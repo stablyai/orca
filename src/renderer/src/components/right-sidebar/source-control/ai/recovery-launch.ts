@@ -1,26 +1,29 @@
-import { acquireAgentLaunchChoices } from '@/lib/host-chat-program-acquisition'
+import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control-action-selection'
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  AgentLaunchChoiceCancelled,
+  acquireAgentLaunchChoices
+} from '@/lib/host-chat-program-acquisition'
 import { toast } from 'sonner'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { settleAgentTabLaunch } from '@/lib/launch-agent-in-new-tab-host-agents'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   ensureDetectedAgentsForWorktree,
   type WorktreeAgentInventoryState
 } from '@/lib/agent-detection-target-inventory'
-import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
 } from '../../../../../../shared/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../../shared/tui-agent-selection'
-import type {
-  SourceControlActionRecipe,
-  SourceControlLaunchActionId
-} from '../../../../../../shared/source-control-ai-actions'
+import { projectSelectedSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
+import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control-ai-actions'
 import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control-recovery-agent-command'
 import { translate } from '@/i18n/i18n'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
@@ -100,7 +103,9 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   actionId: SourceControlLaunchActionId
   basePrompt: string | null
   promptOverride?: string
-  getLaunchActionRecipe: (actionId: SourceControlLaunchActionId) => SourceControlActionRecipe
+  getLaunchActionRecipe: (
+    actionId: SourceControlLaunchActionId
+  ) => SelectedSourceControlActionRecipe
   getStoreState: () => SourceControlAiLaunchStoreSnapshot
   copy: SourceControlRecoveryLaunchCopy
 }): Promise<boolean> {
@@ -112,21 +117,28 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  const workspace = worktreeLaunchWorkspace(activeWorktreeId)
-  const choices = await acquireAgentLaunchChoices(workspace, () =>
-    ensureDetectedAgentsForWorktree(getStoreState(), activeWorktreeId)
-  )
-  const detectedAgents = [...(choices.detected ?? [])]
-  const store = getStoreState()
   const savedRecipe = getLaunchActionRecipe(actionId)
-  const agentArgsPlan = planAgentCliArgsSuffix(
-    savedRecipe.agentArgs,
-    activeSourceControlLaunchPlatform === 'win32' ? 'powershell' : 'posix'
-  )
-  if (!agentArgsPlan.ok) {
-    toast.error(agentArgsPlan.error)
+  const workspace = worktreeLaunchWorkspace(activeWorktreeId)
+  const inventory = await Promise.all([
+    acquireAgentLaunchChoices(workspace, () =>
+      ensureDetectedAgentsForWorktree(getStoreState(), activeWorktreeId)
+    ),
+    ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
+  ]).catch((error) => {
+    if (
+      error instanceof AgentLaunchChoiceCancelled ||
+      (error instanceof DOMException && error.name === 'AbortError')
+    ) {
+      return null
+    }
+    throw error
+  })
+  if (!inventory) {
     return false
   }
+  const [choices, preferences] = inventory
+  const detectedAgents = [...(choices.detected ?? [])]
+  const store = getStoreState()
   if (!basePrompt) {
     toast.error(copy.promptUnavailable)
     return false
@@ -149,35 +161,54 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   if (
     savedAgent &&
     ((!detectedAgents.includes(savedAgent) && !opensAsChat(savedAgent)) ||
-      !isTuiAgentEnabled(savedAgent, store.settings?.disabledTuiAgents))
+      !isTuiAgentEnabled(savedAgent, preferences.disabledTuiAgents))
   ) {
     toast.error(copy.savedAgentUnavailable)
     return false
   }
   const agent = pickSourceControlLaunchAgent({
     savedAgent,
-    defaultAgent: store.settings?.defaultTuiAgent,
+    defaultAgent: preferences.defaultTuiAgent,
     detectedAgents,
-    disabledAgents: store.settings?.disabledTuiAgents,
+    disabledAgents: preferences.disabledTuiAgents,
     chosenOpensAsChat: opensAsChat
   })
   if (!agent) {
     toast.error(copy.noEnabledAgent)
     return false
   }
+  const { commandInput, ...projection } = projectSelectedSourceControlActionLaunch(
+    savedRecipe,
+    agent,
+    {
+      renderedPrompt: prompt,
+      settings: store.settings
+    }
+  )
   const result = launchAgentInNewTab({
     requestId: newAgentLaunchRequestId(),
     agent,
     worktreeId: activeWorktreeId,
     groupId: activeGroupId ?? activeWorktreeId,
-    prompt,
-    agentArgs: savedRecipe.agentArgs,
+    prompt: commandInput,
+    ...projection,
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'
   })
   if (!result) {
     toast.error(copy.launchCommandUnavailable)
+    return false
+  }
+
+  const settled = await settleAgentTabLaunch(result)
+  if (settled.kind !== 'terminal' && settled.kind !== 'structured') {
+    return false
+  }
+  const delivery =
+    result.promptDeliveryResult ??
+    (settled.kind === 'structured' ? settled.promptDeliveryResult : undefined)
+  if (delivery && !(await delivery).delivered) {
     return false
   }
 

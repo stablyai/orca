@@ -1,11 +1,12 @@
+import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
-import { createSessionOutputPipeline } from './session-output-pipeline'
+import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
-import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
+import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
-import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
+import { SessionProcessInspection } from './session-process-inspection'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -20,7 +21,7 @@ import type {
 } from './types'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
-export class Session {
+export class Session extends SessionProcessInspection {
   readonly sessionId: string
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
@@ -30,8 +31,9 @@ export class Session {
   readonly shellIsRootChild: boolean
   private _state: SessionState = 'running'
   private _exitCode: number | null = null
+  exitCause: TerminalExitCause | undefined
+  private readonly initialOutput: ReturnType<typeof createSessionInitialOutput>
   private _disposed = false
-  private subprocess: SubprocessHandle
   private readonly onSessionExit?: (code: number) => void
   private readonly output: SessionOutputPlane
   private readonly producerPause: SessionProducerPause
@@ -41,24 +43,17 @@ export class Session {
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
+    super(opts.subprocess)
+    this.initialOutput = createSessionInitialOutput(opts)
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
-    this.subprocess = opts.subprocess
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.shellIsRootChild = opts.subprocess.shellIsRootChild === true
     this.onSessionExit = opts.onExit
-    const pipeline = createSessionOutputPipeline({
-      cols: opts.cols,
-      rows: opts.rows,
-      scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro,
-      historySeedChunks: opts.historySeedChunks,
-      ownerBackend: opts.ownerBackend,
-      subprocess: this.subprocess,
-      isAlive: () => !this._disposed && this._state !== 'exited'
-    })
+    const isAlive = () => !this._disposed && this._state !== 'exited'
+    const pipeline = createSessionOutputPipeline(opts, isAlive)
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
     this.producerPause = new SessionProducerPause(this.subprocess)
@@ -69,17 +64,9 @@ export class Session {
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
 
-    this.shellReady = new SessionShellReadyBarrier({
-      sessionId: this.sessionId,
-      subprocess: this.subprocess,
-      responderParser: this.output.responderParser,
-      shellReadySupported: opts.shellReadySupported,
-      ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
-      shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
-      installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
-      releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
-      acceptStartupIngress: (data) => this.startupIngress.accept(data)
-    })
+    this.shellReady = createSessionShellReady(opts, this.output, (data) =>
+      this.startupIngress.accept(data)
+    )
 
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
@@ -87,13 +74,20 @@ export class Session {
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
-    this.shellReady.startPromptReadinessProbe()
-    this.subprocess.onData((data) => {
-      if (!this._disposed) {
-        this.shellReady.ingestSubprocessData(data)
-      }
-    })
-    this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
+    try {
+      this.subprocess.onData((data) => {
+        if (!this._disposed) {
+          this.shellReady.ingestSubprocessData(data)
+        }
+      })
+      this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
+    } catch (error) {
+      this._disposed = true
+      this.shellReady.dispose()
+      this.recoveryBarrier.dispose()
+      this.output.disposeEmulator()
+      throw error
+    }
   }
 
   get state(): SessionState {
@@ -120,6 +114,10 @@ export class Session {
     return this.output.hasAttachedClients
   }
 
+  get physicalCompletion(): Promise<void> {
+    return this.termination.physicalCompletion
+  }
+
   get isTerminating(): boolean {
     return this.termination.isTerminating
   }
@@ -139,16 +137,17 @@ export class Session {
   }
 
   write(data: string): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
+    // Human input must reach rc-file readers while automatic startup commands wait for readiness.
+    if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
+      this.subprocess.write(data)
     }
+  }
 
-    // Contain cooked query echoes and preserve input order through the post-ready flush window.
-    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data)) {
-      return
+  /** Orca's own startup command: held by the shell-ready barrier until the shell can read it. */
+  writeStartupCommand(data: string): void {
+    if (this._state !== 'exited' && !this._disposed && !this.shellReady.tryEnqueue(data)) {
+      this.subprocess.write(data)
     }
-
-    this.subprocess.write(data)
   }
 
   resize(cols: number, rows: number): void {
@@ -235,18 +234,6 @@ export class Session {
     return this.output.getCwd()
   }
 
-  inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
-    return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
-  }
-
-  getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null {
-    return this.subprocess.getForegroundProcess(options)
-  }
-
-  async confirmForegroundProcess(): Promise<string | null> {
-    return this.subprocess.confirmForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
-  }
-
   confirmShellForeground(): Promise<boolean> {
     return this.recoveryBarrier.confirmOwnerSettled()
   }
@@ -279,17 +266,11 @@ export class Session {
     }
 
     // Capture termination intent before flipping the state to exited.
-    this.shellReady.releaseDeviceAttributes()
-    this.shellReady.releaseHeldBytes()
-    this.startupIngress.drainAndClose()
-    // Deliver drained recovery bytes while clients are attached and the emulator still accepts writes.
-    this.recoveryBarrier.flushPending()
+    this.drainStartupOutput()
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
-      try {
-        this.subprocess.forceKill()
-      } catch {}
+      this.termination.forceKillDuringDispose().catch(() => {})
       this._exitCode = -1
       this.termination.clearTerminating()
     }
@@ -332,6 +313,14 @@ export class Session {
     this.termination.disposeSubprocessHandle()
   }
 
+  private drainStartupOutput(): void {
+    this.shellReady.releaseDeviceAttributes()
+    this.shellReady.releaseHeldBytes()
+    this.startupIngress.drainAndClose()
+    // Drain before notifying exits or disposing the attached output plane.
+    this.recoveryBarrier.flushPending()
+  }
+
   private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
     // Preserve operator-close intent even when process exit beats the control reply.
     if (this.termination.isTerminating) {
@@ -342,12 +331,9 @@ export class Session {
       return
     }
 
-    this.shellReady.releaseDeviceAttributes()
-    this.shellReady.disposePromptReadinessProbe()
-    this.shellReady.releaseHeldBytes()
-    this.startupIngress.drainAndClose()
-    // Flush after ingress drains so prompts held mid-proof reach clients and history before the exit event.
-    this.recoveryBarrier.flushPending()
+    this.drainStartupOutput()
+    cause = this.initialOutput.resolveExit(code, cause, this.incarnationId)
+    this.exitCause = cause
     this._exitCode = code
     this._state = 'exited'
     this.termination.clearTerminating()

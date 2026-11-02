@@ -41,12 +41,6 @@ export function nativeChatPermissionModeDescription(
 ): string {
   switch (mode) {
     case 'ask':
-      if (agent === 'codex') {
-        return translate(
-          'components.native-chat.composer.permissionAskCodexDescription',
-          'Edits files and runs commands in this workspace; asks before anything else'
-        )
-      }
       if (agent !== 'claude') {
         return translate(
           'components.native-chat.composer.permissionAskSharedDescription',

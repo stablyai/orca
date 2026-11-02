@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
+import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { backgroundReadFailed, useForegroundFirstLoad } from './pr-sidebar-load-result'
 import {
   fetchGithubRepoSlug,
   fetchHostedReviewForBranch,
@@ -18,7 +20,10 @@ import {
   type PrSidebarLoadDeps,
   type PrSidebarState
 } from './mobile-pr-sidebar-state'
-import { fetchWorktreeLinkedPR } from '../source-control/mobile-pr-link'
+import {
+  clearMobileWorktreeReviewLink,
+  fetchWorktreeGitHubPRLink
+} from '../source-control/mobile-pr-link'
 
 type PrSidebarControllerInput = {
   client: RpcClient | null
@@ -31,6 +36,8 @@ type PrSidebarControllerInput = {
 // Load body/comments only when the PR segment opens; the hub chip needs just PR/checks.
 export type PrSidebarLoadOptions = {
   includeDetails?: boolean
+  /** A poll the user did not ask for: a failed read leaves the shown PR in place. */
+  background?: boolean
 }
 
 // Keep HEAD out of identity: commits soft-refresh checks without clearing ready UI.
@@ -68,7 +75,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
     return {
       fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
-      fetchWorktreeLinkedPR: (wt) => fetchWorktreeLinkedPR(client, wt),
+      fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
+      clearWorktreeReviewLink: (wt, shouldApply) =>
+        clearMobileWorktreeReviewLink(client, wt, shouldApply),
       fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args),
       fetchWorkItemDetails: (wt, args) => fetchWorkItemDetails(client, wt, args),
       fetchPRChecks: (wt, args) => fetchPRChecks(client, wt, args)
@@ -122,13 +131,13 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [identity])
 
-  const load = useCallback(
+  const loadOnce = useCallback(
     async (options?: PrSidebarLoadOptions) => {
       const includeDetails = options?.includeDetails ?? true
       const deps = buildDeps()
       const loadIdentity = identity
       if (!deps || !branch || !loadIdentity) {
-        return
+        return 'stale'
       }
       const seq = loadSeqRef.current + 1
       loadSeqRef.current = seq
@@ -149,7 +158,10 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         !shouldApplyResult(seq, loadSeqRef.current) ||
         stateIdentityRef.current !== loadIdentity
       ) {
-        return
+        return 'stale'
+      }
+      if (options?.background && backgroundReadFailed(stateRef.current, next)) {
+        return 'failed'
       }
       stateIdentityRef.current = loadIdentity
 
@@ -165,12 +177,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (next.kind === 'ready' && priorDetails != null) {
         setState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
         if (!includeDetails) {
-          return
+          return 'applied'
         }
       } else {
         setState(next)
         if (next.kind !== 'ready' || !includeDetails) {
-          return
+          return next.kind === 'ready' || next.kind === 'none' ? 'applied' : 'failed'
         }
       }
 
@@ -189,7 +201,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         stateRef.current.kind !== 'ready' ||
         stateRef.current.data.pr.number !== next.data.pr.number
       ) {
-        return
+        return 'applied'
       }
       // Replace nonfatal null with a placeholder so details cannot spin forever.
       const details = resolvePrSidebarDetailsAfterPhase2({
@@ -198,9 +210,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         pr: stateRef.current.data.pr
       })
       setState({ kind: 'ready', data: { ...stateRef.current.data, details } })
+      return 'applied'
     },
     [buildDeps, branch, headSha, identity, worktreeId]
   )
+
+  const load = useForegroundFirstLoad(loadOnce)
 
   const ensurePrSidebarDetails = useCallback(async () => {
     const current = stateRef.current
@@ -274,6 +289,37 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [identity, state, load, ensurePrSidebarDetails])
 
+  // Desktop's patchCachedPRFileViewedState: a viewed tick shows at once, and a failed write puts the old state back.
+  const patchPrFileViewed = useCallback(
+    (pullRequestId: string, path: string, viewed: GitHubPRFileViewedState) => {
+      setState((prev) => {
+        const files = prev.kind === 'ready' ? prev.data.details?.files : undefined
+        // A write for one PR must not land on another the workspace was relinked to meanwhile.
+        if (
+          prev.kind !== 'ready' ||
+          !prev.data.details ||
+          !files ||
+          prev.data.details.pullRequestId !== pullRequestId
+        ) {
+          return prev
+        }
+        return {
+          kind: 'ready',
+          data: {
+            ...prev.data,
+            details: {
+              ...prev.data.details,
+              files: files.map((file) =>
+                file.path === path ? { ...file, viewerViewedState: viewed } : file
+              )
+            }
+          }
+        }
+      })
+    },
+    []
+  )
+
   const retry = useCallback(() => {
     void load({ includeDetails: true })
   }, [load])
@@ -287,7 +333,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     openPRSidebar,
     retryPRSidebar: retry,
     refetchPRSidebar: load,
-    ensurePrSidebarDetails
+    ensurePrSidebarDetails,
+    patchPrFileViewed
   }
 }
 

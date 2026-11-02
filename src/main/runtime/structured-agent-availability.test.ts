@@ -5,7 +5,10 @@ import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
 const mocks = vi.hoisted(() => {
-  const programs: Record<string, () => { command: string; env: Record<string, string> }> = {}
+  const programs: Record<
+    string,
+    () => { command: string; prefixArgs: string[]; env: Record<string, string> }
+  > = {}
   return {
     refreshed: new Set<() => void>(),
     releasesChanged: new Set<() => void>(),
@@ -50,15 +53,15 @@ const READY = { status: 'ready', version: '2.0.14' } as const
 const TOO_OLD = { status: 'tooOld', version: '2.0.13', minimumVersion: '2.0.14' } as const
 const opencodeAvailable = expect.objectContaining({ agent: 'opencode', state: 'available' })
 const found =
-  (command: string, PATH = '/usr/bin') =>
-  () => ({ command, env: { PATH } })
+  (command: string, PATH = '/usr/bin', prefixArgs: string[] = []) =>
+  () => ({ command, prefixArgs, env: { PATH } })
 
 beforeEach(() => {
   mocks.refreshed.clear()
   mocks.releasesChanged.clear()
   mocks.installable = true
   mocks.programs = {
-    claude: found('/usr/bin/claude'),
+    claude: found('/usr/bin/launcher', '/usr/bin', ['run', '--', '/usr/bin/claude']),
     pi: () => {
       throw new Error('Command setting not runnable')
     },
@@ -157,7 +160,11 @@ it('captures fresh shell facts for a first subscriber even when Refresh had no l
 
 it('reads a missing program as missing, a workspace-relative PATH as unknown, and re-reads after an install', async () => {
   mocks.installable = false
-  mocks.programs.claude = found('claude', `bin${delimiter}/usr/bin`)
+  mocks.programs.claude = found('launcher', `bin${delimiter}/usr/bin`, [
+    'run',
+    '--',
+    '/usr/bin/claude'
+  ])
   const { availability } = install()
   const read = vi.fn()
   availability.subscribe(read)

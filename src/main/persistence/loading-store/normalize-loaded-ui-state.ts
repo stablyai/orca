@@ -2,6 +2,7 @@ import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../shared/st
 import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
 import {
   getWorktreeCardModeProperties,
+  isCurrentCompactWorktreeCardProperties,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from '../../../shared/constants'
@@ -87,7 +88,7 @@ export function normalizeLoadedUiState(
     !deliberateUncheck &&
     Array.isArray(rawCardProps) &&
     !rawCardProps.includes('inline-agents')
-  const needsLegacyDefaultedCompactMigration =
+  const hasDefaultedCompactPreset =
     loadedCompactWorktreeCards &&
     parsed.ui?._worktreeCardModeDefaulted === true &&
     isDefaultedCompactWorktreeCardProperties(rawCardProps)
@@ -95,8 +96,11 @@ export function normalizeLoadedUiState(
     if (!Array.isArray(rawCardProps)) {
       return undefined
     }
-    if (needsLegacyDefaultedCompactMigration) {
-      return getWorktreeCardModeProperties('Compact')
+    if (hasDefaultedCompactPreset) {
+      // Only legacy presets need rewriting; returning a current one would save on every load.
+      return isCurrentCompactWorktreeCardProperties(rawCardProps)
+        ? undefined
+        : getWorktreeCardModeProperties('Compact')
     }
     const candidate = needsInlineAgentsMigration
       ? [...rawCardProps, 'inline-agents' as const]

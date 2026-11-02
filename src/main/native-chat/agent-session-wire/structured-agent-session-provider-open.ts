@@ -1,3 +1,4 @@
+import { sameProviderChild } from './structured-agent-session-provider-child'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import {
@@ -21,7 +22,10 @@ export async function openStructuredAgentSessionProviderChild(
   if (!context.runtimeState.startupAttempts.onClock(sessionId, child)) {
     return
   }
-  const attempt = context.runtimeState.acquireAborts.begin(sessionId, false, false, true)
+  const attempt = context.runtimeState.acquireAborts.begin(sessionId, false, false, () => {
+    const current = context.sessions.get(sessionId)?.child
+    return current !== undefined && current !== null && sameProviderChild(current, child)
+  })
   const openedAt = context.now()
   try {
     attempt.signal.throwIfAborted()

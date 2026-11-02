@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeTerminalIdlePolls } from './terminal/wait/terminal-idle-polls'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
@@ -23,26 +23,10 @@ function makePty(ptyId: string, overrides: Partial<RuntimePtyWorktreeRecord> = {
   } as unknown as RuntimePtyWorktreeRecord
 }
 
-function makeLeaf(tabId: string, overrides: Partial<RuntimeLeafRecord> = {}) {
-  return {
-    tabId,
-    ptyId: `${tabId}-pty`,
-    connected: true,
-    lastExitCode: null,
-    lastExitCause: null,
-    lastAgentStatus: null,
-    lastOutputAt: null,
-    paneTitle: null,
-    tailBuffer: [],
-    tailPartialLine: '',
-    preview: '',
-    ...overrides
-  } as unknown as RuntimeLeafRecord
-}
-
 function makeWaiter(handle: string): TerminalWaiter {
   return {
     handle,
+    ptyId: `${handle}-pty`,
     condition: 'tui-idle',
     resolve: () => {},
     reject: () => {},
@@ -70,7 +54,6 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
       quiescenceMs: 1500,
-      getTabTitle: () => null,
       getForegroundProcess: () => null,
       hasCommandPainted: () => true,
       getAdoptedPtyIdleStatus: () => null,
@@ -78,7 +61,6 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getFirstPartyAgentStatus: () => null,
       readScreenLines: () => null,
       readVisibleScreen: () => null,
-      getLiveLeaf: (leaf) => leaf,
       resolve: (waiter, result) => resolved.push({ handle: waiter.handle, result })
     })
 
@@ -86,7 +68,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       const waiter = makeWaiter(`handle-${index}`)
       // Already idle: an independent interval would have resolved this on its own
       // first tick at exactly intervalMs, and so must the shared sweep.
-      polls.startPty(waiter, makePty(`pty-${index}`, { lastAgentStatus: 'idle' }))
+      polls.start(waiter, makePty(`pty-${index}`, { lastAgentStatus: 'idle' }))
       return waiter
     })
 
@@ -104,11 +86,10 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     expect(setIntervalSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps one interval across mixed leaf and pty waiters and re-arms after going idle', () => {
+  it('keeps one interval across waiters and re-arms after going idle', () => {
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
       quiescenceMs: 1500,
-      getTabTitle: () => null,
       getForegroundProcess: () => null,
       hasCommandPainted: () => true,
       getAdoptedPtyIdleStatus: () => null,
@@ -116,13 +97,11 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getFirstPartyAgentStatus: () => null,
       readScreenLines: () => null,
       readVisibleScreen: () => null,
-      getLiveLeaf: (leaf) => leaf,
       resolve: () => {}
     })
 
     for (let index = 0; index < 10; index += 1) {
-      polls.startPty(makeWaiter(`pty-handle-${index}`), makePty(`pty-${index}`))
-      polls.startLeaf(makeWaiter(`leaf-handle-${index}`), makeLeaf(`tab-${index}`))
+      polls.start(makeWaiter(`pty-handle-${index}`), makePty(`pty-${index}`))
     }
     expect(setIntervalSpy).toHaveBeenCalledTimes(1)
 
@@ -136,7 +115,6 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
       quiescenceMs: 1500,
-      getTabTitle: () => null,
       getForegroundProcess: () => null,
       hasCommandPainted: () => true,
       getAdoptedPtyIdleStatus: () => null,
@@ -144,13 +122,12 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getFirstPartyAgentStatus: () => null,
       readScreenLines: () => null,
       readVisibleScreen: () => null,
-      getLiveLeaf: (leaf) => leaf,
       resolve: () => {}
     })
     const first = makeWaiter('a')
     const second = makeWaiter('b')
-    polls.startPty(first, makePty('pty-a'))
-    polls.startPty(second, makePty('pty-b'))
+    polls.start(first, makePty('pty-a'))
+    polls.start(second, makePty('pty-b'))
 
     first.cancelIdlePoll?.()
     expect(first.cancelIdlePoll).toBeNull()
@@ -166,7 +143,6 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
       quiescenceMs: 1500,
-      getTabTitle: () => null,
       getForegroundProcess: () =>
         new Promise<string | null>((resolve) => {
           gates.push(resolve)
@@ -177,12 +153,11 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getFirstPartyAgentStatus: () => null,
       readScreenLines: () => null,
       readVisibleScreen: () => null,
-      getLiveLeaf: (leaf) => leaf,
       resolve: (waiter) => resolved.push(waiter.handle)
     })
 
-    polls.startPty(makeWaiter('slow'), makePty('pty-slow', { lastOutputAt: Date.now() - 10_000 }))
-    polls.startPty(makeWaiter('fast'), makePty('pty-fast', { lastOutputAt: Date.now() - 10_000 }))
+    polls.start(makeWaiter('slow'), makePty('pty-slow', { lastOutputAt: Date.now() - 10_000 }))
+    polls.start(makeWaiter('fast'), makePty('pty-fast', { lastOutputAt: Date.now() - 10_000 }))
 
     vi.advanceTimersByTime(INTERVAL_MS)
     // Same-sweep reads must overlap; unresolved first read cannot block the second.
@@ -226,7 +201,6 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
     return new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
       quiescenceMs: 1500,
-      getTabTitle: () => null,
       // Unknown agent + quiet pane: without the screen check this would settle idle.
       getForegroundProcess: () => (foreground ? Promise.resolve(foreground) : null),
       hasCommandPainted: () => true,
@@ -235,7 +209,6 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
       getFirstPartyAgentStatus: () => null,
       readScreenLines: () => null,
       readVisibleScreen,
-      getLiveLeaf: (leaf) => leaf,
       resolve: (_waiter, result) => resolved.push(result)
     })
   }
@@ -243,14 +216,11 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
   it('reports a dialog the tail lost but the screen still shows, ahead of a quiet-pane idle', async () => {
     const resolved: RuntimeTerminalWait[] = []
     const polls = createPolls(() => Promise.resolve(TRUST_SCREEN), resolved)
-    polls.startPty(makeWaiter('pty'), makePty('pty-1', { lastOutputAt: Date.now() - 10_000 }))
-    polls.startLeaf(makeWaiter('leaf'), makeLeaf('tab-1', { lastOutputAt: Date.now() - 10_000 }))
+    polls.start(makeWaiter('pty'), makePty('pty-1', { lastOutputAt: Date.now() - 10_000 }))
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
 
-    expect(resolved).toHaveLength(2)
     expect(resolved).toEqual([
-      expect.objectContaining({ satisfied: false, blockedReason: 'agent-trust-workspace' }),
       expect.objectContaining({ satisfied: false, blockedReason: 'agent-trust-workspace' })
     ])
     expect(polls.activeTimerCount).toBe(0)
@@ -263,8 +233,7 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
       reads.push(ptyId)
       return Promise.resolve(TRUST_SCREEN)
     }, resolved)
-    polls.startPty(makeWaiter('pty'), makePty('pty-1', { lastAgentStatus: 'working' }))
-    polls.startLeaf(makeWaiter('leaf'), makeLeaf('tab-1', { lastAgentStatus: 'working' }))
+    polls.start(makeWaiter('pty'), makePty('pty-1', { lastAgentStatus: 'working' }))
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)
 
@@ -288,8 +257,8 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
       null
     )
     const waiter = makeWaiter('pty')
-    polls.startPty(waiter, makePty('pty-1'))
-    polls.startPty(makeWaiter('other'), makePty('pty-2'))
+    polls.start(waiter, makePty('pty-1'))
+    polls.start(makeWaiter('other'), makePty('pty-2'))
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS * 2)
     // One read per waiter: the second sweep must not stack reads behind a pending one.
@@ -314,7 +283,7 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
         agent
       )
       const pty = makePty('pty-1', { lastAgentStatus: 'idle', lastOscTitle: agent })
-      polls.startPty(makeWaiter('pty'), pty, { kind: 'ready-weak' })
+      polls.start(makeWaiter('pty'), pty, { kind: 'ready-weak' })
 
       await vi.advanceTimersByTimeAsync(0)
       expect(screens).toHaveLength(1)
@@ -330,7 +299,7 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
     const resolved: RuntimeTerminalWait[] = []
     const polls = createPolls(() => Promise.resolve(TRUST_SCREEN), resolved, null, 'grok')
     const pty = makePty('pty-1', { lastAgentStatus: 'idle', lastOscTitle: 'grok' })
-    polls.startPty(makeWaiter('pty'), pty, { kind: 'ready-weak' })
+    polls.start(makeWaiter('pty'), pty, { kind: 'ready-weak' })
 
     await vi.advanceTimersByTimeAsync(0)
     expect(resolved).toEqual([
@@ -351,7 +320,7 @@ describe('RuntimeTerminalIdlePolls rendered-screen blocked prompts', () => {
       'claude'
     )
     const pty = makePty('pty-1', { lastAgentStatus: 'idle', lastOscTitle: '✳ Claude Code' })
-    polls.startPty(makeWaiter('pty'), pty)
+    polls.start(makeWaiter('pty'), pty)
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     expect(reads).toEqual([])
@@ -378,7 +347,6 @@ describe('RuntimeTerminalIdlePolls quiet foreground for a launched agent', () =>
     return new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
       quiescenceMs: QUIESCENCE_MS,
-      getTabTitle: () => null,
       getForegroundProcess: (ptyId) => {
         foregroundReads.push(ptyId)
         return Promise.resolve(TUI_AGENT_CONFIG[agent].expectedProcess)
@@ -389,7 +357,6 @@ describe('RuntimeTerminalIdlePolls quiet foreground for a launched agent', () =>
       getFirstPartyAgentStatus: () => null,
       readScreenLines: () => null,
       readVisibleScreen: () => null,
-      getLiveLeaf: (leaf) => leaf,
       resolve: (waiter) => resolved.push(waiter.handle)
     })
   }
@@ -400,9 +367,7 @@ describe('RuntimeTerminalIdlePolls quiet foreground for a launched agent', () =>
     const foregroundReads: string[] = []
     const polls = createPolls('amp', resolved, foregroundReads)
     const pty = makePty('pty-amp')
-    const leaf = makeLeaf('tab-amp')
-    polls.startPty(makeWaiter('pty'), pty)
-    polls.startLeaf(makeWaiter('leaf'), leaf)
+    polls.start(makeWaiter('pty'), pty)
 
     // Booting: the agent owns the foreground but has painted nothing (#9976).
     await vi.advanceTimersByTimeAsync(INTERVAL_MS * 5)
@@ -410,7 +375,6 @@ describe('RuntimeTerminalIdlePolls quiet foreground for a launched agent', () =>
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS / 2)
     pty.lastOutputAt = Date.now()
-    leaf.lastOutputAt = Date.now()
     // The next sweep lands inside the quiet window measured from that paint.
     await vi.advanceTimersByTimeAsync(INTERVAL_MS / 2)
     expect(resolved).toEqual([])
@@ -418,14 +382,14 @@ describe('RuntimeTerminalIdlePolls quiet foreground for a launched agent', () =>
     expect(foregroundReads).toEqual([])
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    expect(resolved).toEqual(['pty', 'leaf'])
+    expect(resolved).toEqual(['pty'])
     expect(polls.activeTimerCount).toBe(0)
   })
 
   it('does not settle an agent that will announce rest itself on a quiet foreground', async () => {
     const resolved: string[] = []
     const polls = createPolls('claude', resolved)
-    polls.startPty(makeWaiter('pty'), makePty('pty-claude', { lastOutputAt: Date.now() }))
+    polls.start(makeWaiter('pty'), makePty('pty-claude', { lastOutputAt: Date.now() }))
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS * 5)
     expect(resolved).toEqual([])

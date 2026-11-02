@@ -4,7 +4,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { findMovableClaudeSessions } from '@/lib/claude-session-account-move'
+import { findClaudeSwitchSessions } from '@/lib/claude-session-account-move'
 import {
   handleRunningClaudeSessionsAfterSwitch,
   resetClaudeAccountSwitchSessionsForTests
@@ -14,7 +14,7 @@ import type * as AccountMove from '@/lib/claude-session-account-move'
 
 vi.mock('@/lib/claude-session-account-move', async (importOriginal) => ({
   ...(await importOriginal<typeof AccountMove>()),
-  findMovableClaudeSessions: vi.fn(),
+  findClaudeSwitchSessions: vi.fn(),
   findQueuedClaudeRestartsOnAccount: () => [],
   isClaudePaneMidTurn: () => false
 }))
@@ -38,9 +38,11 @@ const ROSTER = { accounts: [row('account-a'), row('account-b')] }
 const updateSettings = vi.fn(async () => {})
 
 async function switchWith(count: number, from = 'account-a', to = 'account-b'): Promise<void> {
-  vi.mocked(findMovableClaudeSessions).mockResolvedValue(
-    Array.from({ length: count }, (_, index) => candidate(index + 1))
-  )
+  vi.mocked(findClaudeSwitchSessions).mockResolvedValue({
+    onAccount: Array.from({ length: count }, (_, index) => candidate(index + 1)),
+    elsewhere: [],
+    cantMove: []
+  })
   await act(async () => {
     await handleRunningClaudeSessionsAfterSwitch({
       owner: { kind: 'local' },
@@ -169,6 +171,36 @@ describe('ClaudeAccountSwitchDialog', () => {
       screen.getByRole('checkbox', { name: /Don't ask again/ }).getAttribute('aria-checked')
     ).toBe('false')
     expect(screen.getByRole('button', { name: 'Restart 3 sessions' })).toBeTruthy()
+  })
+
+  it('ticks only the outgoing account, ticks a group from its header, and lists unmovable sessions without boxes', async () => {
+    const user = userEvent.setup()
+    vi.mocked(findClaudeSwitchSessions).mockResolvedValue({
+      onAccount: [candidate(1)],
+      elsewhere: [{ ...candidate(2), accountId: null }],
+      cantMove: [{ ...candidate(3), reason: 'own-folder' }]
+    })
+    render(<ClaudeAccountSwitchDialog />)
+    await act(async () => {
+      await handleRunningClaudeSessionsAfterSwitch({
+        owner: { kind: 'local' },
+        target: { runtime: 'host' },
+        before: { state: ROSTER, accountId: 'account-a' },
+        after: { state: ROSTER, accountId: 'account-b' }
+      })
+    })
+
+    expect(screen.getByText('Uses your own Claude folder')).toBeTruthy()
+    expect(screen.getAllByRole('checkbox', { name: 'Claude session' })).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Restart session' })).toBeTruthy()
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'Select all sessions in Not on account-a@example.com'
+      })
+    )
+    await user.click(screen.getByRole('button', { name: 'Restart 2 sessions' }))
+
+    expect(queued()).toEqual({ 'pty-1': 'claude', 'pty-2': 'claude' })
   })
 
   it('shows no session list for a single session', async () => {

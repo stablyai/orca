@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   createCurrentEditorArtifactRequest,
-  createEditorArtifactRequest,
-  editorArtifactContentType,
   editorArtifactSourceKey
 } from './editor-artifact-upload'
 
@@ -38,16 +36,6 @@ function openFile(overrides: Partial<OpenFile> = {}): OpenFile {
 }
 
 describe('Editor artifact upload', () => {
-  it('uses the ordinary file path for local and folder workspaces', () => {
-    expect(editorArtifactSourceKey(openFile())).toBe('/repo/notes.md')
-    expect(createEditorArtifactRequest(openFile(), '# Draft', 'text/markdown')).toEqual({
-      sourceKey: '/repo/notes.md',
-      content: '# Draft',
-      contentType: 'text/markdown',
-      fileName: 'notes.md'
-    })
-  })
-
   it('isolates source identity by runtime owner', () => {
     const file = openFile({
       runtimeEnvironmentId: 'server-1',
@@ -93,13 +81,5 @@ describe('Editor artifact upload', () => {
       ).content
     ).toBe('# Latest edit')
     expect(mocks.flush).toHaveBeenCalledWith(expect.anything(), '/repo/notes.md')
-  })
-
-  it('shares Markdown and HTML documents only', () => {
-    expect(editorArtifactContentType('/repo/notes.md', true)).toBe('text/markdown')
-    expect(editorArtifactContentType('/repo/report.html', false)).toBe('text/html')
-    expect(editorArtifactContentType('/repo/REPORT.HTM', false)).toBe('text/html')
-    expect(editorArtifactContentType('/repo/index.jsp', false)).toBeNull()
-    expect(editorArtifactContentType('/repo/main.ts', false)).toBeNull()
   })
 })

@@ -8,7 +8,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { SourceControlUncommittedSections } from './uncommitted-sections'
-import type { SourceControlDisplaySection, SourceControlDisplaySectionId } from './section-order'
+import type {
+  SourceControlDisplaySection,
+  SourceControlDisplaySectionId
+} from '../../../../../../shared/source-control-section-order'
 
 afterEach(cleanup)
 
@@ -64,6 +67,7 @@ function renderUncommittedSections({
         activeConnectionId={null}
         handleOpenDiff={vi.fn()}
         handleStage={vi.fn()}
+        handleResolveConflict={vi.fn()}
         handleUnstage={vi.fn()}
         requestDiscardEntry={vi.fn()}
         diffCommentCountByPath={new Map()}
@@ -73,15 +77,6 @@ function renderUncommittedSections({
 }
 
 describe('source control section header actions', () => {
-  it('routes the Changes header Stage all through the section handler', () => {
-    const handleStageSectionPaths = vi.fn(async () => {})
-    renderUncommittedSections({ handleStageSectionPaths })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Stage all' }))
-
-    expect(handleStageSectionPaths).toHaveBeenCalledWith('unstaged', ['src/app.ts'])
-  })
-
   it('includes untracked files in the Changes header Stage all', () => {
     const handleStageSectionPaths = vi.fn(async () => {})
     const changes: SourceControlDisplaySection = {

@@ -1,5 +1,5 @@
 import { Terminal } from '@xterm/xterm'
-import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readTerminalKittyFile } from '@/lib/pane-manager/terminal-kitty-file-reader'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'

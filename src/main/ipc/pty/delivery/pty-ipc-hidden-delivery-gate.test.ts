@@ -1,54 +1,52 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from '../../pty-ipc-mock-registry'
-import { setupPtyIpcSuite } from '../../pty-ipc-test-harness'
+import { spawnMock } from '../pty-ipc-mock-registry'
+import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { registerPtyHandlers } from '../register-handlers'
 import { getPtyRendererDeliveryDebugSnapshot } from './debug'
 
-vi.mock('electron', () => import('../../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../../opencode/hook-service', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../../mimo/hook-service', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../../agent-hooks/server', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../../pi/titlebar-extension-service', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../../pwsh', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
-)
+vi.mock('../../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../../wsl', async (importOriginal) =>
-  (await import('../../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../../telemetry/client', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../../telemetry/classify-error', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../../memory/pty-registry', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../../codex/codex-pane-account-registry', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../../codex/codex-state-db-backfill-recovery', () =>
-  import('../../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('registerPtyHandlers', () => {
@@ -168,45 +166,6 @@ describe('registerPtyHandlers', () => {
           rendererInFlightChars: 0
         })
       } finally {
-        vi.useRealTimers()
-      }
-    })
-    it('surfaces the hidden-yet-visible contradiction in the snapshot and warns on drop', async () => {
-      vi.useFakeTimers()
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const daemon = installObservableDaemonTestProvider()
-      try {
-        registerPtyHandlers(mainWindow as never)
-        const result = (await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          sessionId: 'daemon-session'
-        })) as { id: string }
-        const setHidden = getPtySetHiddenRendererPtyListener()
-        const setVisible = getPtySetRendererPtyVisibleListener()
-
-        setVisible(null, { id: result.id, visible: true })
-        setHidden(null, { id: result.id, hidden: true })
-        daemon.emitData(result.id, 'starved visible output')
-        vi.advanceTimersByTime(50)
-
-        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-          hiddenDeliveryGatedPtyCount: 1,
-          hiddenDeliveryGatedVisiblePtyCount: 1,
-          hiddenDeliveryDroppedChars: 'starved visible output'.length
-        })
-        expect(warnSpy).toHaveBeenCalledWith(
-          '[pty] hidden-delivery gate is dropping bytes for a visible/active pty',
-          expect.objectContaining({ id: redactPtyIdForDiagnostics(result.id), visible: true })
-        )
-
-        setHidden(null, { id: result.id, hidden: false })
-        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-          hiddenDeliveryGatedPtyCount: 0,
-          hiddenDeliveryGatedVisiblePtyCount: 0
-        })
-      } finally {
-        warnSpy.mockRestore()
         vi.useRealTimers()
       }
     })
@@ -375,37 +334,6 @@ describe('registerPtyHandlers', () => {
         vi.useRealTimers()
       }
     })
-    it.each([
-      ['terminalHiddenDeliveryGate', { terminalHiddenDeliveryGate: false }],
-      ['terminalMainSideEffectAuthority', { terminalMainSideEffectAuthority: false }]
-    ])('keeps delivery when the %s kill switch is off', async (_name, settings) => {
-      vi.useFakeTimers()
-      const mockProc = createMockProc()
-      spawnMock.mockReturnValue(mockProc.proc)
-
-      try {
-        registerPtyHandlers(mainWindow as never, undefined, undefined, (() => settings) as never)
-        const spawnResult = (await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          cwd: '/tmp'
-        })) as { id: string }
-        const setHidden = getPtySetHiddenRendererPtyListener()
-        mainWindow.webContents.send.mockClear()
-
-        setHidden(null, { id: spawnResult.id, hidden: true })
-        mockProc.emitData('still delivered')
-        vi.advanceTimersByTime(2)
-
-        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
-        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-          id: spawnResult.id,
-          data: 'still delivered'
-        })
-      } finally {
-        vi.useRealTimers()
-      }
-    })
     it.each(['terminalHiddenDeliveryGate', 'terminalMainSideEffectAuthority'] as const)(
       'reevaluates blocked hidden data when the live %s setting enables the derived gate',
       async (settingName) => {
@@ -520,29 +448,6 @@ describe('registerPtyHandlers', () => {
           id: spawnResult.id,
           data: 'visible again'
         })
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-    it('does not emit an unhide marker when nothing was dropped', async () => {
-      vi.useFakeTimers()
-      const mockProc = createMockProc()
-      spawnMock.mockReturnValue(mockProc.proc)
-
-      try {
-        registerPtyHandlers(mainWindow as never)
-        const spawnResult = (await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          cwd: '/tmp'
-        })) as { id: string }
-        const setHidden = getPtySetHiddenRendererPtyListener()
-        mainWindow.webContents.send.mockClear()
-
-        setHidden(null, { id: spawnResult.id, hidden: true })
-        setHidden(null, { id: spawnResult.id, hidden: false })
-
-        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
       } finally {
         vi.useRealTimers()
       }

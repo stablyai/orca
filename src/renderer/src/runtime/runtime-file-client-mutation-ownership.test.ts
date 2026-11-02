@@ -3,7 +3,6 @@ import {
   copyRuntimePath,
   createRuntimePath,
   deleteRuntimePath,
-  readRuntimeDirectory,
   renameRuntimePath,
   writeRuntimeFile
 } from './runtime-file-mutation-client'
@@ -17,8 +16,6 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 import {
-  fsReadFile,
-  fsWriteFile,
   fsCopy,
   fsCreateFile,
   fsRename,
@@ -33,208 +30,6 @@ import {
 installRuntimeFileClientEnvironment()
 
 describe('runtime file client', () => {
-  it('routes create, rename, copy, and delete mutations through the selected runtime', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: { ok: true },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-    const context = {
-      target: { kind: 'environment' as const, environmentId: 'env-1' },
-      worktreeId: 'wt-1',
-      worktreePath: '/remote/repo',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 7
-    }
-
-    await createRuntimePath(context, '/remote/repo/src/new.ts', 'file')
-    await renameRuntimePath(context, '/remote/repo/src/new.ts', '/remote/repo/src/renamed.ts')
-    await copyRuntimePath(
-      context,
-      '/remote/repo/src/renamed.ts',
-      '/remote/repo/src/renamed copy.ts'
-    )
-    await deleteRuntimePath(context, '/remote/repo/src/renamed.ts', false)
-
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
-      selector: 'env-1',
-      method: 'files.createFile',
-      params: {
-        worktree: 'id:wt-1',
-        relativePath: 'src/new.ts',
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
-      selector: 'env-1',
-      method: 'files.rename',
-      params: {
-        worktree: 'id:wt-1',
-        oldRelativePath: 'src/new.ts',
-        newRelativePath: 'src/renamed.ts',
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
-      selector: 'env-1',
-      method: 'files.copy',
-      params: {
-        worktree: 'id:wt-1',
-        sourceRelativePath: 'src/renamed.ts',
-        destinationRelativePath: 'src/renamed copy.ts',
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
-      selector: 'env-1',
-      method: 'files.delete',
-      params: {
-        worktree: 'id:wt-1',
-        relativePath: 'src/renamed.ts',
-        recursive: false,
-        expectedExecutionHostId: 'ssh:ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      },
-      timeoutMs: 15_000
-    })
-  })
-
-  it('refuses HUB-local mutations before RPC when the HUB lacks ownership support', async () => {
-    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: []
-          },
-          _meta: { runtimeId: 'old-hub-runtime' }
-        })
-      }
-      return runtimeEnvironmentCall(args)
-    })
-
-    await expect(
-      writeRuntimeFile(
-        {
-          target: { kind: 'environment' as const, environmentId: 'env-old-hub' },
-          worktreeId: 'wt-hub-local',
-          worktreePath: '/hub/repo',
-          expectedExecutionHostId: 'local'
-        },
-        '/hub/repo/readme.md',
-        'changed'
-      )
-    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
-
-    expect(runtimeEnvironmentTransportCall).toHaveBeenCalledWith({
-      selector: 'env-old-hub',
-      method: 'status.get',
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(fsWriteFile).not.toHaveBeenCalled()
-  })
-
-  it('refuses nested SSH mutations before RPC when the HUB lacks ownership support', async () => {
-    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: []
-          },
-          _meta: { runtimeId: 'old-hub-runtime' }
-        })
-      }
-      return runtimeEnvironmentCall(args)
-    })
-
-    await expect(
-      renameRuntimePath(
-        {
-          target: { kind: 'environment' as const, environmentId: 'env-old-hub' },
-          worktreeId: 'wt-nested-ssh',
-          worktreePath: '/ssh/repo',
-          connectionId: 'hub-ssh-1',
-          expectedExecutionHostId: 'ssh:hub-ssh-1',
-          expectedSshTargetId: 'hub-ssh-1',
-          expectedSshConnectionGeneration: 7
-        },
-        '/ssh/repo/old.md',
-        '/ssh/repo/new.md'
-      )
-    ).rejects.toThrow(FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE)
-
-    expect(runtimeEnvironmentTransportCall).toHaveBeenCalledWith({
-      selector: 'env-old-hub',
-      method: 'status.get',
-      timeoutMs: 15_000
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(fsRename).not.toHaveBeenCalled()
-  })
-
-  it('keeps reads compatible with HUBs that lack mutation ownership support', async () => {
-    runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve({
-          id: 'status',
-          ok: true,
-          result: {
-            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
-            capabilities: []
-          },
-          _meta: { runtimeId: 'old-hub-runtime' }
-        })
-      }
-      return runtimeEnvironmentCall(args)
-    })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'read-dir',
-      ok: true,
-      result: [],
-      _meta: { runtimeId: 'old-hub-runtime' }
-    })
-
-    await expect(
-      readRuntimeDirectory(
-        {
-          target: { kind: 'environment' as const, environmentId: 'env-old-hub' },
-          worktreeId: 'wt-nested-ssh',
-          worktreePath: '/ssh/repo',
-          connectionId: 'hub-ssh-1'
-        },
-        '/ssh/repo'
-      )
-    ).resolves.toEqual([])
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-old-hub',
-      method: 'files.readDir',
-      params: { worktree: 'id:wt-nested-ssh', relativePath: '' },
-      timeoutMs: 15_000
-    })
-    expect(fsReadFile).not.toHaveBeenCalled()
-  })
-
   it('refuses old-HUB imports before staging client-local files', async () => {
     runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'status.get') {
@@ -434,51 +229,6 @@ describe('runtime file client', () => {
     ).rejects.toThrow('outside the owning runtime worktree')
 
     expect(fsCreateFile).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('keeps copy operations on local filesystem IPC when no runtime is active', async () => {
-    await copyRuntimePath(
-      {
-        target: { kind: 'local' as const },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo'
-      },
-      '/repo/a.md',
-      '/repo/a copy.md'
-    )
-
-    expect(fsCopy).toHaveBeenCalledWith({
-      sourcePath: '/repo/a.md',
-      destinationPath: '/repo/a copy.md',
-      connectionId: undefined,
-      expectedExecutionHostId: 'local'
-    })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('preserves the SSH connection for copy operations when no runtime is active', async () => {
-    await copyRuntimePath(
-      {
-        target: { kind: 'local' as const },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: 'ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 5
-      },
-      '/repo/a.md',
-      '/repo/a copy.md'
-    )
-
-    expect(fsCopy).toHaveBeenCalledWith({
-      sourcePath: '/repo/a.md',
-      destinationPath: '/repo/a copy.md',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })

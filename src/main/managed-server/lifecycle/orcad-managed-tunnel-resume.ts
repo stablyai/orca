@@ -1,4 +1,4 @@
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment,

@@ -2,11 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import {
-  createRunTempDirectory,
-  resolveRunTempBase,
-  sweepStaleRunDirectories
-} from './vitest-run-temp-directory.mjs'
+import { createRunTempDirectory, sweepStaleRunDirectories } from './vitest-run-temp-directory.mjs'
 
 const bases = []
 
@@ -50,13 +46,4 @@ it('removes the run directory and leaves an unmarked one with the same name alon
 
   runDirectory(base, 105, false)
   expect(createRunTempDirectory({ base, pid: 105 })).toBeNull()
-})
-
-it('keeps POSIX run roots no longer than the default macOS temp root', () => {
-  const macTemp = '/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000gn/T'
-  expect(resolveRunTempBase(macTemp, 'ov255r', 'darwin')).toBe('/tmp')
-  expect(resolveRunTempBase('/tmp', 'ov255r', 'linux')).toBe('/tmp')
-  expect(resolveRunTempBase('C:\\Users\\a\\AppData\\Local\\Temp', 'ov255r', 'win32')).toBe(
-    'C:\\Users\\a\\AppData\\Local\\Temp'
-  )
 })

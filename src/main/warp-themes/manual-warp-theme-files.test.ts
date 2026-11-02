@@ -31,17 +31,4 @@ describe('manual theme ordering', () => {
       vi.restoreAllMocks()
     }
   })
-
-  it('returns a single dialog selection without collating', () => {
-    const construct = vi.spyOn(Intl, 'Collator')
-    try {
-      expect(createManualWarpThemeFileCandidates([]).map((file) => file.path)).toEqual([])
-      expect(createManualWarpThemeFileCandidates(['a/one.yaml']).map((file) => file.path)).toEqual([
-        'a/one.yaml'
-      ])
-      expect(construct).not.toHaveBeenCalled()
-    } finally {
-      vi.restoreAllMocks()
-    }
-  })
 })

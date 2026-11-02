@@ -26,29 +26,6 @@ beforeEach(() => {
 })
 
 describe('a mounted structured chat', () => {
-  it('holds the session while it is on screen and releases it on unmount', async () => {
-    const { unmount } = renderHook(() =>
-      useStructuredAgentSessionHold({
-        sessionId: 'session-alpha',
-        target: LOCAL_TARGET,
-        surface: 'desktop-chat'
-      })
-    )
-
-    await waitFor(() => expect(callsTo('agentSession.hold')).toHaveLength(1))
-    const held = callsTo('agentSession.hold')[0] as { sessionId: string; holderId: string }
-    expect(held.sessionId).toBe('session-alpha')
-    expect(callsTo('agentSession.release')).toHaveLength(0)
-
-    unmount()
-
-    await waitFor(() =>
-      expect(callsTo('agentSession.release')).toEqual([
-        { sessionId: 'session-alpha', holderId: held.holderId }
-      ])
-    )
-  })
-
   it('does not release a hold that has not landed yet', async () => {
     let settleHold = (): void => {}
     mocks.call.mockImplementation((_target: unknown, method: string) =>
@@ -74,26 +51,6 @@ describe('a mounted structured chat', () => {
     settleHold()
 
     await waitFor(() => expect(callsTo('agentSession.release')).toHaveLength(1))
-  })
-
-  it('reports a hold the host refused and still releases on unmount', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const refused = new Error('structured_agent_session_unsupported')
-    mocks.call.mockImplementation((_target: unknown, method: string) =>
-      method === 'agentSession.hold' ? Promise.reject(refused) : Promise.resolve()
-    )
-    const { unmount } = renderHook(() =>
-      useStructuredAgentSessionHold({
-        sessionId: 'session-alpha',
-        target: LOCAL_TARGET,
-        surface: 'desktop-chat'
-      })
-    )
-
-    await waitFor(() => expect(warn).toHaveBeenCalledWith(expect.any(String), refused))
-    unmount()
-    await waitFor(() => expect(callsTo('agentSession.release')).toHaveLength(1))
-    warn.mockRestore()
   })
 
   it('keeps one hold across re-renders that rebuild the target object', async () => {

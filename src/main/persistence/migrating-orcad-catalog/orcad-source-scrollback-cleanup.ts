@@ -14,6 +14,7 @@ export function deleteUnreferencedOrcadMigrationScrollback(
   >,
   refs: Iterable<string>
 ): void {
+  // Host-run panes whose local copy this deletes repaint from the host (session.readTerminalScrollback).
   const live = new Set([
     ...sessionPartitions(runtime.state, LOCAL_EXECUTION_HOST_ID).flatMap(([, session]) => [
       ...collectTerminalScrollbackSnapshotRefs(session)

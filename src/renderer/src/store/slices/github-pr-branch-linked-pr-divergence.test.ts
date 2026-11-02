@@ -144,7 +144,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-      { shouldApply: expect.any(Function) }
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedItems).toContainEqual({
@@ -206,6 +206,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       worktreeId,
       CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
       {
+        executionHostId: 'local',
         suppressHostedReviewRefresh: true,
         shouldApply: expect.any(Function)
       }
@@ -263,7 +264,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-      { shouldApply: expect.any(Function) }
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
   })
@@ -579,7 +580,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
       CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
-      { shouldApply: expect.any(Function) }
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
     expect(store.getState().prCache[`${repoId}::${branch}`]).toMatchObject({

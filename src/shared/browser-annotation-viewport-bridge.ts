@@ -1,4 +1,5 @@
 import type { BrowserGrabRect } from './browser-grab-types'
+import { COMPOSED_TREE_SCRIPT } from './browser-composed-tree-script'
 import { isValidBrowserGrabRect } from './browser-annotation-viewport-report'
 
 export type BrowserAnnotationViewportBridgeMarker = {
@@ -83,6 +84,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   const hostAttribute = 'data-orca-browser-annotation-overlay';
   const selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
   const markerSize = 24;
+${COMPOSED_TREE_SCRIPT}
 
   const removeOverlay = (state) => {
     if (state && state.host && state.host.parentNode) {
@@ -106,6 +108,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
     if (state.targetObserver) {
       state.targetObserver.disconnect();
     }
+    state.targetShadowRoots.forEach((root) => root.removeEventListener('scroll', state.requestUpdate, true));
     removeOverlay(state);
   };
 
@@ -124,23 +127,40 @@ export function buildBrowserAnnotationViewportBridgeScript({
     scrollY: toNumber(window.scrollY, toNumber(window.pageYOffset, 0))
   });
 
+  const findMarked = (root) =>
+    Array.from(root.querySelectorAll('[' + selectedAttribute + ']')).filter(
+      (candidate) => candidate.getAttribute(selectedAttribute) === selectionId
+    );
+
+  // Document queries stop at shadow roots, so open ones are walked when the light DOM has no match.
+  const findMarkedInShadowRoots = (root) =>
+    Array.from(root.querySelectorAll('*')).flatMap((element) =>
+      element.shadowRoot ? findMarked(element.shadowRoot).concat(findMarkedInShadowRoots(element.shadowRoot)) : []
+    );
+
   // Why: the card must follow the element itself, not a click-time copy; the grab overlay
   // marks it in the shared DOM because this world cannot see the page's objects.
   const trackTarget = (state) => {
     const current = state.target;
     let next = null;
     if (emitViewportMessages && selectionId) {
-      for (const candidate of document.querySelectorAll('[' + selectedAttribute + ']')) {
-        if (candidate.getAttribute(selectedAttribute) !== selectionId) continue;
-        if (next) {
-          next = null;
-          break;
+      let found = findMarked(document);
+      if (found.length === 0) {
+        // The marker is set before the selection reaches this bridge, so one shadow walk per selection suffices.
+        const keep = current && current.isConnected && current.getAttribute(selectedAttribute) === selectionId;
+        if (keep) found = [current];
+        else if (state.searchedSelectionId !== selectionId) {
+          state.searchedSelectionId = selectionId;
+          found = findMarkedInShadowRoots(document);
         }
-        next = candidate;
       }
+      next = found.length === 1 ? found[0] : null;
     }
     if (next !== current) {
       state.target = next;
+      state.targetShadowRoots.forEach((root) => root.removeEventListener('scroll', state.requestUpdate, true));
+      state.targetShadowRoots = next ? shadowRootsAbove(next) : [];
+      state.targetShadowRoots.forEach((root) => root.addEventListener('scroll', state.requestUpdate, true));
       if (state.targetObserver) {
         state.targetObserver.disconnect();
         if (next) {
@@ -272,7 +292,9 @@ export function buildBrowserAnnotationViewportBridgeScript({
     requestUpdate: null,
     onBeforeUnload: null,
     target: null,
-    targetObserver: null
+    targetObserver: null,
+    targetShadowRoots: [],
+    searchedSelectionId: null
   };
 
   state.requestUpdate = () => {

@@ -11,12 +11,11 @@ import {
   assertTerminalArtifactContentUnchanged,
   assertTerminalFileGrantFresh,
   canonicalPathForArtifactComparison,
-  localTerminalArtifactRoots,
   readFileHandleBufferBounded
 } from './artifact-integrity'
 import { isBinaryBuffer } from '../../../../shared/binary-buffer'
 import type { RuntimeFilePreviewResult } from '../../../../shared/runtime-types'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { FONT_FILE_MIME_TYPES } from '../../../../shared/font-file-extensions'
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
 
@@ -50,7 +49,9 @@ export async function readLocalTerminalArtifactPreviewFromHandle(
     throw new Error('Cannot preview a directory')
   }
   assertTerminalFileGrantFresh(grant, fileStats)
-  const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(grant.absolutePath).toLowerCase()]
+  const extension = extname(grant.absolutePath).toLowerCase()
+  const fontMimeType = FONT_FILE_MIME_TYPES[extension]
+  const mimeType = fontMimeType ?? RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extension]
   if (mimeType) {
     const binaryMaxBytes =
       maxContentBytes === undefined
@@ -67,7 +68,7 @@ export async function readLocalTerminalArtifactPreviewFromHandle(
     return {
       content: buffer.toString('base64'),
       isBinary: true,
-      isImage: true,
+      isImage: !fontMimeType,
       mimeType
     }
   }
@@ -91,20 +92,12 @@ export async function openLocalTerminalArtifactGrant(
 ): Promise<FileHandle> {
   await assertLocalTerminalArtifactPathStillCanonical(grant.absolutePath)
   try {
-    return await open(grant.absolutePath, flags | OPEN_NOFOLLOW)
+    // Why: a path swapped for a FIFO would otherwise block a host threadpool thread.
+    return await open(grant.absolutePath, flags | OPEN_NOFOLLOW | (constants.O_NONBLOCK ?? 0))
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ELOOP') {
       throw new Error('terminal_file_grant_stale')
     }
     throw error
   }
-}
-
-export async function resolveAllowedLocalTerminalArtifactPath(
-  absolutePath: string,
-  worktreePath: string
-): Promise<string | null> {
-  const roots = await localTerminalArtifactRoots(worktreePath)
-  const canonicalPath = await canonicalPathForArtifactComparison(absolutePath)
-  return roots.some((root) => isPathInsideOrEqual(root, canonicalPath)) ? canonicalPath : null
 }

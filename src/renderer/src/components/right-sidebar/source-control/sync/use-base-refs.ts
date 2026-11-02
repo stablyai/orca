@@ -4,7 +4,7 @@ import {
   resolveSourceControlBaseRef,
   resolveSourceControlCompareBaseRef,
   resolveSourceControlPickerBaseRef
-} from './base-ref-resolution'
+} from '../../../../../../shared/source-control-base-ref-resolution'
 import { useSourceControlBaseRefDefault } from './use-base-ref-default'
 
 export function useSourceControlBaseRefs({

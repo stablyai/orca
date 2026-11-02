@@ -15,7 +15,7 @@ export function getNativeFileDropRejectionMessage(data: NativeFileDropRejectedPa
       title: translate(
         'auto.hooks.useGlobalFileDrop.nativeDropTempCopyFailed',
         "Orca couldn't copy {{count}} dropped files.",
-        { count: data.pathCount }
+        { count: data.pathCount, defaultValue_one: "Orca couldn't copy {{count}} dropped file." }
       )
     }
   }

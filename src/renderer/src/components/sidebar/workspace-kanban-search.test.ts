@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '@/lib/worktree-palette-query-bounds'
+import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'

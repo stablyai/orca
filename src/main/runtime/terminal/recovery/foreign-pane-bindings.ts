@@ -1,7 +1,7 @@
 // Restores never attach another workspace's terminal; gone local bindings show sleeping, matching window rules (deferred-session-reattach-choice.ts).
 
 import { isPtySessionIdOwnedByWorktree } from '../../../../shared/pty-session-id-format'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 

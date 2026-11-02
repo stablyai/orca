@@ -1,19 +1,48 @@
 // @vitest-environment happy-dom
 
+import type * as LaunchRegistry from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
-const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
-  (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
+const { mocks, moduleFactories, resetStructuredSessionMocks, launchModule } = await vi.hoisted(
+  async () => {
+    const setup = (
+      await import('./NativeChatStructuredSession.test-harness')
+    ).createStructuredSessionMocks()
+    return {
+      ...setup,
+      launchModule: setup.moduleFactories.structuredAgentSessionLaunch()
+    }
+  }
 )
 
-vi.mock('@/lib/structured-agent-session-launch', () =>
-  moduleFactories.structuredAgentSessionLaunch()
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
+  retryStructuredAgentSessionLaunch: launchModule.retryStructuredAgentSessionLaunch,
+  relaunchFailedStructuredAgentSessionForMessage:
+    launchModule.relaunchFailedStructuredAgentSessionForMessage
+}))
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchRegistry>()),
+    getStructuredAgentSessionLaunchLifecycle: launchModule.getStructuredAgentSessionLaunchLifecycle,
+    getStructuredAgentSessionLaunchResumes: launchModule.getStructuredAgentSessionLaunchResumes,
+    useStructuredAgentSessionLaunchLifecycle: launchModule.useStructuredAgentSessionLaunchLifecycle,
+    useStructuredAgentSessionLaunchFailure: launchModule.useStructuredAgentSessionLaunchFailure
+  })
+)
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-options',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof LaunchOptions>()),
+    useStructuredAgentSessionLaunchSelection: launchModule.useStructuredAgentSessionLaunchSelection
+  })
 )
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
@@ -135,7 +164,10 @@ describe('NativeChatStructuredSession task strip on the goal tab', () => {
     expect(goalTab.classList).toContain('group/goal')
 
     const stripRules = dockRules(strip, STRIP_DOCK_RULE)
-    const goalRules = dockRules(goalTab, GOAL_DOCK_RULE)
+    // Its other rules join a tab strip stacked on another tab strip.
+    const goalRules = dockRules(goalTab, GOAL_DOCK_RULE).filter(
+      (rule) => rule.attribute === 'data-native-chat-background-tasks'
+    )
     for (const { attribute } of stripRules) {
       expect(goalTab.hasAttribute(attribute)).toBe(true)
     }

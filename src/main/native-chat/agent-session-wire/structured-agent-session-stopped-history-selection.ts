@@ -2,17 +2,17 @@
 
 import type {
   AgentJournalMessageItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+  AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentSessionSendCarriesStoppedHistory,
   agentSessionSendDeliversStoppedHistory,
   agentSessionStoppedHistoryOwed,
   selectStoppedHistory,
   type StoppedHistoryDelivery
-} from '../../../shared/agent-session-stopped-history'
+} from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 type StoppedHistoryContext = {
@@ -38,7 +38,9 @@ export function carriedStoppedHistory(
   return selectStoppedHistory(
     agentSessionStoppedHistoryOwed({
       submissions: ctx.journal.submissions(),
-      carried: ctx.journal.stoppedHistoryCarried(),
+      carried: new Map(
+        [...ctx.journal.stoppedHistoryCarried()].filter(([id]) => id !== submission.clientMessageId)
+      ),
       clearSequence: ctx.journal.context.floor()?.sequence ?? 0,
       body: (id) => ctx.journal.itemBody(agentJournalSubmissionKey(id))
     }),

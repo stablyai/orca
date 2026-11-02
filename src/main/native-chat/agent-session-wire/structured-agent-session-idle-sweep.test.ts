@@ -1,7 +1,7 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkKind } from '../../../shared/agent-status-child-work'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import {
@@ -347,7 +347,7 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
       now: () => IDLE_MS + 1,
       isDisposed: () => false,
       deliveryActive: () => false,
-      store: { getRecord: () => null, replacedRuntime: () => undefined },
+      store: { getConversation: () => null, replacedRuntime: () => undefined },
       childWorkOpen: () => false,
       hasOpenDispatch: () => false,
       providerHoldsDispatch: () => false,

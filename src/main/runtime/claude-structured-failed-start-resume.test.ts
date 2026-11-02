@@ -1,8 +1,8 @@
 // Unproven first starts have no transcript: retry the same provider id fresh until a start proves its root.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
-import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
+import { waitForStructuredAgentSessionRecovery } from './agent-session/structured-agent-session-runtime'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
 
 const SESSION = 'claude-failed-start'

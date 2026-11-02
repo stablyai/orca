@@ -1,3 +1,7 @@
+import {
+  WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
+  buildPosixClaudeBackgroundJobGuardLines
+} from '../agent-hooks/claude-background-job-guard'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixHookPayloadCapture,
@@ -14,6 +18,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // Reload the endpoint so surviving PTYs reach the current server after restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
+      WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
       buildWindowsAgentHookCurlPostCommand('codex'),
       'exit /b 0',
       ''
@@ -24,6 +29,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('codex'),
+    ...buildPosixClaudeBackgroundJobGuardLines(),
     // Reload endpoint state so surviving PTYs keep reporting after restart.
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',

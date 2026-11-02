@@ -8,7 +8,7 @@ import type { WorktreeLineage } from '../shared/worktree/lineage-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { closeTestStores, createStore, testState } from './persistence/persistence-test-harness'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import { wslMoveCutoverFixture as cutover } from './persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from './persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {

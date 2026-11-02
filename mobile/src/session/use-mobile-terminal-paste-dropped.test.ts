@@ -1,3 +1,4 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -18,9 +19,6 @@ vi.mock('expo-clipboard', () => ({
   getImageAsync: async () => pasteboard.image
 }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: {} }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 vi.mock('./mobile-clipboard-image', async (importOriginal) => ({
   ...(await importOriginal<typeof MobileClipboardImage>()),
   prepareMobileClipboardImageBase64: async () => 'png',
@@ -46,6 +44,7 @@ function setup() {
   const showToast = vi.fn()
   let beforeSend = (): boolean => true
   const options: Parameters<typeof useMobileTerminalPaste>[0] = {
+    sendTerminalUserInput: terminalInputSend.request,
     agent: null,
     activeHandle: 'term-1',
     activeHandleRef,

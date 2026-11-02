@@ -61,6 +61,8 @@ export type OpenWorkspaceBrowserTabRequest = {
   selectWorktree?: boolean
   expectedRuntimeEnvironmentId?: string
   expectedSshConnectionId?: string
+  /** Keep an existing desktop provider, only after matching the asserted source owner. */
+  allowClientBrowserFallback?: boolean
   /** Override placement for links whose pane explicitly requires server ownership. */
   placementPreference?: BrowserClientHostPlacementPreference
 }
@@ -157,7 +159,8 @@ export async function openWorkspaceBrowserTab(
       availability,
       route,
       request.workspaceId,
-      expectedEnvironmentId
+      expectedEnvironmentId,
+      request.allowClientBrowserFallback
     )
   const sshDeploymentClientRoute =
     expectedEnvironmentId !== null &&
@@ -179,7 +182,8 @@ export async function openWorkspaceBrowserTab(
       availability,
       route,
       request.workspaceId,
-      expectedSshConnectionId
+      expectedSshConnectionId,
+      request.allowClientBrowserFallback
     )
   ) {
     throw openFailure(presentation.error, 'asserted SSH connection cannot provide this browser')
@@ -200,9 +204,11 @@ export async function openWorkspaceBrowserTab(
       `host ${route.executionHostId} does not own runtime ${environmentId}`
     )
   }
-  // Remote-pane links pin execution-host ownership over client-generic provider policy, except SSH-deployed servers whose pages this desktop hosts on SSH routes.
+  // Preserve desktop-provider behavior only for opted-in sources and SSH-deployed servers.
   if (
-    (expectedEnvironmentId === null || sshDeploymentClientRoute) &&
+    (expectedEnvironmentId === null ||
+      sshDeploymentClientRoute ||
+      (request.allowClientBrowserFallback && runtimeOwnerRoute)) &&
     availability.provider === 'local-client'
   ) {
     const localHostId = host && host.kind !== 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID

@@ -1,12 +1,13 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 // Keep conversation/status lifetimes aligned: stale host-owned Working rows bypass freshness expiry.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -20,7 +21,7 @@ import type { StructuredAgentSessionAttachContext } from './structured-agent-ses
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 // Fail after acquisition; earlier attach phases are outside this test’s scope.
 vi.mock('./structured-agent-session-attach-flow', () => ({
@@ -142,7 +143,10 @@ async function workingSession(): Promise<{
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
-    getRecord: (sessionId) => records.get(sessionId) ?? null,
+    getConversation: (sessionId) => {
+      const record = records.get(sessionId)
+      return record ? agentSessionConversationView(record) : null
+    },
     now: () => 1,
     statusSink: () => ({
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
@@ -170,7 +174,7 @@ function attachContext(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the attach reads only the members defined here.
   return {
     deps: {
-      store: { getRecord: () => null },
+      store: { getRecord: () => null, getConversation: () => null },
       claimKeyId: 'key-1',
       journalDatabase: openTestJournalHostDatabase(root)
     },

@@ -1,9 +1,34 @@
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
+
+type WorkerHost = Pick<
+  StructuredAgentSessionHost,
+  | 'hasSession'
+  | 'getSessionTabId'
+  | 'notifySessionTabHidden'
+  | 'setSessionTabVisibility'
+  | 'close'
+  | 'observeJournalPublications'
+> & {
+  deps: {
+    logger: Pick<StructuredAgentSessionHost['deps']['logger'], 'warn'>
+    store: Pick<
+      StructuredAgentSessionHost['deps']['store'],
+      'requireWritableRecord' | 'getConversation' | 'getSessionTabId' | 'isSessionTabRetired'
+    >
+  }
+}
 
 const hostRef: { current: unknown } = { current: null }
 const createSpy = vi.fn()
@@ -24,24 +49,40 @@ const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/wor
 const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
 const { sealedChildEnv } = await import('../../structured-session-child-env.test-support')
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a host stub carrying only the members the worker start reaches.
-function installHost(location = { executionHostId: 'local', wslDistro: null as string | null }) {
+function installHost(
+  location: Pick<AgentSessionExecutionLocation, 'executionHostId' | 'wslDistro'> = {
+    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    wslDistro: null
+  }
+) {
+  const hidden = new Set<string>()
+  const record = (sessionId: string) => agentSessionRecordFixture({ sessionId, location })
   const dispose = vi.fn()
-  const subscribe = vi.fn(async () => dispose)
+  const observeJournalPublications = vi.fn(() => dispose)
   hostRef.current = {
-    setSessionTabVisibility: async () => {},
-    close: async () => {},
-    deps: {
-      store: {
-        getRecord: () => ({
-          location,
-          lease: { runtimeFence: 2, runtimeKind: 'native', claimStatus: 'live' }
-        })
+    hasSession: () => false,
+    getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
+    notifySessionTabHidden: () => {},
+    setSessionTabVisibility: async (id: string, visible: boolean) => {
+      if (visible) {
+        hidden.delete(id)
+      } else {
+        hidden.add(id)
       }
     },
-    subscribe
-  }
-  return { subscribe, dispose }
+    close: async () => {},
+    deps: {
+      logger: { warn: vi.fn() },
+      store: {
+        requireWritableRecord: record,
+        getConversation: (id: string) => agentSessionConversationView(record(id)),
+        getSessionTabId: (id: string) => (hidden.has(id) ? null : `agent-session:${id}`),
+        isSessionTabRetired: (id: string) => hidden.has(id)
+      }
+    },
+    observeJournalPublications
+  } satisfies WorkerHost
+  return { observeJournalPublications, dispose }
 }
 
 describe('structured worker session', () => {
@@ -54,8 +95,8 @@ describe('structured worker session', () => {
     }))
   })
 
-  it('binds only a redrive subscription at start, and settlement drops it', async () => {
-    const { subscribe, dispose } = installHost()
+  it('binds only a journal observer at start, and settlement drops it', async () => {
+    const { observeJournalPublications, dispose } = installHost()
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
@@ -65,15 +106,16 @@ describe('structured worker session', () => {
     })
     // No hold: while the dispatch is open the idle sweep reads it from the orchestration database.
     expect(hostRef.current).not.toHaveProperty('hold')
-    expect(subscribe).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: created.identity.sessionId })
+    expect(observeJournalPublications).toHaveBeenCalledWith(
+      created.identity.sessionId,
+      expect.any(Function)
     )
     expect(dispose).not.toHaveBeenCalled()
 
-    releaseStructuredWorkerSession('d1')
+    releaseStructuredWorkerSession(created.identity.sessionId)
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
-    releaseStructuredWorkerSession('d1')
+    releaseStructuredWorkerSession(created.identity.sessionId)
     expect(dispose).toHaveBeenCalledTimes(1)
   })
 
@@ -103,7 +145,7 @@ describe('structured worker session', () => {
       )
     )
     expect(envAtSpawn?.ORCA_PANE_KEY).toBeUndefined()
-    releaseStructuredWorkerSession('d_spawn')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('forgets the identity and discards the session when the start fails', async () => {
@@ -193,12 +235,12 @@ describe('structured worker session', () => {
     expect(structuredWorkerIdentities.getBySessionId(created.identity.sessionId)?.agent).toBe(
       'codex'
     )
-    releaseStructuredWorkerSession('d2')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('does not activate the worker session, so a dispatch cannot steal the surface', async () => {
     installHost()
-    await createStructuredWorkerSession({
+    const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
       agent: 'claude',
@@ -206,16 +248,11 @@ describe('structured worker session', () => {
       onJournalActivity: () => {}
     })
     expect(createSpy.mock.calls[0]![0].activate).toBe(false)
-    releaseStructuredWorkerSession('d3')
+    releaseStructuredWorkerSession(created.identity.sessionId)
   })
 
   it('refuses a session pinned to a non-local execution host', async () => {
-    installHost()
-    ;(hostRef.current as { deps: { store: { getRecord: () => unknown } } }).deps.store.getRecord =
-      () => ({
-        location: { executionHostId: 'ssh-1', wslDistro: null },
-        lease: { runtimeFence: 2, runtimeKind: 'native', claimStatus: 'live' }
-      })
+    installHost({ executionHostId: toSshExecutionHostId('ssh-1'), wslDistro: null })
     await expect(
       createStructuredWorkerSession({
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
@@ -230,7 +267,7 @@ describe('structured worker session', () => {
 
 describe('structured worker dispatch preamble', () => {
   type PreambleHost = Parameters<typeof sendStructuredWorkerPreamble>[0]['host']
-  type Settled = Pick<AgentJournalSubmission, 'dispatchState' | 'reason'>
+  type Settled = Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'rejection'>
 
   function submissionOf(settled: Settled): AgentJournalSubmission {
     return {
@@ -246,7 +283,19 @@ describe('structured worker dispatch preamble', () => {
 
   function hostWithSubmission(submission: Settled, delivered?: Settled): PreambleHost {
     return {
-      deps: { store: { getRecord: () => ({ lease: { runtimeFence: 7 } }) } },
+      deps: {
+        store: {
+          selectWritableRecord: (sessionId) => ({
+            kind: 'writable',
+            record: agentSessionRecordFixture({ sessionId })
+          }),
+          requireWritableRecord: (sessionId) =>
+            agentSessionRecordFixture({
+              sessionId,
+              lease: { ...agentSessionRecordFixture({ sessionId }).lease, runtimeFence: 7 }
+            })
+        }
+      },
       send: async () => ({
         ok: true,
         replayed: false,
@@ -362,6 +411,43 @@ describe('structured worker dispatch preamble', () => {
     expect((error as { code?: string }).code).toBe('dispatch_preamble_undelivered')
     expect((error as Error).message).toMatch(/not delivered: fence moved/)
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(false)
+  })
+
+  it('names a provider log detail the rejection sentence leaves out', async () => {
+    const error = await send(
+      hostWithSubmission({
+        dispatchState: 'rejected',
+        ...codexDispatchRejection(
+          agentSessionFailureFact('providerRejected', {
+            detail: { text: 'thread/start: unsupported service tier', audience: 'log' },
+            neverReachedAgent: true
+          })
+        )
+      })
+    ).catch((thrown: unknown) => thrown)
+    expect(error).toMatchObject({
+      code: 'dispatch_preamble_undelivered',
+      message:
+        "The dispatch preamble was not delivered (providerRejected): Codex didn't accept this message. Details: thread/start: unsupported service tier."
+    })
+  })
+
+  it('does not repeat provider words the rejection sentence already quotes', async () => {
+    const error = await send(
+      hostWithSubmission({
+        dispatchState: 'rejected',
+        ...codexDispatchRejection(
+          agentSessionFailureFact('providerRejected', {
+            detail: { text: 'Unsupported service tier.', audience: 'person' },
+            neverReachedAgent: true
+          })
+        )
+      })
+    ).catch((thrown: unknown) => thrown)
+    expect(error).toMatchObject({
+      message:
+        "The dispatch preamble was not delivered (providerRejected): Codex didn't accept this message: Unsupported service tier."
+    })
   })
 
   it('ends the message with one period whether the reason is a sentence or a marker', async () => {

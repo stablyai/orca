@@ -3,8 +3,8 @@ import { Copy, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import {
-  addressForPort,
   canStopWorkspacePort,
   getPortOpenBrowserTooltipLabel,
   goToWorkspacePortOwner,
@@ -12,9 +12,9 @@ import {
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
   resolvePortOpenInOrcaBrowser
-} from '@/lib/workspace-port-actions'
-import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
-import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+} from '@/lib/workspace-ports/workspace-port-actions'
+import type { WorkspacePortGroup } from '@/lib/workspace-ports/workspace-port-groups'
+import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useAppStore } from '@/store'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
@@ -86,7 +86,14 @@ export function PortRow({
   const runtimeTarget = useWorktreeRuntimeTarget(
     port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
   )
-  const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
+  const processLabel =
+    port.processName ??
+    (port.pid
+      ? `PID ${port.pid}`
+      : translate(
+          'auto.components.status.bar.ports.status.popover.rows.unknownProcess',
+          'Unknown process'
+        ))
   const canStop = canStopWorkspacePort(port)
   const openBrowserLabel = translate(
     'auto.components.status.bar.ports.status.popover.rows.085f4f0334',

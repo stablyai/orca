@@ -17,7 +17,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { FooterKey } from '@/components/worktree-jump-palette-primitives'
+import { FooterKey } from '@/components/worktree-jump/worktree-jump-palette-primitives'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'

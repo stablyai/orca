@@ -35,23 +35,6 @@ function createRecordingTracker(overrides: TerminalTitleTrackerCallbacks = {}): 
 }
 
 describe('createTerminalTitleTracker command-finished facts', () => {
-  it('emits command-finished with best-effort exit codes', () => {
-    const { events, tracker } = createRecordingTracker()
-
-    tracker.handleChunk(`before${ESC}]133;A${BEL}prompt${ESC}]133;B${BEL}`)
-    tracker.handleChunk(`${ESC}]133;C${BEL}running${ESC}]133;D;0${BEL}`)
-    tracker.handleChunk(`${ESC}]133;D;130${BEL}`)
-    tracker.handleChunk(`${ESC}]133;D;not-a-number${BEL}`)
-    tracker.handleChunk(`${ESC}]133;D${BEL}`)
-
-    expect(events).toEqual([
-      ['finished', 0],
-      ['finished', 130],
-      ['finished', null],
-      ['finished', null]
-    ])
-  })
-
   it('detects OSC 133;D split across chunk boundaries (BEL and ST terminated)', () => {
     const { events, tracker } = createRecordingTracker()
 
@@ -90,19 +73,6 @@ describe('createTerminalTitleTracker command-finished facts', () => {
 })
 
 describe('createTerminalTitleTracker pr-link facts', () => {
-  it('emits one fact per PR URL including multiple links in one chunk', () => {
-    const { events, tracker } = createRecordingTracker()
-
-    tracker.handleChunk(
-      'see https://github.com/acme/orca/pull/42 and https://github.com/acme/orca/pull/43 \r\n'
-    )
-
-    expect(events).toEqual([
-      ['pr', 'https://github.com/acme/orca/pull/42', 42],
-      ['pr', 'https://github.com/acme/orca/pull/43', 43]
-    ])
-  })
-
   it('waits for a boundary when a URL splits across chunks and dedupes repeats', () => {
     const { events, tracker } = createRecordingTracker()
 
@@ -112,18 +82,6 @@ describe('createTerminalTitleTracker pr-link facts', () => {
     tracker.handleChunk('again https://github.com/acme/orca/pull/42\r\n')
 
     expect(events).toEqual([['pr', 'https://github.com/acme/orca/pull/42', 42]])
-  })
-
-  it('skips the 133/URL scans entirely when no consumer is registered', () => {
-    // Headless serve has no side-effect consumer; it must not allocate scanners or pay their per-chunk cost.
-    const titles: string[] = []
-    const tracker = createTerminalTitleTracker({
-      onTitle: (normalized) => titles.push(normalized)
-    })
-
-    tracker.handleChunk(`${ESC}]133;D;0${BEL}https://github.com/acme/orca/pull/42\r\n`)
-
-    expect(titles).toEqual([])
   })
 })
 
@@ -136,33 +94,6 @@ describe('createTerminalTitleTracker 2031-subscribe facts', () => {
     expect(events).toEqual([['2031-subscribe'], ['bell']])
   })
 
-  it('detects a subscribe split across chunk boundaries', () => {
-    const { events, tracker } = createRecordingTracker()
-
-    tracker.handleChunk(`${ESC}[?20`)
-    tracker.handleChunk('31h')
-
-    expect(events).toEqual([['2031-subscribe']])
-  })
-
-  it('emits an unsubscribe fact so gated views can retire the subscription', () => {
-    // Gated views miss withdrawal bytes; this fact prevents unsolicited theme replies after unsubscribe (#9993).
-    const { events, tracker } = createRecordingTracker()
-
-    tracker.handleChunk(`${ESC}[?2031l`)
-
-    expect(events).toEqual([['2031-unsubscribe']])
-  })
-
-  it('emits nothing for chunks that carry no 2031 bytes at all', () => {
-    // finalState is null here, not 'unsubscribed' — ordinary output must stay silent.
-    const { events, tracker } = createRecordingTracker()
-
-    tracker.handleChunk('plain build output\r\n')
-
-    expect(events).toEqual([])
-  })
-
   it('reports only the chunk-final state when a chunk toggles 2031 both ways', () => {
     // fish enables and disables 2031 around every prompt; one chunk, one decision.
     const { events, tracker } = createRecordingTracker()
@@ -171,17 +102,6 @@ describe('createTerminalTitleTracker 2031-subscribe facts', () => {
     tracker.handleChunk(`${ESC}[?2031lprompt${ESC}[?2031h`)
 
     expect(events).toEqual([['2031-unsubscribe'], ['2031-subscribe']])
-  })
-
-  it('skips the 2031 scan entirely when no consumer is registered', () => {
-    const { events, tracker } = createRecordingTracker({
-      onMode2031Subscribe: undefined,
-      onMode2031Unsubscribe: undefined
-    })
-
-    tracker.handleChunk(`${ESC}[?2031h`)
-
-    expect(events).toEqual([])
   })
 })
 

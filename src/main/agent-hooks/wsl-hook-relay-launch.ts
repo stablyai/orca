@@ -1,6 +1,7 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
 import { withWslGuestLauncherRevision } from '../wsl/wsl-guest-launcher-revision'
 import { orcadPosixNodeRuntimeGlobs } from '../managed-server/install/orcad-node-runtime-globs'
@@ -13,6 +14,8 @@ import {
 } from './wsl-hook-relay-sentinel'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
@@ -99,13 +102,14 @@ export function spawnWslRelayProcess(
   distro: string,
   env: NodeJS.ProcessEnv,
   version: string
-): ChildProcessWithoutNullStreams {
+): PipedChildProcess {
   // --exec bypasses login-shell rewriting and passes $HOME verbatim for guest-side expansion.
   const command = `exec sh "${guestRelayDirExpr(version)}/launch.sh"`
-  return spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-c', command], {
+  return spawnProcess({
+    program: resolveWslExecutablePath(),
+    args: buildWslExecArgs(distro, ['sh', '-c', command]),
     env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
+    stdio: 'pipe',
     // Use a stable Windows cwd so deleting the current worktree cannot break later relay launches.
     cwd: resolveWslInteropSpawnCwd()
   })
@@ -149,10 +153,10 @@ export async function launchWslRelayWithInstall(options: {
   version: string
   io: WslRelayLaunchIo
   isDisposed: () => boolean
-  onChild: (child: ChildProcessWithoutNullStreams) => void
+  onChild: (child: PipedChildProcess) => void
   onNoNode: () => void
   onFailure: (message: string) => void
-  connect: (transport: MultiplexerTransport, child: ChildProcessWithoutNullStreams) => Promise<void>
+  connect: (transport: MultiplexerTransport, child: PipedChildProcess) => Promise<void>
 }): Promise<void> {
   const { distro, env, bundleJsPath, version, io } = options
   let installTried = false

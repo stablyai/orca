@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { codexItemBody, codexStreamingJournalItem } from './codex-structured-item-translation'
-import { AgentJournalItemBodySchema } from '../../shared/agent-session-journal-schemas'
-import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
+import { AgentJournalItemBodySchema } from '../../shared/agent-session/journal/agent-session-journal-schemas'
+import { projectStructuredItemsToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 describe('plan document translation', () => {
   it('marks both complete documents and streaming snapshots', () => {

@@ -18,8 +18,10 @@ import {
 import * as diagnosticPosition from '@/components/right-sidebar/check-log-initial-diagnostic-position'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   i18n: { language: 'en' },
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/{{(\w+)}}/g, (_match, key) => String(values?.[key] ?? ''))
 }))
 vi.mock('@/components/sidebar/CommentMarkdown', () => ({
   default: ({ content }: { content: string }) => content
@@ -290,7 +292,7 @@ describe('synthetic outcome payloads through real sidebar and header actions', (
       expect(fetch).toHaveBeenCalledWith(
         '/repo',
         { checkRunId: 42, workflowRunId: 55, checkName: 'verify', url: check.url, prRepo: null },
-        { repoId: 'repo-1' }
+        { repoId: 'repo-1', repoOwnerExecutionHostId: 'local' }
       )
       const during = useAppStore.getState().openFiles[0].checkRunDetails
       const positions = [...scrollTopCache]

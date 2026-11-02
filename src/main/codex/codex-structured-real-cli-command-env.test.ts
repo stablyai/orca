@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { resolveCodexCommand } from '../codex-cli/command'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { openCodexThread } from './codex-structured-thread-open'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 
 // The probe is a POSIX shell command.
 const enabled = process.env.ORCA_REAL_CODEX_CLI_TEST === '1' && process.platform !== 'win32'

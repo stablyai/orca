@@ -18,6 +18,48 @@ import {
 } from './agent-title-owner'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 
+import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
+
+describe('normalization structural identity invariant', () => {
+  it.each([
+    ['* | Grok', '* | Grok'],
+    ['. | ✦ session | Thinking', '. | ✦ session | Thinking'],
+    ['. | ✦ Analyze', '. | ✦ Analyze'],
+    ['✦ session | Thinking - grok', '✦ session | Thinking - grok'],
+    ['▲ session | Action Required - grok', '▲ session | Action Required - grok'],
+    ['◇ Qoder CLI CN | Idle - grok', '◇ Qoder CLI CN | Idle - grok'],
+    ['✦ session | Thinking', '✦ Qoder CLI'],
+    ['▲ session | Action Required', '▲ Qoder CLI'],
+    ['◇ session | Idle', '◇ Qoder CLI'],
+    ['✦ Qoder CLI CN (Codex | Claude Code)', '✦ Qoder CLI CN'],
+    ['▲ Qoder CLI CN', '▲ Qoder CLI CN'],
+    ['◇ Qoder CLI CN', '◇ Qoder CLI CN'],
+    ['⠋ fix the gemini launcher', '⠋ fix the gemini launcher'],
+    ['⠋ add ✦ icon to header', '⠋ add ✦ icon to header'],
+    ['✦ Analyze Codex', '✦ Gemini CLI'],
+    ['✋ waiting for permission', '✋ Gemini CLI'],
+    ['◇ ready', '◇ Gemini CLI'],
+    ['⠴ π - session - cwd', '⠋ π - session - cwd'],
+    ['⠴ OMP - session - cwd', '⠴ OMP - session - cwd'],
+    ['Plan: migrate | π - ⠴ cwd', 'Plan: migrate | π - ⠋ cwd'],
+    ['⠋ - Codex: fix parser - grok', '⠋ Grok'],
+    ['⠋ Codex: fix parser - grok', '⠋ Codex: fix parser - grok'],
+    ['⠋ Grok', '⠋ Grok'],
+    ['Fix Codex - grok', 'Fix Codex - grok'],
+    ['⠴ - Review Codex - DeepSeek Build', '⠴ - Review Codex - DeepSeek Build']
+  ])('preserves identity and idempotence for %j', (raw, expected) => {
+    if (raw.startsWith('. | ') || raw.startsWith('* | ')) {
+      expect(resolveExplicitTerminalTitleAgentType(raw)).toBeNull()
+    }
+    const display = normalizeTerminalTitle(raw)
+    expect(display).toBe(expected)
+    expect(resolveExplicitTerminalTitleAgentType(display)).toBe(
+      resolveExplicitTerminalTitleAgentType(raw)
+    )
+    expect(normalizeTerminalTitle(display)).toBe(display)
+  })
+})
+
 describe('OSC title extraction', () => {
   it('extracts the last OSC title from BEL-terminated PTY data', () => {
     expect(extractLastOscTitle('\x1b]0;First\x07noise\x1b]2;Second\x07')).toBe('Second')
@@ -162,7 +204,10 @@ describe('Pi-compatible title detection', () => {
     ['Pi ready', 'Pi', 'idle'],
     // Old stored titles collapsed to Pi; re-detection must still classify idle.
     ['Pi', 'Pi', 'idle'],
-    ['Pi - action required', 'Pi', 'permission']
+    ['Pi - action required', 'Pi', 'permission'],
+    // Owner-rebranded session titles must not fall through to Claude's braille heuristic.
+    ['\u280b OMP - fixing the sidebar - orca', 'OMP', 'working'],
+    ['OMP - fixing the sidebar - orca', 'OMP', 'idle']
   ] as const)('classifies synthesized %s', (title, expectedLabel, expectedStatus) => {
     expect(getAgentLabel(title)).toBe(expectedLabel)
     expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)

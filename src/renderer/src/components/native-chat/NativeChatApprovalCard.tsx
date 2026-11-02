@@ -5,13 +5,13 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
-import { approvalBlockedPathToShow } from '../../../../shared/agent-session-approval-blocked-path'
+import { approvalBlockedPathToShow } from '../../../../shared/agent-session/agent-session-approval-blocked-path'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
-} from '../../../../shared/agent-session-approval-subject'
+} from '../../../../shared/agent-session/agent-session-approval-subject'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
-import type { ChatApproval } from './native-chat-interactive-prompt'
+import type { ChatApproval } from '../../../../shared/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 
@@ -58,7 +58,7 @@ export function NativeChatApprovalCard({
 
   return (
     <SecuritySurface>
-      <div className="min-h-0 shrink overflow-hidden bg-chat-canvas">
+      <div className="min-h-0 shrink overflow-hidden bg-chat-pane">
         <div className="mx-auto flex h-full min-h-0 max-h-full w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
           <div
             ref={cardRef}

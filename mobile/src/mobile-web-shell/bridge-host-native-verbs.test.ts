@@ -2,7 +2,10 @@
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
 import { bridgeId, clientFrame, flushBridge } from './bridge-host-test-fakes'
-import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
+import {
+  BRIDGE_MAX_PENDING_DESKTOP_REQUESTS,
+  BRIDGE_MAX_PENDING_REQUESTS
+} from './bridge/bridge-caps'
 
 function request(method: string, params?: unknown): string {
   return params === undefined
@@ -172,6 +175,19 @@ describe('a native method the page asks for', () => {
     expect(reachedTheDesktop(bridge)).toEqual([])
   })
 
+  it('opens only PDFs, so the page cannot have the shell download and hand off other files', async () => {
+    const bridge = harness({ ready: true })
+    for (const relativePath of ['notes.docx', 'archive.pdf.zip', 'pdf']) {
+      bridge.host.receive(
+        request('native.pdf.view', { action: 'open', worktreeId: 'w', relativePath })
+      )
+      await flushBridge()
+      expect(refusal(bridge)?.code, relativePath).toBe('native_verb_params')
+    }
+    expect(bridge.nativeCalls).toEqual([])
+    expect(reachedTheDesktop(bridge)).toEqual([])
+  })
+
   it('refuses a result the verb does not declare, rather than passing it to the page', async () => {
     // Validate results against the verb table before an arbitrary handler reply reaches the page.
     const bridge = harness({ serveNativeVerb: () => Promise.resolve({ nonsense: 1 }) })
@@ -245,6 +261,33 @@ describe('a native method the page asks for', () => {
     )
     await flushBridge()
     expect(reachedTheDesktop(bridge)).toEqual([])
+  })
+
+  it('still serves one when an older page has every slot waiting on the desktop', async () => {
+    const served: string[] = []
+    const bridge = harness({
+      serveNativeVerb: (verb) => {
+        served.push(verb)
+        return new Promise(() => {})
+      }
+    })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    for (let index = 1; index <= BRIDGE_MAX_PENDING_REQUESTS; index += 1) {
+      bridge.host.receive(
+        clientFrame({ type: 'request', id: bridgeId(index), method: 'worktree.list' })
+      )
+    }
+    expect(bridge.client.requests).toHaveLength(BRIDGE_MAX_PENDING_DESKTOP_REQUESTS)
+    bridge.host.receive(
+      clientFrame({
+        type: 'request',
+        id: bridgeId(BRIDGE_MAX_PENDING_REQUESTS + 1),
+        method: 'native.clipboard.read',
+        params: { mime: 'text' }
+      })
+    )
+    await flushBridge()
+    expect(served).toEqual(['native.clipboard.read'])
   })
 
   it('settles a cancelled native request the way a forwarded one settles, with no late reply', async () => {

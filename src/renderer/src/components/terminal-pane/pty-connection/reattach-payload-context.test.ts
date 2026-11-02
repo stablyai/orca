@@ -27,7 +27,8 @@ function createSession(overrides: Record<string, unknown> = {}): ReattachPayload
       hasProvenBaseline: true,
       reset: vi.fn(),
       resetForSnapshot: vi.fn(),
-      scanReplay: vi.fn()
+      scanReplay: vi.fn(),
+      adoptSnapshot: vi.fn()
     },
     ...overrides
   } as unknown as ReattachPayloadSession

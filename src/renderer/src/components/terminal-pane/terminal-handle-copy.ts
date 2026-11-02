@@ -3,7 +3,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
-} from '../../../../shared/remote-runtime-pty-id'
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 type CopyTerminalHandleDeps = {
   tabId: string

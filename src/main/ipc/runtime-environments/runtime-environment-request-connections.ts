@@ -1,3 +1,4 @@
+import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
@@ -11,7 +12,7 @@ import type {
 } from '../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeRequestConnection } from '../../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
-import { probeAllRemoteRuntimeSocketsNow } from '../../../shared/remote-runtime-socket-liveness'
+import { probeAllRemoteRuntimeSocketsNow } from '../../../shared/remote-runtime/remote-runtime-socket-liveness'
 import type {
   RemoteRuntimeSharedConnectionDiagnostics,
   RemoteRuntimeSharedSubscription
@@ -27,6 +28,7 @@ import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
+import { declareWslHostClient } from '../../wsl/wsl-host-client-declaration'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -97,6 +99,10 @@ export function resetRuntimeEnvironmentStatusOwners(): void {
   for (const id of statusOwners.keys()) {
     closeRemoteRuntimeRequestConnection(id)
   }
+}
+
+export function getRuntimeEnvironmentStatusSnapshot(environmentId: string) {
+  return statusOwners.get(environmentId)?.owner.read() ?? null
 }
 
 export function getRuntimeEnvironmentStatusSnapshots() {
@@ -269,13 +275,16 @@ function getSharedControlConnection(
     cached?.connection.close()
     const transportGeneration = getRuntimeEnvironmentTransportGeneration(environmentId)
     let answeredAt: number | null = null
-    cached = {
-      pairingKey,
-      answeredAt: () => answeredAt,
-      connection: new RemoteRuntimeSharedControlConnection(pairedConnection, {
+    const connection: RemoteRuntimeSharedControlConnection =
+      new RemoteRuntimeSharedControlConnection(pairedConnection, {
         environmentId,
         clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
         ...sharedControlEnvironmentPolicy(environmentId),
+        // R39: every ready socket, including after a reconnect, re-declares this installation.
+        onReady: () =>
+          declareWslHostClient(environmentId, (method, params, timeoutMs) =>
+            connection.request(method, params, timeoutMs)
+          ),
         // Wall-clock time includes suspend, expiring pre-sleep answers.
         onAnswered: () => {
           answeredAt = Date.now()
@@ -301,7 +310,7 @@ function getSharedControlConnection(
             )
         }
       })
-    }
+    cached = { pairingKey, answeredAt: () => answeredAt, connection }
     sharedControlConnections.set(environmentId, cached)
     const entry = cached
     // Ready requires this socket's own server frame, which stamps its answer time.
@@ -310,12 +319,4 @@ function getSharedControlConnection(
     )
   }
   return cached.connection
-}
-
-function getPairingKey(pairedConnection: PairedRuntimeConnection): string {
-  return [
-    pairedConnection.endpoint,
-    pairedConnection.credential.deviceToken,
-    pairedConnection.hostPublicKeyB64
-  ].join('\0')
 }

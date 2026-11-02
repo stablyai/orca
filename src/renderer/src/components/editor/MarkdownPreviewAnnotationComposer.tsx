@@ -36,9 +36,12 @@ export function MarkdownPreviewSingleNoteSendMenu({
           formatPrompt: (notes) => formatMarkdownReviewNotes(notes, content)
         }
       ]}
-      targetModeLabel="This note"
+      targetModeLabel={translate('auto.components.editor.NotesSendMenu.thisNote', 'This note')}
       triggerClassName="orca-diff-comment-pill-btn"
-      disabledTooltip="Note already sent"
+      disabledTooltip={translate(
+        'auto.components.editor.NotesSendMenu.noteAlreadySent',
+        'Note already sent'
+      )}
       onDelivered={onDelivered}
     />
   )

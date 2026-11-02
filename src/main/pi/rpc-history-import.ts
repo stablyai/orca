@@ -1,9 +1,7 @@
 import { z } from 'zod'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import { legacyItemBody } from '../native-chat/agent-session-journal/journal-legacy-import'
 import { decodePiSessionEntryLine } from '../native-chat/agent-session-journal/journal-pi-active-branch'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'

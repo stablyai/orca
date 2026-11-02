@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
@@ -97,6 +97,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     typeof ResizeObserver === 'undefined'
       ? null
       : new ResizeObserver(() => {
+          session.foregroundGridDriftProbeSettled = false
           const paneSize = session.readPaneSize()
           if (
             paneSize &&

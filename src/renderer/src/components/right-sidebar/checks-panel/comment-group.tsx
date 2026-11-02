@@ -88,7 +88,10 @@ export function PRCommentGroupView({
             'Reply to {{value0}}',
             { value0: comment.author }
           )}
-          submitLabel="Reply"
+          submitLabel={translate(
+            'auto.components.right.sidebar.checks.panel.content.c1f6fc006a',
+            'Reply'
+          )}
           autoFocus
           disabled={replyDisabled}
           disabledReason={replyDisabledReason}

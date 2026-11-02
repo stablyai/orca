@@ -144,7 +144,8 @@ function issue(title: string) {
 function desktop(
   vmRepoList: () => Promise<unknown> = async () => ({ repos: VM_REPOS }),
   hostsList: () => Promise<unknown> = async () => ({ hosts: HOSTS }),
-  jiraStatus: () => Promise<RpcResponse> = async () => reply({})
+  jiraStatus: () => Promise<RpcResponse> = async () => reply({}),
+  gitlabList?: () => Promise<RpcResponse>
 ): FakeSession {
   return recording(new FakeSession('connected'), async (method, executionHost) => {
     if (method === 'jira.status') {
@@ -166,6 +167,12 @@ function desktop(
     }
     if (method === 'linear.listIssues') {
       return reply([])
+    }
+    if (method === 'preflight.check' && gitlabList) {
+      return reply({ glab: { installed: true } })
+    }
+    if (method === 'gitlab.listWorkItems' && gitlabList) {
+      return gitlabList()
     }
     if (method === 'github.listWorkItems') {
       return reply({ items: [issue(executionHost ? 'from the server' : 'from the desktop')] })
@@ -250,6 +257,69 @@ function ranOn(client: FakeSession, method: string): string[] {
 }
 
 describe('Tasks screen repos on the desktop and its servers', () => {
+  it('shows GitLab tasks and refresh errors without fetching the advertised probe page', async () => {
+    const items = Array.from({ length: 50 }, (_, index) => ({
+      ...issue(`Merge request ${index + 1}`),
+      id: `mr-${index + 1}`,
+      type: 'mr',
+      number: index + 1,
+      state: 'opened',
+      url: `https://gitlab.com/group/app/-/merge_requests/${index + 1}`
+    }))
+    let result: unknown = { items, page: 1, perPage: 50, totalCount: 0, totalPages: 2 }
+    const client = desktop(undefined, undefined, undefined, async () => reply(result))
+    const model = await mount(client, [], [], {
+      visibleTaskProviders: ['gitlab'],
+      defaultTaskSource: 'gitlab'
+    })
+    await settle()
+
+    expect(model().provider).toBe('gitlab')
+    expect(model().items).toEqual(
+      items.map((item) => ({
+        key: `gitlab:mac-repo:mr:${item.number}`,
+        provider: 'gitlab',
+        title: item.title,
+        subtitle: `app !${item.number}`,
+        status: 'Open',
+        updatedAt: item.updatedAt,
+        source: { ...item, repoId: 'mac-repo', repoName: 'app' }
+      }))
+    )
+    expect(model().error).toBe('')
+    expect(model().loading).toBe(false)
+    const listCalls = () =>
+      (sentBy.get(client) ?? []).filter((sent) => sent.method === 'gitlab.listWorkItems')
+    expect(listCalls()).toHaveLength(1)
+    expect(listCalls()[0]?.params).toMatchObject({
+      repo: 'id:mac-repo',
+      state: 'opened',
+      page: 1,
+      perPage: 50
+    })
+
+    result = {
+      items: [],
+      page: 1,
+      perPage: 50,
+      totalCount: 0,
+      totalPages: 0,
+      error: { type: 'permission_denied', message: 'GitLab access denied' }
+    }
+    await act(async () => {
+      await model().loadTasks()
+    })
+    await settle()
+    expect(model().items).toEqual([])
+    expect(model().error).toBe('GitLab access denied')
+    expect(model().loading).toBe(false)
+    expect(listCalls()).toHaveLength(2)
+    expect(listCalls().map((call) => call.params)).toEqual([
+      expect.objectContaining({ page: 1 }),
+      expect.objectContaining({ page: 1 })
+    ])
+  })
+
   it('hydrates other providers while Jira status is pending and ignores the previous host reply', async () => {
     const jiraStatus = deferred<RpcResponse>()
     const client = desktop(undefined, undefined, () => jiraStatus.promise)

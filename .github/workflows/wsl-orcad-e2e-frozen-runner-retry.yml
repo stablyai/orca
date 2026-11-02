@@ -14,7 +14,7 @@ jobs:
     if: >-
       github.event.workflow_run.path == '.github/workflows/wsl-orcad-e2e.yml' &&
       github.event.workflow_run.run_attempt == 1 && github.event.workflow_run.conclusion != 'success'
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
     permissions:
       actions: write

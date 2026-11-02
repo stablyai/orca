@@ -67,6 +67,7 @@ export function parseUnreadableNumstatPath(stderr: string): string | null {
 async function runNumstat(
   worktreePath: string,
   cached: boolean,
+  detectRenames: boolean,
   options: GitRuntimeOptions = {}
 ): Promise<NumstatPass | null> {
   const memoryKey = `${cached ? 'cached' : 'worktree'}:${worktreePath}`
@@ -83,7 +84,7 @@ async function runNumstat(
           '-z',
           ...(cached ? ['--cached'] : []),
           '--numstat',
-          '-M',
+          detectRenames ? '-M' : '--no-renames',
           ...(excluded.length > 0
             ? ['--', ...excluded.map((excludedPath) => `:(top,exclude,literal)${excludedPath}`)]
             : [])
@@ -125,12 +126,18 @@ export async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
-  const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
+  const { hasStaged, hasUnstaged, hasStagedRenames, hasUnstagedRenames, untrackedPaths } =
+    collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
   const skippedPass: NumstatPass = { stats: emptyStats, complete: true }
+  // Approximates status's rename policy: -M only for areas where status reported a rename.
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
-    hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(skippedPass),
-    hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(skippedPass),
+    hasStaged
+      ? runNumstat(worktreePath, true, hasStagedRenames, options)
+      : Promise.resolve(skippedPass),
+    hasUnstaged
+      ? runNumstat(worktreePath, false, hasUnstagedRenames, options)
+      : Promise.resolve(skippedPass),
     // Node reads need host paths even when Git runs in WSL.
     collectUntrackedAdditions(
       resolveWorktreeFilesystemPath(worktreePath, options),

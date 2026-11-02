@@ -1,24 +1,28 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { TuiAgent } from './tui-agent'
-import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
+import { parseAgentCommand } from './agent-command-plan'
 
-/** A single literal executable; the execution host verifies that the file is runnable. */
-export function structuredAgentCommandToken(command: string): string | null {
+/** Literal program and prefix; chat never evaluates shell syntax. */
+export function structuredAgentCommandPlan(command: string, platform?: NodeJS.Platform) {
   const input = command.trim()
   if (!input || /[\0\r\n$`]/.test(input)) {
     return null
   }
   const windowsPath = /^(?:["']?)(?:[A-Za-z]:[\\/]|\\\\)/.test(input)
-  const parsed = tokenizeCustomCommandTemplate(input, windowsPath ? 'literal' : 'escape')
+  const parsed = parseAgentCommand(
+    '',
+    input,
+    platform === 'win32' || windowsPath ? 'literal' : 'escape'
+  )
   if (
     !parsed.ok ||
-    parsed.tokens.length !== 1 ||
-    parsed.spans.some((span) => span.divergesFromShell)
+    parsed.env ||
+    parsed.divergesFromShell ||
+    [parsed.binary, ...parsed.prefixArgs].some((token) => /[|&;<>(){}[\]*?!]/.test(token))
   ) {
     return null
   }
-  const token = parsed.tokens[0]
-  return token && !/[|&;<>(){}[\]*?!]/.test(token) ? token : null
+  return { program: parsed.binary, prefixArgs: parsed.prefixArgs }
 }
 
 /** Terminal-backed chat skips the structured catalog when its launch command is customized. */

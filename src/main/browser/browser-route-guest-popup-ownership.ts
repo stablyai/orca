@@ -28,6 +28,10 @@ export function resolveBrowserRouteGuestPopupOpener(popupWebContentsId: number):
   return openerByPopupWebContentsId.get(popupWebContentsId) ?? null
 }
 
+export function listBrowserRouteGuestPopups(): number[] {
+  return [...openerByPopupWebContentsId.keys()]
+}
+
 export function isBrowserRouteGuestPopup(webContentsId: number): boolean {
   return openerByPopupWebContentsId.has(webContentsId)
 }

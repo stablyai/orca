@@ -6,6 +6,10 @@ import {
   RETAINED_FIXTURE_PAGE,
   type RetainedHostFixture
 } from './browser-client-page-retained-host-fixture'
+import {
+  BROWSER_CLIENT_PAGE_POSITION_RECHECK_MS,
+  BROWSER_CLIENT_PAGE_POSITION_SETTLE_FRAMES
+} from './browser-client-page-position-driver'
 import type { BrowserClientPageVisibleAttachment } from './browser-client-page-retained-registry'
 
 /** Drives the shared loop by hand so a "frame" is an explicit step, not wall-clock timing. */
@@ -47,6 +51,14 @@ function installFrameStub(): FrameStub {
 function setVisibility(next: DocumentVisibilityState): void {
   visibilityState = next
   document.dispatchEvent(new Event('visibilitychange'))
+}
+
+/** Runs frames, delivering the driver's own mutation wakes, until it stops scheduling them. */
+async function settle(): Promise<void> {
+  for (let step = 0; step < 20 && frames.pending() > 0; step++) {
+    frames.runFrame()
+    await Promise.resolve()
+  }
 }
 
 /** Moves a pane the way a split resize or sidebar toggle does: new rect, no resize/scroll event. */
@@ -99,8 +111,10 @@ afterEach(() => {
     attachment.detach()
   }
   disposeRetainedHostFixtures()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  Reflect.deleteProperty(document, 'getAnimations')
   document.body.innerHTML = ''
 })
 
@@ -134,6 +148,84 @@ describe('client-hosted page position driver', () => {
     expect(pane.host().style.top).toBe('48px')
   })
 
+  it('schedules no frames once idle, and resumes when the DOM changes', async () => {
+    const pane = await attachHost('page-one', 10)
+    await settle()
+    expect(frames.pending()).toBe(0)
+
+    // A layout-changing commit elsewhere, e.g. a sidebar collapsing, moves the pane with no event.
+    document.body.setAttribute('data-sidebar', 'collapsed')
+    moveContainer(pane.container, 120, 0)
+    await Promise.resolve()
+
+    expect(frames.pending()).toBe(1)
+    frames.runFrame()
+    expect(pane.host().style.left).toBe('120px')
+  })
+
+  it('stays idle while a terminal rewrites its own DOM', async () => {
+    await attachHost('page-one', 10)
+    const terminal = document.createElement('div')
+    terminal.className = 'xterm'
+    const slider = document.createElement('div')
+    terminal.append(slider)
+    document.body.append(terminal)
+    await settle()
+
+    slider.style.top = '42px'
+    slider.textContent = 'streamed output'
+    await Promise.resolve()
+
+    expect(frames.pending()).toBe(0)
+  })
+
+  // Style sheet edits and script-driven animations move panes with no mutation or event.
+  it('repositions a pane moved with no wake on the next recheck, without frames while unchanged', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    const pane = await attachHost('page-one', 10)
+    await settle()
+
+    vi.advanceTimersByTime(BROWSER_CLIENT_PAGE_POSITION_RECHECK_MS * 3)
+    expect(frames.pending()).toBe(0)
+
+    moveContainer(pane.container, 640, 48)
+    vi.advanceTimersByTime(BROWSER_CLIENT_PAGE_POSITION_RECHECK_MS)
+
+    expect(pane.host().style.left).toBe('640px')
+    expect(pane.host().style.top).toBe('48px')
+
+    openAttachments.shift()!.detach()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps syncing past the settle window while a finite animation moves a pane', async () => {
+    const pane = await attachHost('page-one', 10)
+    const running = [
+      { playState: 'running', effect: { getComputedTiming: () => ({ endTime: 600 }) } }
+    ]
+    const spinner = [
+      { playState: 'running', effect: { getComputedTiming: () => ({ endTime: Infinity }) } }
+    ]
+    let animations: unknown[] = running
+    Object.defineProperty(document, 'getAnimations', {
+      configurable: true,
+      value: () => animations
+    })
+
+    for (let frame = 0; frame < BROWSER_CLIENT_PAGE_POSITION_SETTLE_FRAMES; frame++) {
+      frames.runFrame()
+    }
+    expect(frames.pending()).toBe(1)
+    moveContainer(pane.container, 300, 0)
+    frames.runFrame()
+    expect(pane.host().style.left).toBe('300px')
+
+    // An endless spinner never moves panes, so it must not keep frames running.
+    animations = spinner
+    frames.runFrame()
+    expect(frames.pending()).toBe(0)
+  })
+
   // macOS can wedge visibilityState at hidden while painting; Chromium already throttles truly hidden rAF, so visibility gating only risks frozen overlays.
   it('keeps tracking pane moves while the document reports hidden', async () => {
     const first = await attachHost('page-one', 10)
@@ -152,7 +244,6 @@ describe('client-hosted page position driver', () => {
     expect(first.host().style.top).toBe('24px')
     expect(second.host().style.left).toBe('400px')
     expect(second.host().style.top).toBe('36px')
-    expect(frames.pending()).toBe(1)
   })
 
   it('cancels the shared frame only when the last host detaches', async () => {
@@ -183,12 +274,14 @@ describe('client-hosted page position driver', () => {
     expect(healthy.host().style.top).toBe('12px')
     expect(frames.pending()).toBe(1)
 
-    // Still running a frame later, and the repeat failure is not re-logged every frame.
+    // Later wakes still sync, and the repeat failure is not re-logged every frame.
+    await settle()
+    document.body.setAttribute('data-layout', 'changed')
     moveContainer(healthy.container, 333, 24)
+    await Promise.resolve()
     frames.runFrame()
 
     expect(healthy.host().style.left).toBe('333px')
-    expect(frames.pending()).toBe(1)
     expect(warn).toHaveBeenCalledTimes(1)
   })
 

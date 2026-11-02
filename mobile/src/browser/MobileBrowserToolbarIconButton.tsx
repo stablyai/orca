@@ -1,6 +1,8 @@
-import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable, type StyleProp, type ViewStyle } from 'react-native'
 import type { ReactNode } from 'react'
 import { colors, radii } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   children: ReactNode
@@ -17,6 +19,7 @@ export function MobileBrowserToolbarIconButton({
   onPress,
   style
 }: Props): React.JSX.Element {
+  useMobileColorScheme()
   return (
     <Pressable
       style={({ pressed }) => [
@@ -34,11 +37,11 @@ export function MobileBrowserToolbarIconButton({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   button: {
     width: 26,
     height: 26,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -48,4 +51,4 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.35
   }
-})
+}))

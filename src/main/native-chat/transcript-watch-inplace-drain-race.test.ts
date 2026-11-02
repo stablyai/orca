@@ -3,7 +3,7 @@ import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { getActiveNativeChatWatcherCount, subscribeNativeChatTranscript } from './transcript-watch'
 
 function record(id: string, text: string): string {

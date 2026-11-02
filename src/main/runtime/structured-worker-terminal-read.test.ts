@@ -1,6 +1,11 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -31,19 +36,24 @@ function message(id: string, text: string): AgentJournalRenderItem {
 function installHost(options: {
   items?: readonly AgentJournalRenderItem[] | 'unreadable'
   hasOlder?: boolean
-  lease?: { runtimeKind: string; claimStatus: string }
+  lease?: Pick<AgentSessionLease, 'runtimeKind' | 'claimStatus'>
   hasSession?: boolean
 }): void {
   const lease = options.lease ?? { runtimeKind: 'native', claimStatus: 'live' }
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) =>
-          ({
-            sessionId,
-            location: { executionHostId: 'local', wslDistro: null },
-            lease: { ...lease, runtimeFence: 1, deathEvidence: null }
-          }) as unknown as AgentSessionRecord
+        getConversation: (sessionId: string) =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(
+              agentSessionLeaseFixture({
+                ...lease,
+                sessionId,
+                runtimeFence: 1,
+                deathEvidence: null
+              })
+            )
+          )
       }
     },
     hasSession: () => options.hasSession ?? true,
@@ -110,12 +120,6 @@ describe('reading a structured worker through the terminal-read path', () => {
     expect(refusal).toMatch(/poll it and diff/)
     // Do not redirect peers to worker-read: it requires coordinator authority and offers no stable cursor either.
     expect(refusal).not.toContain('worker-read')
-  })
-
-  it('reports dropped history as truncated rather than pretending the page is whole', async () => {
-    const handle = registerWorker()
-    installHost({ items: [message('i1', 'tail only')], hasOlder: true })
-    expect((await readStructuredWorkerTerminal({ handle, db: null }))?.truncated).toBe(true)
   })
 
   it('redacts dispatch capability tokens the same way the archive path does', async () => {

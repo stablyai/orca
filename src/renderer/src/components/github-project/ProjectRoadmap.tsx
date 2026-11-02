@@ -192,6 +192,7 @@ export default function ProjectRoadmap({
                   {view.groupByFields[0] ? (
                     <ProjectGroupHeader
                       group={group}
+                      groupFieldName={view.groupByFields[0].name}
                       expanded={expanded}
                       bandWidth={bandWidth}
                       onToggle={() =>

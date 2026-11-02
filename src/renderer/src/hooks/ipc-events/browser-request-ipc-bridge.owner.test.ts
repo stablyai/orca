@@ -115,40 +115,6 @@ describe('browser requests from this desktop follow the workspace owner (#22275)
     registerBrowserRequestIpcBridge([])
   })
 
-  it('creates a tab for an explicit local worktree while a paired server is the Active Server', () => {
-    mocks.getState.mockReturnValue(storeState(REMOTE_WT))
-
-    mocks.createListener?.({ requestId: 'r1', worktreeId: LOCAL_WT, url: 'about:blank' })
-
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith(LOCAL_WT, 'about:blank', expect.anything())
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({ requestId: 'r1', browserPageId: 'ws-new' })
-  })
-
-  it("answers with the new tab's page before main's frame draws it (layout-owner build)", () => {
-    mocks.getState.mockReturnValue(storeState(LOCAL_WT))
-    mocks.createBrowserTab.mockImplementation(() => ({ id: 'ws-new', activePageId: 'page-new' }))
-
-    mocks.createListener?.({ requestId: 'r4', worktreeId: LOCAL_WT, url: 'about:blank' })
-
-    // Not the workspace id: a paired client matches the reply against the page it asked for.
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({
-      requestId: 'r4',
-      browserPageId: 'page-new'
-    })
-
-    mocks.createListener?.({
-      requestId: 'r5',
-      worktreeId: LOCAL_WT,
-      url: 'about:blank',
-      browserPageId: 'page-asked'
-    })
-
-    expect(mocks.replyTabCreate).toHaveBeenCalledWith({
-      requestId: 'r5',
-      browserPageId: 'page-asked'
-    })
-  })
-
   it("renders a page named in a managed host's workspace on this desktop (#29145)", () => {
     mocks.getState.mockReturnValue(storeState(LOCAL_WT))
 

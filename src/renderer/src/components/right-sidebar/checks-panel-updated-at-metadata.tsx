@@ -1,5 +1,5 @@
 import type React from 'react'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 type ChecksPanelUpdatedAtMetadataProps = {
   reviewShortLabel: string
@@ -12,9 +12,14 @@ export function ChecksPanelUpdatedAtMetadata({
 }: ChecksPanelUpdatedAtMetadataProps): React.JSX.Element {
   return (
     <div className="text-[10px] text-muted-foreground/60">
-      {reviewShortLabel}{' '}
-      {translate('auto.components.right.sidebar.ChecksPanel.34464d00b9', 'updated')}{' '}
-      {new Date(updatedAt).toLocaleString()}
+      {translate(
+        'auto.components.right.sidebar.ChecksPanel.reviewUpdatedAt',
+        '{{review}} updated {{time}}',
+        {
+          review: reviewShortLabel,
+          time: new Date(updatedAt).toLocaleString(getIntlLocale())
+        }
+      )}
     </div>
   )
 }

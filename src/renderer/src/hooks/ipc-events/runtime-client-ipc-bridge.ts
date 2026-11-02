@@ -1,3 +1,4 @@
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
@@ -13,7 +14,7 @@ import {
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -64,6 +65,8 @@ export function registerRuntimeClientIpcBridge(
     refresh: async (environmentId) => {
       // Why: project events can reveal target CRUD, but known target states already arrive by push.
       void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})
+      // Why: hosts without workspaceViewChanged still refresh their columns here.
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
       // Group/folder edits share reposChanged; refresh groups before folders to resolve their owners.
       const runtimeOwner = { runtimeEnvironmentId: environmentId }
@@ -110,8 +113,9 @@ export function registerRuntimeClientIpcBridge(
       applyNativeChatLaunchDraftResolved(useAppStore.getState(), event)
       return
     }
-    // A paired desktop keeps its own Workspace options; only the host's phone mirrors them.
+    // A paired desktop keeps its own Workspace options; it reads only the host's columns, for the host's cards.
     if (event.type === 'workspaceViewChanged') {
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       return
     }
     if (event.type === 'reposChanged') {
@@ -162,16 +166,18 @@ export function registerRuntimeClientIpcBridge(
       return
     }
     if (event.type === 'linearLinkedIssueUpdated') {
-      void useAppStore
-        .getState()
-        .refreshLinearIssue(event.identifier, event.workspaceId)
-        .catch((error) => {
-          console.error('Failed to refresh updated Linear issue:', error)
-        })
+      void consumeLinearIssueRead(
+        useAppStore.getState().refreshLinearIssue(event.identifier, event.workspaceId)
+      ).catch((error) => {
+        console.error('Failed to refresh updated Linear issue:', error)
+      })
       return
     }
     // This window builds its sidebar from its own store, never from a host's phone feed.
     if (event.type === 'sidebarInputsChanged') {
+      return
+    }
+    if (event.type !== 'activateWorktree') {
       return
     }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.
@@ -222,6 +228,7 @@ export function registerRuntimeClientIpcBridge(
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
+      void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const subscription = subscribeRuntimeClientEvents(
         environmentId,
         (event) => {

@@ -25,8 +25,11 @@ vi.mock('../mobile-native-chat-send', () => ({
 }))
 
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { useMobileNativeChatMessageSend } from '../../use-mobile-native-chat-message-send'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
+import { useMobileNativeChatMessageSend } from '../transcript/use-mobile-native-chat-message-send'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  useMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
 
 function deferred<T>() {
   let resolve: ((value: T) => void) | undefined
@@ -37,7 +40,7 @@ function deferred<T>() {
 }
 
 type HookState = {
-  drafts: ReturnType<typeof useMobileNativeChatDrafts>
+  drafts: ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
   sender: ReturnType<typeof useMobileNativeChatMessageSend>
 }
 
@@ -94,7 +97,8 @@ describe('mobile native-chat send across screen lifetimes', () => {
         holdUnconfirmedSend: drafts.holdUnconfirmedSend,
         onSendError: transport.error
       })
-      latest = { drafts, sender }
+      const composerText = useMobileNativeChatDraft(drafts.draftKey)
+      latest = { drafts: { ...drafts, composerText }, sender }
       return null
     }
     await act(async () => {

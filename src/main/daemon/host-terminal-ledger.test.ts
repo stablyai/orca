@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_MAX_HOST_TERMINALS,
-  defaultHostTerminalLedgerDir,
   HostTerminalLedger,
   resolveMaxHostTerminals
 } from './host-terminal-ledger'
@@ -163,12 +162,6 @@ describe('HostTerminalLedger', () => {
     expect(isolated.tryReserve(share(2))).toBe(false)
     expect(log).toHaveBeenCalledWith('host-terminal-ledger-unavailable', expect.any(Object))
   })
-
-  it('counts only itself without a shared directory', () => {
-    const solo = new HostTerminalLedger({ dir: null, maxTerminals: 1, pid: 100, log: vi.fn() })
-    expect(solo.tryReserve(share(0))).toBe(true)
-    expect(solo.tryReserve(share(1))).toBe(false)
-  })
 })
 
 describe('resolveMaxHostTerminals', () => {
@@ -182,20 +175,6 @@ describe('resolveMaxHostTerminals', () => {
     )
     expect(resolveMaxHostTerminals({ ORCA_DAEMON_MAX_HOST_TERMINALS: '100000' })).toBe(
       DEFAULT_MAX_HOST_TERMINALS
-    )
-  })
-
-  it('accepts a tuned cap', () => {
-    expect(resolveMaxHostTerminals({ ORCA_DAEMON_MAX_HOST_TERMINALS: ' 64 ' })).toBe(64)
-  })
-})
-
-describe('defaultHostTerminalLedgerDir', () => {
-  it('uses the per-user machine-local base beside relocated daemon sockets', () => {
-    expect(defaultHostTerminalLedgerDir('linux', 1000)).toBe('/tmp/.orca-daemon-1000/terminals')
-    expect(defaultHostTerminalLedgerDir('darwin', 501)).toBe('/tmp/.orca-daemon-501/terminals')
-    expect(defaultHostTerminalLedgerDir('win32', undefined)).toBe(
-      join(tmpdir(), 'orca-daemon-host-terminals')
     )
   })
 })

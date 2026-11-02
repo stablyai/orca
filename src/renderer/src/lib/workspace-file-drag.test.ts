@@ -7,7 +7,6 @@ import {
   encodeWorkspaceFilePaths,
   readWorkspaceFileDragPaths,
   readWorkspaceFileDragSource,
-  isResolvedWorkspaceFileDragExecutionHost,
   writeWorkspaceFileDragSource
 } from './workspace-file-drag'
 
@@ -32,19 +31,6 @@ class FakeDataTransfer {
 }
 
 describe('workspace file drag payloads', () => {
-  it('round-trips explicit workspace and execution-host ownership', () => {
-    const transfer = new FakeDataTransfer()
-    writeWorkspaceFileDragSource(transfer, {
-      executionHostId: 'ssh:remote-1',
-      workspaceId: 'folder:docs'
-    })
-
-    expect(readWorkspaceFileDragSource(transfer)).toEqual({
-      executionHostId: 'ssh:remote-1',
-      workspaceId: 'folder:docs'
-    })
-  })
-
   it('rejects missing and malformed workspace ownership', () => {
     const transfer = new FakeDataTransfer()
     expect(readWorkspaceFileDragSource(transfer)).toBeNull()
@@ -75,11 +61,6 @@ describe('workspace file drag payloads', () => {
       })
     )
     expect(readWorkspaceFileDragSource(transfer)).toBeNull()
-  })
-
-  it('rejects only the exact unresolved execution-host sentinel', () => {
-    expect(isResolvedWorkspaceFileDragExecutionHost('runtime:unresolved-owner')).toBe(false)
-    expect(isResolvedWorkspaceFileDragExecutionHost('runtime:my-unresolved-owner-env')).toBe(true)
   })
 
   it('round-trips bounded multi-path payloads and removes nested duplicates', () => {

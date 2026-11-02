@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { createCmdJTaskSearchRequests } from './task-search-requests'
 import { jiraTaskIssue } from './task-search.test-fixture'
-import { makeRepo } from '../worktree-jump-palette-test-fixtures'
+import { makeRepo } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { linearSearchIssuesForTarget, linearStatusForTarget } from '@/runtime/runtime-linear-client'
 import { jiraSearchIssuesForTarget, jiraStatusForTarget } from '@/runtime/runtime-jira-client'
 import { createRuntimeGitLabApi } from '@/runtime/runtime-gitlab-api'
@@ -194,7 +194,17 @@ it('routes GitHub search through the repo owner with an open-issue query', async
 
 it('uses GitLab combined search and never includes merge requests in task results', async () => {
   const listWorkItems = vi.fn().mockResolvedValue({
-    items: [{ type: 'mr', number: 1, title: 'login redirect', state: 'opened' }]
+    items: Array.from({ length: 12 }, (_, index) => ({
+      id: `mr-${index + 1}`,
+      type: 'mr',
+      number: index + 1,
+      title: 'login redirect',
+      state: 'opened'
+    })),
+    page: 1,
+    perPage: 12,
+    totalCount: 0,
+    totalPages: 2
   })
   vi.mocked(gitLabApiFor).mockReturnValue({
     ...createRuntimeGitLabApi({
@@ -215,8 +225,9 @@ it('uses GitLab combined search and never includes merge requests in task result
     })
   )
   expect(listWorkItems).toHaveBeenCalledWith(
-    expect.objectContaining({ state: 'opened', query: 'login redirect', perPage: 12 })
+    expect.objectContaining({ state: 'opened', query: 'login redirect', page: 1, perPage: 12 })
   )
+  expect(listWorkItems).toHaveBeenCalledTimes(1)
   expect(result).toEqual([])
 })
 

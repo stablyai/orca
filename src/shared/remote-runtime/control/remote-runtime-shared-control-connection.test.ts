@@ -7,9 +7,9 @@ import {
   REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
   retainedRemoteRuntimeJsonStringBytes,
   serializeRemoteRuntimeRpcRequest
-} from '../../remote-runtime-memory-limits'
+} from '../remote-runtime-memory-limits'
 import { getRemoteRuntimeRequestAdmissionEvidence } from '../requests/remote-runtime-prepared-request-admission'
-import { remoteRuntimeClientCapabilities } from '../../remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import { isRuntimeSubscriptionReplayResponse } from '../../runtime-subscription-replay'
 import {
@@ -249,6 +249,19 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       lastClose: null
     })
 
+    connection.close()
+  })
+
+  it('calls onReady for every socket that becomes ready, including after a reconnect', async () => {
+    const server = await createServer()
+    const onReady = vi.fn()
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, { onReady })
+    await connection.request('worktree.ps', undefined, 1000)
+    expect(onReady).toHaveBeenCalledTimes(1)
+    server.closeClients()
+    await vi.waitFor(() => expect(server.connectionCount()).toBe(2))
+    await connection.request('worktree.ps', undefined, 2000)
+    expect(onReady).toHaveBeenCalledTimes(2)
     connection.close()
   })
 

@@ -1,12 +1,12 @@
 import { createElement, Fragment, useMemo, type ReactNode, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import { MobileNativeChatBackgroundTasks } from '../../MobileNativeChatBackgroundTasks'
+import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import {
   MobileNativeChatQueuedMessages,
   type MobileNativeChatQueuedMessagesProps
-} from '../../MobileNativeChatQueuedMessages'
+} from '../input/MobileNativeChatQueuedMessages'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
-import { useMobileNativeChatQueuedEditFocus } from '../../use-mobile-native-chat-queued-edit-focus'
+import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
@@ -31,8 +31,19 @@ export function useMobileNativeChatComposerTray({
   backgroundTasks: MobileStructuredBackgroundTasks | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
-  const { cards, onSend, onDelete, onClearAll, editor, pause, onResume, sessionKey, steerHeld } =
-    queued
+  const {
+    cards,
+    onSend,
+    onDelete,
+    onClearAll,
+    editor,
+    onMove,
+    pause,
+    onResume,
+    sessionKey,
+    steerHeld,
+    agentWorking
+  } = queued
   return useMemo(
     () => ({
       content: createElement(
@@ -53,9 +64,11 @@ export function useMobileNativeChatComposerTray({
           onClearAll,
           onEdit: editQueuedMessage,
           editor,
+          onMove,
           pause,
           onResume,
-          steerHeld
+          steerHeld,
+          agentWorking
         })
       ),
       composerInputRef
@@ -66,13 +79,15 @@ export function useMobileNativeChatComposerTray({
       composerInputRef,
       editQueuedMessage,
       editor,
+      onMove,
       onDelete,
       onClearAll,
       onResume,
       onSend,
       pause,
       sessionKey,
-      steerHeld
+      steerHeld,
+      agentWorking
     ]
   )
 }

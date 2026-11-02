@@ -19,11 +19,15 @@ export function isAgentInterruptInputIntent(intent: unknown): intent is AgentInt
 }
 
 // Ctrl+C can copy text or leave a Codex side chat without cancelling the main turn.
+// Grok's Escape only hints and its Ctrl+C can open a stop dialog; its StopCancelled hook is the verdict.
 export function shouldIgnoreInterruptIntent(
   agentType: AgentType | undefined,
   intent: AgentInterruptInputIntent
 ): boolean {
-  return intent === 'ctrl-c' && (agentType === 'codex' || agentType === 'droid')
+  return (
+    agentType === 'grok' ||
+    (intent === 'ctrl-c' && (agentType === 'codex' || agentType === 'droid'))
+  )
 }
 
 // Escape also closes views (including Codex search and /permissions); only provider evidence ends the turn.

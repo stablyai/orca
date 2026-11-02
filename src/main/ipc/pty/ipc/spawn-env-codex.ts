@@ -26,6 +26,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     mintedSessionId: ctx.ownsNewIncarnation,
     resumeOnSelectedAccount: Boolean(args.replacesPtyId),
     emptySessionIdSkipsHostEnv: false,
+    wslPassiveRestore: args.wslPassiveRestore === true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,
     deps: ctx.deps,

@@ -1,16 +1,24 @@
-import { pickedSkillsInText } from '../../shared/structured-agent-session-send-mutation'
+import {
+  StructuredAgentSessionInputNotAdmitted,
+  type StructuredAgentSessionAdmitFreshInput
+} from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { turnInputFor } from './codex-structured-message-options'
+import { reportedCodexPermissionMode } from './codex-structured-thread-open'
+import { admitCodexTurnPermission } from './codex-structured-turn-permission'
 import type { CodexSkillReport } from './codex-structured-skill-report'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalMessageItem,
   AgentJournalTurnJoin
-} from '../../shared/agent-session-journal-types'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+import { isCodexAppServerUnsupportedError } from './app-server/codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { codexTurnRequestOptions } from './codex-structured-service-tier'
@@ -25,17 +33,27 @@ import {
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
 
-/** Allowlist turn overrides so saved options cannot replace the thread's permission policy. */
-const CODEX_TURN_OPTION_KEYS = new Set(['model', 'effort', 'personality', 'serviceTier'])
-
-export function isCodexTurnOptionKey(key: string): boolean {
-  return CODEX_TURN_OPTION_KEYS.has(key)
-}
-
-function checkDispatchAuthority(host: CodexTurnHost, id: string, signal?: AbortSignal): void {
+function checkDispatchAuthority(
+  host: CodexTurnHost,
+  id: string,
+  signal?: AbortSignal,
+  isCurrent?: () => boolean
+): void {
+  if (isCurrent?.() === false) {
+    host.dispatchEchoes.disarm(id)
+    throw new StructuredAgentSessionInputNotAdmitted({
+      state: 'rejected',
+      ...codexDispatchRejection(
+        agentSessionFailureFact('providerExited', { neverReachedAgent: true })
+      )
+    })
+  }
   if (signal?.aborted) {
     host.dispatchEchoes.disarm(id)
-    signal.throwIfAborted()
+    throw new StructuredAgentSessionInputNotAdmitted({
+      state: 'rejected',
+      ...codexDispatchRejection(agentSessionFailureFact('cancelled'))
+    })
   }
 }
 
@@ -44,6 +62,7 @@ export type CodexTurnHost = {
   skillReport?: Pick<CodexSkillReport, 'hasSkillPath'>
   connection: Pick<CodexAppServerConnection, 'request'>
   threadId: string
+  permissions?: CodexSession['permissions']
   options: Map<string, string>
   appliedTurnOptions?: Readonly<Record<string, string>>
   appliedSettings?: CodexSession['appliedSettings']
@@ -56,31 +75,6 @@ export type CodexTurnHost = {
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
 }
 
-function turnInputFor(
-  host: CodexTurnHost,
-  body: AgentJournalMessageItem
-): Record<string, unknown>[] {
-  const input: Record<string, unknown>[] = []
-  let text = ''
-  for (const block of body.blocks as NativeChatBlock[]) {
-    if (block.type === 'text' && block.text.length > 0) {
-      input.push({ type: 'text', text: block.text })
-      text += `${block.text}\n`
-    } else if (block.type === 'image-ref' && block.path) {
-      input.push({ type: 'localImage', path: block.path })
-    } else if (block.type === 'image-ref' && block.url) {
-      input.push({ type: 'image', url: block.url })
-    }
-  }
-  // Unknown skill paths suppress plain $name resolution, so send only loaded files when known.
-  for (const skill of pickedSkillsInText(text, body.skills ?? [])) {
-    if (host.skillReport?.hasSkillPath(skill.path) !== false) {
-      input.push({ type: 'skill', name: skill.name, path: skill.path })
-    }
-  }
-  return input
-}
-
 /** Explicit steering avoids pre-0.148 turn/start replies naming nonexistent turns; overrides wait for a start. */
 async function steerCodexTurn(
   host: CodexTurnHost,
@@ -90,11 +84,12 @@ async function steerCodexTurn(
     body: AgentJournalMessageItem
     timeoutMs?: number
     signal?: AbortSignal
+    isCurrent?: () => boolean
     onReply?: () => void
   }
 ): Promise<{ turnId: string; via: 'steer' } | null> {
   try {
-    checkDispatchAuthority(host, input.clientMessageId, input.signal)
+    checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
     const answer = await host.connection.request(
       'turn/steer',
       {
@@ -124,6 +119,8 @@ export async function startCodexTurn(
     timeoutMs?: number
     turnOptions?: Readonly<Record<string, string>>
     signal?: AbortSignal
+    isCurrent?: () => boolean
+    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
     onReply?: () => void
   }
 ): Promise<{ turnId: string | null; via: AgentJournalTurnJoin } | false> {
@@ -139,6 +136,7 @@ export async function startCodexTurn(
     runningTurnId = await codexRunningOrOpeningTurn(host, input.signal)
   } catch (error) {
     host.dispatchEchoes.disarm(input.clientMessageId)
+    checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
     throw error
   }
   let steered = steerable(runningTurnId) ? await steerCodexTurn(host, runningTurnId, input) : null
@@ -150,46 +148,92 @@ export async function startCodexTurn(
   if (steered) {
     return steered
   }
-  checkDispatchAuthority(host, input.clientMessageId, input.signal)
-  const previousApplied = host.appliedTurnOptions
-  const previousOptions = input.turnOptions ? new Map(host.options) : null
-  if (input.turnOptions) {
-    host.options.clear()
-    for (const [key, value] of Object.entries(input.turnOptions)) {
-      host.options.set(key, value)
+  let previousApplied = host.appliedTurnOptions
+  let previousOptions: Map<string, string> | null | undefined
+  let requested: Readonly<Record<string, string>> = {}
+  let enqueued = false
+  let discardSettingsAttempt: (() => void) | undefined
+  const enqueue = (
+    permission: Parameters<Parameters<typeof admitCodexTurnPermission>[2]>[0],
+    body = input.body
+  ) => {
+    checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
+    previousApplied = host.appliedTurnOptions
+    previousOptions = input.turnOptions ? new Map(host.options) : null
+    if (input.turnOptions) {
+      host.options.clear()
+      for (const [key, value] of Object.entries(input.turnOptions)) {
+        host.options.set(key, value)
+      }
+    }
+    requested = codexTurnRequestOptions(host)
+    const known = { ...previousApplied }
+    for (const key of Object.keys(requested)) {
+      delete known[key]
+    }
+    host.appliedTurnOptions = known
+    discardSettingsAttempt = host.appliedSettings?.attempt(requested)
+    enqueued = true
+    return {
+      kind: 'sent' as const,
+      response: host.connection
+        .request(
+          'turn/start',
+          {
+            threadId: host.threadId,
+            clientUserMessageId: input.clientMessageId,
+            input: turnInputFor(host, body),
+            ...permission,
+            ...requested
+          },
+          {
+            timeoutMs: input.timeoutMs,
+            onReply: (reply) => {
+              // Record before the rest of the reply's stdout chunk is translated.
+              const turnId = readCodexTurnId(reply)
+              if (turnId) {
+                host.dispatchEchoes.repliedTurn(input.clientMessageId, host.threadId, turnId)
+              }
+              input.onReply?.()
+            }
+          }
+        )
+        .then((answer) => {
+          const applied = reportedCodexPermissionMode({
+            ...permission,
+            sandbox: permission.sandboxPolicy
+          })
+          // Successful fresh-turn policy is applied evidence, not a provider readback.
+          if (applied && host.reportedOptions) {
+            host.reportedOptions.reportedPermissionMode = applied
+          }
+          return answer
+        })
     }
   }
-  host.appliedTurnOptions = input.turnOptions ?? Object.fromEntries(host.options)
-  const requested = codexTurnRequestOptions(host)
   let answer: unknown
-  const discardSettingsAttempt = host.appliedSettings?.attempt(requested)
   try {
-    answer = await host.connection.request(
-      'turn/start',
-      {
-        threadId: host.threadId,
-        clientUserMessageId: input.clientMessageId,
-        input: turnInputFor(host, input.body),
-        ...requested
-      },
-      { timeoutMs: input.timeoutMs, onReply: input.onReply }
-    )
+    answer = await admitCodexTurnPermission(host, input.admitFreshInput, enqueue, input.signal)
   } catch (error) {
+    if (!enqueued) {
+      host.dispatchEchoes.disarm(input.clientMessageId)
+      checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
+    }
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       discardSettingsAttempt?.()
     }
-    if (
-      previousOptions &&
-      (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error))
-    ) {
+    if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       host.appliedTurnOptions = previousApplied
-      host.options.clear()
-      for (const [key, value] of previousOptions) {
-        host.options.set(key, value)
+      if (previousOptions) {
+        host.options.clear()
+        for (const [key, value] of previousOptions) {
+          host.options.set(key, value)
+        }
       }
     }
     throw error
   }
+  host.appliedTurnOptions = { ...previousApplied, ...requested }
   return { turnId: readCodexTurnId(answer), via: 'start' }
 }
 
@@ -203,6 +247,8 @@ export async function dispatchCodexTurn(
     requestedAt?: number
     turnOptions?: Readonly<Record<string, string>>
     signal?: AbortSignal
+    isCurrent?: () => boolean
+    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
   },
   timeoutMs: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
@@ -215,6 +261,9 @@ export async function dispatchCodexTurn(
   try {
     answer = await startCodexTurn(session, { ...input, timeoutMs, onReply })
   } catch (error) {
+    if (error instanceof StructuredAgentSessionInputNotAdmitted) {
+      throw error
+    }
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       // Codex answered and declined, so no echo for this write can arrive.
       session.dispatchEchoes.disarm(input.clientMessageId)
@@ -267,14 +316,5 @@ export async function dispatchCodexTurn(
 
 /** Steers retain running-turn options; starts use request overrides over thread defaults. */
 function codexRanOptions(session: CodexTurnHost): Record<string, string> {
-  const requested = codexTurnRequestOptions(session)
-  const thread = session.reportedOptions ?? {}
-  const model = requested.model ?? thread.model
-  const effort = requested.effort ?? (model === thread.model ? thread.effort : undefined)
-  const { serviceTier } = requested
-  return {
-    ...(model ? { model } : {}),
-    ...(effort ? { effort } : {}),
-    ...(serviceTier ? { serviceTier } : {})
-  }
+  return { ...session.appliedTurnOptions }
 }

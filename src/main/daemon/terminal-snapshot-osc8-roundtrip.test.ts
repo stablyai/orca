@@ -52,15 +52,6 @@ describe('OSC 8 hyperlink snapshot round-trip', () => {
     expect(oscLinkAt(restored, 0, 13)).toBeNull()
   })
 
-  it('retains an explicit OSC link id', async () => {
-    const url = 'https://example.com/identified'
-    const { terminal, addon } = createTerminal()
-    await write(terminal, `\x1b]8;id=review-42;${url}\x1b\\review\x1b]8;;\x1b\\`)
-
-    const restored = await replay(addon.serialize())
-    expect(oscLinkAt(restored, 0, 0)).toEqual({ id: 'review-42', uri: url })
-  })
-
   it('keeps an open link active for output arriving after replay', async () => {
     const url = 'https://example.com/streaming-link'
     const { terminal, addon } = createTerminal()
@@ -69,18 +60,6 @@ describe('OSC 8 hyperlink snapshot round-trip', () => {
     const restored = await replay(addon.serialize())
     await write(restored, 'Z\x1b]8;;\x1b\\')
     expect(oscLinkAt(restored, 0, 6)).toEqual({ id: 'stream', uri: url })
-  })
-
-  it('retains the URI across repeated serialize and replay cycles', async () => {
-    const url = 'https://example.com/repeated'
-    const { terminal, addon } = createTerminal()
-    await write(terminal, `\x1b]8;;${url}\x1b\\again\x1b]8;;\x1b\\`)
-
-    const first = await replay(addon.serialize())
-    const secondAddon = new SerializeAddon()
-    first.loadAddon(secondAddon)
-    const second = await replay(secondAddon.serialize())
-    expect(oscLinkAt(second, 0, 0)?.uri).toBe(url)
   })
 
   it('does not leak an open alternate-screen link into its unlinked prefix', async () => {

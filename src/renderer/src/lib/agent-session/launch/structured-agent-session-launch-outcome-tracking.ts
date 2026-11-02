@@ -1,16 +1,20 @@
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { useAppStore } from '@/store/index'
+import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+import { agentSessionWriteFailureText } from '@/components/native-chat/agent-session-write-notice-text'
+import { getAgentLabel } from '@/lib/agent-catalog'
 import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {
   materializeStructuredLaunchSurface,
   findStructuredLaunchTab
-} from '../../structured-agent-session-launch-surface'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+} from './structured-agent-session-launch-surface'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import {
   settleStructuredLaunchCallers,
   structuredLaunchCallersHavePendingWork
-} from '@/lib/structured-agent-session-launch-callers'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
-import { structuredLaunchFailure } from '../../structured-agent-session-launch-failure'
+import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
   deleteStructuredLaunchStateIfCurrent,
   notifyStructuredLaunchListeners,
@@ -18,6 +22,7 @@ import {
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 import { recordUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
+import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
   if (deleteStructuredLaunchStateIfCurrent(state)) {
@@ -26,25 +31,25 @@ function cleanupLaunchState(state: StructuredLaunchState): void {
 }
 
 export function maybeCleanupLaunchState(state: StructuredLaunchState): void {
-  if (
-    state.callers.outcome === 'failed' ||
-    structuredLaunchCallersHavePendingWork(state.callers) ||
-    Object.keys(state.selection.held).length > 0
-  ) {
+  if (state.callers.outcome === 'failed' || structuredLaunchCallersHavePendingWork(state.callers)) {
     return
   }
   cleanupLaunchState(state)
 }
 
-function cleanupUnmaterializedLaunch(state: StructuredLaunchState): void {
+function cleanupUnmaterializedLaunch(state: StructuredLaunchState): boolean {
   if (state.intent.surfaceAddress && !findStructuredLaunchTab(state.intent)) {
     removeStructuredLaunchSlot(
       useAppStore.getState(),
       state.intent.worktreeId,
       state.intent.sessionId
     )
-    cleanupLaunchState(state)
+    if (deleteStructuredLaunchStateIfCurrent(state)) {
+      forgetStructuredSessionSelection(state.intent.sessionId, state.intent.target)
+      return true
+    }
   }
+  return false
 }
 
 function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
@@ -56,7 +61,9 @@ function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
     state.intent.sessionId
   )
   settleStructuredLaunchCallers(state.callers, 'failed')
-  cleanupUnmaterializedLaunch(state)
+  if (cleanupUnmaterializedLaunch(state)) {
+    retireStructuredAgentSessionReadOwner(state.intent.sessionId, state.intent.target)
+  }
   notifyStructuredLaunchListeners()
 }
 
@@ -65,17 +72,23 @@ export function trackLaunchSettlement(
   promise: Promise<StructuredAgentLaunchReceipt>
 ): void {
   void promise.then(
-    () => {
+    (receipt) => {
       if (state.promise !== promise) {
         return
       }
       if (state.cancelled) {
         return
       }
+      state.visibilityUnknown = false
       materializeStructuredLaunchSurface(state.intent)
       if (!state.hostListed) {
         const { worktreeId, sessionId, executionHostId } = state.intent
         recordUnlistedCreatedChat(worktreeId, sessionId, executionHostId)
+      }
+      if (receipt.configurationFailure) {
+        publishStructuredAgentSessionSends(receipt.sessionId, {
+          notice: `${getAgentLabel(state.intent.agent)}: ${agentSessionWriteFailureText(receipt.configurationFailure, 'option')}`
+        })
       }
       settleStructuredLaunchCallers(state.callers, 'published')
       notifyStructuredLaunchListeners()

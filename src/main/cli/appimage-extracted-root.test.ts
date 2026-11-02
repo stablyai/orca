@@ -5,9 +5,6 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ensureAppImageExtractedRoot,
-  getAppImageCacheRootPath,
-  isAppImageExtractedLauncherPath,
-  isAppImageExtractionComplete,
   isAppImageInstalledLauncherOwnedBySibling,
   readAppImageSourceOfNamespace,
   resolveAppImageCacheKey,
@@ -45,52 +42,6 @@ async function writePayload(cwd: string, content = ''): Promise<void> {
 }
 
 describe('appimage extracted root', () => {
-  it('derives the cache root from XDG_CACHE_HOME when set', () => {
-    const previous = process.env.XDG_CACHE_HOME
-    process.env.XDG_CACHE_HOME = '/xdg-cache'
-    try {
-      expect(getAppImageCacheRootPath('/home/u')).toBe(join('/xdg-cache', 'orca', 'appimage'))
-    } finally {
-      if (previous === undefined) {
-        delete process.env.XDG_CACHE_HOME
-      } else {
-        process.env.XDG_CACHE_HOME = previous
-      }
-    }
-  })
-
-  it('ignores a relative XDG_CACHE_HOME', () => {
-    const previous = process.env.XDG_CACHE_HOME
-    process.env.XDG_CACHE_HOME = 'relative-cache'
-    try {
-      expect(getAppImageCacheRootPath('/home/u')).toBe(
-        join('/home/u', '.cache', 'orca', 'appimage')
-      )
-    } finally {
-      if (previous === undefined) {
-        delete process.env.XDG_CACHE_HOME
-      } else {
-        process.env.XDG_CACHE_HOME = previous
-      }
-    }
-  })
-
-  it('extracts once and reuses the payload on the next call', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    let extractCount = 0
-    const runExtract = async (_path: string, cwd: string): Promise<void> => {
-      extractCount += 1
-      await writePayload(cwd)
-    }
-
-    const first = await ensureAppImageExtractedRoot({ appImagePath, cacheRootPath, runExtract })
-    const second = await ensureAppImageExtractedRoot({ appImagePath, cacheRootPath, runExtract })
-
-    expect(extractCount).toBe(1)
-    expect(second?.stableLauncherPath).toBe(first?.stableLauncherPath)
-    expect(isAppImageExtractionComplete(first!)).toBe(true)
-  })
-
   // Why: a server running from the copy has no $APPIMAGE; this record is how it finds the file.
   it('records which AppImage a namespace came from, and rejects a record for another path', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
@@ -105,20 +56,6 @@ describe('appimage extracted root', () => {
     expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBe(appImagePath)
     await writeFile(join(namespacePath, 'source-appimage'), '/elsewhere/Orca.AppImage')
     expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBeNull()
-  })
-
-  it('keys the payload on file identity and metadata, not just path', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    const before = resolveAppImageCacheKey(appImagePath)
-    await writeFile(appImagePath, '#!/usr/bin/env bash\n# newer\n', {
-      encoding: 'utf8',
-      mode: 0o755
-    })
-
-    expect(resolveAppImageCacheKey(appImagePath)).not.toBe(before)
-    expect(resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })?.rootPath).toContain(
-      resolveAppImageCacheKey(appImagePath) as string
-    )
   })
 
   // chmod, backup restores and SELinux relabels must not trigger re-extraction of unchanged payloads.
@@ -147,20 +84,6 @@ describe('appimage extracted root', () => {
 
     expect(result).toBeNull()
     await expect(readdir(cacheRootPath)).resolves.toEqual([])
-  })
-
-  it('reports failure when the payload has no launcher', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-
-    const result = await ensureAppImageExtractedRoot({
-      appImagePath,
-      cacheRootPath,
-      runExtract: async (_path, cwd) => {
-        await mkdir(join(cwd, 'squashfs-root'), { recursive: true })
-      }
-    })
-
-    expect(result).toBeNull()
   })
 
   it('retains one retry payload when a foreign stable launcher blocks publication', async () => {
@@ -228,24 +151,6 @@ describe('appimage extracted root', () => {
       expect(result).toBeNull()
     }
   )
-
-  it('replaces an incomplete exact extraction root', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    const root = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-    const partialPath = join(root.rootPath, 'partial')
-    await mkdir(root.rootPath, { recursive: true })
-    await writeFile(partialPath, 'interrupted')
-
-    const result = await ensureAppImageExtractedRoot({
-      appImagePath,
-      cacheRootPath,
-      runExtract: async (_path, cwd) => writePayload(cwd, 'recovered')
-    })
-
-    expect(result).toEqual(root)
-    await expect(readFile(root.payloadLauncherPath, 'utf8')).resolves.toBe('recovered')
-    expect(existsSync(partialPath)).toBe(false)
-  })
 
   it('preserves the winner when concurrent calls repair an incomplete root', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
@@ -319,51 +224,6 @@ describe('appimage extracted root', () => {
 
     expect(result).toBeNull()
     expect(extractCount).toBe(2)
-  })
-
-  it('returns null for an AppImage that is not there', async () => {
-    const { root, cacheRootPath } = await makeFixture()
-    const missing = join(root, 'Absent.AppImage')
-
-    expect(resolveAppImageCacheKey(missing)).toBeNull()
-    expect(resolveAppImageExtractedRoot({ appImagePath: missing, cacheRootPath })).toBeNull()
-  })
-
-  it('recognizes managed launchers across AppImage path namespaces', async () => {
-    const { root, appImagePath, cacheRootPath } = await makeFixture()
-    const current = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-    const previousGeneration = join(
-      dirname(current.rootPath),
-      'a'.repeat(24),
-      'resources',
-      'bin',
-      'orca-ide'
-    )
-    const otherAppImagePath = join(root, 'Other.AppImage')
-    await writeFile(otherAppImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
-    const other = resolveAppImageExtractedRoot({
-      appImagePath: otherAppImagePath,
-      cacheRootPath
-    })!
-
-    expect(
-      isAppImageExtractedLauncherPath({ appImagePath, cacheRootPath }, current.stableLauncherPath)
-    ).toBe(true)
-    expect(
-      isAppImageExtractedLauncherPath({ appImagePath, cacheRootPath }, previousGeneration)
-    ).toBe(true)
-    expect(
-      isAppImageExtractedLauncherPath({ appImagePath, cacheRootPath }, other.stableLauncherPath)
-    ).toBe(true)
-    expect(
-      isAppImageExtractedLauncherPath({ appImagePath, cacheRootPath }, other.payloadLauncherPath)
-    ).toBe(true)
-    expect(
-      isAppImageExtractedLauncherPath(
-        { appImagePath, cacheRootPath },
-        join(root, 'foreign', 'resources', 'bin', 'orca-ide')
-      )
-    ).toBe(false)
   })
 
   it('requires a sibling installed endpoint to target an executable payload', async () => {

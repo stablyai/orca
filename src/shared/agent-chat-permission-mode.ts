@@ -71,47 +71,6 @@ export function savedChatPermissionMode(
   return support.modes.find((mode) => mode === intent) ?? 'ask'
 }
 
-/** Launch and menu share model auto support: use its listed row, or the listed CLI default when unnamed. */
-export function chatModelSupportsAutoMode(
-  models: readonly { id: string; isDefault?: boolean; supportsAutoMode?: boolean }[],
-  model: string | null | undefined
-): boolean {
-  const row = models.find((entry) =>
-    model === undefined || model === null || model === 'default'
-      ? entry.isDefault === true
-      : entry.id === model
-  )
-  return row?.supportsAutoMode === true
-}
-
-export function chatPermissionModeNeedsModelSupport(
-  support: AgentChatPermissionModeSupport,
-  intent: unknown
-): boolean {
-  return (
-    support.autoNeedsModelSupport === true && savedChatPermissionMode(support, intent) === 'auto'
-  )
-}
-
-/** Saved choice, with `auto` on a model not listed for it read as Ask; never written back. */
-export function effectiveChatPermissionMode(
-  support: AgentChatPermissionModeSupport,
-  intent: unknown,
-  autoSupported: boolean
-): AgentChatPermissionChoice {
-  const mode = savedChatPermissionMode(support, intent)
-  return mode === 'auto' && support.autoNeedsModelSupport && !autoSupported ? 'ask' : mode
-}
-
-export function offeredChatPermissionModes(
-  support: AgentChatPermissionModeSupport,
-  autoSupported: boolean
-): readonly AgentChatPermissionMode[] {
-  return support.autoNeedsModelSupport && !autoSupported
-    ? support.modes.filter((mode) => mode !== 'auto')
-    : support.modes
-}
-
 export function newChatPermissionMode(
   agent: string,
   setting: unknown

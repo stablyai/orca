@@ -2,7 +2,7 @@ import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { resolvedCodexGoalSettings } from './codex-structured-message-options'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
-import type { AgentSessionThreadGoalChange } from '../../shared/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../shared/agent-session/agent-session-thread-goal-wire'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexSession } from './codex-structured-session-state'
 
@@ -78,12 +78,29 @@ export async function changeCodexThreadGoalWithSettings(
     (input.change.kind === 'status' && input.change.status === 'active')
   try {
     if (startsWork) {
+      const requested = resolvedCodexGoalSettings(session, input.executionOptions)
+      const previousApplied = session.appliedTurnOptions
       const installed = await session.appliedSettings?.install(
         session.connection,
         session.threadId,
-        resolvedCodexGoalSettings(session, input.executionOptions),
+        requested,
         timeoutMs,
-        input.signal
+        input.signal,
+        () => {
+          session.appliedTurnOptions = { ...session.appliedTurnOptions, ...requested }
+        },
+        () => {
+          session.appliedTurnOptions = previousApplied
+        },
+        () => {
+          const known = { ...previousApplied }
+          for (const key of ['model', 'effort'] as const) {
+            if (requested[key] !== undefined && requested[key] !== known[key]) {
+              delete known[key]
+            }
+          }
+          session.appliedTurnOptions = known
+        }
       )
       if (installed && !installed.ok) {
         return installed

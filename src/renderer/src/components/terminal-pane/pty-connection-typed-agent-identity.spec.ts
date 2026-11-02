@@ -95,8 +95,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'OMP ready')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -348,8 +347,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -387,8 +385,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Pi ready')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
+        agentType: 'pi'
       })
     })
 
@@ -524,8 +521,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'OMP ready')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -561,8 +557,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(transport.sendInput).toHaveBeenCalledWith('op\x1b[Dm\r', 'query-reply')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -597,8 +592,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -633,8 +627,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
+        agentType: 'pi'
       })
     })
 
@@ -671,8 +664,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
 
@@ -716,8 +708,7 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'omp',
-        terminalTitle: 'OMP ready'
+        agentType: 'omp'
       })
     })
   })

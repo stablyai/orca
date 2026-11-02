@@ -6,7 +6,7 @@ import type {
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { sendPreparation } from './structured-agent-session-send-preparation'
@@ -17,15 +17,15 @@ import {
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
-} from '../../runtime/agent-session-conversation-command-record'
+} from '../../runtime/agent-session/records/agent-session-conversation-command-record'
 
 export function conversationCommandFailure(
   failure: AgentSessionFailureFact | undefined,
@@ -69,7 +69,7 @@ async function clearUnderSerialize(
   const { sessionId, clientOperationId } = envelope
   const store = context.deps.store
   const matching = () => {
-    const record = store.getRecord(sessionId)?.conversationCommand
+    const record = store.getConversation(sessionId)?.conversationCommand
     return record?.operationId === clientOperationId && record.callerKey === caller.callerKey
       ? record
       : null
@@ -116,7 +116,7 @@ async function clearUnderSerialize(
       // No committed clear means no effects, so replay can safely rerun it.
       rerunWhenReplayMissing: () => true,
       run: async (ctx) => {
-        const record = store.getRecord(sessionId)!
+        const record = store.requireWritableRecord(sessionId)
         const blocked = conversationCommandBlocked(
           ctx,
           record,
@@ -127,7 +127,7 @@ async function clearUnderSerialize(
           return { ok: false, refusal: blocked }
         }
         await context.stopAgent(sessionId, { cause: 'context-clear' })
-        const stopped = store.getRecord(sessionId)!
+        const stopped = store.requireWritableRecord(sessionId)
         const fence = stopped.lease.runtimeFence
         const rechecked = conversationCommandBlocked(
           { ...ctx, fence },

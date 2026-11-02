@@ -3,14 +3,14 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isSmartSortRelevantAgentChange } from '../../../../../shared/sidebar-list/smart-sort-agent-change'
 import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
   findAgentPaneWorktreeId,
   findTabForAgentEntry,
   isAgentCompletionState
-} from '../agent-status-pane-key-tab-binding'
+} from './agent-status-pane-key-tab-binding'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
 import { liveResumeRecord } from '../../../../../shared/agent-resume-record-from-status'
 import { agentMainAgentVerdict } from '../../../../../shared/agent-main-agent-verdict'
@@ -62,7 +62,9 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
   const attributionChanged =
     existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
   const sortRelevantChange =
-    isSmartSortRelevantAgentChange(existing, entry, updatedAt) || commandCodeNewTurn
+    isSmartSortRelevantAgentChange(existing, entry, updatedAt) ||
+    commandCodeNewTurn ||
+    existing?.firstStateStartedAt !== entry.firstStateStartedAt
   const doneRetentionFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&

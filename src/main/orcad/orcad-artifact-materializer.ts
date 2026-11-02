@@ -195,7 +195,10 @@ function artifactSources(
     ...required,
     {
       filename: targetManifest.browserName,
-      path: join(targetDir, targetManifest.browserName),
+      path: join(
+        targetManifest.packagedBrowser ? dirname(templateDir) : targetDir,
+        targetManifest.browserName
+      ),
       executable: true
     }
   ]

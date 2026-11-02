@@ -117,6 +117,7 @@ describe('useMobileDiffReviewSendActions', () => {
   let setActionError: Mock<SendActionArgs['setActionError']>
   let sheets: {
     openSheet: Mock<ReviewSheetIntents['openSheet']>
+    openSheetWhenIdle: Mock<ReviewSheetIntents['openSheetWhenIdle']>
     closeSheet: Mock<ReviewSheetIntents['closeSheet']>
     updateSendSheet: Mock<ReviewSheetIntents['updateSendSheet']>
   }
@@ -128,7 +129,12 @@ describe('useMobileDiffReviewSendActions', () => {
     clipboardMock.setStringAsync.mockReset().mockResolvedValue(true)
     resetMobileNativeChatStaleInputForTests()
     setActionError = vi.fn()
-    sheets = { openSheet: vi.fn(), closeSheet: vi.fn(), updateSendSheet: vi.fn() }
+    sheets = {
+      openSheet: vi.fn(),
+      openSheetWhenIdle: vi.fn(),
+      closeSheet: vi.fn(),
+      updateSendSheet: vi.fn()
+    }
     saveCommentsAndReviewState = vi.fn().mockResolvedValue(undefined)
   })
 
@@ -319,18 +325,8 @@ describe('useMobileDiffReviewSendActions', () => {
       target: { kind: 'existing', worktree: 'id:wt-1' },
       prompt: {
         delivery: 'submit',
-        text: [
-          'You are reviewing the current worktree. Address the following mobile review notes.',
-          '',
-          'File: src/a.ts',
-          'Line: 3',
-          'User comment: "rename this"',
-          '',
-          'After applying fixes:',
-          '1. Summarize changed files.',
-          '2. Run relevant tests.',
-          '3. Tell me if anything remains risky.'
-        ].join('\n')
+        // Desktop sends the formatted notes alone.
+        text: ['File: src/a.ts', 'Line: 3', 'User comment: "rename this"'].join('\n')
       },
       launchSource: 'notes_send'
     })

@@ -30,6 +30,7 @@ export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
     ...authorFieldsFromUnknown(item),
+    ...(typeof item.comments === 'number' ? { commentCount: item.comments } : {}),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
   }
 }

@@ -78,7 +78,8 @@ export async function writeUsageSourceCacheData(
   await writeFileDurable(
     durableWriteTempPath(ref.path, threadId > 0 ? String(threadId) : undefined),
     ref.path,
-    data
+    data,
+    0o600
   )
 }
 

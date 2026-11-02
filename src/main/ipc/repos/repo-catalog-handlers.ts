@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Project, ProjectUpdateArgs } from '../../../shared/project-types'
 import {
   getRepoExecutionHostId,
@@ -20,6 +20,7 @@ import {
   assertWslMoveReposWritable,
   isWslMoveSourceHost
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-moved-projects'
 
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,
@@ -35,6 +36,11 @@ export function registerRepoCatalogHandlers(
     enrichRepoGitUsernames(store, { onChanged: broadcastReposChanged })
     return visibleRepos(store)
   })
+
+  // The local rows `repos:list` hides once their WSL host owns them; read-only, for their chats.
+  ipcMain.handle('repos:listWslMoved', () =>
+    listWslMovedProjects(store.getRepos(), store.getFolderWorkspaces())
+  )
 
   ipcMain.handle('projects:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })

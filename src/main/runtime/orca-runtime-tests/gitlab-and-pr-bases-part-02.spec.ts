@@ -453,7 +453,10 @@ describe('OrcaRuntimeService', () => {
       })
 
       expect(result).toEqual({
-        error: `Failed to fetch refs/merge-requests/42/head: ${message}`
+        error: `Failed to fetch refs/merge-requests/42/head: ${message}`,
+        errorCode: 'fetchFailed',
+        errorParams: { ref: 'refs/merge-requests/42/head' },
+        errorDetail: message
       })
       expect(gitSpy).not.toHaveBeenCalledWith(
         ['rev-parse', '--verify', `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/42^{commit}`],

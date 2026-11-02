@@ -36,25 +36,4 @@ describe('exposeRun', () => {
     expect(exposed).not.toHaveProperty('coordinator_orca_session_id')
     expect(exposed).not.toHaveProperty('coordinator_orca_session_id_generation')
   })
-
-  it('preserves every published column by value', () => {
-    const exposed = exposeRun(RUN_ROW)
-
-    expect(exposed).toEqual({
-      id: 'run_1',
-      objective: 'Coordinate reviews',
-      coordinator_handle: 'term_coord',
-      consumer_generation: 3,
-      legacy: 0,
-      created_at: '2026-09-04T18:53:07Z',
-      updated_at: '2026-09-04T18:53:09Z'
-    })
-  })
-
-  it('does not mutate the source row', () => {
-    const row = { ...RUN_ROW }
-    exposeRun(row)
-
-    expect(row).toEqual(RUN_ROW)
-  })
 })

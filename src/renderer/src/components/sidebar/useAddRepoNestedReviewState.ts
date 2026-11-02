@@ -3,7 +3,7 @@ import type { NestedRepoTelemetryRuntimeKind } from '../../../../shared/nested-r
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import { defaultProjectGroupNameForPath, type AddRepoDialogStep } from './add-repo-dialog-types'
 
-type ShowNestedRepoReviewArgs = {
+export type ShowNestedRepoReviewArgs = {
   scan: NestedRepoScanResult
   selectedPath: string
   connectionId: string | null

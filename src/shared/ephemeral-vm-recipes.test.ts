@@ -183,14 +183,16 @@ describe('parseEphemeralVmRecipeResult', () => {
       )
     ).toEqual({
       ok: false,
-      error: 'Recipe result projectRoot must be an absolute runtime path.'
+      error: 'Recipe result projectRoot must be an absolute runtime path.',
+      errorCode: 'recipeResultProjectRootNotAbsolute'
     })
   })
 
   it('rejects non-json stdout', () => {
     expect(parseEphemeralVmRecipeResult('Pairing URL: nope')).toEqual({
       ok: false,
-      error: 'Recipe stdout must be one JSON object.'
+      error: 'Recipe stdout must be one JSON object.',
+      errorCode: 'recipeResultNotJsonObject'
     })
   })
 
@@ -202,7 +204,8 @@ describe('parseEphemeralVmRecipeResult', () => {
 
       expect(parseEphemeralVmRecipeResult(amplified)).toEqual({
         ok: false,
-        error: 'Recipe stdout must be one JSON object.'
+        error: 'Recipe stdout must be one JSON object.',
+        errorCode: 'recipeResultNotJsonObject'
       })
       expect(parseSpy).not.toHaveBeenCalled()
     } finally {
@@ -221,7 +224,8 @@ describe('parseEphemeralVmRecipeResult', () => {
       )
     ).toEqual({
       ok: false,
-      error: 'Recipe result pairingCode is not a valid Orca pairing code.'
+      error: 'Recipe result pairingCode is not a valid Orca pairing code.',
+      errorCode: 'recipeResultPairingCodeInvalid'
     })
   })
 
@@ -236,7 +240,8 @@ describe('parseEphemeralVmRecipeResult', () => {
       )
     ).toEqual({
       ok: false,
-      error: 'Recipe result projectRoot must be an absolute runtime path.'
+      error: 'Recipe result projectRoot must be an absolute runtime path.',
+      errorCode: 'recipeResultProjectRootNotAbsolute'
     })
   })
 

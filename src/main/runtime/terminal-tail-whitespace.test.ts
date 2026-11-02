@@ -1,19 +1,8 @@
 import { performance } from 'node:perf_hooks'
 import { describe, expect, it } from 'vitest'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
-import { trimTerminalLineRight } from './terminal-tail-line-controls'
 
 describe('terminal redraw whitespace', () => {
-  it.each([
-    ['hello \t', 'hello'],
-    [' \thello \t world \t', ' \thello \t world'],
-    [' \t', ''],
-    ['hello\u00a0 \t', 'hello\u00a0'],
-    ['hello\n', 'hello\n']
-  ])('preserves terminal text while trimming spaces and tabs: %j', (input, expected) => {
-    expect(trimTerminalLineRight(input)).toBe(expected)
-  })
-
   it.each([2, 20])('handles padded redraws across %i retained rows without stalling', (rows) => {
     const padded = `${' '.repeat(32_000)}marker \t`
     const previousLines = Array.from({ length: rows }, (_, index) =>

@@ -4,23 +4,23 @@
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import {
   isSubagentGroupFallbackText,
   normalizeSubagentState,
   subagentGroupFallbackText
-} from '../../../shared/native-chat-subagent-summary'
+} from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import {
   backgroundTaskFallbackText,
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskState
-} from '../../../shared/native-chat-background-task-row'
-import { subagentFallbackText } from '../../../shared/native-chat-subagent-items'
+} from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { subagentFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import {
   isBackgroundTaskBlock,
   isSubagentBlock,
@@ -29,7 +29,7 @@ import {
   type NativeChatBackgroundTaskBlock,
   type NativeChatSubagentBlock,
   type NativeChatSubagentGroupBlock
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 
 export type JournalSubagentLivenessRevision = {
   identity: AgentJournalItemIdentity

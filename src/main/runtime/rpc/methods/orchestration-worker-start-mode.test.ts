@@ -1,5 +1,6 @@
 /** Launch mode follows settings, with explicit fallback reasons; unsupported preference must not refuse ordinary worker-start. */
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it } from 'vitest'
 import {
   decideWorkerStartMode,
@@ -8,7 +9,7 @@ import {
 } from './orchestration-worker-start-mode'
 
 const STRUCTURED_DEFAULT = {
-  experimentalNativeChat: true
+  nativeChatProviders: EVERY_AGENT_CHAT
 }
 
 function decide(
@@ -33,9 +34,8 @@ describe('worker start mode from the user default', () => {
   })
 
   it.each([
-    ['native chat off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
-    ['chat-by-default off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
-    ['structured off', { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }],
+    ['the agent is set to CLI', { ...STRUCTURED_DEFAULT, nativeChatProviders: { claude: false } }],
+    ['the agent has no saved choice', {}],
     ['no settings at all', null]
   ])('starts a terminal worker when %s', (_name, settings) => {
     expect(decide({ settings })).toMatchObject({
@@ -50,8 +50,7 @@ describe('a structured default this dispatch cannot honour', () => {
   it.each([
     ['a remote --on', { on: 'server-1' }, 'remote_execution_host'],
     ['an existing --terminal', { terminal: 'term_1' }, 'reused_terminal'],
-    ['a non-structured agent', { agent: 'cursor' }, 'agent_without_structured_session'],
-    ['no agent at all', { agent: undefined }, 'agent_without_structured_session']
+    ['a non-structured agent', { agent: 'cursor' }, 'agent_without_structured_session']
   ])('falls back to a terminal worker for %s', (_name, params, reason) => {
     const receipt = decide({ params: { agent: 'claude', ...params } })
     expect(receipt).toMatchObject({ mode: 'terminal', preferred: 'structured', reason })

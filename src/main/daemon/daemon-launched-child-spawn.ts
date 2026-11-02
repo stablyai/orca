@@ -3,6 +3,7 @@ import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
+import { hostMallocTunablesDaemonEnv } from '../memory/host-malloc-tunables'
 import {
   appImageDaemonIdentityPath,
   buildAppImageDaemonCommand,
@@ -92,6 +93,7 @@ export function spawnDaemonChildProcess(
   const daemonEnv: NodeJS.ProcessEnv = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
+    ...hostMallocTunablesDaemonEnv(),
     // The detached daemon lacks AppEnvironment; rcfiles must stay outside swept temporary directories.
     ORCA_USER_DATA_PATH: userDataPath
   }

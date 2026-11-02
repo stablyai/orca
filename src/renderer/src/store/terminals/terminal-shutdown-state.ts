@@ -1,12 +1,12 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { clearTransientTerminalState } from '../slices/terminal-helpers'
 import {
   clearCommittedPtyShutdownSettlements,
   markCommittedPtyShutdowns,
   settleDeferredPtyShutdownExits
 } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
-import '../slices/agent-status'
+import '../slices/agent-status/agent-status'
 import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../slices/agent-status/agent-status-sleeping-records'
 import type {
   AgentStatusWorktreeShutdownReason,

@@ -1,4 +1,5 @@
 import type { WorkerThreadFactory } from '../lazy-worker-thread-host'
+import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import { WorkerThreadRequestQueue } from '../worker-thread-request-queue'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type {
@@ -104,8 +105,7 @@ export class OpenCodeSqliteWorkerClient {
           agent: args.agent ?? 'opencode',
           kind: 'scope',
           path: args.dbPaths[0] ?? 'opencode.db',
-          message:
-            'OpenCode history was skipped because its background scanner could not start; the app remains responsive.'
+          ...aiVaultScanIssueText('openCodeScannerUnavailable')
         })
         return []
       }
@@ -113,7 +113,9 @@ export class OpenCodeSqliteWorkerClient {
         agent: args.agent ?? 'opencode',
         kind: 'scope',
         path: args.dbPaths[0] ?? 'opencode.db',
-        message: `OpenCode history scan did not complete: ${errorMessage(err)}`
+        ...aiVaultScanIssueText('openCodeScanIncomplete', {
+          detail: errorMessage(err)
+        })
       })
       return []
     }

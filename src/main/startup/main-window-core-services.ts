@@ -3,6 +3,7 @@ import { registerCoreHandlers } from '../ipc/register-core-handlers/register-cor
 import { attachMainWindowServices } from '../window/attach-main-window-services'
 import { initTccPromptNotice } from '../macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../updater'
+import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
@@ -97,22 +98,36 @@ export function attachMainWindowCoreServices(
       onBeforeRelaunch: async () => {
         state.isQuitting = true
         state.desktopRelayService?.fenceAndCloseNow()
+        desktopConnectorCloud()?.fence()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
       onOrcaProfileAuthMutation: () => {
         // An auth change retries relay installation after launch-time failure.
         void state.desktopRelayInstaller?.authChanged()
         state.desktopRelayService?.authMutated()
+        desktopConnectorCloud()?.accountChanged()
       },
       // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
       onBeforeOrcaProfileSignOut: () => {
         state.desktopRelayInstaller?.suspend()
         state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-      }
+        desktopConnectorCloud()?.signOutStarted()
+      },
+      onAfterOrcaProfileSignOut: () => desktopConnectorCloud()?.signOutFinished()
     },
     state.pluginService ?? undefined,
     state.pluginMarketplaceService && state.pluginMarketplaceInstaller
-      ? { marketplace: state.pluginMarketplaceService, installer: state.pluginMarketplaceInstaller }
+      ? {
+          marketplace: state.pluginMarketplaceService,
+          installer: state.pluginMarketplaceInstaller,
+          ...(state.pluginAutoUpdater ? { autoUpdater: state.pluginAutoUpdater } : {}),
+          ...(state.pluginInstallStatsService
+            ? { installStats: state.pluginInstallStatsService }
+            : {}),
+          ...(state.pluginUpdateReviewNotices
+            ? { reviewNotices: state.pluginUpdateReviewNotices }
+            : {})
+        }
       : undefined
   )
   automations.setWebContents(window.webContents)

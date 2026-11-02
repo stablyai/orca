@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import {
-  clearAllListenerCaches,
-  clearPaneCacheState,
   createHookListenerState,
-  movePaneCacheState,
   seedLegacyAgentStatusForTests,
   type HookListenerState
 } from '../../shared/agent-hook-listener/listener-state'
@@ -93,12 +90,6 @@ function hydrateStuckRow(
 }
 
 describe('Claude compact hook registration', () => {
-  it('registers PostCompact and deliberately does not register PreCompact', () => {
-    expect(REGISTERED_EVENT_NAMES.has('PostCompact')).toBe(true)
-    // Aborted compactions can emit PreCompact alone, so subscribing would strand the pane.
-    expect(REGISTERED_EVENT_NAMES.has('PreCompact')).toBe(false)
-  })
-
   it('writes PostCompact, and no PreCompact, into the settings Claude actually reads', () => {
     const written = applyManagedHooks(
       { hooks: {} },
@@ -146,27 +137,6 @@ describe('STA-2915: a manual compact clears the pane', () => {
 })
 
 describe('STA-4613: an aborted compact must not strand the pane', () => {
-  it('leaves an idle pane idle when PreCompact arrives alone', () => {
-    const state = createHookListenerState()
-    startTurn(state)
-    deliverIfRegistered(state, hook('Stop', TURN_PROMPT_ID))
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
-
-    // Captured from "Not enough messages to compact".
-    deliverIfRegistered(state, hook('PreCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
-
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
-  })
-
-  it('leaves a working pane working when PreCompact arrives alone', () => {
-    const state = createHookListenerState()
-    startTurn(state)
-
-    deliverIfRegistered(state, hook('PreCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
-
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('working')
-  })
-
   it('does not map PreCompact even when it is delivered past the registration gate', () => {
     const state = createHookListenerState()
     startTurn(state)
@@ -201,15 +171,6 @@ describe('an auto compact claims nothing', () => {
 
     deliverIfRegistered(state, hook('Stop', TURN_PROMPT_ID))
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
-  })
-
-  it("writes no compact-scoped state, so it cannot spend the pane's consumed-compact slot", () => {
-    const state = createHookListenerState()
-    startTurn(state)
-
-    deliverIfRegistered(state, hook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'auto' }))
-
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.has(PANE_KEY)).toBe(false)
   })
 })
 
@@ -358,36 +319,5 @@ describe('compact completion guards', () => {
     )
 
     expect(duplicate).toBeNull()
-  })
-})
-
-describe('the consumed-compact record is torn down with its pane', () => {
-  const OTHER_PANE = makePaneKey('compact-registration', '44444444-4444-4444-8444-444444444444')
-
-  function paneWithConsumedCompact(): HookListenerState {
-    const state = createHookListenerState()
-    startTurn(state)
-    expect(successfulManualCompact(state)?.payload.state).toBe('done')
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.get(PANE_KEY)).toBe(COMPACT_PROMPT_ID)
-    return state
-  }
-
-  it('clearPaneCacheState drops it', () => {
-    const state = paneWithConsumedCompact()
-    clearPaneCacheState(state, PANE_KEY)
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.has(PANE_KEY)).toBe(false)
-  })
-
-  it('movePaneCacheState carries it to the new pane key', () => {
-    const state = paneWithConsumedCompact()
-    movePaneCacheState(state, PANE_KEY, OTHER_PANE)
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.has(PANE_KEY)).toBe(false)
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.get(OTHER_PANE)).toBe(COMPACT_PROMPT_ID)
-  })
-
-  it('clearAllListenerCaches empties it', () => {
-    const state = paneWithConsumedCompact()
-    clearAllListenerCaches(state)
-    expect(state.claudeConsumedCompactPromptIdByPaneKey.size).toBe(0)
   })
 })

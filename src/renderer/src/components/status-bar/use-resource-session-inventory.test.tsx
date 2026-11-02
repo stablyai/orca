@@ -194,6 +194,37 @@ describe('Resource Manager inventory admission', () => {
     expect(list).toHaveBeenCalledTimes(2)
   })
 
+  it('updates the cached closed-view count after an exit burst without listing', async () => {
+    list.mockResolvedValue([row('one'), row('two'), row('survivor')])
+    const { result, rerender } = renderHook(
+      ({ active }) => useResourceSessionInventory(true, active),
+      { initialProps: { active: true } }
+    )
+    await flush()
+    rerender({ active: false })
+    act(() => {
+      exit({ id: 'one', incarnationId: 'A', hostId: 'local' })
+      exit({ id: 'two', incarnationId: 'A', hostId: 'local' })
+    })
+    expect(result.current.sessionInventory.count).toBe(3)
+    await flush(50)
+    expect(result.current.sessionInventory.sessions).toEqual([row('survivor')])
+    await flush(1_000)
+    expect(list).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('cancels pending exit publication when the inventory hook unmounts', async () => {
+    const { unmount } = setup(true)
+    await flush()
+    act(() => exit({ id: 'one', incarnationId: 'A', hostId: 'local' }))
+    expect(vi.getTimerCount()).toBe(1)
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
+    await flush(1_000)
+    expect(list).toHaveBeenCalledOnce()
+  })
+
   it('retains failed observations, suppresses native visibility veto errors, and permits Retry', async () => {
     const { result } = setup(true)
     await flush()
@@ -228,6 +259,7 @@ describe('Resource Manager inventory admission', () => {
     const { result } = setup(true)
     await flush()
     act(() => exit({ id: 'one', incarnationId: 'A', hostId: 'local' }))
+    await flush(50)
     expect(result.current.sessionInventory.count).toBe(0)
     list.mockResolvedValue([row('one', 'B')])
     act(() => spawn({ id: 'one', incarnationId: 'B', hostId: 'local' }))
@@ -247,6 +279,7 @@ describe('Resource Manager inventory admission', () => {
     expect(result.current.sessionsError).toBe(false)
     expect(result.current.sessionInventory.count).toBe(3)
     act(() => exit({ id: 'one', incarnationId: 'A', hostId: 'local' }))
+    await flush(50)
     expect(result.current.sessionInventory.sessions).toEqual([row('one', 'B'), row('unrelated')])
     act(() => result.current.removeSession('one', 'A'))
     expect(result.current.sessionInventory.count).toBe(2)
@@ -283,6 +316,7 @@ describe('Resource Manager inventory admission', () => {
     await flush(100)
     expect(list).toHaveBeenCalledOnce()
     act(() => exit({ id: 'one', incarnationId: 'A', hostId: 'local' }))
+    await flush(50)
     expect(result.current.sessionInventory.sessions).toEqual([second])
     act(() => result.current.removeSession('one', 'B'))
     expect(result.current.sessionInventory.count).toBe(0)

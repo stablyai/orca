@@ -2,7 +2,7 @@
 import { FitAddon } from '@xterm/addon-fit'
 import type { Terminal } from '@xterm/xterm'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readTerminalStableCellSize, StableCellFitAddon } from './terminal-stable-cell-fit-addon'
+import { StableCellFitAddon } from './terminal-stable-cell-fit-addon'
 
 // A DejaVu Sans Mono 14px advance on a 1x display, as measured on a Linux DOM-renderer pane.
 const CHAR_WIDTH = 8.4287109375
@@ -57,22 +57,5 @@ describe('StableCellFitAddon', () => {
     for (const from of [52, 75, 51, 80, 120]) {
       expect(propose(new StableCellFitAddon(), from)).toEqual({ cols: 51, rows: 49 })
     }
-  })
-
-  it('proposes nothing before the renderer has measured a cell', () => {
-    const terminal = domRendererTerminal(80, 24)
-    Object.defineProperty(terminal, 'dimensions', { value: undefined })
-    const addon = new StableCellFitAddon()
-    addon.activate(terminal)
-    expect(addon.proposeDimensions()).toBeUndefined()
-  })
-})
-
-describe('readTerminalStableCellSize', () => {
-  it('divides the device cell by the device pixel ratio', () => {
-    expect(readTerminalStableCellSize(domRendererTerminal(75, 58))).toEqual({
-      width: CHAR_WIDTH,
-      height: CELL_HEIGHT
-    })
   })
 })

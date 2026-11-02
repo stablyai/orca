@@ -44,7 +44,7 @@ it.each([false, true])(
     if (graphFirst) {
       f.publish(false, 2)
     }
-    await expect(f.close()).resolves.toEqual({ closed: true })
+    await expect(f.close()).resolves.toEqual({ closed: true, retirementConfirmed: true })
     expect(f.hasTab()).toBe(false)
     expect(f.closeTerminalTab).not.toHaveBeenCalled()
     await f.store.flushPendingOrThrowAsync()
@@ -72,7 +72,7 @@ it.each(['createdAt', 'generation'] as const)(
         ACK_WORKTREE
       )
     )
-    await expect(f.close()).resolves.toEqual({ closed: true })
+    await expect(f.close()).resolves.toEqual({ closed: true, retirementConfirmed: true })
     expect(f.hasTab()).toBe(false)
   }
 )
@@ -88,7 +88,7 @@ it.each([false, true])(
       })
     }
     await f.runtime.onPtyExit('pty-a', 0, ACK_INCARNATION, { providerExitObserved: true })
-    await expect(f.close()).resolves.toEqual({ closed: true })
+    await expect(f.close()).resolves.toEqual({ closed: true, retirementConfirmed: true })
     expect(f.hasTab()).toBe(false)
     expect(f.stopped).toContain('pty-b')
   }
@@ -97,7 +97,7 @@ it.each([false, true])(
 it('closes a pane whose new incarnation main admitted, and stops that terminal', async () => {
   const f = fixture(true)
   f.runtime.onPtySpawned('pty-a', '66666666-6666-4666-8666-666666666666')
-  await expect(f.close()).resolves.toEqual({ closed: true })
+  await expect(f.close()).resolves.toEqual({ closed: true, retirementConfirmed: true })
   expect(f.hasTab()).toBe(false)
   expect(f.stopped).toEqual(expect.arrayContaining(['pty-a', 'pty-b']))
 })
@@ -111,14 +111,14 @@ it('closes on the incarnation main persisted for the leaf', async () => {
     ptyId: 'pty-a',
     incarnationId: '66666666-6666-4666-8666-666666666666'
   })
-  await expect(f.close()).resolves.toEqual({ closed: true })
+  await expect(f.close()).resolves.toEqual({ closed: true, retirementConfirmed: true })
   expect(f.hasTab()).toBe(false)
 })
 
 it("stops a sibling a partial mobile snapshot omitted, from main's own panes", async () => {
   const f = fixture(true)
   f.publish(true, 2, [ACK_LEAF])
-  await expect(f.close()).resolves.toEqual({ closed: true })
+  await expect(f.close()).resolves.toEqual({ closed: true, retirementConfirmed: true })
   expect(f.stopped).toEqual(expect.arrayContaining(['pty-a', 'pty-b']))
   expect(
     f.store.getWorkspaceSession().terminalLayoutsByTabId[ACK_TAB]?.ptyIdsByLeafId?.[ACK_SECOND_LEAF]
@@ -166,7 +166,7 @@ it('stops the visible and the dormant SSH terminal of the closed tab', async () 
   f.publish(true, 2)
   const kill = vi.fn(() => true)
   f.runtime.setPtyController({ write: () => true, kill, getForegroundProcess: async () => null })
-  await expect(f.close()).resolves.toEqual({ closed: true })
+  await expect(f.close()).resolves.toEqual({ closed: true, retirementConfirmed: true })
   expect(kill.mock.calls).toEqual(expect.arrayContaining([[visible], [dormant]]))
   expect(f.hasTab()).toBe(false)
 })
@@ -184,6 +184,6 @@ it("answers the close only once main's layout write is durable", async () => {
   await gate.started.promise
   expect(answered).toBe(false)
   gate.finish.resolve()
-  await expect(closing).resolves.toEqual({ closed: true })
+  await expect(closing).resolves.toEqual({ closed: true, retirementConfirmed: true })
   expect(f.hasTab()).toBe(false)
 })

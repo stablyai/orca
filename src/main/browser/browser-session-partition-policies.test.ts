@@ -245,6 +245,43 @@ describe('partition permission policy', () => {
     expect(checkHandler(guest(8), 'clipboard-read', 'https://a.test')).toBe(true)
   })
 
+  it('answers non-notification requests without inventorying frames', async () => {
+    const install = await loadInstaller()
+    const partition = 'persist:permission-frame-inventory'
+    await install(profileFor(partition), { sitePermissions: 'session' })
+    const { sessionBrowserSitePermissions } = await import('./browser-site-permission-prompt')
+    const memory = sessionBrowserSitePermissions(partition)
+    const requestHandler =
+      sessionsByPartition.get(partition)?.setPermissionRequestHandler.mock.calls[0]?.[0]
+    if (typeof requestHandler !== 'function') {
+      throw new Error('Expected the installed permission request handler')
+    }
+    const enumerateFrames = vi.fn(() => [{ url: 'about:srcdoc', origin: 'https://other.test' }])
+    const tab = {
+      id: 12,
+      getURL: () => 'https://a.test/page',
+      mainFrame: {
+        get framesInSubtree() {
+          return enumerateFrames()
+        }
+      }
+    }
+
+    for (const decision of ['allow', 'block'] as const) {
+      memory.set('https://a.test', ['location', 'clipboard', 'midi'], decision)
+      for (const permission of ['geolocation', 'clipboard-read', 'midi']) {
+        const answer = await new Promise<boolean>((resolve) => {
+          requestHandler(tab, permission, resolve, {
+            requestingUrl: 'about:srcdoc',
+            isMainFrame: false
+          })
+        })
+        expect(answer).toBe(decision === 'allow')
+      }
+    }
+    expect(enumerateFrames).not.toHaveBeenCalled()
+  })
+
   it("answers a notification from a frame with an inherited origin as the frame's real site", async () => {
     const install = await loadInstaller()
     const store = await import('./browser-site-permission-store')

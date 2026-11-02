@@ -9,20 +9,20 @@ import {
   batch
 } from './chat-worker-request-failure-rig.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { structuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { recordStructuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionEndedChild } from '../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import { hostTestMessage } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { countChatFailureOperations } from './chat-worker-error-operation-counts.test-support'
 import { settleStructuredAgentSessionChildExit } from '../../native-chat/agent-session-wire/structured-agent-session-child-exit'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 it.each([100, 1000])(
   'bounds real committed observation and one failure with %i saved requests',
@@ -370,7 +370,7 @@ it.each(['history', 'close', 'replacement', 'epoch'] as const)(
   }
 )
 
-it('consumes disabled/unassigned failures and baselines adoption, epoch replacement and changed assignments', async () => {
+it('consumes unassigned failures and baselines adoption, epoch replacement and changed assignments', async () => {
   const r = await rig()
   r.sessions.delete(SESSION)
   await batch(r.journal, 'saved-history', [
@@ -382,10 +382,8 @@ it('consumes disabled/unassigned failures and baselines adoption, epoch replacem
   ])
   r.sessions.set(SESSION, r.session)
   const deltaQuery = vi.spyOn(r.journal, 'readSince')
-  r.enabled(false)
   await batch(r.journal, 'old', [turn('old', 'failure'), words('old', 'old error')])
   r.unassign()
-  r.enabled(true)
   await batch(r.journal, 'unassigned', [
     turn('unassigned', 'failure'),
     words('unassigned', 'no assignment')
@@ -480,13 +478,6 @@ it('normalizes linked refused starts, reads explicitly scoped late words past a 
     ),
     recovered: true
   })
-  await tick()
-  expect(r.mail()).toHaveLength(2)
-  await batch(r.journal, 'off-at-read', [
-    turn('off-at-read', 'failure'),
-    words('off-at-read', 'muted before read')
-  ])
-  r.enabled(false)
   await tick()
   expect(r.mail()).toHaveLength(2)
 })

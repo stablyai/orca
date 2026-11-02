@@ -1,3 +1,4 @@
+import { registerStructuredSelectionCatalogStore } from '@/lib/structured-agent-session-selection-controller'
 import { canOfferHttpLinkGroupAction } from '@/lib/http-link-in-group-availability'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
@@ -29,7 +30,7 @@ import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
 import { createRuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import { createWslHostsSlice } from './slices/wsl-hosts'
-import { createAgentStatusSlice } from './slices/agent-status'
+import { createAgentStatusSlice } from './slices/agent-status/agent-status'
 import { createPaneForegroundAgentSlice } from './slices/pane-foreground-agent'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
@@ -59,12 +60,14 @@ import {
   registerHttpLinkGroupActionAvailability,
   registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
+import { registerAppHttpLinkStateAccessor } from '@/lib/app-http-link-open'
 import { installStoreListenerCensus } from './store-listener-census'
 import { installSettledSortEpoch } from './settled-sort-epoch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './store-identity-churn-probe'
 import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
+import { withAgentConversationRetention } from './agent-conversation-retention'
 import { attachEditorBufferIdentityEvents } from './editor-buffer-identity-events'
 import {
   registerRendererMemoryProfileContributor,
@@ -79,11 +82,14 @@ const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>)
     ? withStoreIdentityChurnProbe(createState)
     : createState
 
+const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) =>
+  withAgentConversationRetention(withDevelopmentStoreProbes(createState))
+
 // Why buffer records outermost: the probes must see each caller's own partial and frame.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
 export const useAppStore = create<AppState>()(
   withEditorBufferRecords(
-    withDevelopmentStoreProbes(
+    withAppStoreWritePolicies(
       withReactCommitCascadeWriteProbe((...a) => {
         // Why first: settling inside the bump's own notify means hook subscribers never see it unsettled.
         // Switch point: the stamp-sorted list reads no settled epoch.
@@ -149,10 +155,15 @@ export const useAppStore = create<AppState>()(
   )
 )
 
+registerStructuredSelectionCatalogStore({
+  read: useAppStore.getState,
+  subscribe: useAppStore.subscribe
+})
 registerHttpLinkStoreAccessor(() => useAppStore.getState(), useAppStore.subscribe)
 registerHttpLinkGroupActionAvailability((request) =>
   canOfferHttpLinkGroupAction(useAppStore.getState(), request)
 )
+registerAppHttpLinkStateAccessor(() => useAppStore.getState())
 attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {

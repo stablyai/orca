@@ -3,6 +3,7 @@ import { prefetchWorktreeCreateBase } from '../../../worktree-create-base-prefet
 import { prepareWorktreeCreateForRepo } from '../../../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../../../project-runtime-git-options'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { blockedWslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
 
 export function registerWorktreePrefetchHandler(context: WorktreeIpcContext): void {
   const { store, runtime } = context
@@ -15,11 +16,16 @@ export function registerWorktreePrefetchHandler(context: WorktreeIpcContext): vo
         return
       }
       try {
+        const gitOptions = getWorktreeCreatePrefetchGitOptions(store, repo)
+        // Speculative: a composer opening is no act on the repo's WSL distro (E9).
+        if (await blockedWslDistroForPath(repo.path, gitOptions.wslDistro)) {
+          return
+        }
         await prefetchWorktreeCreateBase({
           repo,
           baseBranch: args.baseBranch,
           runtime,
-          gitOptions: getWorktreeCreatePrefetchGitOptions(store, repo),
+          gitOptions,
           prepareCheckout: (base, beforeMaterialization) =>
             prepareWorktreeCreateForRepo(store, repo, base, beforeMaterialization)
         })

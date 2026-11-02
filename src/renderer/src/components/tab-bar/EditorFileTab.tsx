@@ -1,6 +1,7 @@
-import { createElement, useCallback, useEffect, useRef, useState } from 'react'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
+import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
@@ -8,7 +9,7 @@ import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
@@ -32,7 +33,10 @@ import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
+import { useTabCustomEditor } from '@/store/plugin-custom-editors'
+import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 
 export default function EditorFileTab({
   file,
@@ -77,7 +81,6 @@ export default function EditorFileTab({
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
-  const FileIcon = getFileTypeIcon(file.filePath)
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
@@ -89,7 +92,9 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
-  const HoverIcon = isConflictReview
+  const customEditor = useTabCustomEditor(file)
+  // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.
+  const ModeIcon = isConflictReview
     ? ShieldAlert
     : isCheckDetails
       ? ListChecks
@@ -97,7 +102,16 @@ export default function EditorFileTab({
         ? GitCompareArrows
         : isMarkdownPreviewTab
           ? Eye
-          : FileIcon
+          : file.language === 'simulator'
+            ? Smartphone
+            : null
+  const tabIcon = (className: string): React.ReactNode => (
+    <PluginContributionIcon
+      url={customEditor?.iconUrl}
+      fallback={ModeIcon ?? <FileTypeIcon filePath={file.filePath} className={className} />}
+      className={className}
+    />
+  )
   // Strike through missing paths only; changed content is explained by the editor’s on-disk banner.
   const isMissingFileMutation =
     file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
@@ -118,7 +132,6 @@ export default function EditorFileTab({
     (s) => file.isPreview === true && s.settings?.editorPreviewTabsEnabled !== false
   )
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isRenaming, setIsRenaming] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const renameFocusFrameRef = useRef<number | null>(null)
@@ -195,7 +208,6 @@ export default function EditorFileTab({
   )
 
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
-  const tabLabel = getEditorDisplayLabel(file)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -214,11 +226,11 @@ export default function EditorFileTab({
   }, [menuOpen])
 
   const dragListeners = isRenaming ? undefined : listeners
-  // Activate on pointer-up so drag gestures cannot switch tabs mid-drag.
-  const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
+  const { onPointerDown, retirePendingActivation } = useTabStripPointerActivation({
     onActivate,
     disabled: isRenaming
   })
+  const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
 
   const tabRoot = (
@@ -229,9 +241,9 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
-        onTabPointerDown(
+        onPointerDown(
           e,
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
@@ -268,15 +280,14 @@ export default function EditorFileTab({
           className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : (
-        createElement(HoverIcon, {
-          className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
-        })
+        tabIcon(`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`)
       )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
           <Input
             ref={setRenameInputElement}
+            density="compact"
             data-tab-rename-input="true"
             aria-label={translate(
               'auto.components.tab.bar.EditorFileTab.3da7445c84',
@@ -284,8 +295,7 @@ export default function EditorFileTab({
               { value0: basename(file.filePath) }
             )}
             defaultValue={basename(file.filePath)}
-            // Keep inline rename within titlebar height while reserving readable filename width.
-            className="mr-1 h-5 w-[12ch] min-w-[72px] max-w-[132px] rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
+            className="mr-1 min-w-0 flex-1"
             spellCheck={false}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
@@ -327,7 +337,7 @@ export default function EditorFileTab({
               openRenameInput()
             }}
           >
-            {tabLabel}
+            {getEditorDisplayLabel(file)}
           </span>
         )}
         {isMissingFileMutation && !isRenaming && (
@@ -361,33 +371,31 @@ export default function EditorFileTab({
   )
 
   return (
-    <>
-      <div
-        {...slotProps}
-        onContextMenuCapture={(event) => {
-          event.preventDefault()
-          window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-          setMenuPoint({ x: event.clientX, y: event.clientY })
-          setMenuOpen(true)
-        }}
-      >
-        {isRenaming || menuOpen ? (
-          tabRoot
-        ) : (
-          <TabHoverCard
-            title={tabLabel}
-            programName={translate('tabHoverCard.editor', 'Editor')}
-            icon={createElement(HoverIcon, { className: 'size-4' })}
-            description={file.relativePath}
-          >
-            {tabRoot}
-          </TabHoverCard>
-        )}
-      </div>
+    <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
+      <ContextMenuTrigger asChild>
+        <div
+          {...slotProps}
+          onContextMenu={() => {
+            window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+            handleMenuOpenChange(true)
+          }}
+        >
+          {isRenaming || menuOpen ? (
+            tabRoot
+          ) : (
+            <TabHoverCard
+              title={getEditorDisplayLabel(file)}
+              programName={customEditor?.title ?? translate('tabHoverCard.editor', 'Editor')}
+              icon={tabIcon('size-4')}
+              description={file.relativePath}
+            >
+              {tabRoot}
+            </TabHoverCard>
+          )}
+        </div>
+      </ContextMenuTrigger>
 
       <EditorFileTabContextMenu
-        open={menuOpen}
-        menuPoint={menuPoint}
         file={file}
         unifiedTabId={dragData.unifiedTabId}
         groupId={dragData.groupId}
@@ -401,7 +409,6 @@ export default function EditorFileTab({
         resolvedLanguage={resolvedLanguage}
         repoConnectionId={repo?.connectionId ?? null}
         skipMenuFocusRestoreRef={skipMenuFocusRestoreRef}
-        onOpenChange={setMenuOpen}
         onActivate={onActivate}
         onOpenRenameInput={openRenameInput}
         onTogglePin={onTogglePin}
@@ -413,6 +420,6 @@ export default function EditorFileTab({
         onCloseSplitPane={onCloseSplitPane}
         onOpenMarkdownPreview={openMarkdownPreview}
       />
-    </>
+    </ContextMenu>
   )
 }

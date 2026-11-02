@@ -2,6 +2,8 @@ import type { Notification } from 'electron'
 
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
+const WINDOWS_NOTIFICATION_HISTORY_LIMIT = 256
+const retainedWindowsNotifications = new Map<Notification, () => void>()
 
 // Keep strong references so GC cannot discard displayed notifications and click handlers.
 export const activeNotifications = new Set<Notification>()
@@ -24,7 +26,8 @@ export function retainNotificationUntilRelease(
     }
     released = true
     activeNotifications.delete(notification)
-    notification.removeListener('close', release)
+    notification.removeListener('close', onClose)
+    retainedWindowsNotifications.delete(notification)
     if (releaseTimer) {
       clearTimeout(releaseTimer)
       releaseTimer = null
@@ -32,10 +35,30 @@ export function retainNotificationUntilRelease(
     onRelease?.()
   }
 
-  notification.on('close', release)
-  releaseTimer = setTimeout(release, NOTIFICATION_RELEASE_FALLBACK_MS)
-  if (typeof releaseTimer.unref === 'function') {
-    releaseTimer.unref()
+  function onClose(details?: Electron.NotificationCloseEventParams): void {
+    // Windows hides the banner before the notification leaves Action Center.
+    if (process.platform === 'win32' && details?.reason === 'timedOut') {
+      return
+    }
+    release()
+  }
+
+  notification.on('close', onClose)
+  if (process.platform === 'win32') {
+    retainedWindowsNotifications.set(notification, release)
+    if (retainedWindowsNotifications.size > WINDOWS_NOTIFICATION_HISTORY_LIMIT) {
+      const oldest = retainedWindowsNotifications.entries().next().value
+      if (oldest) {
+        // Remove the toast too, so history never contains a target whose handler we discarded.
+        oldest[0].close()
+        oldest[1]()
+      }
+    }
+  } else {
+    releaseTimer = setTimeout(release, NOTIFICATION_RELEASE_FALLBACK_MS)
+    if (typeof releaseTimer.unref === 'function') {
+      releaseTimer.unref()
+    }
   }
 
   return release

@@ -42,31 +42,26 @@ export function prepareOrcadMigrationWorkspaceSession(
     return { incoming: undefined, merged: undefined }
   }
   assertNoSessionRecordConflicts(state.workspaceSession, incoming)
-  assertNoSessionFocusConflicts(state.workspaceSession, incoming)
   assertNoSessionEntityConflicts(state.workspaceSession, incoming)
+  const merged = mergeWorkspaceSessions(state.workspaceSession, incoming)
+  // Focus is one desktop's selection, not saved state: a host already focused keeps all of its own.
   return {
     incoming,
-    merged: mergeWorkspaceSessions(state.workspaceSession, incoming)
+    merged: hasSessionFocus(state.workspaceSession)
+      ? { ...merged, ...sessionFocus(state.workspaceSession) }
+      : merged
   }
 }
 
-function assertNoSessionFocusConflicts(
-  existing: WorkspaceSessionState,
-  incoming: WorkspaceSessionState
-): void {
-  for (const field of SESSION_FOCUS_FIELDS) {
-    const current = existing[field]
-    const next = incoming[field]
-    if (
-      next !== undefined &&
-      next !== null &&
-      current !== undefined &&
-      current !== null &&
-      serializeOrcadMigrationValue(current) !== serializeOrcadMigrationValue(next)
-    ) {
-      throw new Error(`orcad_migration_dormant_focus_conflict:${field}`)
-    }
-  }
+/** Every focus field, so none the host left unset is borrowed from the desktop. */
+function sessionFocus(session: WorkspaceSessionState): Partial<WorkspaceSessionState> {
+  return Object.fromEntries(SESSION_FOCUS_FIELDS.map((field) => [field, session[field] ?? null]))
+}
+
+function hasSessionFocus(session: WorkspaceSessionState): boolean {
+  return SESSION_FOCUS_FIELDS.some(
+    (field) => session[field] !== undefined && session[field] !== null
+  )
 }
 
 export function applyPreparedOrcadMigrationWorkspaceSession(

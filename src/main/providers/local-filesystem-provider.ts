@@ -1,7 +1,10 @@
 import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { readAuthorizedDocPreviewFile } from '../../shared/doc-preview-file-access'
+import {
+  readAuthorizedDocPreviewFile,
+  readAuthorizedDocPreviewFileChunk
+} from '../../shared/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
@@ -31,7 +34,9 @@ export type LocalFilesystemProviderOptions = {
 }
 
 /** Local twins for runtime commands; reads/listing/watching retain call sites with different limits/shapes. */
-export type LocalFilesystemProvider = Required<Pick<IFilesystemProvider, 'listMarkdownDocuments'>> &
+export type LocalFilesystemProvider = Required<
+  Pick<IFilesystemProvider, 'listMarkdownDocuments' | 'readDocPreviewFileChunk'>
+> &
   Pick<
     IFilesystemProvider,
     | 'readDir'
@@ -104,6 +109,7 @@ export function createLocalFilesystemProvider(
       )
     },
     readDocPreviewFile: readAuthorizedDocPreviewFile,
+    readDocPreviewFileChunk: readAuthorizedDocPreviewFileChunk,
     writeFile: async (filePath, content) => {
       await writeTextFile(filePath, content, undefined)
     },

@@ -1,5 +1,5 @@
 import { BrowserClientPageMetadataAck } from '../../shared/browser-client-page-metadata-protocol'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 
 export type BrowserClientPageMetadataSender = {

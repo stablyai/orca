@@ -71,7 +71,8 @@ function scopeWith(markdownDocs: Map<string, MarkdownDocState>): MobileSessionMa
     markdownSaveSeqRef: { current: new Map() },
     markdownSaveInFlightRef: { current: new Set() },
     showToast: () => {},
-    readMarkdownTab: async () => {}
+    readMarkdownTab: async () => {},
+    dictationLeaveHold: { holdsLeave: false, hold: () => false }
   }
 }
 

@@ -17,6 +17,8 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
       return owned.result.repos.map((repo) => withRuntimeRepoOwner(repo, owned.hostId))
     },
+    // A WSL move is a desktop's own; a paired web client never holds the retained local rows.
+    listWslMoved: async () => [],
     add: async ({ path, kind, displayName }) => {
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(

@@ -1,22 +1,24 @@
 import { useId, useLayoutEffect, useRef } from 'react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-option-snapshot'
 import {
   isReadOnlySessionOptionValue,
   type SessionOptionDescriptor,
   type SessionOptionSelectChoice,
   type SessionOptionValue
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   nativeChatSessionChoiceLabel,
   nativeChatSessionChoiceShortLabel,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
-} from './native-chat-session-option-labels'
+} from '../../../../shared/native-chat-session-option-labels'
+import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 
 type NativeChatSessionOptionRowsProps = {
@@ -29,6 +31,10 @@ type NativeChatSessionOptionRowsProps = {
   onSet: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
   /** A value-less action; it has nothing to show in place, so it closes the picker. */
   onAction: (descriptor: SessionOptionDescriptor) => void
+  /** False when the caller already separates these rows from what sits above them. */
+  divided?: boolean
+  /** Settings grids provide their own inset and spacing between option blocks. */
+  layout?: 'menu' | 'settings'
 }
 
 // Retain missing rows disabled for this visit so model changes cannot slide the picker under the pointer.
@@ -46,8 +52,8 @@ function LevelSegment(props: {
 }): React.JSX.Element {
   const { optionId, choice } = props
   const detailId = useId()
-  const label = nativeChatSessionChoiceLabel(choice, optionId)
-  const shortLabel = nativeChatSessionChoiceShortLabel(choice, optionId)
+  const label = nativeChatSessionChoiceLabel(choice, say, optionId)
+  const shortLabel = nativeChatSessionChoiceShortLabel(choice, say, optionId)
   // What the segment's text leaves out: the full name behind an abbreviation, and the description.
   const detail = [label === shortLabel ? null : label, choice.description].filter(Boolean).join(' ')
   if (!detail) {
@@ -77,14 +83,15 @@ function LevelSegment(props: {
 
 function OptionRow(props: {
   descriptor: SessionOptionDescriptor
+  layout: 'menu' | 'settings'
   /** Kept from an earlier model in this visit; the current one does not offer it. */
   gone: boolean
   onSet: (value: SessionOptionValue) => void
   onAction: () => void
 }): React.JSX.Element {
-  const { descriptor, gone, onSet, onAction } = props
+  const { descriptor, layout, gone, onSet, onAction } = props
   const labelId = useId()
-  const label = nativeChatSessionOptionLabel(descriptor)
+  const label = nativeChatSessionOptionLabel(descriptor, say)
   const off = gone || !descriptor.settable
   if (descriptor.action?.type === 'toggle-command') {
     return (
@@ -96,23 +103,33 @@ function OptionRow(props: {
         className="w-full justify-start"
         onClick={onAction}
       >
-        {nativeChatSessionOptionActionLabel(descriptor)}
+        {nativeChatSessionOptionActionLabel(descriptor, say)}
       </Button>
     )
   }
   if (descriptor.action) {
     return (
-      <div className="flex min-h-7 items-center justify-between gap-3 pl-2">
+      <div
+        className={cn(
+          'flex min-h-7 items-center justify-between gap-3',
+          layout === 'menu' && 'pl-2'
+        )}
+      >
         <span className="text-xs text-muted-foreground">{label}</span>
         <Button type="button" variant="ghost" size="xs" disabled={off} onClick={onAction}>
-          {nativeChatSessionOptionActionLabel(descriptor)}
+          {nativeChatSessionOptionActionLabel(descriptor, say)}
         </Button>
       </div>
     )
   }
   if (descriptor.kind.type === 'boolean') {
     return (
-      <label className="flex min-h-7 items-center justify-between gap-3 px-2 text-xs text-muted-foreground">
+      <label
+        className={cn(
+          'flex min-h-7 items-center justify-between gap-3 text-xs text-muted-foreground',
+          layout === 'menu' && 'px-2'
+        )}
+      >
         {label}
         <Switch
           checked={!gone && descriptor.kind.currentValue}
@@ -127,18 +144,28 @@ function OptionRow(props: {
   if (only && isReadOnlySessionOptionValue(descriptor)) {
     // A row kept from the previous model names no value under this one, as a switched-off row.
     return (
-      <div className="flex min-h-7 items-center justify-between gap-3 px-2 text-xs">
+      <div
+        className={cn(
+          'flex min-h-7 items-center justify-between gap-3 text-xs',
+          layout === 'menu' && 'px-2'
+        )}
+      >
         <span className="text-muted-foreground">{label}</span>
         {gone ? null : (
           <span className="text-foreground">
-            {nativeChatSessionChoiceLabel(only, descriptor.id)}
+            {nativeChatSessionChoiceLabel(only, say, descriptor.id)}
           </span>
         )}
       </div>
     )
   }
   return (
-    <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-2">
+    <div
+      className={cn(
+        'flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1',
+        layout === 'menu' && 'pl-2'
+      )}
+    >
       <span id={labelId} className="text-xs text-muted-foreground">
         {label}
       </span>
@@ -174,7 +201,9 @@ export function NativeChatSessionOptionRows({
   shownReason,
   pendingIds,
   onSet,
-  onAction
+  onAction,
+  divided = true,
+  layout = 'menu'
 }: NativeChatSessionOptionRowsProps): React.JSX.Element {
   const shown = useRef(options)
   const rows = withEarlierRows(shown.current, options)
@@ -202,14 +231,17 @@ export function NativeChatSessionOptionRows({
   return (
     <div
       ref={frame}
-      className="h-(--option-rows-height) shrink-0 overflow-hidden transition-[height] duration-150 ease-out motion-reduce:transition-none"
+      className={cn(
+        'h-(--option-rows-height) shrink-0 overflow-hidden transition-[height] duration-150 ease-out motion-reduce:transition-none',
+        layout === 'settings' && rows.length === 0 && 'hidden'
+      )}
     >
       <div ref={content}>
         {rows.length > 0 ? (
-          <div className="border-t border-border p-1">
-            <div className="flex flex-col gap-0.5">
+          <div className={cn(divided && 'border-t border-border', layout === 'menu' && 'p-1')}>
+            <div className={cn('flex flex-col', layout === 'menu' ? 'gap-0.5' : 'gap-2.5')}>
               {rows.map((descriptor) => {
-                const reason = nativeChatSessionOptionDisabledReason(descriptor.disabledReason)
+                const reason = nativeChatSessionOptionDisabledReason(descriptor.disabledReason, say)
                 return (
                   <NativeChatSessionOptionWriteGroup
                     key={descriptor.id}
@@ -218,6 +250,7 @@ export function NativeChatSessionOptionRows({
                     <div data-option-id={descriptor.id}>
                       <OptionRow
                         descriptor={descriptor}
+                        layout={layout}
                         gone={!options.some((option) => option.id === descriptor.id)}
                         onSet={(value) => onSet(descriptor, value)}
                         onAction={() => onAction(descriptor)}

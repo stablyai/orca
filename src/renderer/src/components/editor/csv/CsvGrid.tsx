@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { CsvColumnResizeHandle } from './CsvColumnResizeHandle'
 import { CsvGridCell } from './CsvGridCell'
 import type { CsvGridInteraction } from './csv-grid-interaction'
@@ -336,8 +336,10 @@ export function CsvGrid({
           </Button>
           <span>
             {translate('csv.rowWindow', 'Rows {{first}}–{{last}}', {
-              first: (windowStart + 1).toLocaleString(),
-              last: Math.min(rowCount, windowStart + SCROLL_WINDOW_ROWS).toLocaleString()
+              first: (windowStart + 1).toLocaleString(getIntlLocale()),
+              last: Math.min(rowCount, windowStart + SCROLL_WINDOW_ROWS).toLocaleString(
+                getIntlLocale()
+              )
             })}
           </span>
           <Button

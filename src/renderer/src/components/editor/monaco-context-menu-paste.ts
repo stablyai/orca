@@ -5,6 +5,9 @@ import {
   MONACO_PASTE_DIRECT_MAX_BYTES,
   MONACO_PASTE_MAX_BYTES,
   type MonacoPasteEditor,
+  type MonacoPasteSnapshot,
+  snapshotMonacoPasteTarget,
+  isMonacoPasteTargetCurrent,
   executeMonacoLargeTextPaste
 } from './monaco-large-text-paste'
 
@@ -68,11 +71,13 @@ export function runOrcaContextMenuPaste(
     return false
   }
 
-  return performOrcaContextMenuPaste(editorInstance, deps)
+  const snapshot = snapshotMonacoPasteTarget(editorInstance)
+  return snapshot ? performOrcaContextMenuPaste(editorInstance, snapshot, deps) : false
 }
 
 async function performOrcaContextMenuPaste(
   editorInstance: PasteCapableEditor,
+  snapshot: MonacoPasteSnapshot,
   deps: OrcaContextMenuPasteDeps
 ): Promise<OrcaContextMenuPasteOutcome> {
   let text: string
@@ -85,6 +90,13 @@ async function performOrcaContextMenuPaste(
   }
   if (!text) {
     return { status: 'noop', reason: 'empty' }
+  }
+
+  if (
+    !isMonacoPasteTargetCurrent(editorInstance, snapshot) ||
+    editorInstance.getOption(deps.readOnlyOptionId)
+  ) {
+    return { status: 'noop', reason: 'target-lost' }
   }
 
   // Share native paste size limits and chunking so context-menu paste cannot freeze the renderer or bypass the cap.
@@ -101,11 +113,6 @@ async function performOrcaContextMenuPaste(
       return { status: 'noop', reason: 'target-lost' }
     }
     return { status: 'pasted', mode: 'chunked' }
-  }
-
-  if (!editorInstance.hasTextFocus()) {
-    // Clipboard IPC yields; do not paste into an editor that lost focus meanwhile.
-    return { status: 'noop', reason: 'target-lost' }
   }
 
   const metadata = deps.getClipboardMetadata(text)

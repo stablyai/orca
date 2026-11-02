@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Repo } from '../../shared/repo-types'
 import type { PersistedOpenFile } from '../../shared/workspace-session-state-types'
@@ -17,6 +17,11 @@ import {
   retainUnretainedOrcadMigrationSources,
   retainOrcadMigrationSource
 } from './orcad-migration-source-retention'
+import {
+  enableMovedOrcadAutomations,
+  enableMovedOrcadAutomationsForTarget
+} from './orcad-migration-moved-automations'
+import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 
 const TARGET_ID = 'ssh-1'
 const SOURCE_HOST = `ssh:${TARGET_ID}`
@@ -258,5 +263,97 @@ describe('renaming unsaved drafts to the server on commit', () => {
 
     await retainOrcadMigrationSource(userDataPath, 'm-1', store)
     expect(store.getWorkspaceSession(SERVER_HOST).openFilesByWorktree ?? {}).toEqual({})
+  })
+})
+
+// #29083: a moved automation must run on the server, never again from this desktop.
+describe('moving automations that ran on this desktop', () => {
+  const TARGET = { id: TARGET_ID, label: 'Prod', host: 'h', port: 22, username: 'u', generation: 2 }
+
+  function committedWithAutomation() {
+    store.addSshTarget(TARGET)
+    store.addRepo(REPO)
+    const automation = store.createAutomation({
+      name: 'Nightly check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: REPO.id,
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY',
+      dtstart: 1
+    })
+    const manifest = createOrcadMigrationManifest(store, TARGET, {
+      migrationId: 'm-1',
+      destinationEnvironmentId: 'env-1'
+    })
+    writeOrcadMigrationSourceCutover(userDataPath, {
+      ...orcadMigrationCutoverFixture('m-1', TARGET_ID),
+      phase: 'destination-committed',
+      manifestSha256: manifest.manifestSha256,
+      manifest
+    })
+    return automation
+  }
+
+  it('disables the retained copy at commit and re-enables it on the server once', async () => {
+    const automation = committedWithAutomation()
+
+    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
+    expect(store.listAutomations()[0]?.enabled).toBe(false)
+    await restart()
+    expect(store.listAutomations()[0]?.enabled).toBe(false)
+
+    const enable = vi.fn(async () => true)
+    await expect(enableMovedOrcadAutomations(userDataPath, 'm-1', enable)).resolves.toBe(0)
+    await enableMovedOrcadAutomations(userDataPath, 'm-1', enable)
+    expect(enable).toHaveBeenCalledOnce()
+    expect(enable).toHaveBeenCalledWith(
+      expect.objectContaining({ id: automation.id, dtstart: automation.dtstart })
+    )
+  })
+
+  it('retries a server it could not reach, but not one that refused', async () => {
+    committedWithAutomation()
+    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
+
+    const unreachable = vi.fn(async () => {
+      throw new Error('offline')
+    })
+    await expect(enableMovedOrcadAutomations(userDataPath, 'm-1', unreachable)).resolves.toBe(0)
+    const refused = vi.fn(async () => false)
+    await expect(enableMovedOrcadAutomations(userDataPath, 'm-1', refused)).resolves.toBe(1)
+    await enableMovedOrcadAutomations(userDataPath, 'm-1', refused)
+    expect(refused).toHaveBeenCalledOnce()
+  })
+
+  it('retries an earlier move a later delta move superseded', async () => {
+    committedWithAutomation()
+    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
+    writeOrcadMigrationSourceCutover(userDataPath, {
+      ...orcadMigrationCutoverFixture('m-2', TARGET_ID),
+      phase: 'destination-committed',
+      sourceRetainedAt: '2026-10-03T00:00:00.000Z',
+      supersedesMigrationId: 'm-1'
+    })
+
+    const enable = vi.fn(async () => false)
+    await expect(
+      enableMovedOrcadAutomationsForTarget(userDataPath, TARGET_ID, enable)
+    ).resolves.toBe(1)
+    expect(enable).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a copy the user had turned off alone, and asks the server for nothing', async () => {
+    const automation = committedWithAutomation()
+    store.disableAutomations(new Set([automation.id]))
+    const before = store.listAutomations()[0]
+
+    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
+    const enable = vi.fn(async () => true)
+    await enableMovedOrcadAutomations(userDataPath, 'm-1', enable)
+
+    expect(store.listAutomations()[0]).toEqual(before)
+    expect(enable).not.toHaveBeenCalled()
   })
 })

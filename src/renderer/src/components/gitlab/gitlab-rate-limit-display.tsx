@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 import type {
   GetGitLabRateLimitResult,
   GitLabRateLimitSnapshot
@@ -12,19 +13,19 @@ import type {
 import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
 import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 
 const REFRESH_INTERVAL_MS = 60_000
 
 export function formatGitLabRateLimitReset(resetAt: number | null): string {
   if (resetAt === null) {
-    return 'unknown'
+    return translate('auto.components.gitlab.gitlab.rate.limit.display.resetUnknown', 'unknown')
   }
   const deltaSec = Math.max(0, resetAt - Math.floor(Date.now() / 1000))
   if (deltaSec < 60) {
-    return `${deltaSec}s`
+    return formatUiNarrowDuration(deltaSec, 'second')
   }
-  const mins = Math.round(deltaSec / 60)
-  return `${mins}m`
+  return formatUiNarrowDuration(Math.round(deltaSec / 60), 'minute')
 }
 
 export function toneForGitLabBucket(remaining: number, limit: number): 'ok' | 'warn' | 'crit' {
@@ -54,11 +55,15 @@ export function useGitLabRateLimitSnapshot(
   const [hasError, setHasError] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
   const latestToken = useRef(0)
+  const hasSnapshot = useRef(false)
   const autoRefresh = options?.autoRefresh ?? true
 
   const refresh = useCallback(
     async (force = false): Promise<void> => {
       const token = ++latestToken.current
+      // A stopped WSL distro (where the CLI lives) is no failure: keep the last numbers if any.
+      const keepsLastSnapshot = (error: unknown): boolean =>
+        hasSnapshot.current && isWslDistroNotRunningRefusal(error)
       setIsFetching(true)
       try {
         const params = force ? { force: true } : undefined
@@ -75,13 +80,14 @@ export function useGitLabRateLimitSnapshot(
           return
         }
         if (res?.ok) {
+          hasSnapshot.current = true
           setSnapshot(res.snapshot)
           setHasError(false)
-        } else {
+        } else if (!keepsLastSnapshot(res?.error)) {
           setHasError(true)
         }
-      } catch {
-        if (token === latestToken.current) {
+      } catch (error) {
+        if (token === latestToken.current && !keepsLastSnapshot(error)) {
           setHasError(true)
         }
       } finally {
@@ -136,14 +142,15 @@ function GitLabRateLimitRows({
             tone === 'warn' && 'text-amber-700 dark:text-amber-300'
           )}
         >
-          {rest.remaining}{' '}
-          {translate('auto.components.gitlab.gitlab.rate.limit.display.ea8ad0bae8', 'of')}{' '}
-          {rest.limit}{' '}
           {translate(
-            'auto.components.gitlab.gitlab.rate.limit.display.3e2c982cfa',
-            'left, resets in'
-          )}{' '}
-          {formatGitLabRateLimitReset(rest.resetAt)}
+            'auto.components.gitlab.gitlab.rate.limit.display.remainingOfLimit',
+            '{{remaining}} of {{limit}} left, resets in {{reset}}',
+            {
+              remaining: rest.remaining,
+              limit: rest.limit,
+              reset: formatGitLabRateLimitReset(rest.resetAt)
+            }
+          )}
         </span>
       </div>
     </div>

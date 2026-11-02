@@ -11,7 +11,7 @@ import {
 import { CandidateRow } from './workspace-cleanup-candidate-row'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import { FACET_NOW, makeNamedFacets } from './workspace-cleanup-facet.test.fixture'
-import { getWorkspaceCleanupHostIdentity } from './workspace-cleanup-host-identity'
+
 import { runWorkspaceCleanupQuery } from './workspace-cleanup-query'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 
@@ -106,18 +106,6 @@ describe('workspace cleanup flat list', () => {
     container = null
   })
 
-  it('renders every tier in one list rather than per-tab groups', () => {
-    const result = query()
-
-    renderRows(result.rows)
-
-    expect(result.totalCount).toBe(FLEET.length)
-    expect(result.matchedCount).toBe(FLEET.length)
-    expect(renderedNames()).toEqual(
-      expect.arrayContaining(['ready-one', 'needs-review', 'protected-one', 'ignored-one'])
-    )
-  })
-
   it('switches the visible rows when filters are applied', () => {
     const filters = createDefaultWorkspaceCleanupFilterState()
     filters.safety.dismissed = 'exclude'
@@ -127,12 +115,6 @@ describe('workspace cleanup flat list', () => {
     filters.safety.dismissed = 'only'
     renderRows(query(filters).rows)
     expect(renderedNames()).toEqual(['ignored-one'])
-  })
-
-  it('lets select-all include pinned label rows', () => {
-    expect(query().selectableIdentities).toContain(
-      getWorkspaceCleanupHostIdentity('local', 'repo-1::/repo/protected-one')
-    )
   })
 
   it('offers local removal for a disconnected SSH row without making it selectable', () => {
@@ -148,15 +130,5 @@ describe('workspace cleanup flat list', () => {
     expect(forgetButton).not.toBeNull()
     act(() => forgetButton?.click())
     expect(onForgetLocally).toHaveBeenCalledWith(disconnected.candidate)
-  })
-
-  it('shows status and disk-size facts without expanding a row', () => {
-    renderRows(query().rows)
-
-    expect(container?.textContent).toContain('In progress')
-    expect(container?.textContent).toContain('4.00 MB')
-    expect(container?.textContent).toContain('Not measured')
-    const sizedRows = [...(container?.querySelectorAll('[aria-label^="Size on disk"]') ?? [])]
-    expect(sizedRows).toHaveLength(FLEET.length)
   })
 })

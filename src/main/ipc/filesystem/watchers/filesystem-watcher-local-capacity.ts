@@ -10,12 +10,15 @@ import { isWatcherRemovalInProgressError } from '../../watcher-removal-gate'
 import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 
 export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<void>
+/** Calls `retry` when installing may succeed again; returns a cancel. */
+export type WaitForLocalWatcherRetry = (retry: () => Promise<void>) => () => void
 
 export function scheduleLocalCapacityRetry(
   rootKey: string,
   worktreePath: string,
   listeners: Map<number, WebContents>,
-  subscribe: SubscribeLocalWatcher
+  subscribe: SubscribeLocalWatcher,
+  waitForRetry: WaitForLocalWatcherRetry = onWatcherChildCapacityAvailable
 ): void {
   const existing = watcherLifecycleState.pendingLocalCapacityRetries.get(rootKey)
   if (existing) {
@@ -28,7 +31,7 @@ export function scheduleLocalCapacityRetry(
   }
 
   let retry!: LocalWatcherCapacityRetry
-  const cancelWait = onWatcherChildCapacityAvailable(async () => {
+  const cancelWait = waitForRetry(async () => {
     if (watcherLifecycleState.pendingLocalCapacityRetries.get(rootKey) !== retry) {
       return
     }

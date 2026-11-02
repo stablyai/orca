@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   waitForStructuredAgentSessionStart,
   type StructuredAgentSessionStartReadiness
 } from './structured-agent-session-start-readiness'
 export type { StructuredAgentSessionStartReadiness } from './structured-agent-session-start-readiness'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
@@ -28,7 +28,8 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   attemptId?: string
 }): StructuredAgentSessionStartupAttempt {
   const { record } = input
-  const options = input.startupOptions ?? record.options
+  const selected = input.startupOptions ?? record.options
+  const options = record.provider === 'claude' ? { fastMode: 'false', ...selected } : selected
   return {
     attemptId: input.attemptId ?? randomUUID(),
     identity: input.identity,

@@ -22,7 +22,7 @@ import { NO_ACP_CHILD_STOPS } from './acp-structured-child-stop'
 import { prepareAcpStructuredLaunch } from './acp-structured-launch-preparation'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { AcpStructuredPrompts } from './acp-structured-prompts'
-import { AcpLoadHistory } from './acp-history-replay'
+import { AcpLoadHistory } from './history/acp-history-replay'
 import { asReattachHistory, routeAcpSessionEvent } from './acp-structured-session'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredTurnsDeps } from './acp-structured-turns'
@@ -163,6 +163,12 @@ export async function acquireAcpStructuredSession(input: {
           )
         }
         routeAcpSessionEvent({ lane: slot.lane, options }, event, now(), slot.reattaching)
+        if (
+          event.kind === 'known' &&
+          event.notification.update.sessionUpdate === 'available_commands_update'
+        ) {
+          events?.publish()
+        }
       }
       if (
         isAcpReadySession(session) &&
@@ -175,7 +181,8 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values)
+          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+          catalogListing: { models: options.read().models }
         })
       }
     })

@@ -623,7 +623,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         protocolVersion: GET_SIZE_PROTOCOL_VERSION - 1
       })
       try {
-        await expect(rig.adapter.attach(sessionId)).resolves.toBeUndefined()
+        await expect(rig.adapter.attach(sessionId)).resolves.toMatchObject({ id: sessionId })
         expect(rig.request).not.toHaveBeenCalledWith('getSize', expect.anything())
         expect(rig.request).toHaveBeenCalledWith('listSessions', undefined)
         expect(rig.request).toHaveBeenCalledWith(
@@ -647,7 +647,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         getSizeError: new Error('Unknown request type: getSize')
       })
       try {
-        await expect(rig.adapter.attach(sessionId)).resolves.toBeUndefined()
+        await expect(rig.adapter.attach(sessionId)).resolves.toMatchObject({ id: sessionId })
         expect(rig.request).toHaveBeenCalledWith('listSessions', undefined)
         expect(rig.request).toHaveBeenCalledWith(
           'createOrAttach',
@@ -802,6 +802,34 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expectedIncarnationId: 'incarnation-a'
       })
       current.dispose()
+    })
+
+    describe('foreground observations across retained daemon versions', () => {
+      it.each([39, 43, 54])('does not request the new decision RPC from v%s', async (version) => {
+        const request = vi.fn()
+        const legacy = createInspectionAdapter(version, request)
+        expect(legacy.supportsForegroundObservation('sess-a')).toBe(false)
+        expect(request).not.toHaveBeenCalled()
+        legacy.dispose()
+      })
+      it('adds only the requested field and accepts an omitted optional response', async () => {
+        const answer = { foregroundProcess: 'claude', hasChildProcesses: true }
+        const request = vi.fn(async () => answer)
+        const current = createInspectionAdapter(PROTOCOL_VERSION, request)
+        expect(current.supportsForegroundObservation('sess-a')).toBe(true)
+        expect(
+          await current.inspectProcess('sess-a', {
+            foregroundOnly: true,
+            expectedIncarnationId: 'inc-1'
+          })
+        ).toEqual(answer)
+        expect(request).toHaveBeenCalledExactlyOnceWith('inspectProcess', {
+          sessionId: 'sess-a',
+          foregroundOnly: true,
+          expectedIncarnationId: 'inc-1'
+        })
+        current.dispose()
+      })
     })
   })
 })

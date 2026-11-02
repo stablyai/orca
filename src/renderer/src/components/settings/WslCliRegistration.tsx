@@ -33,30 +33,36 @@ export function WslCliRegistration({
   const { wslAvailable } = useWindowsTerminalCapabilities(currentPlatform === 'win32')
   const showWslCli = currentPlatform === 'win32' && wslAvailable
 
-  const refreshStatus = useCallback(async (): Promise<void> => {
-    setLoading(true)
-    try {
-      const next = await window.api.cli.getWslInstallStatus()
-      if (mountedRef.current) {
-        setStatus(next)
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.WslCliRegistration.26b4b3b00f',
-                'Failed to load WSL CLI status.'
-              )
+  // Mount reads must not start a stopped distro; the refresh button is a user act that may.
+  const refreshStatus = useCallback(
+    async (wakeWslDistro = false): Promise<void> => {
+      setLoading(true)
+      try {
+        const next = await window.api.cli.getWslInstallStatus(
+          wakeWslDistro ? { wakeWslDistro: true } : undefined
         )
+        if (mountedRef.current) {
+          setStatus(next)
+        }
+      } catch (error) {
+        if (mountedRef.current) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.settings.WslCliRegistration.26b4b3b00f',
+                  'Failed to load WSL CLI status.'
+                )
+          )
+        }
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false)
+        }
       }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false)
-      }
-    }
-  }, [mountedRef])
+    },
+    [mountedRef]
+  )
 
   useEffect(() => {
     if (showWslCli) {
@@ -173,7 +179,7 @@ export function WslCliRegistration({
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    onClick={() => void refreshStatus()}
+                    onClick={() => void refreshStatus(true)}
                     disabled={loading || busyAction !== null}
                     aria-label={translate(
                       'auto.components.settings.WslCliRegistration.ab6b022a5c',

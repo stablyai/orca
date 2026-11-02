@@ -7,8 +7,10 @@ import {
   shouldShowChecksPanelPublishBranchAction
 } from '../checks-panel-empty-state'
 import { openChecksPanelHostedReviewUrl } from '../checks-panel-hosted-review-click-routing'
+import { isRateLimitRefresh } from '../checks-panel-review-state-model'
 import { isMacPlatform } from '../../terminal-pane/terminal-link-open-hints'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
 import { useNow } from '@/hooks/use-now'
@@ -63,6 +65,7 @@ export function ChecksPanelEmptyContent({
     linkedGitLabMR,
     linkedPR,
     linkedReviewNumber,
+    manualRefreshError,
     panelContextKey,
     prAiGenerationEnabled,
     prBase,
@@ -155,16 +158,18 @@ export function ChecksPanelEmptyContent({
     const operationInProgress = conflictOperation !== 'unknown'
     const operationLabel =
       conflictOperation === 'rebase'
-        ? 'Rebase'
+        ? translate('auto.components.right.sidebar.checks.panel.content.operation.rebase', 'Rebase')
         : conflictOperation === 'merge'
-          ? 'Merge'
+          ? translate('auto.components.right.sidebar.checks.panel.content.operation.merge', 'Merge')
           : conflictOperation === 'cherry-pick'
-            ? 'Cherry-pick'
+            ? translate(
+                'auto.components.right.sidebar.checks.panel.content.operation.cherryPick',
+                'Cherry-pick'
+              )
             : null
     const emptyReviewIsGitLab =
       linkedGitLabMR !== null || hostedReviewCreation?.provider === 'gitlab'
-    const emptyReviewLabel = emptyReviewIsGitLab ? 'merge request' : 'pull request'
-    const emptyReviewShortLabel = emptyReviewIsGitLab ? 'MR' : 'PR'
+    const emptyReviewCopy = localizedHostedReviewCopy(emptyReviewIsGitLab ? 'gitlab' : 'github')
     const canPushCreate = hostedReviewCreation?.blockedReason === 'needs_push'
     const shouldPushBeforeCreateReview = createPrPushFirst || canPushCreate
     const canPublishBranch =
@@ -197,8 +202,8 @@ export function ChecksPanelEmptyContent({
           : 'loading'
     const reviewState = getChecksPanelReviewState({
       operationLabel,
-      reviewLabel: emptyReviewLabel,
-      reviewShortLabel: emptyReviewShortLabel,
+      reviewLabel: emptyReviewCopy.reviewLabel,
+      reviewShortLabel: emptyReviewCopy.shortLabel,
       providerName: hostedReviewCreateCopy.providerName,
       isGitHubProvider: hostedReviewCreateProvider === 'github',
       reviewLookup: checksPanelReviewLookup,
@@ -212,20 +217,32 @@ export function ChecksPanelEmptyContent({
       hasUpstream: publishActionRemoteStatus?.hasUpstream,
       hasCurrentBranch: Boolean(branch)
     })
-    const emptyStateCopy = { title: reviewState.title, description: reviewState.description }
+    // Classified GitHub states carry the next step (sign in, or wait for the limit), so they win.
+    const refreshFailure =
+      emptyRefreshInput?.status === 'error' || isRateLimitRefresh(emptyRefreshInput)
+        ? null
+        : manualRefreshError
+    const emptyStateCopy = refreshFailure
+      ? {
+          title: translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed'),
+          description: refreshFailure
+        }
+      : { title: reviewState.title, description: reviewState.description }
     const reviewStateAutoRetryText =
       reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > now
         ? translate(
             'auto.components.right.sidebar.ChecksPanel.review.auto_retry',
             'Orca will retry at {{time}}.',
-            { time: new Date(reviewState.autoRetryAt).toLocaleTimeString() }
+            { time: new Date(reviewState.autoRetryAt).toLocaleTimeString(getIntlLocale()) }
           )
         : null
     const reviewRecoveryRetryDisabled =
       reviewState.retryDisabledUntil !== undefined && now < reviewState.retryDisabledUntil
     const reviewRecoveryLabelIsRefresh = reviewState.recovery.includes('refresh')
     const reviewShowRetryOrRefresh =
-      reviewState.recovery.includes('retry') || reviewRecoveryLabelIsRefresh
+      Boolean(refreshFailure) ||
+      reviewState.recovery.includes('retry') ||
+      reviewRecoveryLabelIsRefresh
     const reviewShowOpenReview =
       reviewState.recovery.includes('open_review') && Boolean(reviewState.openReviewUrl)
     const reviewShowSyncBranch = reviewState.workflowAction === 'sync_branch'
@@ -244,10 +261,10 @@ export function ChecksPanelEmptyContent({
         )}
         <div className="text-sm font-medium text-foreground">{emptyStateCopy.title}</div>
         <div className="mt-1 text-xs text-muted-foreground">{emptyStateCopy.description}</div>
-        {reviewState.detail ? (
+        {!refreshFailure && reviewState.detail ? (
           <div className="mt-1 text-xs text-muted-foreground">{reviewState.detail}</div>
         ) : null}
-        {reviewStateAutoRetryText ? (
+        {!refreshFailure && reviewStateAutoRetryText ? (
           <div className="mt-1 text-xs text-muted-foreground">{reviewStateAutoRetryText}</div>
         ) : null}
         {!operationInProgress && createComposerOpen ? (
@@ -288,12 +305,12 @@ export function ChecksPanelEmptyContent({
                   ? translate(
                       'auto.components.right.sidebar.ChecksPanel.98f4c37b33',
                       'Push & Create {{value0}}',
-                      { value0: emptyReviewShortLabel }
+                      { value0: emptyReviewCopy.shortLabel }
                     )
                   : translate(
                       'auto.components.right.sidebar.ChecksPanel.889cdfba04',
                       'Create {{value0}}',
-                      { value0: emptyReviewShortLabel }
+                      { value0: emptyReviewCopy.shortLabel }
                     )
               }}
               onGenerate={() => void handleGeneratePullRequestFields()}

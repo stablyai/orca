@@ -2,11 +2,14 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
+import {
+  resetMobileNativeChatDraftStoreForTests,
+  useMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
 
 describe('useMobileNativeChatDrafts with queued cards', () => {
   let renderer: ReactTestRenderer | null = null
-  let state: ReturnType<typeof useMobileNativeChatDrafts> | null = null
+  let state: (ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }) | null = null
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -16,7 +19,7 @@ describe('useMobileNativeChatDrafts with queued cards', () => {
   })
 
   function Harness(): null {
-    state = useMobileNativeChatDrafts({
+    const drafts = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId: 'a',
@@ -26,6 +29,7 @@ describe('useMobileNativeChatDrafts with queued cards', () => {
       transcriptLoading: false,
       transcriptSettled: true
     })
+    state = { ...drafts, composerText: useMobileNativeChatDraft(drafts.draftKey) }
     return null
   }
 

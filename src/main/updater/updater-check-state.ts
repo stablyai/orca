@@ -5,6 +5,7 @@ import { getRetainedLinuxPackageManualInstallStatus } from '../linux-package-dow
 import type { UpdateCheckOptions, UpdateStatus } from '../../shared/update-status-types'
 import type { UpdateCheckVariant } from './updater-types'
 import { UpdaterStatus } from './updater-status'
+import type { UpdaterCodedMessage } from '../../shared/updater-failure-copy'
 import {
   AUTO_UPDATE_CHECK_INTERVAL_MS,
   AUTO_UPDATE_RETRY_INTERVAL_MS,
@@ -265,7 +266,9 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     )
   }
 
-  protected sendErrorStatus(message: string, userInitiated?: boolean): void {
+  protected sendErrorStatus(failure: string | UpdaterCodedMessage, userInitiated?: boolean): void {
+    const coded = typeof failure === 'string' ? { message: failure } : failure
+    const { message } = coded
     if (
       this.currentStatus.state === 'error' &&
       this.currentStatus.message === message &&
@@ -280,7 +283,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
         message: 'Windows update signature check could not run'
       })
     }
-    this.sendStatus({ state: 'error', message, userInitiated })
+    this.sendStatus({ state: 'error', ...coded, userInitiated })
   }
 
   /** Retain the distro-package manual-install card when settling a check; ordinary status would erase it. */
@@ -289,7 +292,15 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (retainedStatus) {
       this.sendStatus(retainedStatus)
     } else if (status.state === 'error') {
-      this.sendErrorStatus(status.message, status.userInitiated)
+      const { message, messageCode, messageParams } = status
+      this.sendErrorStatus(
+        {
+          message,
+          ...(messageCode === undefined ? {} : { messageCode }),
+          ...(messageParams === undefined ? {} : { messageParams })
+        },
+        status.userInitiated
+      )
     } else {
       this.sendStatus(status)
     }

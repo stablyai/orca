@@ -1,4 +1,5 @@
 import { hostStableKey, parseHostStableKey } from '../../../../shared/automation-owner-key'
+import { translate } from '@/i18n/i18n'
 import type {
   AutomationOwnerRef,
   StableAutomationAuthorityRef,
@@ -21,7 +22,12 @@ import { orderAutomationHostCatalogEntries } from './automation-host-catalog-ord
 
 /** Project mirrored state without connecting or probing; authority health/capabilities are inputs, so rendering the picker adds no network traffic. */
 
-export const AUTOMATION_ORPHAN_ENTRY_LABEL = 'Unassigned legacy automations'
+export function automationOrphanEntryLabel(): string {
+  return translate(
+    'auto.components.automations.hostCatalog.orphanEntryLabel',
+    'Unassigned legacy automations'
+  )
+}
 
 type ReferencedAuthorityScope = { targetIds: Set<string>; orphan: boolean }
 
@@ -214,7 +220,7 @@ function projectOrphanEntry(ctx: AuthorityProjectionContext): AutomationHostCata
     { authority: ctx.authority, selector: { kind: 'orphan' } },
     {
       owner: null,
-      label: AUTOMATION_ORPHAN_ENTRY_LABEL,
+      label: automationOrphanEntryLabel(),
       authorityLabel: ctx.authorityLabel,
       kind: 'orphan',
       catalogState: settled ? 'authoritative' : 'unhydrated',

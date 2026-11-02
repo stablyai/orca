@@ -524,10 +524,10 @@ describe('workspace_create_failed schema', () => {
 })
 
 describe('settings_changed schema', () => {
-  it('accepts the Chat UI switch as a boolean adoption signal', () => {
+  it('accepts the browser extensions switch as a boolean adoption signal', () => {
     expect(
       eventSchemas.settings_changed.safeParse({
-        setting_key: 'experimentalNativeChat',
+        setting_key: 'experimentalBrowserExtensions',
         value_kind: 'bool'
       }).success
     ).toBe(true)

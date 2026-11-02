@@ -1,4 +1,4 @@
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { NESTED_WORKTREE_REMOVAL_PREFIX } from '../shared/worktree/nested-removal'
@@ -12,8 +12,7 @@ import {
 } from './worktree-removal-home-guard'
 import {
   gitFileProvesOrphanedWorktreeDirectory,
-  type ReadPath,
-  type StatPath
+  type WorktreeProofAccess
 } from './worktree-orphan-gitdir-proof'
 
 const ORCA_CREATION_SOURCES = new Set<NonNullable<WorktreeMeta['orcaCreationSource']>>([
@@ -130,8 +129,12 @@ export async function canSafelyRemoveOrphanedWorktreeDirectory(
   worktreePath: string,
   repoPath: string,
   home: WorktreeRemovalHomeAuthority,
-  statPath: StatPath = lstat,
-  readPath: ReadPath = (path) => readFile(path, 'utf8')
+  access: WorktreeProofAccess = {
+    statPath: lstat,
+    layoutStatPath: stat,
+    readPath: (path) => readFile(path, 'utf8'),
+    realPath: realpath
+  }
 ): Promise<boolean> {
   // A .git file can also belong to a dotfiles home; unknown host home must never authorize deletion.
   if (!isRemovalHomeAuthorityResolved(home)) {
@@ -149,8 +152,7 @@ export async function canSafelyRemoveOrphanedWorktreeDirectory(
     worktreePath,
     repoPath,
     pathOps,
-    statPath,
-    readPath
+    access
   })
 }
 

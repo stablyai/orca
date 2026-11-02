@@ -13,7 +13,7 @@ import { resolveHookCommandSourcePolicy } from '../../../../../../shared/hook-co
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from '../../SearchableSetting'
-import { getRepositoryLocalCommandsSectionId } from '../../repository-settings-targets'
+import { getRepositoryLocalCommandsSectionId } from '../repository-settings-targets'
 import {
   getLocalHookFields,
   getLocalCommandSourcePolicyNotice

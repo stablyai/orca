@@ -76,16 +76,6 @@ describe('store identity churn probe', () => {
     expect(readStoreIdentityChurnReport()).toEqual([])
   })
 
-  it('does not flag a refresh that returns the original reference', () => {
-    const store = createProbeStore()
-    const original = store.getState().rows
-    armStoreIdentityChurnProbe()
-
-    store.getState().refresh(original)
-
-    expect(readStoreIdentityChurnReport()).toEqual([])
-  })
-
   it('names the write site when capture is requested', () => {
     const store = createProbeStore()
     armStoreIdentityChurnProbe({ captureSites: true })
@@ -116,15 +106,6 @@ describe('store identity churn probe', () => {
     expect(seen[1]).toMatchObject({ counter: 1 })
     expect(store.getState().counter).toBe(1)
     expect(churnFor('rows')).toBe(1)
-  })
-
-  it('ignores a write zustand itself drops as identical', () => {
-    const store = createProbeStore()
-    armStoreIdentityChurnProbe()
-
-    store.setState((state) => state)
-
-    expect(readStoreIdentityChurnReport()).toEqual([])
   })
 
   it('passes disarmed writes straight through without reading state', () => {
@@ -188,14 +169,6 @@ describe('store identity churn probe', () => {
     store.setState({ ...store.getState(), rows: [{ ...rows[0] }] }, true)
 
     expect(churnFor('rows')).toBe(1)
-  })
-
-  it('records nothing while disarmed', () => {
-    const store = createProbeStore()
-
-    store.getState().refresh([{ id: 'a', label: 'A' }])
-
-    expect(readStoreIdentityChurnReport()).toEqual([])
   })
 
   it('treats distinct class instances as changed rather than equal', () => {

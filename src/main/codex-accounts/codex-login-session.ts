@@ -5,6 +5,7 @@ import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { codexSpawnEnoent } from '../codex-cli/windows-only-agent-cli'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { parseCodexLoginAuthUrl } from './codex-login-auth-url'
@@ -248,11 +249,8 @@ async function runCodexLoginProcess(
       settle(() => {
         const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
         // ENOENT can mean the CLI or its Node interpreter is missing.
-        const isBareCommand = spawnConfig.codexCommand === 'codex'
         const message = isEnoent
-          ? isBareCommand
-            ? 'Codex CLI not found.'
-            : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
+          ? codexSpawnEnoent(spawnConfig.codexCommand).message
           : error.message
         rejectPromise(new Error(message))
       })

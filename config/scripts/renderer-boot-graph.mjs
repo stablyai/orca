@@ -105,16 +105,16 @@ export function verifyRendererBootGraph(root = process.cwd()) {
       console.error(`  ${chunk}`)
     }
     console.error('Escape them in the source (e.g. \\u2014 inside String.raw regex sources).')
-    return 1
   }
-  if (violations.length === 0) {
-    return 0
+  if (violations.length > 0) {
+    console.error('Payloads that must stay off the renderer boot graph are preloaded again:')
+    for (const violation of violations) {
+      console.error(`  ${violation.label} -> ${violation.chunk}`)
+    }
+    console.error('')
+    console.error(
+      'Load them after first paint (see primeTerminalWebglAddon) or from a route chunk.'
+    )
   }
-  console.error('Payloads that must stay off the renderer boot graph are preloaded again:')
-  for (const violation of violations) {
-    console.error(`  ${violation.label} -> ${violation.chunk}`)
-  }
-  console.error('')
-  console.error('Load them after first paint (see primeTerminalWebglAddon) or from a route chunk.')
-  return 1
+  return twoByteChunks.length > 0 || violations.length > 0 ? 1 : 0
 }

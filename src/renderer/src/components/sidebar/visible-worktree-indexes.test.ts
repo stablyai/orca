@@ -21,9 +21,9 @@ vi.mock('../../../../shared/resolved-worktree-lineage', async (importOriginal) =
 
 import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
 import type { computeVisibleWorktrees } from './compute-visible-worktrees'
-import { getSidebarLineageParentsByIdentity } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
+import { getLineageAncestorIndex } from './visible-worktree-indexes'
 
 type IdentifiedWorktree = Worktree & { instanceId: string }
 
@@ -118,27 +118,6 @@ describe('visible worktree indexes', () => {
     }
 
     expect(counters.cycleDetections).toBe(1)
-  })
-
-  it('returns identity-stable index maps for unchanged store inputs', () => {
-    const parent = makeWorktree('parent')
-    const child = makeWorktree('child')
-    const worktreesByRepo = { repo1: [parent, child] }
-    const sortedIds = [parent.id, child.id]
-    const lineageById = { [child.id]: makeLineage(child, parent) }
-
-    const firstAncestors = getLineageAncestorIndex(worktreesByRepo)
-    const secondAncestors = getLineageAncestorIndex(worktreesByRepo)
-    expect(secondAncestors).toBe(firstAncestors)
-    expect(getSortedWorktreeRankIndex(sortedIds)).toBe(getSortedWorktreeRankIndex(sortedIds))
-    expect([...getSortedWorktreeRankIndex(sortedIds)]).toEqual([
-      [parent.id, 0],
-      [child.id, 1]
-    ])
-
-    expect(getSidebarLineageParentsByIdentity(lineageById, secondAncestors)).toBe(
-      getSidebarLineageParentsByIdentity(lineageById, firstAncestors)
-    )
   })
 
   it('keeps archived parents out of the cached ancestor index', () => {

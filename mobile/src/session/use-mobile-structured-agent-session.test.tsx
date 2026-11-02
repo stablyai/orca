@@ -10,11 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalResolution
-} from '../../../src/shared/agent-session-journal-types'
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -195,10 +195,14 @@ describe('useMobileStructuredAgentSession', () => {
   let listener: ((value: unknown) => void) | null = null
   const onSendError = vi.fn()
   const unsubscribe = vi.fn()
+  const unsubscribePreference = vi.fn()
   const sendRequest = vi.fn(defaultSendRequest)
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
-    listener = onData
-    return unsubscribe
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+      return unsubscribe
+    }
+    return unsubscribePreference
   })
   const client: RpcClient = {
     sendRequest,
@@ -259,30 +263,47 @@ describe('useMobileStructuredAgentSession', () => {
     hook = null
   })
 
-  it('subscribes and holds structured sessions without nativeChat or terminal RPCs', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-
-    await vi.waitFor(() =>
-      expect(subscribe).toHaveBeenCalledWith(
-        'agentSession.subscribe',
-        { sessionId: 'session-1' },
-        expect.any(Function)
-      )
-    )
-    await vi.waitFor(() =>
-      expect(sendRequest).toHaveBeenCalledWith(
-        'agentSession.hold',
-        expect.objectContaining({ sessionId: 'session-1', holderId: expect.any(String) }),
-        expect.any(Object)
-      )
-    )
-    expect(sendRequest).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^(nativeChat|terminal)\./),
-      expect.anything(),
-      expect.anything()
-    )
+  it('projects worker creation facts for phone cards alongside conversation messages', async () => {
+    await act(async () => void (renderer = create(createElement(Harness))))
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    const items: AgentJournalRenderItem[] = [
+      {
+        itemId: 'before',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Coordinate' }] }
+      },
+      {
+        itemId: 'start',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: {
+          kind: 'agent-start',
+          dispatchId: 'dispatch',
+          task: 'Worker assignment',
+          worker: {
+            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+            name: 'Worker'
+          }
+        }
+      },
+      {
+        itemId: 'after',
+        revision: 1,
+        sequence: 3,
+        observedAt: 3,
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
+      }
+    ]
+    await act(async () => listener?.(snapshotEvent(3, items)))
+    expect(hook?.session.messages.map(({ blocks }) => blocks)).toEqual([
+      [{ type: 'text', text: 'Coordinate' }],
+      [{ type: 'text', text: 'Worker assignment' }],
+      [{ type: 'text', text: 'Answer' }]
+    ])
+    expect(hook?.session.messages[1]).toMatchObject({ role: 'system', agentStart: true })
   })
 
   it('re-holds before resubscribing after a reconnect', async () => {
@@ -294,13 +315,17 @@ describe('useMobileStructuredAgentSession', () => {
         sendRequest.mock.calls.filter(([method]) => method === 'agentSession.hold')
       ).toHaveLength(1)
     )
-    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>
+      expect(
+        subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
+      ).toHaveLength(1)
+    )
 
     // Reconnect must acquire the connection-scoped hold before replaying the stream.
     await act(async () => {
       renderer?.update(createElement(Harness, { connected: false }))
     })
-    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect([unsubscribe.mock.calls.length, unsubscribePreference.mock.calls.length]).toEqual([1, 1])
     await act(async () => {
       renderer?.update(createElement(Harness, { connected: true }))
     })
@@ -310,19 +335,28 @@ describe('useMobileStructuredAgentSession', () => {
         sendRequest.mock.calls.filter(([method]) => method === 'agentSession.hold')
       ).toHaveLength(2)
     )
-    await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() =>
+      expect(
+        subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
+      ).toHaveLength(2)
+    )
     const holdOrders = sendRequest.mock.calls
       .map((call, index) =>
         call[0] === 'agentSession.hold' ? sendRequest.mock.invocationCallOrder[index] : null
       )
       .filter((order): order is number => order !== null)
-    const subscribeOrders = subscribe.mock.invocationCallOrder
+    const subscribeOrders = subscribe.mock.calls.flatMap(([method], index) =>
+      method === 'agentSession.subscribe' ? [subscribe.mock.invocationCallOrder[index]] : []
+    )
     const secondHoldOrder = holdOrders[1]
     const secondSubscribeOrder = subscribeOrders[1]
     if (secondHoldOrder === undefined || secondSubscribeOrder === undefined) {
       throw new Error('reconnect calls were not recorded')
     }
     expect(secondHoldOrder).toBeLessThan(secondSubscribeOrder)
+    await act(async () => renderer?.unmount())
+    renderer = null
+    expect([unsubscribe.mock.calls.length, unsubscribePreference.mock.calls.length]).toEqual([2, 2])
   })
 
   it('sends with the shared structured mutation envelope after the stream fence lands', async () => {
@@ -644,7 +678,7 @@ describe('useMobileStructuredAgentSession', () => {
     expect(retryId).not.toBe(firstId)
   })
 
-  it('keeps structured option changes dispatched after unknown delivery', async () => {
+  it('keeps unknown intent until a current query, without accepted memory or resend', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -656,9 +690,15 @@ describe('useMobileStructuredAgentSession', () => {
         settable: true
       })
     })
+    let reconcile!: (response: Awaited<ReturnType<typeof defaultSendRequest>>) => void
     sendRequest.mockImplementation(async (method, params) => {
       if (method === 'agentSession.setOption') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
+      }
+      if (method === 'agentSession.options') {
+        return new Promise<Awaited<ReturnType<typeof defaultSendRequest>>>((resolve) => {
+          reconcile = resolve
+        })
       }
       return defaultSendRequest(method, params)
     })
@@ -669,9 +709,18 @@ describe('useMobileStructuredAgentSession', () => {
     })
 
     const model = hook!.optionSnapshot.find((descriptor) => descriptor.id === 'model')
-    expect(model).toMatchObject({
-      valueSource: 'dispatched',
-      kind: expect.objectContaining({ currentValue: 'gpt-slow' })
+    expect(model?.kind).toMatchObject({ currentValue: 'gpt-slow' })
+    expect(
+      sendRequest.mock.calls.filter(([method]) => method === 'agentSession.setOption')
+    ).toHaveLength(1)
+    expect(
+      sendRequest.mock.calls.filter(
+        ([method]) => method === 'settings.mutateNativeChatSessionOptions'
+      )
+    ).toHaveLength(0)
+    await act(async () => reconcile(await defaultSendRequest('agentSession.options')))
+    expect(hook!.optionSnapshot.find((row) => row.id === 'model')?.kind).toMatchObject({
+      currentValue: 'gpt-fast'
     })
     expect(onSendError).not.toHaveBeenCalled()
   })

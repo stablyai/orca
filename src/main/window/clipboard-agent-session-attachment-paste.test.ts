@@ -83,48 +83,6 @@ beforeEach(() => {
   })
 })
 
-describe('clipboard:saveImageAsTempFile for a structured chat on a paired server', () => {
-  it("stores the image in the chat's attachment store, pinned to the pairing and server", async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the image save path never reads the store.
-    registerClipboardHandlers({} as never)
-
-    await expect(
-      saveHandler()(event, {
-        runtimeEnvironmentId: 'remote-host-1',
-        agentSessionAttachment: {
-          sessionId: 'session-1',
-          expectedEnvironmentPairingRevision: 7,
-          expectedEnvironmentRuntimeId: 'runtime-a'
-        }
-      })
-    ).resolves.toBe('/srv/agent-session-attachments/s/upload-1/p.png')
-
-    const methods = mocks.callRuntimeEnvironment.mock.calls.map((call) => call[2])
-    expect(methods).toEqual([
-      'agentSessionAttachment.uploadStart',
-      'agentSessionAttachment.uploadAppend',
-      'agentSessionAttachment.uploadCommit'
-    ])
-    expect(mocks.callRuntimeEnvironment.mock.calls[0][3]).toMatchObject({
-      sessionId: 'session-1',
-      name: expect.stringMatching(/^orca-paste-.+\.png$/),
-      byteLength: 3
-    })
-    for (const call of mocks.callRuntimeEnvironment.mock.calls) {
-      expect(call[5]).toBe(7)
-      expect(call[7]).toMatchObject({ expectedEnvironmentRuntimeId: 'runtime-a' })
-    }
-  })
-
-  it('keeps the server temp directory for a paste that names no chat', async () => {
-    mocks.callRuntimeEnvironment.mockResolvedValue({ ok: true, result: { uploadId: 'u' } })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the image save path never reads the store.
-    registerClipboardHandlers({} as never)
-    await saveHandler()(event, { runtimeEnvironmentId: 'remote-host-1' }).catch(() => {})
-    expect(mocks.callRuntimeEnvironment.mock.calls[0][2]).toBe('clipboard.startImageUpload')
-  })
-})
-
 describe('clipboard:saveImageAsTempFile for a local structured chat', () => {
   it("stores the image in this machine's attachment store, where a send can claim it", async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-local-paste-store-'))

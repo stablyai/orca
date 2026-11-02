@@ -55,13 +55,15 @@ export function collectTabPtyIds(
 export function guardRunningTerminalClose(params: {
   terminalTabId: string
   tabLabel: string
+  /** Work the user already agreed to stop is not running work to ask about. */
+  consentedPtyId?: string
   onClose: () => void
   onCancel?: () => void
 }): void {
-  const { terminalTabId, tabLabel, onClose, onCancel } = params
+  const { terminalTabId, tabLabel, consentedPtyId, onClose, onCancel } = params
   const state = useAppStore.getState()
   const settings = state.settings
-  const ptyIds = collectTabPtyIds(state, terminalTabId)
+  const ptyIds = collectTabPtyIds(state, terminalTabId).filter((id) => id !== consentedPtyId)
   // Opt-out and no-PTY closes stay synchronous.
   if (ptyIds.length === 0 || settings?.skipCloseTerminalWithRunningProcessConfirm === true) {
     onClose()

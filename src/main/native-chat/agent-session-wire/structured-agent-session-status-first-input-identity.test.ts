@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,10 +8,10 @@ import { StructuredAgentSessionJournalProjections } from './structured-agent-ses
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const journals = createTrackedJournalOpener()
 let directory: string
@@ -93,7 +94,10 @@ it.each([10, 100])('scopes %i old commands incrementally across clear', async (c
   expect(item).not.toHaveBeenCalled()
   const boundary = { operationId: 'clear', afterFence: 7, clearedAt: 101 }
   await journal.context.clear(boundary, { write: () => {}, committed: () => {} })
-  const record = { ...agentSessionRecordFixture(), providerContextBoundary: boundary }
+  const record = agentSessionConversationView({
+    ...agentSessionRecordFixture(),
+    providerContextBoundary: boundary
+  })
   item.mockClear()
   floor.mockClear()
   expect(projections.read(journal, record).firstInputSubmissionKey).toBeNull()
@@ -127,7 +131,7 @@ it('observes a first empty real input without broadcasting an unchanged visible 
   const events: AgentSessionStatusEvent[] = []
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: new Map([['session', indexedStatusFeedSession({ journal })]]),
-    getRecord: () => agentSessionRecordFixture(),
+    getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
     now: () => 100,
     logger: createStructuredAgentSessionLogger(),
     onStatusChanged: observer

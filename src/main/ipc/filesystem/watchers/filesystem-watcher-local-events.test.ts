@@ -285,34 +285,41 @@ describe('local filesystem watcher flush serialization', () => {
     )
   })
 
-  it('starts no further stats when a full inflight batch is cancelled', async () => {
-    const eventCount = 5_000
-    const pendingStats = deferred<{ isDirectory: () => boolean }>()
-    statMock.mockReturnValue(pendingStats.promise)
-    const root = await createLocalWatcher('/repo', '/repo')
-    root.listeners.set(1, sender as never)
+  it.each(['cancelled', 'unwatched'] as const)(
+    'starts no further stats when a full inflight batch is %s',
+    async (endState) => {
+      const eventCount = 5_000
+      const pendingStats = deferred<{ isDirectory: () => boolean }>()
+      statMock.mockReturnValue(pendingStats.promise)
+      const root = await createLocalWatcher('/repo', '/repo')
+      root.listeners.set(1, sender as never)
 
-    watcherCallback?.(
-      null,
-      Array.from({ length: eventCount }, (_, index) => ({
-        type: 'update' as const,
-        path: `/repo/file-${index}.ts`
-      }))
-    )
-    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
-    await flushMicrotasks()
-    expect(statMock).toHaveBeenCalledTimes(8)
+      watcherCallback?.(
+        null,
+        Array.from({ length: eventCount }, (_, index) => ({
+          type: 'update' as const,
+          path: `/repo/file-${index}.ts`
+        }))
+      )
+      vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
+      await flushMicrotasks()
+      expect(statMock).toHaveBeenCalledTimes(8)
 
-    cancelLocalBatchFlush(root)
-    pendingStats.resolve({ isDirectory: () => false })
-    for (let i = 0; i < eventCount * 4 && root.batch.flushInFlight; i++) {
-      await Promise.resolve()
+      if (endState === 'cancelled') {
+        cancelLocalBatchFlush(root)
+      } else {
+        root.listeners.clear()
+      }
+      pendingStats.resolve({ isDirectory: () => false })
+      for (let i = 0; i < eventCount * 4 && root.batch.flushInFlight; i++) {
+        await Promise.resolve()
+      }
+
+      expect(root.batch.flushInFlight).toBe(false)
+      expect(statMock).toHaveBeenCalledTimes(8)
+      expect(sender.send).not.toHaveBeenCalled()
     }
-
-    expect(root.batch.flushInFlight).toBe(false)
-    expect(statMock).toHaveBeenCalledTimes(8)
-    expect(sender.send).not.toHaveBeenCalled()
-  })
+  )
 
   it('leaves an open flush window to the armed timer instead of draining early', async () => {
     const firstStat = deferred<{ isDirectory: () => boolean }>()
@@ -354,15 +361,21 @@ describe('local filesystem watcher flush serialization', () => {
     // Fake refresh revives cleared handles; this regression needs real Node Timeout behavior.
     vi.useRealTimers()
     statMock.mockResolvedValue({ isDirectory: () => true })
-    const listener = { ...sender, id: 7, removeListener: vi.fn(), once: vi.fn() }
+    const listener = { ...sender, id: 7, removeListener: vi.fn(), on: vi.fn() }
     try {
       await subscribeLocalWatcher('/repo', listener as never)
-      watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
+      watcherCallback?.(null, [{ type: 'create', path: '/repo/directory' }])
       unsubscribeLocalWatcher('/repo', listener.id)
       await subscribeLocalWatcher('/repo', listener as never)
-      watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
-      await new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_INTERVAL_MS + 50))
-      expect(sender.send).toHaveBeenCalledTimes(1)
+      watcherCallback?.(null, [{ type: 'create', path: '/repo/directory' }])
+      await vi.waitFor(() => expect(sender.send).toHaveBeenCalledTimes(1), {
+        timeout: WATCH_BATCH_INTERVAL_MS * 20
+      })
+      expect(subscribeMock).toHaveBeenCalledTimes(1)
+      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+        worktreePath: '/repo',
+        events: [{ kind: 'create', absolutePath: '/repo/directory', isDirectory: true }]
+      })
     } finally {
       for (const teardown of watcherLifecycleState.pendingTeardowns.values()) {
         clearTimeout(teardown)

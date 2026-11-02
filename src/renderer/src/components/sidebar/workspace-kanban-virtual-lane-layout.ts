@@ -2,8 +2,8 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 
 type VirtualLaneLayoutRegistration = {
   spacerElement: HTMLElement
+  /** Card host identities, the board's lane keys. */
   getItemIds: () => readonly string[]
-  getWorktreeIds?: () => readonly string[]
   getMeasurements: () => readonly Pick<VirtualItem, 'index' | 'start' | 'end'>[]
 }
 
@@ -30,13 +30,11 @@ export function registerWorkspaceKanbanVirtualLaneLayout(args: {
   scrollElement: HTMLElement
   spacerElement: HTMLElement
   getItemIds: () => readonly string[]
-  getWorktreeIds?: () => readonly string[]
   getMeasurements: () => readonly Pick<VirtualItem, 'index' | 'start' | 'end'>[]
 }): () => void {
   const registration = {
     spacerElement: args.spacerElement,
     getItemIds: args.getItemIds,
-    getWorktreeIds: args.getWorktreeIds,
     getMeasurements: args.getMeasurements
   }
   virtualLaneLayouts.set(args.scrollElement, registration)
@@ -52,7 +50,7 @@ export function getWorkspaceKanbanVirtualLaneItemIds(
   scrollElement: HTMLElement
 ): readonly string[] | null {
   const registration = virtualLaneLayouts.get(scrollElement)
-  return registration?.getWorktreeIds?.() ?? registration?.getItemIds() ?? null
+  return registration?.getItemIds() ?? null
 }
 
 export function getWorkspaceKanbanVirtualLaneItemRects(

@@ -1,6 +1,8 @@
 // Build agent launch resolvers with production composition over test doubles so tests exercise the shared path.
 
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
@@ -8,12 +10,12 @@ import {
   acpStructuredLaunchPart,
   type AcpStructuredLaunchPartDeps
 } from '../acp/acp-structured-launch-resolution'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
-import type { ClaudeEnvDeps } from '../claude/claude-structured-child-env'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
+import type { ClaudeEnvDeps } from '../claude/structured/launch/claude-structured-child-env'
 import {
   claudeStructuredLaunchPart,
   type ClaudeStructuredLaunchPartDeps
-} from '../claude/claude-structured-launch-resolution'
+} from '../claude/structured/launch/claude-structured-launch-resolution'
 import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
 import {
   codexStructuredLaunchPart,
@@ -33,7 +35,9 @@ import {
 
 export const TEST_SPAWN_TOKEN = 'test-spawn-token'
 
-export type LaunchTestSources = Pick<StructuredAgentLaunchSources, 'store'> & {
+export type LaunchTestSources = {
+  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'> &
+    Partial<Pick<AgentSessionRecordStore, 'selectWritableRecord' | 'requireWritableRecord'>>
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
   /** The base env; none is an empty one. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
@@ -53,7 +57,28 @@ function launchSources(deps: LaunchTestSources): StructuredAgentLaunchSources {
   const resolveEnvironment = deps.resolveEnvironment
   const resolveBaseEnvironment = async () => definedEnv((await resolveEnvironment?.()) ?? {})
   return {
-    store: deps.store,
+    store: {
+      pinLaunchDirectory: (id, directory) => deps.store.pinLaunchDirectory(id, directory),
+      selectWritableRecord: (id) => {
+        if (deps.store.selectWritableRecord) {
+          return deps.store.selectWritableRecord(id)
+        }
+        const record = deps.store.getRecord(id)
+        return record ? { kind: 'writable', record } : { kind: 'missing' }
+      },
+      requireWritableRecord: (id) => {
+        if (deps.store.requireWritableRecord) {
+          return deps.store.requireWritableRecord(id)
+        }
+        const record = deps.store.getRecord(id)
+        if (!record) {
+          throw agentSessionRefusalError('agent_session_identity_required', {
+            reason: 'recordMissing'
+          })
+        }
+        return record
+      }
+    },
     resolveWorkspacePath: deps.resolveWorkspacePath ?? (async (id) => `/repos/${id}`),
     resolveBaseEnvironment,
     resolveAgentEnvironment: async (agent) => ({

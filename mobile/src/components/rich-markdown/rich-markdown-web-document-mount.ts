@@ -1,6 +1,7 @@
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import { richMarkdownEditorStyle } from './document-style'
+import { getMobileColorScheme } from '../../theme/mobile-theme'
 import { scopeDocumentStyleToHost } from '../../style-scoping/document-style-scoping'
 import type { RichMarkdownEditorApi, RichMarkdownUrlPromptKind } from './document-host-seams'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
@@ -17,6 +18,7 @@ export type RichMarkdownWebDocument = {
 export type RichMarkdownWebDocumentHooks = {
   postToHost: (message: MobileRichMarkdownEditorMessage) => void
   promptForUrl: (kind: RichMarkdownUrlPromptKind) => Promise<string | null>
+  loadImageSource?: (path: string) => Promise<string>
 }
 
 const STYLE_ELEMENT_ID = 'orca-rich-markdown-document-style'
@@ -26,17 +28,25 @@ export const RICH_MARKDOWN_HOST_CLASS = 'orca-rich-markdown-document-host'
 
 // Plant sheet once per page, scoped to host class; move document-wide theme/color/font globals onto host itself.
 // Leave sheet in head on unmount: removing host class makes it inert, and next mount reuses it.
-function ensureDocumentStyle() {
-  if (document.getElementById(STYLE_ELEMENT_ID)) {
+// Rewrite it in place when the color scheme changes; live editors keep their DOM and caret.
+export function ensureDocumentStyle(host: HTMLElement) {
+  // React Native Web replaces themed View classes when its background changes.
+  host.classList.add(RICH_MARKDOWN_HOST_CLASS)
+  const scheme = getMobileColorScheme()
+  const existing = document.getElementById(STYLE_ELEMENT_ID)
+  if (existing?.dataset.scheme === scheme) {
     return
   }
-  const style = document.createElement('style')
+  const style = existing ?? document.createElement('style')
   style.id = STYLE_ELEMENT_ID
+  style.dataset.scheme = scheme
   style.textContent = scopeDocumentStyleToHost(
     richMarkdownEditorStyle(),
     `.${RICH_MARKDOWN_HOST_CLASS}`
   )
-  document.head.appendChild(style)
+  if (!existing) {
+    document.head.appendChild(style)
+  }
 }
 
 // Mount static modules synchronously so cleanup cannot arrive before disposal handle exists.
@@ -44,8 +54,7 @@ export function mountRichMarkdownWebDocument(
   host: HTMLElement,
   hooks: RichMarkdownWebDocumentHooks
 ): RichMarkdownWebDocument {
-  ensureDocumentStyle()
-  host.classList.add(RICH_MARKDOWN_HOST_CLASS)
+  ensureDocumentStyle(host)
   host.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const started = startDocumentOrGiveTheHostBack(host, hooks)
   return {
@@ -71,6 +80,8 @@ function startDocumentOrGiveTheHostBack(host: HTMLElement, hooks: RichMarkdownWe
 
       // Use page modal: both shells lack prompt delegate and return null, so Link/Image otherwise do nothing.
       promptForUrl: hooks.promptForUrl,
+
+      loadImageSource: hooks.loadImageSource,
 
       // Omit inset source: document and screen read same visualViewport formula, and reporting twice double-lifts screen bar.
       keyboardInsetSource: () => null

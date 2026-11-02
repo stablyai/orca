@@ -7,6 +7,12 @@ import { routeMarkdownHref } from '../components/markdown-href-routing'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { loadMobileFilePreview } from './mobile-file-preview-request'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { svgMarkupDataUri } from '../../../src/shared/svg-document'
+
+// Absolute paths leave the workspace; an external-file tab's document has no workspace images.
+function isOutsideWorkspace(path: string): boolean {
+  return /^[\\/]/.test(path) || isWindowsAbsolutePathLike(path) || path.includes('\0')
+}
 
 export async function loadMarkdownPreviewImage(
   client: MobileFilePreviewRpcSender | null,
@@ -22,7 +28,7 @@ export async function loadMarkdownPreviewImage(
     throw new Error('Unsupported image location')
   }
   const path = link.pathText
-  if (/^[\\/]/.test(path) || isWindowsAbsolutePathLike(path) || path.includes('\0')) {
+  if (isOutsideWorkspace(path) || isOutsideWorkspace(documentPath)) {
     throw new Error('Image must be inside this workspace')
   }
   const source = documentPath.replaceAll('\\', '/')
@@ -31,7 +37,8 @@ export async function loadMarkdownPreviewImage(
     '/workspace',
     resolveRuntimePath(`/workspace/${directory}`, path)
   )
-  if (!relativePath || classifyMobileArtifact(relativePath) !== 'image') {
+  const artifactKind = relativePath ? classifyMobileArtifact(relativePath) : null
+  if (!relativePath || (artifactKind !== 'image' && artifactKind !== 'vector')) {
     throw new Error('Unsupported image location')
   }
   if (!client) {
@@ -40,6 +47,9 @@ export async function loadMarkdownPreviewImage(
   const result = await loadMobileFilePreview(client, worktreeId, relativePath)
   if (result.status === 'ready' && result.kind === 'image') {
     return result.dataUri
+  }
+  if (result.status === 'ready' && result.kind === 'svg' && !result.truncated) {
+    return svgMarkupDataUri(result.content)
   }
   throw new Error('message' in result ? result.message : 'Unable to load image')
 }

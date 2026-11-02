@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -64,6 +65,10 @@ function spawnBridge(port: number, env: Partial<NodeJS.ProcessEnv> = {}): Bridge
   })
 }
 
+function realCat(): string {
+  return spawnSync('sh', ['-c', 'command -v cat'], { encoding: 'utf8' }).stdout.trim()
+}
+
 function exitOf(child: Bridge): Promise<number | null> {
   return new Promise((resolve) => child.once('exit', (code) => resolve(code)))
 }
@@ -83,14 +88,20 @@ function firstLine(stream: NodeJS.ReadableStream): Promise<string> {
   })
 }
 
-/** Decodes the bridge's stdout: resolves `ready` on the sentinel and `bytes` once `expected` arrived. */
-function decode(stream: NodeJS.ReadableStream, expected = 0) {
+/** Decodes the bridge's stdout, discarding payload bytes; resolves `ready` on the sentinel. */
+function decode(stream: NodeJS.ReadableStream) {
   const decoder = new OrcadStdioBridgeDecoder('raw')
   stream.pipe(decoder)
+  const ready = new Promise<string>((resolve) => decoder.once('signal', resolve))
+  decoder.resume()
+  return { decoder, ready }
+}
+
+/** Resolves with the payload once `expected` bytes arrived; collecting a flood would copy quadratically. */
+function received(decoder: OrcadStdioBridgeDecoder, expected: number): Promise<Buffer> {
   const chunks: Buffer[] = []
   let length = 0
-  const ready = new Promise<string>((resolve) => decoder.once('signal', resolve))
-  const bytes = new Promise<Buffer>((resolve, reject) => {
+  return new Promise<Buffer>((resolve, reject) => {
     decoder.on('error', reject)
     decoder.on('data', (chunk: Buffer) => {
       chunks.push(chunk)
@@ -100,10 +111,6 @@ function decode(stream: NodeJS.ReadableStream, expected = 0) {
       }
     })
   })
-  if (expected === 0) {
-    decoder.resume()
-  }
-  return { decoder, ready, bytes }
 }
 
 /** Writes like the desktop listener: one chunk at a time, waiting for drain. */
@@ -174,7 +181,8 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
 
   it('carries every byte value both ways in a multi-megabyte frame, without Node', async () => {
     const child = spawnBridge(echo.port)
-    const { ready, bytes } = decode(child.stdout, PAYLOAD.length)
+    const { decoder, ready } = decode(child.stdout)
+    const bytes = received(decoder, PAYLOAD.length)
     await ready
     const pids = processTree(child.pid!)
     child.stdin.write(PAYLOAD)
@@ -258,6 +266,46 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
     }
   })
 
+  it('waits for the cat it kills before exiting, so no zombie is left for the session init', async () => {
+    // WSL's per-session init never reaps orphans; a zombie there kept an idle distro running (R40).
+    // The stub cats mark when their TERM trap is in place, and the one the relay kills takes a
+    // moment to die and leaves a mark: the relay may exit only after that mark exists.
+    const dir = mkdtempSync(join(scratch, 'reap-'))
+    const bin = join(dir, 'bin')
+    mkdirSync(bin)
+    writeFileSync(
+      join(bin, 'cat'),
+      '#!/bin/sh\n' +
+        `trap 'kill $c 2>/dev/null; sleep 0.3; : > "${join(dir, 'killed')}"; exit 0' TERM\n` +
+        // POSIX gives a background job /dev/null as stdin even under `<&0`, so hand it over on fd 5
+        // as the relay does: the socket reader ends with orcad, the stdin reader blocks until killed.
+        `exec 5<&0\n${realCat()} "$@" <&5 & c=$!\nexec 5<&-\n` +
+        `: > "${join(dir, 'trap')}.$$"\nwait $c\n`,
+      { mode: 0o755 }
+    )
+    const trapsSet = (): number =>
+      readdirSync(dir).filter((name) => name.startsWith('trap.')).length
+    let accepted: Socket | null = null
+    const server = createServer((socket) => {
+      accepted = socket
+    })
+    const port = await listen(server)
+    try {
+      const child = spawnBridge(port, { PATH: `${bin}:${process.env.PATH}` })
+      const exited = exitOf(child)
+      await decode(child.stdout).ready
+      await expect.poll(() => accepted).not.toBeNull()
+      // Hang up only once both cats can take the relay's kill on their trap.
+      await expect.poll(trapsSet, { timeout: 10_000 }).toBe(2)
+      // orcad hangs up: the socket reader ends, the relay kills the stdin reader.
+      accepted!.destroy()
+      await expect(exited).resolves.toBe(0)
+      expect(existsSync(join(dir, 'killed'))).toBe(true)
+    } finally {
+      server.close()
+    }
+  })
+
   it('closes orcad’s socket as soon as the desktop ends stdin', async () => {
     const server = createServer()
     const ended = new Promise<void>((resolve) => {
@@ -308,7 +356,8 @@ describe.runIf(POSIX)('the bash stdio bridge’s Node fallback', () => {
       HOME: guestHome(scratch, true),
       PATH: pathWithoutBash(scratch)
     })
-    const { ready, bytes } = decode(child.stdout, PAYLOAD.length)
+    const { decoder, ready } = decode(child.stdout)
+    const bytes = received(decoder, PAYLOAD.length)
     await expect(ready).resolves.toBe('ready')
     child.stdin.write(PAYLOAD)
     expect((await bytes).equals(PAYLOAD)).toBe(true)

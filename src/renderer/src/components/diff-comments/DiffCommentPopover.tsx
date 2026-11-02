@@ -40,9 +40,18 @@ export function DiffCommentPopover({
   left,
   lineHeight = 0,
   title,
-  placeholder = 'Add note for the AI',
-  submitLabel = 'Add note',
-  submittingLabel = 'Saving…',
+  placeholder = translate(
+    'auto.components.diff.comments.DiffCommentPopover.f6c449191e',
+    'Add note for the AI'
+  ),
+  submitLabel = translate(
+    'auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa',
+    'Add note'
+  ),
+  submittingLabel = translate(
+    'auto.components.diff.comments.DiffCommentCard.bb0a55f856',
+    'Saving…'
+  ),
   onCancel,
   onSubmit
 }: Props): React.JSX.Element {

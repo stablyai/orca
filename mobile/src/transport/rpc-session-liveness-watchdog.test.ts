@@ -46,6 +46,38 @@ describe('RpcSessionLivenessWatchdog', () => {
     expect(terminate).toHaveBeenCalledWith(identity)
   })
 
+  it('coalesces recent network hints without losing or postponing a decisive probe', async () => {
+    const identity = {}
+    const sendProbe = vi.fn(() => true)
+    const terminate = vi.fn()
+    const watchdog = new RpcSessionLivenessWatchdog({
+      transport: 'direct',
+      sendProbe,
+      terminate,
+      voluntaryProbeMinIntervalMs: 10_000
+    })
+    watchdog.start(identity)
+    watchdog.probeNow(identity)
+    watchdog.noteAuthenticatedInbound(identity)
+    await vi.advanceTimersByTimeAsync(1_000)
+    watchdog.probeNow(identity, 4_000)
+    expect(sendProbe).toHaveBeenCalledTimes(2)
+    watchdog.noteAuthenticatedInbound(identity)
+
+    for (let index = 0; index < 3; index++) {
+      await vi.advanceTimersByTimeAsync(1_000)
+      watchdog.probeNow(identity, 4_000)
+      watchdog.noteAuthenticatedInbound(identity)
+      expect(sendProbe).toHaveBeenCalledTimes(2)
+    }
+    await vi.advanceTimersByTimeAsync(999)
+    expect(sendProbe).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(sendProbe).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(terminate).toHaveBeenCalledExactlyOnceWith(identity)
+  })
+
   it('reports causal evidence before terminating a stale session', async () => {
     const onTimeout = vi.fn()
     const terminate = vi.fn()

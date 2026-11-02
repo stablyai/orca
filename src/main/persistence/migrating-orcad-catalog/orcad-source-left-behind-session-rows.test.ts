@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { withoutLeftBehindSessionRows } from './orcad-source-left-behind-session-rows'
 import type { OrcadMigrationSourceScope } from './orcad-source-scope'
 
 const WORKTREE = 'repo-0::/home/dev/src/project-0'
 const SCOPE: OrcadMigrationSourceScope = {
+  kind: 'ssh-relay',
   targetId: 'ssh-box',
   targetGeneration: 1,
   hostId: toSshExecutionHostId('ssh-box'),

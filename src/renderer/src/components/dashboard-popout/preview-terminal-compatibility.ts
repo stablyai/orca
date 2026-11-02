@@ -7,19 +7,22 @@ import { attachTerminalMouseWheelMultiplier } from '@/lib/pane-manager/pane-term
 import { configureLazyArabicShapingJoiner } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-tui-wheel-reports'
-import { installPreviewTerminalLinks } from './preview-terminal-links'
+import {
+  installPreviewTerminalLinks,
+  type PreviewTerminalLinkHandlers
+} from './preview-terminal-links'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 
 /** Match pane compatibility; dispose DOM bindings before replacing or disposing the terminal. */
 export function installPreviewTerminalCompatibility(
   terminal: Terminal,
-  deps: { getSettings: () => GlobalSettings | null }
+  deps: { getSettings: () => GlobalSettings | null; linkHandlers?: PreviewTerminalLinkHandlers }
 ): () => void {
   // Load Unicode 11 before its width shim and any replay; earlier writes bake wide characters into default v6 widths.
   terminal.loadAddon(new Unicode11Addon())
   activateOrcaTerminalUnicodeProvider(terminal)
   installWindowsCtrlAltChordRepair(terminal)
-  installPreviewTerminalLinks(terminal)
+  installPreviewTerminalLinks(terminal, deps.linkHandlers)
   syncPreviewTerminalLigatures(terminal, deps.getSettings())
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: () =>

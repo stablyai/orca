@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isPersistedAgentSessionRecord, type AgentSessionRecord } from '../../agent-session-record'
-import { agentSessionRecordFixture } from '../../agent-session-record.test-fixture'
+import { isPersistedAgentSessionRecord, type AgentSessionRecord } from './agent-session-record'
+import { agentSessionRecordFixture } from './agent-session-record.test-fixture'
 import {
   decodePersistedAgentSessionRecord,
   encodeAgentSessionRecord
-} from '../../agent-session-record-stored-form'
+} from './agent-session-record-stored-form'
 
 function grokRecord(transport = 'acp'): AgentSessionRecord {
   const record = agentSessionRecordFixture()

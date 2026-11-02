@@ -270,3 +270,23 @@ export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<v
   const value = JSON.stringify([...ids])
   await persistMirrored(key, value)
 }
+
+export type TerminalSplitLayout = 'auto' | 'side-by-side' | 'stacked'
+const TERMINAL_SPLIT_LAYOUT_KEY = 'orca:terminalSplitLayout'
+let terminalSplitLayoutWrite: Promise<void> = Promise.resolve()
+
+export async function loadTerminalSplitLayout(): Promise<TerminalSplitLayout> {
+  await terminalSplitLayoutWrite
+  const raw = await AsyncStorage.getItem(TERMINAL_SPLIT_LAYOUT_KEY)
+  return raw === 'side-by-side' || raw === 'stacked' ? raw : 'auto'
+}
+
+export function saveTerminalSplitLayout(layout: TerminalSplitLayout): Promise<void> {
+  const write = terminalSplitLayoutWrite.then(() =>
+    persistMirrored(TERMINAL_SPLIT_LAYOUT_KEY, layout)
+  )
+  terminalSplitLayoutWrite = write.catch((error: unknown) => {
+    console.warn('Terminal split layout could not be saved', error)
+  })
+  return write
+}

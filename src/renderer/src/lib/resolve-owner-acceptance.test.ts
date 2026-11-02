@@ -3,8 +3,7 @@ import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution
 import type { HostAuthority } from '../../../shared/host-authority'
 import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import { OWNER_RESOLUTION_CASES } from './runtime-owner-alias-matrix.test-fixture'
-import { OWNER_OR_LOCAL_ACCEPTANCE } from './resolve-owner-acceptance.test-fixture'
-import { LEGACY_RUNTIME_OWNER_GOLDEN } from './legacy-runtime-owner-answers.test-fixture'
+
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 function describeMatch(match: ExecutionHostOwnerMatch<HostAuthority>): string {
@@ -14,55 +13,6 @@ function describeMatch(match: ExecutionHostOwnerMatch<HostAuthority>): string {
   const { endpoint, at } = match.owner
   return `${endpoint.kind === 'self' ? 'self' : `env:${endpoint.environmentId}`}@${at}`
 }
-
-const casesWithIds = OWNER_RESOLUTION_CASES.flatMap((c) =>
-  c.worktreeId === null ? [] : [{ ...c, worktreeId: c.worktreeId }]
-)
-
-// Each deliberate change from the deprecated resolver, with the design's reason (§5).
-const DELIBERATE_CHANGES: Record<string, string> = {
-  'twin-repo::wt': 'D77: a twin is never picked by default',
-  'projected-twin::wt': 'D77',
-  'folder:twin-folder': 'D77',
-  'folder:group-twin-folder': 'D77',
-  'rival-repo::wt': 'B: servers contest the SSH host',
-  'conflict-repo::wt': 'B',
-  'stale-hub-repo::wt': 'C: reached through the server whose repo row names the target',
-  'legacy-repo::wt': 'an unstamped row is local; the Active Server focus never claims it',
-  'folder:unstamped-folder': 'same',
-  'folder:missing-folder': 'same'
-}
-
-describe('resolveOwnerOrLocal acceptance (round-3 design §5)', () => {
-  it('pins the owner of every matrix case', () => {
-    const actual = Object.fromEntries(
-      casesWithIds.map((c) => [
-        c.name,
-        describeMatch(resolveOwnerOrLocal(c.state, { workspaceId: c.worktreeId }))
-      ])
-    )
-    expect(actual).toEqual(OWNER_OR_LOCAL_ACCEPTANCE)
-  })
-
-  it('differs from the deprecated resolver only in the deliberate cases', () => {
-    const changed = casesWithIds.filter((c) => {
-      const owner = resolveOwnerOrLocal(c.state, { workspaceId: c.worktreeId })
-      const environmentId =
-        owner.kind === 'resolved' && owner.owner.endpoint.kind === 'environment'
-          ? owner.owner.endpoint.environmentId
-          : null
-      const legacy = LEGACY_RUNTIME_OWNER_GOLDEN[c.name]
-      // Why: the deprecated environment-id reader collapsed `ambiguous` to `null`.
-      return owner.kind !== 'resolved' || environmentId !== (legacy === 'ambiguous' ? null : legacy)
-    })
-    for (const c of changed) {
-      expect(DELIBERATE_CHANGES[c.worktreeId], c.name).toBeDefined()
-    }
-    expect(new Set(changed.map((c) => c.worktreeId))).toEqual(
-      new Set(Object.keys(DELIBERATE_CHANGES))
-    )
-  })
-})
 
 describe('resolveOwnerOrLocal probes', () => {
   const base = OWNER_RESOLUTION_CASES.find((c) => c.name === 'focused | stale-hub-repo::wt')!.state

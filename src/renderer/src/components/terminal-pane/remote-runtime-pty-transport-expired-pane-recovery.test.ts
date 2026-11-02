@@ -223,6 +223,44 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.isConnected()).toBe(false)
   })
 
+  it("names a held recovery's stopped WSL distro in readable copy, not the raw hold code", async () => {
+    const onError = vi.fn()
+    resolvedPaneHandle = 'terminal-expired'
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    createRemoteRuntimePtyTransport('older-hub', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'pane:1'
+    }).attach({
+      existingPtyId: 'remote:older-hub@@terminal-expired',
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'terminal.recoverPane'
+        ? {
+            ok: false,
+            error: { code: 'runtime_error', message: 'terminal_held_wsl_distro_stopped:Ubuntu' }
+          }
+        : { ok: true, result: {} }
+    )
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'error',
+        streamId: latestSubscribePayload().streamId,
+        message: 'SSH_SESSION_EXPIRED: relay identity changed'
+      }
+    })
+
+    await vi.waitFor(() =>
+      expect(onError).toHaveBeenCalledWith(
+        "The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
+      )
+    )
+  })
+
   it('ignores stale stream end after reattaching a newer remote terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()

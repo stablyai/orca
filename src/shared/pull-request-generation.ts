@@ -70,7 +70,8 @@ function issueIdentifier(issue: PullRequestLinkedIssue): string {
 
 export function buildPullRequestFieldsPrompt(
   context: PullRequestDraftContext,
-  customPrompt: string
+  customPrompt: string,
+  diffBudget?: number
 ): string {
   const linkedIssue = context.linkedIssueDetails
   const provider = linkedIssue?.provider ?? context.provider ?? 'unsupported'
@@ -119,7 +120,7 @@ export function buildPullRequestFieldsPrompt(
     '',
     'Patch:',
     '```diff',
-    truncateDiffForPrompt(context.patch),
+    truncateDiffForPrompt(context.patch, diffBudget),
     '```'
   ].join('\n')
 

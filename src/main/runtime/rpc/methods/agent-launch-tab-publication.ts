@@ -140,7 +140,7 @@ export async function publishAgentLaunchTabEarly(
     // The launch resolves it again after admission and answers for it there.
     return null
   }
-  const settings = readAgentLaunchModeSettings(runtime, params.nativeChatDefault)
+  const settings = readAgentLaunchModeSettings(runtime, params)
   const preflight = decideAgentLaunchMode({
     placement: {
       agent: params.agent,

@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
 
-export type CloseTerminalDialogCopyKind = 'command' | 'agent'
+export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent'
 
 export default function CloseTerminalDialog({
   open,
@@ -52,7 +52,6 @@ export default function CloseTerminalDialog({
     }
   }
 
-  const isAgent = copyKind === 'agent'
   const trimmedTabLabel = tabLabel?.trim()
 
   return (
@@ -66,7 +65,7 @@ export default function CloseTerminalDialog({
     >
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <CloseTerminalDialogBody
-          isAgent={isAgent}
+          copyKind={copyKind}
           trimmedTabLabel={trimmedTabLabel}
           checkboxId={checkboxId}
           dontAskAgain={dontAskAgain}
@@ -81,7 +80,7 @@ export default function CloseTerminalDialog({
 
 // Keep translation and element construction behind the dialog portal's mount boundary.
 function CloseTerminalDialogBody({
-  isAgent,
+  copyKind,
   trimmedTabLabel,
   checkboxId,
   dontAskAgain,
@@ -89,7 +88,7 @@ function CloseTerminalDialogBody({
   onCancel,
   onConfirm
 }: {
-  isAgent: boolean
+  copyKind: CloseTerminalDialogCopyKind
   trimmedTabLabel: string | undefined
   checkboxId: string
   dontAskAgain: boolean
@@ -97,6 +96,8 @@ function CloseTerminalDialogBody({
   onCancel: () => void
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
+  const isAgent = copyKind !== 'command'
+  const isChat = copyKind === 'chat-agent'
   return (
     <>
       <DialogHeader>
@@ -112,18 +113,23 @@ function CloseTerminalDialogBody({
               )}
         </DialogTitle>
         <DialogDescription className="text-xs">
-          {isAgent
+          {isChat
             ? translate(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
-                "Closing this terminal will stop the agent's current work."
+                'auto.components.terminal.pane.CloseTerminalDialog.stop_chat_description',
+                "Closing this chat will stop the agent's current work."
               )
-            : translate(
-                'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
-                'Closing this terminal will stop the command running inside it.'
-              )}
+            : isAgent
+              ? translate(
+                  'auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description',
+                  "Closing this terminal will stop the agent's current work."
+                )
+              : translate(
+                  'auto.components.terminal.pane.CloseTerminalDialog.stop_command_description',
+                  'Closing this terminal will stop the command running inside it.'
+                )}
         </DialogDescription>
       </DialogHeader>
-      {isAgent ? (
+      {copyKind === 'agent' ? (
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.terminal.pane.CloseTerminalDialog.automatic_resume_warning',
@@ -143,10 +149,12 @@ function CloseTerminalDialogBody({
           onCheckedChange={(checked) => setDontAskAgain(checked === true)}
         />
         <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
-          {translate(
-            'auto.components.terminal.pane.CloseTerminalDialog.dont_ask_again',
-            "Don't ask again for running terminals"
-          )}
+          {isChat
+            ? translate('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")
+            : translate(
+                'auto.components.terminal.pane.CloseTerminalDialog.dont_ask_again',
+                "Don't ask again for running terminals"
+              )}
         </Label>
       </div>
       <DialogFooter className="gap-2">

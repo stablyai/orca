@@ -5,12 +5,10 @@ import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import {
-  isNativeChatImageAttachmentPath,
-  isNativeChatPastedImagePath
-} from './native-chat-image-paste'
+import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
-import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session/agent-session-attachments'
 import { chatImageAccess } from '@/lib/local-file-access'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'

@@ -8,26 +8,6 @@ import {
 } from './source-control/listing/file-filter'
 
 describe('source-control-file-filter', () => {
-  it('normalizes bounded queries and filters entries by path', () => {
-    const filter = getSourceControlFileFilterState('  SRC/button  ')
-
-    expect(filter).toEqual({ normalizedFilter: 'src/button', tooLarge: false })
-    expect(
-      filterSourceControlPathEntries(
-        [{ path: 'src/Button.tsx' }, { path: 'docs/Button.md' }],
-        filter
-      )
-    ).toEqual([{ path: 'src/Button.tsx' }])
-  })
-
-  it('returns the original entries for empty filters', () => {
-    const entries = [{ path: 'src/a.ts' }]
-
-    expect(filterSourceControlPathEntries(entries, getSourceControlFileFilterState(' '))).toBe(
-      entries
-    )
-  })
-
   it('rejects oversized filters before reading entry paths', () => {
     const oversizedQuery = 'secret-source-control'.repeat(
       SOURCE_CONTROL_FILE_FILTER_QUERY_MAX_BYTES

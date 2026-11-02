@@ -5,8 +5,8 @@ import {
 import type { GitStatusEntry } from './git-status-types'
 
 const FALLBACK_PUSH_FAILURE_SUMMARY = 'Push failed.'
-const LINT_PUSH_FAILURE_SUMMARY = 'Lint failed during push.'
-const PRE_PUSH_FAILURE_SUMMARY = 'Pre-push hook failed.'
+export const LINT_PUSH_FAILURE_SUMMARY = 'Lint failed during push.'
+export const PRE_PUSH_FAILURE_SUMMARY = 'Pre-push hook failed.'
 export const PUSH_FAILURE_SUMMARY_SCAN_CODE_UNITS = 64 * 1024
 
 const PUSH_FAILURE_PROMPT_OUTPUT_LIMIT = 12_000

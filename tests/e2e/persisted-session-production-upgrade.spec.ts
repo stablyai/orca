@@ -173,7 +173,7 @@ async function launchPackagedOldProfile(args: {
             const hasSettingsApi = await Promise.race([
               candidate.evaluate(() => Boolean(window.api?.settings?.get)).catch(() => false),
               new Promise<boolean>((resolve) => {
-                const timeout = setTimeout(() => resolve(false), 2_000)
+                const timeout = setTimeout<[]>(() => resolve(false), 2_000)
                 timeout.unref?.()
               })
             ])

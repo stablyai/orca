@@ -1,10 +1,10 @@
-import type { TaskPageJiraCreationMetadataModel } from '../../use-task-page-jira-creation-metadata'
+import type { TaskPageJiraCreationMetadataModel } from '../jira/use-task-page-jira-creation-metadata'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useCallback, useMemo, useEffect } from 'react'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { taskPageGitHubItemKey } from '@/components/task-page/github/task-page-github-work-item-mutation-keys'
 import { deriveTaskPagePRCheckSummary } from '../task-page-pr-check-summary'
-import { deriveAdvertisedTotalPages } from '@/components/task-page/task-page-work-item-pagination'
+import { deriveAdvertisedTotalPages } from '../../../../../shared/work-item-empty-page'
 import {
   GITHUB_PR_TASK_GRID_CLASS,
   GITHUB_TASK_GRID_CLASS,

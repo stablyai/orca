@@ -1,5 +1,5 @@
 import type { OpenFile } from '@/store/slices/editor'
-import type { PaletteDocument } from './palette-match/palette-document'
+import type { PaletteDocument } from '../../../shared/palette-match/palette-document'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'

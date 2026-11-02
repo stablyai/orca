@@ -2,6 +2,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { TerminalTab } from '../../../../../../shared/terminal-tab-types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import {
   getStructuredAgentSessionLaunchOwner,
@@ -9,7 +10,7 @@ import {
   shouldRetainStructuredAgentSessionLaunchTab,
   structuredLaunchStates
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
+import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import { forgetUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 import { readStructuredAgentLaunchRecords } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
@@ -37,8 +38,14 @@ export function retirePurgedTabLaunches(
   for (const tab of unifiedTabs) {
     if (tab.contentType === 'agent-session') {
       forgetUnlistedCreatedChat(worktreeId, tab.entityId)
+      retireStructuredAgentSessionReadOwner(
+        tab.entityId,
+        structuredAgentSessionTargetForHost(tab.executionHostId),
+        tab.executionHostId ?? ''
+      )
       const target = structuredAgentSessionTargetForTab(s, tab)
       if (target) {
+        forgetStructuredSessionSelection(tab.entityId, target)
         retireStructuredAgentSessionReadOwner(tab.entityId, target)
       }
     }

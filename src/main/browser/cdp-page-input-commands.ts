@@ -17,11 +17,13 @@ import {
 } from './guest-direct-key-input'
 import { withAgentInputInjection } from './agent-input-injection'
 import type { AgentPointerInput } from './browser-agent-activity'
+import type { CapturePaintHold } from './cdp-screenshot'
+import { waitForGuestFirstPaint } from './guest-first-paint'
 
 /** Shows the agent's pointer at an input's point and resolves once it has landed. */
 export type ShowAgentPointer = (input: AgentPointerInput) => Promise<void>
 
-/** Protect user focus while routing CDP input (docs/reference/agent-browser-focus-isolation.md). */
+/** Protect user focus while routing CDP input. */
 export class CdpPageInputCommands {
   private inputQueue: Promise<void> = Promise.resolve()
 
@@ -31,7 +33,8 @@ export class CdpPageInputCommands {
     private readonly debuggerChannel: CdpDebuggerChannel,
     private readonly domFocusReplay: CdpDomFocusReplay,
     private readonly guardFocus: AgentInputFocusGuard,
-    private readonly showAgentPointer: ShowAgentPointer
+    private readonly showAgentPointer: ShowAgentPointer,
+    private readonly holdPaint: CapturePaintHold
   ) {}
 
   /** Points the agent cursor at a DOM node the agent is about to act on without pointer input. */
@@ -72,7 +75,7 @@ export class CdpPageInputCommands {
     }
     if (method === 'Input.insertText') {
       const pendingFocus = this.domFocusReplay.takePendingFocus(sessionId)
-      void this.queueInput(() =>
+      void this.queueInput(client, () =>
         this.domFocusReplay.insertText(client, clientId, params, sessionId, pendingFocus, () =>
           sessionId
             ? Promise.resolve({
@@ -93,7 +96,7 @@ export class CdpPageInputCommands {
     this.reply(
       client,
       clientId,
-      this.queueInput(async () =>
+      this.queueInput(client, async () =>
         this.responder.isActiveClient(client) ? await this.dispatch(method, params, sessionId) : {}
       )
     )
@@ -148,8 +151,14 @@ export class CdpPageInputCommands {
     this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
 
   // Focus awaits must not reorder pipelined key, text, or pointer events.
-  private queueInput<T>(run: () => Promise<T>): Promise<T> {
-    const result = this.inputQueue.then(run)
+  private queueInput<T>(client: WebSocket, run: () => Promise<T>): Promise<T> {
+    // A replaced client's input is dropped, so it skips the paint wait.
+    const result = this.inputQueue.then(async () => {
+      if (this.responder.isActiveClient(client)) {
+        await waitForGuestFirstPaint(this.webContents, this.sendRoot, this.holdPaint)
+      }
+      return await run()
+    })
     this.inputQueue = result.then(
       () => undefined,
       () => undefined

@@ -1,5 +1,11 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import type { AgentSessionLease } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 
 const hostRef: { current: unknown } = { current: null }
@@ -41,33 +47,36 @@ const ITEMS: AgentJournalRenderItem[] = [
 function installHost(options: {
   items?: AgentJournalRenderItem[]
   hasSession?: boolean
-  claimStatus?: string
-  deathEvidence?: unknown
-  record?: unknown
+  claimStatus?: AgentSessionLease['claimStatus']
+  deathEvidence?: AgentSessionLease['deathEvidence']
+  record?: null
   close?: () => Promise<void>
   setSessionTabVisibility?: () => Promise<void>
   historyThrows?: boolean
   tabListed?: boolean
 }) {
   const record =
-    options.record === undefined
-      ? {
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
+    options.record === null
+      ? null
+      : agentSessionRecordFixture(
+          agentSessionLeaseFixture({
+            sessionId: IDENTITY.sessionId,
             claimStatus: options.claimStatus ?? 'live',
             deathEvidence: options.deathEvidence ?? null,
             runtimeFence: 3
-          }
-        }
-      : options.record
+          })
+        )
   let closed = false
   hostRef.current = {
-    deps: { store: { getRecord: () => record } },
+    deps: {
+      logger: { warn: vi.fn() },
+      store: { getConversation: () => (record ? agentSessionConversationView(record) : null) }
+    },
     getPersistedVisibleSessionTabIndex: () => ({
       present: true,
       sessionIds: options.tabListed ? [IDENTITY.sessionId] : []
     }),
+    getSessionTabId: () => (options.tabListed ? 'tab-1' : null),
     hasSession: () => (closed ? false : (options.hasSession ?? true)),
     setSessionTabVisibility: options.setSessionTabVisibility ?? (async () => {}),
     close:
@@ -126,7 +135,7 @@ describe('structured worker stop', () => {
       claimStatus: 'released',
       deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
     })
-    await expect(stopStructuredWorker(IDENTITY, 'd1')).resolves.toEqual({
+    await expect(stopStructuredWorker(IDENTITY)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -135,7 +144,7 @@ describe('structured worker stop', () => {
   it('settles a released lease whose stop was unproven: nothing is left running to close', async () => {
     // Release uncertainty sends no signal; a user-requested chat close must still be allowed.
     installHost({ claimStatus: 'released', close: async () => {} })
-    await expect(stopStructuredWorker(IDENTITY, 'd1')).resolves.toEqual({
+    await expect(stopStructuredWorker(IDENTITY)).resolves.toEqual({
       stopped: true,
       closeAttempted: true
     })
@@ -145,18 +154,21 @@ describe('structured worker stop', () => {
     // Not being able to find the running session is not a reason to act on a guess.
     const close = vi.fn(async () => {})
     installHost({ record: null, close })
-    const result = await stopStructuredWorker(IDENTITY, 'd1')
+    const result = await stopStructuredWorker(IDENTITY)
     expect(result).toMatchObject({ stopped: false, closeAttempted: false })
     expect(close).not.toHaveBeenCalled()
   })
 
-  it.each([{ hasSession: false }, { claimStatus: 'conflicted' }])(
+  it.each([{ hasSession: false }, { claimStatus: 'conflicted' as const }])(
     'retains without positive exit evidence: %j',
     async (options) => {
       installHost({ ...options, close: async () => {} })
       const retireStructuredAgentSessionTabFromSnapshot = vi.fn()
-      const result = await stopStructuredWorker(IDENTITY, 'd1', {
+      const result = await stopStructuredWorker(IDENTITY, {
         forgetStructuredSessionMail: vi.fn(),
+        captureStructuredAgentSessionPresentation: () => ({ raw: null, saved: [] }),
+        currentLocalStructuredSessionPresentation: () => null,
+        removeCapturedStructuredSessionSavedTabs: vi.fn(),
         retireStructuredAgentSessionTabFromSnapshot
       })
       expect(result).toMatchObject({ stopped: false, closeAttempted: true })
@@ -170,7 +182,7 @@ describe('structured worker stop', () => {
         throw new Error('close is queued for retry')
       }
     })
-    const result = await stopStructuredWorker(IDENTITY, 'd1')
+    const result = await stopStructuredWorker(IDENTITY)
     expect(result.stopped).toBe(false)
     expect(result.closeAttempted).toBe(true)
     expect(result.reason).toContain('retry')
@@ -178,11 +190,11 @@ describe('structured worker stop', () => {
 
   it('retains when the session is still attached after the close', async () => {
     installHost({ hasSession: true, close: async () => {} })
-    const result = await stopStructuredWorker(IDENTITY, 'd1')
+    const result = await stopStructuredWorker(IDENTITY)
     expect(result.stopped).toBe(false)
   })
 
-  it('claims no close when the tab-visibility step threw before one was issued', async () => {
+  it('attempts provider close despite a failed tab visibility write', async () => {
     // Claiming closed_agent_terminal without an actual close would hide a still-running child.
     const close = vi.fn(async () => {})
     installHost({
@@ -191,15 +203,15 @@ describe('structured worker stop', () => {
         throw new Error('the durable tab index is wedged')
       }
     })
-    const result = await stopStructuredWorker(IDENTITY, 'd1')
+    const result = await stopStructuredWorker(IDENTITY)
     expect(result.stopped).toBe(false)
-    expect(result.closeAttempted).toBe(false)
-    expect(close).not.toHaveBeenCalled()
+    expect(result.closeAttempted).toBe(true)
+    expect(close).toHaveBeenCalledOnce()
   })
 
   it('retains when the host is not installed, and claims no close', async () => {
     // Without reaching a host, no receipt may claim closed_agent_terminal.
-    const result = await stopStructuredWorker(IDENTITY, 'd1')
+    const result = await stopStructuredWorker(IDENTITY)
     expect(result.stopped).toBe(false)
     expect(result.closeAttempted).toBe(false)
   })

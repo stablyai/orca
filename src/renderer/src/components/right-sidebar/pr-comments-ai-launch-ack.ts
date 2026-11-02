@@ -2,7 +2,7 @@ import type { PRComment } from '../../../../shared/github/comment-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { getPRCommentGroupRoot, type PRCommentGroup } from '../../../../shared/pr-comment-groups'
-import { isResolvablePRCommentGroup } from '../pr-comments-resolution-prompt'
+import { isResolvablePRCommentGroup } from '../../../../shared/github/pr-comments-resolution-prompt'
 import {
   buildPRCommentBatchConversationReplyBody,
   PR_COMMENT_AI_FIXING_REPLY
@@ -246,6 +246,7 @@ async function postInThreadFixingReply(
 
 /** Pin resolve targets at queue time; prRepo remains optional so degraded PR cache entries can still acknowledge threads. */
 export type PendingPRCommentAiAckGithubResolveTarget = {
+  ownerHostId?: string
   repoPath: string
   repoId: string
   prNumber: number
@@ -293,12 +294,19 @@ export function setPendingPRCommentAiAck(payload: PendingPRCommentAiAck): void {
   pendingAiCommentAck = payload
 }
 
-export function takePendingPRCommentAiAck(): PendingPRCommentAiAck | null {
+export function takePendingPRCommentAiAck(
+  expected?: PendingPRCommentAiAck
+): PendingPRCommentAiAck | null {
+  if (expected && pendingAiCommentAck !== expected) {
+    return null
+  }
   const payload = pendingAiCommentAck
   pendingAiCommentAck = null
   return payload
 }
 
-export function clearPendingPRCommentAiAck(): void {
-  pendingAiCommentAck = null
+export function clearPendingPRCommentAiAck(expected?: PendingPRCommentAiAck): void {
+  if (!expected || pendingAiCommentAck === expected) {
+    pendingAiCommentAck = null
+  }
 }

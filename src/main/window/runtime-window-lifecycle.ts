@@ -90,7 +90,7 @@ export function registerRuntimeWindowLifecycle(
         }, 10_000)
         const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
           // Renderer-supplied request IDs confer no authority; only this window can satisfy reveal.
-          if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
+          if (event.sender !== mainWebContents || reply.requestId !== requestId) {
             return
           }
           clearTimeout(timer)
@@ -193,14 +193,23 @@ export function registerRuntimeWindowLifecycle(
         ...(position ? { position } : {})
       }),
     revealEditorTab: (reveal) => send('ui:revealEditorTabFromRuntime', reveal),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?, navigation?) =>
+    openDiff: (
+      worktreeId,
+      filePath,
+      relativePath,
+      staged,
+      runtimeEnvironmentId?,
+      navigation?,
+      oldPath?
+    ) =>
       send('ui:openDiffFromMobile', {
         worktreeId,
         filePath,
         relativePath,
         staged,
         runtimeEnvironmentId,
-        ...(navigation ? { navigation } : {})
+        ...(navigation ? { navigation } : {}),
+        ...(oldPath ? { oldPath } : {})
       }),
     closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
@@ -218,7 +227,9 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:browserDriverChanged', { browserPageId, driver }),
     browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
       send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
-    clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
+    clientHostedBrowserRowsChanged: (event) =>
+      send('runtime:clientHostedBrowserRowsChanged', event),
+    claudeAccountSelected: (change) => send('claudeAccounts:selectedElsewhere', change)
   })
   // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
   const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN

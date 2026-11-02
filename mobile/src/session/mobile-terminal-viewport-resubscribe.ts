@@ -1,6 +1,7 @@
 // Bound nonconverging viewport refits to avoid stream churn, broken gestures and battery drain.
 
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
+import { translate } from '../i18n/mobile-i18n'
 import type { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 
 export const MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS = 3
@@ -219,7 +220,13 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
   if (decision.kind === 'exhausted') {
     diagnostics.streamResubscribeExhausted(handle, seq, budget.attempts(handle))
     if (budget.shouldAnnounceExhaustion(handle)) {
-      args.showToast("Couldn't fit the terminal to this screen", 4000)
+      args.showToast(
+        translate(
+          'session.terminalViewportResubscribe.fitFailed',
+          "Couldn't fit the terminal to this screen"
+        ),
+        4000
+      )
     }
     return
   }

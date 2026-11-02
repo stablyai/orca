@@ -1,9 +1,9 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { withoutSessionTabs } from './session-tab-browser-placement-projection'
 
-/** A desktop's tab on a file of one of its servers is for its phone, which reaches that server through
- *  the desktop. Another runtime would route the file here, and in a pairing cycle it is that runtime's
- *  own workspace coming back to it (#33424). */
+/** A desktop's tab on a file or page of one of its servers is for its phone, which reaches that server
+ *  through the desktop. Another runtime would route it here, and in a pairing cycle it is that runtime's
+ *  own tab coming back to it (#33424, #36386). */
 export function projectSessionTabFileHosts(
   payload: RuntimeMobileSessionTabsResult,
   clientKind: 'mobile' | 'runtime' | undefined

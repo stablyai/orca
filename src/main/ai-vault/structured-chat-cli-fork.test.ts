@@ -1,11 +1,12 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { prepareStructuredChatCliFork } from './structured-chat-cli-fork'
 import { structuredAgentRuntimeRegistration } from '../runtime/structured-agent-runtime-registrations'
@@ -39,7 +40,13 @@ function install(record: AgentSessionRecord, copy = vi.fn(), journal = savedJour
   setStructuredAgentSessionHost({
     journalSnapshot: async () => journal,
     deps: {
-      store: { getRecord: () => record, listRecords: () => [record] },
+      store: {
+        getRecord: () => record,
+        listRecords: () => [record],
+        listConversations: () => [agentSessionConversationView(record)],
+        selectWritableRecord: () => ({ kind: 'writable', record }),
+        requireWritableRecord: () => record
+      },
       adapter: { copyConversation: copy },
       resolveWorkspacePath: async () => root,
       resolveLaunchEnv: () => ({})

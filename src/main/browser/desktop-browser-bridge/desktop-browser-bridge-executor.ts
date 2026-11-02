@@ -12,8 +12,6 @@ import {
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { parseCdpKeyEvent } from '../cdp-keyboard-us-layout'
-import { iterateBrowserTextInsertionChunks } from '../browser-text-insertion'
-import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from '../agent-browser-bridge-types'
 
 export type DesktopBrowserBridgeOutcome =
   | { ok: true; result: unknown }
@@ -139,6 +137,12 @@ async function scopeRequest(
   }
   const params: Record<string, unknown> = { ...request.params }
   if (request.method === 'browser.tabCreate') {
+    if (params.split !== undefined) {
+      throw new BridgeRefusal(
+        'invalid_argument',
+        'tab create --split is not available from an SSH host; the desktop decides where its tabs open.'
+      )
+    }
     for (const key of TAB_CREATE_STRIPPED_PARAMS) {
       delete params[key]
     }
@@ -153,7 +157,6 @@ async function scopeRequest(
       'An SSH host can open only http:// or https:// URLs in the desktop browser. Pass the full URL.'
     )
   }
-  assertNoOptionLikeArguments(request.method, params)
   if (request.method === 'browser.keypress' && isPasteChord(params.key)) {
     throw new BridgeRefusal(
       DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
@@ -201,40 +204,6 @@ function isWebNavigationUrl(value: unknown, optional: boolean): boolean {
     return protocol === 'http:' || protocol === 'https:'
   } catch {
     return false
-  }
-}
-
-// These parameters bypass argv: eval uses CDP and fill uses stdin.
-const NON_ARGV_PARAMS: Readonly<Record<string, readonly string[]>> = {
-  'browser.eval': ['expression'],
-  'browser.fill': ['value']
-}
-// Each text chunk becomes a separate argv value and needs its own option check.
-const CHUNKED_ARGV_PARAMS: Readonly<Record<string, string>> = {
-  'browser.type': 'input',
-  'browser.keyboardInsertText': 'text'
-}
-
-// agent-browser accepts global options anywhere in argv; leading dashes could redirect its CDP proxy.
-function assertNoOptionLikeArguments(method: string, params: Record<string, unknown>): void {
-  const exempt = new Set(NON_ARGV_PARAMS[method] ?? [])
-  const chunked = CHUNKED_ARGV_PARAMS[method]
-  for (const [name, value] of Object.entries(params)) {
-    if (name === 'worktree' || name === 'page' || exempt.has(name)) {
-      continue
-    }
-    const values =
-      name === chunked && typeof value === 'string'
-        ? [...iterateBrowserTextInsertionChunks(value, AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES)]
-        : Array.isArray(value)
-          ? value
-          : [value]
-    if (values.some((entry) => typeof entry === 'string' && entry.trimStart().startsWith('-'))) {
-      throw new BridgeRefusal(
-        'invalid_argument',
-        `An SSH host cannot send a --${name} value that starts with "-". Rephrase it, or type it with orca fill.`
-      )
-    }
   }
 }
 

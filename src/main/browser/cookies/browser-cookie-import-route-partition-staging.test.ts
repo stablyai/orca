@@ -115,7 +115,7 @@ afterEach(() => {
 
 describe('importCookiesFromBrowser into a client-hosted route partition', () => {
   // Route partitions have no startup replay consumer; do not leave plaintext staged cookies.
-  it('refuses the restart fallback instead of staging a plaintext cookie database', async () => {
+  it('counts rejected rows without producing staged replay', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(
       tmpDir,
@@ -140,7 +140,7 @@ describe('importCookiesFromBrowser into a client-hosted route partition', () => 
 
       expect(result.ok).toBe(true)
       expect(setPendingCookieImportMock).not.toHaveBeenCalled()
-      expect(clearPendingCookieImportMock).toHaveBeenCalledWith(routePartition)
+      expect(clearPendingCookieImportMock).toHaveBeenCalledExactlyOnceWith(routePartition)
       expect(existsSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toBe(false)
       // Verify that plaintext copies were never written, rather than merely cleaned up.
       expect(
@@ -148,11 +148,8 @@ describe('importCookiesFromBrowser into a client-hosted route partition', () => 
           String(destination).includes('cookie-import-staging')
         )
       ).toBe(false)
-      expect(result.ok && result.summary?.warning).toEqual({
-        code: 'restart-fallback-unavailable',
-        loadedCookies: 0,
-        failedCookies: 1
-      })
+      expect(result.ok && result.summary?.warning).toBeUndefined()
+      expect(result.ok && result.summary).toMatchObject({ importedCookies: 0, skippedCookies: 1 })
     } finally {
       platformSpy.mockRestore()
     }

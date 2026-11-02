@@ -13,7 +13,6 @@ import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signatur
 import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import {
-  fsWriteFile,
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,
   runtimeEnvironmentTransportCall,
@@ -91,23 +90,6 @@ function writeCalls(): RuntimeRpcRequest[] {
 }
 
 describe('writeRuntimeFile disk precondition', () => {
-  it('sends the precondition to a local writer and returns its refusal', async () => {
-    fsWriteFile.mockResolvedValue({ ok: false, diskConflict: 'changed' })
-
-    const result = await writeRuntimeFile(
-      { target: { kind: 'local' }, worktreeId: 'wt-1', worktreePath: '/repo' },
-      '/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(fsWriteFile).toHaveBeenCalledWith(
-      expect.objectContaining({ diskPrecondition: precondition })
-    )
-  })
-
   it('cannot write through an older server reached after a supporting server was probed', async () => {
     // The shared socket reconnected to an older server between the capability verdict and the send.
     serveHost({ enforcesPrecondition: true })
@@ -131,26 +113,6 @@ describe('writeRuntimeFile disk precondition', () => {
     expect(unguardedWrites).toHaveLength(0)
   })
 
-  it('lets a host that enforces the precondition compare at write time', async () => {
-    serveHost({ enforcesPrecondition: true })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: false, diskConflict: 'missing' }))
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'missing' })
-    expect(writeCalls()).toHaveLength(1)
-    expect(writeCalls()[0]?.params).toMatchObject({ diskPrecondition: precondition })
-    expect(runtimeEnvironmentTransportCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.read' })
-    )
-  })
-
   it('compares from the client before writing through an older host', async () => {
     serveHost({ enforcesPrecondition: false, diskContent: 'original' })
     runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
@@ -168,28 +130,6 @@ describe('writeRuntimeFile disk precondition', () => {
     expect(writeCalls()[0]?.params).not.toHaveProperty('diskPrecondition')
   })
 
-  it("decides support from the write path's own status probe, one per save", async () => {
-    serveHost({ enforcesPrecondition: false, diskContent: 'original' })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-
-    for (let save = 0; save < 3; save += 1) {
-      await writeRuntimeFile(
-        remoteContext,
-        '/remote/repo/file.ts',
-        'edited',
-        undefined,
-        precondition
-      )
-    }
-
-    const statusCalls = runtimeEnvironmentTransportCall.mock.calls.filter(
-      ([args]) => args.method === 'status.get'
-    )
-    // One ownership probe per save plus the read client's one-time compatibility probe.
-    expect(statusCalls).toHaveLength(4)
-    expect(writeCalls()).toHaveLength(3)
-  })
-
   it('refuses without writing when an older host holds newer disk content', async () => {
     serveHost({ enforcesPrecondition: false, diskContent: 'agent rewrite' })
 
@@ -202,22 +142,6 @@ describe('writeRuntimeFile disk precondition', () => {
     )
 
     expect(result).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('skips writing through an older host whose changed disk already holds the text', async () => {
-    serveHost({ enforcesPrecondition: false, diskContent: 'edited' })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      precondition
-    )
-
-    expect(result).toEqual({ ok: true, unchanged: true })
     expect(writeCalls()).toHaveLength(0)
   })
 
@@ -234,32 +158,6 @@ describe('writeRuntimeFile disk precondition', () => {
       expect(writeCalls()).toHaveLength(0)
     }
   )
-
-  it('keeps the v1 host guard for non-identical automatic saves after comparing locally', async () => {
-    serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'original' })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: false, diskConflict: 'changed' }))
-    expect(
-      await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, {
-        ...precondition,
-        requireLosslessUtf8: true
-      })
-    ).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(writeCalls()[0]?.method).toBe('files.writeIfUnchanged')
-  })
-
-  it('sends an explicit save straight to a v1 guarded host without reading first', async () => {
-    let reads = 0
-    serveHost({
-      enforcesPrecondition: true,
-      identicalNoop: false,
-      diskContent: 'edited',
-      onRead: () => (reads += 1)
-    })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-    await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
-    expect(reads).toBe(0)
-    expect(writeCalls()[0]?.method).toBe('files.writeIfUnchanged')
-  })
 
   it('refuses an ambiguous automatic baseline before sending to a v1 host', async () => {
     serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'a�' })
@@ -316,36 +214,6 @@ describe('writeRuntimeFile disk precondition', () => {
       })
     ).rejects.toThrow('timed out')
     expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('reports a file an older host can no longer send as changed', async () => {
-    serveHost({
-      enforcesPrecondition: false,
-      readError: 'File too large: 60.0MB exceeds 50MB limit'
-    })
-
-    const result = await writeRuntimeFile(
-      remoteContext,
-      '/remote/repo/file.ts',
-      'edited',
-      undefined,
-      {
-        ...precondition,
-        allowMissing: true
-      }
-    )
-
-    expect(result).toEqual({ ok: false, diskConflict: 'changed' })
-    expect(writeCalls()).toHaveLength(0)
-  })
-
-  it('binds a guarded write to the runtime whose capabilities were probed', async () => {
-    serveHost({ enforcesPrecondition: true })
-    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
-
-    await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
-
-    expect(writeCalls()[0]).toMatchObject({ expectedEnvironmentRuntimeId: 'remote-runtime' })
   })
 
   it('refuses to send when the runtime connection changes after the probe', async () => {

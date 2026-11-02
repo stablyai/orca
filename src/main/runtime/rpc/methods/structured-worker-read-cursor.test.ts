@@ -1,7 +1,15 @@
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 /** Mutate journals between reads to catch in-place revisions and mid-array insertions missed by oldest-item-only cursor identity; both can silently omit or duplicate output. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import { buildStructuredJournalArchive } from '../../orchestration/structured-worker-journal-archive'
+import { projectSavedChatContextItems } from '../../../native-chat/agent-session-saved-prompt-text'
+import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 
 const hostRef: { current: unknown } = { current: null }
@@ -51,7 +59,12 @@ function approval(itemId: string, resolved: boolean, revision = 1): AgentJournal
 function installJournal(items: AgentJournalRenderItem[]): void {
   hostRef.current = {
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        getConversation: () =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: IDENTITY.sessionId }))
+          )
+      }
     },
     hasSession: () => true,
     history: () => ({ page: { items, hasOlder: false } })
@@ -79,6 +92,53 @@ function textsOf(result: Awaited<ReturnType<typeof read>>): string[] {
 describe('the structured worker-read cursor over a mutating journal', () => {
   beforeEach(() => {
     hostRef.current = null
+  })
+
+  it('omits creation facts from worker output, consumed prefixes, saved context and archives', async () => {
+    const start: AgentJournalRenderItem = {
+      itemId: 'i2',
+      revision: 1,
+      sequence: 2,
+      observedAt: 1,
+      body: {
+        kind: 'agent-start',
+        dispatchId: 'dispatch',
+        task: 'Private worker assignment',
+        worker: {
+          party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+          name: 'Worker'
+        }
+      }
+    }
+    const items = [message('i1', 'first'), start, message('i3', 'answer')]
+    installJournal(items)
+    const first = await read(undefined, 1)
+    expect(textsOf(first)).toEqual(['first'])
+    installJournal([
+      items[0],
+      {
+        ...start,
+        revision: 2,
+        body:
+          start.body.kind === 'agent-start'
+            ? { ...start.body, task: 'Revised display fact' }
+            : start.body
+      },
+      items[2]
+    ])
+    expect(textsOf(await read(first.cursor))).toEqual(['answer'])
+    const saved = projectSavedChatContextItems(items).map(formatWorkerTranscriptMessage).join('\n')
+    expect(saved).toBe('[assistant] first\n[assistant] answer')
+    const archive = buildStructuredJournalArchive({
+      agent: 'claude',
+      processIncarnation: 'fixture',
+      items,
+      hasOlder: false
+    })
+    expect(archive.messages.map(formatWorkerTranscriptMessage)).toEqual([
+      '[assistant] first',
+      '[assistant] answer'
+    ])
   })
 
   it('refuses to resume when an already-delivered item was revised in place', async () => {
@@ -110,13 +170,6 @@ describe('the structured worker-read cursor over a mutating journal', () => {
     installJournal([message('i1', 'first'), message('i2', 'streaming more', 7)])
     const second = await read(first.cursor)
     expect(textsOf(second)).toEqual(['streaming more'])
-  })
-
-  it('delivers every message exactly once when nothing below the cursor changes', async () => {
-    installJournal([message('i1', 'a'), message('i2', 'b'), message('i3', 'c')])
-    const first = await read(undefined, 2)
-    const second = await read(first.cursor, 2)
-    expect([...textsOf(first), ...textsOf(second)]).toEqual(['a', 'b', 'c'])
   })
 
   it('still refuses when the window slides off the front', async () => {

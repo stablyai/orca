@@ -1,6 +1,6 @@
 // Bind host sessions/store evidence to the projection while keeping shared projection code free of host types.
 
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   structuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork,
@@ -9,7 +9,7 @@ import {
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
 export type StructuredAgentSessionCurrentWorkHost = {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'replacedRuntime'>
+  store: Pick<AgentSessionRecordStore, 'getConversation' | 'replacedRuntime'>
   sessions: {
     get(
       sessionId: string
@@ -43,7 +43,7 @@ export function heldStructuredAgentSessionCurrentWork(
 ): StructuredAgentSessionCurrentWork {
   const ended = session?.lastEndedChild
   return structuredAgentSessionCurrentWork(journal, {
-    record: store.getRecord(sessionId),
+    record: store.getConversation(sessionId),
     replaced: store.replacedRuntime(sessionId),
     child: session?.child ?? null,
     ...(ended ? { ended } : {}),

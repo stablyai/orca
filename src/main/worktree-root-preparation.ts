@@ -6,6 +6,7 @@ import { isFolderRepo } from '../shared/repo-kind'
 import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
 import { getWorktreeMirrorDistro } from './project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
+import { blockedWslDistroForPath } from './wsl/wsl-unc-access-gate'
 
 // Match create's mirror-distro resolution so root preparation cannot target a different directory.
 type WorktreeRootPreparationSettings = Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &
@@ -36,8 +37,16 @@ export async function prepareLocalWorktreeRootForRepo(
   }
 }
 
+/** A settings edit is no act on every repo's WSL distro: stopped ones are skipped (E9). */
 export async function prepareLocalWorktreeRootsForRepos(
   store: WorktreeRootPreparationStore
 ): Promise<void> {
-  await Promise.all(store.getRepos().map((repo) => prepareLocalWorktreeRootForRepo(store, repo)))
+  await Promise.all(
+    store.getRepos().map(async (repo) => {
+      if (await blockedWslDistroForPath(repo.path, getWorktreeMirrorDistro(store, repo))) {
+        return
+      }
+      await prepareLocalWorktreeRootForRepo(store, repo)
+    })
+  )
 }

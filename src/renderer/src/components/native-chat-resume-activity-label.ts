@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { AgentSessionRestartActivity } from '../../../shared/agent-session-restart-activity'
+import type { AgentSessionRestartActivity } from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
 
 export type ResumeActivityLabel = {
   /** One line naming what the chat was doing, in the sidebar's own vocabulary. */
@@ -60,9 +60,9 @@ export function resumeActivityLabel(
   } else if (agents.length > 1) {
     parts.push(
       translate(
-        'auto.components.NativeChatResumeOnRestartModal.activitySubagentMany',
-        '{{value0}} subagents running',
-        { value0: agents.length }
+        'auto.components.NativeChatResumeOnRestartModal.activitySubagentCount',
+        '{{count}} subagents running',
+        { count: agents.length, defaultValue_one: '{{count}} subagent running' }
       )
     )
   }
@@ -77,9 +77,9 @@ export function resumeActivityLabel(
   } else if (watches.length > 1) {
     parts.push(
       translate(
-        'auto.components.NativeChatResumeOnRestartModal.activityMonitorMany',
-        'Monitoring {{value0}} background tasks',
-        { value0: watches.length }
+        'auto.components.NativeChatResumeOnRestartModal.activityMonitorCount',
+        'Monitoring {{count}} background tasks',
+        { count: watches.length, defaultValue_one: 'Monitoring {{count}} background task' }
       )
     )
   }

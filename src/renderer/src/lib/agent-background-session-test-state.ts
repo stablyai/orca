@@ -1,4 +1,6 @@
 import { expect, vi } from 'vitest'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
+import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { resetRemoteRuntimeTerminalMultiplexersForTests } from '@/runtime/remote-runtime-terminal-multiplexer'
@@ -9,6 +11,7 @@ export const AGENT_BACKGROUND_SESSION_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 export type AgentBackgroundSessionTestState = {
+  runtimeStatusByEnvironmentId: Map<string, never>
   activeRepoId: string
   activeWorktreeId: string
   lastTerminalInputAtByPaneKey: Record<string, number>
@@ -69,28 +72,23 @@ export function createAgentBackgroundSessionTestState(mocks: {
   setTabLayout: TestMock
   registerAgentLaunchConfig: TestMock
 }): AgentBackgroundSessionTestState {
-  const state = {
+  const state: AgentBackgroundSessionTestState = {
+    runtimeStatusByEnvironmentId: new Map<string, never>(),
     activeRepoId: 'repo-1',
     activeWorktreeId: 'wt-1',
     lastTerminalInputAtByPaneKey: {},
     settings: {
       agentCmdOverrides: {},
-      activeRuntimeEnvironmentId: null as string | null,
-      terminalMainSideEffectAuthority: undefined as boolean | undefined
+      activeRuntimeEnvironmentId: null,
+      terminalMainSideEffectAuthority: undefined
     },
     projects: [
       {
         id: 'repo-1',
-        localWindowsRuntimePreference: { kind: 'inherit-global' as const }
+        localWindowsRuntimePreference: { kind: 'inherit-global' }
       }
-    ] as {
-      id: string
-      localWindowsRuntimePreference:
-        | { kind: 'inherit-global' }
-        | { kind: 'windows-host' }
-        | { kind: 'wsl'; distro: string | null }
-    }[],
-    repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
+    ],
+    repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
     worktreesByRepo: {
       'repo-1': [
         {
@@ -102,16 +100,13 @@ export function createAgentBackgroundSessionTestState(mocks: {
         }
       ]
     },
-    folderWorkspaces: [] as AgentBackgroundSessionTestState['folderWorkspaces'],
-    projectGroups: [] as AgentBackgroundSessionTestState['projectGroups'],
-    tabsByWorktree: { 'wt-1': [] as { id: string; title: string }[] },
-    terminalLayoutsByTabId: {} as Record<
-      string,
-      { ptyIdsByLeafId?: Record<string, string | undefined> }
-    >,
-    ptyIdsByTabId: {} as Record<string, string[]>,
+    folderWorkspaces: [],
+    projectGroups: [],
+    tabsByWorktree: { 'wt-1': [] },
+    terminalLayoutsByTabId: {},
+    ptyIdsByTabId: {},
     sshConnectionStates: new Map<string, { status: string }>(),
-    transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
+    transientClearedAgentStatusConnectionIds: {},
     allWorktrees: () => state.worktreesByRepo['repo-1'],
     getKnownWorktreeById: (worktreeId: string) =>
       state.worktreesByRepo['repo-1']?.find((worktree) => worktree.id === worktreeId),
@@ -130,6 +125,8 @@ export function createAgentBackgroundSessionTestState(mocks: {
 }
 
 export function resetAgentBackgroundSessionTestState(state: AgentBackgroundSessionTestState): void {
+  clearHostAgentMenuSettingsForTests()
+  state.runtimeStatusByEnvironmentId = new Map<string, never>()
   state.activeRepoId = 'repo-1'
   state.activeWorktreeId = 'wt-1'
   state.lastTerminalInputAtByPaneKey = {}
@@ -262,8 +259,16 @@ export function resetAgentBackgroundSessionTestHarness(args: {
     ok: true,
     result: { terminal: { handle: 'terminal-1', worktreeId: 'wt-1', title: null } }
   })
-  args.runtimeSubscribe.mockImplementation(async (_request, callbacks) => {
-    queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+  args.runtimeSubscribe.mockImplementation(async (request, callbacks) => {
+    queueMicrotask(() =>
+      callbacks.onResponse({
+        ok: true,
+        result:
+          request.method === 'settings.getAgentLaunch'
+            ? { settings: projectAgentLaunchSettings({}) }
+            : { type: 'ready' }
+      })
+    )
     return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
   })
   args.subscribeToData.mockReturnValue(vi.fn())

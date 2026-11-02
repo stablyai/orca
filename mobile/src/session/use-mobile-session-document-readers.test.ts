@@ -1,3 +1,4 @@
+import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { hookMount, performHookAction } from '../test-support/rpc-recording/hook-mount'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
@@ -457,5 +458,40 @@ describe('useMobileSessionDocumentReaders markdown revalidation', () => {
     } finally {
       harness.unmount()
     }
+  })
+})
+
+describe('useMobileSessionDocumentReaders whitespace setting', () => {
+  it('drops diffs built or loading before desktop says to show whitespace', async () => {
+    let docs = new Map<string, FileDocState>([
+      ['diff', { status: 'ready', kind: 'diff', lines: [], truncated: false }],
+      ['pending', { status: 'loading' }],
+      ['plain', { status: 'ready', kind: 'file', content: 'x', truncated: false, byteLength: 1 }]
+    ])
+    const client = {
+      sendRequest: vi.fn(async (): Promise<RpcResponse> => ({
+        id: 'frame-1',
+        ok: true,
+        result: { settings: { diffShowWhitespace: true } },
+        _meta: META
+      }))
+    }
+    const hook = hookMount(() => {
+      useMobileSessionDocumentReaders(
+        mountFixture<Parameters<typeof useMobileSessionDocumentReaders>[0]>({
+          worktreeId: 'wt-1',
+          connState: 'connected',
+          client,
+          setMarkdownDocs: () => {},
+          setFileDocs: (update) => {
+            docs = typeof update === 'function' ? update(docs) : update
+          }
+        })
+      )
+    })
+    hook.mount()
+    await act(async () => {})
+    hook.unmount()
+    expect([...docs.keys()]).toEqual(['plain'])
   })
 })

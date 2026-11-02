@@ -1,8 +1,8 @@
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../shared/execution-host'
 import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
 import { agentDrivesSession } from '../native-chat/agent-session-wire/structured-agent-session-provider-support'
@@ -12,14 +12,17 @@ import {
   type NativeChatVisualsLaunch,
   type PrepareNativeChatVisuals
 } from '../native-chat/native-chat-visuals-delivery'
-import { resolveAgentSessionLaunchDirectory } from './agent-session-launch-directory'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { resolveAgentSessionLaunchDirectory } from './agent-session/agent-session-launch-directory'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registrations'
 import { sealStructuredSessionChild } from './structured-session-child-env'
 
 /** Where a launch's shared inputs come from. */
 export type StructuredAgentLaunchSources = {
-  store: Pick<AgentSessionRecordStore, 'getRecord' | 'pinLaunchDirectory'>
+  store: Pick<
+    AgentSessionRecordStore,
+    'selectWritableRecord' | 'requireWritableRecord' | 'pinLaunchDirectory'
+  >
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveBaseEnvironment: () => Promise<Record<string, string>>
   /** The base environment with the user's overlay for `agent` laid over it. */
@@ -106,10 +109,10 @@ function admittedRecord(
   store: StructuredAgentLaunchSources['store'],
   sessionId: string
 ): AgentSessionRecord {
-  const record = store.getRecord(sessionId)
-  if (!record) {
+  if (store.selectWritableRecord(sessionId).kind === 'missing') {
     throw new Error(`no durable agent-session record for ${sessionId}`)
   }
+  const record = store.requireWritableRecord(sessionId)
   if (record.provider !== definition.agent) {
     throw new Error(`session ${sessionId} is a ${record.provider} session`)
   }
@@ -180,6 +183,7 @@ export function composeStructuredLaunch<L>(
       identity,
       permissionMode
     )
+    admittedRecord(definition, sources.store, identity.sessionId)
     const child = sealStructuredSessionChild({
       sessionId: identity.sessionId,
       spawnToken,
@@ -209,6 +213,7 @@ export function composeStructuredLaunchRead<L>(
       part,
       identity
     )
+    admittedRecord(definition, sources.store, identity.sessionId)
     return { ...launch, cwd, env, envToDelete: [...inheritedEnvToDelete] }
   }
 }

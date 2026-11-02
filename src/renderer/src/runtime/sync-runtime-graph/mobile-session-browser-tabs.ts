@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
+import { editorRowHost } from '../../../../shared/session-tab-file-host'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isUnifiedTabActiveInActiveGroup } from './mobile-session-surfaces'
 
@@ -37,6 +38,8 @@ export function buildMobileBrowserTab(
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
-      : inputs.activeBrowserWorkspaceId === workspace.id
+      : inputs.activeBrowserWorkspaceId === workspace.id,
+    // A page on a paired server is that server's; served back to it, it takes over its own tab (#36386).
+    ...editorRowHost({ runtimeEnvironmentId: activePage?.browserRuntimeEnvironmentId })
   }
 }

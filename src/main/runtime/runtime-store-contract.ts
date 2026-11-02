@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 
@@ -55,6 +55,8 @@ export type RuntimeStore = {
   onStateWritten?: Store['onStateWritten']
   setWorkspaceSession?: Store['setWorkspaceSession']
   getRemoteLayoutSnapshots?: Store['getRemoteLayoutSnapshots']
+  readTerminalScrollbackSnapshotAsync?: Store['readTerminalScrollbackSnapshotAsync']
+  statTerminalScrollbackSnapshotSize?: Store['statTerminalScrollbackSnapshotSize']
   runDurableMutation?: Store['runDurableMutation']
   flushOrThrow?: Store['flushOrThrow']
   flushPendingOrThrowAsync?: Store['flushPendingOrThrowAsync']
@@ -111,14 +113,17 @@ export type RuntimeStore = {
     activeCodexManagedAccountIdsByRuntime?: GlobalSettings['activeCodexManagedAccountIdsByRuntime']
     agentWorkspaceTrustEnabled?: GlobalSettings['agentWorkspaceTrustEnabled']
     codexManagedAccounts?: GlobalSettings['codexManagedAccounts']
+    codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
-    orchestrationChatErrorEscalationEnabled?: GlobalSettings['orchestrationChatErrorEscalationEnabled']
+    orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
     workspaceDir: string
     nestWorkspaces: boolean
     workspaceDirHistory?: GlobalSettings['workspaceDirHistory']
     // Read by worktree placement: decides whether this project's worktrees
     // mirror into a WSL distro instead of the Windows drive.
     localWindowsRuntimeDefault?: GlobalSettings['localWindowsRuntimeDefault']
+    // Stage 1 is opt-in: WSL-host-only explanations and routing need the setting on.
+    experimentalWslHosts?: GlobalSettings['experimentalWslHosts']
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
@@ -127,6 +132,7 @@ export type RuntimeStore = {
     newWorkspaceSetupOnly?: GlobalSettings['newWorkspaceSetupOnly']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+    agentLaunchChoices?: GlobalSettings['agentLaunchChoices']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
     agentPermissionDefault?: GlobalSettings['agentPermissionDefault']
@@ -142,7 +148,7 @@ export type RuntimeStore = {
     followSymlinkedDirectories?: GlobalSettings['followSymlinkedDirectories']
     tabAutoGenerateTitle?: GlobalSettings['tabAutoGenerateTitle']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
-    experimentalNativeChat?: GlobalSettings['experimentalNativeChat']
+    agentDefaultSurface?: GlobalSettings['agentDefaultSurface']
     nativeChatProviders?: GlobalSettings['nativeChatProviders']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
@@ -157,6 +163,9 @@ export type RuntimeStore = {
     minimaxEndpoint?: GlobalSettings['minimaxEndpoint']
     zcodePlanSite?: GlobalSettings['zcodePlanSite']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
+    sourceControlGroupOrder?: GlobalSettings['sourceControlGroupOrder']
+    sourceControlCompareAgainstUpstream?: GlobalSettings['sourceControlCompareAgainstUpstream']
+    diffShowWhitespace?: GlobalSettings['diffShowWhitespace']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
@@ -177,6 +186,7 @@ export type RuntimeStore = {
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
     nativeChatPermissionMode?: GlobalSettings['nativeChatPermissionMode']
+    nativeChatQueueFollowUps?: GlobalSettings['nativeChatQueueFollowUps']
     nativeChatInlineVisuals?: GlobalSettings['nativeChatInlineVisuals']
     nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
     nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']

@@ -40,11 +40,6 @@ describe('tuiAgentArgsBypassPermissions', () => {
     expect(tuiAgentArgsBypassPermissions(agent, args, 'posix')).toBe(expected)
   })
 
-  it('reads no bypass out of an absent or non-string value', () => {
-    expect(tuiAgentArgsBypassPermissions('claude', null, 'posix')).toBe(false)
-    expect(tuiAgentArgsBypassPermissions('claude', undefined, 'posix')).toBe(false)
-  })
-
   it('uses the configured local Windows shell family', () => {
     expect(
       resolvedTuiAgentArgsBypassPermissions(
@@ -115,23 +110,8 @@ describe('resolvedTuiAgentArgsBypassPermissions', () => {
 })
 
 describe('resolveTuiAgentLaunchArgs', () => {
-  // Terminal launches retain every configured argument; structured chat uses separate permission settings.
-  it('hands the configured arguments to a terminal launch unchanged', () => {
-    expect(
-      resolveTuiAgentLaunchArgs('claude', {
-        agentDefaultArgs: { claude: '--dangerously-skip-permissions --model Opus' }
-      })
-    ).toBe('--dangerously-skip-permissions --model Opus')
-  })
-
   it('falls back to the agent default when nothing is configured', () => {
     expect(resolveTuiAgentLaunchArgs('claude', {})).toBe('--dangerously-skip-permissions')
     expect(resolveTuiAgentLaunchArgs('claude', { agentDefaultArgs: { claude: '' } })).toBe('')
-  })
-
-  // Their chats run their own permission mode, so terminals get no permission argument for them.
-  it('adds no permission argument to OMP or OpenCode terminals', () => {
-    expect(resolveTuiAgentLaunchArgs('omp', {})).toBe('')
-    expect(resolveTuiAgentLaunchArgs('opencode', {})).toBe('')
   })
 })

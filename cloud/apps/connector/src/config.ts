@@ -1,9 +1,13 @@
 import { z } from 'zod'
+import { parseDiscordConfig, type DiscordConfig } from './discord-config.js'
+import { parseSlackConfig, type SlackConfig } from './slack-config.js'
 
 const OptionalTextSchema = z.string().min(1).optional()
 
 const EnvSchema = z.object({
   ORCA_CONNECTOR_MODE: z.enum(['active', 'validation']).default('active'),
+  // The same image runs the API, or the one Discord gateway connection (its own service).
+  ORCA_CONNECTOR_ROLE: z.enum(['api', 'discord-gateway']).default('api'),
   PORT: z.coerce.number().int().positive().default(8080),
   ORCA_CONNECTOR_PUBLIC_URL: z.string().url(),
   ORCA_CONNECTOR_DATABASE_URL: OptionalTextSchema,
@@ -17,6 +21,7 @@ const EnvSchema = z.object({
 
 export type ConnectorConfig = {
   mode: 'active' | 'validation'
+  role: 'api' | 'discord-gateway'
   port: number
   publicUrl: string
   databaseUrl?: string
@@ -25,6 +30,8 @@ export type ConnectorConfig = {
   authIssuer: string
   jwksUrl: string
   trustedProxyHops: number
+  slack?: SlackConfig
+  discord?: DiscordConfig
 }
 
 function secureUrl(value: string, name: string): URL {
@@ -44,13 +51,18 @@ function canonicalOrigin(value: string, name: string): string {
 }
 
 export function loadConnectorConfig(env: NodeJS.ProcessEnv = process.env): ConnectorConfig {
-  const parsed = EnvSchema.parse(
-    Object.fromEntries(
-      Object.entries(env).map(([key, value]) => [key, value?.trim() === '' ? undefined : value])
-    )
+  const present = Object.fromEntries(
+    Object.entries(env).map(([key, value]) => [key, value?.trim() === '' ? undefined : value])
   )
+  const parsed = EnvSchema.parse(present)
+  const slack = parseSlackConfig(present)
+  const discord = parseDiscordConfig(present)
+  if (parsed.ORCA_CONNECTOR_ROLE === 'discord-gateway' && discord === undefined) {
+    throw new Error('The discord-gateway role needs the Discord settings')
+  }
   return {
     mode: parsed.ORCA_CONNECTOR_MODE,
+    role: parsed.ORCA_CONNECTOR_ROLE,
     port: parsed.PORT,
     publicUrl: canonicalOrigin(parsed.ORCA_CONNECTOR_PUBLIC_URL, 'ORCA_CONNECTOR_PUBLIC_URL'),
     ...(parsed.ORCA_CONNECTOR_DATABASE_URL === undefined
@@ -61,6 +73,8 @@ export function loadConnectorConfig(env: NodeJS.ProcessEnv = process.env): Conne
     authIssuer: canonicalOrigin(parsed.ORCA_CONNECTOR_AUTH_ISSUER, 'ORCA_CONNECTOR_AUTH_ISSUER'),
     // The signing keys come from here, so plain HTTP would let anyone on the path mint tokens.
     jwksUrl: secureUrl(parsed.ORCA_CONNECTOR_JWKS_URL, 'ORCA_CONNECTOR_JWKS_URL').href,
-    trustedProxyHops: parsed.ORCA_CONNECTOR_TRUSTED_PROXY_HOPS
+    trustedProxyHops: parsed.ORCA_CONNECTOR_TRUSTED_PROXY_HOPS,
+    ...(slack === undefined ? {} : { slack }),
+    ...(discord === undefined ? {} : { discord })
   }
 }

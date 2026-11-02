@@ -15,8 +15,10 @@ import { readOptionalIncludes } from './includes'
 
 export async function readLinearIssueContext(
   request: LinearIssueRequest,
-  resolveCurrent: (context?: LinearCurrentIssueContextHints) => Promise<CurrentIssueLink>
+  resolveCurrent: (context?: LinearCurrentIssueContextHints) => Promise<CurrentIssueLink>,
+  signal?: AbortSignal
 ): Promise<LinearIssueContextResult> {
+  signal?.throwIfAborted()
   if (request.workspaceId === 'all') {
     throw linearError('linear_invalid_workspace', '--workspace all is not valid for issue reads.', {
       nextSteps: ['Pass a concrete Linear workspace id or omit --workspace.']
@@ -40,10 +42,14 @@ export async function readLinearIssueContext(
     throw linearError('linear_issue_required', 'Pass an issue id or use --current.')
   }
 
-  const resolved = await resolveIssue(identifier, {
-    workspaceId: request.workspaceId ?? currentLink?.workspaceId ?? undefined,
-    organizationUrlKey: parsed?.organizationUrlKey ?? currentLink?.organizationUrlKey
-  })
+  const resolved = await resolveIssue(
+    identifier,
+    {
+      workspaceId: request.workspaceId ?? currentLink?.workspaceId ?? undefined,
+      organizationUrlKey: parsed?.organizationUrlKey ?? currentLink?.organizationUrlKey
+    },
+    signal
+  )
   return buildIssueContextResult(resolved, request, currentLink)
 }
 

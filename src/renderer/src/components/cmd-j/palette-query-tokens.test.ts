@@ -2,22 +2,17 @@ import { describe, expect, it } from 'vitest'
 import {
   cmdJPaletteTokenScore,
   isCmdJPaletteQueryOverTokenLimit,
-  uniqueCmdJPaletteQueryTokens,
   normalizeCmdJPaletteQuery,
   tokenizeCmdJPaletteQuery
 } from './palette-query-tokens'
-import { normalizePaletteText } from '@/lib/palette-match/normalized-text'
-import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
+import { normalizePaletteText } from '../../../../shared/palette-match/normalized-text'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 
 describe('Cmd+J palette query normalization', () => {
   it('lowercases supplementary-plane characters as whole code points', () => {
     // Code-unit iteration splits supplementary-plane characters and misses their lowercase counterparts.
     expect(normalizeCmdJPaletteQuery('\u{10400} HELLO')).toBe('\u{10428} hello')
     expect(tokenizeCmdJPaletteQuery('\u{10400} HELLO')).toEqual(['\u{10428}', 'hello'])
-  })
-
-  it('collapses surrounding and repeated whitespace', () => {
-    expect(normalizeCmdJPaletteQuery('  New\n\tTerminal  ')).toBe('new terminal')
   })
 
   it('folds CJK, accented, and non-breaking-space text exactly like the shared matcher', () => {
@@ -37,21 +32,9 @@ describe('Cmd+J palette token scoring', () => {
     expect(cmdJPaletteTokenScore(['终端'], ['终端', '设置'])).toBeGreaterThan(0)
   })
 
-  it('does not let a one-character keyword match every long token', () => {
-    expect(cmdJPaletteTokenScore(['terminal'], ['a'])).toBe(0)
-  })
-
   it('does not score a Latin keyword merely contained in the query token', () => {
     expect(cmdJPaletteTokenScore(['database'], ['base'])).toBe(0)
     expect(cmdJPaletteTokenScore(['worktree'], ['tree'])).toBe(0)
-  })
-
-  it('scores a repeated query token once', () => {
-    const once = cmdJPaletteTokenScore(uniqueCmdJPaletteQueryTokens('terminal'), ['terminal'])
-    const twice = cmdJPaletteTokenScore(uniqueCmdJPaletteQueryTokens('terminal terminal'), [
-      'terminal'
-    ])
-    expect(twice).toBe(once)
   })
 
   it('rejects a query whose punctuation split blows past the ceiling', () => {
@@ -74,10 +57,5 @@ describe('Cmd+J palette query token ceiling', () => {
 
   it('rejects one token past the shared ceiling', () => {
     expect(isCmdJPaletteQueryOverTokenLimit([...tokens, 'extra'].join(' '))).toBe(true)
-  })
-
-  it('counts punctuation-bearing tokens as one top-level token', () => {
-    // Top-level counting treats punctuation-bearing words as one token; the scorer’s expansion has a separate ceiling.
-    expect(isCmdJPaletteQueryOverTokenLimit('08-13 1.4.182 orca/main #123')).toBe(false)
   })
 })

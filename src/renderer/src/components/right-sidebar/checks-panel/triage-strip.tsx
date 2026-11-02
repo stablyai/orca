@@ -13,6 +13,8 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { ConflictReview } from './conflict-summary'
 import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import { CHECK_COLOR } from './check-presentation'
 
 export function PRTriageStrip({
   review,
@@ -66,12 +68,11 @@ export function PRTriageStrip({
           <CircleX className="size-3.5 shrink-0 text-rose-500" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {failingCount}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.b652f38caf',
-                'failing check'
+                'auto.components.right.sidebar.checks.panel.content.failingChecks',
+                '{{count}} failing checks',
+                { count: failingCount, defaultValue_one: '{{count}} failing check' }
               )}
-              {failingCount === 1 ? '' : 's'}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
               {translate(
@@ -104,15 +105,18 @@ export function PRTriageStrip({
     return (
       <div className="border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-amber-500" />
+          <LoaderCircle
+            className={cn(
+              'size-3.5 shrink-0 animate-spin motion-reduce:animate-none',
+              CHECK_COLOR.pending
+            )}
+          />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {pendingCount}{' '}
-              {translate('auto.components.right.sidebar.checks.panel.content.5341023167', 'check')}
-              {pendingCount === 1 ? '' : 's'}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.9ad98f2a17',
-                'pending'
+                'auto.components.right.sidebar.checks.panel.content.pendingChecks',
+                '{{count}} checks pending',
+                { count: pendingCount, defaultValue_one: '{{count}} check pending' }
               )}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
@@ -135,12 +139,10 @@ export function PRTriageStrip({
           <CircleDashed className="size-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
-              {summary.neutral}{' '}
-              {translate('auto.components.right.sidebar.checks.panel.content.5341023167', 'check')}
-              {summary.neutral === 1 ? '' : 's'}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedChip',
-                'unresolved'
+                'auto.components.right.sidebar.checks.panel.content.unresolvedChecks',
+                '{{count}} checks unresolved',
+                { count: summary.neutral, defaultValue_one: '{{count}} check unresolved' }
               )}
             </div>
             <div className="truncate text-[10px] text-muted-foreground">
@@ -197,11 +199,15 @@ export function ConflictTriageStrip({
         <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[11px] font-medium text-foreground">
-            {translate(
-              'auto.components.right.sidebar.checks.panel.content.60186d8498',
-              'Conflicts block this'
-            )}{' '}
-            {reviewKind}
+            {reviewKind === 'MR'
+              ? translate(
+                  'auto.components.right.sidebar.checks.panel.content.conflictsBlockThisMr',
+                  'Conflicts block this MR'
+                )
+              : translate(
+                  'auto.components.right.sidebar.checks.panel.content.conflictsBlockThisPr',
+                  'Conflicts block this PR'
+                )}
           </div>
           <div className="truncate text-[10px] text-muted-foreground">
             {translate(

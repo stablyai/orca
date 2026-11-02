@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../shared/execution-host'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {

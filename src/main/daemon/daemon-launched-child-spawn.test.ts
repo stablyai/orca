@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DAEMON_V8_FLAGS, spawnDaemonChildProcess } from './daemon-launched-child-spawn'
+import {
+  claimHostMallocTunables,
+  HOST_MALLOC_TUNABLES,
+  hostMallocTunablesLaunchEnv,
+  resetHostMallocTunablesForTests
+} from '../memory/host-malloc-tunables'
 
 const { spawn, fork } = vi.hoisted(() => ({ spawn: vi.fn(), fork: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ spawnProcess: spawn }))
@@ -148,5 +154,22 @@ describe('daemon launch environment', () => {
     expect(fork.mock.calls[0]?.[0].env.DBUS_SESSION_BUS_ADDRESS).toBe(
       'unix:path=/run/user/1000/bus'
     )
+  })
+})
+
+describe('daemon malloc tunables', () => {
+  afterEach(() => resetHostMallocTunablesForTests())
+
+  it('hands an orcad launch’s claimed tunables to the daemon on both launch paths', () => {
+    claimHostMallocTunables(Object.fromEntries(hostMallocTunablesLaunchEnv()))
+    spawnDaemonChildProcess(options, true)
+    spawnDaemonChildProcess(options, false)
+    expect(spawn.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(HOST_MALLOC_TUNABLES)
+    expect(fork.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(HOST_MALLOC_TUNABLES)
+  })
+
+  it('adds nothing when the launch set none', () => {
+    spawnDaemonChildProcess(options, false)
+    expect(fork.mock.calls.at(-1)?.[0].env.GLIBC_TUNABLES).toBe(process.env.GLIBC_TUNABLES)
   })
 })

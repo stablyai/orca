@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { withDurableRuntimeStore } from '../../runtime/runtime-durable-store-fixture'
 import { SessionNotFoundError } from '../../daemon/daemon-errors'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -10,49 +10,56 @@ import {
   trackRunningAgentLaunchPane
 } from '../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../shared/agent-launch-pane-verdict'
+import { endPaneAgentLaunch } from './ipc/spawn-agent-launch-end'
+import { createPtyIpcSpawnState } from './ipc/spawn-state'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import {
+  formatTerminalStartFailure,
+  terminalStartError
+} from '../../../shared/terminal-start-failure'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 function localProvider(spawn: ReturnType<typeof vi.fn>): never {
@@ -130,6 +137,61 @@ describe('a pane whose process belongs to an agent launch', () => {
   }
 
   const PANE_ADDRESS = { worktreeId, tabId, leafId }
+
+  it.each([false, true])(
+    'keeps typed capacity verdict ownership and the suppression sentinel (dispatched=%s)',
+    async (dispatched) => {
+      const runtime = new OrcaRuntimeService()
+      vi.spyOn(runtime, 'reportAgentLaunchPaneVerdict')
+      const running = trackRunningAgentLaunchPane(pane)
+      const unexpected = (): never => {
+        throw new Error('unexpected spawn dependency')
+      }
+      const ctx = createPtyIpcSpawnState(
+        {
+          runtime,
+          getLocalPtyStartupPromise: unexpected,
+          adoptStablePane: unexpected,
+          assertWorkspaceAcceptsNewPty: unexpected,
+          resolvePtySpawnStartupCwd: unexpected,
+          transitionSpawnHiddenRendererPtyDeliveryState: unexpected,
+          trustedTerminalHandleEnv: new Set(),
+          sendPtySpawnedToRenderer: unexpected,
+          syncPtyBackgroundedDelivery: unexpected,
+          stopReplacedPty: unexpected,
+          prepareCodexResumeHome: unexpected,
+          resolveCodexResumeLaunch: unexpected,
+          noCodexResumeLaunch: unexpected,
+          reconcileSharedRuntimeResumeHome: unexpected,
+          stripSequencedStartupResumeArgv: unexpected
+        },
+        { cols: 80, rows: 24 }
+      )
+      ctx.paneAgentLaunch = {
+        runtime,
+        address: PANE_ADDRESS,
+        paneKey,
+        running,
+        dispatched,
+        refuseIfClosed() {}
+      }
+      const error = endPaneAgentLaunch(ctx, {
+        error: terminalStartError('agent_session_exited_during_start', {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        })
+      })
+      expect(error?.message).toBe(AGENT_LAUNCH_PANE_REFUSED_CODE)
+      expect(formatTerminalStartFailure(error)).toBeUndefined()
+      expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledExactlyOnceWith(PANE_ADDRESS, {
+        kind: dispatched ? 'unconfirmed' : 'not-started',
+        ...(!dispatched ? { code: 'agent_session_exited_during_start' } : {}),
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      })
+      expect(ctx.paneAgentLaunch).toBeNull()
+    }
+  )
 
   it('waits for the launch instead of spawning while it runs, then tells the window it settled', async () => {
     const providerSpawn = vi.fn(async () => ({ id: 'pty-after-launch' }))

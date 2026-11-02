@@ -9,6 +9,9 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 import { Store } from '../loading-store/store'
 import { createOrcadMigrationManifest } from '../../ssh/orcad-migration-manifest-export'
+import { parseOrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import { orcadMigrationRefusalReason } from '../../ssh/orcad-migration-refusal-reason'
+import { collectUntransferredDependentBlockers } from '../../ssh/targets/ssh-target-orcad-dependents'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   readTerminalScrollbackStoredBytesSync,
@@ -80,6 +83,19 @@ function sourceStore(): Store {
   })
   store.setWorkspaceSession(dormantSession('dormant output\r\n'), toSshExecutionHostId(TARGET.id))
   return store
+}
+
+function sshAutomation(store: Store) {
+  return store.createAutomation({
+    name: 'Nightly check',
+    prompt: 'Check the repo',
+    agentId: 'claude',
+    projectId: REPO_ID,
+    workspaceMode: 'new_per_run',
+    timezone: 'UTC',
+    rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+    dtstart: 1
+  })
 }
 
 describe('exporting a relay-hosted SSH target from the profile store', () => {
@@ -177,6 +193,41 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
     const manifest = createOrcadMigrationManifest(store, TARGET)
     const census = store.inspectOrcadMigrationUntransferredDependencies(manifest)
     expect(census.counts['workspace-session']).toBe(0)
+  })
+
+  // #29083: an enabled automation refused every Connect and left the host unconnectable.
+  it('moves an enabled SSH automation with its finished runs, sent disabled as older servers expect', () => {
+    const store = sourceStore()
+    const automation = sshAutomation(store)
+    const run = store.createAutomationRun(automation, 1)
+    store.updateAutomationRun({ runId: run.id, status: 'completed', workspaceId: null })
+
+    const manifest = createOrcadMigrationManifest(store, TARGET)
+
+    expect(manifest.payload.dormantState?.automations).toEqual([
+      expect.objectContaining({ id: automation.id, enabled: false })
+    ])
+    expect(manifest.payload.dormantState?.automationRuns).toEqual([
+      expect.objectContaining({ id: run.id, status: 'completed' })
+    ])
+    expect(() => parseOrcadMigrationManifest(manifest)).not.toThrow()
+    expect(collectUntransferredDependentBlockers(store, manifest)).toEqual([])
+    expect(store.listAutomations()[0]?.enabled).toBe(true)
+  })
+
+  it('waits for an automation run still in flight, and says so', () => {
+    const store = sourceStore()
+    const automation = sshAutomation(store)
+    store.createAutomationRun(automation, 1)
+
+    const manifest = createOrcadMigrationManifest(store, TARGET)
+
+    expect(manifest.payload.dormantState?.automations).toBeUndefined()
+    expect(
+      orcadMigrationRefusalReason(collectUntransferredDependentBlockers(store, manifest))
+    ).toBe(
+      'This SSH host cannot move yet: automations (1), automation runs (Nightly check is running; wait for it to finish, then connect again).'
+    )
   })
 
   // #30126: three parked shells' local-only scrollback, inlined, overflowed the 768 KB manifest.

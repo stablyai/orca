@@ -13,6 +13,7 @@ import { WORK_ITEM_NUMBER_SORT_QUALIFIER, quoteGitHubSearchValue } from './work-
 export type WorkItemListRequest = {
   args: string[]
   offset: number
+  search: string
 }
 
 export function normalizeWorkItemPage(page: number | undefined): number {
@@ -29,10 +30,10 @@ export function buildWorkItemListRequest(args: {
   const { kind, ownerRepo, limit, query, page } = args
   const searchParts: string[] = []
 
+  // gh pr list adds repo: and type:pr itself; an extra is:pr empties private-repo results for ghu_ tokens.
   if (kind === 'issue') {
-    searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`)
+    searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`, 'is:issue')
   }
-  searchParts.push(kind === 'issue' ? 'is:issue' : 'is:pr')
 
   if (query.state === 'open') {
     searchParts.push('is:open')
@@ -80,7 +81,8 @@ export function buildWorkItemListRequest(args: {
         '--jq',
         '.items'
       ],
-      offset: 0
+      offset: 0,
+      search: searchParts.join(' ')
     }
   }
 
@@ -98,7 +100,11 @@ export function buildWorkItemListRequest(args: {
   ]
   out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
   out.push('--search', searchParts.join(' '))
-  return { args: out, offset: (page - 1) * limit }
+  return {
+    args: out,
+    offset: (page - 1) * limit,
+    search: `( ${searchParts.join(' ')} ) repo:${ownerRepo.owner}/${ownerRepo.repo} type:pr`
+  }
 }
 
 // Carry per-source failures through IPC so pagination cannot mistake them for end-of-data.

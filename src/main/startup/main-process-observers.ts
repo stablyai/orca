@@ -15,7 +15,7 @@ import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetr
 import { initObservability } from '../observability'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
-import { getCanonicalUserDataPath } from '../persistence'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { recoverPendingSkillTransactions } from '../skills/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
@@ -27,6 +27,9 @@ import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
+import { runAfterFirstWindowShown } from './first-window-deferral'
+
+const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
 
 export function initializeMainProcessObservers(): void {
   const store = state.store
@@ -79,7 +82,10 @@ export function initializeMainProcessObservers(): void {
     uninstallHookStatusRepublish()
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
-  initTelemetry(store)
+  // Load the SDK after first paint (#35752); headless serve and GPU failures never show a window.
+  initTelemetry(store, (start) =>
+    runAfterFirstWindowShown(start, TELEMETRY_CLIENT_START_FALLBACK_MS)
+  )
   const profileStateStartup = state.profileStateStartup
   if (profileStateStartup) {
     track('profile_state_authority_selected', {

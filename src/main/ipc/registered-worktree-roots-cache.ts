@@ -129,7 +129,8 @@ export async function rebuildAuthorizedRootsCache(store: Store, onlyDirty = fals
   synchronizeOwners(store)
   for (const entry of pruned) {
     // A fresh create or ownership change makes both the graph and absence probes obsolete.
-    if (!entry || !entry.owner || !isCurrent(entry)) {
+    // A deferred owner is left as it was and stays dirty, so it is listed once its distro runs.
+    if (!entry || !entry.owner || !isCurrent(entry) || entry.deferred) {
       continue
     }
     entry.owner.listed = entry.roots

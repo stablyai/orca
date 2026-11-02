@@ -10,11 +10,11 @@ import {
 } from '@/i18n/hosted-review-localized-copy'
 import type { PrimaryAction, PrimaryActionInputs } from './source-control-primary-action-types'
 import {
-  describeForcePushWithLease,
-  describePullCount,
-  describePushCount,
-  describeSyncCounts
-} from './source-control-primary-action-titles'
+  localizedForcePushWithLease,
+  localizedPullCount,
+  localizedPushCount,
+  localizedSyncCounts
+} from './source-control-count-localized-copy'
 
 export type {
   PrimaryActionKind,
@@ -41,12 +41,45 @@ function toRendererPrimaryAction(
   decision: SourceControlPrimaryActionDecision,
   inputs: PrimaryActionInputs
 ): PrimaryAction {
+  const waitingAction = resolveCrossWorktreeWaitingAction(inputs, decision.kind)
+  if (waitingAction) {
+    return waitingAction
+  }
   return {
     kind: decision.kind,
     label: resolvePrimaryActionLabel(decision, inputs),
     title: resolvePrimaryActionTitle(decision, inputs),
     disabled: decision.disabled
   }
+}
+
+export function resolveCrossWorktreeWaitingAction(
+  inputs: Pick<
+    PrimaryActionInputs,
+    'isCommitting' | 'isRemoteOperationActive' | 'isRemoteOperationInAnotherWorktree'
+  >,
+  kind: PrimaryAction['kind']
+): PrimaryAction | null {
+  if (
+    inputs.isRemoteOperationActive &&
+    inputs.isRemoteOperationInAnotherWorktree &&
+    !inputs.isCommitting
+  ) {
+    return {
+      kind,
+      label: translate(
+        'settings.sourceControl.gitOperationInAnotherWorkspace',
+        'Git operation running elsewhere'
+      ),
+      title: translate(
+        'settings.sourceControl.remoteOperationInAnotherWorkspace',
+        "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap."
+      ),
+      disabled: true,
+      isWaitingForRemoteOperation: true
+    }
+  }
+  return null
 }
 
 function resolvePrimaryActionLabel(
@@ -207,13 +240,13 @@ function resolvePrimaryActionTitle(
         'Linked review branch target is unavailable.'
       )
     case 'force_push_with_lease':
-      return describeForcePushWithLease(decision.count, decision.upstreamName)
+      return localizedForcePushWithLease(decision.count, decision.upstreamName)
     case 'sync_counts':
-      return describeSyncCounts(decision.ahead ?? 0, decision.behind ?? 0)
+      return localizedSyncCounts(decision.ahead ?? 0, decision.behind ?? 0)
     case 'pull_count':
-      return describePullCount(decision.count ?? 0)
+      return localizedPullCount(decision.count ?? 0)
     case 'push_count':
-      return describePushCount(decision.count ?? 0)
+      return localizedPushCount(decision.count ?? 0)
     case 'create_review':
       return translate(
         'auto.components.right.sidebar.source.control.primary.action.946a8a05ea',

@@ -1,28 +1,126 @@
 import type { AppState } from '../types'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
+  normalizeExecutionHostId,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
-import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
+import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
+import {
+  findIndexedReviewRepository,
+  hasUniqueIndexedRepositoryHost
+} from '@/lib/repository-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/worktree-runtime-owner-index'
 import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
 import type { GitHubPRFallbackSource } from './cache-model'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
-export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
-  return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
+export function findWorktreeById(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: string,
+  lookupIndex = getWorktreeLookupIndex(state)
+): Worktree | null {
+  const entry = lookupIndex.byId.get(worktreeId)
+  if (!entry) {
+    return null
+  }
+  const requestedHostId =
+    executionHostId ??
+    (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
+  if (!requestedHostId) {
+    return entry.unique
+  }
+  const hostId = normalizeExecutionHostId(requestedHostId)
+  if (!hostId) {
+    return null
+  }
+  const explicitMatches = entry.owners.filter((worktree) => {
+    const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+    const ownerHostId = runtimeOwner
+      ? toRuntimeExecutionHostId(runtimeOwner)
+      : normalizeExecutionHostId(worktree.hostId)
+    return ownerHostId === hostId
+  })
+  // Explicit execution owners take precedence over physical aliases and legacy recovery.
+  if (explicitMatches.length > 0) {
+    return explicitMatches.length === 1 ? explicitMatches[0] : null
+  }
+  const matches = entry.owners.filter((worktree) => {
+    if (worktree.hostId || worktree.runtimeOwnerEnvironmentId) {
+      return (
+        worktreeOwnerHostIds(worktree).includes(hostId) ||
+        matchesLegacyReviewRepository(state, worktree, hostId)
+      )
+    }
+    const repoHosts = lookupIndex.repoHostIdsByRepoId.get(worktree.repoId)
+    // Legacy rows inherit a sole repo owner, or remain local when that repo has host twins.
+    return repoHosts?.size === 1
+      ? repoHosts.has(hostId)
+      : hostId === LOCAL_EXECUTION_HOST_ID && (!repoHosts || repoHosts.has(hostId))
+  })
+  return matches.length === 1 ? matches[0] : null
+}
+
+export function findWorktreeReviewOwner(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: string,
+  lookupIndex = getWorktreeLookupIndex(state)
+): { worktree: Worktree; repo: Repo } | null {
+  const worktree = findWorktreeById(state, worktreeId, executionHostId, lookupIndex)
+  if (!worktree) {
+    return null
+  }
+  const requestedHost = normalizeExecutionHostId(
+    executionHostId ??
+      (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
+  )
+  const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+  const repositoryHost = runtimeOwner ? toRuntimeExecutionHostId(runtimeOwner) : requestedHost
+  const selectedRepo = repositoryHost
+    ? findIndexedReviewRepository(
+        state.repos,
+        worktree.repoId,
+        repositoryHost,
+        parseExecutionHostId(repositoryHost)?.kind === 'runtime' &&
+          parseExecutionHostId(worktree.hostId)?.kind === 'ssh'
+          ? worktree.hostId
+          : undefined
+      )
+    : undefined
+  if (repositoryHost && !selectedRepo) {
+    return null
+  }
+  const repo = resolveReviewRepository(state.repos, worktree, selectedRepo ?? undefined)
+  return repo ? { worktree, repo } : null
+}
+
+function matchesLegacyReviewRepository(
+  state: AppState,
+  worktree: Worktree,
+  hostId: ExecutionHostId
+): boolean {
+  if (
+    worktree.runtimeOwnerEnvironmentId?.trim() ||
+    parseExecutionHostId(worktree.hostId)?.kind !== 'ssh'
+  ) {
+    return false
+  }
+  const repo = findIndexedReviewRepository(state.repos, worktree.repoId, hostId, worktree.hostId)
+  return Boolean(repo && reviewRepositoryMatchesWorkspace(repo, worktree))
 }
 
 type WorktreeLookupEntry = {
   owners: Worktree[]
-  first: Worktree
   unique: Worktree | null
 }
 
@@ -44,7 +142,7 @@ export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
         existing.owners.push(worktree)
         existing.unique = null
       } else {
-        byId.set(worktreeId, { owners: [worktree], first: worktree, unique: worktree })
+        byId.set(worktreeId, { owners: [worktree], unique: worktree })
       }
     }
   }
@@ -107,96 +205,14 @@ export function isStaleExactLinkedPRLookup(
   state: AppState,
   worktreeId: string | undefined,
   linkedPRNumber: number | null | undefined,
+  executionHostId?: string,
   lookupIndex?: WorktreeLookupIndex
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
     return false
   }
-  const worktree = lookupIndex
-    ? (lookupIndex.byId.get(worktreeId)?.first ?? null)
-    : findWorktreeById(state, worktreeId)
+  const worktree = findWorktreeById(state, worktreeId, executionHostId, lookupIndex)
   return worktree?.linkedPR !== linkedPRNumber
-}
-
-export function shouldClearDivergedLinkedMergedPR(args: {
-  pr: PRInfo | null
-  linkedPRNumber: number | null
-  requestHeadOid: string | null
-}): boolean {
-  const { pr, linkedPRNumber, requestHeadOid } = args
-  return (
-    linkedPRNumber != null &&
-    requestHeadOid !== null &&
-    pr?.number === linkedPRNumber &&
-    pr.state === 'merged' &&
-    // Head-scoped: clear only the worktree whose head diverged, so a PR-number-coalesced broadcast can't clear a sibling still on the PR's line of work.
-    pr.headDivergedFromMergedPRAtOid === requestHeadOid &&
-    pr.headSha !== requestHeadOid &&
-    pr.confirmedContainedHeadOid !== requestHeadOid
-  )
-}
-
-export function shouldApplyDivergedLinkedPRClear(args: {
-  worktree: Pick<Worktree, 'linkedPR' | 'branch' | 'head' | 'isBare' | 'isArchived'> | undefined
-  linkedPRNumber: number
-  branch: string
-  requestHeadOid: string | null
-}): boolean {
-  const { worktree, linkedPRNumber, branch, requestHeadOid } = args
-  return (
-    Boolean(worktree) &&
-    requestHeadOid !== null &&
-    worktree?.linkedPR === linkedPRNumber &&
-    worktree.branch.replace(/^refs\/heads\//, '') === branch &&
-    worktree.head === requestHeadOid &&
-    worktree.isBare !== true &&
-    worktree.isArchived !== true
-  )
-}
-
-// Clear linked PR after branch switch only when neither push target nor HEAD matches its head; otherwise Checks remains pinned to old work.
-export function shouldClearBranchMismatchedLinkedOpenPR(args: {
-  pr: PRInfo | null
-  linkedPRNumber: number | null
-  branch: string
-  requestHeadOid: string | null
-  pushTargetBranch: string | null
-}): boolean {
-  const { pr, linkedPRNumber, branch, requestHeadOid, pushTargetBranch } = args
-  const headRefName = pr?.headRefName?.trim() ?? ''
-  const currentBranch = branch.replace(/^refs\/heads\//, '').trim()
-  return (
-    linkedPRNumber != null &&
-    pr?.number === linkedPRNumber &&
-    // Draft reviews are open PRs too; don't let their distinct renderer state leave a stale durable link wedged after a branch switch.
-    (pr.state === 'open' || pr.state === 'draft') &&
-    requestHeadOid !== null &&
-    headRefName !== '' &&
-    currentBranch !== '' &&
-    headRefName !== currentBranch &&
-    (pushTargetBranch === null || pushTargetBranch !== headRefName) &&
-    // A worktree parked on the PR's head commit is the same line of work (e.g. renamed local branch); keep the link.
-    !(pr.headSha != null && pr.headSha === requestHeadOid)
-  )
-}
-
-export function shouldApplyBranchMismatchedLinkedPRClear(args: {
-  worktree: Pick<Worktree, 'linkedPR' | 'branch' | 'head' | 'isBare' | 'isArchived'> | undefined
-  linkedPRNumber: number
-  branch: string
-  requestHeadOid: string | null
-}): boolean {
-  const { worktree, linkedPRNumber, branch, requestHeadOid } = args
-  return (
-    Boolean(worktree) &&
-    requestHeadOid !== null &&
-    worktree?.linkedPR === linkedPRNumber &&
-    // Branch-scoped: clear only while still on the branch the mismatch was computed against; a newer switch re-validates.
-    worktree.branch.replace(/^refs\/heads\//, '') === branch.replace(/^refs\/heads\//, '') &&
-    worktree.head === requestHeadOid &&
-    worktree.isBare !== true &&
-    worktree.isArchived !== true
-  )
 }
 
 export function buildPRRefreshCandidate(
@@ -205,8 +221,11 @@ export function buildPRRefreshCandidate(
   repoPath?: string,
   repoOverride?: Repo
 ): GitHubPRRefreshCandidate | null {
-  const repo = repoOverride ?? getGitHubRepoLookupIndex(state.repos).findById(worktree.repoId)
-  if (!repo) {
+  const repo = resolveReviewRepository(state.repos, worktree, repoOverride)
+  if (
+    !repo ||
+    !hasUniqueIndexedRepositoryHost(state.repos, repo.id, getRepoExecutionHostId(repo))
+  ) {
     return null
   }
   if (isMacAppDataPath(repoPath ?? repo.path)) {

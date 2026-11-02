@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
 import { resolveBlockedCreateReviewNoticeMessage } from '../../source-control-create-review-blocked-action'
+import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
 import type { SourceControlAi } from '../ai/use-ai'
 import { stripBaseRef } from '../../create-pull-request-base-ref-normalization'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
@@ -16,6 +17,7 @@ import type { SourceControlPullRequestGeneration } from './use-pull-request-gene
 import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
 import { useGenerateBeforeCreatePullRequest } from '../../use-generate-before-create-pull-request'
 import { createdReviewIsForeground } from '../../created-review-foreground'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 /** Already-open and partial-stack failures can leave a real review that still needs linking. */
 export function useSourceControlHostedReviewCreation({
@@ -161,7 +163,7 @@ export function useSourceControlHostedReviewCreation({
             context
           )
           if (context.openChecks && resolvedPrCreationDefaults.openAfterCreate) {
-            window.api.shell.openUrl(result.url)
+            openAppHttpLink(result.url, { worktreeId: activeWorktreeId })
           }
           return
         }
@@ -187,7 +189,8 @@ export function useSourceControlHostedReviewCreation({
                   'Open on {{value0}}',
                   { value0: hostedReviewCreateCopy.providerName }
                 ),
-                onClick: () => window.api.shell.openUrl(result.existingReview!.url)
+                onClick: () =>
+                  openAppHttpLink(result.existingReview!.url, { worktreeId: activeWorktreeId })
               }
             }
           )
@@ -222,7 +225,7 @@ export function useSourceControlHostedReviewCreation({
 
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
           tone: 'destructive',
-          message: result.error
+          message: localizedCreateFailure(result, hostedReviewCreateProvider)
         })
       } catch (error) {
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {

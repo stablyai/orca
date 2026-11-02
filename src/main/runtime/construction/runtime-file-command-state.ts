@@ -1,11 +1,9 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
 import type { LocalProjectGhExecOptions } from '../../project-runtime-git-options'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-terminal-contracts'
 import { OrcaRuntimeWithPreservedBranchCleanup } from './runtime-host-services'
 import { RuntimeFileCommands } from '../orca-runtime-files'
-import { nativeChatTranscriptIncludesPath } from '../../native-chat/native-chat-file-provenance'
 import { createRuntimeFileWatcherRemoval } from '../runtime-file-watcher-removal'
 import { RuntimeGitCommands } from '../orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../runtime-hosted-review-commands'
@@ -57,20 +55,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     relativePath: string
   } | null>
   abstract resolveTerminalCwd(handle: string): Promise<string | null>
-  abstract resolveTerminalContext(handle: string): {
-    worktreeId: string
-    connectionId: string | null
-  } | null
   abstract resolveTerminalFileUriHostname(handle: string): string | null
-  abstract hasRecentTerminalOutputPath(
-    handle: string,
-    pathText: string,
-    absolutePath: string
-  ): boolean
-  protected abstract getMobileSessionTabsForWorktree(
-    worktreeId: string,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult
   protected abstract resolveRuntimeGitTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     repo?: Repo
@@ -100,14 +85,11 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   abstract requireStore(): RuntimeStore
 
-  protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
-
   protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
 
   protected readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
     requireStore: () => this.requireStore(),
-    resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: async (selector) => {
       // Scratch folders are file-only; the general resolver also places chats.
       const scratchFolder = await resolveChatScratchSelectorFolder(selector)
@@ -121,18 +103,8 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     resolveKnownWorkspaceFileTarget: (absolutePath, executionHostId) =>
       this.resolveKnownWorkspaceFileTarget(absolutePath, executionHostId),
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
-    resolveTerminalContext: (terminalHandle) => this.resolveTerminalContext(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>
       this.resolveTerminalFileUriHostname(terminalHandle),
-    hasRecentTerminalOutputPath: (terminalHandle, pathText, absolutePath) =>
-      this.hasRecentTerminalOutputPath(terminalHandle, pathText, absolutePath),
-    hasRecentNativeChatOutputPath: (worktreeId, context, pathText, absolutePath) =>
-      nativeChatTranscriptIncludesPath({
-        tabs: this.getMobileSessionTabsForWorktree(worktreeId).tabs,
-        context,
-        pathText,
-        absolutePath
-      }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     openFile: createRuntimeEditorFileOpener({
       getNotifier: () => this.notifier,
@@ -143,7 +115,15 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         this.notifyMobileSessionTabsChanged(id)
       }
     }),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
+    openDiff: (
+      worktreeId,
+      filePath,
+      relativePath,
+      staged,
+      runtimeEnvironmentId,
+      navigation,
+      oldPath
+    ) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
       }
@@ -156,7 +136,8 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         relativePath,
         staged,
         runtimeEnvironmentId,
-        navigation
+        navigation,
+        ...(oldPath ? ([oldPath] as const) : [])
       )
     }
   })

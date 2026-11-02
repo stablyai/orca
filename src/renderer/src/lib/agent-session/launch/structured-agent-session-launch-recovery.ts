@@ -1,23 +1,23 @@
-import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session-wire'
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../../shared/agent-session-journal-types'
+import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   launchStructuredAgentSession,
   type StructuredLaunchHostSeedListener
-} from '@/lib/structured-agent-session-launch-create-call'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-create-call'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readStructuredSessionTabInventory } from '@/runtime/structured-session-tab-inventory'
-import { publishStructuredAgentSessionCreateHydration } from '../../structured-agent-session-create-hydration'
+import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 
 export type StructuredAgentLaunchReceipt = {
   sessionId: string
   fence: number
   firstMessage?: AgentJournalSubmission
   cursor?: AgentJournalCursor
+  configurationFailure?: AgentSessionWriteFailure
 }
 
 export type StructuredLaunchRecoveryState = {
@@ -105,9 +105,6 @@ async function retrySameIntent(
       () => state.cancelled
     )
     throwIfLaunchCancelled(state)
-    if (state.intent.createMessageSupport !== true) {
-      await verifyPublishedSession(state)
-    }
     return receipt
   } catch (error) {
     if (state.cancelled) {
@@ -154,18 +151,8 @@ export async function launchAndReconcile(
       return retrySameIntent(state, error)
     }
   }
-  try {
-    throwIfLaunchCancelled(state)
-    if (state.intent.createMessageSupport !== true) {
-      await verifyPublishedSession(state)
-    }
-    return receipt
-  } catch (error) {
-    if (state.cancelled) {
-      throw new StructuredAgentSessionLaunchCancelledError()
-    }
-    return retrySameIntent(state, error)
-  }
+  throwIfLaunchCancelled(state)
+  return receipt
 }
 
 export async function reconcileUnknownLaunch(

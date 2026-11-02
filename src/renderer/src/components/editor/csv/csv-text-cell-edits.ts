@@ -4,6 +4,7 @@ import { CSV_RECORD_BYTES } from './csv-byte-index'
 import { csvRecordTokens } from './csv-source-record'
 import { serializeCsvRecord } from './csv-serialization'
 import type { CsvCellEdit, CsvTextDocument } from './csv-text-document'
+import { CsvPreviewError } from './csv-preview-error'
 
 export function editCsvTextCells(
   document: CsvTextDocument,
@@ -20,7 +21,7 @@ export function editCsvTextCells(
       edit.column < 0 ||
       edit.column >= document.columnCount
     ) {
-      throw new Error('The selected CSV row or column no longer exists.')
+      throw new CsvPreviewError('cell-missing')
     }
     if (!changed.has(edit.row)) {
       changed.set(edit.row, [...document.rows[edit.row]!])
@@ -63,10 +64,10 @@ export function editCsvTextCells(
     bytes += measureUtf8ByteLength(record).byteLength
     if (!preservePendingDraft) {
       if (cells > 1024 * 1024 + 1) {
-        throw new Error('CSV contains too many cells to preview safely.')
+        throw new CsvPreviewError('too-many-cells')
       }
       if (measureUtf8ByteLength(record, { stopAfterBytes: CSV_RECORD_BYTES }).exceededLimit) {
-        throw new Error('CSV record is too large to preview safely.')
+        throw new CsvPreviewError('record-too-large')
       }
       assertCsvTableEditBytes(bytes)
     }

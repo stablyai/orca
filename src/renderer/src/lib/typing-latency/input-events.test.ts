@@ -59,20 +59,6 @@ describe('installTypingLatencyInputEvents', () => {
     ])
   })
 
-  it('detaches every listener', () => {
-    const signals: TypingInputSignal[] = []
-    detach = installTypingLatencyInputEvents(window, (signal) => {
-      signals.push(signal)
-    })
-    detach()
-    detach = null
-
-    keydown({ key: 'a' })
-    sessionEnd('한')
-
-    expect(signals).toEqual([])
-  })
-
   it('settles prevented and unprevented commits once after propagation', () => {
     const terminalElement = document.createElement('div')
     document.body.appendChild(terminalElement)

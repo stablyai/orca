@@ -7,7 +7,7 @@ import { getRuntimeGitBranchCompare } from '@/runtime/runtime-git-diff-client'
 import { useAppStore } from '@/store'
 import { createLoadingBranchCompareSummary } from '@/store/slices/editor/git/branch-compare-state'
 import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
-import { shouldClearBranchCompareForMissingBase } from './base-ref-resolution'
+import { shouldClearBranchCompareForMissingBase } from '../../../../../../shared/source-control-base-ref-resolution'
 import { slowTaskRequiredIdleMs } from '../../coalesced-poll-runner'
 import { useBranchCompareRefreshTriggers } from './use-branch-compare-refresh-triggers'
 

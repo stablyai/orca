@@ -16,9 +16,11 @@ import {
 import { resolveEnvironmentFromStore } from './runtime-environment-store'
 import { findCollidingEnvironmentName } from './runtime-environment-name-collision'
 import {
+  hasNonWslOwner,
   readWslHostDeployments,
   writeWslHostDeployment,
-  type WslHostDeploymentRecord
+  type WslHostDeploymentRecord,
+  type WslHostPendingStop
 } from './wsl-host-deployment-store'
 
 type WslHostPorts = Pick<WslHostDeploymentRecord, 'localPort' | 'remotePort'>
@@ -162,6 +164,53 @@ export function refreshWslHostPairing(
     environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId),
     pairingChanged
   }
+}
+
+/**
+ * A crash between refreshWslHostPairing's writes leaves the record's bridge port off the saved
+ * pairing, so the overlay drops the WSL link. The record follows the pairing: its port is only
+ * where the next connect listens, and that connect saves both. Returns the repaired ids.
+ */
+export function reconcileWslHostBridgePorts(userDataPath: string): string[] {
+  const environments = readEnvironmentStore(userDataPath).environments
+  const repaired: string[] = []
+  for (const record of readWslHostDeployments(userDataPath).deployments) {
+    const environment = environments.find((entry) => entry.id === record.environmentId)
+    // A link that overlaid cleanly reads as an owner too, and needs nothing.
+    if (!environment || hasNonWslOwner(environment)) {
+      continue
+    }
+    // A record written for a different pairing stays ignored, not rebound to this one.
+    const key = getPreferredPairingOffer(environment).publicKeyB64
+    if (
+      record.pairingPublicKeyB64 !== undefined &&
+      key !== record.pairingPublicKeyB64 &&
+      key !== record.previousPairingPublicKeyB64
+    ) {
+      continue
+    }
+    const port = getPreferredLoopbackRuntimePort(environment)
+    if (port === null || port === record.localPort) {
+      continue
+    }
+    writeWslHostDeployment(userDataPath, record.environmentId, { ...record, localPort: port })
+    repaired.push(record.environmentId)
+  }
+  return repaired
+}
+
+/** Marks (or with null, clears) a Remove that could not prove the host's server stopped. */
+export function setWslHostPendingStop(
+  userDataPath: string,
+  environmentId: string,
+  pendingStop: WslHostPendingStop | null
+): void {
+  const record = findWslHostDeployment(userDataPath, environmentId)
+  if (!record) {
+    throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not a WSL host.')
+  }
+  const { pendingStop: _previous, ...rest } = record
+  writeWslHostDeployment(userDataPath, environmentId, pendingStop ? { ...rest, pendingStop } : rest)
 }
 
 /** Environment first: a crash between the writes leaves an ownerless record, never a bare server. */

@@ -53,6 +53,8 @@ export function acknowledgeFederationRelay(
     direction: FederationRelayDirection
     throughSequence: number
     settleRemoteReports?: { sequence: number; outcome?: WorkerReportOutcome }[]
+    // Only the home's acceptance proves settlement; arm after it, never at queue time.
+    armAutoRelease?: boolean
   }
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
@@ -114,6 +116,9 @@ export function acknowledgeFederationRelay(
         terminalOutcome,
         'worker_report_settled'
       )
+      if (params.armAutoRelease) {
+        this.armWorkerTerminalAutoReleaseStatement(params.dispatchId)
+      }
     }
     this.db
       .prepare(
@@ -183,12 +188,29 @@ export function recordFederatedHomeAcknowledgment(
     )
 }
 
+/** A worker_done queued for the Run home that it has not acknowledged. */
+export function hasPendingFederatedWorkerReport(
+  this: OrchestrationDb,
+  dispatchId: string
+): boolean {
+  return (
+    this.db
+      .prepare(
+        `SELECT 1 FROM federation_relay_items
+         WHERE dispatch_id = ? AND direction = 'to_home' AND kind = 'worker_done'
+           AND acked_at IS NULL LIMIT 1`
+      )
+      .get(dispatchId) !== undefined
+  )
+}
+
 export type FederationRelayAckMethods = {
   listFederationRelay: typeof listFederationRelay
   listPendingFederationRelay: typeof listPendingFederationRelay
   acknowledgeFederationRelay: typeof acknowledgeFederationRelay
   setFederatedHomeImportSequence: typeof setFederatedHomeImportSequence
   recordFederatedHomeAcknowledgment: typeof recordFederatedHomeAcknowledgment
+  hasPendingFederatedWorkerReport: typeof hasPendingFederatedWorkerReport
 }
 
 export function attachFederationRelayAck(ctor: { prototype: object }): void {
@@ -197,6 +219,7 @@ export function attachFederationRelayAck(ctor: { prototype: object }): void {
     listPendingFederationRelay,
     acknowledgeFederationRelay,
     setFederatedHomeImportSequence,
-    recordFederatedHomeAcknowledgment
+    recordFederatedHomeAcknowledgment,
+    hasPendingFederatedWorkerReport
   })
 }

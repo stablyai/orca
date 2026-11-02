@@ -3,13 +3,13 @@ import {
   agentSessionFailureFact,
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
   type SubmissionRejectionFact
-} from '../../../shared/agent-session-failure'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalPendingSubmissionResolutions } from '../agent-session-journal/journal-pending-submission-recovery'
 import {
   journalLifecycleMutationItemId,
@@ -25,7 +25,7 @@ import { lostLiveWorkJournalBody } from '../agent-session-journal/journal-subage
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import {
   hasStructuredAgentSessionStartFailureRow,
@@ -73,9 +73,6 @@ export function planStructuredAgentSessionDeadGeneration(
 ): { mutations: JournalLifecycleMutationInput[]; dispatches: ResolveDispatchInput[] } {
   const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal, input.exit)
   const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
-  if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
-    return { mutations: [], dispatches: [] }
-  }
   // Leave queued sends to delivery. Failed-start handoffs never ran; ready-child handoffs remain uncertain.
   const startupFailure = input.exitedDuringStartup
     ? structuredAgentSessionStartFailure({ exit: input.exitFailure }, input.failureTextContext)
@@ -84,6 +81,9 @@ export function planStructuredAgentSessionDeadGeneration(
   const unrun =
     startupFailure ?? (closed && agentSessionFailureWords(closed, { surface: 'rejection' }))
   const withdrawn = unrun ? [] : codexUnopenedSendResolutions(input.journal, input.fence)
+  if (!showUnexpectedExitOutcome && !hasUnfinishedWork && withdrawn.length === 0) {
+    return { mutations: [], dispatches: [] }
+  }
   const withdrawnIds = new Set(withdrawn.map((entry) => entry.clientMessageId))
   const dispatches = [
     ...withdrawn,
