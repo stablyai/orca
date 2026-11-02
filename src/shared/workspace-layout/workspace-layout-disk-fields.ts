@@ -121,6 +121,8 @@ const ROW = {
   title: own('terminalRow', 'title'),
   defaultTitle: own('tab.terminal', 'defaultTitle'),
   generatedTitle: tab('generatedTitle'),
+  // Without a saved owner a restored title is never proven stale, so it is kept as before.
+  generatedTitleSessionId: 'unwritten',
   customTitle: tab('customTitle'),
   sortOrder: TAB_ORDER,
   generation: own('terminalRow', 'generation'),
