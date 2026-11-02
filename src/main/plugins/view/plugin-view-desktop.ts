@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
 import type { z } from 'zod'
 import type {
   PluginShotChromeParams,
+  PluginShotEditorParams,
   PluginShotReplayParams
 } from '../../../shared/rpc-contract/plugins-params'
 import {
@@ -30,7 +32,6 @@ import {
   shootPluginEditor,
   type PluginEditorShotResult
 } from './plugin-view-editor-shot'
-import type { PluginEditorShotAct } from '../../../shared/plugins/view/plugin-editor-shot-acts'
 import { shootPluginChrome, type PluginChromeShotResult } from './plugin-view-chrome-shot'
 import {
   resolvePluginViewEditor,
@@ -92,15 +93,7 @@ export type PluginViewDesktop = {
   /** `shot --scenario`: captures a CLI-rendered tree without opening the plugin's panel. */
   shotReplay(params: z.infer<typeof PluginShotReplayParams>): Promise<PluginShotReplayResult>
   /** `shot --editor`: opens the file in the plugin's editor and captures that editor. */
-  shotEditor(params: {
-    pluginKey: string
-    filePath: string
-    colorScheme?: PluginViewColorScheme
-    width?: number
-    height?: number
-    acts?: PluginEditorShotAct[]
-    inPlace?: boolean
-  }): Promise<PluginEditorShotResult>
+  shotEditor(params: z.infer<typeof PluginShotEditorParams>): Promise<PluginEditorShotResult>
   /** `shot --status-bar` / `--window`: captures Orca's own chrome, where plugins draw too. */
   shotChrome(params: z.infer<typeof PluginShotChromeParams>): Promise<PluginChromeShotResult>
 }
@@ -212,6 +205,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       const actsTimeoutMs = (acts?.length ?? 0) * ACT_TIMEOUT_MS
       const { colorScheme, themeReason } = pluginShotThemeDecision(requested, deps.windowShown())
       const { cursor } = deps.logsSince(pluginKey)
+      const captureId = randomUUID()
       return withPaintingWhileHidden([contents, ...deps.guestsOf(pluginKey)], async () => {
         let restored: boolean | undefined
         const shot = await (async (): Promise<PluginShotResult | PluginShotNotShown> => {
@@ -228,6 +222,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
                   ...(colorScheme === undefined ? {} : { colorScheme }),
                   ...(ifShown ? { ifShown: true } : {}),
                   ...(acts ? { acts } : {}),
+                  captureId,
                   timeoutMs: RENDER_TIMEOUT_MS
                 }
               },
@@ -286,7 +281,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
           } finally {
             const ended = await requestPluginViewFromRenderer(
               contents,
-              { kind: 'end-capture' },
+              { kind: 'end-capture', captureId },
               OPEN_TIMEOUT_MS
             ).catch(() => null)
             restored = ended?.ok ? ended.restored : undefined

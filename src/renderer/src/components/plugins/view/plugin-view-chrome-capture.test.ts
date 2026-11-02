@@ -19,7 +19,12 @@ describe("a capture of Orca's chrome", () => {
     bar.setAttribute('data-orca-status-bar', '')
     bar.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 876, width: 800, height: 24 })
     document.body.append(bar)
-    const reply = await captureChrome('r', 'status-bar', 'dark')
+    const reply = await captureChrome({
+      requestId: 'r',
+      kind: 'capture-chrome',
+      region: 'status-bar',
+      colorScheme: 'dark'
+    })
     expect(usePluginViewCaptureStore.getState()).toMatchObject({ dark: true, capturing: true })
     expect(reply).toMatchObject({
       ok: true,
@@ -28,7 +33,9 @@ describe("a capture of Orca's chrome", () => {
   })
 
   it('refuses a hidden status bar, and measures the whole window for --window', async () => {
-    await expect(captureChrome('r', 'status-bar', undefined)).resolves.toMatchObject({
+    await expect(
+      captureChrome({ requestId: 'r', kind: 'capture-chrome', region: 'status-bar' })
+    ).resolves.toMatchObject({
       ok: false,
       code: 'chrome_hidden'
     })
@@ -40,7 +47,9 @@ describe("a capture of Orca's chrome", () => {
       configurable: true,
       value: 800
     })
-    await expect(captureChrome('r', 'window', undefined)).resolves.toMatchObject({
+    await expect(
+      captureChrome({ requestId: 'r', kind: 'capture-chrome', region: 'window' })
+    ).resolves.toMatchObject({
       ok: true,
       panel: { rect: { x: 0, y: 0, width: 1200, height: 800 } }
     })

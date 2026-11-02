@@ -1,7 +1,7 @@
 import type {
   PluginChromeRegion,
-  PluginViewColorScheme,
-  PluginViewReply
+  PluginViewReply,
+  PluginViewRequest
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 import { nextPaintedFrames, waitForColorScheme } from './plugin-view-panel-settle'
@@ -23,12 +23,15 @@ function measureChrome(region: PluginChromeRegion): Rect | null {
 
 /** Paints Orca in the asked theme, then measures the status bar or the whole window. */
 export async function captureChrome(
-  requestId: string,
-  region: PluginChromeRegion,
-  colorScheme: PluginViewColorScheme | undefined
+  request: Extract<PluginViewRequest, { kind: 'capture-chrome' }>
 ): Promise<PluginViewReply> {
+  const { requestId, region, colorScheme, captureId } = request
   const wantDark = colorScheme === undefined ? null : colorScheme === 'dark'
-  usePluginViewCaptureStore.getState().begin({ panelWidth: null, dark: wantDark })
+  usePluginViewCaptureStore.getState().begin({
+    panelWidth: null,
+    dark: wantDark,
+    ...(captureId === undefined ? {} : { owner: captureId })
+  })
   await waitForColorScheme(wantDark)
   await nextPaintedFrames()
   const rect = measureChrome(region)

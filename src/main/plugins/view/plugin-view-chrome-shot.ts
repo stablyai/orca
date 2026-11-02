@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
 import type {
   PluginChromeRegion,
@@ -41,11 +42,17 @@ export async function shootPluginChrome(
     deps.windowShown()
   )
   const { cursor } = deps.logsSince(pluginKey)
+  const captureId = randomUUID()
   return withPaintingWhileHidden([contents], async () => {
     try {
       const reply = await requestPluginViewFromRenderer(
         contents,
-        { kind: 'capture-chrome', region, ...(colorScheme === undefined ? {} : { colorScheme }) },
+        {
+          kind: 'capture-chrome',
+          region,
+          ...(colorScheme === undefined ? {} : { colorScheme }),
+          captureId
+        },
         CHROME_TIMEOUT_MS
       )
       if (!reply.ok) {
@@ -74,7 +81,7 @@ export async function shootPluginChrome(
       // Puts back the theme.
       await requestPluginViewFromRenderer(
         contents,
-        { kind: 'end-capture' },
+        { kind: 'end-capture', captureId },
         CHROME_TIMEOUT_MS
       ).catch(() => null)
     }

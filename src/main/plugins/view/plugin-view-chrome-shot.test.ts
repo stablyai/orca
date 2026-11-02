@@ -87,10 +87,18 @@ describe('shot --status-bar', () => {
       region: 'status-bar',
       colorScheme: 'dark'
     })
-    expect(relay.requestPluginViewFromRenderer.mock.calls.map((call) => call[1])).toEqual([
-      { kind: 'capture-chrome', region: 'status-bar', colorScheme: 'dark' },
-      { kind: 'end-capture' }
-    ])
+    const [begun, ended] = relay.requestPluginViewFromRenderer.mock.calls.map((call) => call[1])
+    expect(begun).toEqual({
+      kind: 'capture-chrome',
+      region: 'status-bar',
+      colorScheme: 'dark',
+      captureId: expect.any(String)
+    })
+    // Ends only this shot's overrides.
+    expect(ended).toEqual({
+      kind: 'end-capture',
+      captureId: begun?.kind === 'capture-chrome' ? begun.captureId : 'missing'
+    })
     expect(capturePage).toHaveBeenCalledWith(
       { x: 0, y: 876, width: 800, height: 24 },
       { stayHidden: true }
@@ -117,12 +125,9 @@ describe('shot --status-bar', () => {
       shootPluginChrome(deps(), contents, { pluginKey: KEY, region: 'status-bar' })
     ).rejects.toMatchObject({ message: 'status bar is hidden' })
     // The theme is put back even then.
-    expect(relay.requestPluginViewFromRenderer).toHaveBeenLastCalledWith(
-      contents,
-      {
-        kind: 'end-capture'
-      },
-      expect.any(Number)
-    )
+    expect(relay.requestPluginViewFromRenderer.mock.calls.at(-1)?.[1]).toEqual({
+      kind: 'end-capture',
+      captureId: expect.any(String)
+    })
   })
 })

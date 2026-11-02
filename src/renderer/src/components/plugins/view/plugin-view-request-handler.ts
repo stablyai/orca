@@ -115,7 +115,11 @@ async function capturePanel(
   capture: PluginViewCapture
 ): Promise<PluginViewReply> {
   const wantDark = capture.colorScheme === undefined ? null : capture.colorScheme === 'dark'
-  usePluginViewCaptureStore.getState().begin({ panelWidth: capture.width ?? null, dark: wantDark })
+  usePluginViewCaptureStore.getState().begin({
+    panelWidth: capture.width ?? null,
+    dark: wantDark,
+    ...(capture.captureId === undefined ? {} : { owner: capture.captureId })
+  })
   const status = await waitForPluginPanelDraw(tabKey, capture.guestRevision, capture.timeoutMs)
   if (status.value?.failure) {
     return fail(requestId, 'panel_failed', `The plugin panel ${status.value.failure}.`)
@@ -221,10 +225,10 @@ export async function handlePluginViewRequest(
       case 'replay-panel':
         return await replayPluginPanel(request)
       case 'capture-chrome':
-        return await captureChrome(request.requestId, request.region, request.colorScheme)
+        return await captureChrome(request)
       case 'end-capture': {
         endPluginShotReplay()
-        usePluginViewCaptureStore.getState().end()
+        usePluginViewCaptureStore.getState().end(request.captureId)
         await runEditorShotCleanup(request.captureId)
         const restored = await restoreActedPanel()
         return {

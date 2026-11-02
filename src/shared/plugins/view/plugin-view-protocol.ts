@@ -26,6 +26,8 @@ export type PluginViewCapture = {
   ifShown?: boolean
   /** Run on the drawn components panel, in order, before it is measured. */
   acts?: PluginShotAct[]
+  /** Names this capture, so its `end-capture` puts back only what it changed. */
+  captureId?: string
   timeoutMs: number
 }
 
@@ -60,7 +62,12 @@ export type PluginViewRequestBody =
   /** `shot --scenario`: draws a validated tree in a detached preview; no plugin panel or guest. */
   | { kind: 'replay-panel'; replay: PluginViewReplay }
   /** `shot --status-bar` / `--window`: measures that part of Orca's own chrome for a capture. */
-  | { kind: 'capture-chrome'; region: PluginChromeRegion; colorScheme?: PluginViewColorScheme }
+  | {
+      kind: 'capture-chrome'
+      region: PluginChromeRegion
+      colorScheme?: PluginViewColorScheme
+      captureId?: string
+    }
   /** Puts back the width and theme a capture changed, and undoes editor capture `captureId`. */
   | { kind: 'end-capture'; captureId?: string }
 

@@ -93,6 +93,7 @@ export async function captureOpenEditor(
       ? { width: capture.width ?? 0, height: capture.height ?? 0 }
       : null
   usePluginViewCaptureStore.getState().begin({
+    owner: capture.captureId,
     panelWidth: null,
     dark: wantDark,
     editorFileId: fileId,

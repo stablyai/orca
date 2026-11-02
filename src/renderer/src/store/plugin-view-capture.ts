@@ -13,14 +13,18 @@ type PluginViewCaptureState = {
   editorSize: { width: number; height: number } | null
   /** Editor captures per file: each one loads the editor afresh, so it reports this load's errors. */
   editorLoads: Readonly<Record<string, number>>
+  /** The shot whose overrides are on screen; only its `end` puts them back. */
+  owner: string | null
   begin: (overrides: {
+    owner?: string
     panelWidth: number | null
     dark: boolean | null
     editorFileId?: string | null
     editorSize?: { width: number; height: number } | null
   }) => void
   setPanelWidth: (panelWidth: number) => void
-  end: () => void
+  /** With `owner`, a no-op once a later shot has taken over. */
+  end: (owner?: string) => void
 }
 
 export const usePluginViewCaptureStore = create<PluginViewCaptureState>()((set) => ({
@@ -30,11 +34,13 @@ export const usePluginViewCaptureStore = create<PluginViewCaptureState>()((set) 
   editorFileId: null,
   editorSize: null,
   editorLoads: {},
-  begin: (overrides) =>
+  owner: null,
+  begin: ({ owner, ...overrides }) =>
     set((state) => ({
       editorFileId: null,
       editorSize: null,
       ...overrides,
+      owner: owner ?? null,
       capturing: true,
       editorLoads: overrides.editorFileId
         ? {
@@ -44,6 +50,17 @@ export const usePluginViewCaptureStore = create<PluginViewCaptureState>()((set) 
         : state.editorLoads
     })),
   setPanelWidth: (panelWidth) => set({ panelWidth }),
-  end: () =>
-    set({ panelWidth: null, dark: null, capturing: false, editorFileId: null, editorSize: null })
+  end: (owner) =>
+    set((state) =>
+      owner !== undefined && state.owner !== owner
+        ? state
+        : {
+            panelWidth: null,
+            dark: null,
+            capturing: false,
+            editorFileId: null,
+            editorSize: null,
+            owner: null
+          }
+    )
 }))
