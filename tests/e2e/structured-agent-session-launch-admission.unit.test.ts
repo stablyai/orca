@@ -34,7 +34,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     }
     return new Promise(() => undefined)
   }),
-  structuredAgentSessionHostSupports: async () => true
+  structuredAgentSessionHostSupports: async () => true,
+  structuredAgentSessionHostCapabilityState: async () => 'supported'
 }))
 
 vi.mock('@/runtime/structured-chat-host-permission', async (importOriginal) => ({

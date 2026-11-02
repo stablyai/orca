@@ -28,6 +28,8 @@ vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => m
 vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: mocks.probe }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   structuredAgentSessionHostSupports: mocks.closeCapability,
+  structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
+    (await mocks.closeCapability(...args)) ? 'supported' : 'unsupported',
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
   supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
   callStructuredAgentSession: (...args: unknown[]) =>

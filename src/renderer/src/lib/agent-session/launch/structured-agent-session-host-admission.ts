@@ -11,7 +11,7 @@ import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import {
   callStructuredAgentSession,
-  structuredAgentSessionHostSupports
+  structuredAgentSessionHostCapabilityState
 } from '@/runtime/structured-agent-session-client'
 
 /** The host answers a worktree selector it cannot resolve yet with this rather than a verdict. */
@@ -69,13 +69,20 @@ export async function askHostCreateSupport(
   agent: TuiAgent,
   resumeFrom?: StructuredLaunchResumeAdmission
 ): Promise<HostCreateSupport> {
-  // An older host's strict params reject the field; its create still refuses, only later.
-  const asksWriters =
-    !!resumeFrom &&
-    (await structuredAgentSessionHostSupports(
-      target,
-      STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY
-    ))
+  // An older host's strict params reject the field; its create still refuses, only later. A host
+  // whose capabilities could not be read is not known to be older: unasked, its answer would
+  // admit a resume another terminal still runs, so it has not answered.
+  const writers = resumeFrom
+    ? await structuredAgentSessionHostCapabilityState(
+        target,
+        STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY
+      )
+    : 'unsupported'
+  if (writers === 'unknown') {
+    const error = new Error('host capabilities unavailable')
+    return { kind: 'unreachable', code: 'runtime_unavailable', message: error.message, error }
+  }
+  const asksWriters = writers === 'supported'
   for (let attempt = 0; ; attempt += 1) {
     try {
       const support = await callStructuredAgentSession<{

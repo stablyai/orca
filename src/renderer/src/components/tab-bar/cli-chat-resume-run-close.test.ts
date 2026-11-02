@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
     ...state,
     sourceCapability: vi.fn(),
     closeCapability: vi.fn(),
+    capabilityState: vi.fn(),
     closeTerminal: vi.fn(),
     probe: vi.fn(),
     createCapability: vi.fn(),
@@ -28,6 +29,9 @@ vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => m
 vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: mocks.probe }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   structuredAgentSessionHostSupports: mocks.closeCapability,
+  structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
+    (await mocks.capabilityState(...args)) ??
+    ((await mocks.closeCapability(...args)) ? 'supported' : 'unsupported'),
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
   supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
   callStructuredAgentSession: (...args: unknown[]) =>
@@ -266,6 +270,22 @@ describe('close terminal then continue on capable hosts', () => {
     expect(mocks.toast.mock.calls).toEqual([
       [
         'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
+      ]
+    ])
+  })
+
+  // A failed read is no proof of an older host: asked without the conversation, it would admit
+  // the resume its create then refuses, after the terminal closed.
+  it('keeps the terminal when the host cannot say whether it checks other terminals', async () => {
+    mocks.capabilityState.mockResolvedValueOnce('unknown')
+    await runCliChatResume(SOURCE)
+    expect(mocks.createSupport).not.toHaveBeenCalled()
+    expect(mocks.closeTerminal).not.toHaveBeenCalled()
+    expect(tabs()).toEqual([])
+    expect(creates()).toEqual([])
+    expect(mocks.toast.mock.calls).toEqual([
+      [
+        "Claude couldn't continue in chat. Check this terminal and the host connection, then try again."
       ]
     ])
   })
