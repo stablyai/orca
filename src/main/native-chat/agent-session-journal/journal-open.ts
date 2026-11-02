@@ -5,7 +5,6 @@ import { journalInputOrder } from './journal-input-order'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { readJournalOutcomes } from './journal-outcome-table'
 import { JournalOutcomeDecodeError } from './journal-outcome-codec'
-import { type JournalReadRow } from './journal-read-row'
 import { AgentSessionJournalError } from './journal-write-guards'
 import { journalInputAcceptance } from './journal-input-provenance'
 import {

@@ -1,3 +1,5 @@
+import { journalInputSourceFamily, journalInputSourceSequence } from './journal-input-source'
+import type { JournalReducerState } from './journal-reducer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Reverse links derive from submission rows and share the reducer lifetime. */
@@ -16,6 +18,15 @@ export class JournalSubmissionLinks {
   original(family: string): AgentJournalSubmission | undefined {
     const id = this.latest.get(family)
     return id ? this.linked.get(family)?.get(id) : undefined
+  }
+  refreshInput(state: JournalReducerState, id: string): void {
+    const source = state.inputs.sources.get(id)
+    this.refresh(
+      id,
+      state.submissions.get(id),
+      journalInputSourceFamily(source),
+      journalInputSourceSequence(source)
+    )
   }
   refresh(
     id: string,

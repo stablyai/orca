@@ -91,8 +91,12 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       iterator.next = (...args) => {
         const result = next(...args)
         if (!result.done) {
-          if (projecting) projectionVisits++
-          if (snapshotReading) snapshotVisits++
+          if (projecting) {
+            projectionVisits++
+          }
+          if (snapshotReading) {
+            snapshotVisits++
+          }
           if (correction) {
             keyVisits++
           } else {
@@ -128,8 +132,12 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       iterator.next = (...args) => {
         const result = next(...args)
         if (!result.done) {
-          if (projecting) projectionVisits++
-          if (snapshotReading) snapshotVisits++
+          if (projecting) {
+            projectionVisits++
+          }
+          if (snapshotReading) {
+            snapshotVisits++
+          }
         }
         return result
       }
@@ -174,7 +182,9 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       this: Map<unknown, unknown>,
       key
     ) {
-      if (projecting) projectionReads++
+      if (projecting) {
+        projectionReads++
+      }
       return mapGet.call(this, key)
     })
     const overlayGet = JournalDraftMap.prototype.get
@@ -182,7 +192,9 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       this: JournalDraftMap<unknown, unknown>,
       key
     ) {
-      if (projecting) projectionReads++
+      if (projecting) {
+        projectionReads++
+      }
       return overlayGet.call(this, key)
     })
     const mapHas = Map.prototype.has
@@ -194,8 +206,9 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       if (
         projecting &&
         (this === state.items || this === state.submissions || this === state.inputs.presentations)
-      )
+      ) {
         projectionReads++
+      }
       return mapHas.call(this, key)
     })
     const setHas = Set.prototype.has
@@ -203,7 +216,9 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       this: Set<unknown>,
       key
     ) {
-      if (projecting && this === journal['state'].normalizedHandOffs) projectionReads++
+      if (projecting && this === journal['state'].normalizedHandOffs) {
+        projectionReads++
+      }
       return setHas.call(this, key)
     })
     const overlaySet = JournalDraftMap.prototype.set
@@ -212,7 +227,9 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       key,
       value
     ) {
-      if (projecting) recordWrites++
+      if (projecting) {
+        recordWrites++
+      }
       return overlaySet.call(this, key, value)
     })
     const sourceGets = () =>
@@ -326,7 +343,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       )
     } finally {
       for (const spy of [
-        ...collectionSpies.reverse(),
+        ...collectionSpies.toReversed(),
         displayRead,
         sourceHas,
         sourceSetHas,

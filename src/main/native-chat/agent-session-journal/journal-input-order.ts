@@ -1,4 +1,3 @@
-import { journalInputSourceFamily, journalInputSourceSequence } from './journal-input-source'
 import {
   readJournalInputPlace,
   restoreJournalInputPlaces,
@@ -114,13 +113,7 @@ export class JournalInputOrder {
   }
 
   refreshLink(id: string): void {
-    const source = this.state.inputs.sources.get(id)
-    this.links.refresh(
-      id,
-      this.state.submissions.get(id),
-      journalInputSourceFamily(source),
-      journalInputSourceSequence(source)
-    )
+    this.links.refreshInput(this.state, id)
   }
   familyOriginal(id: string): AgentJournalSubmission | undefined {
     return this.links.original(id)
