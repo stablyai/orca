@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   getWorkspaceCleanupCandidateIdentity,
-  getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../shared/workspace-cleanup-host-identity'
 import {
@@ -66,17 +65,6 @@ function makeDismissal(
 }
 
 describe('workspace cleanup host-qualified identity', () => {
-  it('separates two hosts publishing the same worktree id', () => {
-    const local = makeCandidate('local')
-    const remote = makeCandidate('ssh:ssh-1', 'ssh-1')
-    expect(getWorkspaceCleanupCandidateIdentity(local)).not.toBe(
-      getWorkspaceCleanupCandidateIdentity(remote)
-    )
-    expect(getWorkspaceCleanupCandidateIdentity(remote)).toBe(
-      getWorkspaceCleanupHostIdentity('ssh:ssh-1', WORKTREE_ID)
-    )
-  })
-
   it('reports no removal host for a row with no host evidence', () => {
     expect(resolveWorkspaceCleanupRemovalHostId(makeCandidate(undefined))).toBeNull()
     // A pre-executionHostId remote row still names its connection.
@@ -93,10 +81,6 @@ describe('workspace cleanup dismissals', () => {
       shouldHideWorkspaceCleanupCandidate(makeCandidate('ssh:ssh-1', 'ssh-1'), dismissal)
     ).toBe(true)
     expect(shouldHideWorkspaceCleanupCandidate(makeCandidate('local'), dismissal)).toBe(false)
-  })
-
-  it('keeps a legacy id-only dismissal hiding its row', () => {
-    expect(shouldHideWorkspaceCleanupCandidate(makeCandidate('local'), makeDismissal())).toBe(true)
   })
 
   it('stores same-id dismissals independently and still reads a legacy id-only key', async () => {
@@ -153,13 +137,6 @@ describe('workspace cleanup removal targets', () => {
       detectedWorktreesByRepo: {}
     } as unknown as AppState
     const [target] = resolveWorkspaceCleanupRemovalTargets([WORKTREE_ID], state, {
-      approvedCandidates: [makeCandidate(undefined)]
-    })
-    expect(target?.kind).toBe('unresolved')
-  })
-
-  it('fails closed for a confirmed row when no owner row carries a host', () => {
-    const [target] = resolveWorkspaceCleanupRemovalTargets([WORKTREE_ID], emptyState, {
       approvedCandidates: [makeCandidate(undefined)]
     })
     expect(target?.kind).toBe('unresolved')

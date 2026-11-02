@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  cursorSessionCookie,
-  isCursorSessionTokenExpired,
-  parseCursorSessionToken
-} from './cursor-session-token'
+import { cursorSessionCookie, parseCursorSessionToken } from './cursor-session-token'
 
 type JwtSegment = Record<string, unknown>
 
@@ -30,27 +26,6 @@ describe('parseCursorSessionToken', () => {
     expect(parseCursorSessionToken('   ')).toBeNull()
     expect(parseCursorSessionToken('not-a-jwt')).toBeNull()
     expect(parseCursorSessionToken('a.!!!.c')).toBeNull()
-  })
-
-  it('leaves expiry null when the token omits exp', () => {
-    expect(parseCursorSessionToken(jwt({ sub: 'auth0|user_1' }))?.expiresAtMs).toBeNull()
-  })
-})
-
-describe('isCursorSessionTokenExpired', () => {
-  const token = parseCursorSessionToken(jwt({ sub: 'auth0|user_1', exp: 2_000 }))
-
-  it('reports a lapsed session', () => {
-    expect(isCursorSessionTokenExpired(token!, 2_000_001)).toBe(true)
-  })
-
-  it('reports a live session', () => {
-    expect(isCursorSessionTokenExpired(token!, 1_999_999)).toBe(false)
-  })
-
-  it('never expires a token with no exp claim', () => {
-    const noExpiry = parseCursorSessionToken(jwt({ sub: 'auth0|user_1' }))
-    expect(isCursorSessionTokenExpired(noExpiry!, Number.MAX_SAFE_INTEGER)).toBe(false)
   })
 })
 

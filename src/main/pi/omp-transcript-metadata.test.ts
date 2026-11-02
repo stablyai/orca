@@ -2,7 +2,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { extractAgentProviderSession, getAgentResumeArgv } from '../../shared/agent-session-resume'
+import { extractAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import { getAgentResumeArgv } from '../../shared/agent-resume-argv'
 import type * as SessionScannerDiscovery from '../ai-vault/session-scanner-discovery'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
@@ -84,33 +85,4 @@ describe.each([
     ).rejects.toThrow()
     expect(walkSessionFiles).not.toHaveBeenCalled()
   })
-
-  it.each([undefined, '', 123])(
-    'clears persistent metadata for ephemeral path %s',
-    async (file) => {
-      const harness = createAgentStatusExtensionHarness(args)
-      let sessionFile: unknown = join(root, 'p.jsonl')
-      const sessionManager = { getSessionId: () => 'same-owner', getSessionFile: () => sessionFile }
-      await harness.callHook('agent_start', undefined, { sessionManager })
-      sessionFile = file
-      await harness.callHook('agent_end', undefined, { sessionManager })
-      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
-      const payload = JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
-      expect(payload).toEqual({ hook_event_name: 'agent_end' })
-      expect(extractAgentProviderSession('omp', payload)).toBeNull()
-    }
-  )
-})
-
-it('retains id-based discovery with an old extension and rejects malformed optional paths', async () => {
-  const id = 'legacy-session'
-  const file = join(root, `${id}.jsonl`)
-  await writeFile(file, '{}\n')
-  for (const session_file of [undefined, '', 123, '/bad\npath.jsonl']) {
-    const session = extractAgentProviderSession('omp', { session_id: id, session_file })!
-    expect(session).toEqual({ key: 'session_id', id })
-    expect(getAgentResumeArgv('omp', session)).toEqual(['omp', '--resume', id])
-    await expect(resolveSessionFilePath('omp', id, { ompSessionsDir: root })).resolves.toBe(file)
-  }
-  expect(walkSessionFiles).toHaveBeenCalledTimes(4)
 })

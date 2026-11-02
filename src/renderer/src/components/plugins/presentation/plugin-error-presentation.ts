@@ -36,6 +36,12 @@ export function pluginInstallErrorMessage(cause: unknown): string {
       "The plugin exceeds Orca's install size or file-count limits."
     )
   }
+  if (detail.includes('moved after it was checked')) {
+    return translate(
+      'auto.components.settings.pluginError.installGitMoved',
+      'The repository changed after Orca checked it. Try again.'
+    )
+  }
   if (/(git|repository|fetch|clone|checkout|remote)/.test(detail)) {
     return translate(
       'auto.components.settings.pluginError.installGit',

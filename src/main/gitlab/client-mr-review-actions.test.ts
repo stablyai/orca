@@ -54,6 +54,11 @@ import {
   updateMRReviewers
 } from './client'
 import { resetGitLabMrMocks } from './client-mr-test-harness'
+import type { HostedReviewInfo } from '../../shared/hosted-review'
+import {
+  __resetHostedReviewBranchCacheForTests,
+  withHostedReviewBranchCache
+} from '../source-control/hosted-review-branch-cache'
 import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
 
 describe('stripGitLabDraftTitlePrefix', () => {
@@ -189,6 +194,60 @@ describe('gitlab client — MR operations', () => {
       }))
     })
 
+    it.each([
+      {
+        owner: 'connection-backed host',
+        connectionId: 'conn-1',
+        localGitOptions: {},
+        hostnameArgs: ['--hostname', 'git.internal'],
+        execOptions: {}
+      },
+      {
+        owner: 'local WSL workspace',
+        connectionId: null,
+        localGitOptions: { wslDistro: 'Ubuntu' },
+        hostnameArgs: [],
+        execOptions: { cwd: '/repo', wslDistro: 'Ubuntu' }
+      }
+    ])('routes semantic readiness through the $owner', async (route) => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: { mergeRequestSetDraft: { mergeRequest: { iid: '12' }, errors: [] } }
+        })
+      })
+
+      await expect(
+        updateMR(
+          '/repo',
+          12,
+          { readyForReview: true },
+          'upstream',
+          route.connectionId,
+          undefined,
+          route.localGitOptions
+        )
+      ).resolves.toEqual({ ok: true })
+
+      expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+        '/repo',
+        'upstream',
+        ['gitlab.com'],
+        route.connectionId,
+        route.localGitOptions
+      )
+      expect(glabExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(
+        [
+          'api',
+          ...route.hostnameArgs,
+          'graphql',
+          '-i',
+          '-f',
+          'query=mutation { mergeRequestSetDraft(input: { projectPath: "g/p", iid: "12", draft: false }) { mergeRequest { iid } errors } }'
+        ],
+        route.execOptions
+      )
+    })
+
     it('updates title, body, and labels through the selected SSH GitLab host', async () => {
       glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '{}' })
 
@@ -226,58 +285,6 @@ describe('gitlab client — MR operations', () => {
         ],
         {}
       )
-    })
-
-    it('fetches the current title before marking a merge request ready', async () => {
-      glabExecFileAsyncMock
-        .mockResolvedValueOnce({ stdout: JSON.stringify({ title: 'Draft: Fresh title' }) })
-        .mockResolvedValueOnce({ stdout: '{}' })
-
-      await expect(
-        updateMR('/repo', 12, { readyForReview: true }, 'upstream', 'conn-1')
-      ).resolves.toEqual({ ok: true })
-
-      expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(
-        1,
-        ['api', '--hostname', 'git.internal', 'projects/g%2Fp/merge_requests/12'],
-        {}
-      )
-      expect(glabExecFileAsyncMock).toHaveBeenNthCalledWith(
-        2,
-        [
-          'api',
-          '--hostname',
-          'git.internal',
-          '-X',
-          'PUT',
-          'projects/g%2Fp/merge_requests/12',
-          '-f',
-          'title=Fresh title'
-        ],
-        {}
-      )
-    })
-
-    it('treats a freshly markerless title as already ready', async () => {
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify({ title: 'Fresh title' })
-      })
-
-      await expect(
-        updateMR('/repo', 12, { readyForReview: true }, 'upstream', 'conn-1')
-      ).resolves.toEqual({ ok: true })
-
-      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    })
-
-    it('rejects a draft marker that would leave an empty title', async () => {
-      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify({ title: 'Draft:' }) })
-
-      await expect(
-        updateMR('/repo', 12, { readyForReview: true }, 'upstream', 'conn-1')
-      ).resolves.toMatchObject({ ok: false, error: 'Title is required' })
-
-      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -533,4 +540,65 @@ describe('gitlab client — MR operations', () => {
       )
     })
   })
+})
+
+describe('gitlab client — review lookups after a merge request write', () => {
+  const projectRef = { host: 'gitlab.example.internal', path: 'g/p' }
+  const identity = { repoPath: '/repo', executionHostId: 'local' as const, branch: 'feature' }
+  const open: HostedReviewInfo = {
+    provider: 'gitlab',
+    number: 6,
+    title: 'MR',
+    state: 'open',
+    url: 'https://gitlab.example.internal/g/p/-/merge_requests/6',
+    status: 'neutral',
+    updatedAt: '',
+    mergeable: 'UNKNOWN'
+  }
+  const writes = {
+    merge: () => mergeMR('/repo', 6, 'squash', undefined, null, projectRef),
+    close: () => closeMR('/repo', 6, undefined, null, projectRef),
+    reopen: () => reopenMR('/repo', 6, undefined, null, projectRef),
+    title: () => updateMR('/repo', 6, { title: 'Renamed' }, undefined, null, projectRef)
+  }
+
+  beforeEach(() => {
+    resetGitLabMrMocks({
+      glabExecFileAsyncMock,
+      glabApiWithHeadersMock,
+      getGlabKnownHostsMock,
+      getProjectRefMock,
+      resolveIssueSourceMock,
+      acquireMock,
+      releaseMock,
+      gitExecFileAsyncMock
+    })
+    __resetHostedReviewBranchCacheForTests()
+    glabExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+  })
+
+  // Issue #14377: "I press Squash and merge" in Orca, and the card stayed Open while a poll was in flight.
+  it.each(Object.entries(writes))(
+    '%s: the follow-up read starts after the write instead of joining an older poll',
+    async (_name, write) => {
+      const prePoll = Promise.withResolvers<HostedReviewInfo | null>()
+      const poll = withHostedReviewBranchCache(
+        identity,
+        { headOid: null, force: true },
+        () => prePoll.promise
+      )
+      await expect(write()).resolves.toEqual({ ok: true })
+      const changed = { ...open, state: 'merged' as const }
+      const afterWrite = vi.fn(async () => changed)
+      const followUp = withHostedReviewBranchCache(
+        identity,
+        { headOid: null, force: true },
+        afterWrite
+      )
+      prePoll.resolve(open)
+      await poll
+      await expect(followUp).resolves.toEqual(changed)
+      expect(afterWrite).toHaveBeenCalledTimes(1)
+    }
+  )
 })

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import {
   pluginCommandIdSchema,
   pluginIdSchema,
@@ -55,11 +56,7 @@ export const pluginLanguagePackContributionSchema = z
         'locales/pt-BR.json'
       ])
     ),
-    displayName: z
-      .string()
-      .trim()
-      .min(1)
-      .max(80)
+    displayName: safePluginDisplayText(z.string().trim().min(1).max(80))
       .optional()
       .meta(
         pluginFieldDoc(
@@ -132,11 +129,9 @@ export const pluginThemeContributionSchema = z
         ['dusk']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(128)
-      .meta(pluginFieldDoc('Name shown in the theme picker.', PLUGIN_MANIFEST_V2_SINCE, ['Dusk'])),
+    title: safePluginDisplayText(z.string().min(1).max(128)).meta(
+      pluginFieldDoc('Name shown in the theme picker.', PLUGIN_MANIFEST_V2_SINCE, ['Dusk'])
+    ),
     path: pluginRelativePathSchema.meta(
       pluginPathFieldDoc('JSON theme file, at most 16 KiB.', PLUGIN_MANIFEST_V2_SINCE, [
         'themes/dusk.json'
@@ -161,13 +156,9 @@ export const pluginSyntaxContributionSchema = z
         ['gleam']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(128)
-      .meta(
-        pluginFieldDoc('Language name shown in the editor.', PLUGIN_MANIFEST_V2_SINCE, ['Gleam'])
-      ),
+    title: safePluginDisplayText(z.string().min(1).max(128)).meta(
+      pluginFieldDoc('Language name shown in the editor.', PLUGIN_MANIFEST_V2_SINCE, ['Gleam'])
+    ),
     scopeName: pluginGrammarScopeSchema.meta(
       pluginFieldDoc(
         "The grammar's root TextMate scope, unique among this plugin's syntaxes.",

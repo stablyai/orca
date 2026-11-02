@@ -30,34 +30,6 @@ function sitesOf(...children: ProfileNode[]): string[] {
 }
 
 describe('summarizeSamplingProfile', () => {
-  it('names frames from the window bundle by function, file name and line', () => {
-    const summary = summarizeSamplingProfile(
-      {
-        head: {
-          callFrame: frame('(root)', '', '0'),
-          selfSize: 0,
-          children: [
-            {
-              callFrame: frame('appendChunk', `${BUNDLE}terminal-Ab12.js`),
-              selfSize: 0,
-              children: [leaf(frame('sliceOutput', `${BUNDLE}terminal-Ab12.js`, '7', 20), 3072)]
-            },
-            leaf(frame('join', '', '0'), 1024)
-          ]
-        }
-      },
-      BUNDLE
-    )
-
-    expect(summary).toEqual({
-      sampledLiveMB: 4,
-      siteCount: 2,
-      site01: '3072KB sliceOutput@terminal-Ab12.js:21:5 < appendChunk@terminal-Ab12.js:10:5',
-      site02: '1024KB join'
-    })
-    expect(JSON.stringify(summary)).not.toContain('someone')
-  })
-
   it('reduces every frame outside the bundle to a fixed label, name included', () => {
     expect(
       sitesOf(
@@ -105,16 +77,5 @@ describe('site length', () => {
 
     expect(site.length).toBeLessThanOrEqual(240)
     expect(site.endsWith('.js:10:5')).toBe(true)
-  })
-})
-
-describe('trustedScriptPrefixFor', () => {
-  it('is the assets folder next to the page', () => {
-    expect(trustedScriptPrefixFor(`${PAGE}?x=1#hash`)).toBe(
-      'file:///Users/someone/Orca.app/Contents/Resources/app.asar/out/renderer/assets/'
-    )
-    expect(trustedScriptPrefixFor('http://localhost:5173/')).toBe('http://localhost:5173/assets/')
-    expect(trustedScriptPrefixFor('about:blank')).toBeNull()
-    expect(trustedScriptPrefixFor('')).toBeNull()
   })
 })

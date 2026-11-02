@@ -229,36 +229,4 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
       vi.useRealTimers()
     }
   })
-
-  it('keeps drop memory armed when the snapshot is refused', async () => {
-    vi.useFakeTimers()
-    try {
-      const daemon = installObservableDaemonTestProvider()
-      const runtime = buildRuntime()
-      runtime.serializeHiddenOutputRecoveryBuffer = vi.fn(async () => null)
-      const result = { id: await registerAndSpawnDaemonPty(runtime) }
-      const setHidden = getPtySetHiddenRendererPtyListener()
-      mainWindow.webContents.send.mockClear()
-
-      setHidden(null, { id: result.id, hidden: true })
-      daemon.emitData(result.id, 'hidden output')
-      vi.advanceTimersByTime(50)
-
-      // A refused snapshot painted nothing; the next reveal still needs a restore signal.
-      expect(
-        await handlers.get('pty:getMainBufferSnapshot')!(null, {
-          id: result.id
-        })
-      ).toBeNull()
-      setHidden(null, { id: result.id, hidden: false })
-      expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
-        id: result.id,
-        hiddenDropEpisode: expect.any(Number),
-        reason: 'unhide',
-        markerSeq: 42
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 })

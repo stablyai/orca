@@ -131,6 +131,23 @@ describe('useDocumentAppearance', () => {
     usePluginThemeStore.setState({ entries: [], loaded: false })
   })
 
+  it('paints the mode of the terminal theme that Match Terminal follows', () => {
+    act(() => {
+      const settings = useAppStore.getState().settings!
+      useAppStore.setState({
+        settings: {
+          ...settings,
+          theme: 'dark',
+          terminalThemeDark: 'Solarized Light',
+          pluginAppThemeDark: 'match-terminal'
+        }
+      })
+    })
+    const { unmount } = renderHook(() => useDocumentAppearance())
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('light')
+    unmount()
+  })
+
   it('swaps between the light and dark slots live when the OS appearance flips', () => {
     const listeners = new Set<(event: { matches: boolean }) => void>()
     let systemDark = false
@@ -165,7 +182,7 @@ describe('useDocumentAppearance', () => {
         listener({ matches: true })
       }
     })
-    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('system')
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('dark')
     expect(mocks.applyPluginAppTheme).toHaveBeenLastCalledWith(dusk)
     unmount()
     vi.unstubAllGlobals()

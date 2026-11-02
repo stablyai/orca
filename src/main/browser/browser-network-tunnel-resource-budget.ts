@@ -1,8 +1,8 @@
 import { performance } from 'node:perf_hooks'
 import type { BrowserNetworkTunnelSessionOptions } from './browser-network-tunnel-stream-state'
 
-const MAX_PENDING_OPENS = 16
-const MAX_OPENS_PER_WINDOW = 128
+// Rapid browsing across four heavy pages measured 302 opens in 10 s.
+const MAX_OPENS_PER_WINDOW = 1024
 const OPEN_RATE_WINDOW_MS = 10_000
 const MAX_RETAINED_BYTES = 8 * 1024 * 1024
 
@@ -14,7 +14,6 @@ export function createBrowserNetworkTunnelResourceBudget(
 
 export class BrowserNetworkTunnelResourceBudget {
   private readonly recentOpenAttempts: number[] = []
-  private pendingOpenCount = 0
   private retainedBytes = 0
   private lastOpenAttemptAt = Number.NEGATIVE_INFINITY
   private readonly aggregateClaims: ({ remaining: number; release: () => void } | undefined)[] = []
@@ -41,24 +40,6 @@ export class BrowserNetworkTunnelResourceBudget {
     }
     this.recentOpenAttempts.push(admittedAt)
     return true
-  }
-
-  claimPendingOpen(): (() => void) | null {
-    if (this.pendingOpenCount >= MAX_PENDING_OPENS) {
-      return null
-    }
-    this.pendingOpenCount += 1
-    let pending = true
-    return () => {
-      if (!pending) {
-        return
-      }
-      if (this.pendingOpenCount <= 0) {
-        throw new Error('Browser tunnel pending-open accounting underflow')
-      }
-      pending = false
-      this.pendingOpenCount -= 1
-    }
   }
 
   reserveRetainedBytes(bytes: number): boolean {

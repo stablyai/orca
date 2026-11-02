@@ -20,6 +20,15 @@ import {
 import { getPRByNumber } from './pr-number-lookup'
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+
+// Why: GitHub lists a branch's PRs newest first, so with a page of one a closed PR opened after
+// the live one wins. Fetch a page and prefer the open PR; fall back to the newest one.
+const BRANCH_PR_LOOKUP_PAGE_SIZE = 10
+
+function preferOpenPullRequest<T extends { state: string }>(list: T[]): T | undefined {
+  return list.find((pr) => pr.state.toLowerCase() === 'open') ?? list[0]
+}
+
 export async function getRestPRForBranch(
   prRepo: GitHubApiRepository,
   headOwner: string,
@@ -29,11 +38,11 @@ export async function getRestPRForBranch(
   const head = encodeURIComponent(`${headOwner}:${branchName}`)
   const stdout = await revalidateGitHubRestJson(
     prRepo,
-    `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=1`,
+    `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=${BRANCH_PR_LOOKUP_PAGE_SIZE}`,
     ghOptions
   )
   const list = JSON.parse(stdout) as RestPullRequest[]
-  const pr = list[0]
+  const pr = preferOpenPullRequest(list)
   return pr ? mapRestPullRequest(pr) : null
 }
 
@@ -54,14 +63,14 @@ export async function getFallbackPRListForBranch(
       '--state',
       'all',
       '--limit',
-      '1',
+      String(BRANCH_PR_LOOKUP_PAGE_SIZE),
       '--json',
       PR_BRANCH_LIST_JSON_FIELDS
     ],
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
   const list = JSON.parse(stdout) as PullRequestLookupData[]
-  return list[0] ?? null
+  return preferOpenPullRequest(list) ?? null
 }
 
 export async function hydrateBranchLookupWithExactPR(
@@ -124,8 +133,8 @@ export async function lookupPRByBranchName(args: {
         )
         if (
           data &&
-          pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
-          (!args.policy || (await args.policy.accepts(data, candidate)))
+          (!args.policy || (await args.policy.accepts(data, candidate))) &&
+          pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
         ) {
           return { data, dataRepo: candidate }
         }
@@ -152,8 +161,8 @@ export async function lookupPRByBranchName(args: {
           )
           if (
             data &&
-            pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
-            (!args.policy || (await args.policy.accepts(data, candidate)))
+            (!args.policy || (await args.policy.accepts(data, candidate))) &&
+            pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
           ) {
             return { data, dataRepo: candidate }
           }

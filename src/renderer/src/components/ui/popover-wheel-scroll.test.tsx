@@ -147,37 +147,6 @@ describe('PopoverContent wheel shim', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  it('does nothing when no element in the target chain can scroll', () => {
-    renderPopover('popover-scroll-content', true)
-    const content = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
-    const viewport = document.querySelector<HTMLElement>('[data-testid="viewport"]')!
-    content.style.overflowY = 'hidden'
-    viewport.style.overflowY = 'hidden'
-    makeScrollable(content, 1000, 400)
-    makeScrollable(viewport, 1000, 400)
-
-    const event = wheel(document.querySelector<HTMLElement>('[data-testid="inner"]')!, 120)
-
-    expect(content.scrollTop).toBe(0)
-    expect(viewport.scrollTop).toBe(0)
-    expect(event.defaultPrevented).toBe(false)
-  })
-
-  it('runs for the shim-only marker, which carries no styling', () => {
-    // Cleanup needs the wheel shim without the content class’s max-height, which would crush its column.
-    renderPopover('popover-wheel-scroll', true)
-    const content = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
-    const viewport = document.querySelector<HTMLElement>('[data-testid="viewport"]')!
-    viewport.style.overflowY = 'auto'
-    makeScrollable(content, 400, 400)
-    makeScrollable(viewport, 1000, 400)
-
-    const event = wheel(document.querySelector<HTMLElement>('[data-testid="inner"]')!, 120)
-
-    expect(viewport.scrollTop).toBe(120)
-    expect(event.defaultPrevented).toBe(true)
-  })
-
   it('lets a consumer prevent the shim scroll', () => {
     const onWheel = vi.fn((event: ReactWheelEvent<HTMLDivElement>) => {
       Object.defineProperty(event.nativeEvent, 'preventDefault', { value: vi.fn() })

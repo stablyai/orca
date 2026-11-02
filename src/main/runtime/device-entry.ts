@@ -86,6 +86,35 @@ export function isStillAuthenticated(
   )
 }
 
+/** A delegated child authenticates only while its parent desktop is still paired. */
+function withPairedParent(
+  device: DeviceEntry,
+  devices: readonly DeviceEntry[]
+): DeviceEntry | null {
+  const { parentDeviceId } = device
+  return parentDeviceId === undefined || devices.some((d) => d.deviceId === parentDeviceId)
+    ? device
+    : null
+}
+
+export function findTokenDevice(
+  devices: readonly DeviceEntry[],
+  token: string
+): DeviceEntry | null {
+  const device = token && devices.find((d) => d.credentialKind === undefined && d.token === token)
+  return device ? withPairedParent(device, devices) : null
+}
+
+export function findPrincipalDevice(
+  devices: readonly DeviceEntry[],
+  principal: AuthenticatedPrincipalBinding
+): DeviceEntry | null {
+  const device = devices.find((d) => d.deviceId === principal.deviceId)
+  return device && isStillAuthenticated(device, principal)
+    ? withPairedParent(device, devices)
+    : null
+}
+
 export function mobilePairingConnectionModeOf(
   device: DeviceEntry | null
 ): MobilePairingConnectionMode | null {

@@ -92,6 +92,7 @@ export function scheduleRichMarkdownBlobImageImport({
         if (!destination) {
           return
         }
+        destination.assertCurrent?.()
         // Why: the temp file is local, as for OS clipboard images; the import uploads it to SSH/runtime owners.
         const tempPath = await callRuntimeRpc<string>(
           { kind: 'local' },
@@ -99,12 +100,17 @@ export function scheduleRichMarkdownBlobImageImport({
           { contentBase64 },
           { signal: controller.signal }
         )
+        destination.assertCurrent?.()
         const { results } = await importExternalPathsToRuntime(
           destination.context,
           [tempPath],
           destination.destinationDir,
-          { access: destination.access }
+          {
+            access: destination.access,
+            ...(destination.assertCurrent ? { assertCurrent: destination.assertCurrent } : {})
+          }
         )
+        destination.assertCurrent?.()
         const imported = results.find((result) => result.status === 'imported')
         if (!imported) {
           throw new Error(`Failed to import ${src}`)

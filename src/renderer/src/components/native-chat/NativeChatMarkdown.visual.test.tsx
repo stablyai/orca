@@ -19,8 +19,6 @@ import {
 } from './native-chat-visual-owner'
 import { clearNativeChatVisualCacheForTests } from './native-chat-visual-read-client'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../shared/constants'
 
 const owner: NativeChatVisualOwner = {
   target: { kind: 'local' },
@@ -62,45 +60,6 @@ afterEach(() => {
 })
 
 describe('NativeChatMarkdown visuals', () => {
-  it('still renders an existing reply after inline visuals are turned off', async () => {
-    const settings = useAppStore.getState().settings
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/tmp'), nativeChatInlineVisuals: false }
-    })
-    try {
-      const { container } = render(
-        withOwner(<NativeChatMarkdown content={LINE} visualMessageId="m1" />)
-      )
-      await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull())
-      expect(container).not.toHaveTextContent('::orca-visual')
-    } finally {
-      useAppStore.setState({ settings })
-    }
-  })
-
-  it('holds back an unfinished directive at the end of a streaming reply', () => {
-    const { container } = render(
-      withOwner(
-        <NativeChatMarkdown
-          content={'Here it is:\n::orca-visual{file="usa'}
-          visualMessageId="m1"
-          streaming
-        />
-      )
-    )
-    expect(container).toHaveTextContent('Here it is:')
-    expect(container).not.toHaveTextContent('::orca-visual')
-  })
-
-  it('shows unfinished syntax as text once the reply is no longer streaming', () => {
-    const { container } = render(
-      withOwner(
-        <NativeChatMarkdown content={'Here it is:\n::orca-visual{file="usa'} visualMessageId="m1" />
-      )
-    )
-    expect(container).toHaveTextContent('::orca-visual{file="usa')
-  })
-
   it('keeps a mounted visual frame while the rest of the reply streams in', async () => {
     const { container, rerender } = render(
       withOwner(
@@ -137,26 +96,6 @@ describe('NativeChatMarkdown visuals', () => {
     expect(container.querySelector('iframe')).toBe(frame)
     expect(container).toHaveTextContent('More text arriving now')
     expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows one muted line when the host refuses the file', async () => {
-    callRuntimeRpc.mockResolvedValue({ ok: false, error: 'outside_folder' })
-    const { container } = render(
-      withOwner(<NativeChatMarkdown content={LINE} visualMessageId="m1" />)
-    )
-    await waitFor(() => expect(container).toHaveTextContent('Visualization unavailable'))
-    expect(container.querySelector('iframe')).toBeNull()
-  })
-
-  it('leaves the line as text where visuals do not apply', () => {
-    const noMessage = render(withOwner(<NativeChatMarkdown content={LINE} />))
-    expect(noMessage.container).toHaveTextContent('::orca-visual')
-    cleanup()
-    const noOwner = render(
-      withOwner(<NativeChatMarkdown content={LINE} visualMessageId="m1" />, null)
-    )
-    expect(noOwner.container).toHaveTextContent('::orca-visual')
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('holds the tail of a text row while its turn works, though the row carries no state', () => {

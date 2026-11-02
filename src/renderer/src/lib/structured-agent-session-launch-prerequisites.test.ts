@@ -18,13 +18,14 @@ import {
   holdStructuredAgentSessionLaunchOption,
   structuredLaunchSelectionController,
   flushStructuredSessionSelectionOptions
-} from './structured-agent-session-launch-options'
+} from './agent-session/launch/structured-agent-session-launch-options'
 import {
   structuredSessionSelectionController,
   forgetStructuredSessionSelection
 } from './structured-agent-session-selection-controller'
 import {
   getStructuredLaunchStateBySessionId,
+  getStructuredAgentSessionLaunchLifecycle,
   resetStructuredAgentLaunchRegistryForTests
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import {
@@ -34,11 +35,8 @@ import {
 import { getStructuredAgentSessionSendNotice } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { recoverPublishedSessionReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
-import { publishStructuredLaunchCreateOptions } from './structured-agent-session-launch-create-message'
-import {
-  retryStructuredAgentSessionLaunch,
-  getStructuredAgentSessionLaunchLifecycle
-} from './structured-agent-session-launch'
+import { publishStructuredLaunchCreateOptions } from './agent-session/launch/structured-agent-session-launch-create-message'
+import { retryStructuredAgentSessionLaunch } from './agent-session/launch/structured-agent-session-launch'
 
 let restoreCatalogStore: (() => void) | undefined
 describe('legacy opening action prerequisites through real launch orchestration', () => {

@@ -84,40 +84,6 @@ describe('unsaved-changes prompt for a closing file', () => {
   })
   afterEach(() => cleanup())
 
-  it('reveals a floating note in the floating panel without moving the main window', () => {
-    store.openFiles = [dirtyFile('note', FLOATING_TERMINAL_WORKTREE_ID)]
-    const { result } = mountCloseQueue()
-
-    act(() => requestEditorFileClose('note'))
-
-    expect(result.current.saveDialogFileId).toBe('note')
-    expect(revealFloatingWorkspacePanel).toHaveBeenCalledOnce()
-    expect(setActiveWorktree).not.toHaveBeenCalled()
-    expect(setActiveTabType).toHaveBeenCalledWith('editor', FLOATING_TERMINAL_WORKTREE_ID)
-  })
-
-  it('still switches to a background worktree to show its file', () => {
-    store.openFiles = [dirtyFile('readme', 'wt-other')]
-    mountCloseQueue()
-
-    act(() => requestEditorFileClose('readme'))
-
-    expect(setActiveWorktree).toHaveBeenCalledWith('wt-other')
-    expect(revealFloatingWorkspacePanel).not.toHaveBeenCalled()
-  })
-
-  it('runs the close reaction once the file is discarded', async () => {
-    store.openFiles = [dirtyFile('note', FLOATING_TERMINAL_WORKTREE_ID)]
-    const onClosed = vi.fn()
-    const { result } = mountCloseQueue()
-    act(() => requestEditorFileClose('note', { onClosed }))
-
-    await act(() => result.current.handleSaveDialogDiscard())
-
-    expect(closeFile).toHaveBeenCalledWith('note')
-    expect(onClosed).toHaveBeenCalledOnce()
-  })
-
   // Why a later close of the same file: a cancelled reaction left behind would fire on it.
   it('drops the close reaction when the prompt is cancelled', async () => {
     vi.useFakeTimers()

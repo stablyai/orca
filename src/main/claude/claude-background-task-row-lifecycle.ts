@@ -2,7 +2,7 @@ import {
   canReplaceBackgroundTaskState,
   isSettledBackgroundTaskState
 } from '../../shared/native-chat/input/native-chat-background-task-row'
-import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat-types'
+import type { NativeChatBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import {
   classifyClaudeBackgroundTaskKind,

@@ -116,6 +116,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      resolvedWorkspace: workspace,
       preAllocatedHandle,
       tabId: source.tabId,
       leafId,
@@ -135,6 +136,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       throw new Error('terminal_exited')
     }
     recordPtySurface(
+      this.terminalIdentity,
       createdPty,
       source.tabId,
       makePaneKey(source.tabId, leafId),

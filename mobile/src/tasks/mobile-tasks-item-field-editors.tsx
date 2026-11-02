@@ -7,13 +7,15 @@ import {
 import {
   View,
   Text,
-  TextInput,
+  TextField,
   colors,
   Pressable,
   ActivityIndicator,
   Check
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { SectionHeader } from '../components/list/ListGroup'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationModel) {
   const {
@@ -51,19 +53,15 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         (actionItem.source.type === 'issue' || actionItem.source.type === 'mr') &&
         detailPayload.provider === 'gitlab')) ? (
     <>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>
-          {translate('tasks.itemFieldEditors.title', 'Title')}
-        </Text>
-        <TextInput
-          style={styles.input}
+      <SectionHeader title={translate('tasks.itemFieldEditors.title', 'Title')} />
+      <View style={styles.itemSectionBody}>
+        <TextField
           value={itemTitleDraft}
           onChangeText={setItemTitleDraft}
           placeholder={translate('tasks.itemFieldEditors.title', 'Title')}
-          placeholderTextColor={colors.textMuted}
         />
         <Pressable
-          style={styles.inlineSaveButton}
+          style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
           disabled={
             mutatingStatus ||
             itemTitleDraft.trim().length === 0 ||
@@ -95,15 +93,13 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         </Pressable>
       </View>
 
-      <View style={styles.detailSection}>
-        <View style={styles.detailSectionHeader}>
-          <Text style={styles.detailSectionTitle}>
-            {translate('tasks.itemFieldEditors.labels', 'Labels')}
-          </Text>
-          <Text style={styles.detailSectionMeta}>
-            {detailPayload.labels.length || translate('tasks.itemFieldEditors.none', 'None')}
-          </Text>
-        </View>
+      <SectionHeader
+        title={translate('tasks.itemFieldEditors.labels', 'Labels')}
+        trailing={String(
+          detailPayload.labels.length || translate('tasks.itemFieldEditors.none', 'None')
+        )}
+      />
+      <View style={styles.itemSectionBody}>
         {actionItem.provider === 'github' ? (
           itemLabelsLoading ? (
             <View style={styles.detailLoadingInline}>
@@ -125,7 +121,11 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                 return (
                   <Pressable
                     key={label}
-                    style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                    style={({ pressed }) => [
+                      styles.detailChip,
+                      selected ? styles.detailChipSelected : undefined,
+                      pressed && pressedStyle
+                    ]}
                     disabled={mutatingStatus}
                     onPress={() =>
                       void updateGitHubIssueMetadata(
@@ -145,30 +145,27 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           )
         ) : (
           <>
-            <TextInput
-              style={styles.input}
+            <TextField
               value={itemAddLabelsDraft}
               onChangeText={setItemAddLabelsDraft}
               placeholder={translate(
                 'tasks.itemFieldEditors.addLabels',
                 'Add labels, comma separated'
               )}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
-            <TextInput
-              style={[styles.input, styles.stackedInput]}
+            <TextField
+              style={styles.stackedInput}
               value={itemRemoveLabelsDraft}
               onChangeText={setItemRemoveLabelsDraft}
               placeholder={translate(
                 'tasks.itemFieldEditors.removeLabels',
                 'Remove labels, comma separated'
               )}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
             <Pressable
-              style={styles.inlineSaveButton}
+              style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
               disabled={
                 mutatingStatus ||
                 (splitCommaList(itemAddLabelsDraft).length === 0 &&
@@ -189,15 +186,13 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         )}
       </View>
 
-      <View style={styles.detailSection}>
-        <View style={styles.detailSectionHeader}>
-          <Text style={styles.detailSectionTitle}>
-            {translate('tasks.itemFieldEditors.assignees', 'Assignees')}
-          </Text>
-          <Text style={styles.detailSectionMeta}>
-            {detailPayload.assignees.length || translate('tasks.itemFieldEditors.none', 'None')}
-          </Text>
-        </View>
+      <SectionHeader
+        title={translate('tasks.itemFieldEditors.assignees', 'Assignees')}
+        trailing={String(
+          detailPayload.assignees.length || translate('tasks.itemFieldEditors.none', 'None')
+        )}
+      />
+      <View style={styles.itemSectionBody}>
         {actionItem.provider === 'github' ? (
           itemAssignableUsersLoading ? (
             <View style={styles.detailLoadingInline}>
@@ -233,7 +228,11 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                 return (
                   <Pressable
                     key={user.login}
-                    style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                    style={({ pressed }) => [
+                      styles.detailChip,
+                      selected ? styles.detailChipSelected : undefined,
+                      pressed && pressedStyle
+                    ]}
                     disabled={mutatingStatus}
                     onPress={() =>
                       void updateGitHubIssueMetadata(
@@ -255,30 +254,27 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           )
         ) : actionItem.source.type === 'issue' ? (
           <>
-            <TextInput
-              style={styles.input}
+            <TextField
               value={itemAddAssigneesDraft}
               onChangeText={setItemAddAssigneesDraft}
               placeholder={translate(
                 'tasks.itemFieldEditors.addUsernames',
                 'Add usernames, comma separated'
               )}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
-            <TextInput
-              style={[styles.input, styles.stackedInput]}
+            <TextField
+              style={styles.stackedInput}
               value={itemRemoveAssigneesDraft}
               onChangeText={setItemRemoveAssigneesDraft}
               placeholder={translate(
                 'tasks.itemFieldEditors.removeUsernames',
                 'Remove usernames, comma separated'
               )}
-              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
             <Pressable
-              style={styles.inlineSaveButton}
+              style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
               disabled={
                 mutatingStatus ||
                 (splitCommaList(itemAddAssigneesDraft).length === 0 &&
