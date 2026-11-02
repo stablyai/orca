@@ -22,7 +22,8 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     setTasksRefreshing,
     setTaskRefreshNonce,
     setPages,
-    selectedWorkItemsCacheEntries
+    selectedWorkItemsCacheEntries,
+    sourceDisplayWorkItemsCacheEntries
   } = model
   const patchTaskPageWorkItemRows = useCallback(
     (
@@ -58,6 +59,11 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
   const perRepoSourceState = useMemo<TaskPageRepoSourceState[]>(
     () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
     [selectedRepos, selectedWorkItemsCacheEntries]
+  )
+  // Source displays (summary, repo link, Filters source row) only; notices, Retry and filters stay on current state.
+  const githubSourceDisplayState = useMemo<TaskPageRepoSourceState[]>(
+    () => buildTaskPageRepoSourceState(selectedRepos, sourceDisplayWorkItemsCacheEntries),
+    [selectedRepos, sourceDisplayWorkItemsCacheEntries]
   )
 
   // Unresolved sources otherwise look like genuine zero results; name them and offer Retry.
@@ -133,6 +139,7 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     patchTaskPageWorkItemRows: typeof patchTaskPageWorkItemRows
     handleDialogReviewRequestsChange: typeof handleDialogReviewRequestsChange
     perRepoSourceState: typeof perRepoSourceState
+    githubSourceDisplayState: typeof githubSourceDisplayState
     unresolvedSourceRepos: typeof unresolvedSourceRepos
     fellBackToastedRef: typeof fellBackToastedRef
     retryingSourceKeys: typeof retryingSourceKeys
@@ -143,6 +150,7 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
   nextModel.patchTaskPageWorkItemRows = patchTaskPageWorkItemRows
   nextModel.handleDialogReviewRequestsChange = handleDialogReviewRequestsChange
   nextModel.perRepoSourceState = perRepoSourceState
+  nextModel.githubSourceDisplayState = githubSourceDisplayState
   nextModel.unresolvedSourceRepos = unresolvedSourceRepos
   nextModel.fellBackToastedRef = fellBackToastedRef
   nextModel.retryingSourceKeys = retryingSourceKeys

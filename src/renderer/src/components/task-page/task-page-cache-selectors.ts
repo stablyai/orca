@@ -6,6 +6,7 @@ import type {
   WorkItemsCacheSources
 } from '@/store/github/cache-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items-query-bounds'
 import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,
@@ -70,6 +71,45 @@ export function selectTaskPageWorkItemsCacheEntries(
   return repos.map(
     (repo) => workItemsCache[workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo))]
   )
+}
+
+/**
+ * Display-only source read: entries are keyed by query but sources are repo-level, so until a new query's
+ * entry lands, describe the source with the latest same-scope sibling. A present entry is authoritative,
+ * and a query the fetch rejects as too large claims no source. Never feeds rows, errors or Retry.
+ */
+export function createTaskPageSourceDisplayEntriesSelector(
+  repos: readonly TaskPageRepoCacheInput[],
+  limit: number,
+  query: string
+): (workItemsCache: WorkItemsCache) => (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] {
+  const queryFetchable = !isGitHubWorkItemsQueryTooLarge(query)
+  // Why memoize by cache ref: the sibling scan reruns per cache write, not per unrelated store update.
+  let lastCache: WorkItemsCache | undefined
+  let lastEntries: (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] = []
+  const select = (workItemsCache: WorkItemsCache) =>
+    repos.map((repo) => {
+      const scope = taskPageRepoCacheScope(repo)
+      const current = workItemsCache[workItemsCacheKey(repo.id, limit, query, scope)]
+      if (current || !queryFetchable) {
+        return current
+      }
+      const siblingPrefix = workItemsCacheKey(repo.id, limit, '', scope)
+      let latest: CacheEntry<readonly GitHubWorkItem[]> | undefined
+      for (const [key, entry] of Object.entries(workItemsCache)) {
+        if (key.startsWith(siblingPrefix) && (!latest || entry.fetchedAt > latest.fetchedAt)) {
+          latest = entry
+        }
+      }
+      return latest
+    })
+  return (workItemsCache) => {
+    if (workItemsCache !== lastCache) {
+      lastCache = workItemsCache
+      lastEntries = select(workItemsCache)
+    }
+    return lastEntries
+  }
 }
 
 export function buildTaskPageRepoSourceState(

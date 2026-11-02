@@ -7,6 +7,7 @@ import { stripRepoQualifiers } from '../../../../../shared/task-query'
 import { useShallow } from 'zustand/react/shallow'
 import {
   selectTaskPageWorkItemsCacheEntries,
+  createTaskPageSourceDisplayEntriesSelector,
   findTaskPageDialogWorkItem
 } from '@/components/task-page/task-page-cache-selectors'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -93,6 +94,18 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
         appliedWorkItemsCacheQuery
       )
     )
+  )
+  const selectSourceDisplayEntries = useMemo(
+    () =>
+      createTaskPageSourceDisplayEntriesSelector(
+        selectedRepos.map(getTaskPageRepoCacheInput),
+        githubPerRepoPageLimit,
+        appliedWorkItemsCacheQuery
+      ),
+    [appliedWorkItemsCacheQuery, githubPerRepoPageLimit, selectedRepos]
+  )
+  const sourceDisplayWorkItemsCacheEntries = useAppStore(
+    useShallow((s) => selectSourceDisplayEntries(s.workItemsCache))
   )
 
   // Keep cache patches in the clicked conversation when origin and upstream share an issue number.
@@ -256,6 +269,7 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
     dialogWorkItemKey: typeof dialogWorkItemKey
     appliedWorkItemsCacheQuery: typeof appliedWorkItemsCacheQuery
     selectedWorkItemsCacheEntries: typeof selectedWorkItemsCacheEntries
+    sourceDisplayWorkItemsCacheEntries: typeof sourceDisplayWorkItemsCacheEntries
     cachedDialogWorkItem: typeof cachedDialogWorkItem
     dialogWorkItem: typeof dialogWorkItem
     dialogRepoPath: typeof dialogRepoPath
@@ -273,6 +287,7 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
   nextModel.dialogWorkItemKey = dialogWorkItemKey
   nextModel.appliedWorkItemsCacheQuery = appliedWorkItemsCacheQuery
   nextModel.selectedWorkItemsCacheEntries = selectedWorkItemsCacheEntries
+  nextModel.sourceDisplayWorkItemsCacheEntries = sourceDisplayWorkItemsCacheEntries
   nextModel.cachedDialogWorkItem = cachedDialogWorkItem
   nextModel.dialogWorkItem = dialogWorkItem
   nextModel.dialogRepoPath = dialogRepoPath
