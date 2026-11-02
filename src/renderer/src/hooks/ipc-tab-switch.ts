@@ -265,7 +265,7 @@ export function handleSwitchRecentTab(): boolean {
   return true
 }
 
-/** Ctrl+PageUp/PageDown cycle visible terminal tabs only. */
+/** Ctrl+PageUp/PageDown cycle visible terminal and native chat tabs. */
 export function handleSwitchTerminalTab(direction: number): boolean {
   const store = useAppStore.getState()
   const worktreeId = store.activeWorktreeId
@@ -276,6 +276,10 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId)
   const activeGroupTerminalTabs = activeGroupNavTabs.filter((entry) => entry.type === 'terminal')
   const worktreeTerminalTabs = getWorktreeTerminalTabOrder(store, worktreeId)
+  // Why: native chat tabs are agent sessions; skipping them breaks sequential tab order.
+  const activeGroupAgentTabs = activeGroupNavTabs.filter(
+    (entry) => entry.type === 'terminal' || entry.type === 'agent-session'
+  )
   const terminalTabs = shouldUseWorktreeTerminalFallback(
     store,
     worktreeId,
@@ -284,7 +288,7 @@ export function handleSwitchTerminalTab(direction: number): boolean {
     worktreeTerminalTabs
   )
     ? worktreeTerminalTabs
-    : activeGroupTerminalTabs
+    : activeGroupAgentTabs
   if (terminalTabs.length === 0) {
     return false
   }
@@ -305,6 +309,13 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   }
   const currentIndex = idx === -1 && direction > 0 ? -1 : idx === -1 ? 0 : idx
   const next = terminalTabs[(currentIndex + direction + terminalTabs.length) % terminalTabs.length]
+  if (next.type === 'agent-session') {
+    if (next.id === currentId && store.activeTabType === 'agent-session') {
+      return false
+    }
+    activateCyclableTab(store, next)
+    return true
+  }
   // Skip redundant activation writes to avoid unnecessary active-tab subscriber work.
   if (next.id === store.activeTabId && store.activeTabType === 'terminal') {
     return false

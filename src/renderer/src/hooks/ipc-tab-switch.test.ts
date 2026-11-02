@@ -24,7 +24,7 @@ import {
   handleSwitchTerminalTab
 } from './ipc-tab-switch'
 
-type ActiveTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+type ActiveTabType = 'terminal' | 'editor' | 'browser' | 'simulator' | 'agent-session'
 
 type MockGroup = {
   id: string
@@ -89,6 +89,42 @@ function makeStore(activeTabType: ActiveTabType, overrides: Partial<MockStore> =
 describe('handleSwitchTerminalTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('steps through native chat tabs in tab-bar order in both directions', () => {
+    const navOrder = [
+      { type: 'terminal', id: 'term-1', tabId: 'tab-1' },
+      { type: 'agent-session', id: 'chat-1', tabId: 'tab-chat' },
+      { type: 'terminal', id: 'term-2', tabId: 'tab-2' }
+    ]
+    getActiveTabNavOrderMock.mockReturnValue(navOrder)
+
+    const forward = makeStore('terminal', { activeTabId: 'term-1' })
+    getStateMock.mockReturnValue(forward)
+    expect(handleSwitchTerminalTab(1)).toBe(true)
+    expect(forward.activateTab).toHaveBeenCalledWith('tab-chat')
+    expect(forward.setActiveTabType).toHaveBeenCalledWith('agent-session', 'wt-1')
+
+    const backward = makeStore('terminal', { activeTabId: 'term-2' })
+    getStateMock.mockReturnValue(backward)
+    expect(handleSwitchTerminalTab(-1)).toBe(true)
+    expect(backward.activateTab).toHaveBeenCalledWith('tab-chat')
+  })
+
+  it('leaves a native chat tab for the next terminal tab', () => {
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-1' },
+      { type: 'agent-session', id: 'chat-1', tabId: 'tab-chat' },
+      { type: 'terminal', id: 'term-2', tabId: 'tab-2' }
+    ])
+    const store = makeStore('agent-session', {
+      getActiveTab: () => ({ contentType: 'agent-session', entityId: 'chat-1' })
+    })
+    getStateMock.mockReturnValue(store)
+
+    expect(handleSwitchTerminalTab(1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
   })
 
   it('skips non-terminal tabs when switching forward', () => {
