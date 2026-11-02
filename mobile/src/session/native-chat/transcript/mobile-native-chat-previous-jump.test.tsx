@@ -14,6 +14,7 @@ const platform = vi.hoisted(() => ({ OS: 'web' }))
 const scrollerSlot = vi.hoisted(() => ({ current: null as ScrollNode | null }))
 const nativeApi = vi.hoisted(() => ({
   offsets: [] as { offset: number; animated: boolean }[],
+  indexes: [] as { index: number; animated: boolean }[],
   drags: 0
 }))
 
@@ -57,16 +58,12 @@ vi.mock('react-native', async () => {
           scrollToOffset: (params: { offset: number; animated?: boolean }) => {
             const animated = params.animated !== false
             nativeApi.offsets.push({ offset: params.offset, animated })
-            const current = latest.current
-            if (!animated) {
-              const event = scrollEvent(params.offset)
-              current.onScroll?.(event)
-              current.onMomentumScrollEnd?.(event)
-            }
+            // Scroll events arrive on a later turn, the way a fresh native list reports them.
             nativeApi.drags += 1
-            current.onScrollBeginDrag?.()
+            latest.current.onScrollBeginDrag?.()
           },
-          scrollToIndex: () => {
+          scrollToIndex: (params: { index: number; animated?: boolean }) => {
+            nativeApi.indexes.push({ index: params.index, animated: params.animated !== false })
             nativeApi.drags += 1
             latest.current.onScrollBeginDrag?.()
           }
@@ -217,16 +214,20 @@ function Host(props: {
   listRef: (list: MobileNativeChatListHandle | null) => void
   onEndDistance?: (fromEnd: number, byReader: boolean) => void
   beginUserScroll?: () => void
+  endMomentum?: () => void
 }): ReactElement {
   const onEnd = useRef(props.onEndDistance ?? (() => {}))
   onEnd.current = props.onEndDistance ?? (() => {})
   const began = useRef(props.beginUserScroll ?? (() => {}))
   began.current = props.beginUserScroll ?? (() => {})
+  const ended = useRef(props.endMomentum ?? (() => {}))
+  ended.current = props.endMomentum ?? (() => {})
   return h(MobileNativeChatRowList, {
     tail: tailOf(
       props.listRef,
       (fromEnd, byReader) => onEnd.current(fromEnd, byReader),
-      () => began.current()
+      () => began.current(),
+      () => ended.current()
     ),
     rowKeys,
     rows: messages,
@@ -258,6 +259,7 @@ describe('previous-message jump while the list is moving', () => {
 
   beforeEach(() => {
     nativeApi.offsets.length = 0
+    nativeApi.indexes.length = 0
     nativeApi.drags = 0
     queued.frames = new Map()
     let next = 1
@@ -289,7 +291,8 @@ describe('previous-message jump while the list is moving', () => {
 
   function mount(
     onEndDistance?: (fromEnd: number, byReader: boolean) => void,
-    beginUserScroll?: () => void
+    beginUserScroll?: () => void,
+    endMomentum?: () => void
   ): MobileNativeChatListHandle {
     let list: MobileNativeChatListHandle | null = null
     act(() => {
@@ -299,7 +302,8 @@ describe('previous-message jump while the list is moving', () => {
             list = next
           },
           onEndDistance,
-          beginUserScroll
+          beginUserScroll,
+          endMomentum
         })
       )
     })
@@ -356,6 +360,8 @@ describe('previous-message jump while the list is moving', () => {
       hostNode('FlatList').props.onScroll(scrollEvent(1_000))
     })
     act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    expect(nativeApi.offsets).toEqual([{ offset: 1_000, animated: false }])
+    runLatestFrame()
     expect(nativeApi.offsets).toEqual([
       { offset: 1_000, animated: false },
       { offset: 500, animated: true }
@@ -365,6 +371,7 @@ describe('previous-message jump while the list is moving', () => {
       hostNode('FlatList').props.onMomentumScrollEnd(scrollEvent(900))
     })
     act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    runLatestFrame()
     expect(nativeApi.offsets.at(-2)).toEqual({ offset: 900, animated: false })
     expect(nativeApi.offsets.at(-1)).toEqual({ offset: 0, animated: true })
   })
@@ -382,6 +389,7 @@ describe('previous-message jump while the list is moving', () => {
       hostNode('FlatList').props.onScroll(scrollEvent(1_000))
     })
     act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    runLatestFrame()
     const listNode = hostNode('FlatList')
     act(() => {
       listNode?.props.onScroll(scrollEvent(500))
@@ -389,6 +397,7 @@ describe('previous-message jump while the list is moving', () => {
     })
     act(() => listNode?.props.onScroll(scrollEvent(700)))
     act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    runLatestFrame()
     expect(nativeApi.offsets.at(-2)).toEqual({ offset: 700, animated: false })
     expect(nativeApi.offsets.at(-1)).toEqual({ offset: 500, animated: true })
   })
@@ -410,6 +419,103 @@ describe('previous-message jump while the list is moving', () => {
     act(() => hostNode('FlatList').props.onScrollBeginDrag())
     expect(began).toEqual(['drag'])
     act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    runLatestFrame()
     expect(nativeApi.offsets.at(-1)).toEqual({ offset: 500, animated: true })
+  })
+
+  function layoutCells(specs: ({ y: number; height: number } | null)[], viewport = 400): void {
+    const views = hostNodes('View')
+    act(() => {
+      specs.forEach((spec, index) => {
+        if (!spec) {
+          return
+        }
+        views[index]?.props.onLayout?.({
+          nativeEvent: { layout: { x: 0, y: spec.y, width: 400, height: spec.height } }
+        })
+      })
+      hostNode('FlatList').props.onLayout({
+        nativeEvent: { layout: { x: 0, y: 0, width: 400, height: viewport } }
+      })
+    })
+  }
+
+  it('scrolls a fresh tail onto the tall last message, then one message back', () => {
+    platform.OS = 'ios'
+    const list = mount()
+    layoutCells([
+      { y: 0, height: 100 },
+      { y: 100, height: 100 },
+      { y: 200, height: 900 }
+    ])
+    act(() => hostNode('FlatList').props.onScroll(scrollEvent(0)))
+    act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    expect(nativeApi.offsets).toEqual([{ offset: 700, animated: false }])
+    runLatestFrame()
+    expect(nativeApi.offsets.at(-1)).toEqual({ offset: 200, animated: true })
+    act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    runLatestFrame()
+    expect(nativeApi.offsets.at(-2)).toEqual({ offset: 700, animated: false })
+    expect(nativeApi.offsets.at(-1)).toEqual({ offset: 100, animated: true })
+  })
+
+  it('moves on the first tap when the last message already fits', () => {
+    platform.OS = 'ios'
+    const list = mount()
+    layoutCells([
+      { y: 0, height: 220 },
+      { y: 220, height: 220 },
+      { y: 440, height: 80 }
+    ])
+    act(() => hostNode('FlatList').props.onScroll(scrollEvent(0)))
+    act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    expect(nativeApi.offsets[0]).toEqual({ offset: 120, animated: false })
+    runLatestFrame()
+    expect(nativeApi.offsets.at(-1)).toEqual({ offset: 0, animated: true })
+  })
+
+  it('keeps a real top at offset 0 from being read as the tail', () => {
+    platform.OS = 'ios'
+    const list = mount()
+    layoutCells([
+      { y: 0, height: 100 },
+      { y: 100, height: 100 },
+      { y: 200, height: 900 }
+    ])
+    act(() => {
+      const listNode = hostNode('FlatList')
+      listNode.props.onScroll(scrollEvent(500))
+      listNode.props.onScroll(scrollEvent(0))
+    })
+    const framesBefore = queued.frames.size
+    act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    expect(nativeApi.offsets).toEqual([{ offset: 0, animated: false }])
+    expect(queued.frames.size).toBe(framesBefore)
+  })
+
+  it('draws an unmeasured stop above the fold on the first tap', () => {
+    platform.OS = 'ios'
+    const list = mount()
+    layoutCells([{ y: 0, height: 100 }, null, { y: 1800, height: 100 }])
+    act(() => hostNode('FlatList').props.onScroll(scrollEvent(0)))
+    act(() => list.revealPreviousMessage?.(['m0', 'm1'], true))
+    runLatestFrame()
+    expect(nativeApi.indexes).toEqual([{ index: 1, animated: true }])
+  })
+
+  it('does not hand the stop’s momentum end back to tail follow', () => {
+    platform.OS = 'ios'
+    const ended: string[] = []
+    const list = mount(undefined, undefined, () => ended.push('end'))
+    layoutCells([
+      { y: 0, height: 100 },
+      { y: 100, height: 100 },
+      { y: 200, height: 900 }
+    ])
+    act(() => list.revealPreviousMessage?.(['m0', 'm1', 'm2'], true))
+    act(() => hostNode('FlatList').props.onMomentumScrollEnd(scrollEvent(700)))
+    expect(ended).toEqual([])
+    act(() => hostNode('FlatList').props.onMomentumScrollEnd(scrollEvent(400)))
+    expect(ended).toEqual(['end'])
   })
 })

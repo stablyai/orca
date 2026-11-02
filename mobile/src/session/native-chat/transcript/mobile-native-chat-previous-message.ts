@@ -120,6 +120,35 @@ export function stopsAsIfAligned(
   )
 }
 
+/**
+ * An undrawn stop after the chosen row still sits above the first visible row.
+ * Measuring from a stale offset of 0 would treat the top of the list as visible and skip it.
+ */
+export function applyTrailingStop(
+  target: PreviousMessageTarget,
+  fromKey: string | null,
+  measured: readonly PreviousMessageStop[],
+  indexOf: (key: string) => number,
+  rowTops: readonly (number | undefined)[]
+): PreviousMessageTarget {
+  if (fromKey !== null || !('key' in target)) {
+    return target
+  }
+  let visibleAt: number | null = null
+  for (let index = 0; index < rowTops.length; index += 1) {
+    const top = rowTops[index]
+    if (top !== undefined && top >= -PREVIOUS_MESSAGE_ALIGN_PX) {
+      visibleAt = index
+      break
+    }
+  }
+  if (visibleAt === null) {
+    return target
+  }
+  const trailing = trailingStopAboveViewport(measured, target.key, indexOf, visibleAt)
+  return trailing === null ? target : { pendingKey: trailing }
+}
+
 /** The previous message after `fromKey` has been brought to the viewport top. */
 export function previousMessageChained(
   stops: readonly PreviousMessageStop[],
@@ -138,6 +167,28 @@ export function previousMessageChained(
     return null
   }
   return earlier.top === undefined ? { pendingKey: earlier.key } : { key: earlier.key }
+}
+
+/**
+ * FlatList opens at offset 0 until the first scroll event, while the chat is already on the tail.
+ * Until that event, the tail offset is the measured content bottom minus the viewport.
+ */
+export function tailOffsetBeforeFirstScroll(
+  sawScroll: boolean,
+  contentOffsetY: number,
+  viewportHeight: number,
+  cellBottoms: readonly number[]
+): number {
+  if (sawScroll || viewportHeight <= 0) {
+    return contentOffsetY
+  }
+  let bottom = 0
+  for (const cellBottom of cellBottoms) {
+    if (cellBottom > bottom) {
+      bottom = cellBottom
+    }
+  }
+  return Math.max(contentOffsetY, bottom - viewportHeight)
 }
 
 /** End-anchored scrollTop: more negative moves toward older rows. `rowTop` and `viewTop` share a viewport. */
