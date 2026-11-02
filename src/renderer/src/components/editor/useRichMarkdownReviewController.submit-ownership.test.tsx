@@ -83,6 +83,7 @@ function mountReview() {
       markdownAnnotationsEnabled: true,
       markdownReviewContent: 'abc xyz',
       markdownSourceLineOffset: 0,
+      noteSource: {},
       rootRef,
       scrollContainerRef: { current: document.createElement('div') },
       worktreeId: 'folder-owner',

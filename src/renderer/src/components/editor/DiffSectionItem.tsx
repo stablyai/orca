@@ -1,3 +1,4 @@
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
 import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DiffOnMount } from '@monaco-editor/react'
@@ -28,7 +29,7 @@ export function DiffSectionItem({
   isDark,
   sectionHeight,
   worktreeId,
-  runtimeEnvironmentId,
+  noteSource = NO_RESOURCE_EVIDENCE,
   loadSection,
   loadDeferredSection,
   retrySection,
@@ -51,9 +52,10 @@ export function DiffSectionItem({
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
   // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId, {
-    runtimeEnvironmentId
-  })
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    worktreeId,
+    noteSource
+  )
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)

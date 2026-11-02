@@ -153,7 +153,7 @@ describe('diff comments on twin worktrees', () => {
   it('offers no copy to change when no host names one of two twins', () => {
     const store = createTwinStore(null)
 
-    expect(selectDiffCommentView(store.getState(), WT)).toEqual({
+    expect(selectDiffCommentView(store.getState(), WT, 'selection')).toEqual({
       owner: null,
       comments: undefined
     })
@@ -518,7 +518,7 @@ describe('diff comments on twin worktrees', () => {
 })
 
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
-  const { owner } = selectDiffCommentView(store.getState(), worktreeId)
+  const { owner } = selectDiffCommentView(store.getState(), worktreeId, 'selection')
   if (!owner) {
     throw new Error('No copy of the workspace is shown.')
   }
@@ -617,7 +617,7 @@ describe('captured note owners across delivery and selection', () => {
   it('keeps a composer opened before its SSH copy lists on that copy, never a local row listed first', async () => {
     const store = createTwinStore('ssh:box')
     store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local')])] } })
-    const view = selectDiffCommentView(store.getState(), WT)
+    const view = selectDiffCommentView(store.getState(), WT, 'selection')
     // Unknown, not empty: the selected copy is not listed, and its sibling's notes are not shown.
     expect(view.comments).toBeUndefined()
 
@@ -691,6 +691,75 @@ describe('captured note owners across delivery and selection', () => {
       }
     })
     expect(diffCommentOwnerKey(capturedOwner(store, WT))).not.toBe(diffCommentOwnerKey(owner))
+  })
+
+  it('keeps a legacy unstamped paired row on its nested copy through confirming stamps', async () => {
+    const store = createTwinStore('runtime:hub')
+    const sent = note('n1', 'sent')
+    store.setState({
+      repos: [{ ...repoBase, connectionId: 'box', executionHostId: 'runtime:hub' }],
+      worktreesByRepo: { [REPO]: [worktree(undefined, [sent])] }
+    })
+    const owner = capturedOwner(store, WT)
+    expect(owner).toMatchObject({
+      authority: { endpoint: { kind: 'environment', environmentId: 'hub' }, at: 'ssh:box' }
+    })
+    let fail = () => {}
+    vi.mocked(callRuntimeRpc).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (fail = () => reject(new Error('unreachable'))))
+    )
+    const pending = addNoteFor(store, owner)
+    const [row] = store.getState().worktreesByRepo[REPO]
+    store.setState({
+      worktreesByRepo: {
+        [REPO]: [{ ...row, hostId: 'ssh:box', runtimeOwnerEnvironmentId: 'hub' }]
+      }
+    })
+    expect(diffCommentOwnerKey(capturedOwner(store, WT))).toBe(diffCommentOwnerKey(owner))
+    await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(1))
+    fail()
+
+    expect(await pending).toBeNull()
+    expect(store.getState().worktreesByRepo[REPO][0].diffComments).toEqual([sent])
+    expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(true)
+    expect(callRuntimeRpc).toHaveBeenLastCalledWith(
+      { kind: 'environment', environmentId: 'hub' },
+      'worktree.set',
+      expect.objectContaining({ diffComments: [] }),
+      expect.anything()
+    )
+    expect(updateMeta).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('writes an SSH row through the server a detected listing already names', async () => {
+    const store = createTwinStore('ssh:box')
+    store.setState({
+      repos: [{ ...repoBase, executionHostId: 'runtime:hub' }],
+      worktreesByRepo: { [REPO]: [worktree('ssh:box', [note('n1', 'sent')])] },
+      detectedWorktreesByRepo: {
+        [REPO]: {
+          repoId: REPO,
+          authoritative: true,
+          source: 'git',
+          worktrees: [{ ...worktree('ssh:box'), runtimeOwnerEnvironmentId: 'hub' }]
+        }
+      }
+    })
+
+    expect(await addNote(store)).not.toBeNull()
+    expect(callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'environment', environmentId: 'hub' },
+      'worktree.set',
+      expect.objectContaining({
+        diffComments: [
+          expect.objectContaining({ body: 'sent' }),
+          expect.objectContaining({ body: 'ssh note' })
+        ]
+      }),
+      expect.anything()
+    )
+    expect(updateMeta).not.toHaveBeenCalled()
   })
 
   it('reports a copy gone since Send or edit once, through the existing failure toast', async () => {

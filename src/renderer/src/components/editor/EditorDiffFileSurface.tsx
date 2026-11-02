@@ -162,7 +162,7 @@ export function EditorDiffFileSurface({
       sideBySide={sideBySide}
       editable={isEditable}
       worktreeId={activeFile.worktreeId}
-      runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+      noteSource={activeFile}
       onContentChange={isEditable ? onContentChange : undefined}
       onSave={isEditable ? (isMarkdown ? markdownDocuments.mdSave : onSave) : undefined}
     />

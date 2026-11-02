@@ -41,7 +41,7 @@ export function SourceControlNotesShelf({
   deleteDiffComment: AppState['deleteDiffComment']
   handleOpenComment: (comment: DiffComment) => void
 }): React.JSX.Element {
-  const { owner } = useDiffCommentView(activeWorktreeId)
+  const { owner } = useDiffCommentView(activeWorktreeId, 'selection')
   return (
     <div className="border-b border-border">
       <div className="flex items-center gap-1 pl-3 pr-2 py-1.5">

@@ -12,10 +12,15 @@ import {
   EMPTY_DIFF_COMMENTS,
   findCopyRows,
   readCopyNotes,
-  resolveDiffCommentCopy,
-  type DiffCommentSelectorState,
-  type DiffCommentSource
+  type DiffCommentSelectorState
 } from './worktree-diff-comments-selector'
+import { focusFreeRouteStateOf } from '@/lib/editor-file-operation-provenance'
+import {
+  resolveSourceCopy,
+  resolveSourceFolderHost,
+  type WorkspaceCopySource,
+  type WorkspaceResource
+} from '@/lib/workspace-copy-owner'
 
 /** A copy whose notes can be changed: the workspace and the authority serving it (endpoint plus place). */
 export type DiffCommentOwner =
@@ -38,43 +43,61 @@ export type DiffCommentView = {
 
 const NO_DIFF_COMMENT_VIEW: DiffCommentView = Object.freeze({ owner: null, comments: undefined })
 
+/** The folder copy a source names: its catalog record and the endpoint serving that catalog, together. */
+function selectFolderView(
+  state: DiffCommentSelectorState,
+  worktreeId: string,
+  folderWorkspaceId: string,
+  source: WorkspaceCopySource
+): DiffCommentView {
+  const hostId = resolveSourceFolderHost(state, worktreeId, source)
+  // Without its own host, a retained resource may not fall back to the selected folder.
+  const ownerState = source === 'selection' ? state : focusFreeRouteStateOf(state)
+  const folder = findFolderWorkspaceOwner(ownerState, folderWorkspaceId, hostId)
+  if (!folder) {
+    return NO_DIFF_COMMENT_VIEW
+  }
+  const executionHostId = getExecutionHostIdForFolderWorkspace(
+    ownerState,
+    folderWorkspaceId,
+    hostId
+  )
+  return {
+    owner: {
+      kind: 'folder',
+      worktreeId,
+      executionHostId,
+      runtimeEnvironmentId: getRuntimeEnvironmentIdForFolderWorkspace(
+        ownerState,
+        folderWorkspaceId,
+        executionHostId
+      )
+    },
+    comments: folder.diffComments ?? EMPTY_DIFF_COMMENTS
+  }
+}
+
+/** Owner and notes of the copy a source shows; resource-bound surfaces pass their own resource. */
 export function selectDiffCommentView(
   state: DiffCommentSelectorState,
   worktreeId: string | null | undefined,
-  source?: DiffCommentSource
+  source: WorkspaceCopySource
 ): DiffCommentView {
   if (!worktreeId) {
     return NO_DIFF_COMMENT_VIEW
   }
   const scope = parseWorkspaceKey(worktreeId)
   if (scope?.type === 'folder') {
-    const folder = findFolderWorkspaceOwner(state, scope.folderWorkspaceId)
-    if (!folder) {
-      return NO_DIFF_COMMENT_VIEW
-    }
-    const executionHostId = getExecutionHostIdForFolderWorkspace(state, scope.folderWorkspaceId)
-    return {
-      owner: {
-        kind: 'folder',
-        worktreeId,
-        executionHostId,
-        runtimeEnvironmentId: getRuntimeEnvironmentIdForFolderWorkspace(
-          state,
-          scope.folderWorkspaceId,
-          executionHostId
-        )
-      },
-      comments: folder.diffComments ?? EMPTY_DIFF_COMMENTS
-    }
+    return selectFolderView(state, worktreeId, scope.folderWorkspaceId, source)
   }
-  const copy = resolveDiffCommentCopy(state, worktreeId, source)
-  // Distinct copies with nothing naming one stay unknown rather than showing an arbitrary copy.
-  if (!copy || copy === 'ambiguous') {
+  const copy = resolveSourceCopy(state, worktreeId, source)
+  // Rival copies with nothing naming one stay unknown rather than showing an arbitrary copy.
+  if (copy.kind !== 'resolved') {
     return NO_DIFF_COMMENT_VIEW
   }
   return {
-    owner: { kind: 'worktree', worktreeId, authority: copy },
-    comments: readCopyNotes(findCopyRows(state, worktreeId, copy))
+    owner: { kind: 'worktree', worktreeId, authority: copy.owner },
+    comments: readCopyNotes(findCopyRows(state, worktreeId, copy.owner))
   }
 }
 
@@ -98,7 +121,16 @@ export function readOwnedDiffComments(
       scope?.type === 'folder'
         ? findFolderWorkspaceOwner(state, scope.folderWorkspaceId, owner.executionHostId)
         : null
-    return folder ? (folder.diffComments ?? EMPTY_DIFF_COMMENTS) : undefined
+    // The same record must still be served by the captured catalog endpoint.
+    return folder &&
+      scope?.type === 'folder' &&
+      getRuntimeEnvironmentIdForFolderWorkspace(
+        state,
+        scope.folderWorkspaceId,
+        owner.executionHostId
+      ) === owner.runtimeEnvironmentId
+      ? (folder.diffComments ?? EMPTY_DIFF_COMMENTS)
+      : undefined
   }
   return readCopyNotes(findCopyRows(state, owner.worktreeId, owner.authority))
 }
@@ -127,14 +159,36 @@ function cacheOnOwnerInputs<Args extends readonly unknown[], Result>(
   }
 }
 
+/** Cache arguments: the source's own fields, so a fresh wrapper object for the same tab still hits. */
+type SourceParts = [
+  selection: boolean,
+  runtimeEnvironmentId: WorkspaceResource['runtimeEnvironmentId'],
+  externalSshTargetId: WorkspaceResource['externalSshTargetId'],
+  operationProvenance: WorkspaceResource['operationProvenance']
+]
+
+export function sourceParts(source: WorkspaceCopySource): SourceParts {
+  return source === 'selection'
+    ? [true, undefined, undefined, undefined]
+    : [false, source.runtimeEnvironmentId, source.externalSshTargetId, source.operationProvenance]
+}
+
 export function createDiffCommentViewSelector(): (
   state: DiffCommentSelectorState,
   worktreeId: string | null | undefined,
-  runtimeEnvironmentId?: string | null
+  ...source: SourceParts
 ) => DiffCommentView {
   return cacheOnOwnerInputs(
-    (state, worktreeId: string | null | undefined, runtimeEnvironmentId?: string | null) =>
-      selectDiffCommentView(state, worktreeId, { runtimeEnvironmentId }),
+    (
+      state,
+      worktreeId: string | null | undefined,
+      ...[selection, runtimeEnvironmentId, externalSshTargetId, operationProvenance]: SourceParts
+    ) =>
+      selectDiffCommentView(
+        state,
+        worktreeId,
+        selection ? 'selection' : { runtimeEnvironmentId, externalSshTargetId, operationProvenance }
+      ),
     (previous, next) =>
       previous.comments === next.comments &&
       JSON.stringify(previous.owner) === JSON.stringify(next.owner)

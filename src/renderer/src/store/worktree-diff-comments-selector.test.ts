@@ -7,7 +7,7 @@ import {
   selectWorktreeDiffComments,
   selectWorktreeDiffCommentsOrEmpty
 } from './worktree-diff-comments-selector'
-import { createDiffCommentViewSelector } from './diff-comment-owner'
+import { createDiffCommentViewSelector, sourceParts } from './diff-comment-owner'
 
 const TARGET = 'repo-9::/w/target'
 
@@ -56,7 +56,7 @@ function measureViewSelectors(rowsPerRepo: number) {
     AppState,
     'worktreesByRepo' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
   > = { worktreesByRepo, activeWorktreeId: TARGET, activeWorkspaceExecutionHostId: 'local' }
-  const views = consumers.map((select) => select(state, TARGET))
+  const views = consumers.map((select) => select(state, TARGET, ...sourceParts('selection')))
   expect(views[0].comments).toBe(comments)
   expect(views[0].owner).toEqual({
     kind: 'worktree',
@@ -67,14 +67,18 @@ function measureViewSelectors(rowsPerRepo: number) {
   idReads = 0
   for (let write = 0; write < 200; write += 1) {
     state = { ...state }
-    consumers.forEach((select, index) => expect(select(state, TARGET)).toBe(views[index]))
+    consumers.forEach((select, index) =>
+      expect(select(state, TARGET, ...sourceParts('selection'))).toBe(views[index])
+    )
   }
   const unrelatedWriteReads = idReads
 
   // Another repo's listing changes: every consumer re-resolves once, and keeps its view.
   idReads = 0
   state = { ...state, worktreesByRepo: { ...worktreesByRepo, 'repo-0': [] } }
-  consumers.forEach((select, index) => expect(select(state, TARGET)).toBe(views[index]))
+  consumers.forEach((select, index) =>
+    expect(select(state, TARGET, ...sourceParts('selection'))).toBe(views[index])
+  )
   return { unrelatedWriteReads, catalogWriteReads: idReads }
 }
 

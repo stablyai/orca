@@ -41,6 +41,7 @@ export default function RichMarkdownEditor({
   worktreeId,
   externalSshTargetId,
   runtimeEnvironmentId,
+  operationProvenance,
   scrollCacheKey,
   onContentChange,
   onDirtyStateHint,
@@ -63,9 +64,11 @@ export default function RichMarkdownEditor({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId, {
-    runtimeEnvironmentId
-  })
+  const noteSource = { runtimeEnvironmentId, externalSshTargetId, operationProvenance }
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    worktreeId,
+    noteSource
+  )
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -113,7 +116,7 @@ export default function RichMarkdownEditor({
     markdownSourceLineOffset,
     rootRef,
     scrollContainerRef,
-    runtimeEnvironmentId,
+    noteSource,
     worktreeId,
     worktreeRoot
   })

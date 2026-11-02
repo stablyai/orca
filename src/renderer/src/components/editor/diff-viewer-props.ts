@@ -1,3 +1,4 @@
+import type { WorkspaceResource } from '@/lib/workspace-copy-owner'
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 
 export type DiffViewerProps = {
@@ -13,8 +14,8 @@ export type DiffViewerProps = {
   editable?: boolean
   // Hosted review dialogs may have no workspace for local comments.
   worktreeId?: string
-  /** The diff's server (`null` this app); its review notes belong to that copy. */
-  runtimeEnvironmentId?: string | null
+  /** The diff's tab; its review notes belong to the copy it names. */
+  noteSource?: WorkspaceResource
   onAddLineComment?: (args: {
     lineNumber: number
     startLine?: number

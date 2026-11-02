@@ -14,6 +14,7 @@ import {
 } from 'react'
 import type { editor } from 'monaco-editor'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { WorkspaceResource } from '@/lib/workspace-copy-owner'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -56,7 +57,7 @@ export function useMonacoMarkdownAnnotations(params: {
   content: string
   language: string
   worktreeId: string | undefined
-  runtimeEnvironmentId?: string | null
+  noteSource: WorkspaceResource
   markdownAnnotationsEnabled: boolean
 }): MonacoMarkdownAnnotations {
   const {
@@ -66,13 +67,14 @@ export function useMonacoMarkdownAnnotations(params: {
     content,
     language,
     worktreeId,
-    runtimeEnvironmentId,
+    noteSource,
     markdownAnnotationsEnabled
   } = params
 
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId, {
-    runtimeEnvironmentId
-  })
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    worktreeId,
+    noteSource
+  )
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -86,7 +88,7 @@ export function useMonacoMarkdownAnnotations(params: {
   )
 
   const [commentPopover, setCommentPopover, commentPopoverOwnerRef] =
-    useOwnedDiffCommentTarget<MarkdownCommentPopoverState>(worktreeId, { runtimeEnvironmentId })
+    useOwnedDiffCommentTarget<MarkdownCommentPopoverState>(worktreeId, noteSource)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
   // Why: claim drafts synchronously so a same-tick second chord can't remount the composer before React commits state.

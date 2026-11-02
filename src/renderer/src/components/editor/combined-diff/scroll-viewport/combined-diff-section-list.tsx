@@ -120,7 +120,7 @@ export function CombinedDiffSectionList({
                   isDark={isDark}
                   sectionHeight={sectionHeights[virtualItem.index]}
                   worktreeId={file.worktreeId}
-                  runtimeEnvironmentId={file.runtimeEnvironmentId}
+                  noteSource={file}
                   loadSection={loadSection}
                   loadDeferredSection={loadDeferredSection}
                   retrySection={retrySection}

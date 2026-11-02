@@ -224,7 +224,7 @@ export function EditorConflictReviewSurface({
             key={`${viewStateScopeId}:${contentFile.id}:${viewStateKeySuffix}`}
             fileId={contentFile.id}
             filePath={contentFile.filePath}
-            runtimeEnvironmentId={contentFile.runtimeEnvironmentId}
+            noteSource={contentFile}
             viewStateKey={selectedViewStateKey}
             viewStateId={editorViewStateId}
             relativePath={contentFile.relativePath}

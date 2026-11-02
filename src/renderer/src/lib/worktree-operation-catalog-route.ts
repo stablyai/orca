@@ -2,12 +2,14 @@
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
+  parseExecutionHostId,
+  type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  findIndexedRepoOwnerForHost,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
@@ -126,6 +128,24 @@ function isUnstampedRowOfSharedLocalProject(
     }
   }
   return hasLocalRepoRow && hasRuntimeRepoRow
+}
+
+/** An unstamped record's host by the rules above: a shared local project's row is local, else its repo setup; with no setup, or one this app also has, the row was listed here (paired listings stamp ownership). */
+export function resolveUnstampedRecordHost(
+  state: WorktreeOperationRouteState,
+  owner: WorktreeOperationOwnerRecord
+): ExecutionHostId | null {
+  if (isUnstampedRowOfSharedLocalProject(state, owner)) {
+    return LOCAL_EXECUTION_HOST_ID
+  }
+  const repo = resolveIndexedRepoOperationRoute(state.repos, owner.repoId)
+  if (repo.kind === 'resolved') {
+    return repo.route.executionHostId
+  }
+  return repo.kind === 'missing' ||
+    findIndexedRepoOwnerForHost(state.repos, owner.repoId, LOCAL_EXECUTION_HOST_ID)
+    ? LOCAL_EXECUTION_HOST_ID
+    : null
 }
 
 function resolveIndexedRepoOperationRoute(

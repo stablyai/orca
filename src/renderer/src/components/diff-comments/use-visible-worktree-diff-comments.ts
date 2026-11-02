@@ -1,6 +1,6 @@
 import { useDiffCommentView } from './use-diff-comment-owner'
 import type { DiffCommentOwner } from '@/store/diff-comment-owner'
-import type { DiffCommentSource } from '@/store/worktree-diff-comments-selector'
+import type { WorkspaceCopySource } from '@/lib/workspace-copy-owner'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -13,7 +13,7 @@ const NO_COMMENTS: DiffComment[] = []
 
 export function useVisibleWorktreeDiffComments(
   worktreeId: string | null | undefined,
-  source?: DiffCommentSource
+  source: WorkspaceCopySource
 ): {
   owner: DiffCommentOwner | null
   comments: DiffComment[]

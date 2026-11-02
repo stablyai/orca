@@ -1,3 +1,4 @@
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
 import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -48,7 +49,7 @@ export default function DiffViewer({
   sideBySide,
   editable,
   worktreeId,
-  runtimeEnvironmentId,
+  noteSource = NO_RESOURCE_EVIDENCE,
   onAddLineComment,
   commentableLineNumbers,
   addLineCommentLabel,
@@ -62,9 +63,10 @@ export default function DiffViewer({
   const monacoTheme = useMonacoTheme()
   const diffTypography = useEditorTypography('diff')
   // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId, {
-    runtimeEnvironmentId
-  })
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    worktreeId,
+    noteSource
+  )
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)

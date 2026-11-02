@@ -19,6 +19,7 @@ import { useRichMarkdownReviewData } from './useRichMarkdownReviewData'
 import { useRichMarkdownReviewCopyFeedback } from './useRichMarkdownReviewCopyFeedback'
 import { useRichMarkdownReviewRailController } from './useRichMarkdownReviewRailController'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { WorkspaceResource } from '@/lib/workspace-copy-owner'
 
 type UseRichMarkdownReviewControllerOptions = {
   addDiffComment: AppState['addDiffComment']
@@ -32,7 +33,7 @@ type UseRichMarkdownReviewControllerOptions = {
   markdownSourceLineOffset: number
   rootRef: MutableRefObject<HTMLDivElement | null>
   scrollContainerRef: MutableRefObject<HTMLDivElement | null>
-  runtimeEnvironmentId?: string | null
+  noteSource: WorkspaceResource
   worktreeId: string
   worktreeRoot: string | null
 }
@@ -49,7 +50,7 @@ export function useRichMarkdownReviewController({
   markdownSourceLineOffset,
   rootRef,
   scrollContainerRef,
-  runtimeEnvironmentId,
+  noteSource,
   worktreeId,
   worktreeRoot
 }: UseRichMarkdownReviewControllerOptions) {
@@ -57,7 +58,7 @@ export function useRichMarkdownReviewController({
     null
   )
   const [annotationPopover, setAnnotationPopover, annotationOwnerRef] =
-    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(worktreeId, { runtimeEnvironmentId })
+    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(worktreeId, noteSource)
   const annotationPopoverRef = useRef<RichMarkdownAnnotationTarget | null>(null)
   const canAnnotateRichMarkdownRef = useRef(false)
   const markdownCommentsRef = useRef<DiffComment[]>([])

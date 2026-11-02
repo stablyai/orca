@@ -90,6 +90,10 @@ function addNote(
   })
 }
 
+function folderNote(worktreeId: string, body: string): DiffComment {
+  return { id: body, worktreeId, filePath: 'README.md', lineNumber: 1, body, createdAt: 1 }
+}
+
 function bodies(store: ReturnType<typeof createTestStore>, workspaceKey: string): string[] {
   return store
     .getState()
@@ -657,6 +661,55 @@ describe('folder workspace diff comment rollback convergence', () => {
     expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
   })
 
+  it("reads and saves a server folder's notes from its own source while the local twin is selected", async () => {
+    const store = createTestStore()
+    const key = folderWorkspaceKey('folder-1')
+    const runtimeWorkspace = makeFolderWorkspace({
+      projectGroupId: 'runtime-group',
+      executionHostId: 'runtime:env-owner',
+      diffComments: [folderNote(key, 'runtime A')]
+    })
+    store.setState({
+      activeWorktreeId: key,
+      activeWorkspaceExecutionHostId: 'local',
+      folderWorkspaces: [
+        makeFolderWorkspace({ diffComments: [folderNote(key, 'local B')] }),
+        runtimeWorkspace
+      ]
+    })
+    runtimeEnvironmentCall.mockImplementation(async () => ({
+      id: 'rpc-folder-update',
+      ok: true,
+      result: { folderWorkspace: runtimeWorkspace },
+      _meta: { runtimeId: 'remote-runtime' }
+    }))
+    const view = selectDiffCommentView(store.getState(), key, { runtimeEnvironmentId: 'env-owner' })
+
+    expect(view.comments?.map((comment) => comment.body)).toEqual(['runtime A'])
+    expect(view.owner).toEqual({
+      kind: 'folder',
+      worktreeId: key,
+      executionHostId: 'runtime:env-owner',
+      runtimeEnvironmentId: 'env-owner'
+    })
+    if (!view.owner) {
+      throw new Error('no owner')
+    }
+    await store.getState().addDiffComment(view.owner, {
+      worktreeId: key,
+      filePath: 'README.md',
+      source: 'markdown',
+      lineNumber: 2,
+      body: 'added',
+      side: 'modified'
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-owner', method: 'folderWorkspace.update' })
+    )
+    expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
+    expect(bodies(store, key)).toEqual(['local B'])
+  })
+
   it('keeps a failing burst scoped to its own execution host', async () => {
     const store = createTestStore()
     const workspaceId = 'shared-folder-id'
@@ -702,7 +755,7 @@ describe('folder workspace diff comment rollback convergence', () => {
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
   return (
     // An unlisted id stands for a copy that is gone, so actions on it are refused.
-    selectDiffCommentView(store.getState(), worktreeId).owner ?? {
+    selectDiffCommentView(store.getState(), worktreeId, 'selection').owner ?? {
       kind: 'worktree',
       worktreeId,
       authority: SELF_LOCAL_AUTHORITY

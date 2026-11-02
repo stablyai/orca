@@ -815,7 +815,7 @@ describe('worktree diff comment rollback convergence', () => {
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
   return (
     // An unlisted id stands for a copy that is gone, so actions on it are refused.
-    selectDiffCommentView(store.getState(), worktreeId).owner ?? {
+    selectDiffCommentView(store.getState(), worktreeId, 'selection').owner ?? {
       kind: 'worktree',
       worktreeId,
       authority: SELF_LOCAL_AUTHORITY

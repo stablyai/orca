@@ -70,6 +70,7 @@ vi.mock('@/store', () => ({
   useAppStore: <T,>(selector: (state: typeof fixture.state) => T) => selector(fixture.state)
 }))
 vi.mock('@/store/diff-comment-owner', () => ({
+  sourceParts: () => [],
   createDiffCommentViewSelector: () => () => ({ owner: null, comments: undefined }),
   selectDiffCommentView: () => ({ owner: null, comments: undefined }),
   diffCommentOwnerKey: () => ''

@@ -25,7 +25,7 @@ export function useSourceControlDiffCommentNotes({
   clearDiffCommentsForFile: AppState['clearDiffCommentsForFile']
 }) {
   const { comments: diffCommentsForActive, markdownReviewNotesEnabled } =
-    useVisibleWorktreeDiffComments(activeWorktreeId)
+    useVisibleWorktreeDiffComments(activeWorktreeId, 'selection')
   const diffCommentCount = diffCommentsForActive.length
   // Index counts once so each row need not refilter every comment.
   const diffCommentCountByPath = useMemo(() => {

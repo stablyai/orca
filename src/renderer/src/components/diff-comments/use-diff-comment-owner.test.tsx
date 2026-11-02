@@ -5,6 +5,8 @@ import { useAppStore } from '@/store'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeOpenFile } from '@/store/slices/store-session-test-harness'
+import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -81,7 +83,7 @@ describe('note owner views', () => {
     seedTwins('ssh:box')
     const renders = { open: 0, other: 0 }
     function Probe({ id, name }: { id: string; name: keyof typeof renders }) {
-      useDiffCommentView(id)
+      useDiffCommentView(id, 'selection')
       renders[name] += 1
       return null
     }
@@ -125,7 +127,7 @@ describe('note owner views', () => {
       worktreesByRepo: { [REPO]: rows }
     })
     const { result } = renderHook(() => {
-      const { owner, comments } = useVisibleWorktreeDiffComments(WT)
+      const { owner, comments } = useVisibleWorktreeDiffComments(WT, 'selection')
       return {
         combined: useCombinedDiffNotesActions({
           owner,
@@ -181,7 +183,7 @@ describe('note owner views', () => {
       ],
       worktreesByRepo: { [REPO]: [row(WT, 'ssh:box', [note('s1')])] }
     })
-    const { result } = renderHook(() => useVisibleWorktreeDiffComments(WT))
+    const { result } = renderHook(() => useVisibleWorktreeDiffComments(WT, 'selection'))
 
     expect(result.current.known).toBe(true)
     expect(result.current.comments.map((comment) => comment.body)).toEqual(['s1'])
@@ -198,7 +200,7 @@ describe('note owner views', () => {
       activeWorkspaceExecutionHostId: 'ssh:box',
       worktreesByRepo: { [REPO]: [row(WT, 'local', [note('l1')])] }
     })
-    const { result } = renderHook(() => useVisibleWorktreeDiffComments(WT))
+    const { result } = renderHook(() => useVisibleWorktreeDiffComments(WT, 'selection'))
     expect(result.current).toMatchObject({ known: false, comments: [], owner: SSH_BOX })
 
     act(() => replaceRow('local', WT, []))
@@ -216,7 +218,9 @@ describe('note owner views', () => {
       activeWorkspaceExecutionHostId: 'ssh:box',
       worktreesByRepo: { [REPO]: [] }
     })
-    const { result } = renderHook(() => useOwnedDiffCommentTarget<{ line: number }>(WT))
+    const { result } = renderHook(() =>
+      useOwnedDiffCommentTarget<{ line: number }>(WT, 'selection')
+    )
     const installedOpener = result.current[1]
     seedTwins('ssh:box')
 
@@ -284,12 +288,128 @@ describe('note owner views', () => {
   })
 })
 
+describe('retained sources', () => {
+  const markdown = (body: string): DiffComment => ({ ...note(body, 'a.md'), source: 'markdown' })
+  const preview = (sourceFileId: string | null) =>
+    renderHook(() =>
+      useMarkdownPreviewSourceFoundation({
+        content: 'content',
+        filePath: '/work/a/a.md',
+        sourceFileId,
+        sourceWorktreeId: WT,
+        sourceRuntimeEnvironmentId: null,
+        prewarmImages: false
+      })
+    )
+
+  it('read and save a direct SSH preview on its own copy while the local copy is selected', async () => {
+    const updateMeta = vi.fn().mockResolvedValue({})
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { worktrees: { updateMeta }, ui: { set: vi.fn() } }
+    })
+    useAppStore.setState({
+      activeWorktreeId: WT,
+      activeWorkspaceExecutionHostId: 'local',
+      worktreesByRepo: {
+        [REPO]: [row(WT, 'local', [markdown('local B')]), row(WT, 'ssh:box', [markdown('SSH A')])]
+      },
+      openFiles: [
+        makeOpenFile({
+          id: 'source-a',
+          worktreeId: WT,
+          filePath: '/work/a/a.md',
+          relativePath: 'a.md',
+          runtimeEnvironmentId: null,
+          operationProvenance: {
+            generation: captureWorktreeOperationGenerationSnapshot({
+              executionHostId: 'ssh:box',
+              runtimeEnvironmentId: null
+            }),
+            ownershipProjection: 'explicit'
+          }
+        })
+      ]
+    })
+    const { result } = preview('source-a')
+    const owner = result.current.commentOwner
+    if (!owner) {
+      throw new Error('no owner')
+    }
+
+    expect(result.current.markdownComments.map((comment) => comment.body)).toEqual(['SSH A'])
+    await act(() =>
+      useAppStore.getState().addDiffComment(owner, {
+        worktreeId: WT,
+        filePath: 'a.md',
+        source: 'markdown',
+        lineNumber: 1,
+        body: 'added',
+        side: 'modified'
+      })
+    )
+    expect(updateMeta).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: WT,
+      executionHostId: 'ssh:box',
+      updates: {
+        diffComments: [
+          expect.objectContaining({ body: 'SSH A' }),
+          expect.objectContaining({ body: 'added' })
+        ]
+      }
+    })
+    const local = useAppStore.getState().worktreesByRepo[REPO][0]
+    expect(local.diffComments?.map((comment) => comment.body)).toEqual(['local B'])
+  })
+
+  it("keep this app's copy for an app source while a server's copy is selected", () => {
+    useAppStore.setState({
+      activeWorktreeId: WT,
+      activeWorkspaceExecutionHostId: 'runtime:hub',
+      worktreesByRepo: {
+        [REPO]: [
+          row(WT, 'local', [markdown('local A')]),
+          row(WT, 'runtime:hub', [markdown('hub B')], 'hub')
+        ]
+      }
+    })
+    const { result } = preview(null)
+
+    expect(result.current.markdownComments.map((comment) => comment.body)).toEqual(['local A'])
+    expect(result.current.commentOwner).toEqual({
+      kind: 'worktree',
+      worktreeId: WT,
+      authority: { endpoint: { kind: 'self' }, at: 'local' }
+    })
+  })
+
+  it('capture through an installed opener the source the surface shows now', () => {
+    useAppStore.setState({
+      worktreesByRepo: {
+        [REPO]: [row(WT, 'runtime:a', [], 'a'), row(WT, 'runtime:b', [], 'b')]
+      }
+    })
+    const { result, rerender } = renderHook(
+      ({ runtimeEnvironmentId }) =>
+        useOwnedDiffCommentTarget<{ line: number }>(WT, { runtimeEnvironmentId }),
+      { initialProps: { runtimeEnvironmentId: 'a' } }
+    )
+    const installedOpener = result.current[1]
+    rerender({ runtimeEnvironmentId: 'b' })
+
+    act(() => installedOpener({ line: 1 }))
+    expect(result.current[2].current).toMatchObject({
+      authority: { endpoint: { kind: 'environment', environmentId: 'b' } }
+    })
+  })
+})
+
 describe('captured Clear confirmations', () => {
   it('in combined diff keep the copy they opened on after the selected host changes', async () => {
     seedTwins('ssh:box')
     const clearDiffComments = vi.fn(async () => true)
     const { result } = renderHook(() => {
-      const { owner, comments } = useVisibleWorktreeDiffComments(WT)
+      const { owner, comments } = useVisibleWorktreeDiffComments(WT, 'selection')
       return useCombinedDiffNotesActions({
         owner,
         clearDiffComments,
@@ -319,7 +439,7 @@ describe('captured Clear confirmations', () => {
         clearDiffComments,
         clearDiffCommentsForFile: vi.fn(async () => true)
       }),
-      owner: useDiffCommentView(WT).owner
+      owner: useDiffCommentView(WT, 'selection').owner
     }))
     const owner = result.current.owner
     if (!owner) {
