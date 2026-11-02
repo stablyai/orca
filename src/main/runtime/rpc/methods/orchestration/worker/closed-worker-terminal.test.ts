@@ -25,6 +25,9 @@ describe('opening a terminal worker Orca closed', () => {
     vi.spyOn(h.runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
       live.has(handle) ? REOPENED_PANE : null
     )
+    vi.spyOn(h.runtime, 'isTerminalRunningAgent').mockImplementation(async (handle) =>
+      live.has(handle)
+    )
     const resume = vi
       .spyOn(h.runtime, 'resumeAgentSessionInWorkspace')
       .mockImplementation(async () => {
@@ -104,5 +107,13 @@ describe('opening a terminal worker Orca closed', () => {
     })
     const [first, second] = resume.mock.calls.map(([, request]) => request.mutationId)
     expect(second).toBe(first)
+  })
+
+  it('resumes again once the agent left the reopened terminal', async () => {
+    const { resource, resume } = await closedHelper()
+    await open(resource.terminal_handle)
+    vi.mocked(h.runtime.isTerminalRunningAgent).mockResolvedValue(false)
+    await open(resource.terminal_handle)
+    expect(resume).toHaveBeenCalledTimes(2)
   })
 })

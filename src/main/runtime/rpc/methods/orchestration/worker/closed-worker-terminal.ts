@@ -41,7 +41,8 @@ export function openClosedWorkerTerminal(
       return null
     }
     const earlier = attempts.get(resource.id)
-    if (earlier?.handle && runtime.getLiveTerminalPaneKey(earlier.handle) !== null) {
+    // A shell the agent exited from no longer holds the conversation; resume it again instead.
+    if (earlier?.handle && (await runtime.isTerminalRunningAgent(earlier.handle))) {
       return { kind: 'terminal', handle: earlier.handle }
     }
     const held = await userTabHoldingSession(runtime, session)
