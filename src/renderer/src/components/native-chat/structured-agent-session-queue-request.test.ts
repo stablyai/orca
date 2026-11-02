@@ -1,4 +1,4 @@
-import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
