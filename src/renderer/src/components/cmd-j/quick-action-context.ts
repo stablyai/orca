@@ -251,7 +251,11 @@ export function getUnavailableQuickActionMessage(
         options
       )
     case 'no-active-terminal':
-      return `Can't ${actionTitle.toLowerCase()} — no terminal pane is active.`
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noActiveTerminal',
+        'Can’t run “{{action}}” — no terminal pane is active.',
+        options
+      )
     case 'no-active-chat':
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.noMovableChat',

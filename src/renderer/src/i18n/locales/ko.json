@@ -17773,6 +17773,7 @@
           "noActiveWorkspace": "“{{action}}” 실행 불가 — 활성 워크스페이스가 없습니다.",
           "workspaceDisconnected": "“{{action}}” 실행 불가 — 워크스페이스 연결이 끊어졌습니다.",
           "noTabGroup": "“{{action}}” 실행 불가 — 사용 가능한 탭 그룹이 없습니다.",
+          "noActiveTerminal": "“{{action}}” 실행 불가 — 활성 터미널 창이 없습니다.",
           "noMovableChat": "“{{action}}” 실행 불가 — 이동 가능한 활성 채팅이 없습니다.",
           "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다."
         }

@@ -18042,6 +18042,7 @@
           "noActiveWorkspace": "無法執行「{{action}}」— 沒有作用中的工作區。",
           "workspaceDisconnected": "無法執行「{{action}}」— 工作區已中斷連線。",
           "noTabGroup": "無法執行「{{action}}」— 沒有可用的分頁群組。",
+          "noActiveTerminal": "無法執行「{{action}}」— 沒有作用中的終端機窗格。",
           "noMovableChat": "無法執行「{{action}}」— 沒有作用中且可移動的聊天。",
           "clientUnsupported": "無法執行「{{action}}」— 此用戶端與執行環境不支援此操作。"
         }

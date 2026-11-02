@@ -17963,6 +17963,7 @@
           "noActiveWorkspace": "No se puede ejecutar «{{action}}» — no hay ningún espacio de trabajo activo.",
           "workspaceDisconnected": "No se puede ejecutar «{{action}}» — el espacio de trabajo está desconectado.",
           "noTabGroup": "No se puede ejecutar «{{action}}» — no hay ningún grupo de pestañas disponible.",
+          "noActiveTerminal": "No se puede ejecutar «{{action}}» — no hay ningún panel de terminal activo.",
           "noMovableChat": "No se puede ejecutar «{{action}}» — no hay ningún chat activo que se pueda mover.",
           "clientUnsupported": "No se puede ejecutar «{{action}}» — este cliente y este entorno de ejecución no lo admiten."
         }

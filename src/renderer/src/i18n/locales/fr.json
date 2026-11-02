@@ -18145,6 +18145,7 @@
           "noActiveWorkspace": "Impossible d’exécuter « {{action}} » — aucun espace de travail n’est actif.",
           "workspaceDisconnected": "Impossible d’exécuter « {{action}} » — l’espace de travail est déconnecté.",
           "noTabGroup": "Impossible d’exécuter « {{action}} » — aucun groupe d’onglets n’est disponible.",
+          "noActiveTerminal": "Impossible d’exécuter « {{action}} » — aucun panneau de terminal n’est actif.",
           "noMovableChat": "Impossible d’exécuter « {{action}} » — aucun chat déplaçable n’est actif.",
           "clientUnsupported": "Impossible d’exécuter « {{action}} » — ce client et cet environnement d’exécution ne le prennent pas en charge."
         }

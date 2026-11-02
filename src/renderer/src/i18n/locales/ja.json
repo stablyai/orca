@@ -17773,6 +17773,7 @@
           "noActiveWorkspace": "「{{action}}」を実行できません。アクティブなワークスペースがありません。",
           "workspaceDisconnected": "「{{action}}」を実行できません。ワークスペースが切断されています。",
           "noTabGroup": "「{{action}}」を実行できません。利用可能なタブグループがありません。",
+          "noActiveTerminal": "「{{action}}」を実行できません。アクティブなターミナルペインがありません。",
           "noMovableChat": "「{{action}}」を実行できません。移動できるアクティブなチャットがありません。",
           "clientUnsupported": "「{{action}}」を実行できません。このクライアントとランタイムは対応していません。"
         }

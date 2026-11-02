@@ -17773,6 +17773,7 @@
           "noActiveWorkspace": "无法运行“{{action}}” — 没有活动的工作区。",
           "workspaceDisconnected": "无法运行“{{action}}” — 工作区已断开连接。",
           "noTabGroup": "无法运行“{{action}}” — 没有可用的标签页组。",
+          "noActiveTerminal": "无法运行“{{action}}” — 没有活动的终端窗格。",
           "noMovableChat": "无法运行“{{action}}” — 没有活动且可移动的聊天。",
           "clientUnsupported": "无法运行“{{action}}” — 此客户端和运行时不支持该操作。"
         }
