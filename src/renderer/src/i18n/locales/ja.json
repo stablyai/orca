@@ -21045,6 +21045,22 @@
         "restartCount_other": "{{count}} 件のセッションを再起動",
         "reviewBody_other": "ほかの {{count}} 件の Claude セッションは {{next}} に移動されませんでした。",
         "body_other": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中です。再起動すると、各会話が {{next}} で続行されます。処理中のセッションは待機状態になってから再起動します。"
+      },
+      "apiEndpoint": {
+        "add": "API エンドポイントを追加",
+        "addTitle": "API エンドポイントを追加",
+        "editTitle": "API エンドポイントを編集",
+        "description": "このアカウントの Claude Code は、入力したトークンで Anthropic 互換のエンドポイントに接続します。",
+        "name": "名前",
+        "baseUrl": "ベース URL",
+        "token": "トークン",
+        "tokenKeep": "空欄なら今のトークンのまま",
+        "model": "モデル",
+        "smallFastModel": "バックグラウンド用モデル",
+        "sameAsModel": "モデルと同じ",
+        "save": "保存",
+        "saveFailed": "エンドポイントを保存できませんでした。",
+        "edit": "編集"
       }
     },
     "hostSignIn": {

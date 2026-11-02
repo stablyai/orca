@@ -21045,6 +21045,22 @@
         "restartCount_other": "세션 {{count}}개 다시 시작",
         "reviewBody_other": "다른 Claude 세션 {{count}}개가 {{next}}(으)로 이동되지 않았습니다.",
         "body_other": "Claude 세션 {{count}}개가 아직 {{previous}}에서 실행 중입니다. 다시 시작하면 각 대화가 {{next}}에서 계속됩니다. 작업 중인 세션은 유휴 상태가 된 후 다시 시작됩니다."
+      },
+      "apiEndpoint": {
+        "add": "API 엔드포인트 추가",
+        "addTitle": "API 엔드포인트 추가",
+        "editTitle": "API 엔드포인트 편집",
+        "description": "이 계정의 Claude Code는 입력한 토큰으로 Anthropic 호환 엔드포인트에 요청을 보냅니다.",
+        "name": "이름",
+        "baseUrl": "기본 URL",
+        "token": "토큰",
+        "tokenKeep": "비워 두면 기존 토큰 유지",
+        "model": "모델",
+        "smallFastModel": "백그라운드 모델",
+        "sameAsModel": "모델과 동일",
+        "save": "저장",
+        "saveFailed": "엔드포인트를 저장하지 못했습니다.",
+        "edit": "편집"
       }
     },
     "hostSignIn": {

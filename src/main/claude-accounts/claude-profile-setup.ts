@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { readClaudeApiEndpointEnv } from './claude-api-endpoint'
 import { shareClaudeProfileHistory } from './claude-profile-history'
 import {
   claudeProfileMarkerPath,
@@ -16,7 +17,9 @@ import {
 } from './claude-profile-report'
 
 /** `refused` means ownership validation failed before any writes. */
-export type ClaudeProfileSetupReport = ClaudeProfileReport & { outcome: 'refused' | 'prepared' }
+export type ClaudeProfileSetupReport = ClaudeProfileReport & {
+  outcome: 'refused' | 'prepared'
+}
 
 /** Run on the execution host; WSL profiles must be set up inside the guest. */
 export async function provisionClaudeAccountProfile(args: {
@@ -49,10 +52,20 @@ export async function provisionClaudeAccountProfile(args: {
     return { outcome: 'refused', ...report }
   }
   const home = args.profile.home
-  const shared = { profileHome: home, userHome: args.userHome, userConfigDir: args.userConfigDir }
+  const shared = {
+    profileHome: home,
+    userHome: args.userHome,
+    userConfigDir: args.userConfigDir
+  }
   for (const step of [
     () => shareClaudeProfileHistory({ ...shared, platform }),
-    () => provisionClaudeProfile({ ...shared, platform, firstSetup })
+    () =>
+      provisionClaudeProfile({
+        ...shared,
+        platform,
+        firstSetup,
+        endpointEnv: readClaudeApiEndpointEnv(home)
+      })
   ]) {
     try {
       const part = await step()

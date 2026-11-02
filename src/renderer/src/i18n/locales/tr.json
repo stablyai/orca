@@ -21466,6 +21466,22 @@
         "reviewBody_one": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
         "body_other": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler.",
         "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler."
+      },
+      "apiEndpoint": {
+        "add": "API uç noktası ekle",
+        "addTitle": "API uç noktası ekle",
+        "editTitle": "API uç noktasını düzenle",
+        "description": "Claude Code bu hesabın isteklerini, belirtecinizle Anthropic uyumlu bir uç noktaya gönderir.",
+        "name": "Ad",
+        "baseUrl": "Temel URL",
+        "token": "Belirteç",
+        "tokenKeep": "Korumak için boş bırakın",
+        "model": "Model",
+        "smallFastModel": "Arka plan modeli",
+        "sameAsModel": "Modelle aynı",
+        "save": "Kaydet",
+        "saveFailed": "Uç nokta kaydedilemedi.",
+        "edit": "Düzenle"
       }
     },
     "managedData": {

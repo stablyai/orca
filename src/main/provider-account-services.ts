@@ -147,7 +147,7 @@ export function createProviderAccountServices(
       ].filter(Boolean)
     )
     return settings.claudeManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
+      .filter((account) => !activeIds.has(account.id) && account.authMethod !== 'api-endpoint')
       .map((account) => ({
         id: account.id,
         managedAuthRuntime: account.managedAuthRuntime,

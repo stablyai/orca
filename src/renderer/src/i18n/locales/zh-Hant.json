@@ -21159,6 +21159,22 @@
         "restartCount_other": "重新啟動 {{count}} 個工作階段",
         "reviewBody_other": "其他 {{count}} 個 Claude 工作階段未移至 {{next}}。",
         "body_other": "{{count}} 個 Claude 工作階段仍在 {{previous}} 上執行。重新啟動後，各對話將在 {{next}} 上繼續。忙碌的工作階段會等待閒置後再重新啟動。"
+      },
+      "apiEndpoint": {
+        "add": "新增 API 端點",
+        "addTitle": "新增 API 端點",
+        "editTitle": "編輯 API 端點",
+        "description": "此帳號的 Claude Code 會使用你的權杖，將請求傳送到相容 Anthropic 的端點。",
+        "name": "名稱",
+        "baseUrl": "基礎 URL",
+        "token": "權杖",
+        "tokenKeep": "留空則保留目前的權杖",
+        "model": "模型",
+        "smallFastModel": "背景模型",
+        "sameAsModel": "與模型相同",
+        "save": "儲存",
+        "saveFailed": "無法儲存此端點。",
+        "edit": "編輯"
       }
     },
     "managedData": {

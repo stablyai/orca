@@ -1,9 +1,20 @@
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 import type {
   ClaudeAccountSignIn,
+  ClaudeApiEndpointAccountRequest,
+  ClaudeApiEndpointSummary,
+  ClaudeManagedAccount,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
 } from '../../shared/managed-account-types'
+import {
+  normalizeClaudeApiEndpointRequest,
+  readClaudeApiEndpointRaw,
+  readClaudeApiEndpointToken,
+  restoreClaudeApiEndpointRaw,
+  writeClaudeApiEndpoint
+} from './claude-api-endpoint'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
 import type {
   ClaudeAccountRuntime,
@@ -13,6 +24,7 @@ import type {
 } from './claude-account-selection'
 import type { ClaudeCommandConfig } from './claude-command-process'
 import { findDuplicateClaudeAccount } from './claude-duplicate-account'
+import { readClaudeProfileObject } from './claude-profile-paths'
 import {
   getClaudeSelectionTargetForAccount,
   normalizeClaudeAccountSelectionTarget,
@@ -21,6 +33,8 @@ import {
 
 export const CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE =
   'Claude has not finished signing in to this account yet. Finish the sign-in in the terminal, then try again.'
+export const CLAUDE_ENDPOINT_ACCOUNT_SIGN_IN_MESSAGE =
+  'This account uses an API endpoint token. Edit it in Settings > Accounts to change the token.'
 const CLAUDE_LOGIN_WITHOUT_ACCOUNT_MESSAGE =
   'Claude login completed, but Orca could not resolve the account email.'
 
@@ -67,6 +81,10 @@ export class ClaudeAccountRegistration {
 
   private async prepare(request: ClaudeSignInRequest) {
     const saved = request.accountId ? this.deps.selection.requireAccount(request.accountId) : null
+    // A login there would relabel the account while its endpoint token kept serving launches.
+    if (saved?.authMethod === 'api-endpoint') {
+      throw new Error(CLAUDE_ENDPOINT_ACCOUNT_SIGN_IN_MESSAGE)
+    }
     const target = saved ? getClaudeSelectionTargetForAccount(saved) : signInTarget(request)
     const accountId = saved?.id ?? randomUUID()
     const folder = await this.deps.runtimeAuth.prepareAccountFolder(accountId, target)
@@ -77,6 +95,79 @@ export class ClaudeAccountRegistration {
     if (!this.deps.selection.findAccount(signIn.accountId)) {
       await this.deps.runtimeAuth.removeAccountFolder(signIn.accountId, signInTarget(signIn))
     }
+  }
+
+  /** Save an endpoint account, or replace a saved one's endpoint when `accountId` is given. */
+  async saveApiEndpoint(
+    request: ClaudeApiEndpointAccountRequest,
+    accountId?: string
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const { store, rateLimits, runtimeAuth, selection } = this.deps
+    const saved = accountId ? selection.requireAccount(accountId) : null
+    if (saved && saved.authMethod !== 'api-endpoint') {
+      throw new Error('That Claude account signs in with a subscription, not a token.')
+    }
+    // Never send the saved token to a different host than the one it was entered for.
+    const savedToken =
+      saved && sameOrigin(saved.apiEndpoint?.baseUrl, request.baseUrl)
+        ? readClaudeApiEndpointToken(runtimeAuth.router.accountHome(saved.id))
+        : null
+    const endpoint = normalizeClaudeApiEndpointRequest(request, savedToken)
+    const accounts = store.getSettings().claudeManagedAccounts
+    if (
+      accounts.some((entry) => entry.id !== saved?.id && endpointAccountMatches(entry, endpoint))
+    ) {
+      throw new Error('This endpoint account is already added.')
+    }
+    const id = saved?.id ?? randomUUID()
+    // Endpoint accounts run on the host; a WSL guest cannot read the host folder's token.
+    const target = { runtime: 'host' } as const
+    const folder = await runtimeAuth.prepareAccountFolder(id, target)
+    const previousFile = saved ? readClaudeApiEndpointRaw(folder.readPath) : null
+    let apiEndpoint: ClaudeApiEndpointSummary
+    try {
+      apiEndpoint = writeClaudeApiEndpoint(folder.readPath, endpoint)
+      // Set up again so the folder's settings carry the endpoint before any launch.
+      await runtimeAuth.prepareAccountFolder(id, target)
+      if (!settingsCarryEndpoint(folder.readPath, endpoint.baseUrl)) {
+        throw new Error(CLAUDE_ENDPOINT_SETTINGS_FAILED_MESSAGE)
+      }
+    } catch (error) {
+      if (!saved) {
+        await runtimeAuth.removeAccountFolder(id, target).catch(() => {})
+      } else if (previousFile !== null) {
+        // Launches read the folder, so it must keep matching the endpoint the account still shows.
+        try {
+          restoreClaudeApiEndpointRaw(folder.readPath, previousFile)
+          await runtimeAuth.prepareAccountFolder(id, target)
+        } catch {
+          // The caller needs the error that stopped the save, not this one.
+        }
+      }
+      throw error
+    }
+    const now = Date.now()
+    selection.saveSettings({
+      claudeManagedAccounts: [
+        ...accounts.filter((entry) => entry.id !== id),
+        {
+          id,
+          email: endpoint.label,
+          managedAuthPath: folder.readPath,
+          managedAuthRuntime: 'host',
+          wslDistro: null,
+          wslLinuxAuthPath: null,
+          authMethod: 'api-endpoint',
+          apiEndpoint,
+          createdAt: saved?.createdAt ?? now,
+          updatedAt: now,
+          lastAuthenticatedAt: now
+        }
+      ]
+    })
+    rateLimits.evictInactiveClaudeCache(id)
+    await runtimeAuth.syncForCurrentSelection(target)
+    return selection.list()
   }
 
   async finish(
@@ -134,6 +225,38 @@ export class ClaudeAccountRegistration {
     selection.refreshUsage(undefined, target)
     return selection.list()
   }
+}
+
+const CLAUDE_ENDPOINT_SETTINGS_FAILED_MESSAGE =
+  "Orca couldn't add the endpoint to this account's Claude settings. Check that ~/.claude/settings.json is valid JSON, then save again."
+
+function sameOrigin(saved: string | undefined, next: string): boolean {
+  try {
+    return Boolean(saved) && new URL(saved!).origin === new URL(next.trim()).origin
+  } catch {
+    return false
+  }
+}
+
+function settingsCarryEndpoint(home: string, baseUrl: string): boolean {
+  const settings = readClaudeProfileObject(join(home, 'settings.json'))
+  const env = settings.kind === 'present' ? settings.value.env : undefined
+  return (
+    typeof env === 'object' &&
+    env !== null &&
+    (env as Record<string, unknown>).ANTHROPIC_BASE_URL === baseUrl
+  )
+}
+
+function endpointAccountMatches(
+  account: ClaudeManagedAccount,
+  endpoint: ClaudeApiEndpointAccountRequest
+): boolean {
+  return (
+    account.authMethod === 'api-endpoint' &&
+    account.email.toLowerCase() === endpoint.label.toLowerCase() &&
+    account.apiEndpoint?.baseUrl === endpoint.baseUrl
+  )
 }
 
 function signInTarget(request: ClaudeAccountSelectionTarget): ClaudeAccountSelectionTarget {

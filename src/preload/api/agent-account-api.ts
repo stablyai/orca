@@ -1,5 +1,6 @@
 import type {
   ClaudeAccountSelectionChange,
+  ClaudeApiEndpointAccountRequest,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
@@ -57,6 +58,11 @@ export type ClaudeAccountsApi = {
   }) => Promise<ClaudeRateLimitAccountsState>
   /** The pending sign-in's link once Claude hands it over; null if it ends without one. */
   waitForSignInLink: () => Promise<string | null>
+  /** Add an Anthropic-compatible endpoint account, or edit one when `accountId` is given. */
+  saveApiEndpoint: (args: {
+    endpoint: ClaudeApiEndpointAccountRequest
+    accountId?: string
+  }) => Promise<ClaudeRateLimitAccountsState>
   remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
   select: (args: {
     accountId: string | null
