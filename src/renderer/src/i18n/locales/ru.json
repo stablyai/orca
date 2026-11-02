@@ -21126,7 +21126,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Агент [необязательно]",
-      "createDescription": "Выберите проект и название рабочего пространства. При желании выберите агента для запуска."
+      "createDescription": "Выберите проект и название рабочего пространства. При желании выберите агента для запуска.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Выберите, выполнять ли настройку перед созданием этого рабочего пространства.",
+        "cancel": "Отмена",
+        "retry": "Повторить",
+        "setupScript": "Скрипт настройки",
+        "defaultTabCommands": "Команды вкладок по умолчанию",
+        "setupAndDefaultTabs": "Настройка и команды вкладок по умолчанию",
+        "askRunSetup": "Выполнить настройку сейчас?",
+        "askRunDefaultTabs": "Выполнить команды вкладок по умолчанию сейчас?",
+        "askRunSetupAndDefaultTabs": "Выполнить настройку и команды вкладок по умолчанию сейчас?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + локальные",
+        "localSource": "локальные настройки"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Задача уже изменяется другой операцией."

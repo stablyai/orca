@@ -19735,7 +19735,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [オプション]",
-      "createDescription": "プロジェクトとワークスペース名を選択します。開始する場合は Agent を選択してください。"
+      "createDescription": "プロジェクトとワークスペース名を選択します。開始する場合は Agent を選択してください。",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "このワークスペースを作成する前にセットアップを実行するかどうかを選択します。",
+        "cancel": "キャンセル",
+        "retry": "再試行",
+        "setupScript": "セットアップスクリプト",
+        "defaultTabCommands": "デフォルトタブのコマンド",
+        "setupAndDefaultTabs": "セットアップとデフォルトタブのコマンド",
+        "askRunSetup": "今すぐセットアップを実行しますか？",
+        "askRunDefaultTabs": "デフォルトタブのコマンドを今すぐ実行しますか？",
+        "askRunSetupAndDefaultTabs": "セットアップとデフォルトタブのコマンドを今すぐ実行しますか？",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + ローカル",
+        "localSource": "ローカル設定"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "別の Issue の変更が進行中です。"

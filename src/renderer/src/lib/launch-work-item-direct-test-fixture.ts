@@ -54,6 +54,7 @@ const mocks: DirectLaunchMocks = vi.hoisted(() => ({
 
 vi.mock('@/store', async () => {
   const { createStore } = await import('zustand/vanilla')
+  const { useStore } = await import('zustand')
   const store = createStore(() => mocks.store)
   Object.defineProperty(mocks, 'store', {
     get: store.getState,
@@ -61,10 +62,17 @@ vi.mock('@/store', async () => {
       store.setState(state, true)
     }
   })
-  return { useAppStore: store }
+  return {
+    useAppStore: Object.assign(
+      (selector: (state: typeof mocks.store) => unknown) => useStore(store, selector),
+      store
+    )
+  }
 })
 
-vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
+vi.mock('sonner', () => ({
+  toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
+}))
 
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mocks.pasteDraftWhenAgentReady
@@ -160,13 +168,17 @@ beforeEach(() => {
   hostMocks.callRuntimeRpc.mockReset().mockResolvedValue({ agents: [] })
   hostMocks.supports.mockReset().mockResolvedValue(false)
   hostMocks.subscribe.mockReset()
-  vi.stubGlobal('window', {
-    api: {
-      worktrees: {
-        resolvePrBase: mocks.resolvePrBase
+  const testWindow = typeof window === 'undefined' ? {} : window
+  vi.stubGlobal(
+    'window',
+    Object.assign(testWindow, {
+      api: {
+        worktrees: {
+          resolvePrBase: mocks.resolvePrBase
+        }
       }
-    }
-  })
+    })
+  )
   hostMocks.checkRuntimeHooks.mockResolvedValue({
     hasHooks: false,
     hooks: null,

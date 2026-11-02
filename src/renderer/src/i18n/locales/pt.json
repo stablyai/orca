@@ -21407,7 +21407,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Agente [Opcional]",
-      "createDescription": "Escolha o projeto e o nome do espaço de trabalho. Selecione um agente se quiser iniciar um."
+      "createDescription": "Escolha o projeto e o nome do espaço de trabalho. Selecione um agente se quiser iniciar um.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Escolha se deseja executar a configuração antes de criar este espaço de trabalho.",
+        "cancel": "Cancelar",
+        "retry": "Tentar novamente",
+        "setupScript": "Script de configuração",
+        "defaultTabCommands": "Comandos das abas padrão",
+        "setupAndDefaultTabs": "Configuração e comandos das abas padrão",
+        "askRunSetup": "Executar a configuração agora?",
+        "askRunDefaultTabs": "Executar os comandos das abas padrão agora?",
+        "askRunSetupAndDefaultTabs": "Executar a configuração e os comandos das abas padrão agora?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "configurações locais"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Outra alteração de issue está em andamento."

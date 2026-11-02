@@ -20541,7 +20541,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent (facultatif)",
-      "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un."
+      "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Choisissez si le setup doit être exécuté avant de créer cet espace de travail.",
+        "cancel": "Annuler",
+        "retry": "Réessayer",
+        "setupScript": "Script de setup",
+        "defaultTabCommands": "Commandes des onglets par défaut",
+        "setupAndDefaultTabs": "Setup et commandes des onglets par défaut",
+        "askRunSetup": "Exécuter le setup maintenant ?",
+        "askRunDefaultTabs": "Exécuter les commandes des onglets par défaut maintenant ?",
+        "askRunSetupAndDefaultTabs": "Exécuter le setup et les commandes des onglets par défaut maintenant ?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + local",
+        "localSource": "paramètres locaux"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Une autre modification d'issue est en cours."

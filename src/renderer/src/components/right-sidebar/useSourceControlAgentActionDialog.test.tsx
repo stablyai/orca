@@ -793,3 +793,26 @@ it.each([
     expect(f.persist).not.toHaveBeenCalled()
   }
 )
+
+it('owns one pending Start, carries its signal, and permits a fresh Start after setup cancellation', async () => {
+  const f = renderDialog(false, false)
+  const choice = Promise.withResolvers<'cancelled'>()
+  f.onStart.mockImplementationOnce(() => choice.promise)
+  await waitFor(() => expect(f.result.current.canStart).toBe(true))
+  let first: Promise<void> | undefined
+  act(() => {
+    first = f.result.current.handleStart()
+  })
+  await waitFor(() => expect(f.onStart).toHaveBeenCalledOnce())
+  expect(f.onStart.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal)
+  await act(async () => f.result.current.handleStart())
+  expect(f.onStart).toHaveBeenCalledOnce()
+  await act(async () => {
+    choice.resolve('cancelled')
+    await first
+  })
+  await act(async () => f.result.current.handleStart())
+  expect(f.onStart).toHaveBeenCalledTimes(2)
+  expect(f.onStart.mock.calls[1][0].signal).not.toBe(f.onStart.mock.calls[0][0].signal)
+  f.unmount()
+})

@@ -20438,7 +20438,23 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [optional]",
-      "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen."
+      "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Auswählen, ob die Einrichtung vor dem Erstellen dieses Arbeitsbereichs ausgeführt werden soll.",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "setupScript": "Einrichtungsskript",
+        "defaultTabCommands": "Standard-Tab-Befehle",
+        "setupAndDefaultTabs": "Einrichtung und Standard-Tab-Befehle",
+        "askRunSetup": "Einrichtung jetzt ausführen?",
+        "askRunDefaultTabs": "Standard-Tab-Befehle jetzt ausführen?",
+        "askRunSetupAndDefaultTabs": "Einrichtung und Standard-Tab-Befehle jetzt ausführen?",
+        "yamlSource": "orca.yaml",
+        "bothSources": "orca.yaml + lokal",
+        "localSource": "Lokale Einstellungen"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Eine weitere Issue-Änderung ist in Bearbeitung."

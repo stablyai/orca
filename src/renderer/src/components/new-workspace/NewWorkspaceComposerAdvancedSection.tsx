@@ -1,7 +1,11 @@
 import React from 'react'
+import { WorkspaceSetupSection } from './WorkspaceSetupSection'
+import { selectWorkspaceSetupCopy } from './workspace-setup-section-model'
+import {
+  getComposerWorkspaceSetupLabels,
+  getComposerSetupStartupLabel
+} from './workspace-setup-composer-copy'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import { cn } from '@/lib/utils'
 import {
@@ -13,20 +17,6 @@ import {
 import { translate } from '@/i18n/i18n'
 import { ComposerParentWorktreePicker } from './ComposerParentWorktreePicker'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
-
-function SetupCommandPreview({
-  setupConfig
-}: {
-  setupConfig: NonNullable<NewWorkspaceComposerCardProps['setupConfig']>
-}): React.JSX.Element {
-  return (
-    <div className="rounded-md border border-border/60 bg-muted/40 shadow-inner">
-      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-5 text-foreground/90 scrollbar-sleek">
-        {setupConfig.command}
-      </pre>
-    </div>
-  )
-}
 
 type NewWorkspaceComposerAdvancedSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -65,11 +55,6 @@ type NewWorkspaceComposerAdvancedSectionProps = Pick<
   sparseEditing?: boolean
   onSparseEditingChange: (editing: boolean) => void
   branchNameInputId: string
-  setupConfigLabel: string
-  setupRunLabel: string
-  setupAskLabel: string
-  setupRunButtonLabel: string
-  setupSkipButtonLabel: string
   showSetupAgentStartupPolicy: boolean
 }
 
@@ -95,11 +80,6 @@ export function NewWorkspaceComposerAdvancedSection({
   onNoteChange,
   setupControlsEnabled = true,
   setupConfig,
-  setupConfigLabel,
-  setupRunLabel,
-  setupAskLabel,
-  setupRunButtonLabel,
-  setupSkipButtonLabel,
   requiresExplicitSetupChoice,
   resolvedSetupDecision,
   onSetupDecisionChange,
@@ -240,116 +220,24 @@ export function NewWorkspaceComposerAdvancedSection({
           </div>
 
           {setupControlsEnabled && setupConfig ? (
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-xs font-medium text-muted-foreground">
-                  {setupConfigLabel}
-                </label>
-                <span className="rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                  {setupConfig.source === 'yaml'
-                    ? translate('auto.components.NewWorkspaceComposerCard.23bb365554', 'orca.yaml')
-                    : setupConfig.source === 'both'
-                      ? translate(
-                          'auto.components.NewWorkspaceComposerCard.326a578923',
-                          'orca.yaml + local'
-                        )
-                      : translate(
-                          'auto.components.NewWorkspaceComposerCard.92e34f0311',
-                          'local settings'
-                        )}
-                </span>
-              </div>
-
-              <SetupCommandPreview setupConfig={setupConfig} />
-
-              {!requiresExplicitSetupChoice || showSetupAgentStartupPolicy ? (
-                <div className="rounded-md border border-border/60 bg-muted/25">
-                  {requiresExplicitSetupChoice ? null : (
-                    <div className="flex items-center justify-between gap-3 p-3">
-                      <span className="text-xs font-medium text-foreground">{setupRunLabel}</span>
-                      <SettingsSwitch
-                        checked={resolvedSetupDecision === 'run'}
-                        onChange={() =>
-                          onSetupDecisionChange(resolvedSetupDecision === 'run' ? 'skip' : 'run')
-                        }
-                        ariaLabel={setupRunLabel}
-                      />
-                    </div>
-                  )}
-                  {showSetupAgentStartupPolicy ? (
-                    <div className="flex items-start justify-between gap-3 p-3">
-                      <span
-                        className={cn(
-                          'min-w-0',
-                          resolvedSetupDecision === 'run' ? '' : 'opacity-50'
-                        )}
-                      >
-                        <span className="block text-xs font-medium text-foreground">
-                          {translate(
-                            'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
-                            'Wait for setup to complete before starting agent'
-                          )}
-                        </span>
-                      </span>
-                      <SettingsSwitch
-                        checked={setupAgentStartupPolicy === 'wait-for-setup'}
-                        disabled={resolvedSetupDecision !== 'run'}
-                        onChange={() =>
-                          onSetupAgentStartupPolicyChange(
-                            setupAgentStartupPolicy === 'wait-for-setup'
-                              ? 'start-immediately'
-                              : 'wait-for-setup'
-                          )
-                        }
-                        ariaLabel={translate(
-                          'auto.components.NewWorkspaceComposerCard.waitForSetupBeforeAgent',
-                          'Wait for setup to complete before starting agent'
-                        )}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {requiresExplicitSetupChoice ? (
-                <div className="space-y-2">
-                  <div className="text-[11px] font-medium text-muted-foreground">
-                    {setupAskLabel}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => onSetupDecisionChange('run')}
-                      variant={setupDecision === 'run' ? 'default' : 'outline'}
-                      size="sm"
-                    >
-                      {setupRunButtonLabel}
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => onSetupDecisionChange('skip')}
-                      variant={setupDecision === 'skip' ? 'secondary' : 'outline'}
-                      size="sm"
-                    >
-                      {setupSkipButtonLabel}
-                    </Button>
-                  </div>
-                  {!setupDecision ? (
-                    <div className="text-xs text-muted-foreground">
-                      {shouldWaitForSetupCheck
-                        ? translate(
-                            'auto.components.NewWorkspaceComposerCard.803b7fe72f',
-                            'Checking setup configuration...'
-                          )
-                        : translate(
-                            'auto.components.NewWorkspaceComposerCard.9a70e4859e',
-                            'Choose whether to run setup before creating this workspace.'
-                          )}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+            <WorkspaceSetupSection
+              setupConfig={setupConfig}
+              copy={selectWorkspaceSetupCopy(setupConfig, getComposerWorkspaceSetupLabels())}
+              requiresExplicitSetupChoice={requiresExplicitSetupChoice}
+              resolvedSetupDecision={resolvedSetupDecision}
+              setupDecision={setupDecision}
+              onSetupDecisionChange={onSetupDecisionChange}
+              shouldWaitForSetupCheck={shouldWaitForSetupCheck}
+              startupPolicy={
+                showSetupAgentStartupPolicy
+                  ? {
+                      value: setupAgentStartupPolicy,
+                      onChange: onSetupAgentStartupPolicyChange,
+                      label: getComposerSetupStartupLabel()
+                    }
+                  : undefined
+              }
+            />
           ) : null}
 
           {sparseControlsEnabled ? (

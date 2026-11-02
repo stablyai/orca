@@ -218,6 +218,119 @@ describe('useComposerState integrated lifecycle', () => {
     }
   })
 
+  it.each(['ask', 'submit-error', 'background-error'] as const)(
+    'preserves real composer setup probe, selection and Create behavior for %s',
+    async (outcome) => {
+      const original = useAppStore.getState()
+      const response = Promise.withResolvers<CreateWorktreeResult>()
+      const create = vi.fn<Window['api']['worktrees']['create']>().mockReturnValue(response.promise)
+      const check = vi
+        .fn<Window['api']['hooks']['check']>()
+        .mockImplementation(async ({ background }) => {
+          if (background) {
+            if (outcome === 'background-error') {
+              throw new Error('probe failed')
+            }
+            return {
+              hasHooks: false,
+              hooks: null,
+              mayNeedUpdate: false,
+              unavailable: 'wsl-distro-stopped'
+            }
+          }
+          if (outcome === 'submit-error') {
+            throw new Error('foreground failed')
+          }
+          return {
+            hasHooks: true,
+            hooks: { scripts: { setup: 'echo prepared' } },
+            mayNeedUpdate: false
+          }
+        })
+      const gh = {
+        repoSlug: vi.fn<Window['api']['gh']['repoSlug']>().mockResolvedValue(null),
+        listWorkItems: vi.fn<Window['api']['gh']['listWorkItems']>().mockResolvedValue({
+          items: [],
+          sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+        })
+      }
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: {
+          ...window.api,
+          gh,
+          hooks: { check },
+          worktrees: { ...window.api.worktrees, create }
+        }
+      })
+      useAppStore.setState(useAppStore.getInitialState(), true)
+      const repo: Repo = {
+        id: 'setup-repo',
+        path: '/setup-repo',
+        displayName: 'Setup repo',
+        badgeColor: '',
+        addedAt: 0,
+        hookSettings: { mode: 'auto', setupRunPolicy: 'ask', scripts: { setup: '', archive: '' } }
+      }
+      const projection = projectHostSetupProjectionFromRepos([repo])
+      useAppStore.setState({
+        repos: [repo],
+        projects: [...projection.projects],
+        projectHostSetups: [...projection.setups],
+        sparsePresetsByRepo: { [repo.id]: [] },
+        trustedOrcaHooks: { [repo.id]: { all: { approvedAt: 1 } } }
+      })
+      const composer = renderHook(() =>
+        useComposerState({
+          initialRepoId: repo.id,
+          initialName: 'setup-review',
+          persistDraft: false
+        })
+      )
+      try {
+        await waitFor(() =>
+          expect(check).toHaveBeenCalledWith({ repoId: repo.id, hostId: 'local', background: true })
+        )
+        expect(composer.result.current.createDisabled).toBe(false)
+        await waitFor(() =>
+          expect(composer.result.current.cardProps.shouldWaitForSetupCheck).toBe(
+            outcome !== 'background-error'
+          )
+        )
+        await act(async () => composer.result.current.submitQuick(null))
+        if (outcome === 'ask') {
+          expect(create).not.toHaveBeenCalled()
+          expect(composer.result.current.cardProps.advancedOpen).toBe(true)
+          expect(composer.result.current.createDisabled).toBe(true)
+          act(() => composer.result.current.cardProps.onSetupDecisionChange('skip'))
+          expect(composer.result.current.cardProps.setupDecision).toBe('skip')
+          expect(composer.result.current.createDisabled).toBe(false)
+          expect(create).not.toHaveBeenCalled()
+          await act(async () => composer.result.current.submitQuick(null))
+        }
+        await waitFor(() => expect(create).toHaveBeenCalledOnce())
+        expect(create).toHaveBeenCalledWith(
+          expect.objectContaining({ setupDecision: outcome === 'ask' ? 'skip' : 'inherit' })
+        )
+        expect(check).toHaveBeenCalledTimes(outcome === 'background-error' ? 1 : 2)
+        if (outcome !== 'background-error') {
+          expect(check).toHaveBeenLastCalledWith({ repoId: repo.id, hostId: 'local' })
+        }
+        await act(async () =>
+          response.resolve({
+            worktree: makeWorktree({ id: 'setup-result', repoId: repo.id, path: '/setup-result' })
+          })
+        )
+        await waitFor(() =>
+          expect(useAppStore.getState().worktreesByRepo[repo.id]?.[0].id).toBe('setup-result')
+        )
+      } finally {
+        composer.unmount()
+        useAppStore.setState(original, true)
+      }
+    }
+  )
+
   it('composes two live composers and exposes the parent-worktree control state', () => {
     useAppStore.setState({
       repos: [],
