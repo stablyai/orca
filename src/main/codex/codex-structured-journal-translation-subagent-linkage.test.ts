@@ -88,6 +88,49 @@ function harness(primaryThreadId: string | null = PARENT) {
 }
 
 describe('codex journal translation — subagent producer linkage', () => {
+  it('retains child assignments and follow-up inputs while root user echoes stay submission-owned', () => {
+    const { on, item, spawn, writes } = harness()
+    on(PARENT, 'turn/started', { turn: { id: 'parent-turn' } })
+    spawn(PARENT, 'parent-turn', CHILD, '/root/review')
+    on(CHILD, 'turn/started', { turn: { id: 'child-turn' } })
+    item(CHILD, 'item/completed', 'child-turn', {
+      type: 'userMessage',
+      id: 'initial-task',
+      content: [{ type: 'text', text: 'Review the complete diff and report regressions.' }]
+    })
+    item(CHILD, 'item/completed', 'child-turn', {
+      type: 'userMessage',
+      id: 'follow-up',
+      content: [{ type: 'text', text: 'Also check mobile history.' }]
+    })
+    item(PARENT, 'item/completed', 'parent-turn', {
+      type: 'userMessage',
+      id: 'root-echo',
+      content: [{ type: 'text', text: 'Root submission already recorded' }]
+    })
+    const inputs = writes.filter(
+      (write) => write.body.kind === 'message' && write.body.role === 'user'
+    )
+    expect(inputs.map((write) => ({ body: write.body, linkage: write.linkage }))).toEqual([
+      {
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Review the complete diff and report regressions.' }]
+        },
+        linkage: CHILD_LINKAGE
+      },
+      {
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Also check mobile history.' }]
+        },
+        linkage: CHILD_LINKAGE
+      }
+    ])
+  })
+
   it("stamps every row a child thread produces, and nothing on the session's own", () => {
     const { on, item, spawn, linkageOf, writes } = harness()
     on(PARENT, 'turn/started', { turn: { id: 'pt' } })

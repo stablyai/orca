@@ -35,6 +35,7 @@ export const ORCHESTRATION_TARGET_PARAM: Readonly<
   'orchestration.dispatch': 'to',
   'orchestration.inbox': 'terminal',
   'orchestration.sessionAddress': 'sessionId',
+  'orchestration.sessionChildren': 'sessionId',
   'orchestration.partyLocation': 'address',
   'orchestration.workerStart': 'terminal'
 }
