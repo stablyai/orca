@@ -1,6 +1,6 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
 export const bottomDrawerStyles = themedStyleSheet(() => ({
   overlay: {

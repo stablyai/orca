@@ -85,7 +85,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: hosts.View,
   X: hosts.View
 }))
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
+vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: hosts.View }))
 const lists = vi.hoisted(() => {
   const held: {
     custom: { items: CustomKey[]; onReorder: (ids: string[]) => void } | null

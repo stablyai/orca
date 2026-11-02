@@ -2,12 +2,12 @@ import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BottomDrawer } from './BottomDrawer'
-import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
+import { findByHostType } from '../../test-support/react-test-renderer-host-nodes'
 
 // BottomDrawer also carries the option pager, which loads these at import.
 vi.mock('react-native', () => ({ StyleSheet: { create: <T>(sheet: T) => sheet }, View: 'View' }))
 vi.mock('react-native-reanimated', async () =>
-  (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+  (await import('../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
 )
 vi.mock('./mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'MountedBottomDrawer'

@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 import { Copy, TextSelect, X } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { ActionSheetContent } from '../../../components/ActionSheetModal'
-import { BottomDrawer } from '../../../components/BottomDrawer'
+import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { useClipboardWriter } from '../../../platform/clipboard'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
 import { colors, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'

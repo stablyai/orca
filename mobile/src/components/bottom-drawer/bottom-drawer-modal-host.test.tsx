@@ -6,8 +6,8 @@ type Timing = { to: number; callback?: (finished: boolean) => void }
 
 const animations = vi.hoisted((): { running: Timing[] } => ({ running: [] }))
 
-vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
-vi.mock('../platform/keyboard-occlusion', () => ({
+vi.mock('../../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../../platform/keyboard-occlusion', () => ({
   currentSoftKeyboardHeight: () => 0,
   subscribeSoftKeyboard: () => () => {}
 }))
@@ -41,9 +41,9 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
-vi.mock('./AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
+vi.mock('../AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
 // The OS motion setting is read through AccessibilityInfo, which the react-native mock leaves out.
-vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
+vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
 vi.mock('react-native-reanimated', () => ({
   useReducedMotion: () => false,
   Easing: { bezier: () => (t: number) => t },

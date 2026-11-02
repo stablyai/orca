@@ -14,12 +14,12 @@ import {
   PUSH_SLIDE_MS,
   PUSH_UNDER_DIM,
   PUSH_UNDER_SHIFT
-} from '../navigation/push-motion'
+} from '../../navigation/push-motion'
 import { useDrawerReducedMotion } from './bottom-drawer-constants'
-import { REDUCED_MOTION_FADE_MS } from './sheet-motion-values'
-import { colors } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { REDUCED_MOTION_FADE_MS } from '../sheet-motion-values'
+import { colors } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { KeyedBottomDrawer } from './keyed-bottom-drawer'
 
 type Props = {

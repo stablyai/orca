@@ -13,7 +13,7 @@ vi.mock('react-native-reanimated', () => ({
     return to
   }
 }))
-vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
+vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
 
 import { hideDrawer, showDrawer } from './use-bottom-drawer-drag'
 

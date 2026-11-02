@@ -31,10 +31,10 @@ vi.mock('react-native', async () => {
   }
 })
 vi.mock(
-  '../platform/keyboard-occlusion',
-  async () => await import('../platform/keyboard-occlusion.web')
+  '../../platform/keyboard-occlusion',
+  async () => await import('../../platform/keyboard-occlusion.web')
 )
-vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 24, bottom: 0, left: 0, right: 0 })
 }))
@@ -55,9 +55,9 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
-vi.mock('./AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
+vi.mock('../AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
 // The OS motion setting is read through AccessibilityInfo, which the react-native mock leaves out.
-vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
+vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
 vi.mock('react-native-reanimated', async () => {
   const React = await import('react')
   return {
@@ -76,7 +76,7 @@ vi.mock('react-native-reanimated', async () => {
 })
 
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
-import { publishShellKeyboardSource } from '../platform/keyboard-occlusion.web'
+import { publishShellKeyboardSource } from '../../platform/keyboard-occlusion.web'
 
 const RESTING_HEIGHT = 900
 const IME_HEIGHT = 300

@@ -19,7 +19,7 @@ import {
   REDUCED_MOTION_DISMISS_FADE_MS,
   REDUCED_MOTION_FADE_MS,
   SETTLE_SPRING
-} from './sheet-motion-values'
+} from '../sheet-motion-values'
 import {
   bottomDrawerDismissMotion,
   bottomDrawerDragProgress,

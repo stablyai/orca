@@ -43,9 +43,9 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
-vi.mock('./AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
+vi.mock('../AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
 // The OS motion setting is read through AccessibilityInfo, which the react-native mock leaves out.
-vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
+vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
 vi.mock('react-native-reanimated', () => {
   function makeShared(key: string, initial: number) {
     let value = initial
