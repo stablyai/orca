@@ -68,6 +68,8 @@ export function ClickUpTaskDetailSheet({
   taskRef.current = task
   const draftRef = useRef({ name, description, status, priority, dueDate })
   draftRef.current = { name, description, status, priority, dueDate }
+  const commentDraftRef = useRef(comment)
+  commentDraftRef.current = comment
   const commentTaskIdRef = useRef<string | null>(null)
   // Why: each comment submission owns the pending state; a task switch or a
   // newer submission bumps this, so a late result can't touch the current one.
@@ -196,10 +198,11 @@ export function ClickUpTaskDetailSheet({
     const submission = ++commentSubmissionRef.current
     const isCurrent = (): boolean => commentSubmissionRef.current === submission
     const taskId = task.id
+    const submittedDraft = comment
     const result = await clickUpAddTaskComment(
       sourceContext,
       taskId,
-      comment.trim(),
+      submittedDraft.trim(),
       task.workspaceId
     ).catch((cause: unknown) => ({
       ok: false as const,
@@ -213,11 +216,14 @@ export function ClickUpTaskDetailSheet({
       setError(result.error)
       return
     }
+    const draftUnchanged = commentDraftRef.current === submittedDraft
+    if (isCurrent() && taskRef.current?.id === taskId && draftUnchanged) {
+      setComment('')
+    }
     try {
       const nextComments = await clickUpTaskComments(sourceContext, taskId, task.workspaceId)
       if (isCurrent()) {
         setComments(nextComments)
-        setComment('')
       }
     } catch (cause: unknown) {
       if (isCurrent()) {

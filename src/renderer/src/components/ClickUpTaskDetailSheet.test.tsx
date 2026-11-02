@@ -10,12 +10,13 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   patch: vi.fn(),
   refresh: vi.fn(),
-  addComment: vi.fn()
+  addComment: vi.fn(),
+  listComments: vi.fn()
 }))
 vi.mock('@/runtime/runtime-clickup-client', () => ({
   clickUpUpdateTask: mocks.update,
   clickUpListLists: vi.fn().mockResolvedValue([]),
-  clickUpTaskComments: vi.fn().mockResolvedValue([]),
+  clickUpTaskComments: mocks.listComments,
   clickUpAddTaskComment: mocks.addComment
 }))
 vi.mock('@/store', () => ({
@@ -56,6 +57,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.update.mockResolvedValue({ ok: true })
   mocks.refresh.mockResolvedValue(null)
+  mocks.listComments.mockResolvedValue([])
+  mocks.addComment.mockResolvedValue({ ok: true })
 })
 
 describe('ClickUp task saves', () => {
@@ -211,5 +214,44 @@ describe('ClickUp comment draft', () => {
     await waitFor(() => expect(box().value).toBe(''))
     fireEvent.change(box(), { target: { value: 'next on B' } })
     expect(button().disabled).toBe(false)
+  })
+
+  it('keeps a newer comment draft typed while the add request is pending', async () => {
+    const pending: ((value: { ok: true }) => void)[] = []
+    mocks.addComment.mockImplementation(
+      () => new Promise<{ ok: true }>((resolve) => pending.push(resolve))
+    )
+    let resolveComments: (value: unknown[]) => void = () => {}
+    mocks.listComments.mockImplementation(
+      () =>
+        new Promise<unknown[]>((resolve) => {
+          resolveComments = resolve
+        })
+    )
+    render(renderSheet(task))
+    const box = (): HTMLTextAreaElement => screen.getByPlaceholderText('Add a comment…')
+    fireEvent.change(box(), { target: { value: 'first' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add comment' }))
+    await waitFor(() => expect(mocks.addComment).toHaveBeenCalled())
+    fireEvent.change(box(), { target: { value: 'second while pending' } })
+    pending[0]({ ok: true })
+    await waitFor(() => expect(mocks.listComments).toHaveBeenCalled())
+    expect(box().value).toBe('second while pending')
+    resolveComments([])
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: 'Add comment' }) as HTMLButtonElement).disabled
+      ).toBe(false)
+    )
+  })
+
+  it('clears the submitted draft when the comment write succeeds but reload fails', async () => {
+    mocks.listComments.mockRejectedValue(new Error('Reload failed'))
+    render(renderSheet(task))
+    const box = (): HTMLTextAreaElement => screen.getByPlaceholderText('Add a comment…')
+    fireEvent.change(box(), { target: { value: 'posted once' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add comment' }))
+    await waitFor(() => expect(screen.getByText('Reload failed')).toBeTruthy())
+    expect(box().value).toBe('')
   })
 })
