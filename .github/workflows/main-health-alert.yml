@@ -1,0 +1,40 @@
+name: Main health alert
+
+# Main pushes run the full PR Checks; tell Slack when main turns red and once when it recovers.
+on:
+  workflow_run:
+    workflows: [PR Checks]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+# No concurrency group: a pending run in a group is replaced, which would drop alerts in a burst.
+jobs:
+  alert:
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion != 'cancelled' &&
+      github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /config/scripts/main-health-alert.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Report main health transitions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # Optional JSON of GitHub login to Slack member ID; unmapped people get a GitHub profile link.
+          SLACK_USER_IDS: ${{ vars.SLACK_USER_IDS_BY_GITHUB_LOGIN }}
+        run: node config/scripts/main-health-alert.mjs
