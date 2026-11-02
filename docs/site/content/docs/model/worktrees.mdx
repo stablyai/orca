@@ -134,6 +134,8 @@ To create one, hover the project group's header row in the sidebar and click the
 
 When deleting a project group, Orca also offers a checkbox to remove the group's contained projects (the underlying repo registrations) in the same action — so cleanup of a no-longer-used cluster is one confirmation, not several.
 
+Group changes are sent to the computer that owns the group, even when another computer is selected. A project can only join a group stored on the same computer; moving it between groups does not transfer its files or registration to another host. Dragging or ungrouping a project keeps the selected project's host identity, even when another host has a project with the same ID.
+
 ## Using plain git
 
 Every Orca worktree is a real git worktree. You can open a terminal in it and use `git status`, `git rebase`, `git cherry-pick`, and anything else — Orca picks up the changes next render.

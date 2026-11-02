@@ -110,6 +110,7 @@ export type FolderWorkspacePathStatusCacheEntry = {
 
 export type DeleteProjectGroupWithContainedProjectsOptions = {
   removeContainedProjects: boolean
+  executionHostId?: ExecutionHostId
   // hostId disambiguates which host's group row to delete when the id exists on multiple hosts.
   hostId?: ExecutionHostId
   /** The text a dialog listed when the user confirmed discarding it; other edits are offered back. */
@@ -265,9 +266,12 @@ export type RepoSlice = {
   updateProjectGroup: (
     groupId: string,
     updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
-    options?: { hostId?: ExecutionHostId }
+    options?: { executionHostId?: ExecutionHostId; hostId?: ExecutionHostId }
   ) => Promise<boolean>
-  deleteProjectGroup: (groupId: string, options?: { hostId?: ExecutionHostId }) => Promise<boolean>
+  deleteProjectGroup: (
+    groupId: string,
+    options?: { executionHostId?: ExecutionHostId; hostId?: ExecutionHostId }
+  ) => Promise<boolean>
   deleteProjectGroupWithContainedProjects: (
     groupId: string,
     options: DeleteProjectGroupWithContainedProjectsOptions
