@@ -15,6 +15,7 @@ import {
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
 import { MAILBOX_POINTER_RESERVED } from './orchestration/db/messages/mailbox-pointer-enter-state'
+import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -46,6 +47,40 @@ describe('mailbox delivery recheck arms only for delivery work', () => {
     vi.useRealTimers()
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('holds mail behind a recorded unfocused default-caret draft and delivers after it is cleared', async () => {
+    const db = createDatabase('orca-labelled-draft-hold-')
+    const { runtime, write } = createRuntime(db, {
+      getAgentStatusSnapshot: () => [hookRow('claude', 'done')],
+      checkHookAgentPresence: async () => 'live',
+      launchAgent: 'claude'
+    })
+    try {
+      const run = createBoundRun(db, 'Labelled draft Run')
+      await runtime.listTerminals()
+      runtime.onPtyData(PTY_ID, '\x1b[2J\x1b[H', Date.now())
+      runtime['resizeHeadlessTerminal'](PTY_ID, 100, 30)
+      runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'Refactor the login page so that it')
+      runtime.onPtyData(
+        PTY_ID,
+        readRuntimeFixture('claude-2-1-316-default-labelled-blurred'),
+        Date.now()
+      )
+      await vi.advanceTimersByTimeAsync(200)
+      expect(runtime['isPtyHoldingDelivery'](PTY_ID)).toBe(true)
+      write.mockClear()
+      insertDirectRunMessage(db, run.id, 'Worker heartbeat')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(write).not.toHaveBeenCalled()
+
+      runtime.onPtyData(PTY_ID, '\x1b[2J\x1b[H', Date.now())
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([POINTER, '\r'])
+    } finally {
+      db.close()
     }
   })
 

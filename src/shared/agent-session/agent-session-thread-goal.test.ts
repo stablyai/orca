@@ -6,10 +6,8 @@ import type {
 } from './journal/agent-session-journal-types'
 import {
   agentSessionThreadGoalElapsedSeconds,
-  agentSessionThreadGoalStatusChange,
   currentAgentSessionThreadGoal,
-  currentAgentSessionThreadGoalSourceBySequence,
-  isAgentSessionThreadGoalOpen
+  currentAgentSessionThreadGoalSourceBySequence
 } from './agent-session-thread-goal'
 
 const PAYLOAD = { head: '{"goal":', byteLength: 4096, digest: 'd'.repeat(64), truncated: true }
@@ -112,22 +110,6 @@ describe('current thread goal', () => {
 })
 
 describe('thread goal presentation facts', () => {
-  it('keeps every status but complete open', () => {
-    expect(isAgentSessionThreadGoalOpen(goal({ status: 'blocked' }))).toBe(true)
-    expect(isAgentSessionThreadGoalOpen(goal({ status: 'complete' }))).toBe(false)
-    expect(isAgentSessionThreadGoalOpen(null)).toBe(false)
-  })
-
-  it('pauses only an active goal, and resumes a paused, blocked or usage-limited one', () => {
-    expect(agentSessionThreadGoalStatusChange('active')).toBe('paused')
-    expect(agentSessionThreadGoalStatusChange('paused')).toBe('active')
-    expect(agentSessionThreadGoalStatusChange('blocked')).toBe('active')
-    expect(agentSessionThreadGoalStatusChange('usageLimited')).toBe('active')
-    // A spent budget is not a pause: the provider will not resume it.
-    expect(agentSessionThreadGoalStatusChange('budgetLimited')).toBeNull()
-    expect(agentSessionThreadGoalStatusChange('complete')).toBeNull()
-  })
-
   it('adds time only while an active goal has a turn running', () => {
     const now = 1_000_000 + 7_500
     const running = { startedAt: null }

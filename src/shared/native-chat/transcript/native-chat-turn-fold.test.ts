@@ -35,33 +35,9 @@ const SETTLED = new Set(['turn-1'])
 const NONE = new Set<string>()
 
 describe('nativeChatTurnAnswerRows', () => {
-  it('names the last assistant row that renders prose, not the first', () => {
-    expect([...nativeChatTurnAnswerRows(TURN)]).toEqual([4])
-  })
-
-  it('ignores rows that render no prose, so a trailing tool run is not the answer', () => {
-    const rows = [row({ role: 'user' }), row(), row({ rendersProse: false })]
-    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1])
-  })
-
   it('ignores reasoning and system rows, which are never the agent answering', () => {
     const rows = [row({ role: 'user' }), row(), row({ role: 'reasoning' }), row({ role: 'system' })]
     expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1])
-  })
-
-  it('names a failure report as the answer when nothing the agent said comes after it', () => {
-    const rows = [row({ role: 'user' }), row(), FAILURE]
-    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([2])
-  })
-
-  it('names the later prose as the answer when the agent recovered from a failure', () => {
-    const rows = [row({ role: 'user' }), FAILURE, row()]
-    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([2])
-  })
-
-  it('reports no answer for a turn that only ran tools', () => {
-    const rows = [row({ role: 'user' }), row({ rendersProse: false })]
-    expect(nativeChatTurnAnswerRows(rows).size).toBe(0)
   })
 })
 

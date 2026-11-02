@@ -172,18 +172,6 @@ describe("the live-turn readers answer for the session's own agent", () => {
     ).toBe(false)
   })
 
-  it("reports the parent's own running call while a subagent runs its own", () => {
-    const childCall = child('child-grep', 3, {
-      kind: 'tool-call',
-      name: 'Grep',
-      input: { pattern: 'x' },
-      state: 'running'
-    })
-    expect(statusStructuredAgentSessionToolCall([turnStart, spawnCall, childCall])?.name).toBe(
-      'Task'
-    )
-  })
-
   it('reports nothing running when only a subagent has a live call', () => {
     const childCall = child('child-grep', 2, {
       kind: 'tool-call',

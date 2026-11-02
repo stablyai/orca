@@ -5,6 +5,128 @@ import {
 } from './terminal-composer-draft'
 
 describe('detectTerminalComposerDraft', () => {
+  it.each([
+    { cursorHidden: false },
+    { cursorHidden: true, activeBuffer: 'normal' as const, cursorInverse: false }
+  ])('keeps rule-prefixed draft rows inside a labelled composer with %o', (cursor) => {
+    expect(
+      detectTerminalComposerDraft({
+        rows: ['──────── ultracode ─', '❯ review the results'],
+        typedRows: ['──────── ultracode ─', '❯ review the results'],
+        promptGlyphBoldRows: [false, false],
+        rowsBelow: ['-------- coverage --------', '────────'],
+        typedRowsBelow: ['-------- coverage --------', '────────'],
+        beforeCursor: '❯ review',
+        afterCursor: ' the results',
+        rawAfterCursor: ' the results',
+        cursorViewportRow: 4,
+        ...cursor
+      })
+    ).toMatchObject({
+      text: 'review the results\n-------- coverage --------',
+      promptRow: 4,
+      endRow: 5
+    })
+  })
+
+  describe("with Claude's hidden native cursor", () => {
+    const hiddenCaret = {
+      rows: ['────────', '❯ review the results'],
+      typedRows: ['────────', '❯ review the results'],
+      promptGlyphBoldRows: [false, false],
+      rowsBelow: ['────────'],
+      typedRowsBelow: ['────────'],
+      beforeCursor: '❯ review',
+      afterCursor: ' the results',
+      rawAfterCursor: ' the results',
+      cursorHidden: true,
+      cursorViewportRow: 4
+    }
+
+    it('accepts caret paint at the cursor on the alternate screen', () => {
+      expect(
+        detectTerminalComposerDraft({
+          ...hiddenCaret,
+          activeBuffer: 'alternate',
+          cursorInverse: true
+        })?.text
+      ).toBe('review the results')
+    })
+
+    it.each([
+      { case: 'an unknown buffer without caret paint', overrides: {} },
+      {
+        case: 'a cursor left of the prompt glyph',
+        overrides: {
+          activeBuffer: 'normal' as const,
+          beforeCursor: '',
+          afterCursor: '❯ review the results'
+        }
+      },
+      {
+        case: 'a box without a closing rule',
+        overrides: { activeBuffer: 'normal' as const, rowsBelow: [], typedRowsBelow: [] }
+      },
+      {
+        case: 'a closing rule after a blank row',
+        overrides: {
+          activeBuffer: 'normal' as const,
+          rowsBelow: ['', '────────'],
+          typedRowsBelow: ['', '────────']
+        }
+      },
+      {
+        case: 'an ordinary shell prompt',
+        overrides: {
+          activeBuffer: 'normal' as const,
+          rows: ['~/repo main', '❯ review the results'],
+          typedRows: ['~/repo main', '❯ review the results']
+        }
+      }
+    ])('leaves $case alone', ({ overrides }) => {
+      expect(detectTerminalComposerDraft({ ...hiddenCaret, ...overrides })).toBeNull()
+    })
+  })
+
+  it.each([{ rowsBelow: [] }, { rowsBelow: ['', 'dimmed output', '────────'] }])(
+    'leaves a labelled tool rule over a shell prompt alone with rows below $rowsBelow',
+    ({ rowsBelow }) => {
+      expect(
+        detectTerminalComposerDraft({
+          rows: ['──────── build ─', '❯ git status'],
+          typedRows: ['──────── build ─', '❯ git status'],
+          promptGlyphBoldRows: [false, false],
+          rowsBelow,
+          typedRowsBelow: rowsBelow.map((row) => (row === '────────' ? row : '')),
+          beforeCursor: '❯ git status',
+          afterCursor: '',
+          rawAfterCursor: '',
+          cursorHidden: false,
+          cursorViewportRow: 4
+        })
+      ).toBeNull()
+    }
+  )
+
+  it('recognizes a wrapped placeholder before checking a labelled closing frame', () => {
+    const context = {
+      rows: ['──────── mode label', '❯ Try “fix the'],
+      typedRows: ['──────── mode label', '❯'],
+      promptGlyphBoldRows: [false, false],
+      rowsBelow: [' failing test”', '────────'],
+      typedRowsBelow: ['', '────────'],
+      rowsBelowWrapped: [true, false],
+      beforeCursor: '❯ ',
+      afterCursor: '',
+      rawAfterCursor: 'Try “fix the',
+      cursorHidden: false,
+      cursorViewportRow: 4
+    }
+
+    expect(hasTerminalComposerPlaceholder(context)).toBe(true)
+    expect(detectTerminalComposerDraft(context)).toBeNull()
+  })
+
   it('keeps a typed draft whose stock placeholder is still rendered to its right', () => {
     // Repaints can leave the placeholder beside typed text; do not mask that user draft.
     const context = {

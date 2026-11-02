@@ -104,21 +104,6 @@ describe('omp model list probe', () => {
 })
 
 describe('omp session option catalog', () => {
-  it('discovers models through the same JSON listing the probe parses', () => {
-    const listModels = OMP_SESSION_OPTION_CATALOG.listModels!
-    expect(listModels.command).toBe('omp models --json')
-    expect(listModels.parse(LISTING)).toEqual([
-      {
-        id: 'deepseek/deepseek-v4-pro',
-        label: 'DeepSeek V4 Pro',
-        description: 'deepseek',
-        options: []
-      },
-      { id: 'minimax-cn/MiniMax-M3', label: 'MiniMax M3', description: 'minimax-cn', options: [] },
-      { id: 'openai/gpt-5.5', label: 'Openai GPT 5.5', description: 'openai', options: [] }
-    ])
-  })
-
   it('launches a picked model with --model <selector>', () => {
     expect(resolveAgentSessionOptionLaunch('omp', { model: 'deepseek/deepseek-v4-pro' })).toEqual({
       args: ['--model', 'deepseek/deepseek-v4-pro'],

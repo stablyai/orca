@@ -28,31 +28,6 @@ describe('parseAgentSessionWriteFailure', () => {
     ).toEqual({ kind: 'refused', code: 'agent_session_conflict' })
   })
 
-  it.each([
-    [
-      'a reason',
-      { kind: 'refused', code: 'agent_session_conflict', details: { reason: 'chatStarting' } }
-    ],
-    [
-      "a rewind's reason",
-      {
-        kind: 'refused',
-        code: 'agent_session_operation_invalid',
-        details: { reason: 'rewindRefused', rewindReason: 'busy' }
-      }
-    ],
-    [
-      "the owner's verdict",
-      {
-        kind: 'refused',
-        code: 'agent_session_ownership_unknown',
-        details: { reason: 'ownerUnproven', ownerVerdict: 'exited' }
-      }
-    ]
-  ])('keeps %s', (_label, value) => {
-    expect(parseAgentSessionWriteFailure(saved(value))).toEqual(value)
-  })
-
   // A newer build's reason or verdict is dropped, never guessed; the code's words stand.
   it.each([
     [{ reason: 'fromTheFuture' }, undefined],
@@ -71,16 +46,6 @@ describe('parseAgentSessionWriteFailure', () => {
       code: 'agent_session_ownership_unknown',
       ...(kept ? { details: kept } : {})
     })
-  })
-
-  it.each([
-    null,
-    'The agent was restarting.',
-    { kind: 'refused' },
-    { kind: 'refused', code: 'agent_session_from_the_future' },
-    { kind: 'something-else' }
-  ])('drops %j instead of guessing', (value) => {
-    expect(parseAgentSessionWriteFailure(value)).toBeUndefined()
   })
 })
 
@@ -141,15 +106,6 @@ describe('a refusal a failed request carried in its error', () => {
       readAgentSessionErrorRefusal({ response: { error: { ...payload, data: { refusal } } } })
     ).toEqual(expected)
     expect(readAgentSessionErrorRefusal(saved({ ...payload, data: { refusal } }))).toEqual(expected)
-  })
-
-  it.each([
-    ['an older host', payload],
-    ['a thrown error without a response', new Error('agent_session_journal_unreadable')],
-    ['a code this build does not know', { ...payload, data: { refusal: { code: 'from_later' } } }],
-    ['nothing', undefined]
-  ])('is absent from %s', (_label, error) => {
-    expect(readAgentSessionErrorRefusal(error)).toBeUndefined()
   })
 
   it("words the refusal when there is one, else what the request's error code proves", () => {

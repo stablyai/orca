@@ -4,8 +4,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-port-actions'
-import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
+import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-ports/workspace-port-actions'
+import { browserUrlForPortForwardEntry } from '@/lib/workspace-ports/workspace-port-urls'
 import type {
   EnrichedDetectedPort,
   PortForwardEntry,

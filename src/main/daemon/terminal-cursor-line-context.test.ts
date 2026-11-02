@@ -55,6 +55,91 @@ function observeCellReads(terminal: Terminal) {
 }
 
 describe('readTerminalCursorLineContext', () => {
+  it.each([
+    { fixture: 'claude-2-1-316-labelled-empty', cursorHidden: false },
+    { fixture: 'claude-2-1-316-default-unlabelled-empty', cursorHidden: true }
+  ])(
+    'keeps recorded empty Claude composer $fixture out of draft and placeholder metadata',
+    async ({ fixture, cursorHidden }) => {
+      const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
+      try {
+        await emulator.write(readRuntimeFixture(fixture))
+        const context = emulator.getCursorLineContext()
+        expect(context?.cursorHidden).toBe(cursorHidden)
+        expect(context?.rows.at(-2)).toMatch(/^─{8,}/)
+        expect(detectTerminalComposerDraft(context)).toBeNull()
+        expect(hasTerminalComposerPlaceholder(context)).toBe(false)
+      } finally {
+        emulator.dispose()
+      }
+    }
+  )
+
+  const MULTILINE_DRAFT =
+    'Refactor the login page so that it preserves the existing authentication behavior and includes\nthe coverage report'
+
+  it.each([
+    {
+      fixture: 'claude-2-1-316-default-labelled-middle',
+      cursorInverse: true,
+      draft: { text: MULTILINE_DRAFT, promptRow: 8, cursorRow: 9, endRow: 9 }
+    },
+    {
+      fixture: 'claude-2-1-316-default-unlabelled-middle',
+      cursorInverse: true,
+      draft: { text: MULTILINE_DRAFT, promptRow: 8, cursorRow: 9, endRow: 9 }
+    },
+    {
+      // Focus-out drops the painted caret; the hidden cursor stays parked mid-draft.
+      fixture: 'claude-2-1-316-default-labelled-blurred',
+      cursorInverse: false,
+      draft: { text: 'Refactor the login page so that it', promptRow: 8, cursorRow: 8, endRow: 8 }
+    }
+  ])(
+    "reads Claude's default hidden caret inside $fixture",
+    async ({ fixture, cursorInverse, draft }) => {
+      const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
+      try {
+        await emulator.write(readRuntimeFixture(fixture))
+        const context = emulator.getCursorLineContext()
+        expect(context).toMatchObject({ cursorHidden: true, activeBuffer: 'normal', cursorInverse })
+        expect(detectTerminalComposerDraft(context)).toEqual({ ...draft, promptGlyph: '❯' })
+      } finally {
+        emulator.dispose()
+      }
+    }
+  )
+
+  it.each([
+    // Claude's alternate-screen redraw parks the hidden cursor in a complete box without caret paint.
+    { fixture: 'claude-interrupt-tool-cancel-supported', length: 1321, completeFrame: true },
+    // The dsh first-run guide redraws its text between rules with the cursor hidden.
+    { fixture: 'dsh-tui-0.17/first-run-guide', length: 10355, completeFrame: false }
+  ])(
+    'leaves an alternate-screen hidden cursor without caret paint out of drafts in $fixture',
+    async ({ fixture, length, completeFrame }) => {
+      const emulator = new HeadlessEmulator({ cols: 120, rows: 40 })
+      try {
+        await emulator.write(readRuntimeFixture(fixture).slice(0, length))
+        const context = emulator.getCursorLineContext()
+        expect(context).toMatchObject({
+          cursorHidden: true,
+          activeBuffer: 'alternate',
+          cursorInverse: false
+        })
+        expect(detectTerminalComposerDraft(context)).toBeNull()
+        if (completeFrame && context) {
+          // The buffer type alone keeps this otherwise complete frame out.
+          expect(detectTerminalComposerDraft({ ...context, activeBuffer: 'normal' })?.text).toMatch(
+            /^Use/
+          )
+        }
+      } finally {
+        emulator.dispose()
+      }
+    }
+  )
+
   it('reuses one cell across every scan without retaining it between reads', () => {
     const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
     try {

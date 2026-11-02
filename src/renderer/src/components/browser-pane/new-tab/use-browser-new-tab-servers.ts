@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
-import { workspacePortScanKeyForTarget } from '@/lib/workspace-port-actions'
-import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-port-scan-refresh'
-import { probeWorkspacePortPageForTarget } from '@/lib/workspace-port-scan-client'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
+import { workspacePortScanKeyForTarget } from '@/lib/workspace-ports/workspace-port-actions'
+import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-ports/workspace-port-scan-refresh'
+import { probeWorkspacePortPageForTarget } from '@/lib/workspace-ports/workspace-port-scan-client'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type {
   WorkspacePort,

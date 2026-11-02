@@ -262,7 +262,6 @@ export class PiRpcSession {
       return
     }
     this.publishedExit = true
-    this.unbindReadingControl?.()
     const observedAt = Date.now()
     this.input.events?.observeExit?.(this.heldSends, observedAt)
     const cause = (this.failedCause ??= error)
@@ -286,7 +285,11 @@ export class PiRpcSession {
         }, 2_000)
         timer.unref()
       })
-    ]).finally(() => clearTimeout(timer))
+    ]).finally(() => {
+      clearTimeout(timer)
+      // Final transfer must not treat an already received backlog as startup work.
+      this.unbindReadingControl?.()
+    })
     this.deps.onLifecycle({
       type: 'ended',
       ...(this.connection.lastCloseResult?.killDelivered && this.connection.rootVerdict !== 'exited'

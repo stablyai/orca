@@ -1,13 +1,13 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import {
   PickerModal,
-  BottomDrawer,
   View,
   Text,
   Pressable,
   ScrollView,
   type TaskProvider
 } from './mobile-tasks-dependencies'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import {
   normalizeGitHubPreset,
   getTaskPresetQuery,

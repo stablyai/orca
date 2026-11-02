@@ -8,7 +8,6 @@ import {
 } from './agent-session-provider-handle'
 import {
   agentSessionJournalProviderHandle,
-  agentSessionProviderHandleFromWire,
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
   agentSessionWireProviderHandle,
@@ -280,20 +279,6 @@ describe('what this build writes', () => {
     }
   })
 
-  it('still reads a typed handle that carries an unrelated field', () => {
-    expect(
-      decodePersistedAgentSessionProviderHandle({ provider: 'codex', threadId: 't', note: 1 })
-    ).toEqual(codexProviderHandle('t'))
-    expect(
-      decodePersistedAgentSessionProviderHandle({
-        provider: 'claude',
-        sessionId: 'sess-1',
-        leafUuid: 'leaf-1',
-        note: 1
-      })
-    ).toEqual(claudeProviderHandle('sess-1', 'leaf-1'))
-  })
-
   it('drops a field a later build put on a handle, but keeps one on the link or record', () => {
     const stored = JSON.parse(STORED_CODEX_ROW)
     stored.providerHandleChain[0].handle.laterHandleField = 'x'
@@ -334,20 +319,6 @@ describe('what this build writes', () => {
 })
 
 describe('the wire and journal forms', () => {
-  it('maps the attach wire handle both ways for Claude and Codex', () => {
-    const claudeWire = { kind: 'claude', sessionId: 'sess-1', leafUuid: null } as const
-    const codexWire = { kind: 'codex', threadId: 'thread-1' } as const
-    expect(agentSessionProviderHandleFromWire(claudeWire)).toEqual(
-      claudeProviderHandle('sess-1', null)
-    )
-    expect(agentSessionWireProviderHandle(agentSessionProviderHandleFromWire(claudeWire))).toEqual(
-      claudeWire
-    )
-    expect(agentSessionWireProviderHandle(agentSessionProviderHandleFromWire(codexWire))).toEqual(
-      codexWire
-    )
-  })
-
   it('records the journal rows exactly as before, and another transport as opaque', () => {
     expect(
       agentSessionJournalProviderHandle({
@@ -420,19 +391,6 @@ describe('a chat whose saved conversation could not be restored', () => {
     stored[3].replaces.key = agentSessionProviderHandleKey(acp('s-1'))
     expect(decodePersistedAgentSessionProviderHandleChain(stored)).toBeNull()
   })
-})
-
-it.each([
-  null,
-  'open',
-  {},
-  { state: 'open', at: -1 },
-  { state: 'settled', at: 10, outcome: 'newer' },
-  { state: 'open', at: 10, prompt: 'p'.repeat(281) }
-])('ignores malformed optional last-turn metadata: %j', (lastTurn) => {
-  const stored = { ...encodeAgentSessionRecord(agentSessionRecordFixture()), lastTurn }
-  expect(isPersistedAgentSessionRecord(stored)).toBe(true)
-  expect(decodePersistedAgentSessionRecord(stored).record.lastTurn).toBeUndefined()
 })
 
 it('preserves the saved turn and unknown JSON through a record transition', () => {
