@@ -8,7 +8,6 @@ import {
 } from '../web-session-focus-intent'
 import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
 import { buildHostToLocalTabIdMap, updateHostSessionTabIdMappings } from './layout-groups'
-import { logicalTabIdOf, tabBarIdOf } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 export function prepareWebSessionTabsSnapshotUnified(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBrowser>
@@ -39,9 +38,10 @@ export function prepareWebSessionTabsSnapshotUnified(
   const mirroredTerminalUnifiedTabs = mirroredTerminalTabs.map((entry) =>
     buildTerminalUnifiedTab(
       entry.tab,
+      entry.containerId,
       hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId,
       environmentId,
-      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id)
+      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.containerId)
     )
   )
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)
@@ -53,10 +53,19 @@ export function prepareWebSessionTabsSnapshotUnified(
     ...mirroredEditorUnifiedTabs,
     ...mirroredAgentUnifiedTabs
   ]
+  const mirroredUnifiedIds = new Set(mirroredUnifiedTabs.map((tab) => tab.id))
+  // A tab a host switch refilled is rebuilt with its new content, never kept beside it.
+  const retainedOutsideMirror = retainedUnifiedTabs.filter((tab) => !mirroredUnifiedIds.has(tab.id))
   const nextUnifiedTabs =
-    retainedUnifiedTabs.length + mirroredUnifiedTabs.length > 0
-      ? [...retainedUnifiedTabs, ...mirroredUnifiedTabs]
+    retainedOutsideMirror.length + mirroredUnifiedTabs.length > 0
+      ? [...retainedOutsideMirror, ...mirroredUnifiedTabs]
       : null
+  // The tab holding a terminal: its own id unless a host switch put it in a tab with another.
+  const containerIdByTerminalId = new Map(
+    mirroredTerminalTabs.map((entry) => [entry.tab.id, entry.containerId])
+  )
+  const containerOfTerminal = (terminalTabId: string | null): string | null =>
+    terminalTabId === null ? null : (containerIdByTerminalId.get(terminalTabId) ?? terminalTabId)
   const validUnifiedTabIds = new Set(nextUnifiedTabs?.map((tab) => tab.id) ?? [])
   const activeHostTerminalId =
     terminalSurfaceTabs.find((tab) => tab.id === snapshot.activeTabId)?.id ??
@@ -167,18 +176,6 @@ export function prepareWebSessionTabsSnapshotUnified(
       ? (activeMirroredEditorFileId ?? mirroredEditorTabs[0]?.file.id)
       : mirroredEditorTabs[0]?.file.id) ??
     null
-  // A switched host tab is this client's tab renamed: it keeps its place (client-owned groups).
-  const switchedTabRekeys = new Map<string, string>()
-  for (const entry of mirroredTerminalTabs) {
-    if (entry.renamedFrom) {
-      switchedTabRekeys.set(entry.renamedFrom, entry.tab.id)
-    }
-  }
-  for (const entry of mirroredAgentTabs) {
-    if (entry.renamedFrom) {
-      switchedTabRekeys.set(entry.renamedFrom, entry.unifiedTab.id)
-    }
-  }
   const currentVisibleUnifiedTabId = resolveWebSessionVisibleTabId(
     state,
     worktreeId,
@@ -204,7 +201,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     ? navigationIntentTab?.type === 'browser'
       ? (intentMirroredBrowser?.unifiedTab.id ?? null)
       : navigationIntentTab?.type === 'terminal'
-        ? intentTerminalId
+        ? containerOfTerminal(intentTerminalId)
         : navigationIntentTab?.type === 'agent-session'
           ? (intentMirroredAgent?.unifiedTab.id ?? null)
           : navigationIntentTab?.type === 'markdown' || navigationIntentTab?.type === 'file'
@@ -216,22 +213,21 @@ export function prepareWebSessionTabsSnapshotUnified(
     currentVisibleUnifiedTabId ??
     reservedEmptyPreviewFallbackTabId ??
     (snapshot.activeTabType === 'agent-session'
-      ? (activeMirroredAgentTabId ?? mirroredAgentUnifiedTabs[0]?.id ?? nextActiveTerminalId)
+      ? (activeMirroredAgentTabId ??
+        mirroredAgentUnifiedTabs[0]?.id ??
+        containerOfTerminal(nextActiveTerminalId))
       : snapshot.activeTabType === 'browser'
         ? (activeMirroredBrowserTabId ??
           mirroredBrowserTabs[0]?.unifiedTab.id ??
-          state.activeTabIdByWorktree[worktreeId] ??
-          nextActiveTerminalId)
+          containerOfTerminal(state.activeTabIdByWorktree[worktreeId] ?? nextActiveTerminalId))
         : snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
           ? (activeMirroredEditorTabId ??
             mirroredEditorTabs[0]?.unifiedTab.id ??
-            state.activeTabIdByWorktree[worktreeId] ??
-            nextActiveTerminalId)
-          : nextActiveTerminalId)
-  const mirroredUnifiedIds = new Set(mirroredUnifiedTabs.map((tab) => tab.id))
+            containerOfTerminal(state.activeTabIdByWorktree[worktreeId] ?? nextActiveTerminalId))
+          : containerOfTerminal(nextActiveTerminalId))
   const hostToLocalTabId = buildHostToLocalTabIdMap({
     terminalSurfaces: terminalSurfaceTabs,
-    terminalTabs: mirroredTerminalTabEntries,
+    terminalTabs: mirroredTerminalTabs,
     browserTabs: mirroredBrowserTabs,
     editorTabs: mirroredEditorTabs,
     agentTabs: mirroredAgentTabs
@@ -240,18 +236,11 @@ export function prepareWebSessionTabsSnapshotUnified(
     environmentId,
     worktreeId,
     terminalSurfaces: terminalSurfaceTabs,
-    terminalTabs: mirroredTerminalTabEntries,
+    terminalTabs: mirroredTerminalTabs,
     browserTabs: mirroredBrowserTabs,
     editorTabs: mirroredEditorTabs,
     agentTabs: mirroredAgentTabs,
-    hostGroupIdByTabId,
-    logicalTabIdByHostTabId: new Map(
-      snapshot.tabs.flatMap((row) =>
-        row.type === 'terminal' || row.type === 'agent-session'
-          ? [[tabBarIdOf(row), logicalTabIdOf(row)] as const]
-          : []
-      )
-    )
+    hostGroupIdByTabId
   })
 
   return {
@@ -294,7 +283,6 @@ export function prepareWebSessionTabsSnapshotUnified(
     intentUnifiedTabId,
     nextActiveUnifiedTabId,
     mirroredUnifiedIds,
-    hostToLocalTabId,
-    switchedTabRekeys
+    hostToLocalTabId
   }
 }

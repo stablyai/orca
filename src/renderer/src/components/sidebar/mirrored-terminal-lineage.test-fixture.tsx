@@ -107,7 +107,7 @@ export async function verifyMirroredTerminalLineage(
       ptyId: toRemoteRuntimePtyId('terminal', 'paired')
     })
     const worker = makePaneKey(tab.id, LEAF)
-    const terminal = buildTerminalUnifiedTab(tab, 'g', 'paired')
+    const terminal = buildTerminalUnifiedTab(tab, tab.id, 'g', 'paired')
     patch({
       tabsByWorktree: { 'folder-a': [tab] },
       unifiedTabsByWorktree: {},

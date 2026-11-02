@@ -1,6 +1,5 @@
 import type { WebSessionTabsSyncState } from './state'
 import {
-  hostLogicalTabIdByLocalKey,
   hostSessionGroupIdByLocalKey,
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree
@@ -24,7 +23,6 @@ export function clearHostSessionTabIdMappings(environmentId: string, worktreeId:
   for (const mappingKey of mappingKeys) {
     hostSessionTabIdByLocalKey.delete(mappingKey)
     hostSessionGroupIdByLocalKey.delete(mappingKey)
-    hostLogicalTabIdByLocalKey.delete(mappingKey)
   }
   mappingKeysByWorktree?.delete(worktreeId)
   if (mappingKeysByWorktree?.size === 0) {
@@ -35,8 +33,7 @@ export function clearHostSessionTabIdMappings(environmentId: string, worktreeId:
 export function setHostSessionTabIdMapping(
   args: { environmentId: string; worktreeId: string; tabId: string },
   hostTabId: string,
-  hostGroupId?: string,
-  hostLogicalTabId?: string
+  hostGroupId?: string
 ): void {
   const mappingKey = hostSessionTabMappingKey(args)
   hostSessionTabIdByLocalKey.set(mappingKey, hostTabId)
@@ -44,11 +41,6 @@ export function setHostSessionTabIdMapping(
     hostSessionGroupIdByLocalKey.set(mappingKey, hostGroupId)
   } else {
     hostSessionGroupIdByLocalKey.delete(mappingKey)
-  }
-  if (hostLogicalTabId) {
-    hostLogicalTabIdByLocalKey.set(mappingKey, hostLogicalTabId)
-  } else {
-    hostLogicalTabIdByLocalKey.delete(mappingKey)
   }
   const mappingKeysByWorktree =
     hostSessionTabMappingKeysByEnvironmentAndWorktree.get(args.environmentId) ?? new Map()
@@ -94,23 +86,6 @@ export function hostSessionTabIdsByLocalTabForWorktree(
     const hostTabId = hostSessionTabIdByLocalKey.get(key)
     if (hostTabId !== undefined) {
       entries.set(key.slice(prefix.length), hostTabId)
-    }
-  }
-  return entries
-}
-
-/** This publishing host's workspace tabs by their layout id, to the local tab mirroring each. */
-export function localTabIdsByHostLogicalTab(
-  environmentId: string,
-  worktreeId: string
-): Map<string, string> {
-  const prefix = hostSessionTabMappingKey({ environmentId, worktreeId, tabId: '' })
-  const keys = hostSessionTabMappingKeysByEnvironmentAndWorktree.get(environmentId)?.get(worktreeId)
-  const entries = new Map<string, string>()
-  for (const key of keys ?? []) {
-    const logicalTabId = hostLogicalTabIdByLocalKey.get(key)
-    if (logicalTabId !== undefined) {
-      entries.set(logicalTabId, key.slice(prefix.length))
     }
   }
   return entries

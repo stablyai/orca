@@ -148,8 +148,6 @@ export const sessionTabsInventoryOmissionsByWorktree = new Map<
 export const hostSessionTabIdByLocalKey = new Map<string, string>()
 // Why: desktop and host mint their own ids for a group a split creates; moves name the host's.
 export const hostSessionGroupIdByLocalKey = new Map<string, string>()
-/** The host's layout id for the tab a local tab mirrors (`logicalTabIdOf`), as of the last frame. */
-export const hostLogicalTabIdByLocalKey = new Map<string, string>()
 export const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
@@ -181,14 +179,12 @@ export type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobile
 export type MirroredAgentTab = {
   hostTabId: string
   unifiedTab: Tab
-  /** The local tab this chat's host tab showed before a switch; the apply rekeys it to this one. */
-  renamedFrom?: string
 }
 export type MirroredTerminalTab = {
   tab: TerminalTab
   hostTabId: string
-  /** As on MirroredAgentTab. */
-  renamedFrom?: string
+  /** The local tab holding it (`mirroredTabContainers`): the TerminalTab keeps its own id. */
+  containerId: string
   ptyIds: string[]
   layout: TerminalLayoutSnapshot
   retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, TerminalSurface>

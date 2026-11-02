@@ -1,13 +1,12 @@
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
 import type { TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type {
   MirroredAgentTab,
   MirroredBrowserTab,
   MirroredEditorTab,
+  MirroredTerminalTab,
   TerminalSurface
 } from './state'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import { clearHostSessionTabIdMappings, setHostSessionTabIdMapping } from './tracking-mappings'
 import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
 import { resolveWebSessionReorderedOrder } from '../web-session-reorder-intent'
@@ -22,16 +21,16 @@ export function buildHostToLocalTabIdMap({
   agentTabs
 }: {
   terminalSurfaces: readonly TerminalSurface[]
-  terminalTabs: readonly TerminalTab[]
+  terminalTabs: readonly MirroredTerminalTab[]
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
   agentTabs: readonly MirroredAgentTab[]
 }): Map<string, string> {
   const hostToLocal = new Map<string, string>()
-  const terminalIds = new Set(terminalTabs.map((tab) => tab.id))
+  const containerByHostTabId = containersByHostTabId(terminalTabs)
   for (const surface of terminalSurfaces) {
-    const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
-    if (terminalIds.has(localId)) {
+    const localId = containerByHostTabId.get(surface.parentTabId)
+    if (localId) {
       hostToLocal.set(surface.parentTabId, localId)
       hostToLocal.set(surface.id, localId)
     }
@@ -53,33 +52,35 @@ export function updateHostSessionTabIdMappings(args: {
   environmentId: string
   worktreeId: string
   terminalSurfaces: readonly TerminalSurface[]
-  terminalTabs: readonly TerminalTab[]
+  terminalTabs: readonly MirroredTerminalTab[]
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
   agentTabs: readonly MirroredAgentTab[]
   hostGroupIdByTabId: ReadonlyMap<string, string>
-  /** Each row's layout id by its tab-bar id; a later frame finds a switched tab's local tab by it. */
-  logicalTabIdByHostTabId: ReadonlyMap<string, string>
 }): void {
   clearHostSessionTabIdMappings(args.environmentId, args.worktreeId)
   const map = (tabId: string, hostTabId: string): void =>
     setHostSessionTabIdMapping(
       { ...args, tabId },
       hostTabId,
-      args.hostGroupIdByTabId.get(hostTabId),
-      args.logicalTabIdByHostTabId.get(hostTabId)
+      args.hostGroupIdByTabId.get(hostTabId)
     )
 
-  const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))
+  // A tab's commands name the host its terminal's own id, whatever the tab's id here.
+  const containerByHostTabId = containersByHostTabId(args.terminalTabs)
   for (const surface of args.terminalSurfaces) {
-    const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
-    if (mirroredTerminalIds.has(localId)) {
+    const localId = containerByHostTabId.get(surface.parentTabId)
+    if (localId) {
       map(localId, surface.parentTabId)
     }
   }
   for (const entry of [...args.browserTabs, ...args.editorTabs, ...args.agentTabs]) {
     map(entry.unifiedTab.id, entry.hostTabId)
   }
+}
+
+function containersByHostTabId(tabs: readonly MirroredTerminalTab[]): Map<string, string> {
+  return new Map(tabs.map((entry) => [entry.hostTabId, entry.containerId]))
 }
 
 export function retainClientPlacedMirroredTabs(args: {

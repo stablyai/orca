@@ -70,8 +70,9 @@ export function buildMirroredAgentTabs(
   sortOffset: number,
   currentUnifiedTabs: readonly Tab[],
   now: number,
-  /** The local tab a switched host tab showed before (switched-tab-renames.ts). */
-  renamedFrom: (row: RuntimeMobileSessionAgentTab) => Tab | undefined = () => undefined
+  /** A paired host's tab already shown here (see `mirroredTabContainers`); the window's own
+   *  chats are found by what they hold. */
+  containerOf: (logicalTabId: string | undefined) => Tab | undefined = () => undefined
 ): MirroredAgentTab[] {
   const agentTabs = snapshot.tabs
     .filter(isAgentSessionTab)
@@ -118,9 +119,9 @@ export function buildMirroredAgentTabs(
   }
   return agentTabs.map((tab, index) => {
     const existing = replacementTabs.get(tab.sessionId) ?? firstUnreplaced(tab.sessionId)
-    // A switched tab is the same tab renamed here, so its color and pin are its own too.
-    const renamed = existing ? undefined : renamedFrom(tab)
-    const own = existing ?? renamed
+    // The host tab's own tab here, whatever it held: the chat takes its place, pin and color.
+    const container = containerOf(tab.logicalTabId)
+    const own = container ?? existing
     const launch = readStructuredAgentLaunchRecord(tab.sessionId)
     const address =
       executionHostId === 'local' &&
@@ -129,8 +130,8 @@ export function buildMirroredAgentTabs(
         ? launch.surfaceAddress
         : undefined
     const baseId = structuredAgentSessionTabId(tab.sessionId)
-    let localId = existing?.id ?? baseId
-    if (!existing || assignedIds.has(localId)) {
+    let localId = own?.id ?? baseId
+    if (!own || assignedIds.has(localId)) {
       let suffix = 0
       while (occupiedIds.has(localId)) {
         localId = `${baseId}:history-${++suffix}`
@@ -140,13 +141,12 @@ export function buildMirroredAgentTabs(
     assignedIds.add(localId)
     return {
       hostTabId: tab.id,
-      ...(renamed ? { renamedFrom: renamed.id } : {}),
       unifiedTab: {
         id: localId,
         entityId: tab.sessionId,
         // Preserve provisional groups on promotion; lagging host placement must not move mounted panes after user splits.
         groupId:
-          existing?.groupId ??
+          own?.groupId ??
           address?.targetGroupId ??
           hostGroupIdByTabId.get(tab.id) ??
           fallbackGroupId,
@@ -160,7 +160,7 @@ export function buildMirroredAgentTabs(
         customLabel: existing?.customLabel ?? null,
         color: tab.color !== undefined ? tab.color : (own?.color ?? null),
         sortOrder: sortOffset + index,
-        createdAt: existing?.createdAt ?? now + sortOffset + index,
+        createdAt: own?.createdAt ?? now + sortOffset + index,
         isPinned: tab.isPinned !== undefined ? tab.isPinned : own?.isPinned === true
       }
     }

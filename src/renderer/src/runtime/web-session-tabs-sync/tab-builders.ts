@@ -15,13 +15,15 @@ import { buildOwnedEditorFileId } from '../../store/slices/editor/file-ids/edito
 
 export function buildTerminalUnifiedTab(
   tab: TerminalTab,
+  /** The tab holding it: its own id, unless a host switch put it in a tab with another. */
+  containerId: string,
   groupId: string,
   environmentId: string,
   // Why: viewMode is host-tracked but the client's optimistic toggle must win during the echo window; callers pass the reconciled value.
   viewMode?: Tab['viewMode']
 ): Tab {
   return {
-    id: tab.id,
+    id: containerId,
     entityId: tab.id,
     groupId,
     worktreeId: tab.worktreeId,

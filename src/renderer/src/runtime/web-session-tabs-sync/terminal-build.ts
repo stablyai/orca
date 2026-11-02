@@ -64,8 +64,11 @@ export function buildMirroredTerminalTabs(
   now: number,
   focusTarget?: { parentTabId: string; leafId: string },
   terminalPtyMode: 'local' | 'remote' = 'remote',
-  /** The local tab a switched host tab showed before (switched-tab-renames.ts). */
-  renamedFrom: (surface: TerminalSurface) => Tab | undefined = () => undefined
+  /** The local tab holding a host tab's terminal (see `mirroredTabContainers`), by its first row. */
+  containerFor: (surface: TerminalSurface, localTabId: string) => { id: string; tab?: Tab } = (
+    _surface,
+    localTabId
+  ) => ({ id: localTabId })
 ): MirroredTerminalTab[] {
   const groups = new Map<string, TerminalSurface[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
@@ -164,9 +167,9 @@ export function buildMirroredTerminalTabs(
       activeSurface.startupCwd || surfaces.find((surface) => surface.startupCwd)?.startupCwd
     // Why: color/pin echo back through host snapshots, so prefer the client's own record and fall back to host only without a prior tab (avoids echo-window reverts).
     const hostColorSurface = surfaces.find((surface) => surface.color != null)
-    // A switched tab is the same tab renamed here, so its color and pin are its own too.
-    const renamed = existing ? undefined : surfaces.map(renamedFrom).find(Boolean)
-    const own = existing ?? renamed
+    // The tab it fills is this client's own: a terminal a host switch put there keeps its pin.
+    const container = containerFor(surfaces[0]!, localTabId)
+    const own = existing ?? container.tab
     const color = own ? (own.color ?? null) : (hostColorSurface?.color ?? null)
     const isPinned = own ? own.isPinned === true : surfaces.some((surface) => surface.isPinned)
     // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
@@ -200,7 +203,7 @@ export function buildMirroredTerminalTabs(
         ...(launchAgent ? { launchAgent } : {})
       },
       hostTabId: parentTabId,
-      ...(renamed ? { renamedFrom: renamed.id } : {}),
+      containerId: container.id,
       ptyIds,
       layout,
       ...(retainedSurfaceByPrunedLeafId ? { retainedSurfaceByPrunedLeafId } : {})

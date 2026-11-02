@@ -182,81 +182,115 @@ describe('client-owned tab placement for paired worktrees', () => {
     resetWebSessionTerminalPlacementsForTests()
   })
 
-  // A switch keeps the host's tab and changes what it holds; here that is the same tab renamed.
-  it('keeps a switched host tab’s place, pin and selection on this client', () => {
-    const hostOrder = (middle: string) => [
-      { id: HOST_GROUP, activeTabId: middle, tabOrder: ['host-tab-1', middle, 'host-tab-3'] }
-    ]
-    let state = makeState({
-      activeGroupIdByWorktree: { [WT]: HOST_GROUP },
-      activeTabIdByWorktree: { [WT]: T2 },
-      activeTabId: T2,
-      groupsByWorktree: {
-        [WT]: [{ id: HOST_GROUP, worktreeId: WT, activeTabId: T2, tabOrder: [T1, T2, T3] }]
-      },
-      layoutByWorktree: { [WT]: { type: 'leaf', groupId: HOST_GROUP } },
-      tabsByWorktree: {
-        [WT]: [
-          mirroredTerminalTab(T1, 'terminal-1', 0),
-          { ...mirroredTerminalTab(T2, 'terminal-2', 1), isPinned: true },
-          mirroredTerminalTab(T3, 'terminal-3', 2)
-        ]
-      },
-      unifiedTabsByWorktree: {
-        [WT]: [
-          terminalUnifiedTab(T1, HOST_GROUP, 0),
-          { ...terminalUnifiedTab(T2, HOST_GROUP, 1), isPinned: true },
-          terminalUnifiedTab(T3, HOST_GROUP, 2)
-        ]
-      }
-    })
-    const apply = (
-      tabs: RuntimeMobileSessionTabsResult['tabs'],
-      middle: string,
-      version: number
-    ) => {
-      state = {
-        ...state,
-        ...applyWebSessionTabsSnapshot(
-          state,
-          makeSnapshot(tabs, { snapshotVersion: version, tabGroups: hostOrder(middle) }),
-          ENV,
-          NOW
-        )
-      }
-    }
-    apply(
-      [
-        terminalSurface('host-tab-1', LEAF_ID, 'terminal-1'),
-        terminalSurface('host-tab-2', SECOND_LEAF_ID, 'terminal-2', true),
-        terminalSurface('host-tab-3', THIRD_LEAF_ID, 'terminal-3')
-      ],
-      'host-tab-2',
-      1
-    )
-    apply(
-      [
-        terminalSurface('host-tab-1', LEAF_ID, 'terminal-1'),
-        {
-          type: 'agent-session',
-          id: 'agent-session:chat-1',
-          logicalTabId: 'host-tab-2',
-          title: 'Codex',
-          sessionId: 'chat-1',
-          agent: 'codex',
-          isActive: true
+  // A switch keeps the host's tab and changes what it holds; so does this client's tab for it,
+  // keyed by the host's layout id, also across a restart that lost every in-memory map.
+  it.each([
+    ['live', false],
+    ['after a restart', true]
+  ])(
+    'keeps a switched host tab’s place, pin and selection on this client: %s',
+    (_name, restart) => {
+      const hostOrder = (middle: string) => [
+        { id: HOST_GROUP, activeTabId: middle, tabOrder: ['host-tab-1', middle, 'host-tab-3'] }
+      ]
+      let state = makeState({
+        activeGroupIdByWorktree: { [WT]: HOST_GROUP },
+        activeTabIdByWorktree: { [WT]: T2 },
+        activeTabId: T2,
+        groupsByWorktree: {
+          [WT]: [{ id: HOST_GROUP, worktreeId: WT, activeTabId: T2, tabOrder: [T1, T2, T3] }]
         },
-        terminalSurface('host-tab-3', THIRD_LEAF_ID, 'terminal-3')
-      ],
-      'agent-session:chat-1',
-      2
-    )
-    const chat = state.unifiedTabsByWorktree[WT]?.find((tab) => tab.entityId === 'chat-1')
-    expect(chat?.isPinned).toBe(true)
-    expect(groupById(state, HOST_GROUP)?.tabOrder).toEqual([T1, chat?.id, T3])
-    expect(groupById(state, HOST_GROUP)?.activeTabId).toBe(chat?.id)
-    expect(state.activeTabTypeByWorktree[WT]).toBe('agent-session')
-  })
+        layoutByWorktree: { [WT]: { type: 'leaf', groupId: HOST_GROUP } },
+        tabsByWorktree: {
+          [WT]: [
+            mirroredTerminalTab(T1, 'terminal-1', 0),
+            { ...mirroredTerminalTab(T2, 'terminal-2', 1), isPinned: true },
+            mirroredTerminalTab(T3, 'terminal-3', 2)
+          ]
+        },
+        unifiedTabsByWorktree: {
+          [WT]: [
+            terminalUnifiedTab(T1, HOST_GROUP, 0),
+            { ...terminalUnifiedTab(T2, HOST_GROUP, 1), isPinned: true },
+            terminalUnifiedTab(T3, HOST_GROUP, 2)
+          ]
+        }
+      })
+      const apply = (
+        tabs: RuntimeMobileSessionTabsResult['tabs'],
+        middle: string,
+        version: number
+      ) => {
+        state = {
+          ...state,
+          ...applyWebSessionTabsSnapshot(
+            state,
+            makeSnapshot(tabs, { snapshotVersion: version, tabGroups: hostOrder(middle) }),
+            ENV,
+            NOW
+          )
+        }
+      }
+      apply(
+        [
+          terminalSurface('host-tab-1', LEAF_ID, 'terminal-1'),
+          terminalSurface('host-tab-2', SECOND_LEAF_ID, 'terminal-2', true),
+          terminalSurface('host-tab-3', THIRD_LEAF_ID, 'terminal-3')
+        ],
+        'host-tab-2',
+        1
+      )
+      if (restart) {
+        resetWebSessionTabsSyncTestState()
+      }
+      apply(
+        [
+          terminalSurface('host-tab-1', LEAF_ID, 'terminal-1'),
+          {
+            type: 'agent-session',
+            id: 'agent-session:chat-1',
+            logicalTabId: 'host-tab-2',
+            title: 'Codex',
+            sessionId: 'chat-1',
+            agent: 'codex',
+            isActive: true
+          },
+          terminalSurface('host-tab-3', THIRD_LEAF_ID, 'terminal-3')
+        ],
+        'agent-session:chat-1',
+        2
+      )
+      // The same local tab now holds the chat: nothing was renamed or carried over.
+      const chat = state.unifiedTabsByWorktree[WT]?.find((tab) => tab.entityId === 'chat-1')
+      expect(chat).toMatchObject({ id: T2, contentType: 'agent-session', isPinned: true })
+      expect(groupById(state, HOST_GROUP)?.tabOrder).toEqual([T1, T2, T3])
+      expect(groupById(state, HOST_GROUP)?.activeTabId).toBe(T2)
+      expect(state.activeTabTypeByWorktree[WT]).toBe('agent-session')
+      expect(state.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([T1, T3])
+      // And back: the host tab's new terminal fills the same local tab, under the terminal's own id.
+      apply(
+        [
+          terminalSurface('host-tab-1', LEAF_ID, 'terminal-1'),
+          {
+            ...terminalSurface('host-tab-4', LEAF_ID, 'terminal-4', true),
+            logicalTabId: 'host-tab-2'
+          } as RuntimeMobileSessionTabsResult['tabs'][number],
+          terminalSurface('host-tab-3', THIRD_LEAF_ID, 'terminal-3')
+        ],
+        'host-tab-4',
+        3
+      )
+      const T4 = toWebTerminalSurfaceTabId('host-tab-4')
+      expect(state.unifiedTabsByWorktree[WT]?.find((tab) => tab.id === T2)).toMatchObject({
+        contentType: 'terminal',
+        entityId: T4,
+        isPinned: true
+      })
+      expect(groupById(state, HOST_GROUP)?.tabOrder).toEqual([T1, T2, T3])
+      expect(groupById(state, HOST_GROUP)?.activeTabId).toBe(T2)
+      expect(state.activeTabIdByWorktree[WT]).toBe(T4)
+    }
+  )
 
   // Host order must not prepend client-placed tabs.
   it('appends a newly client-placed browser tab after the tabs already in its group', () => {

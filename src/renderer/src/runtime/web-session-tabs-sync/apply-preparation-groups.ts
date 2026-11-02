@@ -33,7 +33,6 @@ export function prepareWebSessionTabsSnapshotGroups(
     retainedUnifiedTabs,
     targetGroupId,
     hostToLocalTabId,
-    switchedTabRekeys,
     provisionalHandoffHostTabIds,
     existingTabIndex,
     honorSnapshotActiveFocus,
@@ -52,11 +51,11 @@ export function prepareWebSessionTabsSnapshotGroups(
     if (!nextUnifiedTabs || (currentGroups.length === 0 && !options?.preserveLocalLayout)) {
       return null
     }
-    // Entity-identical local/provisional-to-mirror replacements are renames, as is a switched tab;
-    // preserve position and focus.
-    const rekeyedTabIds = new Map<string, string>(switchedTabRekeys)
+    // Entity-identical local/provisional-to-mirror replacements are renames; preserve position and
+    // focus.
+    const rekeyedTabIds = new Map<string, string>()
     for (const [provisionalTabId, hostTabId] of provisionalHandoffHostTabIds) {
-      const mirroredId = toWebTerminalSurfaceTabId(hostTabId)
+      const mirroredId = hostToLocalTabId.get(hostTabId) ?? toWebTerminalSurfaceTabId(hostTabId)
       if (mirroredId !== provisionalTabId) {
         rekeyedTabIds.set(provisionalTabId, mirroredId)
       }
@@ -92,7 +91,7 @@ export function prepareWebSessionTabsSnapshotGroups(
       })
       if (recordedGroupId) {
         placementMoves.push({
-          tabId: toWebTerminalSurfaceTabId(parentTabId),
+          tabId: hostToLocalTabId.get(parentTabId) ?? toWebTerminalSurfaceTabId(parentTabId),
           groupId: recordedGroupId
         })
       }
