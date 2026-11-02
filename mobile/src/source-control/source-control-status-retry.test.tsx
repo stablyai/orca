@@ -49,6 +49,8 @@ vi.mock('react-native-safe-area-context', () => ({
 vi.mock('lucide-react-native', () =>
   Object.fromEntries(
     [
+      'ArrowDown',
+      'ArrowDownUp',
       'ArrowRight',
       'ArrowUp',
       'Bot',
@@ -63,9 +65,12 @@ vi.mock('lucide-react-native', () =>
       'CircleDot',
       'CircleMinus',
       'CircleX',
+      'CloudUpload',
       'GitBranch',
       'GitMerge',
       'GitPullRequest',
+      'GitPullRequestArrow',
+      'History',
       'Link2',
       'ListFilter',
       'LoaderCircle',
