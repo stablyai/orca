@@ -17,6 +17,7 @@ function makeRequest(params: unknown): RpcRequest {
 }
 
 function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these cases call only the runtime members they override.
   return {
     getRuntimeId: () => 'test-runtime',
     isTerminalRunningAgent: vi.fn().mockResolvedValue(false),

@@ -103,9 +103,10 @@ describe('one host transaction for generated input', () => {
         'claude'
       )
       runtime.onPtyData('pty-prompt', READY, 0)
-      const controller = (
-        runtime as unknown as { ptyController: { getForegroundProcess: () => Promise<string> } }
-      ).ptyController
+      const controller =
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture's controller is this plain object; only its process read is replaced.
+        (runtime as unknown as { ptyController: { getForegroundProcess: () => Promise<string> } })
+          .ptyController
       const answers: ((process: string) => void)[] = []
       controller.getForegroundProcess = () => new Promise((resolve) => answers.push(resolve))
       const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
@@ -165,6 +166,7 @@ describe('one host transaction for generated input', () => {
           runtime.onPtyData('pty-prompt', '\x1b[?1049h\x1b[?2004h', 0)
         }
         vi.spyOn(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies the host's protected screen read to stand in a recorded grid.
           runtime as unknown as { readGeneratedInputScreen: () => Promise<unknown> },
           'readGeneratedInputScreen'
         ).mockResolvedValue({ lines, alternateScreen: agent === 'opencode2' })

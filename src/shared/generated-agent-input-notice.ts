@@ -1,5 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
+import { isTuiAgent } from './tui-agent-config'
 import type { GeneratedInputOutcome } from './generated-terminal-input'
 
 /** Runtime-session notices recover generated text whose detached delivery failed. */
@@ -84,9 +85,7 @@ export function generatedInputNoticeFrames(
 
 /** The agent's display name for notices and refusals; never a raw id. */
 export function generatedInputAgentName(agent: string | null | undefined): string {
-  return agent && agent in TUI_AGENT_DISPLAY_NAMES
-    ? TUI_AGENT_DISPLAY_NAMES[agent as TuiAgent]
-    : 'The agent'
+  return agent && isTuiAgent(agent) ? TUI_AGENT_DISPLAY_NAMES[agent] : 'The agent'
 }
 
 /** Why a reused automation session's run failed instead of starting a second session. */

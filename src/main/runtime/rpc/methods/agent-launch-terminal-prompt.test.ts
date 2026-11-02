@@ -121,8 +121,11 @@ describe('writing a launch prompt into a terminal agent', () => {
   it('reports a stalled submission as delivered, because the stall is raised after the write', async () => {
     const stub = runtimeStub({
       send: async (_handle, _text, options) => {
-        ;(options.onPasteWritten as () => void)()
-        ;(options.onSubmitWritten as () => void)()
+        for (const written of [options.onPasteWritten, options.onSubmitWritten]) {
+          if (typeof written === 'function') {
+            written()
+          }
+        }
         throw new Error(AGENT_PROMPT_STALLED_ERROR)
       }
     })

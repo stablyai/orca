@@ -15,7 +15,7 @@ function harness() {
     registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
     cleanupSubscription: (id: string) => cleanups.get(id)?.()
   }
-  // SAFETY: these handlers only consume the notice owner and subscription registry above.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers only consume the notice owner and subscription registry above.
   const context = { runtime, connectionId: 'viewer' } as unknown as RpcContext
   const methods = eraseRpcMethods(GENERATED_INPUT_METHODS)
   const find = (name: string) => {
@@ -191,7 +191,13 @@ it('reads the host again after a dropped change, keeping additions and dismissal
   await h.settle()
   await h.settle()
   const [first] = [...h.notices.page().frames]
-  h.dropWhen((message) => (message as { type?: string }).type === 'dismissed')
+  h.dropWhen(
+    (message) =>
+      typeof message === 'object' &&
+      message !== null &&
+      'type' in message &&
+      message.type === 'dismissed'
+  )
   h.notices.dismiss(first.id)
   h.dropWhen(() => false)
   h.add('third')

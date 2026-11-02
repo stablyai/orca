@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type { GeneratedInputOutcome } from '../../shared/generated-terminal-input'
 import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
 
 const { deliverTerminalAgentLaunchPrompt } = vi.hoisted(() => ({
-  deliverTerminalAgentLaunchPrompt: vi.fn(async (_args: Record<string, unknown>) => true)
+  deliverTerminalAgentLaunchPrompt: vi.fn(
+    async (_args: { onOutcome?: (outcome: GeneratedInputOutcome) => void }) => true
+  )
 }))
 vi.mock('../runtime/rpc/methods/agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt
@@ -446,7 +449,7 @@ describe('headless automation agent launch', () => {
   it('launches fresh only when the reused terminal was gone before any write', async () => {
     const runtime = harness()
     deliverTerminalAgentLaunchPrompt.mockImplementation(async (args) => {
-      ;(args.onOutcome as (outcome: string) => void)('target-gone')
+      args.onOutcome?.('target-gone')
       return false
     })
 
@@ -456,12 +459,12 @@ describe('headless automation agent launch', () => {
     expect(launched.terminalHandle).toBe('term_existing')
   })
 
-  it.each(['not-sent', 'unconfirmed'])(
+  it.each(['not-sent', 'unconfirmed'] as const)(
     'fails the run instead of sending the prompt to a second session when it was %s',
     async (outcome) => {
       const runtime = harness()
       deliverTerminalAgentLaunchPrompt.mockImplementation(async (args) => {
-        ;(args.onOutcome as (result: string) => void)(outcome)
+        args.onOutcome?.(outcome)
         return false
       })
 

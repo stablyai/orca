@@ -34,12 +34,19 @@ class FakeNoticeHost {
   }
 }
 
-const state = vi.hoisted(() => ({
-  host: null as FakeNoticeHost | null,
+type NoticeState = {
+  host: FakeNoticeHost | null
+  holdPages: boolean
+  pageReads: (() => void)[]
+  shown: string[]
+  dismissed: string[]
+}
+const state = vi.hoisted((): NoticeState => ({
+  host: null,
   holdPages: false,
-  pageReads: [] as (() => void)[],
-  shown: [] as string[],
-  dismissed: [] as string[]
+  pageReads: [],
+  shown: [],
+  dismissed: []
 }))
 
 vi.mock('sonner', () => ({ toast: { dismiss: (id: string) => state.dismissed.push(id) } }))

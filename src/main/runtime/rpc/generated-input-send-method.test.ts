@@ -24,7 +24,7 @@ it('takes a send whose agent is not identified yet, and routes phones to the own
 // A later part naming another terminal or intent once appended text bound for a different target.
 it('refuses a later part that names another terminal than the first, and writes nothing', async () => {
   const resolveGeneratedInputTarget = vi.fn()
-  // SAFETY: a refused part never reaches the runtime; the spy proves it.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused part never reaches the runtime; the spy proves it.
   const context = {
     runtime: { resolveGeneratedInputTarget },
     connectionId: 'phone'

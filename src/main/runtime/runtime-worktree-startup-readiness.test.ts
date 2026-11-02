@@ -74,17 +74,18 @@ describe('startup follow-up prompt', () => {
     'types WSL or SSH-to-Windows follow-ups through the host transaction (%#)',
     async (answer, delivered, refused) => {
       const f = fixture('kimi', false, false, 'unknown')
-      f.sendTerminalAgentPrompt.mockImplementation(async (handle: string, ...rest: unknown[]) => {
-        const options = rest[1] as { onPasteWritten?: () => void }
-        if (answer instanceof Error) {
-          throw answer
+      f.sendTerminalAgentPrompt.mockImplementation(
+        async (handle: string, _text?: string, options?: { onPasteWritten?: () => void }) => {
+          if (answer instanceof Error) {
+            throw answer
+          }
+          if (answer === 'pasted') {
+            options?.onPasteWritten?.()
+            throw new Error('Kimi could not take your prompt')
+          }
+          return { handle, accepted: true, bytesWritten: 2 }
         }
-        if (answer === 'pasted') {
-          options.onPasteWritten?.()
-          throw new Error('Kimi could not take your prompt')
-        }
-        return { handle, accepted: true, bytesWritten: 2 }
-      })
+      )
       const onRefused = vi.fn()
       await expect(
         deliverStartupFollowupPrompt(

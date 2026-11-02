@@ -29,7 +29,7 @@ it('keeps exact prompt text available after Copy until explicit dismissal', asyn
     throw new Error('missing Copy action')
   }
   const event = { preventDefault: vi.fn() }
-  // SAFETY: this action only consumes preventDefault; no DOM event fields are accessed.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this action only consumes preventDefault; no DOM event fields are accessed.
   options.action.onClick(event as unknown as MouseEvent<HTMLButtonElement>)
   await Promise.resolve()
   expect(writeText).toHaveBeenCalledExactlyOnceWith('exact\ntext')

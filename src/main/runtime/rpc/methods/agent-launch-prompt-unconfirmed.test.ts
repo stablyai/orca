@@ -18,7 +18,7 @@ function deliverPartly(clientCapabilities?: string[]) {
       }
     )
   }
-  // SAFETY: only deliverTerminalPrompt runs, and it reads the runtime and client fields above.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only deliverTerminalPrompt runs, and it reads the runtime and client fields above.
   const context = {
     runtime,
     clientKind: 'mobile',

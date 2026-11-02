@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
-const state = vi.hoisted(() => ({
-  mounted: null as { lines: string[]; alternateScreen: boolean } | null,
-  hostRead: null as { tail: string[]; source?: string } | null,
-  observer: null as ((data: string) => void) | null
-}))
+type LegacyState = {
+  mounted: { lines: string[]; alternateScreen: boolean } | null
+  hostRead: { tail: string[]; source?: string } | null
+  observer: ((data: string) => void) | null
+}
+const state = vi.hoisted((): LegacyState => ({ mounted: null, hostRead: null, observer: null }))
 
 vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
   ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
