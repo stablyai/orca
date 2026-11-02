@@ -34,15 +34,90 @@ vi.mock('../transport/use-workspace-client', () => ({
 
 it('opens the phone attachment card, scrolls the actual RN-web list to its tail and copies eligible complete text', async () => {
   await activateMobileUiLocale('en')
+  const viewportHeight = 600
+  const flowChildren = (node: HTMLElement) =>
+    Array.from(node.children).filter(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && getComputedStyle(child).position !== 'absolute'
+    )
+  const height = (node: HTMLElement): number => {
+    const style = getComputedStyle(node)
+    if ([style.overflowX, style.overflowY].some((value) => ['auto', 'scroll'].includes(value))) {
+      return viewportHeight
+    }
+    const fixed = Number.parseFloat(style.height)
+    if (Number.isFinite(fixed)) {
+      return fixed
+    }
+    const children = flowChildren(node).map(height)
+    return Math.max(
+      Number.parseFloat(style.minHeight) || 0,
+      children.length
+        ? style.flexDirection === 'row'
+          ? Math.max(...children)
+          : children.reduce((sum, value) => sum + value, 0)
+        : node.children.length === 0 && node.textContent
+          ? 19
+          : 0
+    )
+  }
+  const width = (node: HTMLElement): number => {
+    if (node.style.opacity === '0') {
+      return 8
+    }
+    const value = getComputedStyle(node).width
+    const fixed = Number.parseFloat(value)
+    const available = node.parentElement ? width(node.parentElement) : 390
+    return Number.isFinite(fixed)
+      ? value.endsWith('%')
+        ? (available * fixed) / 100
+        : fixed
+      : available
+  }
+  const descriptors = new Map<string, PropertyDescriptor | undefined>()
+  const metrics = {
+    offsetHeight: height,
+    clientHeight: height,
+    offsetWidth: width,
+    clientWidth: width,
+    scrollHeight: (node: HTMLElement) => Math.max(height(node), ...flowChildren(node).map(height)),
+    scrollWidth: (node: HTMLElement) => Math.max(width(node), ...flowChildren(node).map(width)),
+    offsetParent: (node: HTMLElement) => node.parentElement,
+    offsetLeft: (node: HTMLElement) => Number.parseFloat(getComputedStyle(node).left) || 0,
+    offsetTop: (node: HTMLElement) => {
+      const style = getComputedStyle(node)
+      if (style.position === 'absolute') {
+        return Number.parseFloat(style.top) || 0
+      }
+      const parent = node.parentElement
+      if (!parent || getComputedStyle(parent).flexDirection === 'row') {
+        return 0
+      }
+      const siblings = flowChildren(parent)
+      return siblings
+        .slice(0, siblings.indexOf(node))
+        .reduce((sum, sibling) => sum + height(sibling), 0)
+    }
+  }
+  for (const [name, measure] of Object.entries(metrics)) {
+    descriptors.set(name, Object.getOwnPropertyDescriptor(HTMLElement.prototype, name))
+    Object.defineProperty(HTMLElement.prototype, name, {
+      configurable: true,
+      get(this: HTMLElement) {
+        return measure(this)
+      }
+    })
+  }
   const rect = vi
     .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
     .mockImplementation(function (this: HTMLElement) {
-      return new DOMRect(
-        0,
-        0,
-        390,
-        this.style.opacity === '0' ? 19 : Number.parseFloat(this.style.height) || 600
-      )
+      let x = this.offsetLeft,
+        y = this.offsetTop
+      for (let parent = this.parentElement; parent; parent = parent.parentElement) {
+        x += parent.offsetLeft - parent.scrollLeft
+        y += parent.offsetTop - parent.scrollTop
+      }
+      return new DOMRect(x, y, width(this), height(this))
     })
   const NativeResizeObserver = globalThis.ResizeObserver
   vi.stubGlobal(
@@ -53,7 +128,10 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
       }
       observe(target: Element) {
         super.observe(target)
-        const box = { inlineSize: 390, blockSize: target.getBoundingClientRect().height }
+        const box = {
+          inlineSize: target.getBoundingClientRect().width,
+          blockSize: target.getBoundingClientRect().height
+        }
         this.notify(
           [
             {
@@ -155,12 +233,6 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     await act(async () =>
       root.render(createElement(MobileChatAttachmentPreview, { params: route.params }))
     )
-    await vi.waitFor(async () => {
-      await flush()
-      expect(reads.length).toBeGreaterThan(0)
-    })
-    expect(button('Copy').getAttribute('aria-disabled')).toBe('true')
-    expect(button('Save').getAttribute('aria-disabled')).toBe('true')
     // Supply browser layout, not source results or callbacks; the real list owns scrolling and demand.
     const scroller = Array.from(container.querySelectorAll('div')).find((node) =>
       ['auto', 'scroll'].includes(getComputedStyle(node).overflowY)
@@ -168,15 +240,26 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     if (!(scroller instanceof HTMLElement)) {
       throw new Error('Expected actual RN-web scroll host')
     }
-    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 600 })
+    await vi.waitFor(async () => {
+      await flush()
+      expect(scroller.offsetHeight).toBe(viewportHeight)
+      expect(scroller.offsetWidth).toBeGreaterThan(0)
+      expect(reads.length).toBeGreaterThan(0)
+      // Visible rows prove the async RN-web onLayout and initial source publication have settled.
+      expect(
+        container.querySelectorAll('[data-testid="attachment-text-segment"]').length
+      ).toBeGreaterThan(Math.floor(viewportHeight / 19))
+    })
+    expect(button('Copy').getAttribute('aria-disabled')).toBe('true')
+    expect(button('Save').getAttribute('aria-disabled')).toBe('true')
     const source = sourceBlocks.mock.contexts.at(-1)
     if (!(source instanceof AttachmentTextSource)) {
       throw new Error('Expected actual source identity')
     }
     const { AttachmentTextViewport } = await import('../../../src/shared/attachment-text-viewport')
-    const track = new AttachmentTextViewport(source, 19, 600)
+    const track = new AttachmentTextViewport(source, 19, scroller.clientHeight)
     await act(async () => {
-      scroller.scrollTop = track.total - 600
+      scroller.scrollTop = track.total - scroller.clientHeight
       scroller.dispatchEvent(new Event('scroll'))
     })
     await vi.waitFor(async () => {
@@ -233,10 +316,20 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     )
     expect(mocks.write).toHaveBeenCalledTimes(1)
   } finally {
-    await act(async () => root.unmount())
-    container.remove()
-    sourceBlocks.mockRestore()
-    rect.mockRestore()
-    vi.unstubAllGlobals()
+    try {
+      await act(async () => root.unmount())
+    } finally {
+      container.remove()
+      sourceBlocks.mockRestore()
+      rect.mockRestore()
+      for (const [name, descriptor] of descriptors) {
+        if (descriptor) {
+          Object.defineProperty(HTMLElement.prototype, name, descriptor)
+        } else {
+          Reflect.deleteProperty(HTMLElement.prototype, name)
+        }
+      }
+      vi.unstubAllGlobals()
+    }
   }
 })
