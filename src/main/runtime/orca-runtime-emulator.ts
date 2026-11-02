@@ -9,6 +9,7 @@ import {
 import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
 import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
+import { assertWorktreeInputNotShadowedByDeviceHub } from '../emulator/emulator-pane-input-check'
 import type { EmulatorActiveSession, EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
@@ -104,6 +105,13 @@ export class RuntimeEmulatorCommands {
     return RuntimeEmulatorCommands.OK
   }
 
+  // Pane touches skip main, so the pane asks whether the active simulator still accepts input.
+  async emulatorCheckInput(params: { worktree?: string }): Promise<{ ok: true }> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    await assertWorktreeInputNotShadowedByDeviceHub(this.requireEmulatorBridge(), worktreeId)
+    return RuntimeEmulatorCommands.OK
+  }
+
   async emulatorExec(params: {
     command: string
     device?: string
@@ -129,16 +137,10 @@ export class RuntimeEmulatorCommands {
       throw new EmulatorError('emulator_disabled', emulatorFailureText('disabled'))
     }
     const bridge = this.requireEmulatorBridge()
-    let device = params.device ?? settings.mobileEmulatorDefaultDeviceUdid ?? undefined
-    if (!device) {
-      device = await resolveDefaultAttachDevice(bridge)
-    }
-    if (!device) {
-      throw new EmulatorError('emulator_device_not_found', emulatorFailureText('noDeviceSpecified'))
-    }
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     if (worktreeId) {
-      const reusable = await bridge.getReusableActiveForWorktree(worktreeId, device)
+      // Untargeted attaches (new tab, pane remount) keep the workspace's live device.
+      const reusable = await bridge.getReusableActiveForWorktree(worktreeId, params.device)
       if (reusable) {
         // Renderer remounts must reuse streams to avoid disconnected reload loops.
         this.notifyRendererEmulatorAutoAttach(worktreeId, reusable)
@@ -147,6 +149,14 @@ export class RuntimeEmulatorCommands {
         }
         return { attached: true, info: reusable }
       }
+    }
+    const device =
+      params.device ??
+      (await resolveDefaultAttachDevice(bridge, {
+        current: worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined,
+        configured: settings.mobileEmulatorDefaultDeviceUdid ?? undefined
+      }))
+    if (worktreeId) {
       // Device switch retains slow-boot Android emulators for fast switch-back.
       await bridge.stopActiveForSwitch(worktreeId)
     }

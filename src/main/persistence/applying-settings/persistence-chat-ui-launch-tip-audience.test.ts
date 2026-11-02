@@ -21,12 +21,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import * as crypto from 'node:crypto'
+import { ensureChatUiLaunchTipCohort } from '../../telemetry/chat-ui-launch-tip-cohort'
+import { restoreConsentEnv, stashAndClearConsentEnv } from '../../telemetry/client-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('node:crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof crypto>()),
+  randomInt: vi.fn(() => 0)
+}))
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-chat-ui-launch-tip-audience-'))
@@ -371,3 +378,73 @@ it('keeps frozen imported originals separate for each Store and prepared export'
     original: false
   })
 })
+
+it.each([true, false])(
+  'preserves filtered eligibility %s and cohort across profile reloads',
+  async (eligible) => {
+    writeDataFile({ settings: { experimentalNativeChat: false } })
+    const store = createStore()
+    const targeting = { mode: 'eligible-harnesses' as const, eligible }
+    store.updateSettings({
+      telemetry: {
+        ...store.getSettings().telemetry!,
+        chatUiLaunchTipCohort: 'treatment',
+        chatUiLaunchTipTargeting: targeting
+      }
+    })
+    store.flush()
+    const reopened = await reopen()
+    expect(reopened.getSettings().telemetry).toMatchObject({
+      chatUiLaunchTipCohort: 'treatment',
+      chatUiLaunchTipTargeting: targeting
+    })
+    reopened.updateSettings({ agentDefaultSurface: 'chat', nativeChatProviders: { codex: true } })
+    reopened.flush()
+    const again = await reopen()
+    expect(again.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual(targeting)
+  }
+)
+
+it.each([true, false])(
+  'enrolls from the current default and retains eligibility %s and historical audience on disk',
+  async (eligible) => {
+    const env = stashAndClearConsentEnv()
+    const random = vi
+      .mocked(crypto.randomInt)
+      .mockReset()
+      .mockImplementation(() => 0)
+    try {
+      writeDataFile({ settings: { experimentalNativeChat: eligible } })
+      const store = createStore()
+      const variant = eligible ? 'chat-ui-on' : 'chat-ui-off'
+      expect(store.getChatUiLaunchTipVariant()).toBe(variant)
+      store.updateSettings({ telemetry: { ...store.getSettings().telemetry!, optedIn: null } })
+      expect(ensureChatUiLaunchTipCohort(store)).toBeUndefined()
+
+      store.updateSettings({
+        agentDefaultSurface: eligible ? 'terminal' : 'chat',
+        telemetry: { ...store.getSettings().telemetry!, optedIn: true }
+      })
+      random.mockImplementationOnce(() => 8).mockImplementationOnce(() => 1)
+      expect(ensureChatUiLaunchTipCohort(store)).toBe('treatment')
+      store.flush()
+
+      const reopened = await reopen()
+      const targeting = { mode: 'not-switched', eligible }
+      expect(reopened.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual(targeting)
+      expect(reopened.getChatUiLaunchTipVariant()).toBe(variant)
+      reopened.updateSettings({ agentDefaultSurface: eligible ? 'chat' : 'terminal' })
+      reopened.flush()
+
+      const again = await reopen()
+      random.mockClear()
+      expect(ensureChatUiLaunchTipCohort(again)).toBe('treatment')
+      expect(random).not.toHaveBeenCalled()
+      expect(again.getSettings().telemetry?.chatUiLaunchTipTargeting).toEqual(targeting)
+      expect(again.getChatUiLaunchTipVariant()).toBe(variant)
+    } finally {
+      random.mockReset()
+      restoreConsentEnv(env)
+    }
+  }
+)

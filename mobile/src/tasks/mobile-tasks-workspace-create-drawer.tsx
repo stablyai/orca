@@ -1,6 +1,6 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import {
-  BottomDrawer,
   View,
   Text,
   MobileWorkspaceNameInput,

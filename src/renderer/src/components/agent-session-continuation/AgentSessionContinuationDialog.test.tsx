@@ -3,11 +3,21 @@ import { mocks, request, detection } from './AgentSessionContinuationDialog.test
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNativeChatHandOff } from '../native-chat/use-native-chat-hand-off'
 import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog'
+import * as rpc from '@/runtime/runtime-rpc-subscribe'
+import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 it('clears failed detection, gates unresolved Start, and submits the displayed root/subfolder choice', async () => {
   const props = { open: true, request, onOpenChange: vi.fn() }
@@ -200,6 +210,7 @@ it.each([
   ['codex', true, false],
   ['claude', true, true],
   ['claude-agent-teams', true, false],
+  ['claude', true, false],
   ['claude', false, false]
 ] as const)(
   'hands off from %s with family exclusion=%s and alternative=%s',
@@ -231,6 +242,16 @@ it.each([
     const selected = avoidSourceAgent ? (hasAlternative ? 'codex' : null) : sourceAgent
     const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' })
     expect(start.disabled).toBe(selected === null)
+    if (selected === null) {
+      expect(
+        screen.getByText(
+          `Only Agents sharing the usage limit with ${getAgentLabel(sourceAgent)} are available on this workspace host. Enable or install a different Agent.`
+        )
+      ).toBeTruthy()
+      expect(
+        screen.queryByText('No enabled Agents were detected on this workspace host.')
+      ).toBeNull()
+    }
     const picker = screen.getAllByRole('combobox')[0]
     fireEvent.click(picker)
     const familyRows = screen.queryAllByRole('option', {
@@ -311,4 +332,258 @@ it('explains an empty host inventory when the enabled agent has no chat preferen
   expect(start.disabled).toBe(true)
   fireEvent.click(start)
   expect(mocks.launch).not.toHaveBeenCalled()
+})
+
+it('explains the excluded source family in Spanish', async () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude' && agent.id !== 'claude-agent-teams')
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude', 'claude-agent-teams'] })
+  try {
+    await i18n.changeLanguage(await loadRendererUiLanguage('es'))
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{
+          ...request,
+          source: { ...request.source, sourceAgent: 'claude' },
+          avoidSourceAgent: true
+        }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    expect(
+      screen.getByText(
+        'En el host de este espacio de trabajo solo hay disponibles agentes que comparten el límite de uso con Claude. Activa o instala un agente diferente.'
+      )
+    ).toBeTruthy()
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Iniciar sesión nueva' }).disabled
+    ).toBe(true)
+  } finally {
+    await i18n.changeLanguage('en')
+  }
+})
+
+it('keeps an unavailable alternative and its explanation when the source family is excluded', () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => !['claude', 'claude-agent-teams', 'codex'].includes(agent.id))
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude', 'claude-agent-teams'] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  expect(screen.queryByText(/Only Agents sharing|No enabled Agents were detected/)).toBeNull()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(true)
+  fireEvent.click(screen.getAllByRole('combobox')[0])
+  expect(screen.getByRole('option', { name: /Codex/ }).getAttribute('aria-disabled')).toBe('true')
+  expect(screen.getByText('Not installed')).toBeTruthy()
+  expect(screen.queryAllByRole('option', { name: /Claude/ })).toHaveLength(0)
+})
+
+it('ignores a detected agent this build does not know when explaining the excluded family', () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    }
+  })
+  // A newer paired host can report an agent id this build has no config for; parse it as the
+  // wire data it arrives as, since no TuiAgent literal can name it.
+  const detectedIds: TuiAgent[] = JSON.parse('["claude", "future-agent"]')
+  mocks.detection.mockReturnValue({ ...detection, detectedIds })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  expect(
+    screen.getByText(
+      'Only Agents sharing the usage limit with Claude are available on this workspace host. Enable or install a different Agent.'
+    )
+  ).toBeTruthy()
+})
+
+it('keeps the no-agents explanation when host preferences disable the desktop-enabled source', async () => {
+  const supports = vi.spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability')
+  const call = vi.spyOn(runtimeRpc, 'callRuntimeRpc')
+  supports.mockResolvedValue(true)
+  call.mockResolvedValue({
+    settings: projectAgentLaunchSettings({
+      disabledTuiAgents: getAgentCatalog().map((agent) => agent.id)
+    })
+  })
+  replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    },
+    runtimeStatusByEnvironmentId: new Map([
+      [
+        'alpha',
+        {
+          status: {
+            runtimeId: 'runtime-1',
+            capabilities: [CHAT],
+            rendererGraphEpoch: 0,
+            graphStatus: 'ready',
+            authoritativeWindowId: null,
+            liveTabCount: 0,
+            liveLeafCount: 0
+          },
+          checkedAt: 1
+        }
+      ]
+    ]),
+    worktreesByRepo: {
+      'repo-1': [
+        makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'runtime:alpha' })
+      ]
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: ['claude'] })
+  try {
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{
+          ...request,
+          source: { ...request.source, sourceAgent: 'claude' },
+          avoidSourceAgent: true
+        }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    await act(async () => {})
+    expect(call).toHaveBeenCalled()
+    expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
+    expect(screen.queryByText(/Only Agents sharing/)).toBeNull()
+  } finally {
+    supports.mockRestore()
+    call.mockRestore()
+    clearHostAgentMenuSettingsForTests()
+    replaceRuntimeEnvironmentRevisions([])
+  }
+})
+
+// Last: the host's published chat availability outlives these tests.
+it('explains the excluded family when the source agent is offered only as a chat', async () => {
+  setLocalRuntimeCapabilitiesForTests([CHAT, AVAILABILITY])
+  vi.spyOn(rpc, 'subscribeRuntimeRpc').mockImplementation(
+    async (_target, _method, _params, handlers) => {
+      queueMicrotask(() =>
+        handlers.onEvent({
+          type: 'availability',
+          agents: [{ agent: 'codex', state: 'available', chatProgram: 'available' }]
+        })
+      )
+      return { unsubscribe: () => {} }
+    }
+  )
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'codex')
+        .map((agent) => agent.id)
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: [] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'codex' },
+        avoidSourceAgent: true
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  await act(async () => {})
+  expect(
+    screen.getByText(
+      'Only Agents sharing the usage limit with Codex are available on this workspace host. Enable or install a different Agent.'
+    )
+  ).toBeTruthy()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(true)
+})
+
+it('keeps the no-agents explanation when the source agent only has a chat that cannot open here', async () => {
+  setLocalRuntimeCapabilitiesForTests([CHAT, AVAILABILITY])
+  vi.spyOn(rpc, 'subscribeRuntimeRpc').mockImplementation(
+    async (_target, _method, _params, handlers) => {
+      queueMicrotask(() =>
+        handlers.onEvent({
+          type: 'availability',
+          agents: [{ agent: 'claude', state: 'available', chatProgram: 'available' }]
+        })
+      )
+      return { unsubscribe: () => {} }
+    }
+  )
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'claude')
+        .map((agent) => agent.id)
+    }
+  })
+  // The root offers Claude's chat, but its row here is unavailable (subfolder) and no CLI exists.
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: [] })
+  render(
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        ...request,
+        source: { ...request.source, sourceAgent: 'claude' },
+        avoidSourceAgent: true,
+        initialCwd: '/repo/packages/app'
+      }}
+      onOpenChange={vi.fn()}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  await act(async () => {})
+  expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
+  expect(screen.queryByText(/Only Agents sharing/)).toBeNull()
 })

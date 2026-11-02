@@ -1,4 +1,4 @@
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget,
