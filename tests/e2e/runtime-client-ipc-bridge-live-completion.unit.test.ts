@@ -90,7 +90,37 @@ export function registerLiveTerminalSourceCompletionTests(
           }
         })
         const resident = getTerminalSemanticResident(ptyId)!
+        // Hydration cannot lend report authority or a Working edge to notifications.
+        expect(resident.policy.completion.canAnnounceCompletion()).toBe(false)
+        expect(useAppStore.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+        expect(dispatch).not.toHaveBeenCalled()
+        source.record(
+          { kind: 'agent-status', payload: { state: 'working', agentType: 'claude', prompt: '' } },
+          Date.now()
+        )
+        h.emit(0, false, {
+          type: 'terminalSideEffects',
+          batch: {
+            ptyId: 'physical',
+            paneKey,
+            tabId: 'tab',
+            worktreeId: 'remote-wt',
+            seq: 1,
+            facts: [
+              {
+                kind: 'agent-status',
+                payload: { state: 'working', agentType: 'claude', prompt: '' }
+              }
+            ],
+            terminalState: {
+              runtimeId: renew ? 'old-runtime' : runtime.getRuntimeId(),
+              incarnationId: 'incarnation',
+              snapshot: source.snapshot()
+            }
+          }
+        })
         expect(resident.policy.completion.canAnnounceCompletion()).toBe(true)
+        expect(useAppStore.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
         expect(resident.policy.completion.hasPendingHookDoneCompletion()).toBe(false)
         h.pending[0].resolve({ subscriptionId: 'sub-0', requestId: 'r' })
         for (let index = 0; index < 30; index++) {
@@ -147,7 +177,7 @@ export function registerLiveTerminalSourceCompletionTests(
         expect(liveFacts).toEqual([{ kind: 'agent-status', payload }])
         expect(getTerminalSemanticResident(ptyId)).toBe(resident)
         expect(resident.identity.runtimeId).toBe(runtime.getRuntimeId())
-        expect(useAppStore.getState().agentStatusByPaneKey[paneKey]?.state).toBe('done')
+        expect(useAppStore.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
         expect(resident.policy.completion.hasPendingHookDoneCompletion()).toBe(true)
         const completed = lastLive!
         expect(historical!.batch.terminalState!.snapshot.revision).toBeLessThan(

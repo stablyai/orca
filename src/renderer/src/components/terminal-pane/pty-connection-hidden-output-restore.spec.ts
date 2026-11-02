@@ -381,6 +381,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
     })
 
     it('pauses capable paired output while hidden and restores exactly on reveal', async () => {
+      // This fixture supplies physical callbacks below; the independent resident reader has no server.
+      const stream = await import('@/runtime/runtime-terminal-stream')
+      vi.spyOn(stream, 'subscribeToRuntimeTerminalData').mockResolvedValue(vi.fn())
       const { connectPanePty } = await import('./pty-connection')
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
@@ -437,6 +440,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = {
         [LEAF_1]: remotePtyId
       }
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const hostStatus = { state: 'interrupted', agentType: 'claude', prompt: 'host interrupted' }
+      mockStoreState.agentStatusByPaneKey[paneKey] = hostStatus
       const visibleStatusHandler = createdTransportOptions[0]?.onAgentStatus as
         | ((payload: { state: 'working'; prompt: string; agentType: 'claude' }) => void)
         | undefined
@@ -446,8 +452,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         prompt: 'visible control',
         agentType: 'claude'
       })
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
-      mockStoreState.setAgentStatus.mockClear()
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBe(hostStatus)
       factsHandler._dispatchTerminalSideEffectBatchForTest({
         ptyId: remotePtyId,
         seq: hidden.length,
@@ -461,20 +467,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         ]
       })
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'remote working')
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
-        makePaneKey('tab-1', LEAF_1),
-        {
-          state: 'working',
-          prompt: 'paired task',
-          agentType: 'claude',
-          // Renderer-parsed OSC 9999 owns remote-runtime row sequencing (STA-4293).
-          observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
-        },
-        undefined,
-        undefined,
-        { connectionId: null }
-      )
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBe(hostStatus)
       // Remote gated panes record the subscription from the fact and answer nothing (#9993).
       expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
       expect(recordPaneMode2031Subscription).toHaveBeenCalledWith(1, expect.any(String))
