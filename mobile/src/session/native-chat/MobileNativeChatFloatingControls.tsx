@@ -65,7 +65,10 @@ function ChatJumpButton({
           style={({ pressed }) => [styles.fab, pressed && { opacity: feedback.pressedOpacity }]}
           onPress={onPress}
         >
-          {icon}
+          {/* The glyph is not the control. A page click on the path never reaches onPress. */}
+          <View collapsable={false} pointerEvents="none">
+            {icon}
+          </View>
         </Pressable>
       </Animated.View>
     </Animated.View>
