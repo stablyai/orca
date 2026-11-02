@@ -26,10 +26,16 @@ import {
   copyVerifiedAppImageNodeRuntime,
   type AppImageNodeRuntime
 } from '../node-runtime/appimage-bundled-node-runtime'
-import { serveProfileHasSshTargets } from './serve-profile-ssh-targets'
+import {
+  serveProfileHasEphemeralVmRuntimes,
+  serveProfileHasInstalledPlugins,
+  serveProfileHasSshTargets
+} from './serve-profile-electron-features'
 import { errorMessage } from '../../shared/error-message'
 
 const NATIVE_PREFLIGHT_TIMEOUT_MS = 30_000
+
+type ProfileFeatureProbe = (userDataPath: string) => boolean
 
 export type ServeRuntimeSelectionInput = {
   env: NodeJS.ProcessEnv
@@ -42,7 +48,9 @@ export type ServeRuntimeSelectionInput = {
   /** Try the AppImage’s pinned Node before downloading. */
   bundledNodeRuntime?: AppImageNodeRuntime | null
   nativePreflight?: (runtime: string, entry: string) => Promise<string>
-  profileHasSshTargets?: (userDataPath: string) => boolean
+  profileHasSshTargets?: ProfileFeatureProbe
+  profileHasInstalledPlugins?: ProfileFeatureProbe
+  profileHasEphemeralVmRuntimes?: ProfileFeatureProbe
 }
 
 function isServerTarget(value: string): value is ServerTarget {
@@ -63,10 +71,10 @@ export async function selectServeRuntime(
   if (requested && requested !== 'orcad') {
     return electron(`${SERVE_RUNTIME_ENV}=${requested} is neither orcad nor electron`)
   }
-  // Default to Electron for SSH targets until orcad supports them; explicit orcad selection overrides.
-  const sshReason = requested ? null : profileSshReason(input)
-  if (sshReason) {
-    return electron(sshReason)
+  // Default to Electron for desktop-only profile features until orcad supports them; explicit orcad selection overrides.
+  const featureReason = requested ? null : profileFeatureReason(input)
+  if (featureReason) {
+    return electron(featureReason)
   }
   const target = (input.hostTarget ?? (() => nativeSlotName(detectNativeHostAbi())))()
   if (!isServerTarget(target)) {
@@ -116,15 +124,26 @@ export async function selectServeRuntime(
   }
 }
 
-function profileSshReason(input: ServeRuntimeSelectionInput): string | null {
-  try {
-    return (input.profileHasSshTargets ?? serveProfileHasSshTargets)(input.userDataPath)
-      ? 'this profile has SSH targets, which orcad cannot serve yet'
-      : null
-  } catch (error) {
-    // Unknown/old-schema profiles may contain saved SSH targets; preserve Electron reachability.
-    return `could not tell whether this profile has SSH targets, which orcad cannot serve yet (${errorMessage(error)})`
+function profileFeatureReason(input: ServeRuntimeSelectionInput): string | null {
+  const features: readonly [string, ProfileFeatureProbe][] = [
+    ['SSH targets', input.profileHasSshTargets ?? serveProfileHasSshTargets],
+    ['installed plugins', input.profileHasInstalledPlugins ?? serveProfileHasInstalledPlugins],
+    [
+      'VM recipe workspaces',
+      input.profileHasEphemeralVmRuntimes ?? serveProfileHasEphemeralVmRuntimes
+    ]
+  ]
+  for (const [feature, hasFeature] of features) {
+    try {
+      if (hasFeature(input.userDataPath)) {
+        return `this profile has ${feature}, which orcad cannot serve yet`
+      }
+    } catch (error) {
+      // Unknown/old-schema state may hold the feature; preserve Electron reachability.
+      return `could not tell whether this profile has ${feature}, which orcad cannot serve yet (${errorMessage(error)})`
+    }
   }
+  return null
 }
 
 async function placeSlotRuntime(
