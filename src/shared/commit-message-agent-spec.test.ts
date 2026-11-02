@@ -156,45 +156,84 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
 
 describe('buildArgs (Claude)', () => {
   const spec = getCommitMessageAgentSpec('claude')!
+  const isolation = ['--strict-mcp-config', '--settings', '{"disableAllHooks":true}']
+  // Every built-in of the CLIs that refuse `--tools`/`dontAsk`, except the file tools.
+  const legacyDenied =
+    'Task,Bash,LS,ExitPlanMode,Edit,MultiEdit,Write,NotebookEdit,WebFetch,TodoWrite,WebSearch,BashOutput,KillBash,KillShell,SlashCommand,Skill,AskUserQuestion,LSP,ListMcpResourcesTool,ReadMcpResourceTool'
 
-  // Plan mode made the CLI run Sonnet for `haiku`; tools stay off without it.
-  it('passes the picked model with tools off and no plan mode', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'haiku' })
-    expect(args).toEqual([
+  // Plan mode made the CLI run Sonnet for `haiku`; an explicit non-plan mode also outranks settings.
+  it('passes the picked model with only file tools and no plan mode', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku' })).toEqual([
       '-p',
       '--output-format',
       'text',
       '--model',
       'haiku',
       '--tools',
-      '',
+      'Read,Grep,Glob',
       '--permission-mode',
       'dontAsk',
-      '--strict-mcp-config',
-      '--settings',
-      '{"disableAllHooks":true}'
+      ...isolation
     ])
-  })
-
-  it('appends --effort when a thinking level is supplied', () => {
-    const args = spec.buildArgs({
-      prompt: '',
-      model: 'sonnet',
-      thinkingLevel: 'high'
-    })
-    expect(args).toEqual([
+    expect(spec.buildArgs({ prompt: '', model: 'sonnet', thinkingLevel: 'high' })).toEqual([
       '-p',
       '--output-format',
       'text',
       '--model',
       'sonnet',
       '--tools',
-      '',
+      'Read,Grep,Glob',
       '--permission-mode',
       'dontAsk',
       '--effort',
       'high',
-      '--strict-mcp-config',
+      ...isolation
+    ])
+  })
+
+  it('denies MCP tools once managed servers load without strict mode', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku', strictMcp: false })).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--tools',
+      'Read,Grep,Glob',
+      '--disallowedTools',
+      'mcp__*',
+      '--permission-mode',
+      'dontAsk',
+      '--settings',
+      '{"disableAllHooks":true}'
+    ])
+  })
+
+  it('keeps the same tools and a non-plan mode in older CLI syntax', () => {
+    expect(spec.buildArgs({ prompt: '', model: 'haiku', legacyToolPolicy: true })).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--disallowedTools',
+      legacyDenied,
+      '--permission-mode',
+      'default',
+      ...isolation
+    ])
+    expect(
+      spec.buildArgs({ prompt: '', model: 'haiku', legacyToolPolicy: true, strictMcp: false })
+    ).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'haiku',
+      '--disallowedTools',
+      legacyDenied,
+      '--permission-mode',
+      'default',
       '--settings',
       '{"disableAllHooks":true}'
     ])

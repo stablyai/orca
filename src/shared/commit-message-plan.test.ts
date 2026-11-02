@@ -46,7 +46,7 @@ describe('planCommitMessageGeneration', () => {
           '--model',
           'sonnet',
           '--tools',
-          '',
+          'Read,Grep,Glob',
           '--permission-mode',
           'dontAsk',
           '--effort',
