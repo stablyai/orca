@@ -109,7 +109,13 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
         : 0
     }
   )
-  ipcMain.handle('automations:rendererReady', (): void => {
-    service.setRendererReady()
+  ipcMain.handle(
+    'automations:dispatchReceived',
+    (_event, args: { runId: string; dispatchToken: string }): void => {
+      service.acknowledgeRendererDispatch(args.runId, args.dispatchToken)
+    }
+  )
+  ipcMain.handle('automations:rendererReady', (_event, args?: { documentId?: string }): void => {
+    service.setRendererReady(args?.documentId)
   })
 }

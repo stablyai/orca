@@ -218,6 +218,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     vi.stubGlobal('window', {
       api: {
         automations: {
+          acknowledgeDispatch: vi.fn(),
           onDispatchRequested: mockOnDispatchRequested,
           rendererReady: mockRendererReady,
           markDispatchResult: mockMarkDispatchResult,

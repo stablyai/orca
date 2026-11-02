@@ -29,6 +29,7 @@ import {
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import { RendererDispatchLink } from './renderer-dispatch-link'
 import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledTickRefusal,
@@ -48,8 +49,7 @@ export class AutomationService {
   private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
-  private webContents: AutomationRendererChannel | null = null
-  private rendererReady = false
+  private readonly renderer = new RendererDispatchLink(this.runInAutomationLane.bind(this))
   private evaluating = false
   private stopped = false
   private dispatchGeneration = 0
@@ -104,15 +104,19 @@ export class AutomationService {
   }
 
   setWebContents(webContents: AutomationRendererChannel | null): void {
-    this.webContents = webContents
-    this.rendererReady = false
+    this.renderer.attach(webContents)
   }
 
-  setRendererReady(): void {
-    this.rendererReady = true
+  /** `documentId` tells a reloaded renderer document apart from a repeat call. */
+  setRendererReady(documentId?: string): void {
+    this.renderer.markReady(documentId)
     // Pane lookup becomes authoritative after the renderer publishes its window graph.
     this.completionWatcher?.markTerminalSurfaceReady()
     void this.evaluateDueRuns()
+  }
+
+  acknowledgeRendererDispatch(runId: string, dispatchToken: string): void {
+    this.renderer.markReceived(runId, dispatchToken)
   }
 
   start(): void {
@@ -126,7 +130,7 @@ export class AutomationService {
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
     // Headless hosts need startup catch-up without a renderer-ready notification.
-    if (this.rendererReady || this.headlessDispatcher) {
+    if (this.renderer.isReady() || this.headlessDispatcher) {
       // Serve adopts PTYs and publishes its graph before start().
       this.completionWatcher?.markTerminalSurfaceReady()
       void this.evaluateDueRuns()
@@ -175,6 +179,7 @@ export class AutomationService {
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
+    this.renderer.settle(result.runId)
     const run = await this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
@@ -247,7 +252,7 @@ export class AutomationService {
 
     // Fold recurring refusals before creating rows so they do not evict real run history.
     const target = this.resolveTarget(automation)
-    const canDispatch = this.canDispatchToRenderer() || Boolean(this.headlessDispatcher)
+    const canDispatch = Boolean(this.renderer.current() || this.headlessDispatcher)
     const refusal = await describeScheduledTickRefusal(this.store, { target, canDispatch })
     // Once WSL owns the schedule, avoid churning skips on the retained local copy.
     if (refusal?.errorCode === 'wslMoveOwnedByHost') {
@@ -274,11 +279,6 @@ export class AutomationService {
     })
   }
 
-  private canDispatchToRenderer(): boolean {
-    const webContents = this.webContents
-    return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
-  }
-
   /** Serialize dispatch and retention per automation until launch, without holding the lane during agent work. */
   runInAutomationLane<T>(automationId: string, operation: () => Promise<T>): Promise<T> {
     return runKeyedSerializedOperation(this.automationLanes, automationId, operation)
@@ -295,13 +295,13 @@ export class AutomationService {
         {
           store: this.store,
           runs: this.runs,
+          tickMs: this.tickMs,
           isActive: () => !this.stopped && generation === this.dispatchGeneration,
-          getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
+          getRenderer: () => this.renderer.current(),
+          trackRendererHandoff: (handoff) => this.renderer.track(handoff),
           headlessDispatcher: this.headlessDispatcher,
           chatDispatcher:
-            this.allowRemoteHostScheduling || this.canDispatchToRenderer()
-              ? this.chatDispatcher
-              : null,
+            this.allowRemoteHostScheduling || this.renderer.current() ? this.chatDispatcher : null,
           resolveTarget: (current) => this.resolveTarget(current),
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),

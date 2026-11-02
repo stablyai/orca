@@ -35,7 +35,10 @@ export const automationsApi = {
     hostId: ExecutionHostId
     displayName: string
   }): Promise<number> => ipcRenderer.invoke('automations:snapshotWorkspaceName', args),
-  rendererReady: (): Promise<void> => ipcRenderer.invoke('automations:rendererReady'),
+  acknowledgeDispatch: (args: { runId: string; dispatchToken: string }): Promise<void> =>
+    ipcRenderer.invoke('automations:dispatchReceived', args),
+  rendererReady: (args: { documentId: string }): Promise<void> =>
+    ipcRenderer.invoke('automations:rendererReady', args),
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>
       callback(request)

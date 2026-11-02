@@ -4,7 +4,8 @@ import { isDeepStrictEqual } from 'node:util'
 import type {
   Automation,
   AutomationRun,
-  AutomationPrecheckResult
+  AutomationPrecheckResult,
+  AutomationRunStatus
 } from '../../shared/automations-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence/loading-store/store'
@@ -20,6 +21,7 @@ import { createAutomationDispatchToken } from './dispatch-tokens'
 import {
   describeScheduledRefusal,
   describeStoppedWslDistroRefusal,
+  missedBeyondGrace,
   sendRendererDispatch
 } from './dispatch-refusal'
 import {
@@ -28,10 +30,15 @@ import {
 } from '../../shared/automation-run-failure-copy'
 import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
+import type { RendererDispatchHandoff } from './renderer-dispatch-link'
 
 export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
 
 export { AutomationDispatchCancelledError }
+
+// Plain English like the startup strand reasons (run-completion-watcher.ts), not a coded skip.
+const RENDERER_RELOADED_MID_DISPATCH =
+  'The Orca window reloaded while this run was starting, so Orca could not confirm that its agent launched.'
 
 type DispatchContext = Pick<
   HeadlessAutomationDispatchContext,
@@ -39,8 +46,11 @@ type DispatchContext = Pick<
 > & {
   store: Store
   runs: AutomationRunWriter
+  /** The scheduler tick, so a re-send honors the grace window the first send did. */
+  tickMs: number
   isActive(): boolean
   getRenderer(): AutomationRendererChannel | null
+  trackRendererHandoff(handoff: RendererDispatchHandoff): void
   headlessDispatcher: HeadlessAutomationDispatcher | null
   chatDispatcher?: HeadlessAutomationDispatcher | null
   resolveTarget(automation: Automation): AutomationRunTargetResult
@@ -114,6 +124,43 @@ export async function requestAutomationDispatch(
     await ctx.store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     return current
   }
+  const sendToRenderer = (renderer: AutomationRendererChannel): Promise<AutomationRun> => {
+    const dispatchToken = createAutomationDispatchToken(automation.id, run.id)
+    ctx.trackRendererHandoff({
+      automationId: automation.id,
+      runId: run.id,
+      dispatchToken,
+      recover: recoverRendererHandoff
+    })
+    return sendRendererDispatch(renderer, { automation, run, dispatchToken }, ctx.runs, run)
+  }
+  // A re-send rechecks what the first send did: the reload may have outlasted an edit or the grace.
+  const recoverRendererHandoff = async (received: boolean): Promise<AutomationRun> => {
+    run = readRun()
+    if (run.status !== 'dispatching') {
+      return run
+    }
+    const closeOut = (status: AutomationRunStatus, failure: AutomationRunFailure) =>
+      ctx.markDispatchResult({ runId: run.id, status, workspaceId: run.workspaceId, ...failure })
+    // Not re-sent: the reloaded document may already have started the precheck or the agent.
+    if (received) {
+      return closeOut('dispatch_failed', { error: RENDERER_RELOADED_MID_DISPATCH })
+    }
+    const { scheduledFor } = run
+    if (
+      run.trigger === 'scheduled' &&
+      missedBeyondGrace({ automation, scheduledFor, now: Date.now(), tickMs: ctx.tickMs })
+    ) {
+      return closeOut('skipped_missed', automationRunFailure('missedGraceWindow'))
+    }
+    const target = resolveCurrentTarget()
+    const renderer = ctx.getRenderer()
+    const refusal = describeScheduledRefusal({ target, canDispatch: Boolean(renderer) })
+    if (refusal || !target.ok || !renderer) {
+      return refuse(refusal ?? automationRunFailure('noDispatchHost'))
+    }
+    return sendToRenderer(renderer)
+  }
 
   run = readRun()
   if (run.status !== 'pending') {
@@ -155,16 +202,7 @@ export async function requestAutomationDispatch(
   }
   const renderer = automation.surface === 'chat' ? null : ctx.getRenderer()
   if (renderer) {
-    return sendRendererDispatch(
-      renderer,
-      {
-        automation,
-        run,
-        dispatchToken: createAutomationDispatchToken(automation.id, run.id)
-      },
-      ctx.runs,
-      run
-    )
+    return sendToRenderer(renderer)
   }
   const dispatcher = automation.surface === 'chat' ? ctx.chatDispatcher : ctx.headlessDispatcher
   if (!dispatcher) {

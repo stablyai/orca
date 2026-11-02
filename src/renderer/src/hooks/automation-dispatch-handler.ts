@@ -34,6 +34,8 @@ export async function handleAutomationDispatchRequest({
   run,
   dispatchToken
 }: AutomationDispatchRequest): Promise<void> {
+  // Optional: a hot-reloaded renderer can outpace its preload, and dispatch must not hinge on this.
+  void window.api.automations.acknowledgeDispatch?.({ runId: run.id, dispatchToken })
   const markDispatchResult = async (result: AutomationDispatchResult): Promise<void> => {
     // The writer publishes host-scoped change before reply; another unscoped emit would invalidate every host.
     await window.api.automations.markDispatchResult(result)

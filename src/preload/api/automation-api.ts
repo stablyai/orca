@@ -37,7 +37,10 @@ export type AutomationsApi = {
     hostId: ExecutionHostId
     displayName: string
   }) => Promise<number>
-  rendererReady: () => Promise<void>
+  /** Sent before any dispatch work, so main re-sends a run a reload dropped unread. */
+  acknowledgeDispatch: (args: { runId: string; dispatchToken: string }) => Promise<void>
+  /** `documentId` is fixed per renderer document, so main can tell a reload apart. */
+  rendererReady: (args: { documentId: string }) => Promise<void>
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
   onChanged: (callback: (payload: AutomationsChangedPayload) => void) => () => void
 }
