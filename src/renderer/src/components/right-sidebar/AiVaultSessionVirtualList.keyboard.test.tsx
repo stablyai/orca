@@ -166,6 +166,12 @@ import {
   drawTabsFromMain,
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import { makeWorktree } from '@/store/slices/store-test-helpers'
+
+// Only a registered workspace opens; these tests open chats in the one already showing.
+const listed = (workspaceId: string) => ({
+  'repo-1': [makeWorktree({ id: workspaceId, repoId: 'repo-1' })]
+})
 
 class NoopResizeObserver {
   observe(): void {}
@@ -415,7 +421,7 @@ describe('Session History keyboard selection', () => {
     async (refused) => {
       const workspaceId = 'repo-1::/repo'
       useAppStore.setState(useAppStore.getInitialState(), true)
-      useAppStore.setState({ activeWorktreeId: workspaceId })
+      useAppStore.setState({ activeWorktreeId: workspaceId, worktreesByRepo: listed(workspaceId) })
       useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
         id: 'old',
         entityId: 'old',
@@ -443,7 +449,7 @@ describe('Session History keyboard selection', () => {
   it('follows the chat the host says holds the row: this one, another open one, or a closed one', async () => {
     const workspaceId = 'repo-1::/repo'
     useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({ activeWorktreeId: workspaceId })
+    useAppStore.setState({ activeWorktreeId: workspaceId, worktreesByRepo: listed(workspaceId) })
     for (const id of ['old', 'other']) {
       useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
         id,

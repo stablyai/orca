@@ -184,16 +184,21 @@ function countCatalogReads(rig: Awaited<ReturnType<typeof retired>>) {
     folders: [] as FolderWorkspace[],
     groups: [] as ProjectGroup[]
   }
-  const counted = <T extends object>(rows: readonly T[]) =>
-    rows.map(
-      (row) =>
-        new Proxy(row, {
-          get: (target, key, receiver) => {
+  // Every read of a catalog row's own fields counts.
+  const counted = <T extends object>(rows: readonly T[]): T[] =>
+    rows.map((row) => {
+      const copy = { ...row }
+      for (const [key, value] of Object.entries(row)) {
+        Object.defineProperty(copy, key, {
+          enumerable: true,
+          get: () => {
             counter.reads++
-            return Reflect.get(target, key, receiver)
+            return value
           }
         })
-    )
+      }
+      return copy
+    })
   const store = rig.profile
   const repos = store.getRepos.bind(store)
   const folders = store.getFolderWorkspaces.bind(store)

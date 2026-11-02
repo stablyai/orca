@@ -9,6 +9,7 @@ import { useAiVaultOriginalPaneActions } from '@/components/right-sidebar/ai-vau
 import { reportCliChatResumeFailure } from '@/components/tab-bar/cli-chat-resume-feedback'
 import AiVaultSessionDropLayer from '@/components/tab-group/AiVaultSessionDropLayer'
 import { writeAiVaultSessionDragData } from './ai-vault-session-drag'
+import { makeWorktree } from '@/store/slices/store-test-helpers'
 const transport = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: transport.toast, success: vi.fn() } }))
 vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
@@ -72,7 +73,12 @@ function publish(tabs: Tab[]) {
 beforeEach(() => {
   vi.clearAllMocks()
   useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({ activeWorktreeId: workspace, activeWorkspaceExecutionHostId: 'local' })
+  useAppStore.setState({
+    // Only a registered workspace opens; this one is already showing.
+    worktreesByRepo: { repo: [makeWorktree({ id: workspace, repoId: 'repo' })] },
+    activeWorktreeId: workspace,
+    activeWorkspaceExecutionHostId: 'local'
+  })
   publish([row('actual-S', 'S')])
   transport.rpc.mockImplementation(async (_host, method) =>
     method === 'orchestration.partyLocation'

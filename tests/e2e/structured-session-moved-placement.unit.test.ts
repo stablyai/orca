@@ -29,6 +29,7 @@ import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-
 import { applyLocalStructuredSessionTabSnapshots } from '../../src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '../../src/renderer/src/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 import {
+  NOW,
   makeState,
   resetWebSessionTabsSyncTestState
 } from '../../src/renderer/src/runtime/web-session-tabs-sync-test-harness'
@@ -185,7 +186,7 @@ const pairedApply = (frames: RuntimeMobileSessionTabsResult[], state = makeState
   frames.reduce(
     (current, frame) => ({
       ...current,
-      ...applyWebSessionTabsSnapshot(current, frame, PAIRED, Date.now())
+      ...applyWebSessionTabsSnapshot(current, frame, PAIRED, NOW)
     }),
     state
   )
@@ -508,13 +509,20 @@ it('saved reads and saves of N workspaces holding moved chats visit each row a b
   const counts: number[] = []
   for (const width of [20, 200]) {
     let count = 0
-    const counted = <T extends object>(row: T) =>
-      new Proxy(row, {
-        get: (target, key, receiver) => {
-          count++
-          return Reflect.get(target, key, receiver)
-        }
-      })
+    // Every read of a row's own fields counts.
+    const counted = <T extends object>(row: T): T => {
+      const copy = { ...row }
+      for (const [key, value] of Object.entries(row)) {
+        Object.defineProperty(copy, key, {
+          enumerable: true,
+          get: () => {
+            count++
+            return value
+          }
+        })
+      }
+      return copy
+    }
     const workspaces = Array.from({ length: width }, (_, i) => `removed-${i}::/old/${i}`)
     const session = {
       ...getDefaultWorkspaceSession(),

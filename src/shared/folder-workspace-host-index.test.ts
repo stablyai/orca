@@ -101,15 +101,17 @@ it('decides every folder exactly as the scalar resolver does, for any required h
 
 it('reads each repo path once for every spelling of a directory', () => {
   let reads = 0
-  const repos = catalog.repos.map(
-    (repo) =>
-      new Proxy(repo, {
-        get: (target, key, receiver) => {
-          reads += key === 'path' ? 1 : 0
-          return Reflect.get(target, key, receiver)
-        }
-      })
-  )
+  const repos = catalog.repos.map((repo) => {
+    const counted = { ...repo }
+    Object.defineProperty(counted, 'path', {
+      enumerable: true,
+      get: () => {
+        reads++
+        return repo.path
+      }
+    })
+    return counted
+  })
   const resolve = createFolderWorkspaceHostIndex({ ...catalog, repos })
   const answers = ['windows', 'windows-slashes', 'windows-case', 'wsl', 'wsl-alias'].map((id) =>
     resolve(id)

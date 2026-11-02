@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
     toast: vi.fn(),
     reveal: vi.fn(),
     activate: vi.fn(),
+    navigate: vi.fn(() => true),
     group: vi.fn(),
     type: vi.fn(),
     state: {
@@ -46,6 +47,10 @@ vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
   focusRuntimeTerminalHandle: mocks.remoteFocus
 }))
 vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: mocks.reveal }))
+// The store is mocked without worktree rows; navigation is the listed workspace already on screen.
+vi.mock('./structured-chat-workspace-navigation', () => ({
+  showStructuredChatWorkspace: mocks.navigate
+}))
 vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: () => false }))
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { openAgentMessageSender, openOrchestrationCrewAgent } from './open-agent-message-sender'
