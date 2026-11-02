@@ -6,6 +6,7 @@ import {
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix
 } from './tui-agent-startup'
+import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import {
@@ -418,6 +419,52 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
+  })
+
+  it('keeps gajae-code on the cursor-gated paste draft route', () => {
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPasteReadySignal).toBe(
+      'render-cursor-after-bracketed-paste'
+    )
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPromptEnvVar).toBeUndefined()
+    // Without a native draft plan, Gajae Code must use cursor-gated paste readiness.
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'gajae-code',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
+  it('launches Gajae Code as bare gjc and delivers the prompt after start', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'gajae-code',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'gajae-code',
+      launchCommand: 'gjc',
+      expectedProcess: 'gjc',
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'gjc', agentArgs: '', agentEnv: {} }
+    })
+  })
+
+  it('maps Gajae Code detection onto both gjc and gajae-code', () => {
+    expect(TUI_AGENT_CONFIG['gajae-code']).toMatchObject({
+      detectCmd: 'gjc',
+      detectCmdAliases: ['gajae-code'],
+      launchCmd: 'gjc',
+      expectedProcess: 'gjc',
+      promptInjectionMode: 'stdin-after-start',
+      draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+    })
+    expect(getTuiAgentDetectCommands(TUI_AGENT_CONFIG['gajae-code'])).toEqual(['gjc', 'gajae-code'])
   })
 
   it('clears draft environment variables with the target shell syntax', () => {

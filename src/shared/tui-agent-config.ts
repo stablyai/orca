@@ -126,6 +126,14 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Mirror OpenCode’s cursor gate by parity; MiMo startup has not been separately validated.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
+  'gajae-code': {
+    detectCmd: 'gjc',
+    // Why: npm `gajae-code` also ships a `gajae-code` bin; wrappers may exec that name instead of `gjc`.
+    detectCmdAliases: ['gajae-code'],
+    // Why: GJC docs launch bare `gjc`; README has no `--prompt`. Gajae has no documented composer-prefill flag.
+    promptInjectionMode: 'stdin-after-start',
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+  },
   pi: {
     detectCmd: 'pi',
     promptInjectionMode: 'argv',
