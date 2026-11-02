@@ -19522,7 +19522,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour continuer dans l'interface de chat.",
-        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse."
+        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
+        "exitUnconfirmed": "{{agent}} exécute cette conversation dans un autre terminal. Quittez-le là-bas ou fermez ce terminal, puis réessayez."
       },
       "state": {
         "loading": {
@@ -20660,6 +20661,9 @@
         "finished": "Worker temporaire d’orchestration terminé · Fermeture dans {{countdown}}",
         "keepOpen": "Garder ouvert"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "S’exécute dans WSL : {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -22652,6 +22656,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}} : aucune sauvegarde lisible, la section repartira donc de zéro.",
+      "sectionKeptCurrent": "{{section}} : vos exécutions actuelles seront conservées",
       "sectionRestored": "{{section}} : restauré à partir de la sauvegarde du {{time}}.",
       "projectsForgotten": "Orca oubliera vos projets et les détails de leurs espaces de travail. Les fichiers sur le disque ne sont pas modifiés.",
       "newerProjectsRemoved": "Les projets ajoutés après cette sauvegarde seront retirés d'Orca, avec les détails de leurs espaces de travail. Les fichiers sur le disque ne sont pas modifiés.",
@@ -22694,7 +22699,7 @@
       "noneFound": "(aucun élément trouvé)",
       "sqlitePath": "Chemin SQLite : {{path}}",
       "sectionsDamaged": "Une partie de l'état enregistré de ce profil est endommagée : {{sections}}. Tout le reste est intact.",
-      "repairCommand": "Quittez Orca, puis exécutez `{{command}}` pour remplacer uniquement les parties endommagées à partir des sauvegardes et conserver tout le reste. Orca conserve une copie du fichier endommagé.",
+      "repairCommand": "Arrêtez Orca, puis exécutez `{{command}}` pour réparer uniquement les parties endommagées et conserver le reste. Orca garde une copie du fichier endommagé.",
       "restoreWholeBackup": "Pour restaurer plutôt une sauvegarde complète, exécutez `{{exportsCommand}}`, puis `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca ne peut pas ouvrir le profil actif en toute sécurité, car son état SQLite est illisible.",
       "legacyJsonPath": "Chemin de l'ancien fichier JSON : {{path}}",

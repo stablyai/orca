@@ -32,7 +32,7 @@ import {
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import { nativeChatMessageCopyText } from '../../../../shared/native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../shared/native-chat/transcript/native-chat-message-copy-text'
 
 type UsageLimitActions = {
   account: ReactNode

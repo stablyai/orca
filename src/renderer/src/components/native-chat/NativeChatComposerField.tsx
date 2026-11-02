@@ -7,10 +7,8 @@ import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 import { useNotificationCardComposerClearance } from '@/lib/notification-card-composer-clearance'
-import type {
-  ComposerAutocomplete,
-  NativeChatPickerItem
-} from '../../../../shared/native-chat-composer-autocomplete'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -31,7 +29,7 @@ import type { NativeChatComposerGoalMode } from './use-native-chat-composer-subm
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
+import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 
 function noop(): void {}
 
@@ -379,11 +377,11 @@ export function NativeChatComposerField({
                         nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
               }
               // Let layout handle wrapping and touch targets; scroll after eight lines (a launch prompt: one line growing to six) without JavaScript measurement.
-              // An empty launch prompt also grows to fit a placeholder that wraps: its zero-width float keeps its height.
+              // An empty launch prompt also grows to fit a wrapping placeholder: a paragraph-wide float that keeps its height, with a zero-width margin box so the caret line stays put.
               className={cn(
                 'w-full bg-transparent px-2 py-1 text-sm outline-none',
                 launch
-                  ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:first-child]:before:!h-auto [&_p.is-editor-empty:first-child]:before:mr-[-100%]'
+                  ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:first-child]:before:!h-auto [&_p.is-editor-empty:first-child]:before:w-full [&_p.is-editor-empty:first-child]:before:mr-[-100%]'
                   : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
                 'overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.

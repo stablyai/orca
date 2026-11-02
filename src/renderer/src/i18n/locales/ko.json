@@ -18813,7 +18813,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "채팅 UI에서 계속하려면 이 호스트의 Orca를 업데이트하세요.",
-        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요."
+        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
+        "exitUnconfirmed": "{{agent}}이(가) 다른 터미널에서 이 대화를 실행 중입니다. 그곳에서 종료하거나 해당 터미널을 닫은 후 다시 시도하세요."
       },
       "state": {
         "loading": {
@@ -19854,6 +19855,9 @@
         "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
         "keepOpen": "열어 두기"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL에서 실행: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -21973,6 +21977,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: 읽을 수 있는 백업이 없어 빈 상태로 시작합니다.",
+      "sectionKeptCurrent": "{{section}}: 현재 실행 기록이 유지됩니다",
       "sectionRestored": "{{section}}: {{time}}에 저장된 백업에서 복원됩니다.",
       "projectsForgotten": "Orca가 프로젝트와 해당 워크스페이스 세부정보를 잊습니다. 디스크의 파일은 변경되지 않습니다.",
       "newerProjectsRemoved": "해당 백업 이후에 추가한 프로젝트는 워크스페이스 세부정보와 함께 Orca에서 제거됩니다. 디스크의 파일은 변경되지 않습니다.",
@@ -22015,7 +22020,7 @@
       "noneFound": "(찾을 수 없음)",
       "sqlitePath": "SQLite 경로: {{path}}",
       "sectionsDamaged": "이 프로필의 저장된 상태 중 일부가 손상되었습니다: {{sections}}. 나머지는 모두 정상입니다.",
-      "repairCommand": "Orca를 종료한 다음 `{{command}}`를 실행하면 손상된 부분만 백업에서 교체하고 나머지는 모두 유지할 수 있습니다. Orca는 손상된 파일의 사본을 보관합니다.",
+      "repairCommand": "Orca를 종료한 다음 `{{command}}`를 실행하여 손상된 부분만 복구하고 나머지는 유지하세요. Orca는 손상된 파일의 복사본을 보관합니다.",
       "restoreWholeBackup": "대신 백업 전체를 복원하려면 `{{exportsCommand}}`를 실행한 다음 `{{rollbackCommand}}`를 실행하세요.",
       "sqliteUnreadable": "SQLite 상태를 읽을 수 없어 Orca가 활성 프로필을 안전하게 열 수 없습니다.",
       "legacyJsonPath": "기존 JSON 경로: {{path}}",
