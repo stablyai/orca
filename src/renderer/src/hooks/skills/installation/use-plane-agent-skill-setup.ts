@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
-import { PLANE_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
+import { PLANE_AGENT_SKILL_NAMES } from '@/lib/skills/installation/agent-feature-skill-names'
 import { getPlaneAgentSkillUpdateTarget } from '@/lib/plane-agent-skill-update-command'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 
 export function usePlaneAgentSkillSetup(): {
   updateSkillName: string

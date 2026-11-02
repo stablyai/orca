@@ -9,8 +9,6 @@ import {
 } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   getAgentSkillNavInstallStatus,
-import {
-  getAgentSkillNavInstallStatus,
   getLinearAgentSkillNavInstallStatus,
   getPlaneAgentSkillNavInstallStatus
 } from '@/components/settings/navigation/agent-skill-nav-install-status'

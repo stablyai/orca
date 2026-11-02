@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { ORCA_PLANE_SKILL_NAME } from './agent-feature-install-commands'
-import type { SkillUsageExample } from './skill-usage-example'
+import { ORCA_PLANE_SKILL_NAME } from './skills/installation/agent-feature-skill-names'
+import type { SkillUsageExample } from './skills/examples/skill-usage-example'
 
 const PLANE_SLASH_COMMAND = `/${ORCA_PLANE_SKILL_NAME}`
 
@@ -60,10 +60,7 @@ export const getPlaneUsageExamples = createLocalizedCatalog((): SkillUsageExampl
   },
   {
     id: 'create-followup',
-    title: translate(
-      'auto.lib.plane.usage.examples.createFollowup',
-      'Create a follow-up issue'
-    ),
+    title: translate('auto.lib.plane.usage.examples.createFollowup', 'Create a follow-up issue'),
     summary: translate(
       'auto.lib.plane.usage.examples.createFollowupSummary',
       'File a new Plane issue for deferred work or related bugs found during development.'
