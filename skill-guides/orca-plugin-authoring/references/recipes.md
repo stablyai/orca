@@ -69,6 +69,7 @@ runs `command`, one of the plugin's own `contributes.commands`. From a worker, c
 `orca.host.call('statusBar.update', { id, text, tone, tooltip, visible })`; fields you leave out
 keep their value and `visible: false` hides it. Bind a key to the same command with
 `contributes.keybindings` (`{ "command", "key": "Mod+Shift+K" }`).
+`ORCA plugin shot <plugin-key> --status-bar` saves a PNG of the status bar with the item drawn.
 
 ## Changing or refusing what Orca does (hooks)
 
@@ -138,3 +139,5 @@ test('merges an agent write that lands while an edit waits', async () => {
 Without `merge` an outside write wins and the draft is dropped. `ORCA plugin check <dir> --json`
 then reads every file the entry loads without running it, and
 `ORCA plugin open <plugin-key> --editor <file>` shows it on a real file.
+`ORCA plugin shot <plugin-key> --editor <file> --theme dark` saves a PNG of the editor on that
+file, without changing it; read the image to check what you built.
