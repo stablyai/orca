@@ -34,9 +34,10 @@ export type StructuredLaunchFailure =
       owner?: undefined
     }
 
-/** A failed launch's refusal; a launch that never started (Setup did not finish) is none. */
+/** A failed launch's refusal; a launch that never started (Setup did not finish) is none, and so
+ *  is a chat with no launch (null lifecycle). */
 export function structuredLaunchRefusalOf(launch: {
-  lifecycle: string
+  lifecycle: string | null
   failure?: StructuredLaunchFailure | null
 }): StructuredLaunchRefusal | null {
   const failure = launch.lifecycle === 'failed' ? launch.failure : null

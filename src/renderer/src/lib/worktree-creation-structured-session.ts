@@ -20,8 +20,7 @@ import {
 } from '@/lib/worktree-creation-completion'
 import {
   keepPendingChatAfterRefusedHandoff,
-  worktreeHostLaunch,
-  worktreeHostLaunchIdentity
+  worktreeHostLaunch
 } from '@/lib/worktree-creation-host-launch'
 
 export type WorktreeCreationStructuredSessionResult = {
@@ -133,24 +132,26 @@ export async function launchStructuredWorktreeSession(
   useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
     chatInputHandedOff: true
   })
-  // A host that owns the new workspace's Setup wait decides chat or terminal itself, after Setup.
-  const hostLaunch = await worktreeHostLaunchIdentity({ ...args, agent })
-  if (isCancelled()) {
-    return { ...settled, cancelled: true, activation, primaryTabId }
-  }
   const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
+  // Chosen before the workspace was created: a host that owns its Setup wait decides chat or
+  // terminal itself, after Setup; without one this keeps the shipped chat create.
+  const hostLaunch = pending?.hostLaunch
   const request = withPendingChatInput(pending, args.request)
   const prompt = request.launchDraftPrompt ?? request.quickPrompt
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
     ...(hostLaunch
       ? {
-          hostLaunch: worktreeHostLaunch(
-            hostLaunch,
-            args.request,
+          hostLaunch: worktreeHostLaunch({
+            creationId: args.creationId,
+            identity: hostLaunch,
+            request: args.request,
+            worktreeId: args.worktreeId,
+            agent,
             prompt,
-            args.shouldActivateOnCompletion
-          )
+            heldChatMessage: pending?.heldChatMessage,
+            foreground: args.shouldActivateOnCompletion
+          })
         }
       : {}),
     route: args.agentLaunchRoute,
@@ -163,7 +164,6 @@ export async function launchStructuredWorktreeSession(
     draftFromScope: pendingCreationChatDraftScopeKey(args.creationId)
   })
   let layoutRefused = false
-  let refusedSessionId: string | undefined
   const abandoned = new AbortController()
   const tabOpen = Promise.withResolvers<string | null>()
   const stopWaiting = (): void => tabOpen.resolve(null)
@@ -186,18 +186,26 @@ export async function launchStructuredWorktreeSession(
               openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
           }),
       beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
-      onTabOpenSettled: (tabId, reason, sessionId) => {
+      onTabOpenSettled: (tabId, reason) => {
         layoutRefused = reason === 'layout-refused'
-        refusedSessionId = sessionId
         tabOpen.resolve(tabId)
       }
     })
-    if (launch && args.shouldActivateOnCompletion) {
-      // Keep the pending chat until the layout owner's answering frame provides its replacement.
+    // Keep the pending chat until the layout owner's answering frame provides its replacement; a
+    // host launch's input stays with the creation until then, in view or not.
+    if (launch && (args.shouldActivateOnCompletion || plan.hostLaunch)) {
       primaryTabId = await tabOpen.promise
       if (abandoned.signal.aborted || isCancelled()) {
         launch.cancel()
         return { ...settled, cancelled: true, activation, primaryTabId }
+      }
+      // The host still owns its launch: the creation keeps the input until a Retry adopts it here.
+      if (primaryTabId === null && layoutRefused && plan.hostLaunch) {
+        keepPendingChatAfterRefusedHandoff(args.creationId, args.worktreeId, agent, plan.hostLaunch)
+        return { ...settled, cancelled: true, activation, primaryTabId }
+      }
+      if (!args.shouldActivateOnCompletion) {
+        return { ...settled, activation, primaryTabId }
       }
       const stillVisible = (): boolean => {
         const state = useAppStore.getState()
@@ -208,16 +216,6 @@ export async function launchStructuredWorktreeSession(
         )
       }
       let recoveryProvidesSurface = false
-      // The host still owns its launch: the creation keeps the input until a Retry adopts it here.
-      if (primaryTabId === null && layoutRefused && plan.hostLaunch) {
-        keepPendingChatAfterRefusedHandoff(
-          args.creationId,
-          args.worktreeId,
-          agent,
-          refusedSessionId
-        )
-        return { ...settled, cancelled: true, activation, primaryTabId }
-      }
       if (primaryTabId === null && plan.prompt && layoutRefused) {
         const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
         if (abandoned.signal.aborted || isCancelled()) {
@@ -255,6 +253,11 @@ export async function launchStructuredWorktreeSession(
   } catch (error) {
     // Contain this fire-and-forget caller’s errors or the panel remains mid-create.
     console.error('worktree create: structured chat tab failed to open', args.worktreeId, error)
+    // A throw adopted nothing: a host launch's input stays with the creation, for its Retry.
+    if (plan.hostLaunch && !isCancelled()) {
+      keepPendingChatAfterRefusedHandoff(args.creationId, args.worktreeId, agent, plan.hostLaunch)
+      return { ...settled, cancelled: true, activation, primaryTabId }
+    }
     return { ...settled, activation, primaryTabId }
   } finally {
     abandoned.signal.removeEventListener('abort', stopWaiting)

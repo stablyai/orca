@@ -30,6 +30,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
+import { worktreeHostLaunch } from './worktree-creation-host-launch'
+import { buildAgentStartupPlan } from './tui-agent-startup'
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
 import {
   readNativeChatComposerDraft,
@@ -238,6 +240,19 @@ describe('a background worktree create whose own machine declines the chat', () 
   })
 })
 
+const OPERATION_ID = `${Date.now()}-000000000000000000000000000000ac`
+const MESSAGE_ID = `${Date.now()}-000000000000000000000000000000ae`
+const IDENTITY = {
+  operationId: OPERATION_ID,
+  sessionId: 'claude_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d',
+  clientMessageId: MESSAGE_ID
+}
+
+/** What route selection left on the creation before its workspace was created. */
+function choseHostLaunch(): void {
+  useAppStore.getState().updatePendingWorktreeCreation('creation-1', { hostLaunch: IDENTITY })
+}
+
 describe('a background create whose own machine owns its Setup and cannot run the chat', () => {
   const TERMINAL_TAB = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 
@@ -251,6 +266,7 @@ describe('a background create whose own machine owns its Setup and cannot run th
       method === 'agent.launchAccept' ? { state: 'running' } : status.promise
     )
     seedThisMachine()
+    choseHostLaunch()
     updateNativeChatComposerDraft(
       pendingCreationChatDraftScopeKey('creation-1'),
       { text: unsent, images: [] },
@@ -279,10 +295,14 @@ describe('a background create whose own machine owns its Setup and cannot run th
     const [, accepted] = mocks.hostLaunch.mock.calls[0]!
     expect(accepted).toMatchObject({
       presentation: 'background',
-      prompt: { text: 'fix the flaky test', delivery: 'submit' },
+      prompt: { text: 'fix the flaky test', delivery: 'submit', clientMessageId: MESSAGE_ID },
+      // No receipt came back from the create: uncertainty, never "nothing to wait for".
+      setupReceipt: { required: true, runId: null },
+      // The submit-time command already carries the quick prompt.
       terminalStartup: {
+        kind: 'command',
         command: "claude --model opus 'fix the flaky test'",
-        promptDelivery: 'draft'
+        prompt: 'carried'
       }
     })
 
@@ -305,7 +325,7 @@ describe('a background create whose own machine owns its Setup and cannot run th
           reason: 'structured_unsupported_on_host',
           detail: ''
         },
-        prompt: { delivery: 'draft', outcome: 'not-delivered' }
+        prompt: { delivery: 'submit', outcome: 'handed-to-terminal' }
       }
     })
 
@@ -326,5 +346,85 @@ describe('a background create whose own machine owns its Setup and cannot run th
     }
     expect(mocks.hostLaunch.mock.calls.map(([method]) => method)).not.toContain('agent.launch')
     expect(state.activeWorktreeId).toBe(LOCAL_OTHER.id)
+  })
+})
+
+describe('the terminal a host launch becomes, planned as this creation would open it', () => {
+  function plan(args: {
+    request: WorktreeCreationRequest
+    prompt: string
+    held?: string
+    foreground: boolean
+    worktreeId?: string
+  }) {
+    return worktreeHostLaunch({
+      creationId: 'creation-1',
+      identity: IDENTITY,
+      request: args.request,
+      worktreeId: args.worktreeId ?? LOCAL_CREATED.id,
+      agent: 'claude',
+      prompt: args.prompt,
+      heldChatMessage: args.held,
+      foreground: args.foreground
+    }).accept!
+  }
+
+  it.each([
+    ['its quick prompt', 'Fix the bug', undefined],
+    ['a message held while it was created', 'Explain the failure', 'Explain the failure']
+  ])(
+    'in view, carries %s once, in the command the planner built for it',
+    async (_case, prompt, held) => {
+      seedThisMachine()
+      const startupPlan = buildAgentStartupPlan({
+        agent: 'claude',
+        prompt: held ? '' : prompt,
+        cmdOverrides: {},
+        platform: 'darwin',
+        allowEmptyPromptLaunch: true
+      })
+      const request = { ...REQUEST, quickPrompt: held ? '' : prompt, startupPlan }
+      const accept = plan({ request, prompt, ...(held ? { held } : {}), foreground: true })
+      expect(accept.terminalStartup).toMatchObject({ kind: 'command', prompt: 'carried' })
+      expect(accept.launchSource).toBe('tab_bar_quick_launch')
+      const startup = accept.terminalStartup
+      expect(startup?.kind === 'command' && startup.command.split(prompt).length).toBe(2)
+    }
+  )
+
+  it('out of view on this machine, with no startup plan, plans no terminal and starts none', async () => {
+    seedThisMachine()
+    const accept = plan({
+      request: { ...REQUEST, startupPlan: null },
+      prompt: 'fix the flaky test',
+      foreground: false
+    })
+    expect(accept).not.toHaveProperty('terminalStartup')
+  })
+
+  it("out of view on a paired server, with no startup plan, starts the agent's own launcher and sends nothing", async () => {
+    seedPairedServer()
+    const accept = plan({
+      request: { ...REQUEST, startupPlan: null },
+      prompt: 'fix the flaky test',
+      foreground: false,
+      worktreeId: CREATED.id
+    })
+    expect(accept.terminalStartup).toEqual({ kind: 'agent', prompt: 'none' })
+  })
+
+  it('out of view on this machine, runs the submit-time command and leaves a held message unsent', async () => {
+    seedThisMachine()
+    const request = {
+      ...REQUEST,
+      quickPrompt: '',
+      startupPlan: { launchCommand: 'claude --model opus', launchConfig: { agent: 'claude' } }
+    } as unknown as WorktreeCreationRequest
+    const accept = plan({ request, prompt: 'Explain it', held: 'Explain it', foreground: false })
+    expect(accept.terminalStartup).toMatchObject({
+      kind: 'command',
+      command: 'claude --model opus',
+      prompt: 'draft'
+    })
   })
 })

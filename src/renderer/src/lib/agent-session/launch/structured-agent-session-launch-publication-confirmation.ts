@@ -1,4 +1,7 @@
-import { recoverPublishedSessionReceipt } from './structured-agent-session-launch-recovery'
+import {
+  reconcileUnknownLaunch,
+  recoverPublishedSessionReceipt
+} from './structured-agent-session-launch-recovery'
 import { publishStructuredLaunchCreateOptions } from './structured-agent-session-launch-create-message'
 import { trackLaunchSettlement } from './structured-agent-session-launch-outcome-tracking'
 import { trackStructuredLaunchConfirmationDeadline } from './structured-agent-session-launch-prompt-outcome'
@@ -21,7 +24,10 @@ export function confirmStructuredLaunchFirstMessagePublication(
   }
   state.callers.outcome = 'pending'
   state.visibilityUnknown = false
-  state.promise = recoverPublishedSessionReceipt(state)
+  // A host launch's own record says what became of its message; the journal is not asked.
+  state.promise = (
+    state.intent.hostLaunch ? reconcileUnknownLaunch(state) : recoverPublishedSessionReceipt(state)
+  )
     .then((receipt) => publishStructuredLaunchCreateOptions(state, receipt))
     .catch((error: unknown) => {
       state.visibilityUnknown = true

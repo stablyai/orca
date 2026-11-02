@@ -4,10 +4,12 @@
 
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch-intent'
 import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
 import {
   AGENT_LAUNCH_STATUS_MAX_WAIT_MS,
   type AgentLaunchAcceptParams,
   type AgentLaunchAcceptResult,
+  type AgentLaunchSetupReceipt,
   type AgentLaunchStatusResult,
   type AgentLaunchTerminalStartupParams
 } from '../../../../../shared/rpc-contract/agent-launch-accept-params'
@@ -20,13 +22,16 @@ import {
   type StructuredAgentSessionLaunchIntent
 } from '../../launch-structured-agent-session'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
-import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
-import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import {
-  prepareLegacyStructuredLaunchPrompts,
-  settleHostCarriedStructuredLaunchPrompts,
-  takeBackLegacyStructuredLaunchPrompts
-} from './structured-agent-session-launch-prompt'
+  structuredChatUnavailableText,
+  type StructuredLaunchFailure
+} from './structured-agent-session-launch-failure'
+import { structuredAgentLabel } from './structured-agent-session-launch-label'
+import { prepareLegacyStructuredLaunchPrompts } from './structured-agent-session-launch-prompt'
+import {
+  hostLaunchMessageAcknowledged,
+  releaseHostLaunchMessage
+} from './structured-agent-session-host-launch-custody'
 import { requireHostPermission } from './structured-agent-session-launch-create-call'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
@@ -35,12 +40,20 @@ export type StructuredHostLaunch = {
   /** Minted once per user action and reused by every retry of it, so the host runs it at most once. */
   operationId: string
   sessionId: string
+  /** The held message under the id the host's chat founds it with. Saved with the launch before
+   *  accept, so a reload still holds it; dropped once the host's answer settles who has it. */
+  firstMessage?: StructuredAgentSessionFirstMessage
   /** What accept carries; absent once restored after a reload, which only reads the launch. */
   accept?: {
-    prompt?: string
+    prompt?: { text: string; clientMessageId: string }
     presentation: 'focused' | 'background'
-    /** The caller's own terminal plan, which the host runs if it cannot run the chat. */
+    /** What the workspace's creation said about the Setup this launch waits for. */
+    setupReceipt: AgentLaunchSetupReceipt
+    /** The caller's own terminal plan, which the host runs if it cannot run the chat; absent, a
+     *  chat the host cannot run starts nothing. */
     terminalStartup?: AgentLaunchTerminalStartupParams
+    /** Who asked for the launch, as the terminal it may become is counted. */
+    launchSource?: string
   }
 }
 
@@ -96,16 +109,18 @@ function acceptHostLaunch(
   hostLaunch: StructuredHostLaunch,
   accept: NonNullable<StructuredHostLaunch['accept']>
 ): Promise<AgentLaunchAcceptResult> {
-  const prompt = accept.prompt?.trim() ? accept.prompt : undefined
+  const prompt = accept.prompt?.text.trim() ? accept.prompt : undefined
   const params: AgentLaunchAcceptParams = {
     agent: intent.agent,
     operationId: hostLaunch.operationId,
     target: { kind: 'existing', worktree: intent.params.worktree },
     sessionId: intent.sessionId,
     nativeChatDefault: true,
-    ...(prompt ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),
+    ...(prompt ? { prompt: { ...prompt, delivery: 'submit' as const } } : {}),
     presentation: accept.presentation,
-    ...(accept.terminalStartup ? { terminalStartup: accept.terminalStartup } : {})
+    setupReceipt: accept.setupReceipt,
+    ...(accept.terminalStartup ? { terminalStartup: accept.terminalStartup } : {}),
+    ...(accept.launchSource ? { launchSource: accept.launchSource } : {})
   }
   return callRuntimeRpc<AgentLaunchAcceptResult>(intent.target, 'agent.launchAccept', params)
 }
@@ -180,15 +195,25 @@ function notStartedFailure(
   intent: StructuredAgentSessionLaunchIntent,
   code: string
 ): StructuredLaunchFailure | undefined {
-  return code === 'agent_launch_setup_not_completed'
+  if (code === 'agent_launch_setup_not_completed') {
+    return {
+      kind: 'not-started',
+      causeText: requiredSetupLaunchFailureText(structuredAgentLabel(intent.agent))
+    }
+  }
+  // No terminal was planned for a chat the host cannot run, as the same create opens none.
+  return code === 'agent_launch_surface_unavailable'
     ? {
-        kind: 'not-started',
-        causeText: requiredSetupLaunchFailureText(structuredAgentLabel(intent.agent))
+        kind: 'refused',
+        code: 'structured_agent_session_unsupported',
+        causeText: structuredChatUnavailableText()
       }
     : undefined
 }
 
 function markUnknown(state: ObservedHostLaunch): Error {
+  // Possibly the host's now: a copy goes back to the composer, and nothing sends it again.
+  releaseHostLaunchMessage(state.intent, false)
   state.visibilityUnknown = true
   state.onVisibilityChanged?.()
   return new Error('agent_session_operation_unknown')
@@ -214,13 +239,7 @@ async function adoptHostLaunchedChat(
   if (typeof fence !== 'number') {
     throw markUnknown(state)
   }
-  const delivered = result.prompt?.outcome
-  if (delivered === 'journaled') {
-    settleHostCarriedStructuredLaunchPrompts(intent.sessionId)
-  } else if (delivered !== undefined && delivered !== 'not-delivered') {
-    // The host may hold it: never send it again, and give it back with the chat.
-    takeBackLegacyStructuredLaunchPrompts(intent.sessionId)
-  }
+  releaseHostLaunchMessage(intent, hostLaunchMessageAcknowledged(result))
   publishStructuredAgentSessionCreateHydration(intent, history.page, fence)
   return { sessionId: intent.sessionId, fence }
 }
@@ -246,6 +265,7 @@ export async function observeStructuredHostLaunch(
     throw markUnknown(state)
   }
   if (answer.state === 'failed') {
+    releaseHostLaunchMessage(intent, false)
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredHostLaunchNotStartedError(
       answer.code,
@@ -255,8 +275,8 @@ export async function observeStructuredHostLaunch(
   }
   const { outcome } = answer.result
   if (outcome.kind === 'terminal') {
-    // The terminal carries the held message (sent, or left unsent in its input); the chat does not.
-    settleHostCarriedStructuredLaunchPrompts(intent.sessionId)
+    // A terminal existing is no receipt for the text: only the host's word on it lets it go.
+    releaseHostLaunchMessage(intent, hostLaunchMessageAcknowledged(answer.result))
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredHostLaunchTerminalError(answer.result)
   }

@@ -81,8 +81,8 @@ export type ProvisionalLaunchArgs = {
   deferPublication?: true
   /** Allow workspace reveal before host acquisition, when the launch has no session ID or owned chat tab yet. */
   beforeOpen?: (sessionId?: string) => boolean | void
-  /** The published tab, or null when the layout owner refuses (naming the refused chat) or the launch ends without a chat. */
-  onTabOpenSettled?: (tabId: string | null, reason?: 'layout-refused', sessionId?: string) => void
+  /** The published tab, or null when the layout owner refuses or the launch ends without a chat. */
+  onTabOpenSettled?: (tabId: string | null, reason?: 'layout-refused') => void
   /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
   onHostDeclined?: (
     target: RuntimeClientTarget,
@@ -258,7 +258,7 @@ function beginLocalProvisionalLaunch(
         } else {
           handle.cancel()
         }
-        args.onTabOpenSettled?.(null, 'layout-refused', handle.sessionId)
+        args.onTabOpenSettled?.(null, 'layout-refused')
       } else {
         args.onTabOpenSettled?.(shown)
       }

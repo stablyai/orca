@@ -20,6 +20,10 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
+import type {
+  AgentLaunchSetupReceipt,
+  AgentLaunchTerminalStartupParams
+} from '../../../shared/rpc-contract/agent-launch-accept-params'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
 export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
@@ -139,8 +143,18 @@ export type PendingWorktreeCreation = {
   heldChatMessage?: string
   /** The launch owns the captured input until its replacement surface is published. */
   chatInputHandedOff?: boolean
-  /** The host launch this creation's chat handed off to; a Retry of the handoff adopts it again. */
-  hostLaunch?: { operationId: string; sessionId: string }
+  /** The host launch this creation's chat hands off to, chosen before the workspace was created; a
+   *  Retry of the handoff adopts it again. Absent: the creation keeps its shipped chat create. */
+  hostLaunch?: {
+    operationId: string
+    sessionId: string
+    /** The held message's id, which the host's chat founds it under. */
+    clientMessageId: string
+    /** What the workspace's creation reported about the Setup the chat waits for. */
+    setupReceipt?: AgentLaunchSetupReceipt
+    /** The terminal alternative planned once at handoff, so every Retry sends the same launch. */
+    terminal?: { startup?: AgentLaunchTerminalStartupParams; launchSource?: string }
+  }
   request: WorktreeCreationRequest
 }
 

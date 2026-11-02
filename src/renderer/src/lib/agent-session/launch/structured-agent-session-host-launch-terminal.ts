@@ -39,7 +39,11 @@ function awaitDrawnTerminalTab(worktreeId: string, hostTabId: string): Promise<s
       unsubscribe()
       resolve(undefined)
     }, HOST_TERMINAL_DRAWN_WITHIN_MS)
-    unsubscribe = useAppStore.subscribe(() => {
+    // Only this workspace's tab list can draw it: other writes leave that list's identity alone.
+    unsubscribe = useAppStore.subscribe((state, previous) => {
+      if (state.unifiedTabsByWorktree[worktreeId] === previous.unifiedTabsByWorktree[worktreeId]) {
+        return
+      }
       const id = drawnTerminalTabId(worktreeId, hostTabId)
       if (id) {
         clearTimeout(timer)

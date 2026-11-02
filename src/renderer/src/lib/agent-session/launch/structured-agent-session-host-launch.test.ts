@@ -18,6 +18,7 @@ import {
   resetStructuredAgentLaunchRegistryForTests
 } from './structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import { newAgentLaunchRequestId } from '../../agent-launch-request-id'
 import { getStructuredAgentSessionSendNotice } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
@@ -26,6 +27,7 @@ import { updateNativeChatComposerDraft } from '@/components/native-chat/native-c
 import type { AgentLaunchStatusResult } from '../../../../../shared/rpc-contract/agent-launch-accept-params'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch-intent'
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 const OPERATION_ID = `${Date.now()}-000000000000000000000000000000ac`
 const SESSION_ID = 'codex_9b1deb4d_3b7d_4bad_9bdd_2b0d7b3dcb6d'
@@ -57,6 +59,8 @@ function hostAnswers(): void {
   )
 }
 
+const MESSAGE_ID = `${Date.now()}-000000000000000000000000000000ae`
+
 function startHostLaunch(accept = true) {
   return startStructuredAgentLaunch('workspace-1', 'codex', {
     requestId: newAgentLaunchRequestId(),
@@ -66,7 +70,16 @@ function startHostLaunch(accept = true) {
     hostLaunch: {
       operationId: OPERATION_ID,
       sessionId: SESSION_ID,
-      ...(accept ? { accept: { prompt: HELD, presentation: 'focused' as const } } : {})
+      firstMessage: { clientMessageId: MESSAGE_ID, body: structuredAgentSessionSendBody(HELD, []) },
+      ...(accept
+        ? {
+            accept: {
+              prompt: { text: HELD, clientMessageId: MESSAGE_ID },
+              presentation: 'focused' as const,
+              setupReceipt: { required: true as const, runId: 'setup-run-1' }
+            }
+          }
+        : {})
     }
   })
 }
@@ -127,7 +140,9 @@ describe('a chat its host launches after the workspace’s Setup', () => {
       target: { kind: 'existing' },
       nativeChatDefault: true,
       presentation: 'focused',
-      prompt: { text: HELD, delivery: 'submit' }
+      // The chat founds the message under this window's own id, behind the creation's Setup run.
+      prompt: { text: HELD, delivery: 'submit', clientMessageId: MESSAGE_ID },
+      setupReceipt: { required: true, runId: 'setup-run-1' }
     })
     expect(host.accept.mock.calls[0]![0]).not.toHaveProperty('surface')
     // Each read is an ordinary bounded request.
@@ -214,6 +229,81 @@ describe('a chat its host launches after the workspace’s Setup', () => {
         { timeoutMs: 25_000 }
       )
       expect(windowCalls()).not.toContain('agentSession.create')
+      if (loss === 'a reload') {
+        // The host's chat holds the message, so no copy comes back.
+        expect(draft(SESSION_ID)).not.toContain(HELD)
+      }
     }
   )
+
+  it.each([
+    ['fails', { state: 'failed', code: 'agent_launch_setup_not_completed' }],
+    ['cannot be confirmed', { state: 'unknown' }]
+  ] as const)(
+    'gives the held message back when, after a reload, the same launch %s, and sends nothing',
+    async (_case, answer) => {
+      host.status.mockReturnValueOnce(new Promise(() => undefined))
+      startHostLaunch()
+      await vi.waitFor(() => expect(host.status).toHaveBeenCalledOnce())
+      // Saved beside the launch before the host answered, under the id the host was given.
+      expect(localStorage.getItem('orca:structuredAgentLaunches:v1')).toContain(MESSAGE_ID)
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentLaunchPersistenceForTests()
+      resetStructuredAgentSessionSendsForTests()
+      host.status.mockReset()
+      host.status.mockResolvedValue(answer)
+
+      expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+      await vi.waitFor(() =>
+        expect(lifecycle()).toBe(answer.state === 'failed' ? 'failed' : 'visibility-unknown')
+      )
+      expect(draft(SESSION_ID)).toContain(HELD)
+      expect(draft(SESSION_ID)).toContain('Also run lint')
+      expect(host.accept).toHaveBeenCalledOnce()
+      expect(windowCalls()).not.toContain('agentSession.create')
+      expect(windowCalls()).not.toContain('agentSession.send')
+      // Given back once: the saved copy is gone, so another reload has nothing to repeat.
+      expect(localStorage.getItem('orca:structuredAgentLaunches:v1') ?? '').not.toContain(
+        MESSAGE_ID
+      )
+    }
+  )
+})
+
+describe('the held message of a launch the host ran in a terminal', () => {
+  const terminalStarted = (prompt: AgentLaunchResult['prompt']): AgentLaunchStatusResult => ({
+    state: 'succeeded',
+    result: {
+      outcome: { kind: 'terminal', handle: 'term_1' },
+      worktreeId: 'workspace-1',
+      receipt: {
+        mode: 'terminal',
+        preferred: 'structured',
+        reason: 'structured_unsupported_on_host',
+        detail: ''
+      },
+      ...(prompt ? { prompt } : {})
+    }
+  })
+
+  it.each([
+    ['its submit was not delivered', { delivery: 'submit', outcome: 'not-delivered' }, true],
+    ['it was left unsent there', { delivery: 'draft', outcome: 'not-delivered' }, true],
+    ['its delivery is unconfirmed', { delivery: 'submit', outcome: 'unconfirmed' }, true],
+    ['it was handed to the terminal', { delivery: 'submit', outcome: 'handed-to-terminal' }, false]
+  ] as const)('is %s: back in the composer only without a receipt', async (_c, prompt, kept) => {
+    host.status.mockResolvedValue(terminalStarted(prompt))
+    const launch = startHostLaunch()
+    await expect(launch.launchResult).rejects.toMatchObject({
+      name: 'StructuredHostLaunchTerminalError'
+    })
+    if (kept) {
+      await expect(launch.promptDeliveryResult).resolves.toMatchObject({ delivered: false })
+      expect(draft(SESSION_ID)).toContain(HELD)
+    } else {
+      expect(draft(SESSION_ID)).not.toContain(HELD)
+    }
+    expect(draft(SESSION_ID)).toContain('Also run lint')
+    expect(windowCalls()).not.toContain('agentSession.send')
+  })
 })

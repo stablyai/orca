@@ -181,7 +181,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   clientOperationId: string
   payloadFingerprint: string
   expectedRuntimeFence: number | null
-  /** A host launch from before a reload: it is read again, never accepted again. */
+  /** A host launch from before a reload: it is read again, never accepted again. Its
+   *  `firstMessage` is the held message this window still owes the user. */
   hostLaunchOperationId?: string
   resumeFrom?: StructuredAgentSessionResumeSource
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
@@ -211,7 +212,10 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
-      ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+      // A host launch's message was never part of this payload or its digest.
+      ...(args.firstMessage && !args.hostLaunchOperationId
+        ? { firstMessage: args.firstMessage }
+        : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})
     },
@@ -221,7 +225,13 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
     ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
     ...(args.hostLaunchOperationId
-      ? { hostLaunch: { operationId: args.hostLaunchOperationId, sessionId: args.sessionId } }
+      ? {
+          hostLaunch: {
+            operationId: args.hostLaunchOperationId,
+            sessionId: args.sessionId,
+            ...(args.firstMessage ? { firstMessage: args.firstMessage } : {})
+          }
+        }
       : {}),
     ...(args.createMessageSupport !== undefined
       ? args.seedOptions

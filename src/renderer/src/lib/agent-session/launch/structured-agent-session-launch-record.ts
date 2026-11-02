@@ -84,7 +84,11 @@ export function structuredAgentLaunchRecordFor(
     expectedRuntimeFence: envelope.expectedRuntimeFence,
     ...(resumeFrom ? { resumeFrom } : {}),
     ...(intent.hostLaunch ? { hostLaunchOperationId: intent.hostLaunch.operationId } : {}),
+    // A host launch's held message is saved beside its create payload, never inside it.
     ...(firstMessage ? { firstMessage } : {}),
+    ...(!firstMessage && intent.hostLaunch?.firstMessage
+      ? { firstMessage: intent.hostLaunch.firstMessage }
+      : {}),
     ...(optionsMode ? { optionsMode } : {}),
     ...(options ? { options } : {}),
     ...(intent.explicitLaunchOptions

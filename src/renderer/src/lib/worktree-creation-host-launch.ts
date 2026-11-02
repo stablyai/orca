@@ -1,6 +1,6 @@
-/** A new workspace's chat on a host that owns its Setup wait: the creation names the host's launch
- *  once, hands the held message and the composer's own terminal plan to it, and keeps its input
- *  when this window could not show the chat. */
+/** A new workspace's chat on a host that owns its Setup wait: the creation picks that route before
+ *  it creates anything, names the host's launch once, hands it the held message and this creation's
+ *  own terminal plan, and keeps its input when this window could not show the chat. */
 
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -10,13 +10,14 @@ import {
   type PendingWorktreeCreation,
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
-import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
+import { planWorktreeHostLaunchTerminal } from '@/lib/worktree-creation-host-launch-terminal'
+import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { isPendingCreationSurfaceVisible } from '@/lib/worktree-creation-completion'
 import { structuredLaunchOwner } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { notifyExplicitChatFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import type { StructuredHostLaunch } from '@/lib/agent-session/launch/structured-agent-session-host-launch'
-import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import {
   deleteNativeChatComposerDraft,
   readNativeChatComposerDraft,
@@ -28,84 +29,129 @@ import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-
 import { AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
 import { createStructuredAgentSessionId } from '../../../shared/agent-session/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { AgentLaunchSetupReceipt } from '../../../shared/rpc-contract/agent-launch-accept-params'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 type HostLaunchIdentity = NonNullable<PendingWorktreeCreation['hostLaunch']>
 
-/** The launch a creation already handed to its host, or a new one when the host can own its Setup
- *  wait; absent on a host too old to, which keeps its shipped chat create. */
-export async function worktreeHostLaunchIdentity(args: {
-  creationId: string
-  worktreeId: string
-  agent: TuiAgent
-  agentLaunchRoute: AgentLaunchRoute
-}): Promise<HostLaunchIdentity | undefined> {
-  // A request that reached a host never falls back to another route, whatever that host says now.
-  const handedOff = useAppStore.getState().pendingWorktreeCreations[args.creationId]?.hostLaunch
-  if (handedOff) {
-    return handedOff
-  }
-  const owner = structuredLaunchOwner({ route: args.agentLaunchRoute }, args.worktreeId)
-  if (
-    !owner ||
-    !(await structuredAgentSessionHostSupports(
-      owner.target,
-      AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY
-    ))
-  ) {
-    return undefined
-  }
-  const identity = {
-    operationId: createStructuredAgentSessionOperationId(createBrowserUuid),
-    sessionId: createStructuredAgentSessionId(args.agent, createBrowserUuid)
-  }
-  useAppStore.getState().updatePendingWorktreeCreation(args.creationId, { hostLaunch: identity })
-  return identity
+/** The host a creation runs on, reached as its create call reaches it. */
+function creationHostTarget(request: WorktreeCreationRequest): RuntimeClientTarget | null {
+  const hostId = request.workspaceRunContext?.hostId ?? request.executionHostId
+  return hostId
+    ? (runtimeRpcTargetForAuthorityKey(hostId) ?? { kind: 'local' })
+    : runtimeTargetForRepoOwner(useAppStore.getState(), request.repoId)
 }
 
-/** What accept carries: the held message, and the composer's own terminal plan in case the host
- *  cannot run the chat. A background create leaves the message unsent in that terminal, as its
- *  terminal always has; a foreground one sends it. */
-export function worktreeHostLaunch(
-  identity: HostLaunchIdentity,
-  request: WorktreeCreationRequest,
-  prompt: string | undefined,
+/** Chosen before the workspace exists, once per creation: a host that owns its Setup wait gets the
+ *  chat as its own launch, and an older one keeps the shipped chat create. A creation that chose
+ *  the host's launch keeps it whatever its create reply says; one that did not never takes it up. */
+export async function selectChatRoute(
+  creationId: string,
+  request: WorktreeCreationRequest
+): Promise<boolean> {
+  if (useAppStore.getState().pendingWorktreeCreations[creationId]?.hostLaunch) {
+    return true
+  }
+  const target = creationHostTarget(request)
+  if (
+    !request.agent ||
+    !target ||
+    !(await structuredAgentSessionHostSupports(target, AGENT_LAUNCH_ACCEPT_RUNTIME_CAPABILITY)) ||
+    !useAppStore.getState().pendingWorktreeCreations[creationId]
+  ) {
+    return false
+  }
+  useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+    hostLaunch: {
+      operationId: createStructuredAgentSessionOperationId(createBrowserUuid),
+      sessionId: createStructuredAgentSessionId(request.agent, createBrowserUuid),
+      clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid)
+    }
+  })
+  return true
+}
+
+/** What the creation's host said about the Setup the chat waits for. A reply without a readable
+ *  word is uncertainty, never "nothing to wait for". */
+export function recordChatSetupReceipt(creationId: string, reported: unknown): void {
+  const hostLaunch = useAppStore.getState().pendingWorktreeCreations[creationId]?.hostLaunch
+  if (!hostLaunch) {
+    return
+  }
+  const parsed = AgentLaunchSetupReceipt.safeParse(reported)
+  useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+    hostLaunch: {
+      ...hostLaunch,
+      setupReceipt: parsed.success ? parsed.data : { required: true, runId: null }
+    }
+  })
+}
+
+/** What accept carries: the held message under its own id, the creation's Setup receipt, and the
+ *  terminal this creation's own path would open if the host cannot run the chat. The terminal is
+ *  planned once, at the first handoff; a Retry sends the same launch. */
+export function worktreeHostLaunch(args: {
+  creationId: string
+  identity: HostLaunchIdentity
+  request: WorktreeCreationRequest
+  worktreeId: string
+  agent: TuiAgent
+  prompt: string | undefined
+  heldChatMessage: string | undefined
   foreground: boolean
-): StructuredHostLaunch {
-  const startup = buildWorktreeCreationStartupOpt(request, false)
+}): StructuredHostLaunch {
+  const { identity } = args
+  const owner = structuredLaunchOwner({ route: 'structured-native-chat' }, args.worktreeId)
+  const terminal =
+    identity.terminal ??
+    (owner
+      ? planWorktreeHostLaunchTerminal({
+          ...args,
+          prompt: args.prompt ?? '',
+          owner
+        })
+      : {})
+  if (!identity.terminal) {
+    useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+      hostLaunch: { ...identity, terminal }
+    })
+  }
+  const text = args.prompt?.trim() ? args.prompt : undefined
   return {
-    ...identity,
-    accept: {
-      ...(prompt?.trim() ? { prompt } : {}),
-      presentation: foreground ? 'focused' : 'background',
-      ...(startup
-        ? {
-            terminalStartup: {
-              command: startup.command,
-              ...(startup.env ? { env: startup.env } : {}),
-              ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
-              ...(startup.startupCommandDelivery
-                ? { startupCommandDelivery: startup.startupCommandDelivery }
-                : {}),
-              promptDelivery: foreground ? ('submit' as const) : ('draft' as const)
-            }
+    operationId: identity.operationId,
+    sessionId: identity.sessionId,
+    ...(text
+      ? {
+          firstMessage: {
+            clientMessageId: identity.clientMessageId,
+            body: structuredAgentSessionSendBody(text, [])
           }
-        : {})
+        }
+      : {}),
+    accept: {
+      ...(text ? { prompt: { text, clientMessageId: identity.clientMessageId } } : {}),
+      presentation: args.foreground ? 'focused' : 'background',
+      setupReceipt: identity.setupReceipt ?? { required: true, runId: null },
+      ...(terminal.startup ? { terminalStartup: terminal.startup } : {}),
+      ...(terminal.launchSource ? { launchSource: terminal.launchSource } : {})
     }
   }
 }
 
-/** The layout refused the chat's tab: the creation keeps its held message, takes back the draft the
- *  launch moved, and shows why, with a Retry that hands off into this same workspace again. */
+/** The layout refused the chat's tab, or opening it threw: the creation keeps its held message,
+ *  takes back the draft the launch moved, and shows why, with a Retry that hands off into this same
+ *  workspace again. Out of view, the existing short notice says so without moving the user. */
 export function keepPendingChatAfterRefusedHandoff(
   creationId: string,
   worktreeId: string,
   agent: TuiAgent,
-  sessionId: string | undefined
+  { sessionId }: Pick<StructuredHostLaunch, 'sessionId'>
 ): void {
-  const launchScope = sessionId ? structuredAgentSessionDraftScopeKey(sessionId) : null
-  const { text, document, pastedTextFiles, images } = readNativeChatComposerDraft(launchScope ?? '')
-  if (launchScope && (text !== '' || images.length > 0)) {
+  const launchScope = structuredAgentSessionDraftScopeKey(sessionId)
+  const { text, document, pastedTextFiles, images } = readNativeChatComposerDraft(launchScope)
+  if (text !== '' || images.length > 0) {
     const draft = { text, images, ...(document ? { document } : {}) }
     updateNativeChatComposerDraft(
       pendingCreationChatDraftScopeKey(creationId),

@@ -170,7 +170,9 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
           provisioningLog: undefined,
           checkoutProgress: undefined,
           worktreeId: undefined,
-          hostLaunch: undefined
+          // A route chosen for a create whose reply never came stays chosen; one already handed a
+          // launch is not reused for another workspace.
+          ...(entry.hostLaunch?.terminal ? { hostLaunch: undefined } : {})
         })
   })
   store.setActivePendingWorktreeCreation(creationId)
