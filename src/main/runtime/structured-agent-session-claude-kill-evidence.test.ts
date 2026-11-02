@@ -241,10 +241,10 @@ it.each(['prove-owner', 'journal-attach'] as const)(
     if (boundary === 'prove-owner') {
       vi.spyOn(fixture.host.deps.store, 'proveOwner').mockRejectedValueOnce(fault)
     } else {
-      vi.spyOn(
-        fixture.host.collaboratorsForTests().conversationDelivery,
-        'open'
-      ).mockRejectedValueOnce(fault)
+      // The first open freezes recovery's source before the spawn; journal attach is the next one.
+      const delivery = fixture.host.collaboratorsForTests().conversationDelivery
+      const open = delivery.open.bind(delivery)
+      vi.spyOn(delivery, 'open').mockImplementationOnce(open).mockRejectedValueOnce(fault)
     }
     const events = vi.spyOn(fixture.host, 'handleAdapterEvent')
     fixture.permitKill.add(0)

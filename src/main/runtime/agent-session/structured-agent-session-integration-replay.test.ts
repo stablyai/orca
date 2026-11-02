@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
-import type * as JournalStoreFactory from '../../native-chat/agent-session-journal/journal-store-factory'
+import type * as AttachJournal from '../../native-chat/agent-session-wire/structured-agent-session-attach'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
@@ -24,24 +24,25 @@ const { journalOpenHold } = vi.hoisted(() => {
   return { journalOpenHold }
 })
 
-// Holds the next journal open midway, so provider events land while the attach binds its journal.
-vi.mock('../../native-chat/agent-session-journal/journal-store-factory', async (importOriginal) => {
-  const actual = await importOriginal<typeof JournalStoreFactory>()
-  return {
-    ...actual,
-    openAgentSessionJournal: async (
-      input: Parameters<typeof actual.openAgentSessionJournal>[0]
-    ) => {
-      const hold = journalOpenHold.next
-      journalOpenHold.next = null
-      if (hold) {
-        hold.entered()
-        await hold.released
+// Holds the attach after its child is acquired and before its sink binds, so provider events buffer.
+vi.mock(
+  '../../native-chat/agent-session-wire/structured-agent-session-attach',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof AttachJournal>()
+    return {
+      ...actual,
+      attachJournal: async (input: Parameters<typeof actual.attachJournal>[0]) => {
+        const hold = journalOpenHold.next
+        journalOpenHold.next = null
+        if (hold) {
+          hold.entered()
+          await hold.released
+        }
+        return actual.attachJournal(input)
       }
-      return actual.openAgentSessionJournal(input)
     }
   }
-})
+)
 
 const journals = createTrackedJournalOpener()
 const WORKSPACE = 'workspace-1'
@@ -60,6 +61,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  journalOpenHold.next = null
   await journals.closeAll()
   await harness.dispose()
 })
@@ -101,21 +103,23 @@ describe('a structured codex session over agentSession.*', () => {
       'agentSession.create',
       harness.createIntentParams()
     )
-    await openEntered.promise
-    harness.codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
-    harness.codex.notify('item/started', {
-      threadId: THREAD,
-      turnId: TURN,
-      item: { type: 'agentMessage', id: 'item-bind-window', text: '' }
-    })
-    harness.codex.notify('item/agentMessage/delta', {
-      threadId: THREAD,
-      turnId: TURN,
-      itemId: 'item-bind-window',
-      delta: 'Buffered while the journal opens.'
-    })
-
-    openGate.resolve()
+    try {
+      await openEntered.promise
+      harness.codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
+      harness.codex.notify('item/started', {
+        threadId: THREAD,
+        turnId: TURN,
+        item: { type: 'agentMessage', id: 'item-bind-window', text: '' }
+      })
+      harness.codex.notify('item/agentMessage/delta', {
+        threadId: THREAD,
+        turnId: TURN,
+        itemId: 'item-bind-window',
+        delta: 'Buffered while the journal opens.'
+      })
+    } finally {
+      openGate.resolve()
+    }
     await creating
     await vi.waitFor(() =>
       expect(harness.codex.live().calls.some((entry) => entry.method === 'thread/start')).toBe(true)

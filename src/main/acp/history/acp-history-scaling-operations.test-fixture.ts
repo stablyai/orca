@@ -117,7 +117,10 @@ export async function work(run: (counts: ReturnType<typeof newCounts>) => Promis
           executionItemIds: []
         })
       }
-      if (caller.includes('journalView') && this.every((key) => typeof key === 'string')) {
+      if (
+        caller.includes('acpHistoryJournalView') &&
+        this.every((key) => typeof key === 'string')
+      ) {
         counts.views.at(-1)!.canonicalEntries += this.length
       }
       const result: unknown[] = arrayMap.call(this, (value, index, array) => {
@@ -242,7 +245,7 @@ export async function work(run: (counts: ReturnType<typeof newCounts>) => Promis
     for (const script of coverage.result) {
       const path = script.url.split('?')[0]
       if (
-        !/acp-history-(ordered-availability|turn-matching|catch-up)\.ts$|structured-agent-session-message-projection\.ts$/.test(
+        !/acp-history-(ordered-availability|turn-matching|catch-up|journal-view)\.ts$|structured-agent-session-message-projection\.ts$/.test(
           path
         )
       ) {
@@ -253,7 +256,11 @@ export async function work(run: (counts: ReturnType<typeof newCounts>) => Promis
         if (path.endsWith('acp-history-turn-matching.ts')) {
           counts.matching += total
         }
-        if (path.endsWith('acp-history-catch-up.ts')) {
+        // The catch-up's journal view moved to its own module; it is still catch-up work.
+        if (
+          path.endsWith('acp-history-catch-up.ts') ||
+          path.endsWith('acp-history-journal-view.ts')
+        ) {
           counts.catchUp += total
         }
       }

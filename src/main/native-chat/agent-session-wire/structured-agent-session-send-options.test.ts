@@ -1,3 +1,4 @@
+import { readyConstructionValue } from './structured-agent-session-instant-start.test-support'
 import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -98,8 +99,9 @@ describe('an opening message created with a model and effort', () => {
       rest.proveStart({
         sessionId: SESSION,
         fence: rest.store.getRecord(SESSION)!.lease.runtimeFence,
-        acquisitionGeneration: (await rest.adapter.acquire.mock.results[0]!.value)
-          .acquisitionGeneration
+        acquisitionGeneration: readyConstructionValue(
+          await rest.adapter.acquire.mock.results[0]!.value
+        ).acquisitionGeneration
       })
     return { first, proveStart }
   }

@@ -205,7 +205,7 @@ async function measureCatchUp(
         })
       }),
       vi.spyOn(history, 'item').mockImplementation((key) => {
-        if (operationStack().includes('journalView')) {
+        if (operationStack().includes('acpHistoryJournalView')) {
           count.views.at(-1)!.itemReads++
         } else {
           count.otherItemReads++
@@ -214,7 +214,7 @@ async function measureCatchUp(
       }),
       vi.spyOn(history, 'submissions').mockImplementation(() => {
         const result = sends.call(history)
-        if (operationStack().includes('journalView')) {
+        if (operationStack().includes('acpHistoryJournalView')) {
           const view = count.views.at(-1)!
           view.submissionReturns++
           view.submissionCopies += result.length
@@ -228,7 +228,7 @@ async function measureCatchUp(
         const stack = operationStack()
         count.canonicalKeyUtf8Bytes += Buffer.byteLength(key, 'utf8')
         count.longestCanonicalKey = Math.max(count.longestCanonicalKey, key.length)
-        if (stack.includes('journalView')) {
+        if (stack.includes('acpHistoryJournalView')) {
           count.views.at(-1)!.canonicalReads++
         } else if (stack.includes('structured-agent-session-history-catch-up.ts')) {
           count.resolverCanonicalReads++

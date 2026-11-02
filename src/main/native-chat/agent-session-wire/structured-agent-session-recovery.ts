@@ -105,19 +105,32 @@ export function prepareNativeRecovery(input: {
   return permit
 }
 
+/** A prepared fresh-target attempt whose source is still this chat's head; the open must build it. */
+export function hasPreparedRecoveryAttempt(
+  journal: AgentSessionJournal,
+  record: AgentSessionRecord
+): boolean {
+  const state = deriveContextTransferState(
+    journal.contextTransfers.read(),
+    record.providerHandleChain
+  )
+  const source = agentSessionProviderHandleChainHead(record.providerHandleChain)
+  return (
+    state.kind === 'unpublished' &&
+    !state.target.targetLink &&
+    !!source &&
+    state.target.sourceLinkId === source.linkId
+  )
+}
+
 export function recoveryConstructionIntent(input: {
   store: AgentSessionRecordStore
   journal: AgentSessionJournal
   record: AgentSessionRecord
   now: number
 }) {
-  const state = deriveContextTransferState(
-    input.journal.contextTransfers.read(),
-    input.record.providerHandleChain
-  )
-  const current = state.kind === 'unpublished' ? state.target : undefined
   const source = agentSessionProviderHandleChainHead(input.record.providerHandleChain)
-  if (!current || current.targetLink || !source || current.sourceLinkId !== source.linkId) {
+  if (!source || !hasPreparedRecoveryAttempt(input.journal, input.record)) {
     return undefined
   }
   const permit = prepareNativeRecovery({ ...input, source, trigger: 'uncertain-context-delivery' })

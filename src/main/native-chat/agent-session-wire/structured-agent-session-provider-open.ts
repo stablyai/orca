@@ -1,5 +1,6 @@
 import { normalizeConstruction } from './structured-agent-session-construction'
 import {
+  hasPreparedRecoveryAttempt,
   prepareNativeRecovery,
   recoveryConstructionIntent
 } from './structured-agent-session-recovery'
@@ -44,16 +45,19 @@ export async function openStructuredAgentSessionProviderChild(
       throw new Error('Recovery owner changed while opening')
     }
     const acquiredPermit = context.sessions.get(sessionId)?.child?.recoveryPermit
+    // Only a prepared attempt needs the conversation's ordering; ordinary opens start at once.
     const constructionIntent = acquiredPermit
       ? { kind: 'recovery' as const, permit: acquiredPermit }
-      : await context.serialize(sessionId, async () =>
-          recoveryConstructionIntent({
-            store: context.deps.store,
-            journal,
-            record,
-            now: context.now()
-          })
-        )
+      : !hasPreparedRecoveryAttempt(journal, record)
+        ? undefined
+        : await context.serialize(sessionId, async () =>
+            recoveryConstructionIntent({
+              store: context.deps.store,
+              journal,
+              record,
+              now: context.now()
+            })
+          )
     const construction = normalizeConstruction(
       await waitForPromiseWithSignal(
         context.deps.adapter.open({

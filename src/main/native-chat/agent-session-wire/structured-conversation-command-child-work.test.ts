@@ -1,3 +1,4 @@
+import { normalizeConstruction, readyConstruction } from './structured-agent-session-construction'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
@@ -138,10 +139,15 @@ describe('conversation command admission reads the work the provider reported', 
 
   it('refuses a queued command at handover once reported work runs', async () => {
     const acquireChild = state.acquire.getMockImplementation()!
-    state.acquire.mockImplementation(async (input) => ({
-      ...(await acquireChild(input)),
-      acquisitionGeneration: `generation-${input.fence}`
-    }))
+    state.acquire.mockImplementation(async (input) => {
+      const acquired = normalizeConstruction(await acquireChild(input))
+      return acquired.kind === 'ready'
+        ? readyConstruction({
+            ...acquired.value,
+            acquisitionGeneration: `generation-${input.fence}`
+          })
+        : acquired
+    })
     await attach()
     const fence = state.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
     await state.host.handleAdapterEvent({
