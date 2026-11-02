@@ -1,8 +1,5 @@
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
-import { GITHUB_CONNECTION_CHANGED } from '../../transport/github-target-invocation'
 import type { BridgedParityClass } from '../bridged-parity/divergence-classes'
-import { isKeyedObject, scriptsAbsentResultReply } from '../bridged-parity/divergence-evidence'
-import type { Observation, Recording, RecordingScenario } from './recording-scenario'
+import { isKeyedObject } from '../bridged-parity/divergence-evidence'
 import type { RecordedValue } from './recording-values'
 
 // Producers whose input or recorded product contract this PR changed (the re-recorded set). Each earns its own
@@ -174,48 +171,6 @@ export function expectedUnchangedTally(
   return expected
 }
 
-export const BRIDGE_REPLY_REFUSED = 'the reply could not be read (unrecognised-message)'
-
-const unreadable = (method: string) => `The host sent a reply this app could not read (${method})`
-
-// The GitHub exact-target check maps its own failures: natively an unreadable answer says to update the server,
-// while the page's refusal of that frame is a failed transport check, which says the connection changed.
-const GITHUB_CHECK_COPIES = [unreadable('status.get'), GITHUB_EXACT_OPERATION_UNSUPPORTED]
-const GITHUB_CHECK_PAGE_COPY = GITHUB_CONNECTION_CHANGED
-
-function refusedError(): RecordedValue {
-  return {
-    category: 'BridgeReplyRefusedError',
-    message: BRIDGE_REPLY_REFUSED,
-    isRpcDeliveryUnknown: true
-  }
-}
-
-function substitute(value: RecordedValue, copied: ReadonlyMap<string, string>): RecordedValue {
-  if (typeof value === 'string') {
-    return copied.get(value) ?? value
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => substitute(entry, copied))
-  }
-  if (!isKeyedObject(value)) {
-    return value
-  }
-  if (
-    value.category === 'RpcIncompatibleReplyError' &&
-    typeof value.message === 'string' &&
-    copied.get(value.message) === BRIDGE_REPLY_REFUSED &&
-    value.code === 'incompatible_reply' &&
-    value.isRpcDeliveryUnknown === false &&
-    Object.keys(value).length === 4
-  ) {
-    return refusedError()
-  }
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [key, substitute(entry, copied)])
-  )
-}
-
 export function rows(value: RecordedValue): Record<string, RecordedValue>[] {
   if (!Array.isArray(value)) {
     throw new Error('Missing reviewed recorded rows')
@@ -226,64 +181,4 @@ export function rows(value: RecordedValue): Record<string, RecordedValue>[] {
     }
     return row
   })
-}
-
-// The page refuses the injected { ok: true } reply that the native reader rejects as unreadable: the bound caller
-// rejects with the bridge refusal, and the product shows that error where it showed the native one. Everything
-// else is the reviewed native golden, so a shorter page prefix or any other difference still fails.
-function refusedObservation(observation: Observation): Observation {
-  const copied = new Map<string, string>()
-  const sender = rows(observation.sender).map((attempt): RecordedValue => {
-    const settlement = attempt.settlement
-    if (
-      !isKeyedObject(settlement) ||
-      settlement.status !== 'fulfilled' ||
-      !isKeyedObject(settlement.value) ||
-      settlement.value.ok !== true ||
-      Object.hasOwn(settlement.value, 'result')
-    ) {
-      return attempt
-    }
-    const method = String(attempt.name).replace(/#.*$/, '')
-    if (method === 'status.get') {
-      for (const copy of GITHUB_CHECK_COPIES) {
-        copied.set(copy, GITHUB_CHECK_PAGE_COPY)
-      }
-    } else {
-      copied.set(unreadable(method), BRIDGE_REPLY_REFUSED)
-    }
-    const { value: _value, ...timing } = settlement
-    return { ...attempt, settlement: { ...timing, status: 'rejected', error: refusedError() } }
-  })
-  if (!copied.size) {
-    return observation
-  }
-  return {
-    ...observation,
-    sender,
-    settlements: substitute(observation.settlements, copied),
-    state: substitute(observation.state, copied),
-    effects: substitute(observation.effects, copied)
-  }
-}
-
-export function refusedReplyExpectation(
-  expected: Recording,
-  scenarios: readonly RecordingScenario[]
-): Recording {
-  return {
-    ...expected,
-    checkpoints: expected.checkpoints.map((checkpoint) => {
-      const source =
-        scenarios.length === 1
-          ? scenarios[0]
-          : scenarios.find((scenario) => checkpoint.id.startsWith(`${scenario.id}:`))
-      if (!source) {
-        throw new Error(`Checkpoint has no input scenario: ${checkpoint.id}`)
-      }
-      return scriptsAbsentResultReply(source)
-        ? { ...checkpoint, observation: refusedObservation(checkpoint.observation) }
-        : checkpoint
-    })
-  }
 }

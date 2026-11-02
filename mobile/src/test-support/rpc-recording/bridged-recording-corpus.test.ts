@@ -42,15 +42,10 @@ import {
   scriptsAbsentResultReply,
   withReplyMeta
 } from '../bridged-parity/divergence-evidence'
-import {
-  CHANGED_PRODUCERS,
-  expectedUnchangedTally,
-  refusedReplyExpectation,
-  rows
-} from './changed-bridge-outcomes'
+import { CHANGED_PRODUCERS, expectedUnchangedTally, rows } from './changed-bridge-outcomes'
 import { familyGoldens, pilotGoldens, type DerivedGolden } from './derived-goldens'
 import { compareGolden, readGolden } from './golden-recording'
-import { pageRefusalOutcome } from './changed-page-outcomes'
+import { PAGE_REFUSAL_PRODUCERS, pageExpectation } from './changed-page-outcomes'
 import { recordingDifferences } from './golden-difference'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import type { Recording, RecordingScenario } from './recording-scenario'
@@ -358,23 +353,25 @@ async function unchangedVerdict(
   tally(id, family, name, fields, run)
 }
 
-// Changed members earn their own outcome in both page modes: the reviewed native golden, with the page's
-// refusal of the injected absent result applied where the product copies it, and nothing else may differ.
+// Changed members earn their own outcome in both page modes: the expected page recording, built from the
+// reviewed native golden and the declared page refusals before the run is judged, shapes the whole comparison,
+// and nothing else may differ.
 async function directVerdict(id: string, family: string, scenarios: readonly RecordingScenario[]) {
   const expected = readGolden(directory, id)
   for (const mode of ['page-original', 'page-reply-meta'] as const) {
+    const page = pageExpectation(id, expected.recording, scenarios)
     const run = await replay(id, scenarios, mode)
     if (run.didThrow || !run.recording) {
       throw run.thrown
     }
     const view = comparison(
       input.scenarios,
-      expected.recording,
+      page,
       run.recording,
       scenarios,
       mode === 'page-reply-meta'
     )
-    const want = pageRefusalOutcome(id, refusedReplyExpectation(view.expected, scenarios))
+    const want = view.expected
     const fields = divergingFields(want, view.actual)
     if (fields.length) {
       const values = recordingDifferences(want, view.actual)
@@ -648,13 +645,15 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
       const duplicated = discovered.filter((id, index) => discovered.indexOf(id) !== index)
       const missing = discovered.filter((id) => !accounted.has(id))
       const twice = [...accounted].filter(([, routes]) => routes.length !== 1).map(([id]) => id)
-      // Every re-recorded producer replays here and is judged directly.
+      // Every re-recorded producer replays here and is judged directly, and only those declare page refusals.
       const unrouted = CHANGED_PRODUCERS.filter((id) => !discovered.includes(id))
-      expect({ duplicated, missing, twice, unrouted }).toEqual({
+      const strayRefusals = PAGE_REFUSAL_PRODUCERS.filter((id) => !changed.has(id))
+      expect({ duplicated, missing, twice, unrouted, strayRefusals }).toEqual({
         duplicated: [],
         missing: [],
         twice: [],
-        unrouted: []
+        unrouted: [],
+        strayRefusals: []
       })
     })
     afterCorpus('keeps the unchanged corpus within its legacy labels and bounded tally', () => {
