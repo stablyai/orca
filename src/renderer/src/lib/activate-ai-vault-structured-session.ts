@@ -13,15 +13,11 @@ import {
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
-import { activateAndRevealWorkspace } from './worktree-activation'
-import { activateWslMovedWorkspace } from './wsl-moved-chat-activation'
-import { useAppStore } from '@/store'
+import { showStructuredChatWorkspace } from './structured-chat-workspace-navigation'
 import {
   structuredAgentSessionTargetForHost,
   executionHostIdForStructuredTarget
 } from '@/runtime/structured-agent-session-owner'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 export {
   revealStructuredSession,
   type StructuredSessionRevealOutcome
@@ -93,53 +89,24 @@ export function openDesktopStructuredSession(
   deps?: StructuredSessionActivationDeps,
   locate?: StructuredSessionOpenDeps['locate']
 ): Promise<StructuredSessionOpenResult> {
-  const navigated = new Map<string, boolean>()
-  let navigationReported = false
-  const activate: StructuredSessionOpenAdapterDeps['activate'] = (args) => {
-    let opened = navigated.get(args.worktreeId)
-    if (opened === undefined) {
-      // Re-activating the current workspace would wake its unrelated sleeping agents.
-      opened =
-        useAppStore.getState().activeWorktreeId === args.worktreeId ||
-        activateWslMovedWorkspace(args.worktreeId) ||
-        navigateToWorkspace(args, () => {
-          navigationReported = true
-        })
-      navigated.set(args.worktreeId, opened)
-    }
-    return opened && desktopStructuredSessionOpenDeps.activate(args)
-  }
+  const feedback = { reported: false }
+  // Navigate on every attempt: the opener awaits between them, and the registration can change.
+  const activate: StructuredSessionOpenAdapterDeps['activate'] = (args) =>
+    showStructuredChatWorkspace(
+      args.worktreeId,
+      args.target ? executionHostIdForStructuredTarget(args.target) : undefined,
+      feedback
+    ) && desktopStructuredSessionOpenDeps.activate(args)
   return openDesktopStructuredSessionInteraction(source, {
     target: host,
     deps: deps ?? { ...desktopStructuredSessionOpenDeps, activate },
     locate,
     present: (result) => {
-      if (!navigationReported) {
+      if (!feedback.reported) {
         presentDesktopStructuredSession(result, source, deps ?? structuredSessionOpenFeedback)
       }
     }
   })
-}
-
-/** Folder activation toasts its own refusal once it resolves the host's folder; other failures stay with the opener. */
-function navigateToWorkspace(
-  args: { worktreeId: string; target?: RuntimeClientTarget },
-  reported: () => void
-): boolean {
-  const executionHostId = args.target ? executionHostIdForStructuredTarget(args.target) : undefined
-  const scope = parseWorkspaceKey(args.worktreeId)
-  const folderReports =
-    scope?.type === 'folder' &&
-    findFolderWorkspaceOwner(useAppStore.getState(), scope.folderWorkspaceId, executionHostId)
-  const opened =
-    activateAndRevealWorkspace(args.worktreeId, {
-      providesInitialSurface: true,
-      ...(executionHostId ? { executionHostId } : {})
-    }) !== false
-  if (!opened && folderReports) {
-    reported()
-  }
-  return opened
 }
 
 function presentDesktopStructuredSession(

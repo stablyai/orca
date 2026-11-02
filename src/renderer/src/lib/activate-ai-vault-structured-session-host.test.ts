@@ -9,10 +9,9 @@ const mocks = vi.hoisted(() => {
   const orders: Record<string, string[]> = {}
   const folders: FolderWorkspace[] = []
   return {
-    navigate: vi.fn<(...args: unknown[]) => { primaryTabId: null } | false>(() => ({
-      primaryTabId: null
-    })),
-    moved: vi.fn(() => false),
+    navigate: vi.fn<
+      (id: string, host: string | undefined, feedback: { reported: boolean }) => boolean
+    >(() => true),
     call: vi.fn(),
     supports: vi.fn(),
     apply: vi.fn(),
@@ -33,8 +32,9 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionWorktreeTabs: async () => undefined
 }))
-vi.mock('./worktree-activation', () => ({ activateAndRevealWorkspace: mocks.navigate }))
-vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: mocks.moved }))
+vi.mock('./structured-chat-workspace-navigation', () => ({
+  showStructuredChatWorkspace: mocks.navigate
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     setState: (patch: Partial<typeof mocks.state>) => Object.assign(mocks.state, patch),
@@ -82,8 +82,7 @@ function tab(id: string, host: 'local' | 'runtime:remote-2'): Tab {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.state.activeWorktreeId = 'workspace'
-  mocks.moved.mockReturnValue(false)
-  mocks.navigate.mockReset().mockReturnValue({ primaryTabId: null })
+  mocks.navigate.mockReset().mockReturnValue(true)
   mocks.state.folderWorkspaces = []
   mocks.state.groupsByWorktree = {}
   mocks.state.tabBarOrderByWorktree = {}
@@ -313,25 +312,23 @@ it.each([false, true])(
   }
 )
 
-it('navigates before selecting once per open and preserves moved-workspace activation', async () => {
+it('shows the workspace on the chat host before selecting, whether or not it is already selected', async () => {
   const session = { structuredSession: { workspaceId: 'workspace', sessionId: 'sender' } }
-  mocks.state.activeWorktreeId = 'elsewhere'
   mocks.state.unifiedTabsByWorktree.workspace.push(tab('current', 'local'))
   mocks.navigate.mockImplementation(() => {
     expect(mocks.activateTab).not.toHaveBeenCalled()
-    return { primaryTabId: null }
+    return true
   })
-  expect(await activateAiVaultStructuredSession(session)).toBe(true)
-  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith('workspace', {
-    providesInitialSurface: true,
-    executionHostId: 'local'
-  })
-  mocks.activateTab.mockClear()
-  mocks.navigate.mockClear()
-  mocks.moved.mockReturnValue(true)
-  expect(await activateAiVaultStructuredSession(session)).toBe(true)
-  expect(mocks.navigate).not.toHaveBeenCalled()
-  expect(mocks.activateTab).toHaveBeenCalledOnce()
+  for (const active of ['elsewhere', 'workspace']) {
+    mocks.state.activeWorktreeId = active
+    mocks.navigate.mockClear()
+    mocks.activateTab.mockClear()
+    expect(await activateAiVaultStructuredSession(session)).toBe(true)
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith('workspace', 'local', {
+      reported: false
+    })
+    expect(mocks.activateTab).toHaveBeenCalledOnce()
+  }
 })
 
 it('reports a registered blocked folder once despite repeated activation attempts', async () => {
@@ -361,8 +358,12 @@ it('reports a registered blocked folder once despite repeated activation attempt
       ? { location: { kind: 'chat', sessionId: 'sender', worktreeId: workspace } }
       : { ok: true, sessionId: 'sender', workspaceId: workspace, agent: 'claude' }
   )
-  mocks.navigate.mockImplementation(() => {
-    toast.error('Cannot open folder workspace')
+  // The navigation's folder path guard: its toast fires only while nothing reported yet.
+  mocks.navigate.mockImplementation((_id, _host, feedback) => {
+    if (!feedback.reported) {
+      toast.error('Cannot open folder workspace')
+    }
+    feedback.reported = true
     return false
   })
   expect(
@@ -370,7 +371,7 @@ it('reports a registered blocked folder once despite repeated activation attempt
       structuredSession: { sessionId: 'sender', workspaceId: workspace }
     })
   ).toBe(false)
-  expect(mocks.navigate).toHaveBeenCalledOnce()
+  expect(mocks.navigate.mock.calls.length).toBeGreaterThan(1)
   expect(toast.error).toHaveBeenCalledExactlyOnceWith('Cannot open folder workspace')
   expect(mocks.activateTab).not.toHaveBeenCalled()
 })
@@ -431,7 +432,7 @@ it('routes retired History by its saved host and prunes only its old placement a
     }
   ]
   mocks.state.tabBarOrderByWorktree[old] = [prior.id, decoy.id, sibling.id]
-  mocks.navigate.mockImplementation((id) => (id === old ? false : { primaryTabId: null }))
+  mocks.navigate.mockImplementation((id) => id !== old)
   mocks.call.mockImplementation(async (host, method) => {
     expect(host).toEqual(TARGET)
     if (method === 'orchestration.partyLocation') {

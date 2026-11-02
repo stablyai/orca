@@ -1,5 +1,5 @@
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi, type Mock } from 'vitest'
 import {
   root,
   B,
@@ -21,15 +21,68 @@ import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/s
 import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { agentSessionMessagePayload } from '../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionSubscribeEvent } from '../../src/shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionLease,
+  AgentSessionRecord
+} from '../../src/shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionOwnerProbe } from '../../src/shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type * as OwnerProbeModule from '../../src/main/runtime/agent-session/structured-agent-session-owner-probe'
+import {
+  readPersistedTestAgentSessionStore,
+  seedTestAgentSessionRecordStore
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined
 }))
 vi.mock('../../src/shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+// Only the host's process-table seam: a test names what the recorded owner's PID shows.
+const owners = vi.hoisted(() => ({
+  probe: null as Mock<(record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>> | null
+}))
+vi.mock(
+  '../../src/main/runtime/agent-session/structured-agent-session-owner-probe',
+  async (original) => {
+    const real = await original<typeof OwnerProbeModule>()
+    return {
+      ...real,
+      createStructuredAgentSessionOwnerProbe: (hostId: string) => {
+        const probe = real.createStructuredAgentSessionOwnerProbe(hostId)
+        return (record: AgentSessionRecord) => owners.probe?.(record) ?? probe(record)
+      },
+      createStructuredAgentSessionOwnerProbes: (hostId: string) => {
+        const probeMany = real.createStructuredAgentSessionOwnerProbes(hostId)
+        return async (records: readonly AgentSessionRecord[]) =>
+          owners.probe
+            ? new Map(
+                await Promise.all(
+                  records.map(
+                    async (record) => [record.sessionId, await owners.probe!(record)] as const
+                  )
+                )
+              )
+            : probeMany(records)
+      }
+    }
+  }
+)
+beforeEach(() => {
+  owners.probe = null
+})
 
-async function retiredChat(instance = false) {
+async function retiredChat(instance = false, lease?: Partial<AgentSessionLease>) {
   const old = `retired-project::${root}${instance ? '::workspace:11111111-1111-4111-8111-111111111111' : ''}`
   const input = await inWorkspace(old, 'folder')
+  if (lease) {
+    const prior = await readPersistedTestAgentSessionStore(root)
+    await seedTestAgentSessionRecordStore(root, {
+      records: Object.values(prior.records).map((record) => ({
+        ...record,
+        lease: { ...record.lease, ...lease }
+      })),
+      sessionTabs: []
+    })
+  }
   input.profile.removeFolderWorkspace(input.folderId)
   input.profile.setWorkspaceSession(
     withChatTabChanges('local', getDefaultWorkspaceSession(), old, [
@@ -242,4 +295,101 @@ it('never guesses between same-directory registrations or crosses execution host
   expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: false } })
   expect(rig.store.getRecord(B)?.location.workspaceId).toBe(rig.old)
   expect(rig.acquire).not.toHaveBeenCalled()
+})
+
+const ALIVE: AgentSessionOwnerProbe = {
+  outcome: 'identity-matched',
+  matchedOn: ['process-start-time']
+}
+const UNKNOWN: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no start time' }
+const GONE: AgentSessionOwnerProbe = { outcome: 'pid-absent' }
+const OWNER = {
+  hostId: 'local',
+  pid: 4242,
+  processStartTimeMs: 1_700_000_000_000,
+  spawnToken: 'spawn-owner'
+}
+
+const heldRefusal = {
+  ok: true,
+  result: { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
+}
+
+async function ownedRetiredChat(atRestart: AgentSessionOwnerProbe) {
+  owners.probe = vi.fn(async () => atRestart)
+  const rig = await retiredChat(false, {
+    ownerProcess: OWNER,
+    reservedSpawnToken: OWNER.spawnToken,
+    claimStatus: 'live'
+  })
+  rig.host.deps.stopOwnerProcess = vi.fn()
+  const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+  const repo = storeRepo({ id: 'current-project', path: root, kind: 'folder' })
+  rig.profile.addRepo(repo)
+  return { ...rig, kill, probe: owners.probe, destination: getRepoMainWorktreeId(repo) }
+}
+
+it.each([
+  ['alive', ALIVE],
+  ['unknown', UNKNOWN]
+])(
+  'a chat whose owner was %s at restart moves once a fresh look proves that owner gone, with no restart',
+  async (_, atRestart) => {
+    const rig = await ownedRetiredChat(atRestart)
+    // While the owner may still run, the chat stays where it was.
+    expect(await reveal(rig)).toMatchObject(heldRefusal)
+    expect(rig.store.getRecord(B)).toMatchObject({
+      location: { workspaceId: rig.old },
+      lease: { ownerProcess: OWNER }
+    })
+    const looked = rig.probe.mock.calls.length
+    rig.probe.mockResolvedValue(GONE)
+    const opened = { ok: true, result: { ok: true, sessionId: B, workspaceId: rig.destination } }
+    expect(await reveal(rig)).toMatchObject(opened)
+    expect(rig.probe.mock.calls.length).toBeGreaterThan(looked)
+    expect(await reveal(rig)).toMatchObject(opened)
+    expect(rig.store.getRecord(B)).toMatchObject({
+      location: { workspaceId: rig.destination },
+      conversationName: 'Retained project conversation',
+      providerHandleChain: rig.record.providerHandleChain,
+      lease: { ownerProcess: null, claimStatus: 'released' }
+    })
+    const events: AgentSessionSubscribeEvent[] = []
+    await rig.host.subscribe({ id: 'phone', sessionId: B, emit: (event) => events.push(event) })
+    expect(JSON.stringify(await rig.host.journalSnapshot(B))).toContain('retained reply')
+    expect(JSON.stringify(events)).toContain('keep my queued text')
+    expect(rig.acquire).not.toHaveBeenCalled()
+    expect(rig.host.deps.stopOwnerProcess).not.toHaveBeenCalled()
+    expect(rig.kill).not.toHaveBeenCalled()
+  }
+)
+
+it('keeps the chat in place when its owner changes while the gone owner is being confirmed', async () => {
+  const rig = await ownedRetiredChat(UNKNOWN)
+  expect(await reveal(rig)).toMatchObject(heldRefusal)
+  const successor = { ...OWNER, pid: 5151, spawnToken: 'spawn-successor' }
+  rig.probe.mockImplementation(async (record) => {
+    // A new owner takes the lease at the next fence before the old one's absence is applied.
+    await rig.store.transitionHandoff(B, (latest) => ({
+      ...latest,
+      lease: {
+        ...latest.lease,
+        runtimeFence: record.lease.runtimeFence + 1,
+        handoffStage: null,
+        handoffOperationId: null,
+        claimStatus: 'live',
+        provenHandleLinkId: null,
+        ownerProcess: successor,
+        reservedSpawnToken: successor.spawnToken
+      }
+    }))
+    return GONE
+  })
+  expect(await reveal(rig)).toMatchObject(heldRefusal)
+  expect(rig.store.getRecord(B)).toMatchObject({
+    location: { workspaceId: rig.old },
+    lease: { ownerProcess: successor }
+  })
+  expect(rig.acquire).not.toHaveBeenCalled()
+  expect(rig.kill).not.toHaveBeenCalled()
 })
