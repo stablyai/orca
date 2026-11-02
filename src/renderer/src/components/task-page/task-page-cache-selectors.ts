@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import { workItemsCacheKey } from '@/store/github/cache-identity'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -6,7 +7,6 @@ import type {
   WorkItemsCacheSources
 } from '@/store/github/cache-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items-query-bounds'
 import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,
@@ -62,53 +62,66 @@ function taskPageRepoCacheScope(repo: TaskPageRepoCacheInput): string {
   return repo.sourceCacheScope ?? getRepoExecutionHostId(repo)
 }
 
+function taskPageRepoSourceKey(repo: TaskPageRepoCacheInput): string {
+  return `${repo.id}::${taskPageRepoCacheScope(repo)}`
+}
+
+export type TaskPageRepoCacheRow = { sourceKey: string; cacheKey: string }
+
+export function getTaskPageRepoCacheRows(
+  repos: readonly TaskPageRepoCacheInput[],
+  limit: number,
+  query: string
+): TaskPageRepoCacheRow[] {
+  return repos.map((repo) => ({
+    sourceKey: taskPageRepoSourceKey(repo),
+    cacheKey: workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo))
+  }))
+}
+
 export function selectTaskPageWorkItemsCacheEntries(
   workItemsCache: WorkItemsCache,
   repos: readonly TaskPageRepoCacheInput[],
   limit: number,
   query: string
 ): (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] {
-  return repos.map(
-    (repo) => workItemsCache[workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo))]
-  )
+  return getTaskPageRepoCacheRows(repos, limit, query).map((row) => workItemsCache[row.cacheKey])
+}
+
+type TaskPageWorkItemsCacheSelection = {
+  current: (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
+  /** Source displays only: rows, notices, errors and Retry read `current`. */
+  display: (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
 }
 
 /**
- * Display-only source read: entries are keyed by query but sources are repo-level, so until a new query's
- * entry lands, describe the source with the latest same-scope sibling. A present entry is authoritative,
- * and a query the fetch rejects as too large claims no source. Never feeds rows, errors or Retry.
+ * Entries are keyed by query but sources are repo-level, so while a row's new query has no entry, source displays
+ * keep reading (live) the row's last committed current entry. A present entry wins even when unresolved, and a
+ * query the fetch rejects as too large claims nothing. Unchanged arrays are reused so subscribers skip renders.
  */
-export function createTaskPageSourceDisplayEntriesSelector(
-  repos: readonly TaskPageRepoCacheInput[],
-  limit: number,
-  query: string
-): (workItemsCache: WorkItemsCache) => (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] {
-  const queryFetchable = !isGitHubWorkItemsQueryTooLarge(query)
-  // Why memoize by cache ref: the sibling scan reruns per cache write, not per unrelated store update.
-  let lastCache: WorkItemsCache | undefined
-  let lastEntries: (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] = []
-  const select = (workItemsCache: WorkItemsCache) =>
-    repos.map((repo) => {
-      const scope = taskPageRepoCacheScope(repo)
-      const current = workItemsCache[workItemsCacheKey(repo.id, limit, query, scope)]
-      if (current || !queryFetchable) {
-        return current
-      }
-      const siblingPrefix = workItemsCacheKey(repo.id, limit, '', scope)
-      let latest: CacheEntry<readonly GitHubWorkItem[]> | undefined
-      for (const [key, entry] of Object.entries(workItemsCache)) {
-        if (key.startsWith(siblingPrefix) && (!latest || entry.fetchedAt > latest.fetchedAt)) {
-          latest = entry
-        }
-      }
-      return latest
-    })
+export function createTaskPageWorkItemsCacheSelector(
+  rows: readonly TaskPageRepoCacheRow[],
+  queryFetchable: boolean,
+  getDisplayCacheKey: (sourceKey: string) => string | undefined
+): (workItemsCache: WorkItemsCache) => TaskPageWorkItemsCacheSelection {
+  let last: TaskPageWorkItemsCacheSelection = { current: [], display: [] }
   return (workItemsCache) => {
-    if (workItemsCache !== lastCache) {
-      lastCache = workItemsCache
-      lastEntries = select(workItemsCache)
+    const current = rows.map((row) => workItemsCache[row.cacheKey])
+    const display = current.map((entry, index) => {
+      if (entry || !queryFetchable) {
+        return entry
+      }
+      const displayKey = getDisplayCacheKey(rows[index].sourceKey)
+      return displayKey === undefined ? undefined : workItemsCache[displayKey]
+    })
+    const next = {
+      current: shallow(current, last.current) ? last.current : current,
+      display: shallow(display, last.display) ? last.display : display
     }
-    return lastEntries
+    if (next.current !== last.current || next.display !== last.display) {
+      last = next
+    }
+    return last
   }
 }
 
@@ -122,7 +135,7 @@ export function buildTaskPageRepoSourceState(
       repoId: repo.id,
       repoPath: repo.path,
       hostId: getRepoExecutionHostId(repo),
-      sourceKey: `${repo.id}::${taskPageRepoCacheScope(repo)}`,
+      sourceKey: taskPageRepoSourceKey(repo),
       sources: entry?.sources ?? null,
       error: entry?.error ?? null
     }
@@ -143,7 +156,7 @@ export function selectTaskPageUnresolvedSourceRepos(
   const stateBySourceKey = new Map(sourceState.map((state) => [state.sourceKey, state]))
   const unresolved: TaskPageUnresolvedSourceRepo[] = []
   for (const repo of repos) {
-    const state = stateBySourceKey.get(`${repo.id}::${taskPageRepoCacheScope(repo)}`)
+    const state = stateBySourceKey.get(taskPageRepoSourceKey(repo))
     if (
       state?.sources &&
       !state.sources.ineligible &&

@@ -28,8 +28,6 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     selectedJiraSite,
     activeGithubTaskKind
   } = model
-  const providerLabel =
-    sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
   // Why strict kind: Issues and PRs resolve independently; the other kind's repo is not this list's source.
   const githubActiveSources = useMemo(
     () =>
@@ -41,7 +39,10 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
   const linearWorkspaceName =
     selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null
   const jiraSiteName = selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+  // Why the catalog dep: it changes with the language, and the summary's own copy is translated too.
   const taskSourceContextSummary = useMemo(() => {
+    const providerLabel =
+      sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
     if (taskSource === 'github' && githubMode === 'project') {
       return getGitHubProjectSourceSummary({
         providerLabel,
@@ -85,8 +86,8 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     hostRegistryById,
     jiraSiteName,
     linearWorkspaceName,
-    providerLabel,
     selectedRepos.length,
+    sourceOptions,
     taskSource,
     taskSourceHostAvailability,
     taskSourceRepoContexts

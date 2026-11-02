@@ -4,18 +4,11 @@ import { getWorkItemRepo } from '@/lib/work-item-repo-row'
 import { useState, useMemo, useLayoutEffect, useCallback, useEffect } from 'react'
 import type { ItemDialogTab } from '@/components/github/github-work-item-identity'
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
-import { useShallow } from 'zustand/react/shallow'
-import {
-  selectTaskPageWorkItemsCacheEntries,
-  createTaskPageSourceDisplayEntriesSelector,
-  findTaskPageDialogWorkItem
-} from '@/components/task-page/task-page-cache-selectors'
+import { findTaskPageDialogWorkItem } from '@/components/task-page/task-page-cache-selectors'
+import { useTaskPageWorkItemsCacheSelection } from './use-task-page-work-items-cache-selection'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
-import {
-  getTaskPageRepoCacheInput,
-  getTaskPageRepoSourceContext
-} from '../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(
@@ -85,28 +78,12 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
     () => stripRepoQualifiers(appliedTaskSearch.trim()),
     [appliedTaskSearch]
   )
-  const selectedWorkItemsCacheEntries = useAppStore(
-    useShallow((s) =>
-      selectTaskPageWorkItemsCacheEntries(
-        s.workItemsCache,
-        selectedRepos.map(getTaskPageRepoCacheInput),
-        githubPerRepoPageLimit,
-        appliedWorkItemsCacheQuery
-      )
+  const { selectedWorkItemsCacheEntries, sourceDisplayWorkItemsCacheEntries } =
+    useTaskPageWorkItemsCacheSelection(
+      selectedRepos,
+      githubPerRepoPageLimit,
+      appliedWorkItemsCacheQuery
     )
-  )
-  const selectSourceDisplayEntries = useMemo(
-    () =>
-      createTaskPageSourceDisplayEntriesSelector(
-        selectedRepos.map(getTaskPageRepoCacheInput),
-        githubPerRepoPageLimit,
-        appliedWorkItemsCacheQuery
-      ),
-    [appliedWorkItemsCacheQuery, githubPerRepoPageLimit, selectedRepos]
-  )
-  const sourceDisplayWorkItemsCacheEntries = useAppStore(
-    useShallow((s) => selectSourceDisplayEntries(s.workItemsCache))
-  )
 
   // Keep cache patches in the clicked conversation when origin and upstream share an issue number.
   const cachedDialogWorkItem = useAppStore((s) =>
