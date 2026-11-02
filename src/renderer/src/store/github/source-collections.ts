@@ -199,9 +199,12 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
       }
       return false
     }
-    if (firstPage) {
-      const complete = !envelope.errors?.issues && !envelope.errors?.prs
-      const empty = complete && envelope.items.length === 0
+    if (firstPage && attempt.binding && attempt.owner) {
+      if (envelope.errors?.issues || envelope.errors?.prs) {
+        delete this.evidence[this.evidenceKey(attempt, query)]
+        return true
+      }
+      const empty = envelope.items.length === 0
       this.evidence = withBoundedCacheEntry(this.evidence, this.evidenceKey(attempt, query), {
         attempt,
         sources,

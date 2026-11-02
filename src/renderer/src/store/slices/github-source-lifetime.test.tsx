@@ -253,6 +253,18 @@ describe('GitHub source collection lifetime', () => {
 })
 
 describe('source mapping and estimate retirement', () => {
+  it('keeps unregistered legacy reads usable without certifying another repository estimate', async () => {
+    const store = setup()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({ ...envelope('parent'), items: [] })
+    await store.getState().fetchWorkItems('unregistered-a', '/unregistered-a', 20, '')
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(40)
+    expect(
+      await store
+        .getState()
+        .countWorkItemsAcrossRepos([{ repoId: 'unregistered-b', path: '/unregistered-b' }], '', 20)
+    ).toEqual({ totalCount: 40, totalPages: 2 })
+  })
+
   it('joins an already running discovery without another list, retains known answers on opaque failure, and retires complete empty evidence', async () => {
     const store = setup()
     const held = Promise.withResolvers<ReturnType<typeof envelope>>()
@@ -279,6 +291,7 @@ describe('source mapping and estimate retirement', () => {
       errors: { issues: { type: 'unknown', message: 'partial' } }
     })
     await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(20)
     expect(await store.getState().countWorkItemsAcrossRepos(args, '', 20)).toBeUndefined()
     expect(owner.count(key)?.totalCount).toBe(60)
     mockApi.gh.listWorkItems.mockResolvedValueOnce({ ...envelope('parent'), items: [] })
