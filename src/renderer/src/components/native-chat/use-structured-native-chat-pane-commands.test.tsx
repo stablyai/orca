@@ -44,6 +44,13 @@ const menuActions = vi.hoisted(
         appendEnter: true
       },
       {
+        id: 'draft',
+        label: 'Draft commit',
+        scope: { type: 'global' },
+        command: 'git commit -m ',
+        appendEnter: false
+      },
+      {
         id: 'agent',
         label: 'Review changes',
         scope: { type: 'repo', repoId: 'worktree-1' },
@@ -360,6 +367,8 @@ describe('a structured chat tab', () => {
         historyId: `local\0${command.id}`
       })
     }
+    // A new tab runs a shell command even without Enter, so the chat menu offers no Insert hint.
+    expect(menuText).not.toContain('Insert')
     view.rerender(<StructuredChatTab terminalPane />)
     expect(view.container.textContent).not.toContain('Quick Commands')
     expect(view.container.textContent).not.toContain('Continue with Terminal Agent')

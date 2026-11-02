@@ -16,7 +16,6 @@ import {
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export function useStructuredNativeChatPaneCommands({
   pane,
@@ -39,11 +38,6 @@ export function useStructuredNativeChatPaneCommands({
   const { tabId, groupId, isVisible, sessionId, target } = pane
   const terminalPaneActions = pane.contextMenuActions
   const keybindings = useAppStore((state) => state.keybindings)
-  const providerSessionId = useAppStore(
-    (state) =>
-      state.agentStatusByPaneKey[structuredAgentSessionPaneKey(tabId, sessionId)]?.providerSession
-        ?.id
-  )
   const focusSource = useCallback(() => composerRef.current?.focus(), [composerRef])
   const resolveOrcaSessionId = useMemo(
     () =>
@@ -89,7 +83,7 @@ export function useStructuredNativeChatPaneCommands({
         : undefined,
     chatPane:
       ownerWorktreeId && groupId && terminalPaneActions === undefined
-        ? { tabId, worktreeId: ownerWorktreeId, groupId, providerSessionId }
+        ? { tabId, worktreeId: ownerWorktreeId, groupId, sessionId }
         : undefined
   })
   const onKeyDownCapture = useCallback<KeyboardEventHandler<HTMLDivElement>>(

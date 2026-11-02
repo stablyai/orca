@@ -73,7 +73,7 @@ type UseNativeChatContextMenuArgs = {
   actions: NativeChatContextMenuActions
   showTerminalPaneActions?: boolean
   splitShortcutLabels?: { right: string; down: string }
-  chatPane?: { tabId: string; worktreeId: string; groupId: string; providerSessionId?: string }
+  chatPane?: { tabId: string; worktreeId: string; groupId: string; sessionId: string }
   chatSession?: NativeChatSessionMenuSource
   /** A structured chat tab's Orca session ID; a chat in a terminal pane is that terminal's agent. */
   resolveOrcaSessionId?: () => Promise<string | null>
@@ -237,7 +237,6 @@ export function useNativeChatContextMenu({
   const standaloneMenu = useNativeChatStandaloneMenu({
     pane: showTerminalPaneActions ? undefined : chatPane,
     source: showTerminalPaneActions ? undefined : chatSession,
-    open: enabled && state.open,
     close: () => setState((prev) => ({ ...prev, open: false }))
   })
   return {

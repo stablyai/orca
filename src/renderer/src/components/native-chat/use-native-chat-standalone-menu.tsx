@@ -12,15 +12,13 @@ import {
 export function useNativeChatStandaloneMenu({
   pane,
   source,
-  open,
   close
 }: {
   pane: { tabId: string; worktreeId: string; groupId: string } | undefined
   source: NativeChatSessionMenuSource | undefined
-  open: boolean
   close: () => void
 }) {
-  const quickCommands = useNativeChatQuickCommandsMenu(pane, open, close)
+  const quickCommands = useNativeChatQuickCommandsMenu(pane, close)
   const context = useNativeChatSessionContextActions(source)
   return {
     quickCommands: quickCommands.menu,
