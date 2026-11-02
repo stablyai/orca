@@ -391,7 +391,7 @@
         "inheritFont": "Même police que l’IDE",
         "fontPreviewLabel": "Aperçu de la police du chat",
         "fontPreview": "Le vif renard brun saute par-dessus le chien paresseux.",
-        "title": "Chat",
+        "title": "Interface de chat",
         "textSize": "Taille du texte",
         "textSizeDescription": "Messages, activité des outils et zone de message. {{increase}} / {{decrease}} dans un chat modifient aussi ce réglage.",
         "codeTextSize": "Taille du texte du code",
@@ -7961,7 +7961,6 @@
           "9d3e56ca36": "Appliquer les modifications",
           "f96688b6bc": "Annuler",
           "b7ddae600c": "Terminé",
-          "e4bda7ce6f": "Aucune configuration Ghostty trouvée sur ce système.",
           "b58d4c9051": "Clés non prises en charge",
           "674b5ccd6b": "Aucun nouveau réglage à importer — vos réglages actuels correspondent déjà.",
           "a4c5dec640": "Réglages à mettre à jour",
@@ -21095,7 +21094,10 @@
       "title": "Exécuter {{distro}} comme hôte (recommandé)",
       "why": "Git, les fichiers et les terminaux s’exécutent alors nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
       "accept": "Exécuter comme hôte",
-      "projectNotFound": "Impossible de trouver le projet ajouté à déplacer. Utilisez « Déplacer vers l'hôte {{distro}}… » sur le projet dans la barre latérale."
+      "projectNotFound": "Impossible de trouver le projet ajouté à déplacer. Utilisez « Déplacer vers l'hôte {{distro}}… » sur le projet dans la barre latérale.",
+      "existingTitle": "Ajouter sur l’hôte {{distro}} (recommandé)",
+      "existingWhy": "{{distro}} s’exécute déjà comme hôte : Git, les fichiers et les terminaux s’exécutent donc nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
+      "existingAccept": "Ajouter sur l’hôte"
     }
   },
   "editor": {
@@ -23031,7 +23033,9 @@
     "toggleArguments": "Afficher ou masquer les arguments",
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
-    "legacyModelCount": "{{total}} modèles"
+    "legacyModelCount": "{{total}} modèles",
+    "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
+    "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers"
   },
   "wslMove": {
     "entry": {
@@ -23061,7 +23065,8 @@
       "changed": "Déplacé auparavant, puis modifié ici par une version plus ancienne d'Orca. Il n'est pas déplacé à nouveau.",
       "chatsStay": "Les chats existants restent sur cet ordinateur. Les nouveaux chats de ce projet démarrent sur l'hôte WSL.",
       "browserLoginsConflict": "Les connexions du navigateur ne seront pas transférées, car le profil de navigateur de l'hôte est déjà utilisé. Reconnectez-vous dans les onglets de navigateur de l'hôte après le déplacement.",
-      "browserLoginsNotCarried": "Les connexions du navigateur ne seront pas transférées vers cet hôte. Reconnectez-vous dans ses onglets de navigateur après le déplacement."
+      "browserLoginsNotCarried": "Les connexions du navigateur ne seront pas transférées vers cet hôte. Reconnectez-vous dans ses onglets de navigateur après le déplacement.",
+      "why": "Le travail s’exécute alors dans Linux, à côté de vos fichiers : les terminaux, Git et les modifications de fichiers sont plus rapides et plus fiables. Vos projets ne changent pas, et vous pouvez ramener n’importe quel projet avec « Utiliser à nouveau sur cet ordinateur »."
     },
     "cancel": "Annuler",
     "progress": {

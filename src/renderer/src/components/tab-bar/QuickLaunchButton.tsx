@@ -12,7 +12,7 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchWithClaudeAccountChoice } from '../claude-account-prompt/choose-claude-launch-account'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
+import { agentLaunchPromptOwnership, newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
 import { Settings as SettingsIcon } from 'lucide-react'
 import {
@@ -109,7 +109,8 @@ export function useTabAgentMenuLaunch({
         ...(draft ? agentPickerLaunchInputs(draft, pickerEntry) : {}),
         worktreeId,
         groupId,
-        ...(prompt !== undefined ? { prompt } : {}),
+        // A caller's prompt (notes) owns the launch; otherwise the picker panel's typed one.
+        ...(prompt !== undefined ? { prompt } : draft?.prompt ? { prompt: draft.prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),
         ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
@@ -124,7 +125,7 @@ export function useTabAgentMenuLaunch({
             { value0: label }
           )
         )
-        return
+        return false
       }
       if (onPromptHandedOff && result.promptDeliveryResult) {
         const outcome = newAgentPromptOutcome({ delivery: result.promptDeliveryResult })
@@ -148,18 +149,16 @@ export function useTabAgentMenuLaunch({
       }
       if (result.surface.kind === 'local-chat') {
         onFocusChat?.(result.surface.tabId)
-        return
-      }
-      if (result.surface.kind !== 'local-terminal') {
+      } else if (result.surface.kind !== 'local-terminal') {
         onFocusHostTerminal?.()
-        return
-      }
-      // Why: after the account prompt the menu has closed, so a queued focus runs only if flushed.
-      if (deferred && !afterDeferredLaunch) {
+      } else if (deferred && !afterDeferredLaunch) {
+        // Why: after the account prompt the menu has closed, so a queued focus runs only if flushed.
         focusTerminalTabSurface(result.surface.tabId)
       } else {
         onFocusTerminal(result.surface.tabId)
       }
+      // A setup submission waits for actual prompt ownership, not just surface dispatch.
+      return !draft?.prompt || agentLaunchPromptOwnership(result.promptDeliveryResult)
     },
     [
       worktreeId,
@@ -179,16 +178,17 @@ export function useTabAgentMenuLaunch({
   return useCallback(
     (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
       if (disabled || row.kind === 'chat-unavailable') {
-        return
+        return false
       }
       // Why captured before the account prompt: the prompt itself takes focus.
       const focusIntent = captureNativeChatComposerFocusIntent()
-      launchWithClaudeAccountChoice(
+      const launched = launchWithClaudeAccountChoice(
         row.agent,
         { worktreeId, afterDeferredLaunch },
         (claudeAccountId, deferred) =>
           launchOnAccount(row, focusIntent, claudeAccountId, deferred, draft, pickerEntry)
       )
+      return launched instanceof Promise ? launched.then((owned) => owned ?? false) : launched
     },
     [disabled, worktreeId, afterDeferredLaunch, launchOnAccount]
   )
@@ -212,7 +212,7 @@ export function ProjectedAgentMenuItems({
 }: {
   disabled?: boolean
   model: NewTabAgentMenuModel
-  runLaunch: (row: NewTabAgentMenuRow, draft?: AgentPickerDraft) => void
+  runLaunch: React.ComponentProps<typeof SubscribedAgentLaunchPickerMenu>['runLaunch']
   pickerInventory?: AgentPickerInventorySource
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean

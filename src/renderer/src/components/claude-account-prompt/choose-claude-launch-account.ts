@@ -160,25 +160,26 @@ export async function chooseClaudeLaunchAccountIdForRepo(
 }
 
 // Why: launch synchronously when no prompt can apply so menu-close focus handoffs keep today's timing.
-export function launchWithClaudeAccountChoice(
+/** A delayed launch resolves to its result, or undefined when the prompt is cancelled. */
+export function launchWithClaudeAccountChoice<R>(
   agent: TuiAgent,
   target: { repoId?: string; worktreeId?: string; afterDeferredLaunch?: () => void },
-  launch: (claudeAccountId: string | undefined, deferred: boolean) => void
-): void {
+  launch: (claudeAccountId: string | undefined, deferred: boolean) => R
+): R | Promise<R | undefined> {
   const state = useAppStore.getState()
   if (
     agent !== 'claude' ||
     !claudeAccountPromptMayApplyInState(state, findLaunchRepo(state, target))
   ) {
-    launch(undefined, false)
-    return
+    return launch(undefined, false)
   }
-  void (async () => {
+  return (async () => {
     const choice = await chooseClaudeLaunchAccountForWorkspace(target)
     if (choice.kind === 'cancelled') {
-      return
+      return undefined
     }
-    launch(choice.kind === 'account' ? choice.accountId : undefined, true)
+    const result = launch(choice.kind === 'account' ? choice.accountId : undefined, true)
     target.afterDeferredLaunch?.()
+    return result
   })()
 }

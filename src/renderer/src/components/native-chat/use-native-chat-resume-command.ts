@@ -12,14 +12,14 @@ import { findNativeChatTabOwnerWorktreeId } from './native-chat-file-link'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
-const RESUME = 'resume'
+export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
 
 /** Replace the agent’s /resume catalog entry with Orca’s Session History command. */
 export function withNativeChatResumeCommand(
   commands: readonly SlashCommandSuggestion[]
 ): SlashCommandSuggestion[] {
   const resume: SlashCommandSuggestion = {
-    name: RESUME,
+    name: NATIVE_CHAT_RESUME_COMMAND,
     description: translate(
       'components.native-chat.resumeCommand.description',
       'Open Agent Session History'
@@ -27,7 +27,7 @@ export function withNativeChatResumeCommand(
     argumentHint: translate('components.native-chat.resumeCommand.argumentHint', '[search]'),
     orcaOwned: true
   }
-  const at = commands.findIndex(({ name }) => name === RESUME)
+  const at = commands.findIndex(({ name }) => name === NATIVE_CHAT_RESUME_COMMAND)
   return at === -1
     ? [...commands, resume]
     : [...commands.slice(0, at), resume, ...commands.slice(at)]
@@ -36,7 +36,7 @@ export function withNativeChatResumeCommand(
 /** Parse optional /resume search text using host command syntax; null for other drafts. */
 export function parseNativeChatResumeDraft(draft: string): string | null {
   const firstToken = draft.split(/\s/, 1)[0] ?? ''
-  if (firstToken.toLowerCase() !== `/${RESUME}`) {
+  if (firstToken.toLowerCase() !== `/${NATIVE_CHAT_RESUME_COMMAND}`) {
     return null
   }
   return draft.slice(firstToken.length).replace(/\s+/g, ' ').trim()
