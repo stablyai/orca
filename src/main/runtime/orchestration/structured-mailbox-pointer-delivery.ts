@@ -269,8 +269,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       session_id: sessionId,
       operation_id:
         again && !again.renew ? again.row.operation_id : mintAgentSessionOperationId(Date.now()),
-      minted_at_ms: again && !again.renew ? again.row.minted_at_ms : Date.now(),
-      fence
+      minted_at_ms: again && !again.renew ? again.row.minted_at_ms : Date.now()
     }
     // Reserved before the send, with its delivered stamp, so a crash after it lands finds the card
     // instead of sending twice. Only the pass whose reservation lands sends.

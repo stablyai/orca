@@ -8,8 +8,6 @@ export type StructuredMailSendRow = {
   session_id: string
   operation_id: string
   minted_at_ms: number
-  /** The session's fence when it was sent: a context cleared since then never took it. */
-  fence: number
 }
 
 export function getStructuredMailSends(
@@ -54,8 +52,8 @@ export function reserveStructuredMailSend(
         ? this.db
             .prepare(
               `INSERT INTO structured_mail_sends
-                 (mailbox_handle, message_id, session_id, operation_id, minted_at_ms, fence)
-               VALUES (?, ?, ?, ?, ?, ?)
+                 (mailbox_handle, message_id, session_id, operation_id, minted_at_ms)
+               VALUES (?, ?, ?, ?, ?)
                ON CONFLICT(mailbox_handle, message_id) DO NOTHING`
             )
             .run(
@@ -63,20 +61,18 @@ export function reserveStructuredMailSend(
               row.message_id,
               row.session_id,
               row.operation_id,
-              row.minted_at_ms,
-              row.fence
+              row.minted_at_ms
             ).changes === 1
         : this.db
             .prepare(
               `UPDATE structured_mail_sends
-                  SET session_id = ?, operation_id = ?, minted_at_ms = ?, fence = ?
+                  SET session_id = ?, operation_id = ?, minted_at_ms = ?
                 WHERE mailbox_handle = ? AND message_id = ? AND operation_id = ?`
             )
             .run(
               row.session_id,
               row.operation_id,
               row.minted_at_ms,
-              row.fence,
               row.mailbox_handle,
               row.message_id,
               replacing

@@ -525,8 +525,7 @@ describe('structured mailbox delivery across a real database close and reopen', 
         message_id: message.id,
         session_id: 'session-1',
         operation_id: operationId,
-        minted_at_ms: 1_757_030_400_000,
-        fence: 4
+        minted_at_ms: 1_757_030_400_000
       }
       if (stamped) {
         expect(db.reserveStructuredMailSend(row)).toBe(true)
@@ -534,10 +533,10 @@ describe('structured mailbox delivery across a real database close and reopen', 
         db.db
           .prepare(
             `INSERT INTO structured_mail_sends
-               (mailbox_handle, message_id, session_id, operation_id, minted_at_ms, fence)
-             VALUES (?, ?, ?, ?, ?, ?)`
+               (mailbox_handle, message_id, session_id, operation_id, minted_at_ms)
+             VALUES (?, ?, ?, ?, ?)`
           )
-          .run(mailbox, message.id, 'session-1', operationId, row.minted_at_ms, 4)
+          .run(mailbox, message.id, 'session-1', operationId, row.minted_at_ms)
       }
       expect(db.getMessageById(message.id)?.read).toBe(0)
       db.close()

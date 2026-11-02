@@ -14,8 +14,8 @@ export function subscribeForRedrive(
   host: StructuredAgentSessionHost,
   sessionId: string,
   onJournalActivity: (sessionId: string) => void,
-  /** Whether a publication changed anything the subscriber acts on; every one does by default. */
-  relevant: (journal: AgentSessionJournal) => boolean = () => true
+  /** Whether a publication changed anything the subscriber acts on. */
+  relevant: (journal: AgentSessionJournal) => boolean
 ): () => void {
   const coalescer = createKeyedTrailingEdgeCoalescer(onJournalActivity, {
     flushMs: REDRIVE_FLUSH_MS,

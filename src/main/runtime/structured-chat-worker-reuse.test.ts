@@ -89,20 +89,8 @@ async function finishedStructuredWorker(
   taskId: string,
   settle: 'done' | 'abandon' | 'none' = 'done'
 ) {
-  // The worker's own journal watches; the coordinator's mail watches come and go with its mail.
-  const disposed = vi.fn()
-  const observe = host.observeJournalPublications.bind(host)
-  const observed = vi
-    .spyOn(host, 'observeJournalPublications')
-    .mockImplementation((id, listener) => {
-      const dispose = observe(id, listener)
-      return () => {
-        if (id !== COORDINATOR) {
-          disposed()
-        }
-        dispose()
-      }
-    })
+  // Each release of the worker's binding frees its handle.
+  const forget = vi.spyOn(structuredWorkerIdentities, 'forget')
   const started = db.createStartingWorkerDispatch({
     creator: { kind: 'session', orcaSessionId: testOrcaSessionId(COORDINATOR) },
     maxDepth: 9,
@@ -113,8 +101,7 @@ async function finishedStructuredWorker(
     runtime,
     worktreeId: host.deps.store.getConversation(COORDINATOR)!.location.workspaceId,
     agent: 'codex',
-    dispatchId: started.dispatch.id,
-    onJournalActivity: () => {}
+    dispatchId: started.dispatch.id
   })
   db.prepareStartingWorkerAuthority({
     dispatchId: started.dispatch.id,
@@ -140,7 +127,8 @@ async function finishedStructuredWorker(
       result: { lifecycle: { action: 'completed' } }
     })
   }
-  return { identity, observed, disposed, firstDispatchId: started.dispatch.id }
+  const released = () => forget.mock.calls.filter(([handle]) => handle === identity.handle).length
+  return { identity, released, firstDispatchId: started.dispatch.id }
 }
 
 async function followUpTask(): Promise<string> {
@@ -156,7 +144,7 @@ describe('a finished structured worker', () => {
   it('takes a follow-up Dispatch in its chat, and releasing it frees the worker', async () => {
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
-    const { identity, disposed, firstDispatchId } = await finishedStructuredWorker(taskId)
+    const { identity, released, firstDispatchId } = await finishedStructuredWorker(taskId)
     const worker = connectionFor(identity.sessionId)
     const resource = db.getWorkerTerminalResourceByOwner(firstDispatchId)
     expect(resource?.auto_release_at).not.toBeNull()
@@ -189,24 +177,22 @@ describe('a finished structured worker', () => {
     })
 
     expect(await reportDone(identity.sessionId, followUp, dispatchId)).toMatchObject({ ok: true })
-    expect(disposed).not.toHaveBeenCalled()
+    expect(released()).toBe(0)
     expect(structuredMailboxCustody(identity.handle, db)).toMatchObject({
       sessionId: identity.sessionId
     })
     await call('orchestration.workerRelease', { dispatch: dispatchId }, { sessionId: COORDINATOR })
-    await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(1), WAIT)
+    await vi.waitFor(() => expect(released()).toBe(1), WAIT)
     // Released: mail to its handle is no longer this chat's, so a card for it never holds the person's queue.
     expect(structuredMailboxCustody(identity.handle, db)).toBe('elsewhere')
   })
 
-  it('given new work after abandon, watches its journal again so parked mail is retried', async () => {
+  it('given new work after abandon, is bound again so its release frees it again', async () => {
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
-    const { identity, observed, disposed } = await finishedStructuredWorker(taskId, 'abandon')
-    expect(disposed).toHaveBeenCalledTimes(1)
+    const { identity, released } = await finishedStructuredWorker(taskId, 'abandon')
+    expect(released()).toBe(1)
     const worker = connectionFor(identity.sessionId)
-    const watches = () => observed.mock.calls.filter(([id]) => id === identity.sessionId).length
-    expect(watches()).toBe(1)
 
     const followUp = await followUpTask()
     const started = call(
@@ -217,11 +203,11 @@ describe('a finished structured worker', () => {
     await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
     await settleTurn(identity.sessionId, 0)
     const dispatchId = String((await started).dispatchId)
-    expect(watches()).toBe(2)
+    expect(structuredWorkerIdentities.get(identity.handle)).not.toBeNull()
 
     expect(await reportDone(identity.sessionId, followUp, dispatchId)).toMatchObject({ ok: true })
     await call('orchestration.workerRelease', { dispatch: dispatchId }, { sessionId: COORDINATOR })
-    await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(2), WAIT)
+    await vi.waitFor(() => expect(released()).toBe(2), WAIT)
   })
 
   it('kept open by the user takes follow-up work and stays kept', async () => {
