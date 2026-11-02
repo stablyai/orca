@@ -1,5 +1,6 @@
 import { terminateResolvedDaemonSession } from './daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
+import { routedDaemonAgentSessionClaimRelease } from './daemon-agent-session-claim-release'
 import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
@@ -120,6 +121,13 @@ export class DaemonPtyRouter implements IPtyProvider {
     terminateResolvedDaemonSession(request, () =>
       this.ownerResolver.resolveTermination(request.id, request.expectedIncarnationId)
     )
+
+  private readonly claimRelease = routedDaemonAgentSessionClaimRelease(
+    (id) => this.ownerResolver.getVerifiedRoute(id),
+    (id, incarnationId) => this.ownerResolver.resolveTermination(id, incarnationId)
+  )
+  supportsAgentSessionClaimRelease = this.claimRelease.supportsAgentSessionClaimRelease
+  releaseAgentSessionClaim = this.claimRelease.releaseAgentSessionClaim
 
   supportsAgentSessionCreateOperations(): boolean {
     // New sessions route to current; legacy adapters retain existing IDs.

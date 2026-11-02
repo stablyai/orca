@@ -15,6 +15,9 @@ import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import type { ListSessionsResult, SessionInfo } from './types'
 import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
 import type { PtyProcessInfo } from '../providers/pty-provider-contract'
+import { AGENT_SESSION_CLAIM_RELEASE_PROTOCOL_VERSION } from './daemon-protocol-version'
+import { requestDaemonAgentSessionClaimRelease } from './daemon-agent-session-claim-release'
+import type { AgentSessionClaimReleaseRequest } from '../../shared/agent-session-claim-release'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
@@ -170,5 +173,16 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     }
     const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
     return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))
+  }
+
+  supportsAgentSessionClaimRelease(_id: string): boolean {
+    return this.protocolVersion >= AGENT_SESSION_CLAIM_RELEASE_PROTOCOL_VERSION
+  }
+
+  async releaseAgentSessionClaim(request: AgentSessionClaimReleaseRequest, timeoutMs: number) {
+    if (!this.supportsAgentSessionClaimRelease(request.id) || !this.client.isConnected()) {
+      return { outcome: 'refused' as const, reason: 'unsupported' as const }
+    }
+    return await requestDaemonAgentSessionClaimRelease(this.client, request, timeoutMs)
   }
 }

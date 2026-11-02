@@ -312,4 +312,72 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     await expect(second).resolves.toMatchObject({ disposition: 'adopted' })
     expect(spawn).toHaveBeenCalledOnce()
   })
+  describe('exact release for a restore that started fresh', () => {
+    it('removes only the named binding, and a later ensure starts its own owner', async () => {
+      const registry = new ClaimedAgentPtyOwnerRegistry()
+      const { owner } = await registry.ensure({
+        claim: claim(),
+        surface,
+        spawn: async () => ({ ptyId: 'pty-p' })
+      })
+      const other = await registry.ensure({
+        claim: claim('ccccccccccccccccccccccccccccccccccccccccccc'),
+        surface,
+        spawn: async () => ({ ptyId: 'pty-p' })
+      })
+
+      expect(registry.releaseExact({ ...owner, generation: 'other' })).toBe('refused')
+      expect(registry.releaseExact({ ...owner, ptyId: 'pty-q' })).toBe('refused')
+      expect(registry.releaseExact(owner)).toBe('released')
+      expect(registry.releaseExact(owner)).toBe('absent')
+      expect(registry.listForPty('pty-p')).toEqual([other.owner])
+
+      const later = await registry.ensure({
+        claim: claim(),
+        surface,
+        spawn: async () => ({ ptyId: 'pty-y' })
+      })
+      expect(later).toMatchObject({ disposition: 'created', owner: { ptyId: 'pty-y' } })
+    })
+
+    it('refuses to release an adopted generation and announces the adoption before returning it', async () => {
+      const registry = new ClaimedAgentPtyOwnerRegistry()
+      const { owner } = await registry.ensure({
+        claim: claim(),
+        surface,
+        spawn: async () => ({ ptyId: 'pty-p' })
+      })
+      const announced: string[] = []
+      registry.onAdopted((adopted) => announced.push(adopted.generation))
+
+      const adopted = await registry.ensure({
+        claim: claim(),
+        surface,
+        spawn: async () => ({ ptyId: 'unused' })
+      })
+
+      expect(adopted).toMatchObject({ disposition: 'adopted', owner: { ptyId: 'pty-p' } })
+      expect(announced).toEqual([owner.generation])
+      expect(registry.wasAdopted(owner)).toBe(true)
+      expect(registry.releaseExact(owner)).toBe('refused')
+    })
+
+    it('a request that joined the start counts as an adoption, so the release is refused', async () => {
+      const registry = new ClaimedAgentPtyOwnerRegistry()
+      const started = Promise.withResolvers<{ ptyId: string }>()
+      const creator = registry.ensure({ claim: claim(), surface, spawn: () => started.promise })
+      const joiner = registry.ensure({
+        claim: claim(),
+        surface,
+        spawn: async () => ({ ptyId: 'unused' })
+      })
+
+      started.resolve({ ptyId: 'pty-p' })
+      const { owner } = await creator
+
+      await expect(joiner).resolves.toMatchObject({ disposition: 'adopted', owner })
+      expect(registry.releaseExact(owner)).toBe('refused')
+      expect(registry.find(claim())).toEqual(owner)
+    })
+  })
 })

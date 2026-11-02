@@ -130,3 +130,8 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
     }
   }
 }
+
+/** Settles a listing already in flight so its pre-release snapshot cannot republish an owner. */
+export async function drainAgentSessionOwnerReconciliation(): Promise<void> {
+  await agentSessionOwnerReconciliation?.catch(() => {})
+}

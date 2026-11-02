@@ -1,6 +1,7 @@
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
+import { releaseTerminalHostAgentSessionClaim } from './terminal-host-agent-session-release'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import type { Session } from './session'
 import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
@@ -183,6 +184,14 @@ export class TerminalHost {
       pendingCreations: this.pendingCreations,
       owners: this.agentSessionOwners,
       kill: (id, options) => this.kill(id, options)
+    })
+  }
+
+  releaseAgentSessionClaim(request: Parameters<typeof releaseTerminalHostAgentSessionClaim>[0]) {
+    return releaseTerminalHostAgentSessionClaim(request, {
+      sessions: this.sessions,
+      pendingCreations: this.pendingCreations,
+      owners: this.agentSessionOwners
     })
   }
 

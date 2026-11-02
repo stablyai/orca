@@ -20,6 +20,10 @@ import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type {
+  AgentSessionClaimReleaseOutcome,
+  AgentSessionClaimReleaseRequest
+} from '../../shared/agent-session-claim-release'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -140,6 +144,12 @@ export type IPtyProvider = {
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   supportsFencedTermination?: (id: string) => boolean
   killFenced?: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
+  /** Whether this PTY's owner can remove one conversation claim while the PTY keeps running. */
+  supportsAgentSessionClaimRelease?: (id: string) => boolean
+  releaseAgentSessionClaim?: (
+    request: AgentSessionClaimReleaseRequest,
+    timeoutMs: number
+  ) => Promise<AgentSessionClaimReleaseOutcome>
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<PtySpawnResult | void>

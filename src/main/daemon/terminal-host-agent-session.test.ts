@@ -285,4 +285,29 @@ describe('TerminalHost agent-session claims', () => {
     expect(winningData).toHaveBeenCalledExactlyOnceWith('winner-only')
     expect(canceledData).not.toHaveBeenCalled()
   })
+  it('refuses to release a claim another request adopted since it was created', async () => {
+    const first = await host.createOrAttach({
+      sessionId: 'restored-pane',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface }
+    })
+    await host.createOrAttach({
+      sessionId: 'explicit-resume',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface: { ...surface, terminalHandle: 'term_explicit' } }
+    })
+
+    expect(
+      host.releaseAgentSessionClaim({
+        sessionId: 'restored-pane',
+        expectedIncarnationId: first.incarnationId!,
+        owner: first.agentSessionEnsure!.owner
+      })
+    ).toEqual({ outcome: 'refused', reason: 'owner' })
+    expect(host.listSessions()[0]?.agentSessionOwners).toHaveLength(1)
+  })
 })

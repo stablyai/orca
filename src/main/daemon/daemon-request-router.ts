@@ -1,5 +1,6 @@
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
+import { isAgentSessionClaimReleasePayload } from '../../shared/agent-session-claim-release'
 import { performance } from 'node:perf_hooks'
 import { setPtyOwnerHostColors } from '../../shared/pty-owner-color-query-colors'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
@@ -109,6 +110,10 @@ export class DaemonRequestRouter {
           return handleDaemonFencedTermination(request.payload, this.options)
         }
         return handleDaemonTerminalKill(clientId, request.payload, this.options)
+      case 'releaseAgentSessionClaim':
+        return isAgentSessionClaimReleasePayload(request.payload)
+          ? this.options.host.releaseAgentSessionClaim(request.payload)
+          : { outcome: 'refused', reason: 'unverifiable' }
       case 'signal':
         this.options.host.signal(request.payload.sessionId, request.payload.signal)
         return {}

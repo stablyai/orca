@@ -158,6 +158,12 @@ export type KillRequest = {
   }
 }
 
+export type ReleaseAgentSessionClaimRequest = {
+  id: string
+  type: 'releaseAgentSessionClaim'
+  payload: unknown
+}
+
 export type SignalRequest = {
   id: string
   type: 'signal'
@@ -267,6 +273,7 @@ export type DaemonRequest =
   | ResumePtyRequest
   | SetSessionBackgroundRequest
   | KillRequest
+  | ReleaseAgentSessionClaimRequest
   | SignalRequest
   | ListSessionsRequest
   | ShutdownIfIdleRequest
