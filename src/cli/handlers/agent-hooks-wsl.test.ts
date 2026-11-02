@@ -92,15 +92,12 @@ describe.skipIf(process.platform === 'win32')(
       harness.data.mockReturnValue(join(root, 'windows-user-data'))
       harness.admission.mockResolvedValue({ reachable: true, legacyPidRunning: true })
       harness.call.mockImplementation(async () => ({ result: { settings: policy } }))
-      harness.apply.mockImplementation(async (_enabled, _settings, options) => {
+      harness.apply.mockImplementation(async (_enabled, settings, options) => {
         expect(options.agents).not.toContain('claude')
+        expect(settings.agentCmdOverrides).toEqual(policy.agentCmdOverrides)
         return []
       })
       mkdirSync(join(root, 'windows-user-data'))
-      writeFileSync(
-        join(root, 'windows-user-data', 'orca-data.json'),
-        JSON.stringify({ settings: policy })
-      )
       harness.status.mockImplementation(async (options) => {
         if (options?.agents) {
           expect(options.agents).not.toContain('claude')
@@ -127,6 +124,10 @@ describe.skipIf(process.platform === 'win32')(
       const cli = join(root, 'claude-fixture')
       writeFileSync(cli, '#!/bin/sh\nprintf "2.1.261 (Claude Code)\\n"\n', { mode: 0o700 })
       policy.agentCmdOverrides = { claude: cli }
+      writeFileSync(
+        join(root, 'windows-user-data', 'orca-data.json'),
+        JSON.stringify({ settings: policy })
+      )
       harness.spawn.mockImplementation((spec) => {
         expect(spec.args.slice(0, 5)).toEqual([
           '-d',
