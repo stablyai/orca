@@ -1,10 +1,17 @@
 import { useCallback } from 'react'
+import { resolveNativeChatTranscriptAgent } from '../../../../../src/shared/native-chat/native-chat-agent-support'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { nativeChatSessionPageRead } from '../../mobile-session-read-operations'
 import type { MobileNativeChatSubagentRead } from './use-mobile-native-chat-subagent-page'
 
 const PAGE_TIMEOUT_MS = 15_000
+
+// The host child-page reader is Claude, Codex, and Grok. Other agents keep the local-row fallback.
+function childPageSupported(agent: string): boolean {
+  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  return transcriptAgent === 'claude' || transcriptAgent === 'codex' || transcriptAgent === 'grok'
+}
 
 function isNativeChatMessage(value: unknown): value is NativeChatMessage {
   return (
@@ -84,7 +91,7 @@ export function useMobileNativeChatSubagentReader(args: {
     },
     [agent, client, sessionId, transcriptPath]
   )
-  if (!client || !agent || !sessionId) {
+  if (!client || !agent || !sessionId || !childPageSupported(agent)) {
     return null
   }
   return read

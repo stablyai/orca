@@ -5,6 +5,17 @@ import type { NativeChatOlderPageResult } from './native-chat-pagination'
 const INITIAL_LIMIT = 40
 const PAGE_LIMIT = 60
 
+function idlePage(agentId: string): PageState {
+  return {
+    agentId,
+    messages: [],
+    hasMore: false,
+    beforeOffset: 0,
+    loading: false,
+    loadingEarlier: false
+  }
+}
+
 export type NativeChatSubagentPageRead = (
   agentId: string,
   limit: number,
@@ -55,30 +66,30 @@ export function useNativeChatSubagentPage(
       loading: true,
       loadingEarlier: false
     })
-    void read(agentId, INITIAL_LIMIT).then((result) => {
-      if (cancelled) {
-        return
-      }
-      if ('error' in result) {
+    void read(agentId, INITIAL_LIMIT).then(
+      (result) => {
+        if (cancelled) {
+          return
+        }
+        if ('error' in result) {
+          setPage(idlePage(agentId))
+          return
+        }
         setPage({
           agentId,
-          messages: [],
-          hasMore: false,
-          beforeOffset: 0,
+          messages: result.messages,
+          hasMore: result.hasMore === true,
+          beforeOffset: result.beforeOffset ?? 0,
           loading: false,
           loadingEarlier: false
         })
-        return
+      },
+      () => {
+        if (!cancelled) {
+          setPage(idlePage(agentId))
+        }
       }
-      setPage({
-        agentId,
-        messages: result.messages,
-        hasMore: result.hasMore === true,
-        beforeOffset: result.beforeOffset ?? 0,
-        loading: false,
-        loadingEarlier: false
-      })
-    })
+    )
     return () => {
       cancelled = true
     }
@@ -129,6 +140,14 @@ export function useNativeChatSubagentPage(
       pageRef.current = next
       setPage(next)
       return older.length > 0 ? 'applied' : 'unchanged'
+    } catch {
+      const latest = pageRef.current
+      if (latest && latest.agentId === agentId && latest.beforeOffset === beforeOffset) {
+        const failed = { ...latest, loadingEarlier: false }
+        pageRef.current = failed
+        setPage(failed)
+      }
+      return 'failed'
     } finally {
       pagingRef.current = false
     }

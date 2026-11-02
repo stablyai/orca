@@ -5,6 +5,18 @@ import type { OlderPagePhase } from '../../use-mobile-older-page-loader'
 const INITIAL_LIMIT = 40
 const PAGE_LIMIT = 60
 
+function idleMobilePage(agentId: string): PageState {
+  return {
+    agentId,
+    messages: [],
+    hasMore: false,
+    beforeOffset: 0,
+    loading: false,
+    loadingEarlier: false,
+    earlierFailed: false
+  }
+}
+
 export type MobileNativeChatSubagentRead = (
   agentId: string,
   limit: number,
@@ -57,32 +69,31 @@ export function useMobileNativeChatSubagentPage(
       loadingEarlier: false,
       earlierFailed: false
     })
-    void read(agentId, INITIAL_LIMIT).then((result) => {
-      if (cancelled) {
-        return
-      }
-      if ('error' in result) {
+    void read(agentId, INITIAL_LIMIT).then(
+      (result) => {
+        if (cancelled) {
+          return
+        }
+        if ('error' in result) {
+          setPage(idleMobilePage(agentId))
+          return
+        }
         setPage({
           agentId,
-          messages: [],
-          hasMore: false,
-          beforeOffset: 0,
+          messages: result.messages,
+          hasMore: result.hasMore === true,
+          beforeOffset: result.beforeOffset ?? 0,
           loading: false,
           loadingEarlier: false,
           earlierFailed: false
         })
-        return
+      },
+      () => {
+        if (!cancelled) {
+          setPage(idleMobilePage(agentId))
+        }
       }
-      setPage({
-        agentId,
-        messages: result.messages,
-        hasMore: result.hasMore === true,
-        beforeOffset: result.beforeOffset ?? 0,
-        loading: false,
-        loadingEarlier: false,
-        earlierFailed: false
-      })
-    })
+    )
     return () => {
       cancelled = true
     }
@@ -126,6 +137,14 @@ export function useMobileNativeChatSubagentPage(
             loadingEarlier: false,
             earlierFailed: false
           }
+        })
+      })
+      .catch(() => {
+        setPage((latest) => {
+          if (!latest || latest.agentId !== agentId || latest.beforeOffset !== beforeOffset) {
+            return latest
+          }
+          return { ...latest, loadingEarlier: false, earlierFailed: true }
         })
       })
       .finally(() => {

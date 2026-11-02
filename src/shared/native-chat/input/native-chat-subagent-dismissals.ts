@@ -25,7 +25,12 @@ export function parseDismissedSubagentStates(raw: unknown): DismissedSubagentSta
   }
   const next: Record<string, NativeChatSubagentState> = {}
   for (const [id, state] of Object.entries(raw as Record<string, unknown>)) {
-    if (id.length === 0 || id.length > 256 || !isSubagentState(state)) {
+    if (
+      id.length === 0 ||
+      id.length > 256 ||
+      !isSubagentState(state) ||
+      !nativeChatSubagentDismissible(state)
+    ) {
       continue
     }
     next[id] = state

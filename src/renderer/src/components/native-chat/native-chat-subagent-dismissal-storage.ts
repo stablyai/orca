@@ -46,9 +46,13 @@ export function writeDismissedSubagents(
     return
   }
   const key = nativeChatDismissedSubagentsKey(sessionId)
-  if (Object.keys(dismissed).length === 0) {
-    store.removeItem(key)
-    return
+  try {
+    if (Object.keys(dismissed).length === 0) {
+      store.removeItem(key)
+      return
+    }
+    store.setItem(key, JSON.stringify(dismissed))
+  } catch {
+    // Storage is unavailable or full. The dismissal stays in memory for this session.
   }
-  store.setItem(key, JSON.stringify(dismissed))
 }

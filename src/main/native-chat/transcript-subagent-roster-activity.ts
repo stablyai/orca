@@ -1,5 +1,4 @@
 import type { Dirent } from 'node:fs'
-import { open } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { nativeChatRosterActivityLine } from '../../shared/native-chat/input/native-chat-roster-activity-line'
 import type { NativeChatSubagentActivity } from '../../shared/native-chat/input/native-chat-activity'
@@ -9,7 +8,14 @@ import {
 } from '../ai-vault/session-scanner-subagent-transcripts'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import { splitTranscriptStreamLines } from './transcript-stream-lines'
-import { openTranscriptReadStream, wslGatedReaddir } from './wsl-transcript-fs-access'
+import {
+  closeTranscriptHandle,
+  openTranscriptFile,
+  openTranscriptReadStream,
+  readTranscriptFile,
+  transcriptFileStat,
+  wslGatedReaddir
+} from './wsl-transcript-fs-access'
 
 const CODEX_THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CLAUDE_CHILD_ID = /^[A-Za-z0-9_-]{1,128}$/
@@ -130,20 +136,38 @@ async function readDir(path: string): Promise<Dirent[] | null> {
 }
 
 async function peekActivity(filePath: string): Promise<string | null> {
-  const handle = await open(filePath, 'r').catch(() => null)
-  if (!handle) {
+  let size = 0
+  try {
+    size = (await transcriptFileStat(filePath, 'exact')).size
+  } catch {
+    return null
+  }
+  const length = Math.min(TAIL_BYTES, size)
+  if (length === 0) {
+    return null
+  }
+  let handle: Awaited<ReturnType<typeof openTranscriptFile>>
+  try {
+    handle = await openTranscriptFile(filePath, 'exact')
+  } catch {
     return null
   }
   try {
-    const info = await handle.stat()
-    const length = Math.min(TAIL_BYTES, info.size)
     const buffer = Buffer.alloc(length)
-    await handle.read(buffer, 0, length, Math.max(0, info.size - length))
-    return activityFromTail(buffer.toString('utf8'))
+    const { bytesRead } = await readTranscriptFile(
+      handle,
+      filePath,
+      buffer,
+      0,
+      length,
+      Math.max(0, size - length),
+      'exact'
+    )
+    return activityFromTail(buffer.subarray(0, bytesRead).toString('utf8'))
   } catch {
     return null
   } finally {
-    await handle.close()
+    await closeTranscriptHandle(handle, filePath)
   }
 }
 

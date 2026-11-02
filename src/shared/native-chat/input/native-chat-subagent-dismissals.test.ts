@@ -69,8 +69,7 @@ describe('parseDismissedSubagentStatesJson', () => {
     expect(
       parseDismissedSubagentStatesJson('{"bad":"failed","run":"working","nope":"nope"}')
     ).toEqual({
-      bad: 'failed',
-      run: 'working'
+      bad: 'failed'
     })
     expect(parseDismissedSubagentStatesJson('{"/root/child":"failed","":"failed"}')).toEqual({
       '/root/child': 'failed'

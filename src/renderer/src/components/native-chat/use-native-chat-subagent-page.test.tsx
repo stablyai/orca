@@ -48,6 +48,15 @@ describe('useNativeChatSubagentPage', () => {
     expect(result.current.loading).toBe(false)
   })
 
+  it('settles an empty page when the child read rejects', async () => {
+    const readPage = vi.fn(async () => {
+      throw new Error('ipc down')
+    })
+    const { result } = renderHook(() => useNativeChatSubagentPage('child', readPage))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.messages).toEqual([])
+  })
+
   it('reports an applied earlier page from the committed child, not a deferred render', async () => {
     const readPage = vi.fn(async (_id: string, _limit: number, beforeOffset?: number) => {
       if (beforeOffset === undefined) {

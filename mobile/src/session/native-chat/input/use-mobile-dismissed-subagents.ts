@@ -22,6 +22,23 @@ export type MobileDismissedSubagentScope = {
   sessionId: string | null
 }
 
+function persistDismissals(
+  pendingWrites: { current: number },
+  hostId: string,
+  worktreeId: string,
+  sessionId: string,
+  next: DismissedSubagentStates
+): void {
+  pendingWrites.current += 1
+  writeDismissedSubagentSession(hostId, worktreeId, sessionId, next)
+    .catch(() => {
+      // Persistence failed. The dismissal stays in memory for this session.
+    })
+    .finally(() => {
+      pendingWrites.current -= 1
+    })
+}
+
 function sameDismissals(left: DismissedSubagentStates, right: DismissedSubagentStates): boolean {
   const leftIds = Object.keys(left)
   return (
@@ -66,10 +83,7 @@ export function useMobileDismissedSubagents(
       const next = nativeChatReconcileDismissals(stored, listedRef.current)
       setDismissed((current) => (sameDismissals(current, next) ? current : next))
       if (next !== stored) {
-        pendingWrites.current += 1
-        void writeDismissedSubagentSession(hostId, worktreeId, sessionId, next).finally(() => {
-          pendingWrites.current -= 1
-        })
+        persistDismissals(pendingWrites, hostId, worktreeId, sessionId, next)
       }
     }
     const unsubscribe = subscribeMirroredKey(key, apply)
@@ -94,10 +108,7 @@ export function useMobileDismissedSubagents(
     setDismissed((current) => {
       const next = nativeChatReconcileDismissals(current, listedRef.current)
       if (next !== current) {
-        pendingWrites.current += 1
-        void writeDismissedSubagentSession(hostId, worktreeId, sessionId, next).finally(() => {
-          pendingWrites.current -= 1
-        })
+        persistDismissals(pendingWrites, hostId, worktreeId, sessionId, next)
       }
       return sameDismissals(current, next) ? current : next
     })
@@ -111,10 +122,7 @@ export function useMobileDismissedSubagents(
       }
       setDismissed((current) => {
         const next = nativeChatDismissSubagents(current, agents)
-        pendingWrites.current += 1
-        void writeDismissedSubagentSession(hostId, worktreeId, sessionId, next).finally(() => {
-          pendingWrites.current -= 1
-        })
+        persistDismissals(pendingWrites, hostId, worktreeId, sessionId, next)
         return next
       })
     },
