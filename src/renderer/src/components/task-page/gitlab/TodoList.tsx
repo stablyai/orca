@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { ExternalLink } from 'lucide-react'
 import { filterGitLabTodosForRepos } from './gitlab-todo-project-filter'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageGitLabTodoList({
   model
 }: {
@@ -67,11 +68,11 @@ export function TaskPageGitLabTodoList({
               role="button"
               tabIndex={0}
               key={todo.id}
-              onClick={() => void window.api.shell.openUrl(todo.targetUrl)}
+              onClick={(event) => openAppHttpLink(todo.targetUrl, { event })}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
-                  void window.api.shell.openUrl(todo.targetUrl)
+                  openAppHttpLink(todo.targetUrl)
                 }
               }}
               className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] hover:bg-muted/50"
@@ -96,7 +97,7 @@ export function TaskPageGitLabTodoList({
                 {todo.projectPath}
               </span>
               <span className="text-xs text-muted-foreground">
-                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString() : ''}
+                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString(getIntlLocale()) : ''}
               </span>
               <span className="flex justify-end">
                 <ExternalLink className="size-3.5 text-muted-foreground" />

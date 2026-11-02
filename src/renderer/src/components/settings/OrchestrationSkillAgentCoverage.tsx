@@ -44,16 +44,15 @@ function getAgentCoverageSummary(props: {
     )
   }
   if (fullCoverage) {
-    return totalCount === 1
-      ? translate(
-          'auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage_one',
-          'All 1 detected agent has the skill.'
-        )
-      : translate(
-          'auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage_other',
-          'All {{value0}} detected agents have the skill.',
-          { value0: totalCount }
-        )
+    return translate(
+      'auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage',
+      'All {{value0}} detected agents have the skill.',
+      {
+        value0: totalCount,
+        count: totalCount,
+        defaultValue_one: 'All 1 detected agent has the skill.'
+      }
+    )
   }
   if (noCoverage) {
     return translate(

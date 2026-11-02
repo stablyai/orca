@@ -43,6 +43,7 @@ import type {
 import type { GitHubCreateIssueResult, GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 
 export type GitHubRepoSelectorArgs = {
+  repoOwnerExecutionHostId?: string
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
@@ -77,6 +78,7 @@ export type GithubWorkItemApi = {
       number: number
       type?: 'issue' | 'pr'
       ownerRepo?: GitHubOwnerRepo
+      canonical?: boolean
     }
   ) => Promise<GitHubWorkItemDetails | null>
   notifyWorkItemMutated: (args: {
@@ -95,7 +97,12 @@ export type GithubWorkItemApi = {
     labels?: string[]
     assignees?: string[]
   }) => Promise<GitHubCreateIssueResult>
-  countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
+  countWorkItems: (args: {
+    repoPath: string
+    repoId?: string
+    query?: string
+    wakeWslDistro?: boolean
+  }) => Promise<number>
   listWorkItems: (args: {
     repoPath: string
     repoId?: string
@@ -103,6 +110,7 @@ export type GithubWorkItemApi = {
     query?: string
     page?: number
     noCache?: boolean
+    wakeWslDistro?: boolean
   }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
   updateIssue: (
     args: GitHubRepoSelectorArgs & {

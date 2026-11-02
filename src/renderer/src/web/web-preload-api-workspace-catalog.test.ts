@@ -209,7 +209,7 @@ describe('web worktree preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
 
-    await globals.window.api.worktrees.remove({
+    const removed = await globals.window.api.worktrees.remove({
       worktreeId: 'repo-1::/workspace/locked',
       force: true,
       skipArchive: false
@@ -220,6 +220,7 @@ describe('web worktree preload API', () => {
       skipArchive: true
     })
 
+    expect(removed).toEqual({ removed: true })
     expect(runtimeCalls).toEqual([
       {
         method: 'worktree.rm',

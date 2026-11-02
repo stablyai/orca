@@ -5,6 +5,7 @@ import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import {
   findPluginCommandForKeybinding,
   globalShortcutTargetYields
@@ -18,7 +19,7 @@ import {
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
-import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/plugin-command-actions'
+import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -47,9 +48,8 @@ export function useGlobalKeybindings(args: {
   const terminalShortcutPolicy = useAppStore((s) => s.settings?.terminalShortcutPolicy)
   const pluginCommands = usePluginCommands()
 
-  const shortcutState: AppShortcutState = {
+  const shortcutState: Omit<AppShortcutState, 'activeWorktreeId'> = {
     activeView: layout.activeView,
-    activeWorktreeId: layout.activeWorktreeId,
     actions,
     creationLayoutActive: layout.creationLayoutActive,
     floatingTerminalEnabled: floatingWorkspace.enabled,
@@ -71,12 +71,24 @@ export function useGlobalKeybindings(args: {
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
 
-    const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
-      (createAppCommandHandlers(shortcutStateRef.current).get(actionId) ?? (() => false))()
+    // The active worktree is read at dispatch: App deliberately does not re-render on workspace switches.
+    const readShortcutState = (): AppShortcutState => ({
+      ...shortcutStateRef.current,
+      activeWorktreeId: useAppStore.getState().activeWorktreeId
+    })
+    const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId, source) =>
+      (
+        createAppCommandHandlers(
+          readShortcutState(),
+          undefined,
+          'app',
+          source === 'plugin-host'
+        ).get(actionId) ?? (() => false)
+      )()
     )
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
-      const state = shortcutStateRef.current
+      const state = readShortcutState()
       const {
         activeView,
         activeWorktreeId,
@@ -134,9 +146,11 @@ export function useGlobalKeybindings(args: {
         if (selectedFolderRelativePath !== null && activeWorktreeId) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
-          actions.showRightSidebarSearch({
-            includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
-          })
+          runBuiltInOrReplacement('sidebar.search.toggle', () =>
+            actions.showRightSidebarSearch({
+              includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
+            })
+          )
           return
         }
 
@@ -144,7 +158,9 @@ export function useGlobalKeybindings(args: {
         if (selectedText) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
-          actions.showRightSidebarSearch({ query: selectedText })
+          runBuiltInOrReplacement('sidebar.search.toggle', () =>
+            actions.showRightSidebarSearch({ query: selectedText })
+          )
           return
         }
       }
@@ -172,7 +188,7 @@ export function useGlobalKeybindings(args: {
         floatingTerminalEnabled
       ) {
         input.preventDefault()
-        openFloatingWorkspaceMaximized()
+        runBuiltInOrReplacement('floatingWorkspace.maximize', openFloatingWorkspaceMaximized)
         return
       }
 
@@ -213,6 +229,9 @@ export function useGlobalKeybindings(args: {
         matchShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()
       ) {
+        return
+      }
+      if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {

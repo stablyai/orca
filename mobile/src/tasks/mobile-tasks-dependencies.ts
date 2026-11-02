@@ -9,7 +9,6 @@ export {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View
 } from 'react-native'
 // Use the platform seam: WebView window.open is refused by both shells despite resolving successfully.
@@ -30,10 +29,12 @@ export {
   ExternalLink,
   GitBranch,
   Lock,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
-  Send,
+  Search,
+  SlidersHorizontal,
   X
 } from 'lucide-react-native'
 export type { RpcClient } from '../transport/rpc-client'
@@ -47,12 +48,12 @@ export {
 export { classifyConnection } from '../transport/connection-health'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
-export { BottomDrawer } from '../components/BottomDrawer'
-export { BottomDrawerModalHost } from '../components/bottom-drawer-modal-host'
 export { ConfirmModal } from '../components/ConfirmModal'
 export { MobileMarkdown } from '../components/MobileMarkdown'
 export { MobileAgentIcon } from '../components/MobileAgentIcon'
 export { MobileWorkspaceNameInput } from '../components/MobileWorkspaceNameInput'
+export { MessageBox } from '../components/composer-input/MessageBox'
+export { TextField } from '../components/composer-input/TextField'
 export { MobileSearchField } from '../components/MobileSearchField'
 export { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 export { PickerModal } from '../components/PickerModal'
@@ -118,7 +119,9 @@ export {
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
 export { colors, radii, spacing, typography } from '../theme/mobile-theme'
-export { triggerMediumImpact } from '../platform/haptics'
+export type { MobileColorScheme } from '../theme/mobile-theme'
+export { themedStyleSheet, themedStyles } from '../theme/themed-styles'
+export { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 export {
   CROSS_REPO_DISPLAY_LIMIT,
   getTaskPagePerRepoLimit,

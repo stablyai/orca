@@ -51,6 +51,8 @@ export function sessionStartupMountAdapters(
               activeHandle = typeof update === 'function' ? update(activeHandle) : update
             },
             setActiveSessionTabId: () => {},
+            setSplitTerminalHandles: () => {},
+            terminalPaneViewportsRef: { current: new Map() },
             setMarkdownDocs: () => {},
             setFileDocs: () => {},
             terminalGestureInputQueuesRef,

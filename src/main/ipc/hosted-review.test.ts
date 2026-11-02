@@ -17,7 +17,8 @@ const {
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   resolveRegisteredWorktreePathMock,
-  listRepoWorktreeGraphMock
+  listRepoWorktreeGraphMock,
+  readWslDistroRunningStateMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
@@ -25,7 +26,13 @@ const {
   getHostedReviewCreationEligibilityMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
-  listRepoWorktreeGraphMock: vi.fn()
+  listRepoWorktreeGraphMock: vi.fn(),
+  readWslDistroRunningStateMock: vi.fn()
+}))
+
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: readWslDistroRunningStateMock
 }))
 
 vi.mock('electron', () => ({
@@ -44,7 +51,12 @@ vi.mock('../source-control/stacked-hosted-review-creation', () => ({
 }))
 
 vi.mock('../source-control/hosted-review', () => ({
-  getHostedReviewForBranch: getHostedReviewForBranchMock
+  getHostedReviewForBranch: getHostedReviewForBranchMock,
+  // Handlers read through this; keep asserting on the one mock.
+  readHostedReviewForBranch: vi.fn(async (input: unknown) => ({
+    review: await getHostedReviewForBranchMock(input),
+    readOutcome: 'cached'
+  }))
 }))
 
 vi.mock('./registered-worktree-roots-cache', () => ({
@@ -56,9 +68,30 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
+import { readHostedReviewForBranch } from '../source-control/hosted-review'
+import type { HostedReviewInfo } from '../../shared/hosted-review'
+import { WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
+
+const providerReview: HostedReviewInfo = {
+  provider: 'gitlab',
+  number: 7,
+  title: 'MR',
+  url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+  state: 'open',
+  status: 'success',
+  mergeable: 'MERGEABLE',
+  updatedAt: '2026-10-30'
+}
+// Only a caller that asks gets the outcome envelope; a definitive null keeps its outcome too.
+const READ_OUTCOME_REPLIES = [
+  { reportReadOutcome: true, review: providerReview },
+  { reportReadOutcome: true, review: null },
+  { reportReadOutcome: false, review: providerReview },
+  { reportReadOutcome: undefined, review: null }
+]
 
 describe('registerHostedReviewHandlers', () => {
   const handlers: HandlerMap = {}
@@ -99,6 +132,7 @@ describe('registerHostedReviewHandlers', () => {
     getHostedReviewForBranchMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
     listRepoWorktreeGraphMock.mockReset()
+    readWslDistroRunningStateMock.mockReset().mockResolvedValue('running')
     store.getRepo.mockReset()
     store.getRepos.mockReset()
     store.getProjects.mockReset()
@@ -304,7 +338,125 @@ describe('registerHostedReviewHandlers', () => {
     expect(getHostedReviewForBranchMock.mock.calls[0][0]).not.toHaveProperty('active')
   })
 
-  it('carries a selected-worktree claim and explicit refresh through to the branch lookup', async () => {
+  it('refuses a card poll for a stopped WSL distro without running gh or glab in it', async () => {
+    setPlatform('win32')
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'local',
+        badgeColor: '#000',
+        sourceRepoIds: [localRepo.id],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:forBranch'](null, {
+        repoPath: localRepo.path,
+        repoId: localRepo.id,
+        branch: 'feature/wsl',
+        force: true
+      })
+    ).rejects.toBeInstanceOf(WslDistroStoppedError)
+    expect(readWslDistroRunningStateMock).toHaveBeenCalledWith('Ubuntu', expect.anything())
+    expect(getHostedReviewForBranchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      "refuses the visible scheduler's interactive-priority poll",
+      { admissionTier: 'interactive' },
+      0
+    ],
+    [
+      'lets an explicit Refresh start the distro',
+      { admissionTier: 'interactive', wakeWslDistro: true },
+      1
+    ]
+  ] as const)('%s for a stopped distro', async (_case, extra, reads) => {
+    setPlatform('win32')
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'local',
+        badgeColor: '#000',
+        sourceRepoIds: [localRepo.id],
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    getHostedReviewForBranchMock.mockResolvedValue(null)
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    const read = handlers['hostedReview:forBranch'](null, {
+      repoPath: localRepo.path,
+      repoId: localRepo.id,
+      branch: 'feature/wsl',
+      ...extra
+    })
+
+    await (reads === 0 ? expect(read).rejects.toBeInstanceOf(WslDistroStoppedError) : read)
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledTimes(reads)
+  })
+
+  it.each([
+    ["refuses Source Control's mount-time eligibility read", {}, 0],
+    ["lets the user's Create PR start the distro", { wakeWslDistro: true }, 1]
+  ] as const)('%s for a stopped distro (E9)', async (_case, extra, reads) => {
+    setPlatform('win32')
+    const wslRepo = {
+      id: 'repo-wsl',
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+      displayName: 'wsl',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepo.mockImplementation((repoId: string) => (repoId === wslRepo.id ? wslRepo : null))
+    store.getRepos.mockReturnValue([wslRepo])
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    getHostedReviewCreationEligibilityMock.mockResolvedValue({ canCreate: false })
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    const read = handlers['hostedReview:getCreationEligibility'](null, {
+      repoPath: wslRepo.path,
+      repoId: wslRepo.id,
+      branch: 'feature/wsl',
+      ...extra
+    })
+
+    await (reads === 0 ? expect(read).rejects.toBeInstanceOf(WslDistroStoppedError) : read)
+    expect(getHostedReviewCreationEligibilityMock).toHaveBeenCalledTimes(reads)
+  })
+
+  it('carries a selected-worktree claim and explicit refresh through, and replies with the outcome only when asked', async () => {
     getHostedReviewForBranchMock.mockResolvedValueOnce(null)
     registerHostedReviewHandlers(store as never, stats as never)
 
@@ -313,13 +465,34 @@ describe('registerHostedReviewHandlers', () => {
       repoId: repo.id,
       branch: 'feature/selected',
       active: true,
-      force: true
+      force: true,
+      userRefresh: true
     })
 
     // Selected-worktree lookups use the faster active tier, unlike O(N) card polling (#11532).
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ branch: 'feature/selected', active: true, force: true })
+      expect.objectContaining({
+        branch: 'feature/selected',
+        active: true,
+        force: true,
+        userRefresh: true
+      })
     )
+
+    for (const { reportReadOutcome, review } of READ_OUTCOME_REPLIES) {
+      vi.mocked(readHostedReviewForBranch).mockResolvedValueOnce({
+        review,
+        readOutcome: 'provider'
+      })
+      const reply = await handlers['hostedReview:forBranch'](null, {
+        repoPath,
+        repoId: repo.id,
+        branch: 'feature/selected',
+        userRefresh: true,
+        ...(reportReadOutcome === undefined ? {} : { reportReadOutcome })
+      })
+      expect(reply).toEqual(reportReadOutcome ? { review, readOutcome: 'provider' } : review)
+    }
   })
 
   it('uses interactive git admission for an explicit card refresh', async () => {

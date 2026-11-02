@@ -1,10 +1,8 @@
-import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+import type { AgentSessionContextUsage } from '../../shared/agent-session/agent-session-context-usage'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   claudeCurrentTurnIdentity,
@@ -17,7 +15,7 @@ import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
 import { refineClaudeQuotaTurnEnd } from './claude-terminal-failure'
 import type { ClaudeUsageLimitEvidence } from './claude-usage-limits'
-import type { ClaudeStartedSend } from './claude-structured-session-state'
+import type { ClaudeStartedSend } from './structured/claude-structured-session-state'
 
 export type ClaudeOpenTurnDeps = {
   sink: StructuredAgentSessionEventSink

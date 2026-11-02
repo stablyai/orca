@@ -1,4 +1,8 @@
 import {
+  readTerminalStartFailure,
+  type TerminalStartFailure
+} from '../../../../shared/terminal-start-failure'
+import {
   AGENT_LAUNCH_PANE_REFUSED_CODE,
   type AgentLaunchPaneAddress,
   type AgentLaunchPaneVerdict
@@ -22,7 +26,10 @@ export type PaneAgentLaunch = {
   refuseIfClosed: () => void
 }
 
-type PaneAgentLaunchEnd = { started: true } | { exitedDuringStart: true } | { error: unknown }
+type PaneAgentLaunchEnd =
+  | { started: true }
+  | { exitedDuringStart: true; terminalStartFailure?: TerminalStartFailure }
+  | { error: unknown }
 
 function finish(launch: PaneAgentLaunch, verdict: AgentLaunchPaneVerdict): void {
   launch.running.finish(verdict)
@@ -36,7 +43,11 @@ export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEn
     return null
   }
   if ('exitedDuringStart' in end) {
-    finish(launch, { kind: 'not-started', code: 'agent_session_exited_during_start' })
+    finish(launch, {
+      kind: 'not-started',
+      code: 'agent_session_exited_during_start',
+      ...diagnosticFields(end.terminalStartFailure)
+    })
     return null
   }
   const closed = launch.running.closedByUser()
@@ -56,8 +67,12 @@ export function endPaneAgentLaunch(ctx: PtyIpcSpawnState, end: PaneAgentLaunchEn
     launch,
     // The provider may have started it before its answer was lost.
     launch.dispatched
-      ? { kind: 'unconfirmed' }
-      : { kind: 'not-started', code: agentLaunchFailureCode(end.error) }
+      ? { kind: 'unconfirmed', ...diagnosticFields(readTerminalStartFailure(end.error)) }
+      : {
+          kind: 'not-started',
+          code: agentLaunchFailureCode(end.error),
+          ...diagnosticFields(readTerminalStartFailure(end.error))
+        }
   )
   return new Error(AGENT_LAUNCH_PANE_REFUSED_CODE)
 }
@@ -73,4 +88,12 @@ function stopClosed(launch: PaneAgentLaunch): void {
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
+}
+
+function diagnosticFields(failure: TerminalStartFailure | undefined): {
+  initialOutputDiagnostic?: 'git-bash-console-capacity'
+} {
+  return failure?.cause.kind === 'exited' && failure.cause.initialOutputDiagnostic
+    ? { initialOutputDiagnostic: failure.cause.initialOutputDiagnostic }
+    : {}
 }

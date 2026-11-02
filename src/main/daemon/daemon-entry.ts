@@ -127,6 +127,8 @@ async function main(): Promise<void> {
   const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
+  // Log writes are async; every exit, including process.exit below, flushes the queued tail.
+  process.once('exit', () => daemonLog.close())
   const daemonScope = ownFreshDaemonScope(freshDaemonScope === true, launchNonce)
   const log = (event: string, details?: Record<string, unknown>): void =>
     daemonLog.log(event, details)
@@ -153,6 +155,8 @@ async function main(): Promise<void> {
       return
     }
     daemonLog.log('uncaught-exception-fatal', uncaughtExceptionLogDetails(err))
+    // Rethrowing from this handler skips 'exit' listeners.
+    daemonLog.close()
     console.error('[daemon] Uncaught exception (fatal):', err)
     throw err
   })
@@ -160,7 +164,7 @@ async function main(): Promise<void> {
   let daemon: DaemonHandle | null = null
   let deathWatch: MacosLoginSessionDeathWatch | null = null
   let shuttingDown = false
-  const shutdownDeadline = createDaemonShutdownDeadline(daemonLog, () => process.exit(0))
+  const shutdownDeadline = createDaemonShutdownDeadline(daemonLog, () => daemon)
   const beginShutdown = (): void => {
     shuttingDown = true
     shutdownDeadline.start()
@@ -184,7 +188,6 @@ async function main(): Promise<void> {
       daemonLog.log('shutdown-error', { message: (err as Error)?.message })
     } finally {
       shutdownDeadline.cancel()
-      daemonLog.close()
       process.exit(0)
     }
   }
@@ -239,7 +242,6 @@ async function main(): Promise<void> {
             shuttingDown = true
             daemonLog.log('login-session-dead-retire', details)
             daemon?.recordOrderlyExit()
-            daemonLog.close()
             // Skip PTY teardown so replacement daemons cold-restore scrollback from unclean session metadata.
             process.exit(1)
           }
@@ -292,12 +294,10 @@ async function main(): Promise<void> {
       deathWatch?.stop()
       shuttingDown = true
       daemonLog.log('shutdown', { reason: 'idle' })
-      daemonLog.close()
       process.exit(0)
     },
     onRpcShutdown: () => {
       shutdownDeadline.cancel()
-      daemonLog.close()
       process.exit(0)
     },
     onShutdownRequested: beginShutdown

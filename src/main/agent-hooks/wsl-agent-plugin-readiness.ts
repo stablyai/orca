@@ -11,6 +11,7 @@ import {
 } from '../../shared/pi-agent-kind'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { wslHookRelayManager, type WslHookRelayManager } from './wsl-hook-relay-manager'
+import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
 
 export async function awaitExplicitAgentPluginGuestReadiness(args: {
   isWsl: boolean
@@ -41,6 +42,10 @@ export async function awaitExplicitAgentPluginGuestReadiness(args: {
     return true
   }
   const distro = args.distro ?? null
+  // Ensuring the relay launches wsl.exe; a passive restore must not start a stopped distro (E9).
+  if (await blockedWslDistroForExec(distro)) {
+    return false
+  }
   const manager = args.manager ?? wslHookRelayManager
   let timer: ReturnType<typeof setTimeout> | undefined
   try {

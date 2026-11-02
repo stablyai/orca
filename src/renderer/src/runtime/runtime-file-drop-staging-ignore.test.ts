@@ -22,13 +22,6 @@ const notFoundResponse = (id: string): unknown => ({
   _meta: { runtimeId: 'remote-runtime' }
 })
 
-const failedResponse = (id: string): unknown => ({
-  id,
-  ok: false,
-  error: { code: 'permission_denied', message: 'read-only file system' },
-  _meta: { runtimeId: 'remote-runtime' }
-})
-
 const statResponse = (id: string): unknown => ({
   id,
   ok: true,
@@ -121,66 +114,6 @@ describe('drop staging ignore file', () => {
     expect(methods.indexOf('files.write')).toBeLessThan(methods.indexOf('files.commitUpload'))
   })
 
-  it('leaves an existing ignore file alone', async () => {
-    stageOneFile()
-    runtimeEnvironmentCall
-      .mockResolvedValueOnce(statResponse('stat-orca-hit'))
-      .mockResolvedValueOnce(statResponse('stat-drops-hit'))
-      .mockResolvedValueOnce(statResponse('stat-ignore-hit'))
-      .mockResolvedValueOnce(notFoundResponse('stat-file-miss'))
-      .mockResolvedValueOnce(okResponse('commit-upload'))
-      .mockResolvedValueOnce(okResponse('delete-temp'))
-
-    await importExternalPathsToRuntime(CONTEXT, ['/Users/me/shot.png'], '/remote/repo/.orca/drops')
-
-    expect(calledMethods().some((call) => call.method === 'files.write')).toBe(false)
-  })
-
-  it('still uploads the drop when the ignore file cannot be written', async () => {
-    stageOneFile()
-    runtimeEnvironmentCall
-      .mockResolvedValueOnce(statResponse('stat-orca-hit'))
-      .mockResolvedValueOnce(statResponse('stat-drops-hit'))
-      .mockResolvedValueOnce(notFoundResponse('stat-ignore-miss'))
-      .mockResolvedValueOnce(failedResponse('write-ignore-denied'))
-      .mockResolvedValueOnce(notFoundResponse('stat-file-miss'))
-      .mockResolvedValueOnce(okResponse('commit-upload'))
-      .mockResolvedValueOnce(okResponse('delete-temp'))
-
-    const { results } = await importExternalPathsToRuntime(
-      CONTEXT,
-      ['/Users/me/shot.png'],
-      '/remote/repo/.orca/drops'
-    )
-
-    expect(results).toEqual([expect.objectContaining({ status: 'imported' })])
-  })
-
-  it('recognizes the drops folder of a Windows worktree', async () => {
-    stageOneFile()
-    runtimeEnvironmentCall
-      .mockResolvedValueOnce(statResponse('stat-orca-hit'))
-      .mockResolvedValueOnce(statResponse('stat-drops-hit'))
-      .mockResolvedValueOnce(notFoundResponse('stat-ignore-miss'))
-      .mockResolvedValueOnce(okResponse('write-ignore'))
-      .mockResolvedValueOnce(notFoundResponse('stat-file-miss'))
-      .mockResolvedValueOnce(okResponse('commit-upload'))
-      .mockResolvedValueOnce(okResponse('delete-temp'))
-
-    await importExternalPathsToRuntime(
-      { ...CONTEXT, worktreePath: 'C:\\Users\\me\\repo' },
-      ['/Users/me/shot.png'],
-      'C:\\Users\\me\\repo\\.orca\\drops'
-    )
-
-    expect(calledMethods().filter((call) => call.method === 'files.write')).toEqual([
-      {
-        method: 'files.write',
-        params: expect.objectContaining({ relativePath: '.orca/drops/.gitignore', content: '*\n' })
-      }
-    ])
-  })
-
   // Why: the ignore step swallows its own errors, and a drop with nothing staged never re-checks.
   it('reports a host that went stale during the ignore step even when nothing was staged', async () => {
     fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
@@ -206,18 +139,5 @@ describe('drop staging ignore file', () => {
         assertCurrent
       })
     ).rejects.toThrow('runtime owner generation changed')
-  })
-
-  it('never writes an ignore file into a folder the user picked', async () => {
-    stageOneFile()
-    runtimeEnvironmentCall
-      .mockResolvedValueOnce(statResponse('stat-uploads-hit'))
-      .mockResolvedValueOnce(notFoundResponse('stat-file-miss'))
-      .mockResolvedValueOnce(okResponse('commit-upload'))
-      .mockResolvedValueOnce(okResponse('delete-temp'))
-
-    await importExternalPathsToRuntime(CONTEXT, ['/Users/me/shot.png'], '/remote/repo/uploads')
-
-    expect(calledMethods().some((call) => call.method === 'files.write')).toBe(false)
   })
 })

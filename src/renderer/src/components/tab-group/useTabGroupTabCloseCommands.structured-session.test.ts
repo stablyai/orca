@@ -29,6 +29,12 @@ const store = vi.hoisted(() => ({
   unifiedTabsByWorktree: {} as Record<string, unknown[]>
 }))
 
+vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
+  admitStructuredAgentSession: (
+    await import('@/store/slices/store-session-test-harness')
+  ).admissionFromBusy(() => false)
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {
@@ -73,7 +79,7 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
 
-vi.mock('@/lib/structured-agent-session-launch', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 

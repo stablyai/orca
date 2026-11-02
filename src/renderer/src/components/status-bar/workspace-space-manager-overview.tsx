@@ -1,7 +1,7 @@
 import { AlertTriangle, HardDrive, Loader2, RefreshCw, X } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import { formatBytes } from './workspace-space-format'
+import { formatBytes, getWorkspaceSpaceScanningFallbackLabel } from './workspace-space-format'
 import { translate } from '@/i18n/i18n'
 import { Metric, UpdatedMetric } from './workspace-space-metrics'
 import { WorkspaceSpaceTreemap } from './workspace-space-treemap'
@@ -133,12 +133,16 @@ export function WorkspaceSpaceManagerOverview({
               ? translate(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.34174bd83d',
                   '{{value0}}. You can leave this page; the last result stays visible.',
-                  { value0: progressLabel ?? 'Scanning workspace sizes' }
+                  {
+                    value0: progressLabel ?? getWorkspaceSpaceScanningFallbackLabel()
+                  }
                 )
               : translate(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.265d956765',
                   '{{value0}}. You can leave this page.',
-                  { value0: progressLabel ?? 'Scanning workspace sizes' }
+                  {
+                    value0: progressLabel ?? getWorkspaceSpaceScanningFallbackLabel()
+                  }
                 )}
           </span>
         </div>

@@ -267,7 +267,7 @@ describe('SidebarSettingsHelpMenu', () => {
     expect(html).toContain('M16.0742 4.45014C14.9244 3.92097 13.7106 3.54556 12.4638 3.3335')
   })
 
-  it('opens Discord invite through the shell bridge', async () => {
+  it('opens the Discord invite when no workspace browser can host it', async () => {
     const container = await renderMenu()
     const discordButton = findMenuItem(container, 'Discord')
 

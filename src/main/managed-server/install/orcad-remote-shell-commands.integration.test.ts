@@ -532,6 +532,33 @@ describe('liveness and stop commands, run for real', () => {
     }
   })
 
+  // Slim Linux images ship no ps; after a reboot the recorded PID often names a new process (#34149).
+  it.runIf(process.platform === 'linux')(
+    'reads argv from /proc on a host without ps, so a reused PID is DEAD and the slot is LIVE',
+    () => {
+      const noPs = 'ps() { return 127; };'
+      const stranger = spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' })
+      const slot = spawn(
+        process.execPath,
+        ['-e', 'setTimeout(() => {}, 30000)', join(versionDir, 'orcad.js')],
+        { stdio: 'ignore' }
+      )
+      try {
+        writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(stranger.pid))
+        expect(
+          parseOrcadLiveness(sh(`${noPs} ${orcadLivenessProbeCommand(host, versionDir)}`))
+        ).toBe('DEAD')
+        writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(slot.pid))
+        expect(
+          parseOrcadLiveness(sh(`${noPs} ${orcadLivenessProbeCommand(host, versionDir)}`))
+        ).toBe('LIVE')
+      } finally {
+        stranger.kill('SIGKILL')
+        slot.kill('SIGKILL')
+      }
+    }
+  )
+
   it.each(['orcad.js', 'orcad-server.js'])(
     'reports LIVE and stops a running %s even without entry files',
     async (entry) => {
@@ -574,6 +601,13 @@ describe('liveness and stop commands, run for real', () => {
       expect(sh(`ps -o stat= -p ${child.pid} || echo GONE`).trim()).toMatch(/^Z/)
       expect(sh(`kill -0 ${child.pid} 2>/dev/null && echo LIVE || echo DEAD`).trim()).toBe('LIVE')
       expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
+      if (process.platform === 'linux') {
+        expect(
+          parseOrcadLiveness(
+            sh(`ps() { return 127; }; ${orcadLivenessProbeCommand(host, versionDir)}`)
+          )
+        ).toBe('DEAD')
+      }
       expect(
         parseOrcadStopOutcome(
           sh(stopOrcadCommand(host, versionDir, { waitSeconds: 1, justLaunched: true }))

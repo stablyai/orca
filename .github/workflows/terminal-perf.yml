@@ -1,5 +1,6 @@
 name: Terminal Perf
 
+# On demand only; see docs/readme/terminal-perf.md.
 on:
   workflow_dispatch:
     inputs:
@@ -43,10 +44,6 @@ on:
         description: Comma-separated hidden real-PTY pressure pane counts
         required: false
         type: string
-  schedule:
-    # Why: keep the expensive scale run off PRs, but exercise it daily so
-    # terminal throughput regressions are caught before users report typing lag.
-    - cron: '30 8 * * *'
 
 permissions:
   contents: read
@@ -57,7 +54,8 @@ cache-mode: read
 jobs:
   terminal-perf:
     name: terminal scale perf
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Presented-frame measurement only accepts GitHub-hosted Xvfb displays.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       NODE_OPTIONS: --max-old-space-size=4096

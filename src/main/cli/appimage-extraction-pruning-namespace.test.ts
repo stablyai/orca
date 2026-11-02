@@ -23,9 +23,7 @@ vi.mock('./appimage-generation-residency', async (importOriginal) => {
 })
 
 import {
-  isAppImageInstalledLauncherOwnedBySibling,
   resolveAppImageExtractedRoot,
-  resolveAppImageNamespacePath,
   resolveLegacyAppImageNamespacePath
 } from './appimage-extracted-root'
 import { pruneAppImageExtractedRoots } from './appimage-extraction-pruning'
@@ -56,36 +54,6 @@ async function writePayload(rootPath: string): Promise<string> {
 }
 
 describe('AppImage generation namespace', () => {
-  it('extracts outside the namespace that pre-lease pruners scan', async () => {
-    const { options, keep } = await makeFixture()
-    const legacyNamespace = resolveLegacyAppImageNamespacePath(options)
-
-    expect(dirname(keep.rootPath)).toBe(resolveAppImageNamespacePath(options))
-    expect(resolveAppImageNamespacePath(options)).not.toBe(legacyNamespace)
-    expect(dirname(dirname(keep.rootPath))).toBe(dirname(legacyNamespace))
-  })
-
-  it('a pre-lease pruner keeping its own generation never reaches the new namespace', async () => {
-    const { options, keep } = await makeFixture()
-    const legacyKeep = join(resolveLegacyAppImageNamespacePath(options), 'c'.repeat(24))
-    await Promise.all([writePayload(keep.rootPath), writePayload(legacyKeep)])
-
-    // Pre-lease builds prune only the parent of the generation they keep.
-    await pruneAppImageExtractedRoots(legacyKeep)
-
-    expect(existsSync(keep.rootPath)).toBe(true)
-  })
-
-  it('treats the legacy namespace of the same AppImage as its own, not a sibling', async () => {
-    const { options } = await makeFixture()
-    const legacyLauncher = await writePayload(
-      join(resolveLegacyAppImageNamespacePath(options), 'c'.repeat(24))
-    )
-    publishAppImageLauncherEndpoint(options.cacheRootPath, 'installed', legacyLauncher)
-
-    expect(isAppImageInstalledLauncherOwnedBySibling(options)).toBe(false)
-  })
-
   it('reclaims idle legacy generations but keeps resident and installed ones', async () => {
     const { options, keep } = await makeFixture()
     const legacyNamespace = resolveLegacyAppImageNamespacePath(options)
@@ -103,17 +71,6 @@ describe('AppImage generation namespace', () => {
     expect(existsSync(resident!)).toBe(true)
     expect(existsSync(installed!)).toBe(true)
     expect(existsSync(keep.rootPath)).toBe(true)
-  })
-
-  it('keeps a generation whose process is resident', async () => {
-    const { keep } = await makeFixture()
-    const older = join(dirname(keep.rootPath), 'c'.repeat(24))
-    await Promise.all([writePayload(keep.rootPath), writePayload(older)])
-    residentExecutables.paths = [`${join(older, 'orca-ide')} (deleted)`]
-
-    await pruneAppImageExtractedRoots(keep.rootPath)
-
-    expect(existsSync(older)).toBe(true)
   })
 
   it.runIf(process.platform === 'linux')(

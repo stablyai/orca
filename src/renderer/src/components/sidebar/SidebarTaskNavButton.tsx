@@ -72,9 +72,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const linearStatus = useAppStore((s) => s.linearStatus)
-  const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
-  const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
@@ -114,20 +112,20 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
-    if (!linearStatusChecked) {
+    if (taskProviderConnections.linear === undefined) {
       void checkLinearConnection()
     }
     // Why: Jira hides once its status settles as disconnected; without a check its icon lingers.
-    if (!jiraStatusChecked) {
+    if (taskProviderConnections.jira === undefined) {
       void checkJiraConnection()
     }
   }, [
     checkJiraConnection,
     checkLinearConnection,
-    jiraStatusChecked,
-    linearStatusChecked,
     preflightStatusChecked,
     preflightStatusCurrent,
+    taskProviderConnections.jira,
+    taskProviderConnections.linear,
     refreshPreflightStatus
   ])
 

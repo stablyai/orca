@@ -1,16 +1,9 @@
-import { provisionClaudeAccountProfile } from './claude-profile-setup'
-import { wslClaudeProfile } from './claude-profile-wsl-paths'
+import { provisionWslClaudeAccountProfile } from './claude-profile-wsl-provision'
 
-// Copy hooks from guest settings instead of installing them from the host.
+// Runs inside a WSL distro on Orca's pinned Node: `<guest home> <distro> <account id>`.
 async function main(): Promise<void> {
   const [userHome = '', distro = '', accountId = ''] = process.argv.slice(2)
-  const { dataRoot, profile } = wslClaudeProfile(userHome, distro, accountId)
-  const report = await provisionClaudeAccountProfile({
-    dataRoot,
-    profile,
-    userHome,
-    installHooks: null
-  })
+  const report = await provisionWslClaudeAccountProfile(userHome, distro, accountId)
   if (report.outcome !== 'prepared') {
     console.error(JSON.stringify(report))
     process.exitCode = 2

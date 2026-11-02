@@ -8,9 +8,9 @@ import {
   type AgentSessionLaunchRequest
 } from '@/lib/agent-session-launch-plan'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
-import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
+import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
-import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
+import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 
 /** The user action this launch serves: minted where that action is handled, or carried by the
  *  route the caller already planned for it. */
@@ -56,6 +56,29 @@ const NOT_DELIVERED: StructuredPromptDeliveryResult = { delivered: false, failur
 
 type AwaitingHostAnswer = { awaited: Promise<void>; replan: () => AgentSessionLaunchPlan }
 
+/** Both terminal adapters retain the same actual-create receipt behind their early acceptance. */
+export async function terminalLaunchOpened(terminal: StructuredLaunchTerminal): Promise<boolean> {
+  return terminal.completion
+    ? (await terminal.completion).outcome.status === 'created'
+    : terminal.opened
+}
+
+/** Surface acceptance can precede preparation; only its existing completion can claim a create. */
+export async function settleAgentTabLaunch(
+  result: AgentTabLaunchOutcome
+): Promise<StructuredAgentLaunchSettlement> {
+  if (!result || 'refused' in result) {
+    return { kind: 'cancelled', sessionId: null }
+  }
+  if (result.structuredSettlement) {
+    return result.structuredSettlement
+  }
+  if (!(await terminalLaunchOpened({ opened: true, completion: result.terminalCompletion }))) {
+    return { kind: 'cancelled', sessionId: null }
+  }
+  return { kind: 'terminal' }
+}
+
 /** Reuse caller plans; otherwise await missing host agents/local capabilities before deciding the route. */
 export function routeNewTabLaunch(
   store: Parameters<typeof planAgentSessionLaunch>[0],
@@ -95,18 +118,13 @@ export function launchOnceHostAnswered(
       agentSessionLaunchPlan: route.replan()
     })
   )
-  const structuredSettlement = opened.then(
-    (result): Promise<StructuredAgentLaunchSettlement> | StructuredAgentLaunchSettlement =>
-      !result || 'refused' in result
-        ? { kind: 'cancelled', sessionId: null }
-        : (result.structuredSettlement ?? { kind: 'terminal' }),
-    (error: unknown): StructuredAgentLaunchSettlement => {
+  const structuredSettlement = opened
+    .then(settleAgentTabLaunch)
+    .catch((error: unknown): StructuredAgentLaunchSettlement => {
       args.focusIntent?.cancel()
       return { kind: 'failed', error }
-    }
-  )
-  const deliversPrompt =
-    Boolean(args.prompt?.trim()) && (args.promptDelivery ?? 'auto-submit') !== 'draft'
+    })
+  const deliversPrompt = Boolean(args.prompt?.trim())
   return {
     surface: { kind: 'host-published' },
     pasteDraftAfterLaunch: false,

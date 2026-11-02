@@ -45,6 +45,8 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ).toEqual([
       '--prompt',
       'Name a branch for adding login',
+      '--output-format',
+      'stream-json',
       '--model',
       'kimi-code/kimi-for-coding'
     ])
@@ -68,13 +70,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
         'Write a concise commit message'
       ]
     )
-  })
-
-  it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.kimi?.models.map((m) => m.id)).toEqual([
-      'default',
-      'kimi-code/kimi-for-coding'
-    ])
   })
 
   it('omits Kimi --model for the config default and an empty model', () => {
@@ -274,8 +269,8 @@ describe('buildArgs (Jcode)', () => {
     expect(
       spec.modelDiscovery?.parse('claude-opus-5-5\nclaude-haiku-4-5\ngemini-2.5-pro\n')
     ).toEqual([
-      { id: 'claude-opus-5-5', label: 'Claude Opus 5 5' },
-      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4 5' },
+      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' }
     ])
   })

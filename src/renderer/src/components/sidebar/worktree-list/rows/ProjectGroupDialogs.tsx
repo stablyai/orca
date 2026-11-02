@@ -53,10 +53,18 @@ export function SidebarWorktreeListDialogs({
           nameDialog?.type === 'rename'
             ? nameDialog.currentName
             : nameDialog
-              ? `${nameDialog.repo.displayName} group`
+              ? translate(
+                  'auto.components.sidebar.ProjectGroupNameDialog.defaultGroupName',
+                  '{{name}} group',
+                  { name: nameDialog.repo.displayName }
+                )
               : ''
         }
-        confirmLabel={nameDialog?.type === 'rename' ? 'Rename' : 'Create'}
+        confirmLabel={
+          nameDialog?.type === 'rename'
+            ? translate('auto.components.sidebar.ProjectGroupNameDialog.rename', 'Rename')
+            : translate('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')
+        }
         onOpenChange={(open) => {
           if (!open) {
             setNameDialog(null)

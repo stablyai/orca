@@ -1,8 +1,10 @@
 import type { NativeChatPickerItem } from './native-chat-picker-items'
 
-// Only leading / dispatches; mid-prompt triggers require whitespace and stop at / so file paths remain prose.
+// `/` is the composer's trigger for every agent. A draft-leading slash is the one
+// that can dispatch; elsewhere the token starts after whitespace and its query
+// allows native `skill:` namespaces while ordinary file paths stay prose.
 export const LEADING_SLASH_TRIGGER = /^\/(\S*)$/
-export const MID_PROMPT_SLASH_TRIGGER = /\s\/([^\s/]*)$/
+export const MID_PROMPT_SLASH_TRIGGER = /\s\/(skill:\S*|[^\s/]*)$/
 // An agent whose skills carry their own sigil (Codex `$`) also opens its skills alone on it.
 const SKILL_SIGIL_TRIGGER = /(?:^|\s)\$(\S*)$/
 const COMMON_ENV_VARS = new Set(

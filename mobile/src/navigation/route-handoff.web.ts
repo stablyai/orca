@@ -102,7 +102,7 @@ export function useRouteHandoff(): RouteHandoff {
       const held = session?.grants.native ?? []
       return declared.grants.every((grant) => held.includes(grant))
     }
-    const handOff = (href: RouterHref): RouteHandoffOutcome => {
+    const handOff = (href: RouterHref, replace = false): RouteHandoffOutcome => {
       // Resolve object hrefs; String would send [object Object], including for Connection-log links.
       const target = stringifyRouteHref(href)
       if (servedHere(target)) {
@@ -113,7 +113,7 @@ export function useRouteHandoff(): RouteHandoff {
         report('malformed-href', target)
         return 'refused'
       }
-      if (!client.notifyNavigate(target)) {
+      if (!client.notifyNavigate(target, replace)) {
         report('shell-refused', target)
         return 'refused'
       }
@@ -132,10 +132,14 @@ export function useRouteHandoff(): RouteHandoff {
           router.navigate(href, options)
         }
       },
-      // External replace becomes a native push so Back can reveal this document; native owns none of the history being replaced.
+      // Native replace would drop this whole document, so with in-page history the top entry is popped here and the target pushed over the rest.
       replace: (href, options) => {
-        if (handOff(href) === 'local') {
+        const inPageHistory = router.canGoBack()
+        const outcome = handOff(href, !inPageHistory)
+        if (outcome === 'local') {
           router.replace(href, options)
+        } else if (outcome === 'handed-off' && inPageHistory) {
+          router.back()
         }
       },
       // Pop in-page history when present; otherwise ask native, with local no-op fallback if posting is unavailable.

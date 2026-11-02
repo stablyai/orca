@@ -1,4 +1,5 @@
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
+import { markHostShuttingDown } from '../host-shutdown-state'
 import { setDesktopBrowserBridgeHostEnabled } from '../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { startOrcadBrowserProvider } from './orcad-browser-startup'
@@ -7,7 +8,7 @@ import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
-import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
+import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
 import { holdOrcadTerminalAdmissionUntilExit } from './orcad-stop-terminal-admission'
 import {
@@ -59,6 +60,7 @@ export function installOrcadShutdownSignals(
       return false
     }
     stopping = true
+    markHostShuttingDown()
     holdOrcadTerminalAdmissionUntilExit()
     exitCode = stoppedExitCode
     retractClean = onFailed
@@ -93,7 +95,7 @@ export function installOrcadShutdownSignals(
 
 export async function stopOrcadStructuredAgentSessions(): Promise<void> {
   const { stopStructuredAgentSessionRuntime } =
-    await import('../runtime/structured-agent-session-runtime')
+    await import('../runtime/agent-session/structured-agent-session-runtime')
   await stopStructuredAgentSessionRuntime({ trigger: 'quit' })
 }
 
@@ -105,6 +107,8 @@ export async function startOrcadWithLifecycle<T extends object>(
   const cleanup = createIdempotentOrcadCleanup(async () => {
     // Stamp quit before awaiting teardown so dying chat agents read as restart rather than crash.
     recordAgentSessionRuntimeEnd('quit')
+    // Startup failures reach cleanup without shutdown admission while RPC may already be serving.
+    markHostShuttingDown()
     let runtimeCleanupSucceeded = false
     try {
       await runtime.stop()
@@ -131,7 +135,7 @@ export async function startOrcadWithLifecycle<T extends object>(
 export async function startOrcadWithHost<T extends object>(
   userDataPath: string,
   start: (registerCleanup: (cleanup: OrcadRuntimeCleanup) => void) => Promise<T>,
-  runQuitHandlers: () => void
+  runQuitHandlers: () => void | Promise<void>
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
   const instanceLock = acquireOrcadInstanceLock(userDataPath)
   const { pid, startedAtMs, nonce } = instanceLock.record

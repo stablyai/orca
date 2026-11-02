@@ -1,20 +1,13 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, cleanup, fireEvent } from '@testing-library/react'
 import '../../__fixtures__/settings-persistence-test-fixture'
 import React from 'react'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
-import type {
-  RepoSourceControlAiOverrides,
-  SourceControlAiSettings
-} from '../../../../../../shared/source-control-ai-types'
-import {
-  SOURCE_CONTROL_ACTION_IDS,
-  setSourceControlActionAgentDefault,
-  type SourceControlActionId
-} from '../../../../../../shared/source-control-ai-actions'
+import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
+import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control-ai-actions'
 import {
   computeActionDirtyById,
   dropRepoLegacyInstructionForAction,
@@ -29,7 +22,6 @@ import {
 import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../SourceControlActionAgentPicker'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
-import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAiEnablement'
 import { SourceControlAiActionRecipeDefaults } from '../../SourceControlAiActionRecipeDefaults'
 import { useAppStore } from '../../../../store/index'
 import { TooltipProvider } from '../../../ui/tooltip'
@@ -103,24 +95,6 @@ describe('saved chat-or-CLI pick', () => {
   })
 })
 
-describe('RepositorySourceControlAiEnablement', () => {
-  it('describes repo enablement as Source Control AI action visibility', () => {
-    const markup = renderToStaticMarkup(
-      React.createElement(RepositorySourceControlAiEnablement, {
-        value: false,
-        source: { enabled: true } as SourceControlAiSettings,
-        onChange: () => {}
-      })
-    )
-
-    expect(markup).toContain('Show Source Control AI actions')
-    expect(markup).toContain('Controls whether Source Control AI buttons are shown')
-    expect(markup).toContain('separate features follows those features&#x27; settings')
-    expect(markup).toContain('Show')
-    expect(markup).not.toContain('Source Control AI enabled')
-  })
-})
-
 describe('RepositorySourceControlAiActionRows', () => {
   it.each([
     { agent: 'codex', detected: ['codex'], surface: undefined },
@@ -166,7 +140,7 @@ describe('RepositorySourceControlAiActionRows', () => {
         repos: [{ ...TEST_REPO, id: 'repo-1' }],
         settings: {
           ...settings,
-          experimentalNativeChat: false,
+          nativeChatProviders: {},
           defaultTuiAgent: 'claude',
           sourceControlAi: source
         },
@@ -212,10 +186,10 @@ describe('RepositorySourceControlAiActionRows', () => {
       expect(ensure).toHaveBeenCalledTimes(2)
       expect(detectAgents).toHaveBeenCalledTimes(1)
       for (const card of cards) {
-        expect(card.textContent).not.toContain('Model')
+        expect(card.textContent).toContain('Model')
         expect(card.textContent).toContain('Permissions')
         expect(card.textContent).toContain('Ask')
-        expect(card.querySelector('button[aria-label="saved"]')).toBeNull()
+        expect(card.querySelector('button[aria-label="saved"]')).not.toBeNull()
         const controls = Array.from(
           card.querySelectorAll<HTMLButtonElement>(
             'button[role="combobox"].min-w-0, button[aria-haspopup="menu"]'
@@ -236,8 +210,8 @@ describe('RepositorySourceControlAiActionRows', () => {
         )
         expect(controls.length).toBeGreaterThan(0)
         expect(controls.every((control) => !control.disabled)).toBe(true)
-        expect(card.textContent).not.toContain('Model')
-        expect(card.textContent).not.toContain('Effort')
+        expect(card.textContent).toContain('Model')
+        expect(card.textContent?.includes('Reasoning effort')).toBe(agent === 'codex')
         expect(card.textContent).toContain('Permissions')
         expect(
           card.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')?.value
@@ -248,10 +222,13 @@ describe('RepositorySourceControlAiActionRows', () => {
           )
         ).toBe(true)
       }
-      for (const experimentalNativeChat of [true, false]) {
+      for (const chat of [true, false]) {
         await act(() =>
           useAppStore.setState({
-            settings: { ...useAppStore.getState().settings!, experimentalNativeChat }
+            settings: {
+              ...useAppStore.getState().settings!,
+              nativeChatProviders: chat ? EVERY_AGENT_CHAT : {}
+            }
           })
         )
         for (const card of cards) {
@@ -259,7 +236,7 @@ describe('RepositorySourceControlAiActionRows', () => {
           expect(input?.value).toBe(
             surface === 'terminal'
               ? '--saved-cli'
-              : surface === 'chat' || (experimentalNativeChat && agent !== 'opencode')
+              : surface === 'chat' || (chat && agent !== 'opencode')
                 ? undefined
                 : '--saved-cli'
           )
@@ -268,67 +245,6 @@ describe('RepositorySourceControlAiActionRows', () => {
       expect(JSON.stringify(source.actions.fixCommitFailure)).toBe(originalRecipe)
       expect(writeConfig).not.toHaveBeenCalled()
       expect(onEdit).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each([undefined, null, '', '--repo'])(
-    'renders save controls and argument ownership for %s',
-    (repoAgentArgs) => {
-      const actionDirtyById = Object.fromEntries(
-        SOURCE_CONTROL_ACTION_IDS.map((actionId) => [actionId, actionId === 'fixCommitFailure'])
-      ) as Record<SourceControlActionId, boolean>
-      const source: SourceControlAiSettings = {
-        enabled: true,
-        agentId: null,
-        selectedModelByAgent: {},
-        selectedThinkingByModel: {},
-        customAgentCommand: '',
-        instructionsByOperation: {},
-        actions: { fixCommitFailure: { agentId: null, agentArgs: '--global' } }
-      }
-
-      const rows = React.createElement(RepositorySourceControlAiActionRows, {
-        repoId: 'repo-1',
-        repoAi: {
-          actionOverrides: {
-            fixCommitFailure: {
-              agentId: null,
-              commandInputTemplate: '{basePrompt}\n\nrepo',
-              ...(repoAgentArgs !== undefined ? { agentArgs: repoAgentArgs } : {})
-            }
-          }
-        },
-        source,
-        defaultTuiAgent: 'codex',
-        savingActionIds: {},
-        actionDirtyById,
-        onActionModeChange: () => {},
-        onActionAgentChange: () => {},
-        onActionLaunchPreferencesChange: () => {},
-        onActionTemplateChange: () => {},
-        onActionAgentArgsChange: () => {},
-        onAppendVariable: () => {},
-        onActionDiscard: () => {},
-        onActionSave: () => {}
-      })
-      const markup = renderToStaticMarkup(React.createElement(TooltipProvider, null, rows))
-
-      expect(markup).toContain('Commit failure fixes')
-      expect(markup).toContain('Push failure fixes')
-      expect(markup).toContain('Unsaved changes')
-      expect(markup).toContain('Discard')
-      expect(markup).toContain('Save')
-      expect(markup).toContain('repo-repo-1-source-control-ai-fixCommitFailure')
-      const card = new DOMParser()
-        .parseFromString(markup, 'text/html')
-        .getElementById('repo-repo-1-source-control-ai-fixCommitFailure')
-      expect(card?.textContent).toContain(
-        repoAgentArgs === undefined
-          ? 'Global custom args'
-          : repoAgentArgs
-            ? 'Repository custom args'
-            : 'No args'
-      )
     }
   )
 })
@@ -353,21 +269,10 @@ describe('dropRepoLegacyInstructionForAction', () => {
       commandInputTemplate: '{basePrompt}\n\nUse PR style.'
     })
   })
-
-  it('leaves launch action recipes alone because they have no legacy instruction key', () => {
-    const value = {
-      instructionsByOperation: { commitMessage: 'Use repo style.' },
-      actionOverrides: {
-        fixChecks: { commandInputTemplate: '{basePrompt}' }
-      }
-    }
-
-    expect(dropRepoLegacyInstructionForAction(value, 'fixChecks')).toBe(value)
-  })
 })
 
 it.each(['', '--model raw'])(
-  'a repository surface edit saves the complete target and keeps its arguments (%s)',
+  'a repository agent/surface edit keeps its owned Arguments group without pinning global choices (%s)',
   (agentArgs) => {
     const settings = useAppStore.getState().settings!
     const launchPreferences = {
@@ -392,16 +297,17 @@ it.each(['', '--model raw'])(
     expect(edited.actionOverrides?.fixChecks).toMatchObject({
       agentId: 'codex',
       agentArgs,
-      launchPreferences,
       surface: 'terminal'
     })
+    expect(edited.actionOverrides?.fixChecks?.launchPreferences).toBeUndefined()
     const payload = toSourceControlAiRepoUpdate(edited).sourceControlAi
     const replay = resolveSourceControlActionRecipe({
       settings: sourceSettings,
       repo: { sourceControlAi: payload ?? undefined },
       actionId: 'fixChecks'
     })
-    expect(replay).toMatchObject({ agentArgs, surface: 'terminal', launchPreferences })
+    expect(replay).toMatchObject({ agentArgs, surface: 'terminal' })
+    expect(replay.launchPreferences).toBeUndefined()
     expect(replay.launchPreferencesYieldToAgentArgs).toBeUndefined()
     const changedAgent = withRepoAiActionAgent(edited, sourceSettings, 'fixChecks', 'claude', {
       surface: 'chat'
@@ -413,7 +319,7 @@ it.each(['', '--model raw'])(
 it('keeps default and missing-agent editors disabled only until the host inventory settles', async () => {
   const settings = useAppStore.getState().settings!
   useAppStore.setState({
-    settings: { ...settings, experimentalNativeChat: false },
+    settings: { ...settings, nativeChatProviders: {} },
     detectedAgentIds: null,
     ensureDetectedAgents: vi.fn(() => new Promise<TuiAgent[]>(() => {}))
   })
@@ -476,7 +382,7 @@ it.each([1, 10])(
     useAppStore.setState({
       settings: {
         ...settings,
-        experimentalNativeChat: false,
+        nativeChatProviders: {},
         defaultTuiAgent: 'claude',
         disabledTuiAgents: ['codex']
       },
@@ -530,7 +436,9 @@ it.each([1, 10])(
       fireEvent.click(view.getByRole('menuitemradio', { name: /^Ask/ }))
       expect(edit).toHaveBeenCalledWith(
         'fixCommitFailure',
-        expect.objectContaining({ agentId: 'codex' })
+        expect.objectContaining({ agentId: 'codex' }),
+        undefined,
+        null
       )
       expect(gets()).toHaveLength(1)
       view.rerender(tree(1))

@@ -8,6 +8,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { cn } from '@/lib/utils'
 import { PreviewMedia, RelatedFeatures } from './FeatureWallPreview'
+import { getLocalizedFeatureWallWorkflowCopy } from './feature-wall-tour-localized-copy'
 import { TasksAnimatedVisual } from './TasksAnimatedVisual'
 import { WorkspacesAnimatedVisual } from './WorkspacesAnimatedVisual'
 import { WorkbenchAnimatedVisual } from './WorkbenchAnimatedVisual'
@@ -234,7 +235,7 @@ export function FeatureWallBody(props: {
             posterUrl={posterUrl}
             gifUrl={gifUrl}
             showGif={showGif}
-            workflowTitle={selected.title}
+            workflowTitle={getLocalizedFeatureWallWorkflowCopy(selected.id).title}
           />
         ) : null}
 

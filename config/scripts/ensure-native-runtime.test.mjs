@@ -341,7 +341,8 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
     module: {
       listJobProcessIds() {},
       terminateJob() {},
-      assignCurrentProcessToJob() {}
+      assignCurrentProcessToJob() {},
+      assignCurrentProcessToStrictJob() {}
     }
   }
 }
@@ -351,7 +352,13 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
   if (process.platform === 'win32') {
     const buildDir = join(nodePtyDir, 'build', 'Release')
     writePatchedNodePtyBuildArtifacts(projectDir)
-    writeFileSync(join(buildDir, 'conpty.node'), Buffer.from('msys-2.0.dll', 'utf16le'))
+    writeFileSync(
+      join(buildDir, 'conpty.node'),
+      Buffer.concat([
+        Buffer.from('msys-2.0.dll', 'utf16le'),
+        Buffer.from('assignCurrentProcessToStrictJob')
+      ])
+    )
   }
 }
 
@@ -381,7 +388,8 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
     module: {
       listJobProcessIds: () => [],
       terminateJob: () => true,
-      assignCurrentProcessToJob: () => true
+      assignCurrentProcessToJob: () => true,
+      assignCurrentProcessToStrictJob: () => true
     }
   }
 }
@@ -415,7 +423,10 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   )
   const securityDir = join(projectDir, 'node_modules', '@orca', 'windows-security')
   mkdirSync(securityDir, { recursive: true })
-  writeFileSync(join(securityDir, 'index.js'), "exports.currentUserSid = () => 'S-1-5-18'\n")
+  writeFileSync(
+    join(securityDir, 'index.js'),
+    "exports.currentUserSid = () => 'S-1-5-18'; exports.hasNativeExport = () => true\n"
+  )
 }
 
 function writeNodePtyPatchFile(projectDir) {

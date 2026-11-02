@@ -16,10 +16,11 @@ export type StructuredAgentSessionStartListingContext = {
 export function saveStructuredAgentSessionListing(
   context: Pick<StructuredAgentSessionStartListingContext, 'deps'>,
   sessionId: string,
-  listing: AgentModelCatalogLiveListing
+  listing: AgentModelCatalogLiveListing,
+  current: () => boolean
 ): void {
   try {
-    context.deps.modelCatalog?.recordLiveListing(sessionId, listing)
+    context.deps.modelCatalog?.recordLiveListing(sessionId, listing, current)
   } catch (error) {
     context.deps.logger.warn('saving what a provider listed failed', {
       scope: 'provider-catalog',
@@ -41,7 +42,12 @@ export function saveStructuredAgentSessionStartReadbackListing(
       const child = context.sessions.get(sessionId)?.child
       const identity = { generation: reporter.acquisitionGeneration, fence: reporter.fence }
       if (child && sameProviderChild(child, identity)) {
-        context.deps.modelCatalog?.recordLiveListing(sessionId, listing)
+        context.deps.modelCatalog?.recordLiveListing(
+          sessionId,
+          listing,
+          () =>
+            context.sessions.get(sessionId)?.child === child && child.catalogSource?.() !== false
+        )
       }
     })
     .catch((error: unknown) => {

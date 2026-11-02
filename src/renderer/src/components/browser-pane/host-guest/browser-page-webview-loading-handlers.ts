@@ -5,6 +5,7 @@ import {
 } from '../../../../../shared/browser-url'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { isBrowserLoadBlockedByExtension } from '../../../../../shared/browser-load-failure'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { releaseBrowserPageMount } from './browser-page-mount-admission'
@@ -101,7 +102,11 @@ export function createBrowserPageWebviewLoadingHandlers({
         normalizeBrowserNavigationUrl(activeLoadFailure.validatedUrl) ??
         activeLoadFailure.validatedUrl
       const normalizedCurrentUrl = normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
-      if (normalizedAttemptedUrl === normalizedCurrentUrl) {
+      // Why: a load an extension blocked never commits, so the guest still shows the old URL.
+      if (
+        normalizedAttemptedUrl === normalizedCurrentUrl ||
+        isBrowserLoadBlockedByExtension(activeLoadFailure)
+      ) {
         // Why: some failures still emit did-stop-loading on the original URL; keep loadError so the known-failed load isn't cleared to a blank surface.
         onUpdatePageStateRef.current(browserTabId, {
           loading: false,

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GRAB_BUDGET } from '../../../../shared/browser-grab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { createBrowserMockApi } from './browser-slice-test-harness'
@@ -60,38 +59,19 @@ describe('saved browser note lifetime and marker eligibility', () => {
     expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual(['fresh'])
   })
 
-  it('shares the 20-note budget across URLs and bounds marker IDs to retained notes', async () => {
+  it('prunes marker IDs when notes are deleted or cleared', async () => {
     const { store, pageId } = await createAnnotatedPage()
-    for (let index = 0; index < GRAB_BUDGET.annotationsMaxPerPage + 3; index++) {
-      const url = `https://example.com/page-${index % 2}`
-      store.getState().setBrowserPageUrl(pageId, url)
-      const note = makeAnnotation(pageId, `note-${index}`)
-      note.payload.page.sanitizedUrl = url
-      store.getState().addBrowserPageAnnotation(note)
-    }
-    const saved = store.getState().browserAnnotationsByPageId[pageId]
-    const eligible = store.getState().browserAnnotationMarkerIdsByPageId[pageId]
-    expect(saved).toHaveLength(20)
-    expect(saved[0].id).toBe('note-3')
-    expect(new Set(saved.map((note) => note.payload.page.sanitizedUrl)).size).toBe(2)
-    expect(eligible).toEqual(['note-22'])
-    expect(eligible.every((id) => saved.some((note) => note.id === id))).toBe(true)
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'second'))
+    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual([
+      'annotation-1',
+      'second'
+    ])
 
-    store.getState().deleteBrowserPageAnnotation(pageId, 'note-22')
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
+    store.getState().deleteBrowserPageAnnotation(pageId, 'second')
+    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual(['annotation-1'])
     store.getState().clearBrowserPageAnnotations(pageId)
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
-  })
-
-  it('prunes eligible IDs when the oldest current-document notes are evicted', async () => {
-    const { store, pageId } = await createAnnotatedPage()
-    for (let index = 0; index < 22; index++) {
-      store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, `note-${index}`))
-    }
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toEqual(
-      store.getState().browserAnnotationsByPageId[pageId].map((note) => note.id)
-    )
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toHaveLength(20)
+    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
   })
 
   it('removes an accepted delivery snapshot after navigation while preserving later edits and additions', async () => {

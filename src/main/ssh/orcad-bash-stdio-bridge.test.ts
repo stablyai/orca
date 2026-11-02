@@ -88,14 +88,20 @@ function firstLine(stream: NodeJS.ReadableStream): Promise<string> {
   })
 }
 
-/** Decodes the bridge's stdout: resolves `ready` on the sentinel and `bytes` once `expected` arrived. */
-function decode(stream: NodeJS.ReadableStream, expected = 0) {
+/** Decodes the bridge's stdout, discarding payload bytes; resolves `ready` on the sentinel. */
+function decode(stream: NodeJS.ReadableStream) {
   const decoder = new OrcadStdioBridgeDecoder('raw')
   stream.pipe(decoder)
+  const ready = new Promise<string>((resolve) => decoder.once('signal', resolve))
+  decoder.resume()
+  return { decoder, ready }
+}
+
+/** Resolves with the payload once `expected` bytes arrived; collecting a flood would copy quadratically. */
+function received(decoder: OrcadStdioBridgeDecoder, expected: number): Promise<Buffer> {
   const chunks: Buffer[] = []
   let length = 0
-  const ready = new Promise<string>((resolve) => decoder.once('signal', resolve))
-  const bytes = new Promise<Buffer>((resolve, reject) => {
+  return new Promise<Buffer>((resolve, reject) => {
     decoder.on('error', reject)
     decoder.on('data', (chunk: Buffer) => {
       chunks.push(chunk)
@@ -105,10 +111,6 @@ function decode(stream: NodeJS.ReadableStream, expected = 0) {
       }
     })
   })
-  if (expected === 0) {
-    decoder.resume()
-  }
-  return { decoder, ready, bytes }
 }
 
 /** Writes like the desktop listener: one chunk at a time, waiting for drain. */
@@ -179,7 +181,8 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
 
   it('carries every byte value both ways in a multi-megabyte frame, without Node', async () => {
     const child = spawnBridge(echo.port)
-    const { ready, bytes } = decode(child.stdout, PAYLOAD.length)
+    const { decoder, ready } = decode(child.stdout)
+    const bytes = received(decoder, PAYLOAD.length)
     await ready
     const pids = processTree(child.pid!)
     child.stdin.write(PAYLOAD)
@@ -274,12 +277,10 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
       join(bin, 'cat'),
       '#!/bin/sh\n' +
         `trap 'kill $c 2>/dev/null; sleep 0.3; : > "${join(dir, 'killed')}"; exit 0' TERM\n` +
-        `: > "${join(dir, 'trap')}.$$"\n` +
-        `${realCat()} "$@" & c=$!\nwait $c\n` +
-        // The relay's socket is fd 3: its reader (stdin is fd 3) ends with orcad; the stdin reader
-        // stays blocked, as on a real host where the desktop keeps its pipe open, until killed.
-        '[ /dev/fd/0 -ef /dev/fd/3 ] && exit 0\n' +
-        'sleep 30 & c=$!\nwait $c\n',
+        // POSIX gives a background job /dev/null as stdin even under `<&0`, so hand it over on fd 5
+        // as the relay does: the socket reader ends with orcad, the stdin reader blocks until killed.
+        `exec 5<&0\n${realCat()} "$@" <&5 & c=$!\nexec 5<&-\n` +
+        `: > "${join(dir, 'trap')}.$$"\nwait $c\n`,
       { mode: 0o755 }
     )
     const trapsSet = (): number =>
@@ -355,7 +356,8 @@ describe.runIf(POSIX)('the bash stdio bridge’s Node fallback', () => {
       HOME: guestHome(scratch, true),
       PATH: pathWithoutBash(scratch)
     })
-    const { ready, bytes } = decode(child.stdout, PAYLOAD.length)
+    const { decoder, ready } = decode(child.stdout)
+    const bytes = received(decoder, PAYLOAD.length)
     await expect(ready).resolves.toBe('ready')
     child.stdin.write(PAYLOAD)
     expect((await bytes).equals(PAYLOAD)).toBe(true)

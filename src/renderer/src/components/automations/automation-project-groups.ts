@@ -1,6 +1,5 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { getProjectIdentityKey } from '../../../../shared/project-host-setup-projection'
 import type { Repo } from '../../../../shared/repo-types'
 
 export type AutomationProjectGroup = {
@@ -13,15 +12,9 @@ export function getAutomationProjectGroups(
   repos: readonly Repo[],
   selectedRepoId: string
 ): AutomationProjectGroup[] {
-  const projectIds = new Map(
-    projectHostSetupProjectionFromRepos(repos).setups.map((setup, index) => [
-      getRepoHostIdentity(repos[index]),
-      setup.projectId
-    ])
-  )
   const groupsByProject = new Map<string, AutomationProjectGroup>()
   for (const repo of repos) {
-    const projectKey = projectIds.get(getRepoHostIdentity(repo))!
+    const projectKey = getProjectIdentityKey(repo)
     const current = groupsByProject.get(projectKey)
     if (!current) {
       groupsByProject.set(projectKey, { projectKey, repo, sources: [repo] })
@@ -68,4 +61,20 @@ function compareAutomationProjectSource(a: Repo, b: Repo): number {
     return aLocal ? -1 : 1
   }
   return (a.addedAt ?? 0) - (b.addedAt ?? 0) || a.id.localeCompare(b.id)
+}
+
+export function getAutomationProjectRepoDetail(repo: Repo, hostLabel?: string | null): string {
+  const label = hostLabel?.trim()
+  return label ? `${label} · ${repo.path}` : repo.path
+}
+
+export function hasMultipleAutomationProjectHosts(repos: readonly Repo[]): boolean {
+  const hostIds = new Set<string>()
+  for (const repo of repos) {
+    hostIds.add(getRepoExecutionHostId(repo))
+    if (hostIds.size > 1) {
+      return true
+    }
+  }
+  return false
 }

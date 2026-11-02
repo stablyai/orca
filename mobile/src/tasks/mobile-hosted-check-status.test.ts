@@ -2,11 +2,35 @@ import { describe, expect, it } from 'vitest'
 import type { HostedReviewDecision } from '../../../src/shared/hosted-review'
 import {
   getHostedChecksLabel,
+  getHostedMergeLabel,
   getHostedReviewLabel,
   getHostedReviewSignalTone
 } from './mobile-hosted-check-status'
 
 describe('mobile hosted check status', () => {
+  it.each(['merged', 'closed'] as const)('shows %s before stale merge enrichment', (state) => {
+    expect(getHostedMergeLabel({ state, mergeable: 'CONFLICTING' })).toBe(
+      state === 'merged' ? 'Merged' : 'Closed'
+    )
+    expect(getHostedReviewSignalTone({ state, mergeable: 'CONFLICTING' }, 'merge')).toBe('neutral')
+  })
+
+  it('does not call pending checks Behind', () => {
+    const item = {
+      mergeable: 'MERGEABLE' as const,
+      checksSummary: {
+        state: 'pending' as const,
+        total: 1,
+        passed: 0,
+        failed: 0,
+        pending: 1,
+        neutral: 0
+      }
+    }
+    expect(getHostedMergeLabel(item)).toBe('Checks pending')
+    expect(getHostedReviewSignalTone(item, 'merge')).toBe('warning')
+  })
+
   it('renders a hydrated neutral GitLab summary as unresolved checks', () => {
     const summary = {
       state: 'neutral' as const,

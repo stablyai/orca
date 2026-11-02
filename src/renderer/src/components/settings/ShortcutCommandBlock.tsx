@@ -72,7 +72,7 @@ export function ShortcutCommandBlock({
   const isDigitIndex = isDigitIndexActionId(item.id)
   const canEnable = isDisabled && previousBindings.length > 0
 
-  const doubleTapHint = platform === 'darwin' ? '⇧⇧' : 'Shift Shift'
+  const doubleTapHint = platform === 'darwin' ? '⇧⇧' : '⇧ ⇧'
   const recordingMessage = translate(
     'auto.components.settings.ShortcutCommandBlock.eb72c52c28',
     'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',

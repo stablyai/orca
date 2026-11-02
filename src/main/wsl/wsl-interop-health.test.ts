@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../wsl', () => ({
-  listRunningWslDistrosAsync: vi.fn(),
   listWslDistrosAsync: vi.fn()
 }))
+vi.mock('../wsl-background-distro-gate', () => ({ isWslDistroRunning: vi.fn() }))
 vi.mock('./wsl-runner', () => ({ runWslProcess: vi.fn() }))
 
 import {
-  ACTIVITY_CHECK_DELAY_MS,
   ACTIVITY_CHECK_INTERVAL_MS,
   REPAIR_FAILURE_BACKOFF_MS,
   STOP_CHECK_FLOOR_MS,
   WslInteropHealthMonitor,
   type WslInteropHealthDeps
 } from './wsl-interop-health'
+
 import { WSL_INTEROP_PROBE_SCRIPT, WSL_INTEROP_REPAIR_SCRIPT } from './wsl-interop-registration'
 
 const PRESENT = 'orca-wsl-interop:present\n'
@@ -26,7 +26,7 @@ function harness(overrides: Partial<WslInteropHealthDeps> = {}) {
   let stopListener: ((stopped: string[], running: string[]) => void) | null = null
   const deps: WslInteropHealthDeps = {
     platform: () => 'win32',
-    listRunningDistros: vi.fn(async () => ['Ubuntu']),
+    isRunning: vi.fn(async (distro: string) => distro === 'Ubuntu'),
     resolveDefaultDistro: vi.fn(async () => 'Ubuntu'),
     runScript: vi.fn(async () => ({ code: 0, stdout: PRESENT })),
     subscribeStops: (listener) => {
@@ -62,20 +62,13 @@ function harness(overrides: Partial<WslInteropHealthDeps> = {}) {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('WslInteropHealthMonitor.check', () => {
-  it('reports intact without repairing', async () => {
-    const h = harness()
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: true })).resolves.toBe('intact')
-    expect(h.deps.runScript).toHaveBeenCalledTimes(1)
-    expect(h.deps.runScript).toHaveBeenCalledWith('Ubuntu', WSL_INTEROP_PROBE_SCRIPT)
-  })
-
   it('repairs as root when the entry is missing', async () => {
     const runScript = vi
       .fn()
       .mockResolvedValueOnce({ code: 0, stdout: MISSING })
       .mockResolvedValueOnce({ code: 0, stdout: 'orca-wsl-interop:repaired\n' })
     const h = harness({ runScript })
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: true })).resolves.toBe('repaired')
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('repaired')
     expect(runScript).toHaveBeenLastCalledWith('Ubuntu', WSL_INTEROP_REPAIR_SCRIPT, 'root')
     expect(h.deps.log).toHaveBeenCalledWith(expect.stringContaining('wsl --update'))
   })
@@ -83,25 +76,23 @@ describe('WslInteropHealthMonitor.check', () => {
   it('respects interop disabled in wsl.conf', async () => {
     const runScript = vi.fn(async () => ({ code: 0, stdout: MISSING_DISABLED }))
     const h = harness({ runScript })
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: true })).resolves.toBe(
-      'interop-disabled'
-    )
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('interop-disabled')
     expect(runScript).toHaveBeenCalledTimes(1)
   })
 
   it('never runs inside a distro that is not running', async () => {
-    const h = harness({ listRunningDistros: vi.fn(async () => ['Debian']) })
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: true })).resolves.toBe('not-running')
+    const h = harness({ isRunning: vi.fn(async (distro: string) => distro === 'Debian') })
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('not-running')
     expect(h.deps.runScript).not.toHaveBeenCalled()
   })
 
   it('treats an unconfirmed running list as not running', async () => {
     const h = harness({
-      listRunningDistros: vi.fn(async () => {
+      isRunning: vi.fn(async () => {
         throw new Error('unavailable')
       })
     })
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: true })).resolves.toBe('not-running')
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('not-running')
     expect(h.deps.runScript).not.toHaveBeenCalled()
   })
 
@@ -114,8 +105,8 @@ describe('WslInteropHealthMonitor.check', () => {
         })
     )
     const h = harness({ runScript })
-    const first = h.monitor.check('Ubuntu', { confirmRunning: false })
-    const second = h.monitor.check('ubuntu', { confirmRunning: false })
+    const first = h.monitor.check('Ubuntu')
+    const second = h.monitor.check('ubuntu')
     expect(second).toBe(first)
     await flush()
     release({ code: 0, stdout: PRESENT })
@@ -128,15 +119,11 @@ describe('WslInteropHealthMonitor.check', () => {
       script === WSL_INTEROP_PROBE_SCRIPT ? { code: 0, stdout: MISSING } : { code: 1, stdout: '' }
     )
     const h = harness({ runScript })
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: false })).resolves.toBe(
-      'repair-failed'
-    )
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: false })).resolves.toBe(
-      'repair-failed'
-    )
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('repair-failed')
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('repair-failed')
     expect(runScript).toHaveBeenCalledTimes(3)
     h.advance(REPAIR_FAILURE_BACKOFF_MS)
-    await h.monitor.check('Ubuntu', { confirmRunning: false })
+    await h.monitor.check('Ubuntu')
     expect(runScript).toHaveBeenCalledTimes(5)
   })
 
@@ -146,7 +133,7 @@ describe('WslInteropHealthMonitor.check', () => {
         throw new Error('timeout')
       })
     })
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: false })).resolves.toBe('unknown')
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('unknown')
   })
 })
 
@@ -156,27 +143,6 @@ describe('WslInteropHealthMonitor triggers', () => {
     h.monitor.noteActivity('Ubuntu')
     await flush()
     expect(h.timers).toHaveLength(0)
-  })
-
-  it('checks once after a delay and throttles repeated activity', async () => {
-    const h = harness()
-    h.monitor.noteActivity(null)
-    h.monitor.noteActivity('Ubuntu')
-    await flush()
-    expect(h.timers).toEqual([{ fn: expect.any(Function), delayMs: ACTIVITY_CHECK_DELAY_MS }])
-    expect(h.deps.runScript).not.toHaveBeenCalled()
-    h.runTimers()
-    await flush()
-    expect(h.deps.listRunningDistros).toHaveBeenCalledTimes(1)
-    expect(h.deps.runScript).toHaveBeenCalledTimes(1)
-
-    h.monitor.noteActivity('Ubuntu')
-    await flush()
-    expect(h.timers).toHaveLength(0)
-    h.advance(ACTIVITY_CHECK_INTERVAL_MS)
-    h.monitor.noteActivity('Ubuntu')
-    await flush()
-    expect(h.timers).toHaveLength(1)
   })
 
   it('re-checks used distros that are still running when another distro stops', async () => {
@@ -190,8 +156,8 @@ describe('WslInteropHealthMonitor triggers', () => {
     h.emitStop(['docker-desktop'], ['Ubuntu'])
     await flush()
     expect(h.deps.runScript).toHaveBeenCalledTimes(2)
-    // The confirmed list that reported the stop already proves Ubuntu is up.
-    expect(h.deps.listRunningDistros).toHaveBeenCalledTimes(1)
+    // The list that reported the stop can still name a stopping distro: the re-check reads again.
+    expect(h.deps.isRunning).toHaveBeenCalledTimes(2)
     h.advance(10_000)
     h.emitStop(['Ubuntu'], [])
     await flush()
@@ -230,6 +196,30 @@ describe('WslInteropHealthMonitor triggers', () => {
     expect(h.deps.runScript).toHaveBeenCalledTimes(2)
   })
 
+  it('never probes a distro a stop event lists but a settled read finds stopping (E9)', async () => {
+    const isRunning = vi.fn(async () => true)
+    const h = harness({ isRunning })
+    h.monitor.noteActivity('Ubuntu')
+    await flush()
+    h.runTimers()
+    await flush()
+    expect(h.deps.runScript).toHaveBeenCalledTimes(1)
+    h.advance(10_000)
+    isRunning.mockResolvedValue(false)
+    h.emitStop(['docker-desktop'], ['Ubuntu'])
+    await flush()
+    expect(h.deps.runScript).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the root repair when the distro stops after the probe (E9)', async () => {
+    const isRunning = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
+    const runScript = vi.fn(async () => ({ code: 0, stdout: MISSING }))
+    const h = harness({ isRunning, runScript })
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('not-running')
+    expect(runScript).toHaveBeenCalledTimes(1)
+    expect(runScript).toHaveBeenCalledWith('Ubuntu', WSL_INTEROP_PROBE_SCRIPT)
+  })
+
   it('treats an entry restored between probe and repair as intact', async () => {
     const h = harness({
       runScript: vi.fn(async (_distro: string, script: string) => ({
@@ -237,7 +227,7 @@ describe('WslInteropHealthMonitor triggers', () => {
         stdout: script === WSL_INTEROP_PROBE_SCRIPT ? MISSING : PRESENT
       }))
     })
-    await expect(h.monitor.check('Ubuntu', { confirmRunning: false })).resolves.toBe('intact')
+    await expect(h.monitor.check('Ubuntu')).resolves.toBe('intact')
     expect(h.deps.log).not.toHaveBeenCalled()
   })
 })

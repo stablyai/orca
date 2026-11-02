@@ -3,7 +3,10 @@ import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
 import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
 import { buildAgentNotificationId } from '../../shared/agent-notification-id'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
+import { isCoordinatorOnlyNews, withApprovalTitle } from '../../shared/dispatched-worker-attention'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
+import { isNotificationSourceEnabled } from '../../shared/notification-source-gate'
 import type {
   NotificationDispatchRequest,
   NotificationSettings
@@ -26,6 +29,8 @@ export type TerminalAgentPhonePushDeps = {
   /** In-memory only, as the window's: the alert must not wait on a lookup. */
   readWorkspaceLabels: (worktreeId: string, paneKey: string) => TerminalAgentWorkspaceLabels
   isWorkspaceMuted: (worktreeId: string) => boolean
+  readOrchestration: (paneKey: string) => AgentStatusOrchestrationContext | undefined
+  readTerminalTitle: (paneKey: string) => string | null
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
   translate?: (key: string, fallback: string) => string
   dispatch: (event: MobileNotificationDispatchEvent) => void
@@ -93,12 +98,22 @@ export class TerminalAgentPhonePush {
 
   private send(news: PaneNews): void {
     // Recheck window ownership at delivery to avoid duplicating a newly opened window's push.
-    if (this.deps.hasWindow() || this.deps.isWorkspaceMuted(news.worktreeId)) {
+    const { agentState, paneKey } = news.event
+    if (
+      this.deps.hasWindow() ||
+      this.deps.isWorkspaceMuted(news.worktreeId) ||
+      (paneKey &&
+        isCoordinatorOnlyNews(
+          withApprovalTitle(agentState, this.deps.readTerminalTitle(paneKey)),
+          () => this.deps.readOrchestration(paneKey)
+        ))
+    ) {
       return
     }
     const settings = this.deps.readNotificationSettings()
     // The window's own fan-out gates the phone on these same preferences.
-    const desktopAllowed = settings?.enabled !== false && settings?.agentTaskComplete !== false
+    const desktopAllowed =
+      !settings || isNotificationSourceEnabled(settings, news.event.source, news.event.agentState)
     const now = this.deps.now()
     const burstKey = JSON.stringify([desktopAllowed, news.event.agentState, news.worktreeId])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {

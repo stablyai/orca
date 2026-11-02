@@ -97,6 +97,21 @@ export function captureWslRelaySetup(state: WslRelayDistroState): WslRelayRestar
   }
 }
 
+/** A cooled-down failed state: ensure replaces it with a starting relay that inherits its config. */
+export function seedWslRelayState(
+  distro: string,
+  setup: WslRelayRestartSetup
+): WslRelayDistroState {
+  return {
+    distro,
+    ...setup,
+    launchKinds: new Set(setup.launchKinds),
+    phase: 'failed',
+    failures: 0,
+    cooldownUntil: 0
+  }
+}
+
 /** Brings a relay back with everything it served before, even after its state was dropped. */
 export async function restartWslRelay(
   states: Map<string, WslRelayDistroState>,
@@ -107,15 +122,7 @@ export async function restartWslRelay(
   const key = wslHookRelayStateKey(distro)
   let seed: WslRelayDistroState | undefined
   if (!states.has(key)) {
-    // A cooled-down failed state: ensure replaces it with a starting relay that inherits its config.
-    seed = {
-      distro,
-      ...setup,
-      launchKinds: new Set(setup.launchKinds),
-      phase: 'failed',
-      failures: 0,
-      cooldownUntil: 0
-    }
+    seed = seedWslRelayState(distro, setup)
     states.set(key, seed)
   }
   // No Codex home argument: ensure keeps the seed's, and never overwrites a newer relay's.

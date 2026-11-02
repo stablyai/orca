@@ -27,34 +27,28 @@ function listen(serverToStart: Server): Promise<number> {
 }
 
 describe('MjpegFrameStream', () => {
-  it('reads raw MJPEG frames through Node HTTP', async () => {
-    let requestUrl = ''
+  it('discards an unfinished frame when reconnecting to a new response', async () => {
+    let attempts = 0
     const framePromise = new Promise<Buffer>((resolve, reject) => {
-      const httpServer = createServer((req, res) => {
-        requestUrl = req.url ?? ''
+      const httpServer = createServer((_req, res) => {
+        attempts += 1
         res.writeHead(200, { 'content-type': 'application/octet-stream' })
-        res.write(Buffer.concat([Buffer.from('--frame\r\n'), JPEG]))
-        res.end()
+        res.end(attempts === 1 ? JPEG.subarray(0, 3) : JPEG)
       })
       server = httpServer
-
       void listen(httpServer).then((port) => {
-        const stream = new MjpegFrameStream(
-          `http://127.0.0.1:${port}/stream.mjpeg`,
-          {
-            onError: reject,
-            onFrame: (frame) => {
-              stream.stop()
-              resolve(frame)
-            }
-          },
-          'test-key'
-        )
+        const stream = new MjpegFrameStream(`http://127.0.0.1:${port}/stream.mjpeg`, {
+          onError: reject,
+          onFrame: (frame) => {
+            stream.stop()
+            resolve(frame)
+          }
+        })
         stream.start()
       })
     })
 
     await expect(framePromise).resolves.toEqual(JPEG)
-    expect(requestUrl).toBe('/stream.mjpeg?raw=1&_orca=test-key')
+    expect(attempts).toBe(2)
   })
 })

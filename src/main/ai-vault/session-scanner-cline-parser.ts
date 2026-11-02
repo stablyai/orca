@@ -4,6 +4,7 @@ import { readStreamedSessionDocument } from './session-document-stream'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { clineMessagesPathForMetadata } from '../../shared/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
 import { addSessionContent } from './session-scanner-messages'
@@ -29,9 +30,7 @@ export function isClineSessionMetadataPath(filePath: string): boolean {
   return Boolean(fileName && sessionId && fileName === `${sessionId}.json`)
 }
 
-export function clineMessagesPathForMetadata(filePath: string): string {
-  return filePath.endsWith('.json') ? `${filePath.slice(0, -'.json'.length)}.messages.json` : ''
-}
+export { clineMessagesPathForMetadata }
 
 export async function parseClineSessionFile(
   file: FileWithMtime,

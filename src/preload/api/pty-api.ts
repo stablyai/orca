@@ -10,7 +10,7 @@ import type {
   TerminalLaunchResult,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
@@ -75,6 +75,8 @@ export type PtyApi = {
     placement?: TerminalPanePlacement
     // Visible restores are `user-resume`, hidden ones `automatic-restore`; the fork gate validates.
     spawnIntent?: SpawnIntent
+    // A restore no user act asked for; main holds it for a stopped WSL distro. Older mains ignore it.
+    wslPassiveRestore?: true
     agentLaunch?: AgentPaneLaunchRequest
     // Main emits agent_started only after a successful spawn.
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }

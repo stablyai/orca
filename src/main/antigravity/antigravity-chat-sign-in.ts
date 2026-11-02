@@ -15,7 +15,7 @@ import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { prepareAcpLaunch } from '../acp/acp-structured-launch-preparation'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/acp-errors'
-import { saveSignInModels } from './antigravity-sign-in-models'
+import { captureSignInModelPublisher } from './antigravity-sign-in-models'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { structuredAgentHostLaunchSources } from '../runtime/structured-agent-launch-support'
 import {
@@ -55,7 +55,7 @@ type Flow = {
 }
 
 export type AntigravityChatSignInHost = {
-  launchSources(): ReturnType<typeof structuredAgentHostLaunchSources>
+  launchSources(signal: AbortSignal): ReturnType<typeof structuredAgentHostLaunchSources>
   /** Rejects when a chat is not proven stopped. */
   stopLiveChats(): Promise<void>
   connect?: ConnectAcpAgent<AcpAgentConnection>
@@ -157,7 +157,11 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
   const spec: AcpLaunchSpec = ANTIGRAVITY_LAUNCH_SPEC
   const { signal } = current.ended
   const closed = (): void => signal.throwIfAborted()
-  const { accountHome, env, commandSettings, dataDirectory } = await host.launchSources()
+  const publishModels = captureSignInModelPublisher(
+    spec,
+    () => active === current && running(current) && !signal.aborted
+  )
+  const { accountHome, env, commandSettings, dataDirectory } = await host.launchSources(signal)
   const deps = { spec, dataDirectory, connect: host.connect ?? createAcpAgentConnection }
   const resolve = () =>
     resolveAcpLaunchInvocation(spec, accountHome, {
@@ -210,7 +214,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       })
       owned.sessionId = started.sessionId
       current.pending = undefined
-      saveSignInModels(spec, accountHome, started)
+      publishModels(accountHome, started, !connection.exited)
     } finally {
       signal.removeEventListener('abort', stop)
       await closeAntigravitySignInOwner(home, server)

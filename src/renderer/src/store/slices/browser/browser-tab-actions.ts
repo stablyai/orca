@@ -23,6 +23,7 @@ import { findGroupAndWorktree } from '../tab-group-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { openBrowserTabThroughLayoutOwner } from './browser-tab-open-through-layout-owner'
 import { browserTabOpenView } from './browser-tab-open-view'
+import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,
@@ -162,10 +163,20 @@ export function createBrowserTabActions(
         return browserTab
       }
       drawHere()
+      // Why: activating by creation must reach main like a tab switch does, or main's active tab lags the UI.
+      // Main ignores a page id it never registered, so a paired-runtime page needs no owner lookup.
+      if (
+        (options?.activate ?? true) &&
+        !page.browserRuntimeEnvironmentId &&
+        typeof window !== 'undefined' &&
+        window.api?.browser
+      ) {
+        window.api.browser.notifyActiveTabChanged({ browserPageId: page.id }).catch(() => {})
+      }
       return browserTab
     },
 
-    openNewBrowserTabInActiveWorkspace: async (groupId) => {
+    openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection) => {
       const state = get()
       // Why: the invoking group owns its workspace; global selection may already point elsewhere.
       const worktreeId =
@@ -180,6 +191,7 @@ export function createBrowserTabActions(
         throw new Error(browserAvailability.reason)
       }
       const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
+      const split = splitDirection ? { sourceGroupId: groupId, splitDirection } : undefined
       const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
@@ -193,9 +205,11 @@ export function createBrowserTabActions(
             worktreeId,
             environmentId: runtimeEnvironmentId,
             url: defaultUrl,
-            // Desktop reconciliation honors clientTargetGroupId; targetGroupId steers snapshot-driven clients instead.
-            targetGroupId: groupId,
-            clientTargetGroupId: groupId
+            ...resolveWebRuntimeBrowserClientTargetGroup(
+              get(),
+              { workspaceId: worktreeId, targetGroupId: groupId, split },
+              runtimeEnvironmentId
+            )
           })
           if (created) {
             get().recordFeatureInteraction('browser-tab-created')
@@ -215,7 +229,7 @@ export function createBrowserTabActions(
         title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
         focusAddressBar: true,
         browserRuntimeEnvironmentId: null,
-        targetGroupId: groupId
+        ...(split ? { split } : { targetGroupId: groupId })
       })
       get().recordFeatureInteraction('browser-tab-created')
     },

@@ -197,13 +197,12 @@ describe('useTerminalPaneGlobalEffects', () => {
       'fit-reveal',
       'intent:terminal-a',
       'intent:terminal-b',
-      'reveal-repaint'
+      'reveal-present'
     ])
-    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     vi.advanceTimersByTime(0)
-    expect(order.slice(-3)).toEqual(['reveal-repaint', 'reset-atlas', 'refresh'])
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
+    // A healthy shared atlas is not cleared on an ordinary worktree reveal.
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
     expect(mocks.restoreScrollStateAfterLayout).not.toHaveBeenCalled()
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
@@ -572,7 +571,8 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.fitAndFocusPanes).not.toHaveBeenCalled()
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(manager.refreshAllPanes).not.toHaveBeenCalled()
-    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealPresent).toHaveBeenCalled()
   })
 
   it('enforces scroll intent after hidden layout changes the viewport', () => {

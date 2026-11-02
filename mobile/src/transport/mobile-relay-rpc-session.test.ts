@@ -326,6 +326,20 @@ describe('mobile relay RPC session', () => {
     expect(session.getState()).toBe('disconnected')
   })
 
+  it('releases requests waiting on a failed session once it is retired, unsent', async () => {
+    const { session } = await authenticateSession()
+    fakes.linkOptions!.onError(new Error('relay lost'))
+    vi.useFakeTimers()
+    const settled = vi.fn()
+    session.sendRequest('status.get').catch(settled)
+    session.close()
+    // No timer advances: the request must not sit out its connect timeout.
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledOnce())
+
+    expect(isRpcDeliveryUnknown(settled.mock.calls[0]![0])).toBe(false)
+    expect(fakes.sendText).not.toHaveBeenCalled()
+  })
+
   it('keeps a synchronous pre-write relay failure definite', async () => {
     const { session } = await authenticateSession()
     fakes.sendText.mockImplementationOnce(() => {

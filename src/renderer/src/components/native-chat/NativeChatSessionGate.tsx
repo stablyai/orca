@@ -45,7 +45,12 @@ export function NativeChatSessionGate({
     }
   }, [resolution])
   if (!resolution) {
-    return <NativeChatEmptyState kind="not-agent" />
+    // Why its own canvas: over a theme image the cover is clear and only a chat root paints.
+    return (
+      <div className="flex size-full bg-chat-canvas">
+        <NativeChatEmptyState kind="not-agent" />
+      </div>
+    )
   }
   return <>{children(resolution)}</>
 }

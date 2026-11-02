@@ -5,8 +5,8 @@ import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bun
 import type {
   MobileWebBundleFetchProgress,
   MobileWebBundleFetchResult
-} from '../transport/mobile-web-bundle-fetch'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+} from '../transport/web-bundle/mobile-web-bundle-fetch'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
@@ -87,7 +87,7 @@ vi.mock('../transport/rpc-operation', () => ({
     return { manifest: doubles.manifest }
   }
 }))
-vi.mock('../transport/mobile-web-bundle-fetch', () => ({
+vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: (args: {
     signal: AbortSignal
     onProgress: (progress: MobileWebBundleFetchProgress) => void
@@ -523,7 +523,7 @@ describe('the wait for the page to speak', () => {
     })
     expect(
       live(mounted.timers.armed).filter((timer) => timer.delayMs === DOCUMENT_LOAD_DEADLINE_MS)
-    ).toHaveLength(2)
+    ).toHaveLength(1)
     await act(async () => {
       mounted.timers.fire()
     })

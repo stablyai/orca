@@ -1,103 +1,36 @@
-import { EventEmitter } from 'node:events'
-import { connect, isIP, type Socket } from 'node:net'
+import { isIP } from 'node:net'
 import { connect as connectTls, type ConnectionOptions } from 'node:tls'
 import { separateElectronProxyCredentials } from '../network/electron-proxy-credentials'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
-import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import { ProxyHandshakeSocket, type ProxyHandshakeTransport } from './proxy-handshake-socket'
 
 const MAX_RESPONSE_HEAD_BYTES = 16 * 1024
 const HEAD_TERMINATOR = Buffer.from('\r\n\r\n')
 
-export class HttpConnectTunnelSocket extends EventEmitter implements BrowserNetworkTunnelSocket {
-  destroyed = false
-  private readonly socket: Socket
-  private paused = false
+export class HttpConnectTunnelSocket extends ProxyHandshakeSocket {
+  private readonly request: string
   private head: Buffer = Buffer.alloc(0)
-  private ready = false
 
-  constructor(proxy: URL, target: BrowserNetworkTunnelOpen) {
+  /** `openTransport` reaches the proxy's own host and port; an https: proxy is wrapped in TLS here. */
+  constructor(
+    proxy: URL,
+    target: BrowserNetworkTunnelOpen,
+    openTransport: (signal: AbortSignal) => Promise<ProxyHandshakeTransport>
+  ) {
     super()
-    const request = encodeConnectRequest(proxy, target)
-    const port = Number(proxy.port) || (proxy.protocol === 'https:' ? 443 : 80)
-    const host = proxy.hostname.replace(/^\[|\]$/g, '')
-    const onConnected = (): void => {
-      this.socket.write(request)
-    }
-    // tls.connect supports allowHalfOpen, but its typings omit it.
-    const tlsOptions: ConnectionOptions & { allowHalfOpen: boolean } = {
-      host,
-      port,
-      allowHalfOpen: true,
-      ...(isIP(host) ? {} : { servername: host })
-    }
-    this.socket =
+    this.request = encodeConnectRequest(proxy, target)
+    this.start((signal) =>
       proxy.protocol === 'https:'
-        ? connectTls(tlsOptions, onConnected)
-        : connect({ host, port, allowHalfOpen: true }, onConnected)
-    this.socket.on('data', (bytes: Buffer | string) =>
-      this.onData(typeof bytes === 'string' ? Buffer.from(bytes) : bytes)
+        ? openTransport(signal).then((raw) => wrapTls(proxy, raw))
+        : openTransport(signal)
     )
-    this.socket.on('end', () => this.emit('end'))
-    this.socket.on('close', () => {
-      this.destroyed = true
-      this.emit('close')
-    })
-    this.socket.on('error', (error) => this.emit('error', error))
   }
 
-  setNoDelay(noDelay = true): this {
-    this.socket.setNoDelay(noDelay)
-    return this
+  protected begin(): void {
+    this.send(this.request)
   }
 
-  pause(): this {
-    this.paused = true
-    if (this.ready) {
-      this.socket.pause()
-    }
-    return this
-  }
-
-  resume(): this {
-    this.paused = false
-    if (this.ready) {
-      this.socket.resume()
-    }
-    return this
-  }
-
-  write(bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
-    if (!this.ready || this.destroyed) {
-      callback?.()
-      return false
-    }
-    return this.socket.write(bytes, callback)
-  }
-
-  end(): this {
-    this.socket.end()
-    return this
-  }
-
-  destroy(): this {
-    this.destroyed = true
-    this.socket.destroy()
-    return this
-  }
-
-  private fail(error: Error): void {
-    if (this.destroyed) {
-      return
-    }
-    this.emit('error', error)
-    this.socket.destroy()
-  }
-
-  private onData(bytes: Buffer): void {
-    if (this.ready) {
-      this.emit('data', bytes)
-      return
-    }
+  protected onHandshakeData(bytes: Buffer): void {
     this.head = Buffer.concat([this.head, bytes])
     const end = this.head.indexOf(HEAD_TERMINATOR)
     if (end === -1) {
@@ -114,15 +47,21 @@ export class HttpConnectTunnelSocket extends EventEmitter implements BrowserNetw
     }
     const remaining = this.head.subarray(end + HEAD_TERMINATOR.byteLength)
     this.head = Buffer.alloc(0)
-    this.ready = true
-    if (this.paused) {
-      this.socket.pause()
-    }
-    this.emit('connect')
-    if (remaining.byteLength > 0) {
-      this.emit('data', remaining)
-    }
+    this.finishHandshake(remaining)
   }
+}
+
+function wrapTls(proxy: URL, socket: ProxyHandshakeTransport): ProxyHandshakeTransport {
+  const host = proxy.hostname.replace(/^\[|\]$/g, '')
+  // tls.connect supports allowHalfOpen, but its typings omit it.
+  const options: ConnectionOptions & { allowHalfOpen: boolean } = {
+    socket,
+    // The certificate is checked against host; SNI must not carry an IP literal.
+    host,
+    allowHalfOpen: true,
+    ...(isIP(host) ? {} : { servername: host })
+  }
+  return connectTls(options)
 }
 
 function encodeConnectRequest(proxy: URL, target: BrowserNetworkTunnelOpen): string {

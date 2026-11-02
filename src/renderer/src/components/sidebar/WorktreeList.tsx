@@ -9,6 +9,7 @@ import {
 } from '@/store/selectors'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { openHeaderCreateComposer } from './header-create-workspace-target'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
@@ -35,6 +36,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-s
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
+import { useWorkspaceBoardStatuses } from './use-workspace-board-statuses'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
@@ -80,7 +82,7 @@ const WorktreeList = React.memo(function WorktreeList({
     [activeWorkspaceKey, activeWorktreeId]
   )
   const groupBy = useAppStore((s) => s.groupBy)
-  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const boardStatuses = useWorkspaceBoardStatuses()
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const openModal = useAppStore((s) => s.openModal)
@@ -126,7 +128,7 @@ const WorktreeList = React.memo(function WorktreeList({
     projectOrderBy,
     pinnedDisplayPolicy,
     defaultHostId,
-    workspaceStatuses,
+    workspaceStatuses: boardStatuses,
     settings,
     collapsedGroups,
     repos,
@@ -152,7 +154,7 @@ const WorktreeList = React.memo(function WorktreeList({
   })
   const statusMutations = useWorktreeStatusMutations({
     manualOrderCatalog,
-    workspaceStatuses,
+    workspaceStatuses: boardStatuses,
     sortBy
   })
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
@@ -162,12 +164,6 @@ const WorktreeList = React.memo(function WorktreeList({
     markSidebarWorktreeActiveImmediately(worktreeId, rowKey)
   }, [])
 
-  const handleCreateForRepo = useCallback(
-    (projectId: string) => {
-      openModal('new-workspace-composer', { initialRepoId: projectId, telemetrySource: 'sidebar' })
-    },
-    [openModal]
-  )
   const handleOpenRepoSettings = useCallback(
     (projectId: string, sectionId?: string) => {
       openSettingsTarget({ pane: 'repo', repoId: projectId, ...(sectionId ? { sectionId } : {}) })
@@ -268,7 +264,7 @@ const WorktreeList = React.memo(function WorktreeList({
         projectOrderBy={projectOrderBy}
         toggleGroup={toggleGroup}
         collapsedGroups={effectiveCollapsedGroups}
-        handleCreateForRepo={handleCreateForRepo}
+        handleCreateForRepo={openHeaderCreateComposer}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
@@ -310,7 +306,7 @@ const WorktreeList = React.memo(function WorktreeList({
         onHostDragActiveChange={rowModel.setHostDragActive}
         prCache={prCache}
         hostedReviewCache={hostedReviewCache}
-        workspaceStatuses={workspaceStatuses}
+        workspaceStatuses={boardStatuses}
         projectGrouping={projectGrouping}
         projectGroups={projectGroups}
         visibleProjectGroups={visibleScope.visibleProjectGroupsForRows}

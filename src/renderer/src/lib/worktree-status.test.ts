@@ -117,9 +117,19 @@ describe('getWorktreeStatus', () => {
     expect(status).toBe('active')
   })
 
-  it('still spins on an agent-attributable braille-spinner title', () => {
+  it('keeps an unowned task title active despite an incidental agent name', () => {
     const status = getWorktreeStatus(
       [{ id: 'tab-1', title: '⠹ codex fix flaky test' }],
+      [],
+      livePtyMap('tab-1')
+    )
+
+    expect(status).toBe('active')
+  })
+
+  it('spins on the same task title with independent launch identity', () => {
+    const status = getWorktreeStatus(
+      [{ id: 'tab-1', title: '⠹ codex fix flaky test', launchAgent: 'codex' }],
       [],
       livePtyMap('tab-1')
     )

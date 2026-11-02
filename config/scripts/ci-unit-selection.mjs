@@ -54,7 +54,7 @@ export function selectUnitFiles(files, changed, graphInput) {
 
 // Job slots, not cores, drive queueing: eight shards consumed 68% of daily slots. Five budget ~8.8min/shard versus 10.5min p95 queue.
 // Full PR/daily callers use five; selected drafts may use fewer.
-export const FULL_SHARD_COUNT = 5
+export const FULL_SHARD_COUNT = 12
 
 export function planUnitSelection({
   files,

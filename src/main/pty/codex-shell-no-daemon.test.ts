@@ -18,6 +18,10 @@ import {
 } from '../../shared/codex-shell-function'
 import { resolveFishBinary } from '../../shared/fish-binary-requirement'
 import { getPowerShellAgentWrappers } from '../../shared/powershell-agent-wrappers'
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  REMOTE_VIEWER_CLIPBOARD_ENV
+} from '../../shared/remote-viewer-clipboard-env'
 
 const isWindows = process.platform === 'win32'
 const fishLookup = resolveFishBinary()
@@ -109,6 +113,7 @@ if (a.length === 1 && a[0] === '--help') {
   process.exit(0)
 }
 let out = ['ARGV', ...a].join('|')
+if (process.env.FAKE_CODEX_READ_CLIPBOARD_ENV === '1') out += '|ssh=' + (process.env.SSH_CONNECTION ?? '<unset>')
 if (process.env.FAKE_CODEX_READ_STDIN === '1') out += '|stdin=' + fs.readFileSync(0, 'utf8').trim()
 console.log(out)
 process.exit(Number(process.env.FAKE_CODEX_EXIT || 0))
@@ -125,6 +130,7 @@ process.exit(Number(process.env.FAKE_CODEX_EXIT || 0))
 if [ "$#" -eq 1 ] && [ "$1" = --help ]; then echo help >> ${JSON.stringify(helpLog)}; cat ${JSON.stringify(helpFile)}; exit 0; fi
 out=ARGV
 for a in "$@"; do out="$out|$a"; done
+[ "\${FAKE_CODEX_READ_CLIPBOARD_ENV:-}" = 1 ] && out="$out|ssh=\${SSH_CONNECTION-<unset>}"
 [ "\${FAKE_CODEX_READ_STDIN:-}" = 1 ] && out="$out|stdin=$(cat)"
 printf '%s\\n' "$out"
 exit "\${FAKE_CODEX_EXIT:-0}"
@@ -190,6 +196,9 @@ function run(
       CODEX_HOME: join(sandbox.bin, '..', 'codex-home'),
       // Nested Orca tests must not forward the host pane's identity.
       ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, ''])),
+      SSH_CONNECTION: undefined,
+      SSH_TTY: undefined,
+      [REMOTE_VIEWER_CLIPBOARD_ENV]: undefined,
       ...env
     }
   })
@@ -220,6 +229,37 @@ describe('codex wrapper --no-daemon rule', () => {
 
   for (const [shell, available] of shells) {
     describe.skipIf(!available)(shell, () => {
+      it.each(
+        [
+          ['1', undefined, undefined, CODEX_REMOTE_VIEWER_SSH_CONNECTION, '0'],
+          ['1', undefined, undefined, CODEX_REMOTE_VIEWER_SSH_CONNECTION, '3'],
+          ['0', undefined, undefined, '<unset>', '0'],
+          ['1', '', undefined, '', '0'],
+          ['1', '10.0.0.1 5000 10.0.0.2 22', undefined, '10.0.0.1 5000 10.0.0.2 22', '0'],
+          ['1', undefined, '/dev/ttys004', '<unset>', '0']
+        ].filter(([, inherited]) => !isPowerShell(shell) || inherited !== '')
+      )(
+        'routes manual copies for remote=%s without marking the parent shell',
+        (remote, inherited, inheritedTty, expected, exitCode) => {
+          const sandbox = makeSandbox(HELP_WITH_FLAG)
+          const bareCall = isPowerShell(shell)
+            ? '$orcaClipboardExit = $LASTEXITCODE\n& (Get-Command codex -CommandType Application | Select-Object -First 1).Source shell\nexit $orcaClipboardExit'
+            : 'command codex shell'
+          const result = run(shell, `codex clipboard\n${bareCall}`, sandbox, {
+            FAKE_CODEX_READ_CLIPBOARD_ENV: '1',
+            FAKE_CODEX_EXIT: exitCode ?? '0',
+            [REMOTE_VIEWER_CLIPBOARD_ENV]: remote ?? '0',
+            ...(inherited !== undefined ? { SSH_CONNECTION: inherited } : {}),
+            ...(inheritedTty ? { SSH_TTY: inheritedTty } : {})
+          })
+          expect(result.status, result.stderr).toBe(Number(exitCode))
+          expect(lines(result.stdout)).toEqual([
+            `ARGV|--no-daemon|clipboard|ssh=${expected}`,
+            `ARGV|shell|ssh=${inherited ?? '<unset>'}`
+          ])
+        }
+      )
+
       it('adds --no-daemon first unless an argument is denylisted', () => {
         const sandbox = makeSandbox(HELP_WITH_FLAG)
         const result = run(shell, ALL.map((argv) => codexCall(shell, argv)).join('\n'), sandbox)

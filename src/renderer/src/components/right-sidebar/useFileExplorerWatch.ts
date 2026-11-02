@@ -1,5 +1,6 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
+import { FileWatchEventBuffer } from '../../../../shared/filesystem-watch-event-buffer'
 import type {
   DirCache,
   FileExplorerOperationOwner,
@@ -120,12 +121,12 @@ export function useFileExplorerWatch({
   const refreshTreeRef = useRef(refreshTree)
   refreshTreeRef.current = refreshTree
 
-  const deferredRef = useRef<FsChangedPayload[]>([])
+  const deferredRef = useRef(new FileWatchEventBuffer())
   const resyncWatchKeysRef = useRef(new Set<string>())
   const activeResyncByWatchKeyRef = useRef(new Map<string, () => void>())
 
   // Bridge payload replay to the flush effect without resubscribing.
-  const processPayloadRef = useRef<((payload: FsChangedPayload) => void) | null>(null)
+  const processPayloadRef = useRef<((events: FsChangeEvent[]) => void) | null>(null)
 
   // Keep setup atomic to prevent cleanup-order races dropping events on rapid switches.
   useEffect(() => {
@@ -136,6 +137,7 @@ export function useFileExplorerWatch({
 
     const currentWorktreePath = worktreePath
     const currentWorktreeId = activeWorktreeId
+    const deferred = deferredRef.current
     const resyncWatchKeys = resyncWatchKeysRef.current
     const activeResyncByWatchKey = activeResyncByWatchKeyRef.current
     const currentWatchKey = JSON.stringify([
@@ -176,7 +178,8 @@ export function useFileExplorerWatch({
       })
     }
 
-    processPayloadRef.current = processPayload
+    processPayloadRef.current = (events) =>
+      processPayload({ worktreePath: currentWorktreePath, events })
 
     let disposed = false
 
@@ -207,7 +210,7 @@ export function useFileExplorerWatch({
         dragSourceRef.current !== null ||
         isNativeDragOverRef.current
       ) {
-        deferredRef.current.push(payload)
+        deferred.push(payload.events)
         return
       }
 
@@ -247,12 +250,12 @@ export function useFileExplorerWatch({
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {
         activeResyncByWatchKey.delete(currentWatchKey)
       }
-      const hadDeferredEvents = deferredRef.current.length > 0
+      const hadDeferredEvents = deferred.size > 0
       if (scheduler.cancel() || hadDeferredEvents) {
         // The tree cache survives Files being hidden, so remember work canceled after receipt.
         resyncWatchKeys.add(currentWatchKey)
       }
-      deferredRef.current = []
+      deferred.clear()
       processPayloadRef.current = null
     }
   }, [worktreePath, activeWorktreeId, activeRuntimeEnvironmentId, setDirCache, setSelectedPath])
@@ -262,14 +265,9 @@ export function useFileExplorerWatch({
       inlineInput === null &&
       dragSourcePath === null &&
       !isNativeDragOver &&
-      deferredRef.current.length > 0
+      deferredRef.current.size > 0
     ) {
-      const deferred = deferredRef.current.splice(0)
-      if (processPayloadRef.current) {
-        for (const payload of deferred) {
-          processPayloadRef.current(payload)
-        }
-      }
+      processPayloadRef.current?.(deferredRef.current.take())
     }
   }, [inlineInput, dragSourcePath, isNativeDragOver])
 }

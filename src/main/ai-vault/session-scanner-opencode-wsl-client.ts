@@ -4,11 +4,17 @@ import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { admitWslTranscriptPath } from '../native-chat/wsl-transcript-running-admission'
+import { noteWslDistroMayHaveStopped } from '../wsl/wsl-unc-access-gate'
 import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sqlite-process-client'
 import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 import { buildRelayAiVaultServiceEnv } from './session-scanner-service-env'
+import { AiVaultScanIssueError } from './session-scan-issues'
+import {
+  AI_VAULT_SCAN_ISSUE_COPY,
+  aiVaultScanIssueText
+} from '../../shared/ai-vault-scan-issue-copy'
 
 const runtimes = new Map<string, OpenCodeWslRuntime>()
 const clients = new Map<string, OpenCodeSqliteWorkerClient>()
@@ -49,10 +55,14 @@ export async function openCodeWslClient(
   throwIfSignalAborted(signal)
   const key = distro.toLowerCase()
   const runtime = runtimes.get(key)
-  if (!runtime || runtime.error !== undefined) {
-    throw new Error(
-      runtime?.error ?? 'The WSL SQLite reader is not prepared. Refresh Vault to retry.'
-    )
+  if (!runtime) {
+    throw new AiVaultScanIssueError(aiVaultScanIssueText('openCodeWslReaderNotPrepared'))
+  }
+  if (runtime.error !== undefined) {
+    // The preparing placeholder is Orca's own table text; real setup failures stay verbatim.
+    throw runtime.error === AI_VAULT_SCAN_ISSUE_COPY.openCodeWslReaderPreparing
+      ? new AiVaultScanIssueError(aiVaultScanIssueText('openCodeWslReaderPreparing'))
+      : new Error(runtime.error)
   }
   let client = clients.get(key)
   if (!client) {
@@ -62,14 +72,11 @@ export async function openCodeWslClient(
       cwd: resolveWslInteropSpawnCwd(),
       env: { ...buildRelayAiVaultServiceEnv(), WSL_UTF8: '1' },
       async beforeSpawn(spawnSignal) {
-        const running = await waitForPromiseWithSignal(
-          filterPathsToRunningWslDistrosAsync([dbPath], { requireConfirmed: true }),
-          spawnSignal
-        )
-        if (running.length === 0) {
-          throw new Error(`WSL distro ${distro} is not running. Start it to read its history.`)
-        }
-      }
+        // A `--exec` of a stopped distro boots it; every respawn asks again.
+        await waitForPromiseWithSignal(admitWslTranscriptPath(dbPath), spawnSignal)
+      },
+      // The reader dying may mean its distro stopped: a respawn must not trust an older running read.
+      onUnexpectedExit: () => noteWslDistroMayHaveStopped(distro)
     })
     clients.set(key, client)
   }

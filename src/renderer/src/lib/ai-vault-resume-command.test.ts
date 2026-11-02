@@ -1,3 +1,4 @@
+import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { getDefaultSettings } from '../../../shared/constants'
 import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,44 +25,32 @@ afterEach(() => {
 
 type RuntimePreference = { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
 
-type AiVaultResumeCommandState = Parameters<
-  typeof buildAiVaultResumeCopyCommandForWorktree
->[0]['state']
+type AiVaultResumeCommandState = AiVaultResumePlatformState
 
 function makeState(args: {
   worktreePath: string
   localWindowsRuntimePreference?: RuntimePreference
   terminalWindowsShell?: string
-}): Extract<AiVaultResumeCommandState, { endpointProjects: unknown }> & {
-  settings: NonNullable<AiVaultResumeCommandState['settings']>
-} {
+}): AiVaultResumeCommandState {
+  const settings = getDefaultSettings('/tmp')
+  Reflect.deleteProperty(settings, 'agentPermissionDefault')
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     repos: [{ ...TEST_REPO, id: 'repo-1', path: 'C:\\Users\\alice\\repo' }],
-    endpointProjectHostSetups: [
+    projects: [
       {
-        id: 'repo-1',
-        projectId: 'repo-1',
-        repoId: 'repo-1',
-        hostId: 'local',
-        path: 'C:/Users/alice/repo',
-        displayName: 'repo',
-        setupMethod: 'legacy-repo',
-        setupState: 'ready',
-        createdAt: 0,
-        updatedAt: 0
-      }
-    ],
-    endpointProjects: [
-      {
-        id: 'repo-1',
         displayName: 'repo',
         badgeColor: '',
         createdAt: 0,
         updatedAt: 0,
+        id: 'repo-1',
         sourceRepoIds: ['repo-1'],
         ...(args.localWindowsRuntimePreference
           ? { localWindowsRuntimePreference: args.localWindowsRuntimePreference }
@@ -69,11 +58,10 @@ function makeState(args: {
       }
     ],
     settings: {
-      ...getDefaultSettings('/tmp'),
+      ...settings,
       localWindowsRuntimeDefault: { kind: 'windows-host' },
       ...(args.terminalWindowsShell ? { terminalWindowsShell: args.terminalWindowsShell } : {}),
       agentDefaultArgs: { claude: '', codex: '' },
-      agentPermissionDefault: 'own',
       agentDefaultEnv: { claude: {}, codex: {} }
     },
     worktreesByRepo: {
@@ -220,7 +208,6 @@ describe('ai vault resume command runtime', () => {
 
   it('follows the live Windows shell for Cursor resume', () => {
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-    state.settings.agentPermissionOverrides = { cursor: 'full-access' }
 
     expect(
       buildQueuedAiVaultResumeCommand({
@@ -370,7 +357,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
     )
   })
 
@@ -391,7 +378,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      "cd '/home/alice/repo' && CODEX_HOME='/home/alice/custom-codex' codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
+      "cd '/home/alice/repo' && CODEX_HOME='/home/alice/custom-codex' codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
     )
     expect(command).not.toContain('unset CODEX_HOME')
   })
@@ -448,7 +435,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      "CODEX_HOME='/home/alice/.codex' codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
+      "CODEX_HOME='/home/alice/.codex' codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'"
     )
   })
 
@@ -652,7 +639,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'session one'`
     )
     expect(command).not.toContain('/retired/shared-home')
   })

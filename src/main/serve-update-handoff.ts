@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { BROWSER_SIDECAR_OWNER_ENV } from '../shared/browser-sidecar-lifetime'
 import { app } from 'electron'
 import { quitProcess } from './startup/process-quit-request'
@@ -10,7 +10,8 @@ import {
   type ServeSupervisorMessage,
   type ServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
-import { getCanonicalUserDataPath } from './persistence'
+import { isSameUserDataPath } from '../shared/serve-user-data-path'
+import { getCanonicalUserDataPath } from './persistence/loading-store/user-data-path'
 
 function getConfiguredHandoffPath(): string | null {
   const configuredPath = process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]
@@ -18,7 +19,10 @@ function getConfiguredHandoffPath(): string | null {
     return null
   }
   const expectedPath = getServeUpdateHandoffPath(getCanonicalUserDataPath())
-  return resolve(configuredPath) === resolve(expectedPath) ? expectedPath : null
+  return basename(configuredPath) === basename(expectedPath) &&
+    isSameUserDataPath(dirname(configuredPath), dirname(expectedPath))
+    ? expectedPath
+    : null
 }
 
 export function hasServeUpdateSupervisor(): boolean {

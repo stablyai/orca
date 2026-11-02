@@ -26,6 +26,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
     expectedStreamGeneration = session.transportStreamGeneration
   ): void => {
     const scheduledGeneration = session.reattachReplayPayloadSignalGeneration
+    const imageTitle: string | undefined = session.reattachReplayImageTitle
     void waitForTerminalOutputParsed(session.pane.terminal).then(() => {
       const currentPtyId = session.transport.getPtyId()
       if (
@@ -41,7 +42,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       }
       // Dead replay screens can remain above shell prompts; require parsed parked-cursor screen or corroborating status/title before retaining agent focus behavior.
       if (
-        !session.hasLiveAgentReattachStatusOrTitleSignal() &&
+        !session.hasLiveAgentReattachStatusOrTitleSignal(imageTitle) &&
         session.reattachReplayPayloadHasCursorAgentSignal
       ) {
         if (parsedViewportShowsParkedCursorAgentScreen(session.pane.terminal) === false) {
@@ -53,7 +54,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       }
       // Reattach preserves DOM focus, so live TUIs may miss focus-in needed to unpark their cursor; inject only with ?1004h to spare bare shells.
       const sendFocusMode = terminalHasFocusReportingEnabled(session.pane.terminal)
-      if (!session.shouldSendFocusedAgentReattachFocusIn() || !sendFocusMode) {
+      if (!session.shouldSendFocusedAgentReattachFocusIn(imageTitle) || !sendFocusMode) {
         return
       }
       session.transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE, 'query-reply')
@@ -91,6 +92,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         pendingEscapeTailAnsi,
         alternateScreen,
         terminalOwner,
+        lastTitle,
         snapshotCols,
         snapshotRows,
         carriesNormalBuffer,
@@ -148,7 +150,10 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       }
       if (clearBeforeReplay || data.length > 0) {
         // Authoritative empty clearing frames must also retire prior agent-screen evidence.
-        session.rememberReattachPayloadAgentSignal(data, { fullScreenReplay: clearBeforeReplay })
+        session.rememberReattachPayloadAgentSignal(data, {
+          fullScreenReplay: clearBeforeReplay,
+          imageTitle: lastTitle
+        })
       }
       // Re-arm Kitty from application replay using set semantics so repeated windows cannot grow its stack.
       session.applySnapshotKittyKeyboardModes(data, payload)
@@ -158,7 +163,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       }
       if (clearBeforeReplay || data.length > 0) {
         await session.writeReplayEpilogue(
-          session.chooseReattachReplayReset(data, false, alternateScreen, terminalOwner),
+          session.chooseReattachReplayReset(data, false, alternateScreen, terminalOwner, lastTitle),
           session.writeReplayDataAsync
         )
         if (!isCurrentPayload()) {

@@ -32,7 +32,7 @@ vi.mock('../install/remote-versioned-install', async (importOriginal) => ({
 }))
 vi.mock('../install/orcad-remote-install', () => ({ installOrcadBundle: vi.fn() }))
 vi.mock('../install/orcad-remote-preflight', () => ({
-  preflightInstalledOrcad: vi.fn()
+  preflightInstalledOrcad: vi.fn(async () => ({}))
 }))
 vi.mock('../../ssh/orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
@@ -267,6 +267,44 @@ describe('recovery refusals keep the fence', () => {
     expect(host.commands.filter((command) => command.includes('kill -TERM'))).toHaveLength(1)
     expectExactlyTheRecordedSlot()
     expect(host.record).toContain(`"previous": "${OLD}"`)
+  })
+
+  it('skips its reads only when a connect just saw no journal and an open fence', async () => {
+    await interruptedAfterCandidateLaunch()
+    const before = host.commands.length
+    expect(
+      await recoverInterruptedOrcadActivation(slot, { transactionAbsent: true, fenceOpen: true })
+    ).toEqual({ outcome: 'none' })
+    expect(host.commands).toHaveLength(before)
+    // Any other answer reads the host as before, and so finds the interrupted run.
+    const result = await recoverInterruptedOrcadActivation(slot, {
+      transactionAbsent: false,
+      fenceOpen: true
+    })
+    expect(result).toMatchObject({ outcome: 'recovered', resolution: 'committed' })
+  })
+
+  it('skips the deploy fence only for a same-version WSL deploy whose caller re-checks', async () => {
+    const sameVersion = { sameVersionFencedByCaller: true }
+    host = FakeOrcadHost.activatedNew()
+    const deployWith = (extra: { sameVersionFencedByCaller?: boolean }) =>
+      deployOrcad({
+        ...slot,
+        localOrcadDir: '/local/out/orcad',
+        target: 'linux-x64-glibc',
+        census,
+        recountCensus: async () => census,
+        releaseIncumbentAdmission: async () => {},
+        ...extra
+      })
+    expect(await deployWith(sameVersion)).toEqual({ outcome: 'already-active', fullVersion: NEW })
+    expect(acquireInstallLock).not.toHaveBeenCalled()
+    // Without the flag, or on a host running another version, the deploy fences as before.
+    expect(await deployWith({})).toMatchObject({ outcome: 'already-active' })
+    expect(acquireInstallLock).toHaveBeenCalledOnce()
+    host = FakeOrcadHost.deployedOld()
+    await deployWith(sameVersion)
+    expect(acquireInstallLock).toHaveBeenCalledTimes(2)
   })
 
   it('relaunches and commits that candidate after a host reboot left nothing running', async () => {

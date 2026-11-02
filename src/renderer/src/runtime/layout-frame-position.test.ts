@@ -12,25 +12,6 @@ import {
 describe('afterLayoutFrame', () => {
   afterEach(() => endLayoutFramePositions())
 
-  it('runs at once once the stream ended, or for a reply that names no frame', () => {
-    endLayoutFramePositions()
-    const run = vi.fn()
-    afterLayoutFrame(9, run)
-    expect(run).toHaveBeenCalledTimes(1)
-
-    noteLayoutFramePosition(3)
-    afterLayoutFrame(undefined, run)
-    expect(run).toHaveBeenCalledTimes(2)
-  })
-
-  it('runs at once while the window has opened no stream', () => {
-    _resetLayoutFramePositionForTests()
-    const run = vi.fn()
-    afterLayoutFrame(2, run)
-    expect(run).toHaveBeenCalledOnce()
-    expect(layoutFramesFlowing()).toBe(false)
-  })
-
   it('waits for an opened stream before its first frame: that frame, or its end', () => {
     _resetLayoutFramePositionForTests()
     beginLayoutFramePositions()

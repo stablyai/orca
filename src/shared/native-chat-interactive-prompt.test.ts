@@ -3,7 +3,7 @@ import {
   parseApprovalFromStatus,
   resolveNativeChatInteractivePromptCard
 } from './native-chat-interactive-prompt'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { buildOmpPlanReviewAnswer } from './omp-plan-review-prompt'
 
 describe('parseApprovalFromStatus', () => {

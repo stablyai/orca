@@ -73,4 +73,54 @@ describe('resolveProcessCwd', () => {
     await expect(cwdPromise).resolves.toBe('')
     expect(killMock).toHaveBeenCalled()
   })
+
+  it('answers from lsof -b while in-process cwd lookups hang on a wedged mount, holding at most two pool threads', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    readlinkMock.mockRejectedValue(new Error('proc unavailable'))
+    execFileMock.mockImplementation(
+      (
+        _file: string,
+        args: string[],
+        _options: unknown,
+        callback: (...result: unknown[]) => void
+      ) => {
+        callback(null, `p${args[4]}\nfcwd\nn/Volumes/dead/${args[4]}\n`)
+        return { kill: vi.fn() }
+      }
+    )
+    const { setLibprocAddonForTests } = await import('../../shared/libproc-addon')
+    const readProcessCwd = vi.fn(() => new Promise<never>(() => {}))
+    setLibprocAddonForTests({
+      readProcessTable: async () => [],
+      readProcessCwd,
+      readProcessPath: async () => null
+    })
+    const { resolveProcessCwd } = await import('./process-cwd')
+
+    const cwds = Promise.all([1, 2, 3].map((pid) => resolveProcessCwd(pid)))
+    await vi.advanceTimersByTimeAsync(250)
+
+    await expect(cwds).resolves.toEqual(['/Volumes/dead/1', '/Volumes/dead/2', '/Volumes/dead/3'])
+    expect(readProcessCwd).toHaveBeenCalledTimes(2)
+    setLibprocAddonForTests(undefined)
+  })
+
+  it('keeps one stuck lsof per pid instead of spawning another every poll', async () => {
+    // The result cache must expire between polls.
+    vi.restoreAllMocks()
+    vi.useFakeTimers()
+    readlinkMock.mockRejectedValue(new Error('proc unavailable'))
+    // SIGTERM cannot interrupt lsof waiting in the kernel on a dead mount, so it never exits.
+    execFileMock.mockImplementation(() => ({ kill: vi.fn() }))
+    const { resolveProcessCwd } = await import('./process-cwd')
+
+    for (let poll = 0; poll < 3; poll += 1) {
+      const cwd = resolveProcessCwd(42)
+      await vi.advanceTimersByTimeAsync(1500)
+      await expect(cwd).resolves.toBe('')
+      // Past the result cache, so the next poll looks the pid up again.
+      await vi.advanceTimersByTimeAsync(1500)
+    }
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
 })

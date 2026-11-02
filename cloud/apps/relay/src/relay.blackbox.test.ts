@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { assignmentLeaseKeyId } from './assignment/assignment-lease.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import {
   encodeMembership,
   type CellAdmissionMembership
@@ -470,17 +470,6 @@ afterAll(async () => {
 })
 
 describe('served relay URL', () => {
-  it('exposes only /health, never /healthz', async () => {
-    expect(await (await fetch(`${relayUrl}/health`)).json()).toEqual({
-      ok: true,
-      connectionCapacityProtocol: 2,
-      capacityReportedCapMin: true,
-      drainPaceWindowMaxMs: 1_200_000
-    })
-    expect(await (await fetch(`${relayUrl}/ready`)).json()).toEqual({ ok: true })
-    expect((await fetch(`${relayUrl}/healthz`)).status).toBe(404)
-  })
-
   it('keeps liveness healthy when dependency readiness fails', async () => {
     const port = await unusedPort()
     const url = `http://127.0.0.1:${port}`

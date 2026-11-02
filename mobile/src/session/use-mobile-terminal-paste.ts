@@ -3,8 +3,8 @@ import {
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
 } from '../../../src/shared/terminal-bracketed-paste-text'
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback, type RefObject } from 'react'
+import { translate } from '../i18n/mobile-i18n'
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { useClipboardReader } from '../platform/clipboard'
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
@@ -28,6 +28,7 @@ function buildMobileTerminalClipboardTextPayload(
 }
 
 type UseMobileTerminalPasteOptions = {
+  readonly sendTerminalUserInput: typeof terminalInputSend.request
   readonly agent?: string | null
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
@@ -48,6 +49,7 @@ type UseMobileTerminalPasteOptions = {
 }
 
 export function useMobileTerminalPaste({
+  sendTerminalUserInput,
   activeHandle,
   agent,
   activeHandleRef,
@@ -86,7 +88,13 @@ export function useMobileTerminalPaste({
         if (!image) {
           // Null also covers iOS paste denial and undecodable images.
           onError()
-          showToast("Couldn't read the clipboard", 1500)
+          showToast(
+            translate(
+              'session.useTerminalPaste.clipboardReadFailed',
+              "Couldn't read the clipboard"
+            ),
+            1500
+          )
           refreshCanPaste()
           return
         }
@@ -105,7 +113,10 @@ export function useMobileTerminalPaste({
       if (wrappedBytes > 256 * 1024) {
         onError()
         console.warn('[mobile-clip] paste oversized', { wrappedBytes })
-        showToast('Paste too large (max 256 KiB)', 1500)
+        showToast(
+          translate('session.useTerminalPaste.pasteTooLarge', 'Paste too large (max 256 KiB)'),
+          1500
+        )
         return
       }
       // Accessory paste must follow pending IME text.
@@ -113,7 +124,10 @@ export function useMobileTerminalPaste({
       const currentClient = clientRef.current
       if (!currentClient || connStateRef.current !== 'connected') {
         onError()
-        showToast('Paste failed (disconnected)', 1500)
+        showToast(
+          translate('session.useTerminalPaste.disconnected', 'Paste failed (disconnected)'),
+          1500
+        )
         return
       }
       if (
@@ -121,15 +135,21 @@ export function useMobileTerminalPaste({
         activeSessionTabTypeRef.current !== 'terminal'
       ) {
         onError()
-        showToast('Paste canceled (terminal changed)', 1500)
+        showToast(
+          translate(
+            'session.useTerminalPaste.terminalChanged',
+            'Paste canceled (terminal changed)'
+          ),
+          1500
+        )
         return
       }
       if (!flushedPendingInput) {
         onError()
-        showToast('Paste failed', 1500)
+        showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
         return
       }
-      const response = await terminalInputSend.request(currentClient, {
+      await sendTerminalUserInput(currentClient, {
         terminal: targetHandle,
         text: payload,
         enter: false,
@@ -137,9 +157,6 @@ export function useMobileTerminalPaste({
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
           : {})
       })
-      if (terminalInputSend.interpret(response) === true) {
-        reportWorkerTerminalUserInput(currentClient, targetHandle)
-      }
       onSuccess()
       refreshCanPaste()
     } catch (e) {
@@ -148,14 +165,21 @@ export function useMobileTerminalPaste({
       const isDisconnected = connState !== 'connected'
       console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
       if (isDisconnected) {
-        showToast('Paste failed (disconnected)', 1500)
+        showToast(
+          translate('session.useTerminalPaste.disconnected', 'Paste failed (disconnected)'),
+          1500
+        )
       } else if (err.message === 'Clipboard image is too large') {
-        showToast('Image too large to paste', 1500)
+        showToast(
+          translate('session.useTerminalPaste.imageTooLarge', 'Image too large to paste'),
+          1500
+        )
       } else {
-        showToast('Paste failed', 1500)
+        showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
       }
     }
   }, [
+    sendTerminalUserInput,
     activeHandle,
     agent,
     activeHandleRef,

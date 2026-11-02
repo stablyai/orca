@@ -7,7 +7,7 @@ import {
   type LocalGitExecOptions
 } from '../../gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import type { GhExecOptions } from './../github-exec-scope'
+import { githubPRStackExecutionScope, type GhExecOptions } from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import {
@@ -52,6 +52,33 @@ export async function fetchIssueWorkItem(
     ghOptions
   )
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
+}
+
+/** One REST call for hover previews; skips the review, check and merge metadata a full lookup adds. */
+export async function fetchWorkItemPreview(
+  repoPath: string,
+  ownerRepo: GitHubApiRepository,
+  number: number,
+  type: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<MainWorkItem | null> {
+  const ghOptions = {
+    ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
+    ...githubHostExecOptions(ownerRepo)
+  }
+  const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
+  if (type === 'issue') {
+    const { stdout } = await ghExecFileAsync(['api', `${base}/issues/${number}`], ghOptions)
+    const item: Record<string, unknown> = JSON.parse(stdout)
+    // `#N` links point at /issues/N even when N is a PR.
+    if (!('pull_request' in item)) {
+      return mapIssueWorkItem(item)
+    }
+  }
+  const { stdout } = await ghExecFileAsync(['api', `${base}/pulls/${number}`], ghOptions)
+  const pull: Record<string, unknown> = JSON.parse(stdout)
+  return mapPullRequestWorkItem(pull, ownerRepo)
 }
 
 // REST pull data omits latestReviews; retain gh's reviewer fields.
@@ -119,7 +146,12 @@ export async function fetchPullRequestWorkItem(
       // Best-effort merge metadata must not trigger a REST fallback that drops latestReviews.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
       try {
-        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        const mergeMetadata = await detectRepositoryMergeMetadata(
+          ownerRepo,
+          baseRefName,
+          ghOptions,
+          githubPRStackExecutionScope(connectionId, localGitOptions)
+        )
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,

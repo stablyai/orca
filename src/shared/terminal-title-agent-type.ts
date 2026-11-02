@@ -1,3 +1,4 @@
+import { collectExplicitAgentTitleEvidence } from './agent-title-evidence'
 import { isQoderTerminalTitle } from './qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
@@ -70,17 +71,7 @@ export function isGeminiTerminalTitle(title: string): boolean {
   return titleHasAgentName(title, 'gemini')
 }
 
-// Collapse only Grok’s spinner - phrase - grok frame; both delimiters exclude Claude/Codex task mentions.
-// Keep unspun session titles unchanged and accept spinner + grok so our collapsed label stays idempotent.
-const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
-const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
-
-export function isGrokRotatingWorkingTitle(title: string): boolean {
-  if (!containsBrailleSpinner(title)) {
-    return false
-  }
-  return GROK_ROTATING_FRAME_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
-}
+export { isGrokRotatingWorkingTitle } from './agent-title-core'
 
 export function isPiAgentTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title)
@@ -261,25 +252,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   OMP: 'omp'
 }
 
-function hasGenericClaudeStatusPrefix(title: string): boolean {
-  return (
-    containsAgentSpinnerGlyph(title) ||
-    title.startsWith('✳ ') ||
-    title === '✳' ||
-    title.startsWith('. ') ||
-    title.startsWith('* ')
-  )
-}
-
 export { isClaudeIdentityFrameTitle } from './agent-title-core'
-
-function isGenericClaudeStatusClaim(title: string, titleAgent: TerminalAgent | null): boolean {
-  return (
-    titleAgent === 'claude' &&
-    hasGenericClaudeStatusPrefix(title) &&
-    !titleHasAgentName(title, 'claude')
-  )
-}
 
 export function resolveTerminalTitleAgentType(title: string): TerminalAgent | null {
   const label = getAgentLabel(title)
@@ -291,15 +264,28 @@ export function resolveTerminalTitleAgentType(title: string): TerminalAgent | nu
   }).agent
 }
 
-/** Treat bare Claude-style prefixes as activity only; explicit identity requires a Claude Code name, not a task/workspace spinner. */
+/** Activity and task mentions cannot establish identity for display or input routing. */
 function computeExplicitTerminalTitleAgentType(title: string): TerminalAgent | null {
-  const titleAgent = resolveTerminalTitleAgentType(title)
-  if (isGenericClaudeStatusClaim(title, titleAgent)) {
-    return null
-  }
-  return titleAgent
+  return collectExplicitAgentTitleEvidence(title).agent
 }
 
 /** Pure in `title` — memoized so repeated selector reads skip the canonical/title parse. */
 export const resolveExplicitTerminalTitleAgentType: (title: string) => TerminalAgent | null =
   memoizeTitleClassification(computeExplicitTerminalTitleAgentType)
+
+/** Readiness and confirmed-shell cleanup retain their pre-existing title policy. */
+function computeTerminalTitlePolicyAgentType(title: string): TerminalAgent | null {
+  const agent = resolveTerminalTitleAgentType(title)
+  const genericClaudeStatus =
+    containsAgentSpinnerGlyph(title) ||
+    title.startsWith(`${CLAUDE_IDLE} `) ||
+    title === CLAUDE_IDLE ||
+    title.startsWith('. ') ||
+    title.startsWith('* ')
+  return agent === 'claude' && genericClaudeStatus && !titleHasAgentName(title, 'claude')
+    ? null
+    : agent
+}
+
+export const resolveTerminalTitlePolicyAgentType: (title: string) => TerminalAgent | null =
+  memoizeTitleClassification(computeTerminalTitlePolicyAgentType)

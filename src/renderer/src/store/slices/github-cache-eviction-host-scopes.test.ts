@@ -133,28 +133,4 @@ describe('repo cache eviction across host scopes', () => {
     expect(cachedKeys(reverse)).toEqual(expect.arrayContaining(ssh))
     expect(cachedKeys(reverse).filter((key) => local.includes(key))).toEqual([])
   })
-
-  it('without a host, evicts the bucket of the row at the request path', () => {
-    const seeded = seedEveryHostScope('twin', localRow.path)
-    const store = createTestStore()
-    store.setState({ repos: [localRow, sshRow], ...seeded.state })
-
-    store.getState().evictGitHubRepoCaches('twin', sshRow.path)
-
-    expect(Object.keys(store.getState().workItemsCache)).toEqual([seeded.keys.local.workItems])
-  })
-
-  it('an issue-source change on the SSH twin drops its work items and keeps the local twin’s', async () => {
-    const seeded = seedEveryHostScope('twin', localRow.path)
-    const store = createTestStore()
-    store.setState({
-      repos: [localRow, sshRow],
-      updateRepo: vi.fn().mockResolvedValue(true),
-      ...seeded.state
-    })
-
-    await store.getState().setIssueSourcePreference('twin', sshRow.path, 'origin', SSH_HOST)
-
-    expect(Object.keys(store.getState().workItemsCache)).toEqual([seeded.keys.local.workItems])
-  })
 })

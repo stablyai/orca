@@ -113,7 +113,6 @@ describe('Codex RPC exit diagnostics', () => {
     )
 
     expect(result.error).toBe('Your ChatGPT session could not be refreshed. Please sign in again.')
-    // Pin the renderer reauthentication predicate; codex-account-auth-warning.test.ts covers its display.
     expect(isCodexAuthError(result.error)).toBe(true)
   })
 

@@ -16,8 +16,8 @@ export function findOptionOccurrence(
   stopAtTerminator: boolean,
   valueOptions: readonly string[] = [],
   startIndex = 0,
-  /** False for a flag that takes no value, so the token after it stays where it is. */
-  takesValue = true
+  /** False keeps the next token; 'required' consumes even a dash-leading operand. */
+  takesValue: boolean | 'required' = true
 ): { index: number; consumed: number; value?: string } | null {
   for (let index = startIndex; index < tokens.length; index += 1) {
     const token = tokens[index]
@@ -33,7 +33,10 @@ export function findOptionOccurrence(
     }
     const nextToken = tokens[index + 1]
     const consumesNext =
-      takesValue && aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
+      takesValue &&
+      aliases.includes(token) &&
+      nextToken !== undefined &&
+      (takesValue === 'required' || !nextToken.startsWith('-'))
     const alias = aliases.find((name) => matchesOption(token, [name]))
     const value = consumesNext
       ? nextToken

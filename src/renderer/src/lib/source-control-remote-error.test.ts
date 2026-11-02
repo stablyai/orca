@@ -1,40 +1,28 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import { normalizeGitErrorMessage } from '../../../shared/git-remote-error'
+import { i18n } from '@/i18n/i18n'
+import es from '@/i18n/locales/es.json'
+import {
+  isNonFastForwardRemoteError,
+  resolveRemoteOperationErrorMessage
+} from './source-control-remote-error'
 
-import { resolveRemoteOperationErrorMessage } from './source-control-remote-error'
+const originalLanguage = i18n.language
+
+afterEach(async () => {
+  await i18n.changeLanguage(originalLanguage)
+})
 
 describe('source-control remote error formatting', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
+  it('recognizes split colored stale lease markers from remote hosts', () => {
+    const error = new Error(
+      " ! [rejected] main -> main (stale\x1b[31m info\x1b[m)\nerror: failed to push some refs to 'origin'"
+    )
 
-  it.each([
-    { options: { isPush: true }, label: 'Push' },
-    { options: { isForcePush: true }, label: 'Force Push' },
-    { options: { publish: true }, label: 'Publish Branch' },
-    { options: { isSync: true }, label: 'Sync' },
-    { options: { isSync: true, isSyncPushStage: true }, label: 'Sync' },
-    { options: { isFetch: true }, label: 'Fetch' },
-    { options: { isFastForward: true }, label: 'Fast-forward' },
-    { options: { isRebase: true }, label: 'Rebase' },
-    { options: undefined, label: 'Pull' }
-  ])('retains normalized authentication guidance for $label', ({ options, label }) => {
-    for (const stderr of [
-      "fatal: could not read Username for 'https://example.com': terminal prompts disabled",
-      "fatal: could not read Password for 'https://user@example.com': terminal prompts disabled",
-      'fatal: unable to get password from user'
-    ]) {
-      const normalized = normalizeGitErrorMessage(new Error(stderr), 'push')
-      const error = new Error(normalized)
-      const wrapped = new Error(`Error invoking remote method 'git:push': Error: ${normalized}`)
-
-      for (const failure of [error, wrapped]) {
-        expect(resolveRemoteOperationErrorMessage(failure, options)).toBe(
-          `${label} failed. Authentication failed. Check your remote credentials.`
-        )
-      }
-    }
+    expect(resolveRemoteOperationErrorMessage(error, { isForcePush: true })).toBe(
+      'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
+    )
+    expect(isNonFastForwardRemoteError(error)).toBe(true)
   })
 
   it('prefers fatal detail over an earlier remote detail for publish failures', () => {
@@ -45,6 +33,58 @@ describe('source-control remote error formatting', () => {
     )
   })
 
+  it.each(['fatal', 'remote'])(
+    'redacts ANSI-bearing credentials in %s details from older remote hosts',
+    (prefix) => {
+      const error = new Error(
+        `git.push failed:\n${prefix}: Access denied to https://user:sec\x1b[1 qret@example.com/repo.git`
+      )
+
+      expect(resolveRemoteOperationErrorMessage(error, { isPush: true })).toBe(
+        'Push failed. Access denied to https://example.com/repo.git. Check your remote access and try again.'
+      )
+    }
+  )
+
+  it.each([
+    [{ isFetch: true }, 'Fetch failed. '],
+    [{ isFastForward: true }, 'Fast-forward failed. '],
+    [{ isRebase: true }, 'Rebase failed. '],
+    [{}, '']
+  ])('redacts ANSI-bearing credentials in fallback details for %j', (options, prefix) => {
+    const error = new Error('Access denied to https://user:sec\x1b[1 qret@example.com/repo.git')
+
+    expect(resolveRemoteOperationErrorMessage(error, options)).toBe(
+      `${prefix}Access denied to https://example.com/repo.git`
+    )
+    expect(error.message).toContain('user:sec\x1b[1 qret@')
+  })
+
+  it.each([
+    [{ publish: true }, 'Publish Branch'],
+    [{ isSync: true }, 'Sync'],
+    [{ isForcePush: true }, 'Force Push'],
+    [{ isPush: true }, 'Push']
+  ])('sanitizes and classifies older-host submodule errors for %j', (options, operation) => {
+    const error = new Error(
+      "Unable to push sub\x1b[1 qmodule 'https://user:sec\x1b[1 qret@example.com/repo.git'\n" +
+        ' ! [rejected] main -> main (fetch\x1b[1 q first)'
+    )
+
+    expect(resolveRemoteOperationErrorMessage(error, options)).toBe(
+      `${operation} failed. Submodule 'https://example.com/repo.git' has remote changes. Pull inside the submodule, then try again.`
+    )
+    expect(isNonFastForwardRemoteError(error)).toBe(true)
+    expect(
+      resolveRemoteOperationErrorMessage(
+        new Error("Unable to push submodule 'https://user:sec\x1b[1 qret@example.com/repo.git'"),
+        options
+      )
+    ).toBe(
+      `${operation} failed. Submodule 'https://example.com/repo.git' could not be pushed. Resolve the submodule push error, then try again.`
+    )
+  })
+
   it('maps pre-push hook failures to a hook-specific message instead of remote access guidance', () => {
     const error = new Error(
       "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
@@ -52,22 +92,6 @@ describe('source-control remote error formatting', () => {
 
     expect(resolveRemoteOperationErrorMessage(error, { isPush: true })).toBe(
       'Push blocked — lint failed during push.'
-    )
-  })
-
-  it('maps force-push, publish, and sync push-stage hook failures to blocked copy', () => {
-    const error = new Error(
-      "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1"
-    )
-
-    expect(resolveRemoteOperationErrorMessage(error, { isForcePush: true })).toBe(
-      'Force Push blocked — pre-push hook failed.'
-    )
-    expect(resolveRemoteOperationErrorMessage(error, { publish: true })).toBe(
-      'Publish Branch blocked — pre-push hook failed.'
-    )
-    expect(resolveRemoteOperationErrorMessage(error, { isSync: true, isSyncPushStage: true })).toBe(
-      'Sync blocked — pre-push hook failed.'
     )
   })
 
@@ -114,28 +138,21 @@ describe('source-control remote error formatting', () => {
       "Push failed. Submodule 'deps/lib' could not be pushed. Resolve the submodule push error, then try again."
     )
   })
-
-  it('extracts publish details from newline-heavy output without full line-array splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-    const progress = 'remote: Enumerating objects\r\n'.repeat(10_000)
-    const error = new Error(
-      `${progress}fatal: unable to access https://token:secret@example.com/repo.git\r\n`
+  it('translates classified sentences and passes unclassified errors through verbatim', async () => {
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    const submoduleError = new Error(
+      "Command failed: git push\nUnable to push submodule 'deps/lib'\nfatal: failed to push all needed submodules"
     )
 
-    const result = resolveRemoteOperationErrorMessage(error, { publish: true })
-
-    expect(result).toContain('Publish Branch failed. unable to access https://example.com/repo.git')
-    const usedLineSplit = splitSpy.mock.calls.some(([separator]) => {
-      if (typeof separator === 'string') {
-        return separator === '\n'
-      }
-      return separator instanceof RegExp && separator.source === '\\r?\\n'
-    })
-    const usedCrlfReplace = replaceSpy.mock.calls.some(
-      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
+    expect(resolveRemoteOperationErrorMessage(submoduleError, { isPush: true })).toBe(
+      es.sourceControl.remoteError.failedWithDetail.push.replace(
+        '{{detail}}',
+        es.sourceControl.remoteError.submodule.namedPushFailed.replace('{{name}}', 'deps/lib')
+      )
     )
-    expect(usedLineSplit).toBe(false)
-    expect(usedCrlfReplace).toBe(false)
+    expect(resolveRemoteOperationErrorMessage(new Error('some new git failure'))).toBe(
+      'some new git failure'
+    )
   })
 })

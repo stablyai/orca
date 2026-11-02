@@ -1,3 +1,4 @@
+import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { getDefaultSettings } from '../../../shared/constants'
 import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { describe, expect, it, vi } from 'vitest'
@@ -10,23 +11,26 @@ vi.mock('@/lib/new-workspace', () => ({
 const RECORDED_HOME = '/tmp/orca/codex-accounts/aaaa/home'
 const SELECTED_HOME = '/tmp/orca/codex-accounts/bbbb/home'
 
-type DropRepinState = Parameters<typeof buildAiVaultDropRepinStartup>[0]['state']
+type DropRepinState = AiVaultResumePlatformState
 
 function makeState(): DropRepinState {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: 'repo-1::worktree-1',
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     repos: [{ ...TEST_REPO, id: 'repo-1', path: '/Users/ada/repo' }],
-    endpointProjectHostSetups: [],
-    endpointProjects: [
+    projects: [
       {
-        id: 'repo-1',
         displayName: 'repo',
         badgeColor: '',
         createdAt: 0,
         updatedAt: 0,
+        id: 'repo-1',
         sourceRepoIds: ['repo-1']
       }
     ],

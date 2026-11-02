@@ -119,6 +119,18 @@ describe('Store', () => {
         options: { thinkingEffort: 'high' }
       }
     }
+    const canonicalRecipe = {
+      ...recipe,
+      launchPreferences: {
+        agentId: 'codex',
+        modelSelection: {
+          base: 'default',
+          model: { agentId: 'codex', value: 'gpt-6-sol' },
+          options: { thinkingEffort: { agentId: 'codex', value: 'high' } }
+        },
+        permissionMode: 'ask'
+      }
+    }
     const sparse = { agentArgs: '--model gpt-6-sol' }
     const repo = makeRepo()
     writeDataFile({
@@ -135,14 +147,16 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    expect(store.getSettings().sourceControlAi?.actions?.fixCommitFailure).toEqual(recipe)
+    expect(store.getSettings().sourceControlAi?.actions?.fixCommitFailure).toEqual(canonicalRecipe)
     expect(store.getRepos()[0]?.sourceControlAi?.actionOverrides?.resolveConflicts).toEqual(sparse)
     store.updateSettings({ theme: 'light' })
     store.flush()
     await closeTestStores()
 
     const reopened = await createStore()
-    expect(reopened.getSettings().sourceControlAi?.actions?.fixCommitFailure).toEqual(recipe)
+    expect(reopened.getSettings().sourceControlAi?.actions?.fixCommitFailure).toEqual(
+      canonicalRecipe
+    )
     expect(reopened.getRepos()[0]?.sourceControlAi?.actionOverrides?.resolveConflicts).toEqual(
       sparse
     )

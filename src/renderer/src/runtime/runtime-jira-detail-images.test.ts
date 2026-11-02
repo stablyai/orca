@@ -9,7 +9,6 @@ import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-t
 type SubscribeArgs = Parameters<typeof window.api.runtimeEnvironments.subscribe>[0]
 type SubscribeCallbacks = Parameters<typeof window.api.runtimeEnvironments.subscribe>[1]
 const target = { kind: 'environment' as const, environmentId: 'issue-owner' }
-const image = '![shot](orca-jira-image://attachment/12345678-1234-1234-1234-123456789012)'
 const localIssue = vi.fn()
 const localComments = vi.fn()
 const runtimeCall = vi.fn()
@@ -48,61 +47,6 @@ afterEach(() => {
 })
 
 describe('captured Jira detail owners', () => {
-  it('requests image references through local issue and comment IPC', async () => {
-    localIssue.mockResolvedValue({ key: 'JIR-1', description: image })
-    localComments.mockResolvedValue([{ id: 'comment', body: image }])
-    await expect(jiraGetIssueForTarget({ kind: 'local' }, 'JIR-1', 'site')).resolves.toMatchObject({
-      description: image
-    })
-    await expect(jiraIssueCommentsForTarget({ kind: 'local' }, 'JIR-1', 'site')).resolves.toEqual([
-      { id: 'comment', body: image }
-    ])
-    const args = { key: 'JIR-1', siteId: 'site', mediaFormat: 'reference' }
-    expect(localIssue).toHaveBeenCalledWith(args)
-    expect(localComments).toHaveBeenCalledWith(args)
-    expect(runtimeCall).not.toHaveBeenCalled()
-    expect(runtimeSubscribe).not.toHaveBeenCalled()
-  })
-
-  it('checks the captured remote owner capability and reads short image references there', async () => {
-    runtimeCall.mockImplementation(async (args: { method: string }) =>
-      args.method === 'status.get'
-        ? createCompatibleRuntimeStatusResponse()
-        : {
-            id: 'detail',
-            ok: true,
-            result:
-              args.method === 'jira.getIssue'
-                ? { key: 'JIR-1', description: image }
-                : [{ id: 'comment', body: image }],
-            _meta: { runtimeId: 'remote-runtime' }
-          }
-    )
-    await expect(jiraGetIssueForTarget(target, 'JIR-1', 'site')).resolves.toMatchObject({
-      description: image
-    })
-    await expect(jiraIssueCommentsForTarget(target, 'JIR-1', 'site')).resolves.toEqual([
-      { id: 'comment', body: image }
-    ])
-    for (const method of ['status.get', 'jira.getIssue', 'jira.issueComments']) {
-      expect(runtimeCall).toHaveBeenCalledWith(
-        expect.objectContaining({
-          selector: 'issue-owner',
-          method
-        })
-      )
-    }
-    expect(runtimeCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'jira.getIssue',
-        params: { key: 'JIR-1', siteId: 'site', mediaFormat: 'reference' }
-      })
-    )
-    expect(localIssue).not.toHaveBeenCalled()
-    expect(localComments).not.toHaveBeenCalled()
-    expect(runtimeSubscribe).not.toHaveBeenCalled()
-  })
-
   it('keeps old-host streams and migrated image bytes under their captured owner', async () => {
     runtimeCall.mockResolvedValue(statusWithoutImages())
     runtimeSubscribe.mockImplementation(

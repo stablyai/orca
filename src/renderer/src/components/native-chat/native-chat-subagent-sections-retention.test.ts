@@ -3,15 +3,15 @@ import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
-import { projectNativeChatTranscript } from '../../../../shared/native-chat-transcript-projection'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
+import { projectNativeChatTranscript } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../../shared/structured-agent-session-reducer'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
 import { compareMessages } from './native-chat-session-assembler'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import { nativeChatSubagentLiveSections } from './native-chat-subagent-live-frontier'

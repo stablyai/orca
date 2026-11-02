@@ -1,6 +1,6 @@
 // Prefer canonical task IDs across resumes; write provisional child rows immediately and correct them in place.
 
-import type { AgentJournalProducerLinkage } from '../../shared/agent-session-journal-types'
+import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 
 export type ClaudeSubagentLinkageVerdict =

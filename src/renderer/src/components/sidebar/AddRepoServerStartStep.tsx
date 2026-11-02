@@ -13,6 +13,7 @@ type AddRepoServerPathStartStepProps = {
   isAddingServerPath: boolean
   addProjectBusyLabel: string | null
   hostSelector?: ReactNode
+  notice?: ReactNode
   initialBrowsing?: boolean
   onServerPathChange: (path: string) => void
   onAddServerPath: (kind: 'git' | 'folder') => void
@@ -26,6 +27,7 @@ export function AddRepoServerPathStartStep({
   isAddingServerPath,
   addProjectBusyLabel,
   hostSelector,
+  notice,
   initialBrowsing = false,
   onServerPathChange,
   onAddServerPath,
@@ -89,6 +91,7 @@ export function AddRepoServerPathStartStep({
 
         <div className="space-y-3 pt-2">
           {hostSelector}
+          {notice}
           <div className="grid grid-cols-3 gap-2">
             <AddRepoServerStartAction
               icon={FolderOpen}
@@ -178,6 +181,7 @@ export function AddRepoServerPathStartStep({
 
       <div className="space-y-3 pt-2">
         {hostSelector}
+        {notice}
         <div className="space-y-1">
           <label
             htmlFor="server-project-path"
