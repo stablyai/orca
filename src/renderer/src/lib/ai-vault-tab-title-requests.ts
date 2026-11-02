@@ -1,4 +1,8 @@
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isAgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  extractAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
 import {
   type AiVaultSessionTitle,
@@ -94,11 +98,22 @@ function registerCandidate<Agent extends AgentType>(
 }
 
 function liveCandidate(entry: AgentStatusEntry): Parameters<typeof registerCandidate>[4] {
+  const nestedGuest = Boolean(entry.paneOwner?.agent && entry.paneOwner.agent !== entry.agentType)
+  const agent = entry.paneOwner?.agent ?? entry.agentType
+  const providerSession =
+    nestedGuest && entry.paneOwner
+      ? isAgentHookSource(entry.paneOwner.agent)
+        ? (extractAgentProviderSession(entry.paneOwner.agent, {
+            session_id: entry.paneOwner.session,
+            conversationId: entry.paneOwner.session
+          }) ?? undefined)
+        : undefined
+      : entry.providerSession
   return {
-    agent: entry.agentType,
+    agent,
     paneKey: entry.paneKey,
     priority: 30,
-    providerSession: entry.providerSession,
+    providerSession,
     refresh: true,
     tabId: entry.tabId,
     worktreeId: entry.worktreeId

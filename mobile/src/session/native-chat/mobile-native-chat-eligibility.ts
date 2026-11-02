@@ -57,7 +57,8 @@ export function resolveMobileNativeChat(
   if (tab.type !== 'terminal') {
     return null
   }
-  const liveAgent = tab.agentStatus?.agentType ?? null
+  const statusOwnerAgent = tab.agentStatus?.paneOwner?.agent ?? null
+  const liveAgent = statusOwnerAgent ?? tab.agentStatus?.agentType ?? null
   const remembered = tab.nativeChatIdentity ?? null
   // No title slot: the phone's tab title is a display title (custom/generated), not pane evidence.
   const evidenceAgent = nativeChatAvailabilityAgent({
@@ -69,7 +70,10 @@ export function resolveMobileNativeChat(
   if (!agent || !isNativeChatAgentAvailable(agent, nativeChatTranscriptIsLocalReadable)) {
     return null
   }
-  const liveSession = tab.agentStatus?.providerSession
+  const nestedGuestStatus = Boolean(
+    statusOwnerAgent && tab.agentStatus?.agentType && statusOwnerAgent !== tab.agentStatus.agentType
+  )
+  const liveSession = nestedGuestStatus ? undefined : tab.agentStatus?.providerSession
   // A live agent without a session may be a relaunch; only an identity-less frame inherits one.
   const rememberedSession = !liveAgent && remembered?.agent === agent ? remembered : null
   return {
@@ -128,8 +132,16 @@ export function resolveMobileNativeChatSessionId(tab: MobileNativeChatTab | null
     return tab.sessionId ?? null
   }
   if (tab?.type === 'terminal') {
+    const statusOwnerAgent = tab.agentStatus?.paneOwner?.agent
+    const nestedGuestStatus = Boolean(
+      statusOwnerAgent &&
+      tab.agentStatus?.agentType &&
+      statusOwnerAgent !== tab.agentStatus.agentType
+    )
     return (
-      tab.agentStatus?.providerSession?.id ?? resolveMobileNativeChat(tab, true)?.sessionId ?? null
+      (nestedGuestStatus ? undefined : tab.agentStatus?.providerSession?.id) ??
+      resolveMobileNativeChat(tab, true)?.sessionId ??
+      null
     )
   }
   return null

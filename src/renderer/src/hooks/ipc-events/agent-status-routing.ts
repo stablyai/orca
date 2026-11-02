@@ -10,6 +10,7 @@ import type {
 import { resolveAgentStatusIdentity } from '../../../../shared/agent-status-identity'
 import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 import type { useAppStore } from '../../store'
 
 export function isAgentStatusForRecentlyClosedTab(
@@ -139,7 +140,11 @@ export function isInheritedFromActivePane(
   existing: AgentStatusEntry,
   data: AgentStatusIpcPayload,
   incoming: AgentType | undefined,
-  owner: { connectionId: string | null | undefined; worktreeId: string | undefined }
+  owner: {
+    connectionId: string | null | undefined
+    worktreeId: string | undefined
+    foreground?: PaneForegroundAgentEntry
+  }
 ): boolean {
   const sameTerminal = sameAgentStatusTerminalOwner(
     { connectionId: existing.connectionId ?? null, worktreeId: existing.worktreeId },
@@ -149,15 +154,38 @@ export function isInheritedFromActivePane(
       worktreeId: data.worktreeId ?? owner.worktreeId ?? existing.worktreeId
     }
   )
-  return (
-    sameTerminal &&
-    resolveAgentStatusIdentity({
-      existing: { ...existing, agentPresence: data.paneOwner },
-      incoming,
-      incomingSession: data.providerSession?.id,
-      now: data.receivedAt
-    }).inheritedFromActivePane
+  if (!sameTerminal) {
+    return false
+  }
+  const existingOwnerAgent = existing.paneOwner?.agent ?? existing.agentType
+  const fg = owner.foreground
+  const foregroundLeftExistingOwner = Boolean(
+    fg &&
+    (fg.shellForeground ||
+      (fg.agentEvidence === 'process-read' && fg.agent !== null && fg.agent !== existingOwnerAgent))
   )
+  if (
+    !foregroundLeftExistingOwner &&
+    existingOwnerAgent &&
+    existingOwnerAgent !== 'unknown' &&
+    incoming &&
+    incoming !== 'unknown' &&
+    incoming !== existingOwnerAgent &&
+    (data.paneOwner?.agent === existingOwnerAgent ||
+      (fg &&
+        !fg.shellForeground &&
+        !fg.routingRevoked &&
+        fg.agent === existingOwnerAgent &&
+        data.paneOwner?.agent !== incoming))
+  ) {
+    return true
+  }
+  return resolveAgentStatusIdentity({
+    existing: { ...existing, agentPresence: data.paneOwner },
+    incoming,
+    incomingSession: data.providerSession?.id,
+    now: data.receivedAt
+  }).inheritedFromActivePane
 }
 
 export { resolvePaneKey } from '../../lib/agent-status-pane-ownership'

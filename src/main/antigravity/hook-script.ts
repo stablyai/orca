@@ -1,4 +1,5 @@
 import { posixCurlCommand } from '../agent-hooks/hook-post-command'
+import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
 import {
   buildPosixHookPayloadCapture,
   POSIX_HOOK_JSON_STDIN,
@@ -56,6 +57,8 @@ export function getManagedScript(
     '  spool_hook_event',
     '  exit 0',
     'fi',
+    'ORCA_HOOK_AGENT_PID="${ORCA_HOOK_AGENT_PID:-${PPID:-}}"',
+    ...buildHookProcessCapture(),
     // Keep large payloads off command lines to avoid EDR false positives.
     `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/antigravity" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
@@ -68,6 +71,7 @@ export function getManagedScript(
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "hook_event_name=${ORCA_ANTIGRAVITY_EVENT}" \\',
+    '  --data-urlencode "agentProcess=${orca_agent_process}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
