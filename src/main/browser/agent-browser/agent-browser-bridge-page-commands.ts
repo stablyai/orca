@@ -20,6 +20,7 @@ import {
 import { captureRemoteCliBrowserRevocation } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { ExpectedPageUrlGuard, getRequestedPageUrl } from '../browser-expected-page-url'
 
+/** Keep JSON results stable across CLI payload versions. */
 export type BrowserDialogAnswer = { accepted: boolean; browserPageId?: string; checkedUrl?: string }
 
 export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeMouseCommands {

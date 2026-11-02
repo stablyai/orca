@@ -77,11 +77,9 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       )
       if (!response.ok) {
         const mismatch = BrowserExpectedUrlMismatch.safeParse(response.error.data)
-        throw new BrowserClientPageCommandError(
-          response.error.code,
-          undefined,
-          mismatch.success ? mismatch.data : undefined
-        )
+        throw new BrowserClientPageCommandError(response.error.code, {
+          expectedUrlMismatch: mismatch.success ? mismatch.data : undefined
+        })
       }
       return response.result
     }

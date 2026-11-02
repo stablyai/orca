@@ -2,16 +2,18 @@ import type { BrowserClientHostCommandResult } from '../../shared/browser-client
 import type { BrowserExpectedUrlMismatch } from '../../shared/browser-expected-url'
 
 export class BrowserClientPageCommandError extends Error {
+  readonly expectedUrlMismatch?: BrowserExpectedUrlMismatch
+
   constructor(
     message: string,
-    options?: ErrorOptions,
-    readonly expectedUrlMismatch?: BrowserExpectedUrlMismatch
+    options?: ErrorOptions & { expectedUrlMismatch?: BrowserExpectedUrlMismatch }
   ) {
     super(message, options)
+    this.expectedUrlMismatch = options?.expectedUrlMismatch
   }
 }
 
-export function browserClientPageCommandFailureCode(error: unknown, signal: AbortSignal): string {
+function browserClientPageCommandFailureCode(error: unknown, signal: AbortSignal): string {
   if (error instanceof BrowserClientPageCommandError) {
     return error.message
   }

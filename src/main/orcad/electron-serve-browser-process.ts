@@ -50,8 +50,7 @@ export class ElectronServeBrowserProcess {
   private child: ReturnType<typeof spawnProcess> | null = null
   private metadata: RuntimeMetadata | null = null
   private readonly tabs = new ElectronSidecarTabRegistry()
-  private googleCookieClearSupported = false
-  private expectUrlSupported = false
+  private sidecarCapabilities: readonly string[] = []
   private sidecarDataPath: string | null = null
 
   constructor(
@@ -60,8 +59,7 @@ export class ElectronServeBrowserProcess {
   ) {}
 
   async start(signal?: AbortSignal): Promise<void> {
-    this.googleCookieClearSupported = false
-    this.expectUrlSupported = false
+    this.sidecarCapabilities = []
     signal?.throwIfAborted()
     await removeLeftoverElectronSidecarProfile(this.orcadUserDataPath)
     const userDataPath = await createElectronSidecarProfile(this.orcadUserDataPath)
@@ -106,12 +104,7 @@ export class ElectronServeBrowserProcess {
           )
           signal?.throwIfAborted()
           if (status.capabilities?.includes('browser.headless.v1')) {
-            this.googleCookieClearSupported = status.capabilities.includes(
-              BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
-            )
-            this.expectUrlSupported = status.capabilities.includes(
-              BROWSER_EXPECT_URL_RUNTIME_CAPABILITY
-            )
+            this.sidecarCapabilities = status.capabilities
             this.metadata = metadata
             return
           }
@@ -149,7 +142,10 @@ export class ElectronServeBrowserProcess {
     })
   }
   supportsGoogleCookieClear(): boolean {
-    return this.isAvailable() && this.googleCookieClearSupported
+    return (
+      this.isAvailable() &&
+      this.sidecarCapabilities.includes(BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY)
+    )
   }
 
   isAvailable(): boolean {
@@ -168,8 +164,7 @@ export class ElectronServeBrowserProcess {
     const sidecarDataPath = this.sidecarDataPath
     this.child = null
     this.metadata = null
-    this.googleCookieClearSupported = false
-    this.expectUrlSupported = false
+    this.sidecarCapabilities = []
     this.sidecarDataPath = null
     this.tabs.clear()
     if (sidecarPid) {
@@ -203,7 +198,10 @@ export class ElectronServeBrowserProcess {
     }
     const original = (args[0] ?? {}) as Record<string, unknown>
     // The sidecar is the installed app, which can be older and would drop the field.
-    if (original.expectUrl !== undefined && !this.expectUrlSupported) {
+    if (
+      original.expectUrl !== undefined &&
+      !this.sidecarCapabilities.includes(BROWSER_EXPECT_URL_RUNTIME_CAPABILITY)
+    ) {
       throw new BrowserError(
         BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
         'The installed Orca app that runs this server’s browser cannot check --expect-url. Update it or drop the flag.'

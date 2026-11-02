@@ -19,14 +19,12 @@ import {
   type ExternalChromiumPageRecord as PageRecord
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
-import { runExternalChromiumPageInput } from './external-chromium-page-input'
+import { runExternalChromiumPageInput, type PageInputSession } from './external-chromium-page-input'
 import { agentBrowserSnapshotArgs } from '../browser/agent-browser/agent-browser-snapshot-arguments'
 import { Snapshot } from '../../shared/rpc-contract/browser-observation-params'
 import { ExpectedPageUrlGuard } from '../browser/browser-expected-page-url'
 
 const AgentBrowserCurrentUrl = z.object({ url: z.string() })
-
-type PageCommandSession = Pick<ExternalChromiumBrowserSession, 'run' | 'runSteps'>
 
 const AgentBrowserSnapshot = z.object({
   refs: z
@@ -162,7 +160,7 @@ export class ExternalChromiumBrowserProcess {
     guard: ExpectedPageUrlGuard,
     page: PageRecord,
     method: string
-  ): PageCommandSession {
+  ): PageInputSession {
     const verify = async (): Promise<void> => {
       // Unlike `tab`, `get url` waits out a navigation still replacing the document, and so would
       // wait forever on a dialog, which blocks the page and any navigation with it.
@@ -186,7 +184,7 @@ export class ExternalChromiumBrowserProcess {
   }
 
   private async runOnPage(
-    session: PageCommandSession,
+    session: PageInputSession,
     page: PageRecord,
     method: string,
     params: Record<string, unknown>

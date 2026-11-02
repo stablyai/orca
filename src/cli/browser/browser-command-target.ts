@@ -10,7 +10,7 @@ import {
   resolveCurrentWorktreeSelector
 } from '../selectors'
 
-export type BrowserCliTarget = {
+type BrowserCliTarget = {
   worktree?: string
   page?: string
   expectUrl?: string

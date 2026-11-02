@@ -17,7 +17,9 @@ describe('browserClientPageCommandFailure', () => {
 
     expect(
       browserClientPageCommandFailure(
-        new BrowserClientPageCommandError('browser_expected_url_mismatch', undefined, mismatch),
+        new BrowserClientPageCommandError('browser_expected_url_mismatch', {
+          expectedUrlMismatch: mismatch
+        }),
         signal
       )
     ).toEqual({

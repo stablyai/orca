@@ -15,7 +15,7 @@ import {
   type ExternalChromiumBrowserSession
 } from './external-chromium-browser-session'
 
-type PageInputSession = Pick<ExternalChromiumBrowserSession, 'run' | 'runSteps'>
+export type PageInputSession = Pick<ExternalChromiumBrowserSession, 'run' | 'runSteps'>
 
 const ElementCallResult = z.object({
   result: z.object({ reached: z.boolean(), outcome: z.unknown().optional() })

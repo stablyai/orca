@@ -1,39 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeTypes from '../runtime/types'
 
-const callMock = vi.fn()
-
-vi.mock('../runtime/types', () => {
-  class RuntimeClientError extends Error {
-    readonly code: string
-
-    constructor(code: string, message: string) {
-      super(message)
-      this.code = code
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
-    }
-  }
-
-  return { RuntimeClientError, RuntimeRpcFailureError }
-})
+const { callMock, runtimeClientConstructorMock, serveOrcaAppMock, getDefaultUserDataPathMock } =
+  vi.hoisted(() => ({
+    callMock: vi.fn(),
+    runtimeClientConstructorMock: vi.fn(),
+    serveOrcaAppMock: vi.fn(),
+    getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data')
+  }))
 
 vi.mock('../runtime-client', async () => {
-  class RuntimeClient {
-    call = callMock
-    getCliStatus = vi.fn()
-    openOrca = vi.fn()
-  }
-  const { RuntimeClientError, RuntimeRpcFailureError } =
-    await vi.importMock<typeof RuntimeTypes>('../runtime/types')
-  return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
+  const { createRuntimeClientModuleMock } = await import('../index-test-harness.js')
+  return createRuntimeClientModuleMock({
+    callMock,
+    runtimeClientConstructorMock,
+    serveOrcaAppMock,
+    getDefaultUserDataPathMock
+  })
 })
 
 import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
