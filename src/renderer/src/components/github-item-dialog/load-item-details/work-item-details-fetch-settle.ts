@@ -1,3 +1,11 @@
+import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { WorkItemDetailsCacheEntry } from './work-item-details-cache'
+import {
+  GitHubWorkItemTargetError,
+  matchesGitHubWorkItemTarget,
+  requireGitHubWorkItemTargetDetails,
+  type GitHubWorkItemTarget
+} from '../../../../../shared/github/work-item-target'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
@@ -8,6 +16,7 @@ import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
+  WORK_ITEM_DETAILS_FRESH_MS,
   markUserActionWorkItemDetailsRead,
   touchWorkItemDetailsCache,
   workItemDetailsCache,
@@ -30,6 +39,7 @@ export async function loadCanonicalGitHubTaskDetails(
       type: 'issue',
       number: target.item.number,
       ownerRepo: target.ownerRepo,
+      expectedGhAccount: target.expectedGhAccount,
       canonical: true,
       accepts: () => accepts() && owned(),
       rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)
@@ -57,6 +67,7 @@ export async function loadOrdinaryWorkItemDetails(
     ...lookup,
     number: item.number,
     type: item.type,
+    canonical: false,
     ...(binding && {
       rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)
     })
@@ -69,6 +80,8 @@ export async function loadOrdinaryWorkItemDetails(
 type FetchAcceptance = {
   /** A user-started read reports its own failure, so it never installs an inline load error. */
   userAction?: boolean
+  target?: GitHubWorkItemTarget | null
+  isCurrent?: () => boolean
   accepts?: (result: GitHubWorkItemDetails | null) => boolean
   onAccepted?: (result: GitHubWorkItemDetails) => void
 }
@@ -81,22 +94,32 @@ export async function settleWorkItemDetailsFetch(
   const { detailsCacheKey, inflight } = args
   let result: GitHubWorkItemDetails | null = null
   let error: string | undefined
+  let targetError = false
   try {
     result = await inflight
   } catch (err) {
     error = err instanceof Error ? err.message : 'Failed to load details'
+    targetError = err instanceof GitHubWorkItemTargetError
   }
   const prev = workItemDetailsCache.get(detailsCacheKey)
   if (prev?.pending !== inflight) {
     return { status: 'superseded' } as const
   }
+  if (args.isCurrent?.() === false) {
+    touchWorkItemDetailsCache(detailsCacheKey, { ...prev, pending: undefined })
+    return { status: 'superseded' } as const
+  }
   try {
+    if (args.target && !error) {
+      requireGitHubWorkItemTargetDetails(result, args.target)
+    }
     if (args.accepts?.(result) === false) {
       touchWorkItemDetailsCache(detailsCacheKey, { ...prev, pending: undefined })
       return { status: 'superseded' } as const
     }
   } catch (err) {
     error = err instanceof Error ? err.message : 'Failed to load details'
+    targetError = err instanceof GitHubWorkItemTargetError
     result = null
   }
   if (error || result === null) {
@@ -104,6 +127,7 @@ export async function settleWorkItemDetailsFetch(
     touchWorkItemDetailsCache(detailsCacheKey, {
       ...prev,
       pending: undefined,
+      ...(targetError ? { details: null, fetchedAt: 0 } : {}),
       ...(args.userAction
         ? {}
         : { error: error ?? (prev.details ? undefined : WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE) })
@@ -115,10 +139,35 @@ export async function settleWorkItemDetailsFetch(
     details: result,
     pending: undefined,
     error: undefined,
+    rereadOwed: undefined,
     fetchedAt: Date.now()
   })
   args.onAccepted?.(result)
   return { status: 'accepted', details: result } as const
+}
+
+export function ensureWorkItemDetailsFetch(
+  key: string,
+  load: () => Promise<GitHubWorkItemDetails | null>,
+  options: FetchAcceptance = {}
+): void {
+  if (options.isCurrent?.() === false) {
+    return
+  }
+  const cached = workItemDetailsCache.get(key)
+  if (cached?.pending) {
+    if (cached.pending.isCurrent?.() !== false) {
+      return
+    }
+  } else if (
+    cached?.details &&
+    !cached.rereadOwed &&
+    (!options.target || matchesGitHubWorkItemTarget(cached.details.item, options.target)) &&
+    Date.now() - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
+  ) {
+    return
+  }
+  startWorkItemDetailsFetch(key, load, options)
 }
 
 export function startWorkItemDetailsFetch(
@@ -126,7 +175,7 @@ export function startWorkItemDetailsFetch(
   load: () => Promise<GitHubWorkItemDetails | null>,
   options: FetchAcceptance = {}
 ) {
-  const inflight = Promise.resolve().then(load)
+  const inflight = Object.assign(Promise.resolve().then(load), { isCurrent: options.isCurrent })
   if (options.userAction) {
     markUserActionWorkItemDetailsRead(inflight)
   }
@@ -147,5 +196,43 @@ export function startWorkItemDetailsFetch(
         touchWorkItemDetailsCache(key, { ...current, pending: undefined })
       }
     }
+  }
+}
+
+export function getAcceptedWorkItemDetails({
+  cachedEntry,
+  resource,
+  workItem,
+  opt
+}: {
+  cachedEntry: WorkItemDetailsCacheEntry | undefined
+  resource: GitHubWorkItemTarget | null
+  workItem: GitHubWorkItem | null
+  opt: PRComment[]
+}): GitHubWorkItemDetails | null {
+  if (resource && cachedEntry?.error === new GitHubWorkItemTargetError(resource).message) {
+    return null
+  }
+  if (workItem && resource && !matchesGitHubWorkItemTarget(workItem, resource)) {
+    return null
+  }
+  const cachedDetails = cachedEntry?.details ?? null
+  if (cachedDetails && resource && !matchesGitHubWorkItemTarget(cachedDetails.item, resource)) {
+    return null
+  }
+  if (!cachedDetails) {
+    return null
+  }
+  if (opt.length === 0) {
+    return cachedDetails
+  }
+  const ids = new Set(cachedDetails.comments.map((c) => c.id))
+  const missing = opt.filter((c) => !ids.has(c.id))
+  if (missing.length === 0) {
+    return cachedDetails
+  }
+  return {
+    ...cachedDetails,
+    comments: [...cachedDetails.comments, ...missing]
   }
 }

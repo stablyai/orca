@@ -1,11 +1,15 @@
+import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { getWorkItemRepo } from './work-item-repo-row'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../shared/task-source-runtime-capabilities'
-import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
-import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callGitHubTargetOperation } from './github-work-item-target-request'
+import {
+  GITHUB_EXACT_OPERATION_UNSUPPORTED,
+  requireGitHubWorkItemTargetDetails
+} from '../../../shared/github/work-item-target'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
@@ -38,7 +42,9 @@ type GitHubWorkItemDetailsLookupArgs = {
   number: number
   type: 'issue' | 'pr'
   ownerRepo?: GitHubOwnerRepo | null
+  target?: RuntimeClientTarget
   canonical?: boolean
+  expectedGhAccount?: GhAccountBinding | null
   accepts?: () => boolean
   rpcOptions?: Parameters<typeof callRuntimeRpc>[3]
 }
@@ -150,72 +156,64 @@ export async function lookupGitHubWorkItemDetailsForSource(
   }
   const sourceContext = args.sourceContext
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
-  if (
-    args.canonical &&
-    runtimeHost &&
-    !(await runtimeEnvironmentSupportsCapability(
-      runtimeHost.environmentId,
-      GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY
-    ))
-  ) {
-    // A canonical read an old server can't serve is unavailable, never an ordinary cached read.
-    return null
-  }
-  if (args.accepts?.() === false) {
-    return null
-  }
-  const result = await (runtimeHost
-    ? callRuntimeRpc<GitHubWorkItemDetails | null>(
-        { kind: 'environment', environmentId: runtimeHost.environmentId },
-        'github.workItemDetails',
-        {
-          repo: getGitHubRuntimeRepoId(sourceContext, args.repoId),
+  let result: GitHubWorkItemDetails | null
+  try {
+    result = await callGitHubTargetOperation<GitHubWorkItemDetails | null>({
+      target:
+        args.target ??
+        (runtimeHost
+          ? { kind: 'environment', environmentId: runtimeHost.environmentId }
+          : { kind: 'local' }),
+      ownerRepo: args.ownerRepo,
+      expectedGhAccount: args.expectedGhAccount,
+      canonical: args.canonical ?? false,
+      read: true,
+      method: 'github.workItemDetails',
+      params: {
+        repo: getGitHubRuntimeRepoId(sourceContext, args.repoId),
+        number: args.number,
+        type: args.type
+      },
+      rpcOptions: {
+        ...args.rpcOptions,
+        beforeSend: () => {
+          args.rpcOptions?.beforeSend?.()
+          if (args.accepts?.() === false) {
+            throw new Error('Task context changed.')
+          }
+        }
+      },
+      local: (exact) =>
+        window.api.gh.workItemDetails({
+          repoPath: args.repoPath,
+          repoId: args.repoId,
+          sourceContext,
           number: args.number,
           type: args.type,
-          ...(args.canonical && args.ownerRepo ? { ownerRepo: args.ownerRepo } : {})
-        },
-        {
-          timeoutMs: 30_000,
-          ...args.rpcOptions,
-          ...(args.accepts
-            ? {
-                beforeSend: () => {
-                  if (!args.accepts?.()) {
-                    throw new Error('Task context changed.')
-                  }
-                }
-              }
-            : {})
-        }
-      )
-    : window.api.gh.workItemDetails({
-        repoPath: args.repoPath,
-        repoId: args.repoId,
-        sourceContext,
-        number: args.number,
-        type: args.type,
-        ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {}),
-        ...(args.canonical ? { canonical: true } : {})
-      }))
-  if (args.accepts?.() === false) {
-    return null
-  }
-  if (args.canonical && result) {
-    const returned = parseGitHubIssueOrPRLink(result.item.url)
+          ...exact
+        })
+    })
+  } catch (error) {
     if (
-      !returned ||
-      !args.ownerRepo ||
-      result.item.type !== args.type ||
-      result.item.number !== args.number ||
-      returned.type !== args.type ||
-      returned.number !== args.number ||
-      githubRepoIdentityKey(returned.slug) !== githubRepoIdentityKey(args.ownerRepo)
+      args.canonical &&
+      error instanceof Error &&
+      error.message === GITHUB_EXACT_OPERATION_UNSUPPORTED
     ) {
       return null
     }
-    return result.item.assignees === undefined
-      ? result
-      : { ...result, assignees: result.item.assignees.map((user) => user.login) }
+    throw error
   }
-  return result
+  if (args.accepts?.() === false) {
+    return null
+  }
+  if (args.ownerRepo) {
+    requireGitHubWorkItemTargetDetails(result, {
+      repository: args.ownerRepo,
+      type: args.type,
+      number: args.number
+    })
+  }
+  return args.canonical && result?.item.assignees !== undefined
+    ? { ...result, assignees: result.item.assignees.map((user) => user.login) }
+    : result
 }
