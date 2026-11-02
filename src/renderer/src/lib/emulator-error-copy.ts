@@ -54,6 +54,16 @@ const COPY: Record<EmulatorFailureCode, (params: (name: string) => Param) => str
       ? null
       : translate('emulator.errors.avdBootTimeout', EN.avdBootTimeout, { avdName })
   },
+  avdExitedBeforeBoot: (param) => {
+    const avdName = param('avdName')
+    const detail = param('detail')
+    return avdName === null || detail === null
+      ? null
+      : translate('emulator.errors.avdExitedBeforeBoot', EN.avdExitedBeforeBoot, {
+          avdName,
+          detail
+        })
+  },
   scrcpyDownloadFailed: (param) => {
     const detail = param('detail')
     return detail === null

@@ -1,7 +1,5 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnJoin
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnJoin } from '../../shared/agent-session/journal/agent-session-journal-types'
 export const MAX_CODEX_PENDING_DISPATCH_ECHOES = 256
 export const MAX_CODEX_RECORDED_TURN_ENDS = 64
 

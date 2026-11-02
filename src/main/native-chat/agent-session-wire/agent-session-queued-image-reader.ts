@@ -2,13 +2,11 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionQueuedMessage,
-  AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { journalRenderItem } from '../agent-session-journal/journal-render-item'
 import {

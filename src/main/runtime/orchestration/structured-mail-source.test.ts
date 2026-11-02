@@ -9,7 +9,7 @@ import {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { orchestrationSenderName } from './orchestration-sender-name'
 import * as relations from './agent-message-relation'
@@ -36,7 +36,10 @@ describe('who delivered mail is from', () => {
         },
         { id: 'm3', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null }
       ],
-      senderName: (party) => (party.terminalHandle === 'term_a' ? 'Build tab' : null)
+      senderSnapshot: (party) => ({
+        name: party.terminalHandle === 'term_a' ? 'Build tab' : null,
+        agent: null
+      })
     })
     expect(source).toEqual({
       kind: 'agent',
@@ -68,13 +71,13 @@ describe('who delivered mail is from', () => {
   })
 
   it('bounds a snapshot name, and a naming failure costs only the name', () => {
-    const named = (senderName: (party: unknown) => string | null) =>
+    const named = (name: (party: unknown) => string | null) =>
       structuredMailSource({
         db: null,
         mailboxHandle: 'run:r1',
         dispatchId: null,
         batch: [{ id: 'm1', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null }],
-        senderName
+        senderSnapshot: (party) => ({ name: name(party), agent: null })
       }).senders[0]?.name
     expect(named(() => `  Build\n${'x'.repeat(400)}`)).toHaveLength(200)
     expect(named(() => '   ')).toBeNull()
@@ -114,7 +117,7 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
         db,
         mailboxHandle: recipient,
         dispatchId,
-        senderName: () => 'Sender',
+        senderSnapshot: () => ({ name: 'Sender', agent: null }),
         batch: addresses.map<MailSourceMessage>((address, i) => ({
           id: `m${i}`,
           from_handle: address,
@@ -124,15 +127,17 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
         }))
       })
     expect(mail('term_coord', ['term_worker']).senders[0].relation).toBe('worker')
-    expect(agentMessageHeading(mail('term_coord', ['term_worker']))).toBe('worker')
+    expect(agentMessageHeading(mail('term_coord', ['term_worker']), { blocks: [] })).toBe('worker')
     expect(mail('term_worker', ['term_coord'], worker.id).senders[0].relation).toBe('coordinator')
-    expect(agentMessageHeading(mail('term_worker', ['term_coord'], worker.id))).toBe('coordinator')
+    expect(
+      agentMessageHeading(mail('term_worker', ['term_coord'], worker.id), { blocks: [] })
+    ).toBe('coordinator')
     expect(mail('term_coord', ['term_child']).senders[0].relation).toBe('none')
     const delivered = mail('term_worker', ['term_child', 'term_peer'], worker.id)
     db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(child.id)
     const reload = readAgentMessageSource(JSON.parse(JSON.stringify(delivered)))!
     expect(reload.senders.map((sender) => sender.relation)).toEqual(['worker', 'none'])
-    expect(agentMessageHeading(reload)).toBe('generic')
+    expect(agentMessageHeading(reload, { blocks: [] })).toBe('generic')
     expect(mail('term_worker', ['term_child'], worker.id).senders[0].relation).toBeUndefined()
     expect(mail('term_worker', ['term_child'], worker.id, child.id).senders[0].relation).toBe(
       'worker'
@@ -162,7 +167,7 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
         mailboxHandle: 'term_coord',
         dispatchId: null,
         batch: [good, bad],
-        senderName: () => 'Sender'
+        senderSnapshot: () => ({ name: 'Sender', agent: null })
       })
       expect(source.senders[0].relation).toBeUndefined()
       expect(source.orchestration).toMatchObject({
@@ -265,8 +270,8 @@ it.each([100, 1000])(
           mailboxHandle: `orca_session_id:${coordinator}`,
           dispatchId: null,
           batch,
-          senderName: (party, report) =>
-            orchestrationSenderName(
+          senderSnapshot: (party, report) => ({
+            name: orchestrationSenderName(
               party,
               {
                 db,
@@ -276,7 +281,9 @@ it.each([100, 1000])(
                 generatedTitlesEnabled: true
               },
               report
-            )
+            ),
+            agent: null
+          })
         })
         const groups = distinct ? 10 : 1
         // Known groups walk canonical records eight times; a missing Run ends after sender canonicalization.

@@ -1,28 +1,25 @@
-import { readTestQueueChanges } from '../agent-session-journal/journal-host-database-test-support'
-import * as fixture from './structured-agent-session-queued-legacy-import.test-fixture'
+import {
+  readTestQueueChanges,
+  appendTestJournalQueueRow
+} from '../agent-session-journal/journal-host-database-test-support'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import { markUnclaimedUploadForSweep } from '../agent-session-attachments/agent-session-attachment-claims'
-import { appendTestJournalQueueRow } from '../agent-session-journal/journal-host-database-test-support'
-// An earlier build kept queued cards in their own table. They move into the chat's journal: the
-// queue reads each the same before and after, each action moves only its own card, and the bulk
-// import runs once per open, all-or-nothing, until no readable legacy row is left.
-
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { readCodexHistoryJournalView } from '../../codex/codex-history-journal-view'
 import { catchUpCodexThread } from '../../codex/codex-structured-thread-catch-up'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
 import { expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { readPublishedQueuedMessages } from './structured-agent-session-queued-publication'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -41,7 +38,11 @@ import {
   seedLegacy,
   legacyIds
 } from './structured-agent-session-queued-legacy-import.test-fixture'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import * as fixture from './structured-agent-session-queued-legacy-import.test-fixture'
+// An earlier build kept queued cards in their own table. They move into the chat's journal: the
+// queue reads each the same before and after, each action moves only its own card, and the bulk
+// import runs once per open, all-or-nothing, until no readable legacy row is left.
 
 /** An earlier build's hand-off of `card`, answered `as`. */
 async function handOff(

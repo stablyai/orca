@@ -170,6 +170,7 @@ export function MobileHomeScreen() {
             contentMaxWidth={contentMaxWidth}
             isWideLayout={isWideLayout}
             connectedHosts={data.connectedHosts}
+            hostsConnecting={data.hostsConnecting}
             onOpenTasks={(hostId) => openMobileTasks(hostId)}
             onOpenAutomations={openMobileAutomations}
             onCreateWorkspace={() =>

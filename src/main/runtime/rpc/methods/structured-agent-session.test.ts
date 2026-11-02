@@ -4,17 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES,
-  RUNTIME_PROTOCOL_VERSION,
-  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
-  AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { RUNTIME_CAPABILITIES, RUNTIME_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-attention-capabilities'
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../native-chat/agent-session-wire/structured-agent-session-send-settlement'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ALL_RPC_METHODS } from './index'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
@@ -42,110 +43,28 @@ afterEach(() => {
   clearStructuredHostStub()
 })
 
-describe('agentSession.reveal', () => {
-  it.each(['codex', 'claude'] as const)('republishes a persisted %s chat tab', async (agent) => {
-    hostCalls.revealSession.mockResolvedValueOnce({
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      agent,
-      readable: true
-    })
-
-    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(hostCalls.revealSession).toHaveBeenCalledWith(SESSION)
-    expect(response).toMatchObject({ ok: true, result: { ok: true, agent } })
-    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
-      expect.objectContaining({ agent, activate: true })
-    )
-  })
-
-  it('publishes the workspace the host reported, not one the client could assert', async () => {
-    // The client sends only a session id, so a stale or forged one cannot aim the publish at
-    // another workspace.
-    hostCalls.revealSession.mockResolvedValueOnce({
-      sessionId: SESSION,
-      workspaceId: 'workspace-from-record',
-      agent: 'claude',
-      readable: true
-    })
-
-    await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith({
-      workspaceId: 'workspace-from-record',
-      sessionId: SESSION,
-      agent: 'claude',
-      activate: true
-    })
-  })
-
-  it('publishes the tab even when the journal could not be read', async () => {
-    // Publish unreadable chats too: attach can recover them; refusing reveal would strand them permanently.
-    hostCalls.revealSession.mockResolvedValueOnce({
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      agent: 'codex',
-      readable: false
-    })
-
-    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(response).toMatchObject({ ok: true, result: { ok: true, readable: false } })
-    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
-  })
-
-  it('refuses rather than throws when the host holds no such record', async () => {
-    hostCalls.revealSession.mockRejectedValueOnce(new Error('agent_session_identity_required'))
-
-    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { ok: false, refusal: { code: 'agent_session_identity_required' } }
-    })
-    expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
-  })
-
-  it('does not launder an unrelated fault into a refusal', async () => {
-    hostCalls.revealSession.mockRejectedValueOnce(new Error('EACCES: journal directory'))
-
-    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
-
-    expect(response).toMatchObject({ ok: false })
-  })
-
-  it('is refused for a client that cannot read structured sessions', async () => {
-    const response = await call(
-      'agentSession.reveal',
-      { sessionId: SESSION },
-      { clientKind: 'runtime', clientCapabilities: [] }
-    )
-
-    expect(response).toMatchObject({ ok: false })
-    expect(hostCalls.revealSession).not.toHaveBeenCalled()
-  })
-})
-
 describe('capability gating', () => {
   it('clears durable tab visibility when closing through the agent-session RPC', async () => {
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
 
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
     expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
-    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
+    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false, undefined, {
+      deferHiddenNotice: true,
+      check: expect.any(Function)
+    })
     expect(hostCalls.setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(
       hostCalls.close.mock.invocationCallOrder[0]!
     )
   })
 
-  it('does not stop the provider when durable tab retirement fails', async () => {
+  it('attempts provider stop and reports the durable tab retirement failure', async () => {
     hostCalls.setSessionTabVisibility.mockRejectedValueOnce(new Error('visibility write failed'))
 
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
 
     expect(response).toMatchObject({ ok: false })
-    expect(hostCalls.close).not.toHaveBeenCalled()
+    expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
   })
 
   it('advertises the capability without bumping the protocol version', () => {

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
-import { structuredAgentSessionShownSnapshot } from '../../../src/shared/structured-agent-session-option-view'
-import type { StructuredAgentSessionOptionState } from '../../../src/shared/structured-agent-session-options'
+import { structuredAgentSessionShownSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
+import type { StructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface,

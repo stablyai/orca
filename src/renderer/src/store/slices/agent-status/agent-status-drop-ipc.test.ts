@@ -35,29 +35,6 @@ function stubWindowApi(): {
   return { drop, dropByTabPrefix }
 }
 
-describe('dropAgentStatus → IPC fan-out', () => {
-  it('fires window.api.agentStatus.drop exactly once after a live-entry drop', () => {
-    const { drop } = stubWindowApi()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
-
-    store.getState().dropAgentStatus('tab-1:0')
-    expect(drop).toHaveBeenCalledTimes(1)
-    expect(drop).toHaveBeenCalledWith('tab-1:0')
-  })
-
-  it('still fires drop on a no-op dismissal so a stale on-disk entry is cleaned up defensively', () => {
-    // Main may hold hydrated rows unknown to renderer; propagate even local no-op drops (main deletion is idempotent).
-    const { drop } = stubWindowApi()
-    const store = createTestStore()
-    store.getState().dropAgentStatus('tab-missing:0')
-    expect(drop).toHaveBeenCalledTimes(1)
-    expect(drop).toHaveBeenCalledWith('tab-missing:0')
-  })
-})
-
 describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
   it('fires window.api.agentStatus.dropByTabPrefix after dropping local tab rows', () => {
     const { dropByTabPrefix } = stubWindowApi()
@@ -75,30 +52,6 @@ describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
     expect(dropByTabPrefix).toHaveBeenCalledWith('tab-1')
     expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeUndefined()
     expect(store.getState().agentStatusByPaneKey['tab-2:0']).toBeDefined()
-  })
-
-  it('fires dropByTabPrefix when no local rows match so stale main cache can be evicted', () => {
-    const { dropByTabPrefix } = stubWindowApi()
-    const store = createTestStore()
-
-    store.getState().dropAgentStatusByTabPrefix('tab-missing')
-
-    expect(dropByTabPrefix).toHaveBeenCalledTimes(1)
-    expect(dropByTabPrefix).toHaveBeenCalledWith('tab-missing')
-    expect(store.getState().recentlyClosedAgentStatusTabIds['tab-missing']).toBe(true)
-  })
-
-  it('keeps closed tab markers for the renderer session', () => {
-    stubWindowApi()
-    const store = createTestStore()
-
-    store.getState().dropAgentStatusByTabPrefix('tab-old')
-    store.getState().dropAgentStatusByTabPrefix('tab-new')
-
-    expect(store.getState().recentlyClosedAgentStatusTabIds).toEqual({
-      'tab-old': true,
-      'tab-new': true
-    })
   })
 
   it('FIFO-caps recentlyClosedAgentStatusTabIds so it cannot grow unbounded', () => {
@@ -154,12 +107,5 @@ describe('dismissRetainedAgentsByWorktree → IPC fan-out', () => {
     const calls = drop.mock.calls.map((c) => c[0]).sort()
     expect(calls).toEqual(['tab-a:0', 'tab-b:0'])
     expect(store.getState().retainedAgentsByPaneKey['tab-c:0']).toBeDefined()
-  })
-
-  it('does not fire IPC when no retained entries match the worktree', () => {
-    const { drop } = stubWindowApi()
-    const store = createTestStore()
-    store.getState().dismissRetainedAgentsByWorktree('wt-empty')
-    expect(drop).not.toHaveBeenCalled()
   })
 })

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
-import type { AgentSessionOptionsResult } from './agent-session-wire'
-import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { createStructuredAgentSessionOptionState } from './structured-agent-session-options'
+import type { AgentSessionOptionsResult } from './agent-session/options/agent-session-options-result'
+import { getAgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog'
+import { createStructuredAgentSessionOptionState } from './agent-session/options/structured-agent-session-options'
 import { createStructuredSessionSelectionController } from './structured-agent-session-selection-operations'
 import { createStructuredAgentSessionOptionsReadOwner } from './structured-agent-session-options-read-owner'
 
@@ -192,4 +192,45 @@ it('lets two live readers retire the same captured IDs without removing a newer 
   expect(reader.getSnapshot().support).not.toBeNull()
   expect(peer.getSnapshot().support).not.toBeNull()
   closes.forEach((close) => close())
+})
+
+it('clears account-switch evidence only on a current owner read failure and retains other support', async () => {
+  const { reader, context, reads } = fixture()
+  let close = reader.attach(context)
+  await tick()
+  reads[0].resolve({ ...answer, canSwitchAccount: true })
+  await tick()
+  const accepted = reader.getSnapshot()
+  reader.invalidate()
+  await tick()
+  reader.invalidate()
+  reads[1].reject(new Error('obsolete read'))
+  await tick()
+  expect(reader.getSnapshot()).toBe(accepted)
+  expect(reads).toHaveLength(3)
+  reads[2].reject(new Error('current read'))
+  await tick()
+  expect(reader.supportFor(context.owner)?.result.canSwitchAccount).toBe(false)
+  expect(reader.supportFor(context.owner)?.result.acceptsImages).toBe(true)
+  expect(reader.getSnapshot().optionState).toBe(accepted.optionState)
+  reader.invalidate()
+  await tick()
+  reads[3].resolve({ ...answer, canSwitchAccount: true })
+  await tick()
+  reader.invalidate()
+  await tick()
+  close()
+  const replacement = createStructuredSessionSelectionController(vi.fn())
+  const owner = [replacement]
+  close = reader.attach({ ...context, controller: replacement, owner })
+  expect(reader.supportFor(owner)).toBeNull()
+  await tick()
+  reads[5].resolve({ ...answer, canSwitchAccount: true })
+  await tick()
+  const current = reader.getSnapshot()
+  reads[4].reject(new Error('previous host'))
+  await tick()
+  expect(reader.getSnapshot()).toBe(current)
+  expect(reader.supportFor(owner)?.result.canSwitchAccount).toBe(true)
+  close()
 })

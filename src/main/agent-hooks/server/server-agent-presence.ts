@@ -80,8 +80,13 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
         this.statusHookGeneration === generation &&
         this.state.lastStatusByPaneKey.get(resolved) === row &&
         row.agentPresence === presence,
+      // An agent that reported its own end holds nothing, even while its process winds down.
       presence: () =>
-        presence?.process ? probeAgentProcessPresence(presence.process) : Promise.resolve(null),
+        presence?.ended
+          ? Promise.resolve('exited')
+          : presence?.process
+            ? probeAgentProcessPresence(presence.process)
+            : Promise.resolve(null),
       topology: cliWriterTopology(row)
     }
   }

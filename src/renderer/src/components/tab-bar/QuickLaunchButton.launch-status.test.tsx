@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import type { ReactNode } from 'react'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
@@ -11,8 +10,25 @@ import {
   screen
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
+import {
+  type StructuredLaunchState,
+  resetStructuredAgentLaunchRegistryForTests,
+  setStructuredLaunchState
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type { StructuredLaunchAttempt } from '@/lib/agent-session/launch/structured-agent-session-launch-request'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
+import {
+  QuickLaunchAgentMenuItems,
+  ProjectedAgentMenuItems,
+  useTabAgentMenuLaunch
+} from './QuickLaunchButton'
+import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
+
 import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -70,23 +86,7 @@ vi.mock('@/runtime/structured-chat-name-observation', () => ({
 }))
 vi.mock('@/hooks/use-now', () => ({ useNow: () => 0 }))
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
-import {
-  QuickLaunchAgentMenuItems,
-  ProjectedAgentMenuItems,
-  useTabAgentMenuLaunch
-} from './QuickLaunchButton'
-import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import * as menuRows from './use-new-tab-agent-menu-rows'
-import {
-  resetStructuredAgentLaunchRegistryForTests,
-  setStructuredLaunchState
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
 
@@ -384,7 +384,7 @@ it('gives static/search no agent actions while loading, retaining settings and g
       onNewBrowserTab: vi.fn()
     })
   )
-  expect(controller.result.current.agentLaunchOptions).toEqual([])
+  expect(controller.result.current.agentPickerInventory.getSnapshot()).toEqual([])
   expect(
     controller.result.current.createMenuOptions.some((option) => option.kind === 'new-terminal')
   ).toBe(true)

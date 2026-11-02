@@ -1,5 +1,5 @@
-import type Database from '../../sqlite/sync-database'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { journalInputOrder } from './journal-input-order'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readHistoricalAdmissionSources } from './journal-historical-inputs'
 import { decodeJournalOutcome } from './journal-outcome-codec'
 import { outcomeFormat1EntryParsers } from './journal-outcome-format-1'
@@ -12,6 +12,7 @@ import {
   journalInputSourceSequence
 } from './journal-input-source'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from './journal-dispatch-doubt-reasons'
+import type Database from '../../sqlite/sync-database'
 
 /** Restore runtime views from retained admissions; newest complete records still own deletion. */
 export function restoreRetainedJournalInputs(
@@ -31,11 +32,11 @@ export function restoreRetainedJournalInputs(
   for (const [id, admission] of ordered) {
     const family = journalInputSourceFamily(admission)
     if (family) {
-      state.inputs.families.set(family, admission)
       const members = families.get(family) ?? []
       members.push([id, admission])
       families.set(family, members)
     }
+    journalInputOrder(state).refreshLink(id)
     const send = state.submissions.get(id)
     if (
       family &&

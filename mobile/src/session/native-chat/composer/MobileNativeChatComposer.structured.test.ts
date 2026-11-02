@@ -27,14 +27,7 @@ import { structuredSendResultFixture } from '../../structured-agent-send-result.
 import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
-import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session-runtime-capabilities'
-vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
-vi.mock('../../../platform/media-picker', () => ({
-  useMediaPicker: () => ({ pickImages: async () => [] })
-}))
-vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
-}))
+import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -42,6 +35,13 @@ import {
   MobileNativeChatComposer as NativeChatComposer,
   MobileNativeChatDraftComposer
 } from './MobileNativeChatComposer'
+vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('../../../platform/media-picker', () => ({
+  useMediaPicker: () => ({ pickImages: async () => [] })
+}))
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
+}))
 
 const getNoComposerEditGeneration = () => 0
 
@@ -54,9 +54,14 @@ function MobileNativeChatComposer({
   return createElement(NativeChatComposer, { ...props, getComposerEditGeneration })
 }
 
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },

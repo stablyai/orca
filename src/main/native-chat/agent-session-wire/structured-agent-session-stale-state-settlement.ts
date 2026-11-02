@@ -2,14 +2,14 @@ import { providerTimelineExecutionItems } from '../agent-session-timeline/provid
 // Plan against queued journal state; death/replacement proof interrupts only matching owners,
 // otherwise settle unverifiable and revise when later proof arrives.
 
-import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
+import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import type { AgentSessionReplacedRuntime } from '../../runtime/agent-session/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-death-evidence'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalPendingSubmissionResolutions } from '../agent-session-journal/journal-pending-submission-recovery'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'

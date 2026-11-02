@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
 import { confirmStructuredLaunchFirstMessagePublication } from './structured-agent-session-launch-publication-confirmation'
-import { retryStructuredAgentSessionLaunch } from '../../structured-agent-session-launch'
+import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredAgentSessionLaunchOwner,

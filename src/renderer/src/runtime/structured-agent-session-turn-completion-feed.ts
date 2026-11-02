@@ -1,8 +1,8 @@
 // Share host completion/prompt edges per target without snapshots, buffers or reconnect catch-up. Status feed retains state; this feed intentionally loses outage edges. Retention would create unread obligations with nothing to retire them and relight already-read work.
 
-import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-wire'
-import type { AgentSessionAttentionEdge } from '../../../shared/agent-session-attention'
-import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import type { AgentSessionAttentionEdge } from '../../../shared/agent-session/agent-session-attention'
+import { AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-attention-capabilities'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionTurnCompletions } from './structured-agent-session-client'

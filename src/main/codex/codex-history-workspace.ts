@@ -1,4 +1,4 @@
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readCodexJournalRecord } from './codex-structured-journal-translation-values'
 
 export function savedTurnFacts(saved: AgentJournalRenderItem | null): Record<string, unknown> {

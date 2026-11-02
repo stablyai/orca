@@ -1,13 +1,13 @@
 import { structuredAgentSessionStopControl } from '../../../shared/structured-agent-session-stop-control'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { expect, it, vi, type Mock } from 'vitest'
 import { CreateIntentParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import { resolveSourceControlActionSessionOptions } from '../../../shared/source-control-action-launch-preferences'
 import {
   startStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch
-} from './structured-agent-session-launch'
-import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
+} from './agent-session/launch/structured-agent-session-launch'
+import { holdStructuredAgentSessionLaunchOption } from './agent-session/launch/structured-agent-session-launch-options'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
 import {
@@ -19,7 +19,7 @@ import {
   created,
   draft
 } from './structured-agent-session-launch-create-message.test-fixture'
-import { structuredAgentSessionCreateFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { readStructuredAgentLaunchRecord } from './agent-session/launch/structured-agent-session-launch-persistence'

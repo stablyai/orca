@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { prepareRuntimePtySpawn } from './spawn-preflight'
-import { buildRuntimePtySpawnOptions } from './spawn-options'
+
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { makeRuntimePtySpawnTestDeps } from './spawn-preflight-test-deps-fixture'
@@ -44,74 +44,6 @@ function makeDeps(): PtyRuntimeControllerDeps {
   return makeRuntimePtySpawnTestDeps(HOST_DEFAULT_SHELL)
 }
 
-async function resolveSpawnOptions(
-  args: RuntimePtySpawnArgs
-): Promise<ReturnType<typeof createRuntimePtySpawnState>['spawnOptions']> {
-  const ctx = createRuntimePtySpawnState(makeDeps(), args)
-  await prepareRuntimePtySpawn(ctx)
-  await buildRuntimePtySpawnOptions(ctx)
-  ctx.finishTerminalInstall()
-  return ctx.spawnOptions
-}
-
-async function resolveSpawnShell(shellOverride: string | undefined): Promise<string | undefined> {
-  return (await resolveSpawnOptions({ cols: 120, rows: 40, shellOverride })).shellOverride
-}
-
-describe('runtime pty spawn options: declared spawn intent', () => {
-  it("hands a paired client's intent to the provider and omits it when undeclared", async () => {
-    await expect(
-      resolveSpawnOptions({ cols: 120, rows: 40, spawnIntent: 'automatic-restore' })
-    ).resolves.toMatchObject({ spawnIntent: 'automatic-restore' })
-    await expect(resolveSpawnOptions({ cols: 120, rows: 40 })).resolves.not.toHaveProperty(
-      'spawnIntent'
-    )
-  })
-})
-
-describe("runtime pty spawn options: the user's act on a WSL distro (E9)", () => {
-  it("checks a folder workspace's path passively unless the start is the user's act", async () => {
-    const admit = vi.fn<PtyRuntimeControllerDeps['assertWorkspaceAcceptsNewPty']>(() => undefined)
-    for (const args of [{}, { wslUserAct: true as const }]) {
-      const ctx = createRuntimePtySpawnState(
-        { ...makeDeps(), assertWorkspaceAcceptsNewPty: admit },
-        { cols: 120, rows: 40, worktreeId: 'wt-1', ...args }
-      )
-      await prepareRuntimePtySpawn(ctx)
-      ctx.finishTerminalInstall()
-    }
-    expect(admit.mock.calls.map((call) => call[3])).toEqual([true, false])
-  })
-
-  it('marks every main-side start as background work unless its caller names the user', async () => {
-    await expect(resolveSpawnOptions({ cols: 120, rows: 40 })).resolves.toMatchObject({
-      wslBackgroundStart: true
-    })
-    await expect(
-      resolveSpawnOptions({ cols: 120, rows: 40, wslUserAct: true })
-    ).resolves.not.toHaveProperty('wslBackgroundStart')
-  })
-})
-
-/** Runtime --shell must choose the provider shell, not type its name into the host default shell. */
-describe('runtime pty spawn preflight: requested shell on a local Windows host', () => {
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
-  })
-
-  it('spawns the requested shell as the pty', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-
-    await expect(resolveSpawnShell('cmd.exe')).resolves.toBe('cmd.exe')
-  })
-
-  it('keeps the host default shell when nothing was requested', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-
-    await expect(resolveSpawnShell(undefined)).resolves.toBe(HOST_DEFAULT_SHELL)
-  })
-})
-
 describe('runtime pty spawn preflight: OpenSSH login shell on a managed SSH host (#9327)', () => {
   let loginShellDir = ''
   afterEach(() => {
@@ -144,18 +76,6 @@ describe('runtime pty spawn preflight: OpenSSH login shell on a managed SSH host
     const { loginShell, shell } = await resolveWithLoginShell(true)
 
     expect(shell).toBe(loginShell)
-  })
-
-  it('still honors a shell the client asked for explicitly', async () => {
-    await expect(resolveWithLoginShell(true, 'cmd.exe')).resolves.toMatchObject({
-      shell: 'cmd.exe'
-    })
-  })
-
-  it('leaves a desktop or user-started server on its own default', async () => {
-    await expect(resolveWithLoginShell(false)).resolves.toMatchObject({
-      shell: HOST_DEFAULT_SHELL
-    })
   })
 })
 

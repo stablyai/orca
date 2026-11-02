@@ -2,8 +2,8 @@ import { z } from 'zod'
 import {
   AgentJournalProducerLinkageFields,
   AgentJournalTurnScopeSchema
-} from '../../../shared/agent-session-journal-schemas'
-import { AgentSessionExecutionOptionsSchema } from '../../../shared/agent-session-execution-options'
+} from '../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { AgentSessionExecutionOptionsSchema } from '../../../shared/agent-session/options/agent-session-execution-options'
 import {
   storedItem,
   storedMessageBody,
@@ -14,7 +14,7 @@ import { strictStorage } from './journal-storage-strict'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalSubmissionRow } from './journal-row-schema'
 
 const number = z.number().finite()

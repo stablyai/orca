@@ -1,19 +1,17 @@
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { restoreRetainedJournalInputs } from './journal-retained-inputs'
-// Loading a journal: the session projection names the live epoch, and that
-// epoch's rows are folded through the reducer in sequence order.
-//
-// Context boundaries stay in this ordered range beside canonical input. A row
-// this build cannot parse, a gap, or a first row that is not the epoch's is
-// damage, and a row a newer Orca wrote is one this build cannot place: the load
-// names either and the open fails on it. Nothing is deleted.
-
+import { readJournalLegacyCards } from './journal-queue-import'
+import { journalInputOrder } from './journal-input-order'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { readJournalOutcomes } from './journal-outcome-table'
 import { JournalOutcomeDecodeError } from './journal-outcome-codec'
-import { readJournalOutcomeGroups, type JournalReadRow } from './journal-read-row'
+import {
+  readJournalOutcomeGroups,
+  type JournalReadRow,
+  type JournalRowsRead
+} from './journal-read-row'
 import { AgentSessionJournalError } from './journal-write-guards'
-import type Database from '../../sqlite/sync-database'
+import { journalInputAcceptance } from './journal-input-provenance'
 import {
   applyJournalRow,
   applyMarker5JournalRow,
@@ -26,6 +24,8 @@ import {
   readJournalSessionEpoch
 } from './journal-row-table'
 import { parseJournalRow } from './journal-row-schema'
+
+import type Database from '../../sqlite/sync-database'
 
 /** The physical anchor is sequence 1; later epoch rows are context boundaries. */
 const FIRST_JOURNAL_SEQUENCE = 1
@@ -48,7 +48,10 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
   if (epoch === null) {
     return null
   }
-  return foldJournalFromState(db, createJournalReducerState(sessionId, epoch))
+  return foldJournalFromState(
+    db,
+    createJournalReducerState(sessionId, epoch, (id) => journalInputAcceptance(db, sessionId, id))
+  )
 }
 
 /** The read is synchronous, like main's replay: it blocks once for one chat's saved records (its
@@ -59,7 +62,9 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
   if (epoch === null) {
     return null
   }
-  const empty = createJournalReducerState(sessionId, epoch)
+  const empty = createJournalReducerState(sessionId, epoch, (id) =>
+    journalInputAcceptance(db, sessionId, id)
+  )
   try {
     const source = journalOutcomeSource(db, sessionId, epoch)
     if (!source) {
@@ -71,7 +76,8 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
         db,
         empty,
         source.prefix,
-        source.marker === 5 ? 'marker5' : 'sources'
+        source.marker === 5 ? 'marker5' : 'sources',
+        true
       )
       if (prefix.newer || prefix.damage || prefix.state.lastSequence !== source.prefix) {
         const gap = { sequence: prefix.state.lastSequence + 1, cause: 'sequence-gap' as const }
@@ -124,10 +130,11 @@ function foldJournalFromState(
   db: Database.Database,
   state: JournalReducerState,
   through = Number.POSITIVE_INFINITY,
-  interpretation: 'marker5' | 'sources' = 'sources'
+  interpretation: 'marker5' | 'sources' = 'sources',
+  deferNativeCleanup = false
 ): JournalLoad {
   const { sessionId, epoch, lastSequence } = state
-  const fold = startJournalRowFold({ sessionId, epoch, interpretation }, state)
+  const fold = startJournalRowFold({ sessionId, epoch, interpretation, deferNativeCleanup }, state)
   for (const entry of iterateJournalEpochRows(
     db,
     sessionId,
@@ -137,6 +144,9 @@ function foldJournalFromState(
     if (entry.seq > through || !fold.add(entry)) {
       break
     }
+  }
+  if (!deferNativeCleanup) {
+    journalInputOrder(state).overlay(state, readJournalLegacyCards(db, state))
   }
   return fold.finish()
 }
@@ -148,12 +158,15 @@ export function startJournalRowFold(
     epoch: string
     untilDamage?: boolean
     interpretation?: 'marker5' | 'sources'
+    deferNativeCleanup?: boolean
+    originalAcceptance?: Parameters<typeof createJournalReducerState>[2]
   },
-  state = createJournalReducerState(input.sessionId, input.epoch)
+  state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
 ): {
   add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
   finish: () => JournalLoad
 } {
+  journalInputOrder(state).beginReconstruction()
   let expectedSequence = state.lastSequence + 1
   let damage: JournalDamage | null = null
   let anchored = state.lastSequence > 0
@@ -200,6 +213,13 @@ export function startJournalRowFold(
     return true
   }
   const finish = (): JournalLoad => {
+    if (!input.deferNativeCleanup) {
+      journalInputOrder(state).finishReconstruction(state)
+      journalInputOrder(state).lineage.restoreFrontier(
+        state.lastSequence,
+        state.inputEntries.values()
+      )
+    }
     state.oldestSequence = FIRST_JOURNAL_SEQUENCE
     // Empty epochs contain no recoverable history; founding a fresh epoch loses nothing.
     const found =
@@ -217,7 +237,7 @@ export function journalRowsAfterReader(
   sessionId: string,
   epoch: string,
   limit?: number
-): (afterSequence: number) => JournalReadRow[] {
+): (afterSequence: number) => JournalRowsRead {
   return (afterSequence) => readJournalRowsAfterCursor(db, sessionId, epoch, afterSequence, limit)
 }
 
@@ -229,35 +249,42 @@ export function readJournalRowsAfterCursor(
   epoch: string,
   afterSequence: number,
   limit?: number
-): JournalReadRow[] {
+): JournalRowsRead {
   const source = journalOutcomeSource(db, sessionId, epoch)
   const prefix = source ? source.prefix : Number.POSITIVE_INFINITY
   const rows: JournalReadRow[] = []
+  // A read that stops early covers only the rows it returned.
+  const stopped = (): JournalRowsRead => ({ rows, through: rows.at(-1)?.seq ?? afterSequence })
   if (afterSequence < prefix) {
     for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
       const parsed =
         stored.seq <= prefix ? parseJournalRow(stored.rowJson, source?.marker !== 5) : null
       if (!parsed?.ok) {
         // An unreadable prefix row ends the page; outcome groups never skip past it.
-        return parsed ? rows : [...rows, ...groupsAfter(prefix)]
+        return parsed ? stopped() : groupsAfter(prefix)
       }
       rows.push(parsed.row)
     }
     if (!source || (limit !== undefined && rows.length >= limit)) {
-      return rows
+      return stopped()
     }
   }
-  return [...rows, ...groupsAfter(Math.max(afterSequence, prefix))]
+  return groupsAfter(Math.max(afterSequence, prefix))
 
-  function groupsAfter(after: number): JournalReadRow[] {
-    return source
-      ? readJournalOutcomeGroups(
-          db,
-          epoch,
-          source,
-          after,
-          limit === undefined ? undefined : limit - rows.length
-        )
-      : []
+  function groupsAfter(after: number): JournalRowsRead {
+    if (!source) {
+      return stopped()
+    }
+    const remaining = limit === undefined ? undefined : limit - rows.length
+    const groups = readJournalOutcomeGroups(db, epoch, source, after, remaining)
+    // Append one by one: spreading an unlimited read into push's arguments overflows the stack.
+    for (const group of groups) {
+      rows.push(group)
+    }
+    // A write whose fold changed nothing stores no record, so no group names its sequence; a read
+    // that returned every group still covers the epoch through its newest write.
+    return remaining === undefined || groups.length < remaining
+      ? { rows, through: source.through }
+      : stopped()
   }
 }

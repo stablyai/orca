@@ -71,10 +71,11 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
   hostedReviewCache: {},
 
   getHostedReviewCreationEligibility: async (args) => {
-    const repo = findHostedReviewRepoByPath(get().repos, args.repoPath, args.repoId)
+    const repo = findHostedReviewRepoForFetch(get().repos, args.repoPath, args)
     const target = hostedReviewRepoOwnerTarget(repo)
     if (target.kind === 'environment') {
-      const { repoPath: _repoPath, worktreePath, ...runtimeArgs } = args
+      const { repoOwnerExecutionHostId: _ownerHostId, ...requestArgs } = args
+      const { repoPath: _repoPath, worktreePath, ...runtimeArgs } = requestArgs
       void _repoPath
       return callRuntimeRpc<HostedReviewCreationEligibility>(
         target,
@@ -174,14 +175,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const linkedRefetch = shouldRefetchForLinkedHint(cached, hintKey)
     const scopedResultRefetch = shouldRefetchGitHubScopedResultForNoHint(cached, hintKey)
     const staleMergedHeadRefetch = isStaleMergedGitHubReviewForHead(cached, options?.currentHeadOid)
-    if (
-      !options?.userRefresh &&
-      !options?.force &&
-      !linkedRefetch &&
-      !scopedResultRefetch &&
-      !staleMergedHeadRefetch &&
-      isFreshHostedReview(cached)
-    ) {
+    const needsRefetch = linkedRefetch || scopedResultRefetch || staleMergedHeadRefetch
+    if (!options?.userRefresh && !options?.force && !needsRefetch && isFreshHostedReview(cached)) {
       return cached.data
     }
 
@@ -290,9 +285,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     if (
       !options?.userRefresh &&
       !options?.force &&
-      !linkedRefetch &&
-      !scopedResultRefetch &&
-      !staleMergedHeadRefetch &&
+      !needsRefetch &&
       options?.staleWhileRevalidate &&
       cached !== undefined &&
       cached.data !== null

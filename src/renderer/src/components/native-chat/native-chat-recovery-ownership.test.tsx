@@ -14,7 +14,7 @@ import {
   resetNativeChatPtySendQueuesForTests
 } from './native-chat-pty-send-queue'
 import { clearPendingSendCacheForTests } from './native-chat-pending'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 

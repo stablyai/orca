@@ -1,6 +1,5 @@
-import type Database from '../../sqlite/sync-database'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { JournalOutcomeSource } from './journal-outcome-format'
 import { decodeJournalOutcome, JournalOutcomeDecodeError } from './journal-outcome-codec'
 import {
@@ -14,6 +13,7 @@ import {
   outcomeFormat1EntryParsers
 } from './journal-outcome-format-1'
 import type { JournalReducerState } from './journal-reducer'
+import type Database from '../../sqlite/sync-database'
 /** First is evidence only when the item's original admission and its metadata agree. */
 export function readHistoricalAdmissionSources(
   db: Database.Database,
@@ -44,7 +44,7 @@ export function readHistoricalAdmissionSources(
       continue
     }
     const record = first.get(source.generation, 'submissions', key.entry_key, source.through)
-    if (!record || record.format !== 1 || record.deleted !== 0) {
+    if (!record || (record.format !== 1 && record.format !== 2) || record.deleted !== 0) {
       continue
     }
     const value = decodeJournalOutcome(record)
@@ -64,8 +64,8 @@ export function readHistoricalAdmissionSources(
     if (
       !itemRecord ||
       !fenceRecord ||
-      itemRecord.format !== 1 ||
-      fenceRecord.format !== 1 ||
+      (itemRecord.format !== 1 && itemRecord.format !== 2) ||
+      (fenceRecord.format !== 1 && fenceRecord.format !== 2) ||
       itemRecord.deleted !== 0 ||
       fenceRecord.deleted !== 0 ||
       itemRecord.seq !== value.seq ||

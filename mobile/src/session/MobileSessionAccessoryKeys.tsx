@@ -6,7 +6,7 @@ import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../terminal/terminal-accesso
 import { isMobileTerminalTabRunningAgent } from './mobile-terminal-tab-agent'
 import { TerminalArrowPad } from './TerminalArrowPad'
 import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
-import { terminalDockStyles as styles } from './terminal-dock-styles'
+import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
@@ -69,6 +69,7 @@ export function MobileSessionAccessoryKeys({
       key={id}
       style={({ pressed }) => [keyStyle, pressed && styles.keyPressed, !canSend && styles.disabled]}
       disabled={!canSend}
+      hitSlop={TERMINAL_KEY_HIT_SLOP}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -93,6 +94,7 @@ export function MobileSessionAccessoryKeys({
           !canSend && styles.disabled
         ]}
         disabled={!canSend}
+        hitSlop={TERMINAL_KEY_HIT_SLOP}
         onPress={() => keys.tapModifier(modifier)}
         accessibilityRole="button"
         accessibilityLabel={name}
@@ -194,6 +196,7 @@ export function MobileSessionAccessoryKeys({
         ]}
         // Offline, Keys mode is dead but the composer still composes; keep the escape hatch tappable (#6713).
         disabled={!canCompose}
+        hitSlop={TERMINAL_KEY_HIT_SLOP}
         onPress={toggleLiveInput}
         accessibilityRole="button"
         accessibilityLabel={
@@ -233,6 +236,7 @@ export function MobileSessionAccessoryKeys({
         {rowKeys}
         <Pressable
           style={({ pressed }) => [styles.ghostKey, pressed && styles.keyPressed]}
+          hitSlop={TERMINAL_KEY_HIT_SLOP}
           onPress={() => setSheetVisible(true)}
           accessibilityRole="button"
           accessibilityLabel={t('session.accessoryKeys.moreKeys', 'More keys and actions')}

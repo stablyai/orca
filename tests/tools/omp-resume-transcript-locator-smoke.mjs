@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { getAgentResumeArgv } from '../../src/shared/agent-session-resume.ts'
+import { getAgentResumeArgv } from '../../src/shared/agent-resume-argv'
 
 assert.ok(process.argv[2], 'Pass a read-only OMP checkout path')
 const scratch = await mkdtemp(join(tmpdir(), 'orca-omp-resume-locator-'))

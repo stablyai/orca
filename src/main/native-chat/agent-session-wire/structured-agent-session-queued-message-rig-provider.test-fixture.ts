@@ -1,11 +1,11 @@
 import { vi, type Mock } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -99,7 +99,7 @@ export function createQueuedRigProvider(
         link: {
           linkId: `link-${fence}`,
           handle:
-            options.agent === 'claude'
+            identity.agent === 'claude'
               ? claudeProviderHandle(thread, null)
               : codexProviderHandle(thread),
           origin: resumes ? ('resumed' as const) : ('created' as const),

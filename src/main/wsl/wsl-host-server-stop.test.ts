@@ -62,6 +62,20 @@ describe('stopWslHostServer', () => {
     expect(all.decommission).toHaveBeenCalledWith(census(0), 'runtime-a')
   })
 
+  it('retries a lingering census 20 times, 250 ms apart, unless a caller sets fewer', async () => {
+    const lingering = () => vi.fn(async () => census(1))
+    const remove = steps({ census: lingering() })
+    await stopWslHostServer(remove.all)
+    expect(remove.all.census).toHaveBeenCalledTimes(20)
+    expect(remove.all.sleep).toHaveBeenCalledTimes(19)
+    expect(remove.all.sleep).toHaveBeenCalledWith(250)
+
+    const single = steps({ census: lingering(), censusAttempts: 1 })
+    await stopWslHostServer(single.all)
+    expect(single.all.census).toHaveBeenCalledTimes(1)
+    expect(single.all.sleep).not.toHaveBeenCalled()
+  })
+
   it('keeps a server another Orca shares: only this desktop lets go, nothing ends', async () => {
     const { all, order } = steps({
       peerDesktops: vi.fn(async (): Promise<WslHostPeerDesktops> => ({

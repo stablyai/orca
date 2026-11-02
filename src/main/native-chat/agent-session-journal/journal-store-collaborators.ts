@@ -1,9 +1,9 @@
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalContextController } from './journal-context-controller'
 import { JournalEpochController } from './journal-epoch-controller'
@@ -156,6 +156,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,
+      reopenFloor: () => host.journal().reopenFloor(),
       identity: host.identity,
       rowWriter,
       queuedMessages,

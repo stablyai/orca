@@ -3,6 +3,7 @@ import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
+import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
@@ -22,6 +23,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     loading,
     error,
     attach,
+    markStreamLost,
     shutdown,
     sendTap,
     sendButton,
@@ -87,6 +89,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             isActive={isActive}
             onTap={(x, y) => void sendTap(x, y)}
             onGesture={(points) => void sendGesture(points)}
+            onStreamLost={scrcpyDeviceIdFromStreamUrl(previewUrl) ? markStreamLost : undefined}
           />
         </MobileEmulatorAgentSetupGuideLayer>
       </div>

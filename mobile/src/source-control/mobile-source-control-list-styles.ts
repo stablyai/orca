@@ -7,35 +7,17 @@ export const listStyles = themedStyleSheet(() => ({
   listContent: {
     paddingHorizontal: spacing.lg
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  sectionTitle: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase'
-  },
-  sectionCount: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+  // SectionHeader brings its own row padding, so it reaches past the list's.
+  sectionHeaderBleed: {
+    marginHorizontal: -spacing.lg
   },
   branchCompareBlock: {
     paddingBottom: spacing.sm
   },
-  branchSectionTitleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
   branchSectionSubtitle: {
     color: colors.textMuted,
     fontSize: typography.metaSize,
-    marginTop: 2
+    paddingBottom: spacing.xs
   },
   branchStateRow: {
     minHeight: 44,
@@ -70,9 +52,10 @@ export const listStyles = themedStyleSheet(() => ({
   fileRowUnavailable: {
     opacity: 0.72
   },
+  // Leading-aligned so the status letter starts on the section label's edge.
   statusBadge: {
     width: 24,
-    alignItems: 'center'
+    alignItems: 'flex-start'
   },
   statusBadgeText: {
     fontFamily: typography.monoFamily,
@@ -137,8 +120,9 @@ export const listStyles = themedStyleSheet(() => ({
     left: 0,
     right: 0,
     gap: spacing.xs,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.bgPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle

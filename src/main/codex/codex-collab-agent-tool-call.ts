@@ -1,11 +1,10 @@
-// Schema 0.155/live default mode reports helpers through collab calls without subAgentActivity.
-// Spawn receivers can first appear at completion, even on failure; prompts supply missing labels.
-// agentsStates holds caller snapshots; child turn frames determine execution state.
-
 import { codexCollabToolRowName } from '../../shared/codex-collab-agent-tools'
 import { collapsedToolInputPrefix } from '../../shared/native-chat/tools/native-chat-tool-preview-prefix'
 import { readRecord, readString } from './codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
+// Schema 0.155/live default mode reports helpers through collab calls without subAgentActivity.
+// Spawn receivers can first appear at completion, even on failure; prompts supply missing labels.
+// agentsStates holds caller snapshots; child turn frames determine execution state.
 
 export const CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE = 'collabAgentToolCall'
 

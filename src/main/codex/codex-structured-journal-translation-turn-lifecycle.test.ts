@@ -2,12 +2,10 @@ import { createCodexStructuredNotificationRetry } from './codex-structured-notif
 import type { CodexSession } from './codex-structured-session-state'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../shared/agent-session-turn-record'
-
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import {
@@ -20,8 +18,7 @@ import {
   CodexPromptRegistry
 } from './codex-structured-prompt-replies'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   fixture,
   LIFECYCLE_KEY,

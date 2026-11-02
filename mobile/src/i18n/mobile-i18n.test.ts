@@ -1,5 +1,5 @@
 import { sayMobileAgentSessionFailure } from '../session/agent-session-failure-copy'
-import { agentSessionFailureSentence } from '../../../src/shared/agent-session-failure-words'
+import { agentSessionFailureSentence } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const pending = new Map<string, (catalog: Record<string, unknown>) => void>()

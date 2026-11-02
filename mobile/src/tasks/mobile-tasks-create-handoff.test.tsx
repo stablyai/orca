@@ -26,6 +26,10 @@ vi.mock('./mobile-tasks-dependencies', () => ({
   Linking: { openURL: vi.fn() }
 }))
 vi.mock('./mobile-tasks-legacy-styles', () => ({ styles: {} }))
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('../components/nav-bar/NavBarButton', () => ({ NavBarButton: 'NavBarButton' }))
 vi.mock('./mobile-tasks-legacy-foundation', () => ({
   TASK_SECONDARY_DRAWER_Z_INDEX: 20,
@@ -131,7 +135,8 @@ describe('Tasks create source handoffs', () => {
   it('queues project row creation through the supplied drawer handoff', () => {
     const { state, presentation, handoff, close } = model('github')
     const rendered = mount(renderMobileTasksProjectDetailDrawer(presentation))
-    act(() => rendered.root.findAllByType(Pressable)[0].props.onPress())
+    const createRow = rendered.root.findAll((node) => String(node.type) === 'ListRow')[0]
+    act(() => createRow.props.onPress())
     expect(close).toHaveBeenCalledOnce()
     expect(state.createWorkspaceFromProjectRow).not.toHaveBeenCalled()
     act(() => handoff.drawerProps.onAfterClose())

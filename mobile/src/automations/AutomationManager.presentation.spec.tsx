@@ -2,7 +2,7 @@ import { AUTOMATION_ORPHAN_ISSUES } from '../../../src/shared/automation-list-sc
 import { activateMobileUiLocale } from '../i18n/mobile-i18n'
 import { MOBILE_RPC_METHOD_ROUTES } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-mobile-method-routing'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
-import { SetupHookTrustDrawer } from '../components/SetupHookTrustDrawer'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
@@ -73,7 +73,7 @@ export function registerAutomationPresentationTests({
     await press('Continue')
     await press('Create automation')
     expect(port.send.mock.calls.filter(([method]) => method === 'automation.create')).toEqual([])
-    const drawer = root().findByType(SetupHookTrustDrawer)
+    const drawer = root().findByType(OrcaHookTrustDrawer)
     expect(drawer.props).toMatchObject({
       visible: true,
       prompt: { repoId: 'repo-1', contentHash: 'setup-hash', scriptContent: 'npm ci' }
@@ -198,7 +198,7 @@ export function registerAutomationPresentationTests({
     await press('Continue')
     await press('Create automation')
     expect(send.mock.calls.filter(([method]) => method === 'automation.create')).toEqual([])
-    const drawer = root().findByType(SetupHookTrustDrawer)
+    const drawer = root().findByType(OrcaHookTrustDrawer)
     expect(drawer.props).toMatchObject({
       visible: true,
       allowAlwaysTrust: false,

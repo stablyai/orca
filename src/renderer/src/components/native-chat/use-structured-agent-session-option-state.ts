@@ -3,21 +3,21 @@ import {
   structuredSessionSelectionController
 } from '@/lib/structured-agent-session-selection-controller'
 import { useStructuredSessionSelectionReads } from './use-structured-session-selection-reads'
-import { projectRuntimePermission } from '../../../../shared/structured-agent-session-permission-option'
+import { projectRuntimePermission } from '../../../../shared/agent-session/options/structured-agent-session-permission-option'
 import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { usesInstalledAgentModelCatalog } from '../../../../shared/agent-model-catalog-ownership'
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
-import type { StructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import type { StructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
+import { structuredAgentSessionOptionView } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-session-create-capabilities'
+} from '../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   useStructuredAgentSessionHostCapability,
   useStructuredAgentSessionOwnPermissionState,
@@ -32,6 +32,7 @@ import { firstFrameOptionState } from './structured-agent-session-option-first-f
 /** The picker's option state for one session: seeded, kept across its fences, re-read each turn. */
 export function useStructuredAgentSessionOptionState(args: {
   agent: AgentType
+  transportEnabled: boolean
   optionCatalog: AgentSessionOptionCatalog | null
   identity: string
   fence: number | null
@@ -73,26 +74,35 @@ export function useStructuredAgentSessionOptionState(args: {
       })
     )
   )
-  const { optionState, support } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  const { optionState } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  const authority = structuredSessionSelectionAuthority(target)
+  const controller = structuredSessionSelectionController(target, sessionId, agent)
+  const hostKey = structuredAgentSessionHostKey(target)
+  const owner = useMemo(
+    () => [agent, sessionId, hostKey, identity, controller],
+    [agent, sessionId, hostKey, identity, controller]
+  )
+  const acceptedSupport = reader.supportFor(owner)
   // Projected once per accepted answer so consumers keep stable references between answers.
   const conversationSupport = useMemo(
     () =>
-      support && support.sessionId !== null
+      acceptedSupport && acceptedSupport.sessionId !== null
         ? {
-            sessionId: support.sessionId,
-            commands: support.result.conversationCommands ?? [],
-            threadGoal: support.result.threadGoal,
-            reportedThreadGoal: support.result.reportedThreadGoal,
-            contextUsage: support.result.contextUsage,
-            acceptsImages: support.result.acceptsImages,
-            rewind: support.result.rewind ?? {
+            sessionId: acceptedSupport.sessionId,
+            commands: acceptedSupport.result.conversationCommands ?? [],
+            threadGoal: acceptedSupport.result.threadGoal,
+            reportedThreadGoal: acceptedSupport.result.reportedThreadGoal,
+            contextUsage: acceptedSupport.result.contextUsage,
+            acceptsImages: acceptedSupport.result.acceptsImages,
+            canSwitchAccount: acceptedSupport.result.canSwitchAccount === true,
+            rewind: acceptedSupport.result.rewind ?? {
               supported: false as const,
               reason: 'unsupported' as const
             },
-            fence: support.fence
+            fence: acceptedSupport.fence
           }
         : null,
-    [support]
+    [acceptedSupport]
   )
   const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
   const {
@@ -102,13 +112,10 @@ export function useStructuredAgentSessionOptionState(args: {
     receiveCatalog,
     invalidate: rereadOptions
   } = reader
-  const authority = structuredSessionSelectionAuthority(target)
-  const controller = structuredSessionSelectionController(target, sessionId, agent)
   const takesSelection = useStructuredAgentSessionHostCapability(
     target,
     AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
   )
-  const hostKey = structuredAgentSessionHostKey(target)
   const contextKey = JSON.stringify([identity, hostKey, newLaunch, worktree, fence, observation])
   const contextRef = useRef(contextKey)
   useEffect(() => {
@@ -122,7 +129,7 @@ export function useStructuredAgentSessionOptionState(args: {
   useEffect(
     () =>
       reader.attach({
-        owner: [agent, sessionId, hostKey, identity, controller],
+        owner,
         reset: [contextKey, authority],
         sessionId,
         fence,
@@ -154,6 +161,7 @@ export function useStructuredAgentSessionOptionState(args: {
       }),
     [
       reader,
+      owner,
       agent,
       sessionId,
       hostKey,
@@ -214,13 +222,21 @@ export function useStructuredAgentSessionOptionState(args: {
     AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
   )
 
+  const support =
+    args.transportEnabled && conversationSupport?.sessionId === sessionId
+      ? conversationSupport
+      : null
   return {
     // What the picker shows and a send carries.
     optionView,
     controller,
     takesSelection,
     takesSendOptions,
-    conversationSupport,
+    conversationSupport: support,
+    sessionSupport: {
+      acceptsImages: support?.acceptsImages,
+      canSwitchAccount: support?.canSwitchAccount
+    },
     rereadOptions,
     receiveCatalog,
     isCurrentContext,

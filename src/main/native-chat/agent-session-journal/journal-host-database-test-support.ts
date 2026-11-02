@@ -1,10 +1,9 @@
 import { prepareJournalOutcomeWrite } from './journal-outcome-write'
-// Share one connection per test profile to match production host ownership.
-
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-identity'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { JournalHostDatabase } from './journal-host-database'
 import { restoreJournal, type JournalLoad } from './journal-open'
 import { buildJournalQueueRow, type JournalQueueChange } from './journal-queue-events'
@@ -20,9 +19,11 @@ import {
   readJournalSessionEpoch,
   type JournalStoredRow
 } from './journal-row-table'
-import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
+// Share one connection per test profile to match production host ownership.
+
+import type Database from '../../sqlite/sync-database'
 
 const opened = new Map<string, JournalHostDatabase>()
 
@@ -222,6 +223,44 @@ export function appendTestJournalQueueRow(
     insertTestJournalRow(db, state.sessionId, row)
     applyJournalRow(state, row)
   }
+}
+
+/** Unannotated submissions and terminal rows emitted by the legacy writer in one source epoch. */
+export function writeTestLegacyTerminalGaps(
+  db: Database.Database,
+  sessionId: string,
+  base: {
+    epoch: string
+    sequence: number
+    fence: number
+    providerHandle: AgentSessionJournalProviderHandle
+  },
+  n: number
+): number {
+  let seq = base.sequence
+  const row = () => ({ v: 3, epoch: base.epoch, seq: ++seq, fence: base.fence, ts: 1 })
+  for (let i = 0; i < n; i++) {
+    const id = `terminal-${i}`
+    insertTestJournalRow(db, sessionId, {
+      ...row(),
+      kind: 'submission',
+      clientMessageId: id,
+      payloadFingerprint: id,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
+      providerHandle: base.providerHandle,
+      handoverRecorded: true,
+      origin: 'client'
+    })
+    insertTestJournalRow(db, sessionId, {
+      ...row(),
+      kind: 'dispatch',
+      clientMessageId: id,
+      state: 'rejected',
+      providerItemId: null,
+      reason: 'not sent'
+    })
+  }
+  return seq
 }
 
 /** Read current canonical contributions in commit order for persisted-outcome assertions. */

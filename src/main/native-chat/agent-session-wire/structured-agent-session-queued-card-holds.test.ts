@@ -1,17 +1,10 @@
-// The queue sends its cards strictly in order. The host publishes the queue's pause and the card it
-// sends next. A client reading its updates one at a time, as the chat does, reads one working state
-// across a turn's end or a Resume and the queue's send of the next card: the working status and
-// row, the pickers, the composer's Stop and the card labels never flip in between. After a restart
-// nothing sends by itself and no pause shows: the chat's next turn runs first, then the cards.
-// Where the host would refuse the send, it names no next card, so the chat reads idle.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from '../../../shared/agent-session-wire'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import {
   projectQueuedMessageCards,
   queuedMessageCardSteers,
@@ -36,6 +29,12 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+// The queue sends its cards strictly in order. The host publishes the queue's pause and the card it
+// sends next. A client reading its updates one at a time, as the chat does, reads one working state
+// across a turn's end or a Resume and the queue's send of the next card: the working status and
+// row, the pickers, the composer's Stop and the card labels never flip in between. After a restart
+// nothing sends by itself and no pause shows: the chat's next turn runs first, then the cards.
+// Where the host would refuse the send, it names no next card, so the chat reads idle.
 
 let rig: QueuedMessageTestRig
 

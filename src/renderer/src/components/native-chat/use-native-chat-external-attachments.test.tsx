@@ -37,7 +37,7 @@ vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
 
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
 import type { NativeChatPendingAttachmentChips } from './native-chat-session-attachment-drop'
-import type { AgentSessionAttachmentPathUploadResult } from '../../../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentPathUploadResult } from '../../../../shared/agent-session/agent-session-attachments'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import type { NativeChatStructuredAttachmentSession } from './native-chat-attachment-upload'
 

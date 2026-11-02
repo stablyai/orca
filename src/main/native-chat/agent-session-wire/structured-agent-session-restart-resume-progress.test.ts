@@ -1,7 +1,6 @@
-import * as runner from './structured-agent-session-restart-resume-runner'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import {
   interruptedRestart,
   continuationUnanswered,
@@ -14,6 +13,7 @@ import {
 import { createRestartResumeProgress } from './structured-agent-session-restart-resume-progress'
 import { journal } from './structured-agent-session-restart-resume-test-harness'
 import type { StructuredAgentSessionRestartOfferSession } from './structured-agent-session-restart-offer-withdrawal'
+import * as runner from './structured-agent-session-restart-resume-runner'
 
 afterEach(() => vi.restoreAllMocks())
 

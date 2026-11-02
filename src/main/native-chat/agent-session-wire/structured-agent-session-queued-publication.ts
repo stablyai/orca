@@ -1,15 +1,10 @@
-// The published view of a conversation's queue: its whole draft list, the queue's
-// pause and the card it sends next, on the `commands` precedent — read per emit,
-// reference-stable while unchanged, so the subscribers' identity dedup keeps token
-// streams from re-sending it. They ride together: a client never sees one without the others.
-
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuedMessagePausedReason,
   type AgentSessionQueuePause
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   queuePauseLiftOnItsWay,
@@ -24,6 +19,10 @@ import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost
 } from './structured-agent-session-host-current-work'
+// The published view of a conversation's queue: its whole draft list, the queue's
+// pause and the card it sends next, on the `commands` precedent — read per emit,
+// reference-stable while unchanged, so the subscribers' identity dedup keeps token
+// streams from re-sending it. They ride together: a client never sees one without the others.
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]

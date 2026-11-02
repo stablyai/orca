@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { classifyDispatchRejection } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import {
   acquiredCodexAdapter,

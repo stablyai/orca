@@ -4,7 +4,7 @@ import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoptio
 import {
   getCanonicalUserDataPath,
   migrateMobilePairingDataToCanonicalUserDataPath
-} from '../persistence'
+} from '../persistence/loading-store/user-data-path'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { WS_BIND_HOST_LOOPBACK } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
 import { isOrcadSidecarLaunch } from '../window/foreground-activation-policy'

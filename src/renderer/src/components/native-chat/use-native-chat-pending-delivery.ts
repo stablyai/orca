@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { returnMessageToComposer } from './structured-agent-session-message-hand-back'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   pendingSendsAsMessages,
   prunePendingSends,

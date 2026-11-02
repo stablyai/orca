@@ -1,11 +1,6 @@
-// Fit phone bridge limits by splitting queue/roster lists into side batches.
-// Omit slash commands because phones read them through agentSession.options.
-
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { boundedFrameItem } from './agent-session-bounded-frame-item'
 import { boundedQueuePublication } from './agent-session-bounded-queue'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
@@ -16,6 +11,8 @@ import {
 import { agentJournalItemForWire, CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import { jsonBytes, shortenJsonStringsToFit } from './json-string-shortening'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
+// Fit phone bridge limits by splitting queue/roster lists into side batches.
+// Omit slash commands because phones read them through agentSession.options.
 
 const BOUNDED_FRAME_READER: HistoryReader = {
   form: (item) => boundedFrameItem(agentJournalItemForWire(item)),

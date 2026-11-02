@@ -1,7 +1,5 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalRowAttribution
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalRowAttribution } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-terminal-settlement'
 import {
   codexItemIdentity,
@@ -14,13 +12,13 @@ import { createCodexStructuredItemStreams } from './codex-structured-item-stream
 import type { CodexHelperName } from './codex-collab-agent-item-translation'
 import { boundStreamItem, codexStructuredItemKey } from './codex-structured-item-stream-bounds'
 import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
-import type {
-  CodexActiveJournalItem,
-  CodexItemTranslation,
-  CodexJournalTranslationAdmission,
-  CodexJournalTranslatorDeps
+import {
+  type CodexActiveJournalItem,
+  type CodexItemTranslation,
+  type CodexJournalTranslationAdmission,
+  type CodexJournalTranslatorDeps,
+  CODEX_JOURNAL_ADMITTED
 } from './codex-structured-journal-contracts'
-import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
 import {
   MAX_CODEX_ACTIVE_ITEMS,
   MAX_CODEX_DETAIL_BYTES,

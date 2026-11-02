@@ -1,7 +1,7 @@
 import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { JournalReducerState } from './journal-reducer'
 import {
   journalLifecycleMutationFitsOneBatch,
@@ -22,7 +22,7 @@ import type {
   ResolveDispatchInput
 } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { keepFailedStartSends } from './journal-unsent-send-hold'
 import { buildJournalQueueRow } from './journal-queue-events'
 

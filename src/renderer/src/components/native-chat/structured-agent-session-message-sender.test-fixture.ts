@@ -1,5 +1,7 @@
 import { vi, type Mock } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { sendStructuredAgentSessionMessage } from './structured-agent-session-message-sender'
+import { getStructuredAgentSessionPendingSends } from './structured-agent-session-pending-sends'
 
 type MessageSenderFixtureMocks = {
   call: Mock
@@ -22,9 +24,6 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 vi.mock('./structured-agent-session-message-hand-back', () => ({
   handBackStructuredAgentSessionMessage: mocks.handBack
 }))
-
-import { sendStructuredAgentSessionMessage } from './structured-agent-session-message-sender'
-import { getStructuredAgentSessionPendingSends } from './structured-agent-session-pending-sends'
 
 const SESSION = 'session-1'
 const target = { kind: 'local' } as const

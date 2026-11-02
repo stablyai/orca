@@ -1,12 +1,12 @@
-// Save compares body fingerprints without changing card identity/order; edit leases block automatic delivery.
-
 import type {
   AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
+import type {
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { queuedMessageEditableText } from '../../../shared/queued-message-edit'
 import {
   queuedMessageUpdateDecision,
@@ -19,6 +19,7 @@ import type { StructuredAgentSessionCaller } from './structured-agent-session-ho
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import { mutateQueued } from './structured-agent-session-queued-mutations'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
+// Save compares body fingerprints without changing card identity/order; edit leases block automatic delivery.
 
 /** Editing sends nothing and needs no send admission; compare-and-set handles same-ID retries. */
 export function updateQueuedStructuredAgentMessage(

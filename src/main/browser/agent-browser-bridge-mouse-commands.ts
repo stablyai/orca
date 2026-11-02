@@ -45,6 +45,8 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
           // Hit testing can activate an element; recheck access after awaiting focus.
           assertRemoteCliBrowserAccess(target.webContentsId)
+          // A DOM-activated tap fires no guest input event, so credit it before it can open a link.
+          this.browserManager.creditPageInput(target.webContentsId)
           const point =
             cdpButton === 'left'
               ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.

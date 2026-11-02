@@ -1,20 +1,18 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import {
-  projectStructuredQuestionMessages,
-  structuredQuestionTranscript
-} from '../../../src/shared/structured-agent-question-projection'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { createStructuredQuestionProjection } from '../../../src/shared/structured-agent-question-projection'
+import { projectStructuredAgentStartItem } from '../../../src/shared/structured-agent-start-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
-import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
+import { agentSessionTranscriptRows } from '../../../src/shared/agent-session/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionQueueSendsNext
-} from '../../../src/shared/structured-agent-session-live-turn'
+} from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
@@ -47,6 +45,10 @@ import { useMobileStructuredSends } from './use-mobile-structured-sends'
 import { useMobileNativeChatQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
+
+const mobileStructuredTranscript = createStructuredQuestionProjection(
+  projectStructuredAgentStartItem
+)
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
@@ -143,7 +145,7 @@ export function useMobileStructuredAgentSession(
         transcriptItems,
         sends.optimistic,
         state.submissions,
-        projectStructuredQuestionMessages
+        mobileStructuredTranscript.messages
       ),
     [transcriptItems, sends.optimistic, state.submissions]
   )
@@ -295,7 +297,7 @@ export function useMobileStructuredAgentSession(
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
-    receipts: structuredQuestionTranscript(transcriptItems).receipts,
+    receipts: mobileStructuredTranscript.transcript(transcriptItems).receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt),

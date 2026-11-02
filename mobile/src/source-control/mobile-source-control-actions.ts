@@ -31,6 +31,7 @@ export type MobileSourceControlAction = {
   hint?: string
   loading?: boolean
   skipAutoClose?: boolean
+  closeBeforePress?: boolean
   onPress: () => void
 }
 
@@ -40,8 +41,6 @@ export type MobileSourceControlActionArgs = {
   conflictOperation?: GitConflictOperation
   rebaseBaseRef: string | null
   busyAction: string | null
-  openingPath: string | null
-  openingBranchPath: string | null
   prAvailable: boolean
   prHint?: string
   forcePushBlockedReason?: string
@@ -80,8 +79,7 @@ export function buildMobileSourceControlActions(
   )
   const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish } =
     buildRemoteDropdownItems(ctx, mobileRemoteDropdownCopy(t))
-  const busy =
-    args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
+  const busy = args.busyAction !== null
   const blockForce = (item: DropdownItem): DropdownItem =>
     args.forcePushBlockedReason
       ? { ...item, disabled: true, title: args.forcePushBlockedReason }
@@ -121,7 +119,8 @@ export function buildMobileSourceControlActions(
       disabled: busy || !args.prAvailable,
       hint: args.prHint,
       loading: args.busyAction === 'create-pr',
-      skipAutoClose: true,
+      // The sheet presents only after this one has closed; iOS refuses a second modal mid-close.
+      closeBeforePress: true,
       onPress: handlers.createPr
     },
     {
@@ -131,7 +130,8 @@ export function buildMobileSourceControlActions(
       disabled: busy || push.disabled || !args.prAvailable,
       hint: args.prHint ?? (push.disabled ? push.title : undefined),
       loading: args.busyAction === 'push-create-pr',
-      skipAutoClose: true,
+      // The sheet presents only after this one has closed; iOS refuses a second modal mid-close.
+      closeBeforePress: true,
       onPress: handlers.pushAndCreatePr
     },
     row(pull, 'pull', 'pull', handlers.pull),

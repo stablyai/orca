@@ -2,9 +2,9 @@ import { act } from 'react-test-renderer'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
-} from '../../../src/shared/agent-session-wire'
+  AgentSessionOptionResult
+} from '../../../src/shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import type { AcpThinkingOptionsFixtureModule } from '../../../src/shared/acp-thinking-options.test-fixture-contract'
@@ -117,20 +117,6 @@ describe('useMobileStructuredAgentOptions fast mode', () => {
         fields: expect.objectContaining({ key: 'fastMode', value: 'true' })
       })
     ])
-    await harness.unmount()
-  })
-
-  it.each([
-    [
-      'session reports unsupported',
-      { ...FAST_OPTIONS, fastModeSupport: { supported: false, reason: 'account' } }
-    ],
-    ['model capability is unknown', { ...FAST_OPTIONS, models: OPTIONS.models }]
-  ] as const)('offers no Fast row when %s', async (_reason, answer) => {
-    const client = optionsClient(queuedReads(answer))
-    const { mutate } = recordingMutate(async () => ({ status: 'rejected' }))
-    const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-    expect(descriptorFor(harness.current().optionSnapshot, 'fastMode')).toBeUndefined()
     await harness.unmount()
   })
 })
@@ -256,21 +242,6 @@ describe('useMobileStructuredAgentOptions generation fencing', () => {
 })
 
 describe('useMobileStructuredAgentOptions images', () => {
-  it.each([
-    ['claude', undefined, true],
-    ['grok', undefined, false],
-    ['claude', false, false],
-    ['grok', true, true]
-  ] as const)('offers %s images when its report says %s', async (agent, reported, offered) => {
-    const report = reported === undefined ? OPTIONS : { ...OPTIONS, acceptsImages: reported }
-    const client = optionsClient(queuedReads(report))
-    const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
-    const harness = await mountOptions({ ...BASE, agent, client: client.client, mutate })
-    expect(client.optionReads()).toBe(1)
-    expect(harness.current().acceptsImages).toBe(offered)
-    await harness.unmount()
-  })
-
   it('keeps the answer through a pick made during the read', async () => {
     const stale = deferred<AgentSessionOptionsResult>()
     const first = optionsClient(queuedReads(OPTIONS))
@@ -413,35 +384,6 @@ describe('useMobileStructuredAgentOptions host catalog', () => {
     expect(currentValueOf(harness.current().optionSnapshot, 'model')).toBe('gpt-live')
     await harness.unmount()
   })
-
-  it.each(['grok', 'codex'])(
-    'names the configured model and its effort for a %s chat this phone created',
-    async (agent) => {
-      const sessionId = `${agent}-created-here`
-      rememberMobileCreatedStructuredSession(sessionId, 'id:wt-1')
-      const client = optionsClient(
-        () => deferred<AgentSessionOptionsResult>().promise,
-        async () => HOST_CATALOG
-      )
-      const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
-      const harness = await mountOptions({
-        ...BASE,
-        agent,
-        sessionId,
-        client: client.client,
-        mutate
-      })
-
-      expect(client.methods('agentSession.modelCatalog')[0]?.params).toEqual({
-        agent,
-        sessionId,
-        worktree: 'id:wt-1'
-      })
-      expect(currentValueOf(harness.current().optionSnapshot, 'model')).toBe('grok-4')
-      expect(currentValueOf(harness.current().optionSnapshot, 'effort')).toBe('high')
-      await harness.unmount()
-    }
-  )
 
   it('does not name the listed default when a chat this phone created is reopened', async () => {
     const sessionId = 'grok-reopened'

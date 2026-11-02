@@ -1,6 +1,6 @@
 // Initialize gates host open after process publication; settings enrichment runs independently.
 
-import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
@@ -17,15 +17,15 @@ import {
 import {
   claudeStructuredSessionPublicationOptions,
   prepareClaudeStructuredSessionAcquisitionOptions
-} from '../claude-structured-session-acquisition-options'
+} from './launch/claude-structured-session-acquisition-options'
 import {
   claudeStructuredSessionOptionsFrom,
   observeClaudeSettingsApplied,
   readClaudeSettingsApplied,
   readClaudeFastModeFacts,
   readClaudeSettingsEffort
-} from '../claude-structured-session-options'
-import { claudeExecutionObservations } from '../claude-structured-execution-observations'
+} from './launch/claude-structured-session-options'
+import { claudeExecutionObservations } from './claude-structured-execution-observations'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeSession,

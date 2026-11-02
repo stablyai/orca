@@ -23,7 +23,7 @@ import {
   observeCodexExecutionFrame,
   readCodexBackgroundTaskFrame
 } from './codex-background-task-frames'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 export type {
   CodexJournalTranslationAdmission,

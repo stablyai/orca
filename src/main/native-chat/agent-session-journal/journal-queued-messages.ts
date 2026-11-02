@@ -1,15 +1,15 @@
+import type { JournalReducerState } from './journal-reducer'
 import { journalInputAttemptEnded, type JournalInputWork } from './journal-input-obligations'
+import { journalInputOrder } from './journal-input-order'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import { journalAttachmentClaimReceipt } from './journal-submission-hook'
-// Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
-
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessageMoveAnchor,
   AgentSessionQueuedMessageMoveResult,
   AgentSessionQueuedMessageUpdateResult
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
 import { queueNeedsReopen } from './journal-queue-retention'
@@ -18,7 +18,6 @@ import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './jour
 import {
   deriveQueuePauses,
   journalUserStopInForce,
-  nextSendableQueuedCard,
   type DerivedQueuePause,
   type JournalQueuePauseMarks
 } from './queued-message-pause'
@@ -31,6 +30,7 @@ import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { QueuedMessageEditLeases } from './queued-message-edit-leases'
 import { queuedMessageUpdateDecision, type QueuedMessageUpdate } from './queued-message-update'
 import { queuedMessageMovePlan } from './queued-message-move'
+// Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
 export type JournalQueuePlan = {
   rows: ((seq: number, ts: number) => JournalQueueRow)[]
@@ -38,7 +38,11 @@ export type JournalQueuePlan = {
 }
 
 export class JournalQueuedMessages {
-  readonly editLeases = new QueuedMessageEditLeases(() => this.list())
+  readonly editLeases = new QueuedMessageEditLeases(
+    () => this.list(),
+    undefined,
+    (id) => this.get(id)
+  )
   private readonly legacy: LegacyQueuedCards
   inputWork: () => JournalInputWork | null = () => null
   private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
@@ -51,7 +55,15 @@ export class JournalQueuedMessages {
     return this.deps.sessionId
   }
 
-  displayState = () => this.legacy.displayState()
+  inputState(): JournalReducerState {
+    const state = this.deps.state()
+    journalInputOrder(state).overlay(state, this.legacy.cards())
+    return state
+  }
+  displayState(): JournalReducerState {
+    this.inputState()
+    return this.legacy.displayState()
+  }
 
   revision(): string {
     const { epoch, queue } = this.deps.state()
@@ -74,8 +86,20 @@ export class JournalQueuedMessages {
   }
 
   get(messageId: string): QueuedMessageRow | null {
-    const own = this.deps.state().queue.cards.get(messageId)
-    return own ?? this.list().find((card) => card.messageId === messageId) ?? null
+    return this.deps.state().queue.cards.get(messageId) ?? this.legacy.get(messageId) ?? null
+  }
+
+  /** Selection reads identity summaries; current values are resolved after edits. */
+  nextInputCard(automatic = true): QueuedMessageRow | null {
+    const state = this.inputState()
+    const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
+    const card = identity ? this.get(identity.messageId) : null
+    return !card ||
+      card.state === 'returned' ||
+      journalInputOrder(state).paused(state, card, this.deps.reopenFloor()) ||
+      (automatic && this.editLeases.isHeld(card.messageId))
+      ? null
+      : card
   }
 
   // Card insertion, attachment claims and send receipt must commit together.
@@ -206,9 +230,7 @@ export class JournalQueuedMessages {
       card.fingerprint === input.fingerprint &&
       input.consumedAs !== input.messageId
     if (consumable && input.yieldsToPause) {
-      const cards = this.list()
-      const held = this.editLeases.heldIds(cards)
-      const next = nextSendableQueuedCard(this.derivePauses(cards), cards, held)
+      const next = this.nextInputCard()
       if (next?.messageId === input.messageId) {
         return
       }

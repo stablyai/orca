@@ -1,18 +1,19 @@
-// Select carried history inside serialized handover to deliver each message once across devices.
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 
-import type {
-  AgentJournalMessageItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
 import {
   agentSessionSendCarriesStoppedHistory,
   agentSessionSendDeliversStoppedHistory,
   agentSessionStoppedHistoryOwed,
   selectStoppedHistory,
   type StoppedHistoryDelivery
-} from '../../../shared/agent-session-stopped-history'
+} from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+// Select carried history inside serialized handover to deliver each message once across devices.
+
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 type StoppedHistoryContext = {
   journal: Pick<AgentSessionJournal, 'submissions' | 'submissionBody' | 'stoppedHistoryCarried'> & {

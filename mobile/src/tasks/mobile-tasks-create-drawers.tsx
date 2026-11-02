@@ -25,6 +25,7 @@ import {
   type LinearTeam,
   TASK_SECONDARY_DRAWER_Z_INDEX
 } from './mobile-tasks-legacy-foundation'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel) {
   const {
@@ -84,7 +85,11 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
             : translate('tasks.tasksCreateDrawers.team', 'Team')}
         </Text>
         <Pressable
-          style={[styles.targetButton, styles.targetButtonOnSheet]}
+          style={({ pressed }) => [
+            styles.targetButton,
+            styles.targetButtonOnSheet,
+            pressed && pressedStyle
+          ]}
           disabled={!taskUiReady}
           onPress={() => {
             if (!taskUiReady) {
@@ -138,9 +143,10 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
                 return (
                   <Pressable
                     key={preference}
-                    style={[
+                    style={({ pressed }) => [
                       styles.issueSourceSegmentButton,
-                      selected && styles.issueSourceSegmentButtonActive
+                      selected && styles.issueSourceSegmentButtonActive,
+                      pressed && pressedStyle
                     ]}
                     accessibilityState={{ selected }}
                     onPress={() =>
@@ -188,9 +194,10 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
         />
 
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.createButton,
-            (!taskUiReady || !createTitle.trim() || creatingTask) && styles.createButtonDisabled
+            (!taskUiReady || !createTitle.trim() || creatingTask) && styles.createButtonDisabled,
+            pressed && pressedStyle
           ]}
           disabled={!taskUiReady || !createTitle.trim() || creatingTask}
           onPress={() => void createTask()}
@@ -309,7 +316,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
           <Text style={styles.detailError}>{linearConnectError}</Text>
         ) : null}
         <Pressable
-          style={styles.inlineTextLink}
+          style={({ pressed }) => [styles.inlineTextLink, pressed && pressedStyle]}
           onPress={() => void Linking.openURL('https://linear.app/settings/account/security')}
         >
           <ExternalLink size={13} color={colors.textSecondary} />
@@ -330,10 +337,11 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
           </Text>
         </View>
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.createButton,
             (!linearApiKeyDraft.trim() || linearConnectState === 'connecting') &&
-              styles.createButtonDisabled
+              styles.createButtonDisabled,
+            pressed && pressedStyle
           ]}
           disabled={!linearApiKeyDraft.trim() || linearConnectState === 'connecting'}
           onPress={() => void connectLinearAccount()}

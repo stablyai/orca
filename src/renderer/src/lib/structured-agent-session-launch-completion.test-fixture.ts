@@ -6,7 +6,7 @@ import { beginStructuredAgentLaunchSettlement } from './structured-agent-launch-
 import {
   getStructuredAgentLaunchStatus,
   hasStructuredAgentLaunchInWorktree
-} from './structured-agent-session-launch-status'
+} from './agent-session/launch/structured-agent-session-launch-status'
 import { admitStructuredAgentSession } from './agent-session/structured-agent-session-busy'
 import { renderHook } from '@testing-library/react'
 import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
@@ -19,7 +19,7 @@ import {
 } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { readStructuredAgentLaunchRecord } from './agent-session/launch/structured-agent-session-launch-persistence'
 import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/structured-agent-session-message-sender'
-import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
+import { holdStructuredAgentSessionLaunchOption } from './agent-session/launch/structured-agent-session-launch-options'
 import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import {

@@ -26,7 +26,7 @@ function contrastRatio(foreground: string, background: string): number {
 describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) => {
   const colors = paletteForScheme(scheme)
 
-  // Light bgRaised is desktop's own --secondary under --muted-foreground (4.36:1), so only page surfaces are held to 4.5.
+  // Dark textMuted is desktop's --chat-foreground-faint (4.33:1 on bgRaised), so only page surfaces are held to 4.5.
   it('keeps muted text readable on page and panel surfaces', () => {
     for (const surface of [colors.bgBase, colors.bgPanel]) {
       expect(contrastRatio(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5)

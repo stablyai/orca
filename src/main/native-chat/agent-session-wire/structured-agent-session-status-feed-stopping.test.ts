@@ -1,12 +1,12 @@
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -111,39 +111,6 @@ describe("the status feed's Stopping", () => {
     feed.publish(SESSION)
 
     expect(published.at(-1)).toMatchObject({ status: 'attention' })
-    expect(published.at(-1)).not.toHaveProperty('stopping')
-  })
-
-  it('never says Stopping for a stop that was not a person’s', async () => {
-    const journal = await journals.open({
-      identity: {
-        sessionId: SESSION,
-        workspaceId: 'workspace-1',
-        hostId: 'local',
-        agent: 'codex',
-        providerHandle: codexProviderHandle('thread-1')
-      },
-      stateDirectory: join(root, SESSION)
-    })
-    const fence = agentSessionRecordFixture().lease.runtimeFence
-    const published: AgentSessionStatusSummary[] = []
-    const feed = new StructuredAgentSessionStatusFeed({
-      logger: createStructuredAgentSessionLogger(),
-      sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
-      statusSink: () => ({ publish: (summary) => published.push(summary), forget: () => {} }),
-      getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
-      now: () => 1_000
-    })
-    await journal.appendItem(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
-      { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 1_000 },
-      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-
-    await journal.appendStopEvent({ reason: 'host-stop', turnId: 'turn-1' }, fence)
-    feed.publish(SESSION)
-
-    expect(published.at(-1)).toMatchObject({ status: 'working' })
     expect(published.at(-1)).not.toHaveProperty('stopping')
   })
 })

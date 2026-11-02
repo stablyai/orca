@@ -1,20 +1,20 @@
+import { journalInputOrder } from './journal-input-order'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalStatusItem
-} from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { readCodexErrorWillRetry } from '../../codex/codex-structured-thread-facts'
 import type { JournalInputSource } from './journal-input-source-schema'
 import {
   journalInputSourceBody,
   journalInputSourceFamily,
-  journalInputSourceId,
   journalInputSourceSequence,
   journalInputSourceScope
 } from './journal-input-source'
@@ -39,7 +39,6 @@ export type JournalInputEnd =
 export function createJournalInputObligations() {
   return {
     sources: new Map<string, JournalInputSource>(),
-    families: new Map<string, JournalInputSource>(),
     rejections: new Map<string, JournalDispatchRow | AgentJournalSubmission>(),
     presentations: new Map<string, JournalDispatchRow | JournalQueueRow | QueuedMessageRow>(),
     handovers: new Map<string, JournalDispatchRow>(),
@@ -60,17 +59,12 @@ export function foldJournalInputObligations(
   const input = state.inputs
   if (row.kind === 'submission') {
     input.sources.set(row.clientMessageId, row)
-    if (row.queuedMessageId) {
-      const previous = input.families.get(row.queuedMessageId)
-      if (previous) {
-        input.candidates.delete(
-          previous.kind === 'submission'
-            ? previous.clientMessageId
-            : previous.submission.clientMessageId
-        )
-      }
-      input.families.set(row.queuedMessageId, row)
+    const family = journalInputSourceFamily(row)
+    const prior = family && journalInputOrder(state).familyOriginal(family)
+    if (prior) {
+      input.candidates.delete(prior.clientMessageId)
     }
+    journalInputOrder(state).refreshLink(row.clientMessageId)
   }
   if (row.kind === 'dispatch' && !dispatchApplies) {
     return
@@ -254,7 +248,7 @@ export function refreshJournalInputCandidate(state: JournalReducerState, id: str
   if (
     send &&
     (send.dispatchState === 'pending' || send.dispatchState === 'unknown') &&
-    (!family || journalInputSourceId(state.inputs.families.get(family)) === id)
+    (!family || journalInputOrder(state).familyOriginal(family)?.clientMessageId === id)
   ) {
     state.inputs.candidates.set(id, send)
   } else {

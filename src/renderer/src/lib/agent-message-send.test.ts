@@ -1,4 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import { sendMessageToAgent } from './agent-message-send'
+import { activeAgentNotesSendFailureMessage } from './active-agent-note-send-result'
 
 const mocks = vi.hoisted(() => {
   const launch: { lifecycle: string | null } = { lifecycle: null }
@@ -21,7 +23,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/runtime/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
-vi.mock('./structured-agent-session-launch-message', () => ({
+vi.mock('./agent-session/launch/structured-agent-session-launch-message', () => ({
   relaunchFailedStructuredAgentSessionWithMessage: mocks.relaunch
 }))
 vi.mock('./agent-session/launch/structured-agent-session-launch-registry', () => ({
@@ -32,9 +34,6 @@ vi.mock('./active-agent-note-send', () => ({ sendNotesToActiveAgentSession: vi.f
 vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
   sendStructuredAgentSessionMessage: mocks.send
 }))
-
-import { sendMessageToAgent } from './agent-message-send'
-import { activeAgentNotesSendFailureMessage } from './active-agent-note-send-result'
 
 function sendNotes() {
   return sendMessageToAgent({

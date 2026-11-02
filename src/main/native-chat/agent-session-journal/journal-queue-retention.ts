@@ -1,4 +1,5 @@
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+
 import type { JournalQueuedChange } from './journal-queue-events'
 import type { QueuedMessageRow } from './queued-message-table'
 

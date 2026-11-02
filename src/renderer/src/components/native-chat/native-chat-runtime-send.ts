@@ -1,8 +1,10 @@
-import type { NativeChatPtySubmissionOutcome } from './native-chat-pty-send-queue'
-// Runtime send for native chat: clear any unsubmitted TUI line, write the framed
-// body, then Enter as a SEPARATE delayed pty write. Kept apart from the pure
-// byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
-
+import {
+  type NativeChatPtySubmissionOutcome,
+  cancelNativeChatPtySends,
+  enqueueNativeChatPtySend,
+  resetNativeChatPtySendQueuesForTests,
+  waitForNativeChatPtyIdle
+} from './native-chat-pty-send-queue'
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
@@ -26,12 +28,9 @@ import {
   AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
   typeAgentTuiCommand
 } from '../../../../shared/agent-tui-command-typing'
-import {
-  cancelNativeChatPtySends,
-  enqueueNativeChatPtySend,
-  resetNativeChatPtySendQueuesForTests,
-  waitForNativeChatPtyIdle
-} from './native-chat-pty-send-queue'
+// Runtime send for native chat: clear any unsubmitted TUI line, write the framed
+// body, then Enter as a SEPARATE delayed pty write. Kept apart from the pure
+// byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
 
 export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
 export { resetNativeChatPtySendQueuesForTests }

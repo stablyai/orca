@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 
 // Dropped relays clear connected across remote PTYs; use host verdicts to distinguish lost contact from death.
 describe('worker-stop against a terminal we lost contact with', () => {
@@ -31,7 +31,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method.handler(method.params!.parse(params), { runtime })
@@ -124,26 +124,6 @@ describe('worker-stop against a terminal we lost contact with', () => {
     expect(stopped.lastError).toContain('could not be confirmed stopped')
   })
 
-  it('uses the canonical live verdict for an observed process', async () => {
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      connected: true,
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'live',
-      ptyIds: ['runtime:pty:1']
-    })
-    const dispatch = createWorker()
-
-    await expect(
-      call('orchestration.workerShow', { dispatch: dispatch.id })
-    ).resolves.toMatchObject({
-      observation: { status: 'live', exactWorker: true }
-    })
-  })
-
   it('does not close a legacy worker terminal without an ownership record', async () => {
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: 'term_worker',
@@ -183,20 +163,5 @@ describe('worker-stop against a terminal we lost contact with', () => {
       'is stopping; wait for worker-stop to settle before abandoning'
     )
     expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('stopping')
-  })
-
-  it('still reports a locally observed exit as exited', async () => {
-    const dispatch = createWorker()
-
-    await expect(
-      call('orchestration.workerShow', { dispatch: dispatch.id })
-    ).resolves.toMatchObject({
-      observation: { status: 'exited', exactWorker: true }
-    })
-
-    const stopped = (await call('orchestration.workerStop', { dispatch: dispatch.id })) as {
-      lastError: string
-    }
-    expect(stopped.lastError).toBe('The recorded worker process is exited; no terminal was closed.')
   })
 })

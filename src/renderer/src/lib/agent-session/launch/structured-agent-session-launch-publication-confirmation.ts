@@ -1,6 +1,6 @@
 import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/structured-agent-session-message-sender'
 import { recoverPublishedSessionReceipt } from './structured-agent-session-launch-recovery'
-import { publishStructuredLaunchCreateOptions } from '../../structured-agent-session-launch-create-message'
+import { publishStructuredLaunchCreateOptions } from './structured-agent-session-launch-create-message'
 import { trackLaunchSettlement } from './structured-agent-session-launch-outcome-tracking'
 import { trackStructuredLaunchConfirmationDeadline } from './structured-agent-session-launch-prompt-outcome'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'

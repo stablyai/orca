@@ -1,14 +1,14 @@
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
-import type { AgentSessionUsageLimit } from '../../../shared/agent-session-usage-limit'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentState
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../acp-errors'
-import type { AgentSessionOptionChoice } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 
 export type AcpRequestPresentation = {

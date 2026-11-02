@@ -1,13 +1,11 @@
 import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
-export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
-// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   backgroundTaskFingerprint,
   emitSubscriberFrame,
@@ -30,6 +28,10 @@ import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
 import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { HistoryReader } from './agent-session-history-page-bounds'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
+// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
+
+// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
 export type Subscriber = {

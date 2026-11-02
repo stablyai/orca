@@ -10,8 +10,8 @@ import {
 import {
   reduceStructuredAgentSession,
   EMPTY_STRUCTURED_AGENT_SESSION
-} from '../../../../shared/structured-agent-session-reducer'
-import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -37,18 +37,17 @@ import {
 import type {
   AgentJournalSubmission,
   AgentJournalMessageItem
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type {
-  AgentSessionQueuedMessage,
   AgentSessionHistoryRequest,
   AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
-
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 // Load the real phone readers at runtime; their RN ambient types belong to the mobile compiler.
 const { mobileQueuedMessageCards } = await vi.importActual<{

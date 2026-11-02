@@ -1,4 +1,3 @@
-import React, { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -33,10 +32,11 @@ import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
-import type { LaunchSource } from '../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../shared/telemetry-property-schemas'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
+import React, { useCallback, useMemo } from 'react'
 
 type OrderedSendTarget = {
   target: NotesSendAgentTarget

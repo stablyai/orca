@@ -1,10 +1,10 @@
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../shared/agent-session-wire'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../shared/agent-session/agent-session-wire'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../shared/agent-session-turn-record'
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 

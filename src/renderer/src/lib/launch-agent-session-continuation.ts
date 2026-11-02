@@ -11,7 +11,7 @@ import {
 import { agentChoicePending } from './host-chat-program'
 import { worktreeLaunchWorkspace } from './agent-launch-route-input'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import type { LaunchSource } from '../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../shared/telemetry-property-schemas'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   adoptAgentSessionLaunchVerdict,

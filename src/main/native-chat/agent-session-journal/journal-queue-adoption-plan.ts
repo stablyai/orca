@@ -1,7 +1,7 @@
 import type { JournalQueuedMessagesDeps } from './journal-store-contracts'
 import type { LegacyQueuedCards } from './journal-queue-import'
 import type { JournalQueuePlan } from './journal-queued-messages'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalQueueRowBuilder, type JournalQueueCardChange } from './journal-queue-events'
 import { journalAttachmentClaimsReceipt } from './journal-submission-hook'
 

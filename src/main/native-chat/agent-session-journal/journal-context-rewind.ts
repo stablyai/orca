@@ -1,9 +1,9 @@
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { JournalReducerState } from './journal-reducer'
 import {
@@ -19,7 +19,7 @@ import { journalContextCursor, journalContextEpoch } from './journal-context-cur
 import { sameJournalConversation } from './journal-history-origin'
 import { journalItemEchoRestatement } from './journal-item-echo'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalEpochRow, JournalRow } from './journal-row-schema'
 
 export async function rewindJournalContext(input: {

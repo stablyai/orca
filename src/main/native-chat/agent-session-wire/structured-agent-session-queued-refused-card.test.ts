@@ -1,9 +1,5 @@
-// A refused queued card comes back as a returned card that holds the cards behind it, read from the
-// chat's own rows with no card write of its own: through provider context replacement, a restart
-// and a Resume. Only its own Send and Delete act on it.
-
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   openTestJournalHostDatabase,
   readTestQueueChanges
@@ -19,6 +15,9 @@ import {
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+// A refused queued card comes back as a returned card that holds the cards behind it, read from the
+// chat's own rows with no card write of its own: through provider context replacement, a restart
+// and a Resume. Only its own Send and Delete act on it.
 
 let rig: QueuedMessageTestRig
 const rewind = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewind']>>()

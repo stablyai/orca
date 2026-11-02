@@ -112,6 +112,10 @@ export async function bootstrapBundledPlugins(options: {
   userDataPath: string
   hostVersion: string
   blockedPluginReason?: (pluginKey: string) => string | null
+  /** Runs before a retired plugin's files are deleted, e.g. to revoke its consent. */
+  beforeRetire?: (pluginKey: string) => void | Promise<void>
+  /** Runs after a retired plugin's files are gone, e.g. to clear its frame storage. */
+  afterRetire?: (pluginKey: string) => void | Promise<void>
 }): Promise<PluginBundledBootstrapResult> {
   const index = await readBundledPluginIndex(options.root)
   const pluginsDir = getUserPluginsDir(options.userDataPath)
@@ -174,10 +178,12 @@ export async function bootstrapBundledPlugins(options: {
       const retired = await retireBundledPlugin({
         pluginsDir,
         pluginsDataDir: getPluginsDataDir(options.userDataPath),
-        pluginKey
+        pluginKey,
+        beforeRemove: () => options.beforeRetire?.(pluginKey)
       })
       if (retired) {
         result.retired.push(pluginKey)
+        await options.afterRetire?.(pluginKey)
       }
     } catch (error) {
       result.errors.push({

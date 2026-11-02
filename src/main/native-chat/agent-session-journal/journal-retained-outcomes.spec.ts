@@ -9,14 +9,14 @@ import {
 import { publishNewEpoch } from './journal-epoch-rollover'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { JournalOutcomeCompaction } from './journal-outcome-compaction-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   AGENT_JOURNAL_THREAD_SCOPE as thread,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
-import { agentSessionSendBodyFingerprint as fingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionSendBodyFingerprint as fingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   queuedImageReaderSnapshot,
   queuedImageSourceIds
@@ -193,7 +193,7 @@ export function registerRetainedOutcomeContract() {
       expect(JSON.parse(String(raw[0].row_json))).toMatchObject({ v: 5 })
       expect(
         database.db.prepare('SELECT prefix_seq,format FROM journal_outcome_epochs').all()
-      ).toEqual([{ prefix_seq: 0, format: 1 }])
+      ).toEqual([{ prefix_seq: 0, format: 2 }])
       const inventory = () =>
         database.db
           .prepare(
@@ -446,7 +446,7 @@ export function registerRetainedEchoBoundaryContract() {
               ordinal: 1
             }
             const { agentJournalItemKey } =
-              await import('../../../shared/agent-session-journal-item-key')
+              await import('../../../shared/agent-session/journal/agent-session-journal-item-key')
             await journal.appendSubmission({
               clientMessageId: 'U',
               body,
@@ -488,7 +488,7 @@ export function registerRetainedEchoBoundaryContract() {
               })
               expect(cut?.kept.map((row) => agentJournalItemKey(row.identity))).toEqual(['orca:U'])
               const { seedTestAgentSessionRecordStore, openTestAgentSessionRecordStore } =
-                await import('../../runtime/agent-session-record-store-test-harness')
+                await import('../../runtime/agent-session/records/agent-session-record-store-test-harness')
               const pending = {
                 operationId: 'rewind',
                 callerKey: 'desktop',

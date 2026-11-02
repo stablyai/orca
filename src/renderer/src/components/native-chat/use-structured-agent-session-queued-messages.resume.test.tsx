@@ -1,16 +1,28 @@
 // @vitest-environment happy-dom
-
-// Resume uses the shared fenced write path; serialize presses, show one failure toast and keep Resume as the retry.
-
 import { useCallback, useRef } from 'react'
 import { act, cleanup, renderHook, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryResult } from '../../../../shared/agent-session/agent-session-wire'
 import type {
-  AgentSessionHistoryResult,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
+import {
+  reduceStructuredAgentSession,
+  EMPTY_STRUCTURED_AGENT_SESSION
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
+import { useStructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
+import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
+import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
+import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
+import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
+import type { QueuedEditTransport } from './use-structured-agent-session-queued-edit'
+import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
+
+// Resume uses the shared fenced write path; serialize presses, show one failure toast and keep Resume as the retry.
 
 type ResumeParams = { envelope: { clientOperationId: string } }
 
@@ -35,12 +47,6 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
-import {
-  reduceStructuredAgentSession,
-  EMPTY_STRUCTURED_AGENT_SESSION
-} from '../../../../shared/structured-agent-session-reducer'
 
 // Keep the host fixture's Node imports outside the renderer compiler while executing its real publisher.
 const { createQueuedMessageTestRig } = await vi.importActual<{
@@ -60,14 +66,6 @@ const { createQueuedMessageTestRig } = await vi.importActual<{
 }>(
   '../../../../main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 )
-
-import { useStructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
-import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
-import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
-import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
-import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
-import type { QueuedEditTransport } from './use-structured-agent-session-queued-edit'
-import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 const NO_EDIT: QueuedEditTransport = {
   target: { kind: 'local' },

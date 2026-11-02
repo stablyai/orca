@@ -15,8 +15,8 @@ import {
   resetHostTestOperationIds
 } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-idle-sweep'
-import type { AgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { useAppStore } from '../../src/renderer/src/store'
 import { runWorktreeAgentActivationGate } from '../../src/renderer/src/lib/worktree-agent-activation-gate'
 import { readWorktreeStructuredActivationInventory } from '../../src/renderer/src/lib/worktree-agent-structured-inventory'
@@ -26,7 +26,7 @@ import {
   openTestJournalHostDatabase
 } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { startsWhenPublished } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { NO_STRUCTURED_AGENTS } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 

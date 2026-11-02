@@ -3,7 +3,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { PickerModal, type PickerOption } from '../components/PickerModal'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { automationStyles as styles } from './automation-styles'
 
 export function AutomationButton(props: {
@@ -20,10 +20,11 @@ export function AutomationButton(props: {
       accessibilityState={{ disabled: props.disabled }}
       disabled={props.disabled}
       onPress={props.onPress}
-      style={[
+      style={({ pressed }) => [
         styles.button,
         props.primary && styles.primaryButton,
-        props.disabled && styles.disabled
+        props.disabled && styles.disabled,
+        pressed && pressedStyle
       ]}
     >
       <Text

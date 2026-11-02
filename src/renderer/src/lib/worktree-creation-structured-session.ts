@@ -8,7 +8,7 @@ import {
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
+import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
@@ -85,7 +85,10 @@ export async function launchStructuredWorktreeSession(
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
-  // Read at launch, not submit: the user may have written or sent in the chat while git worked.
+  // Lock before capturing: host admission and layout publication can both leave this composer visible.
+  useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+    chatInputHandedOff: true
+  })
   const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
   const request = withPendingChatInput(pending, args.request)
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
@@ -99,10 +102,13 @@ export async function launchStructuredWorktreeSession(
     // What the user left unsent in the chat shown while the worktree was created.
     draftFromScope: pendingCreationChatDraftScopeKey(args.creationId)
   })
+  let layoutRefused = false
   const abandoned = new AbortController()
-  let ownershipTransferred = false
+  const tabOpen = Promise.withResolvers<string | null>()
+  const stopWaiting = (): void => tabOpen.resolve(null)
+  abandoned.signal.addEventListener('abort', stopWaiting, { once: true })
   const unsubscribe = useAppStore.subscribe((state) => {
-    if (!ownershipTransferred && !state.pendingWorktreeCreations[args.creationId]) {
+    if (!state.pendingWorktreeCreations[args.creationId]) {
       abandoned.abort()
     }
   })
@@ -118,33 +124,60 @@ export async function launchStructuredWorktreeSession(
             onHostDeclined: (host) =>
               openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
           }),
-      beforeOpen: () => {
-        // Launch cancellation can beat pending-store updates during async reveal; check the signal too.
-        if (abandoned.signal.aborted || isCancelled()) {
-          return false
-        }
-        if (args.shouldActivateOnCompletion && !activation) {
-          try {
-            activation = activateAndRevealWorktree(args.worktreeId, {
-              providesInitialSurface: true,
-              worktreeCreationId: args.creationId
-            })
-          } catch (error) {
-            // Why: without a revealed workspace the provisional tab has no visible owner.
-            console.error('worktree create: structured chat reveal failed', args.worktreeId, error)
-            activation = false
-            return false
-          }
-          if (activation === false) {
-            return false
-          }
-          primaryTabId = activation.primaryTabId
-        }
-        return !abandoned.signal.aborted && !isCancelled()
+      beforeOpen: () => !abandoned.signal.aborted && !isCancelled(),
+      onTabOpenSettled: (tabId, reason) => {
+        layoutRefused = reason === 'layout-refused'
+        tabOpen.resolve(tabId)
       }
     })
-    ownershipTransferred = launch !== null
-    if (launch) {
+    if (launch && args.shouldActivateOnCompletion) {
+      // Keep the pending chat until the layout owner's answering frame provides its replacement.
+      primaryTabId = await tabOpen.promise
+      if (abandoned.signal.aborted || isCancelled()) {
+        launch.cancel()
+        return { ...settled, cancelled: true, activation, primaryTabId }
+      }
+      const stillVisible = (): boolean => {
+        const state = useAppStore.getState()
+        return (
+          !activation &&
+          state.activeView === 'terminal' &&
+          state.activePendingCreationId === args.creationId
+        )
+      }
+      let recoveryProvidesSurface = false
+      if (primaryTabId === null && plan.prompt && layoutRefused) {
+        const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
+        if (abandoned.signal.aborted || isCancelled()) {
+          launch.cancel()
+          return { ...settled, cancelled: true, activation, primaryTabId }
+        }
+        const fallback = launchAgentInNewTabWithOutcome({
+          agent,
+          worktreeId: args.worktreeId,
+          prompt: plan.prompt,
+          promptDelivery: plan.promptDelivery,
+          activate: stillVisible(),
+          agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+            route: 'terminal-tui',
+            requestId: args.creationId,
+            agent,
+            worktreeId: args.worktreeId
+          })
+        })
+        if (fallback && !('refused' in fallback)) {
+          recoveryProvidesSurface = true
+          primaryTabId = fallback.surface.kind === 'local-terminal' ? fallback.surface.tabId : null
+        }
+      }
+      if (stillVisible()) {
+        activation = activateAndRevealWorktree(args.worktreeId, {
+          providesInitialSurface: primaryTabId !== null || recoveryProvidesSurface,
+          worktreeCreationId: args.creationId
+        })
+        primaryTabId ??= activation === false ? null : activation.primaryTabId
+      }
+    } else if (launch) {
       primaryTabId = launch.tab?.id ?? primaryTabId
     }
   } catch (error) {
@@ -152,6 +185,7 @@ export async function launchStructuredWorktreeSession(
     console.error('worktree create: structured chat tab failed to open', args.worktreeId, error)
     return { ...settled, activation, primaryTabId }
   } finally {
+    abandoned.signal.removeEventListener('abort', stopWaiting)
     unsubscribe()
   }
   return { ...settled, activation, primaryTabId }

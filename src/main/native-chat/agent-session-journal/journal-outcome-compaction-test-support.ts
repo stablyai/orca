@@ -1,4 +1,3 @@
-import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 import { AgentSessionJournalError } from './journal-write-guards'
@@ -11,6 +10,7 @@ import {
   OUTCOME_FORMAT_1_COLLECTIONS,
   outcomeFormat1StoredScalars
 } from './journal-outcome-format-1'
+import type Database from '../../sqlite/sync-database'
 
 const PAGE_SIZE = 32
 const fields = new Set<string>(OUTCOME_FORMAT_1_COLLECTIONS)

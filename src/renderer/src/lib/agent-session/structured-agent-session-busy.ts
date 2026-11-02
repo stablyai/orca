@@ -1,12 +1,8 @@
 import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { agentChildWorkLiveness } from '../../../../shared/agent-status-child-work-liveness'
-import type {
-  AgentSessionStatusSummary,
-  AgentSessionHistoryResult
-} from '../../../../shared/agent-session-wire'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   structuredAgentSessionLaunchHasRetainedInput
@@ -18,6 +14,10 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
 import type { StructuredAgentSessionAdmission } from '@/components/native-chat/structured-agent-session-read-owner-contract'
+import type {
+  AgentSessionStatusSummary,
+  AgentSessionHistoryResult
+} from '../../../../shared/agent-session/agent-session-wire'
 
 function summaryBusy(summary: AgentSessionStatusSummary | null | undefined): boolean {
   return (

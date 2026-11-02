@@ -1,17 +1,15 @@
-// Exercise real recovery publication and normal Resume through the current phone controller and tray.
-
 import { createElement } from 'react'
-import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/structured-agent-session-coalescer'
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/agent-session/structured-agent-session-coalescer'
 import { useMobileNativeChatComposerTray } from './native-chat/composer/use-mobile-native-chat-composer-tray'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionHistoryResult,
   AgentSessionMutationEnvelope
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import { QueuedMessagesResumeParams } from '../../../src/shared/rpc-contract/structured-agent-session-params'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -28,6 +26,7 @@ import {
   queuedDraft,
   snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
+// Exercise real recovery publication and normal Resume through the current phone controller and tray.
 
 // Run the real host publisher/action without pulling Node ambient declarations into the phone compiler.
 const { createQueuedMessageTestRig, QUEUED_RIG_CALLER } = await vi.importActual<{

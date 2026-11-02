@@ -1,10 +1,10 @@
+import type Database from '../../sqlite/sync-database'
+import { journalRowsAfterReader } from './journal-open'
 import { createHash } from 'node:crypto'
-import type {
-  AgentJournalAcceptanceReceipt,
-  AgentJournalCursor
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalAcceptanceReceipt } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalReadRow, JournalRowsRead } from './journal-read-row'
 import { readJournalSince } from './journal-cursor'
 
 /** Public context identity changes without changing the physical journal's ownership/order. */
@@ -23,10 +23,10 @@ export function journalContextCursor(
   return { epoch: journalContextEpoch(state.epoch, state.contextBoundary), sequence }
 }
 
-export function projectJournalRows(
+export function projectJournalRows<Row extends JournalReadRow>(
   state: JournalReducerState,
-  rows: readonly JournalRow[]
-): JournalRow[] {
+  rows: readonly Row[]
+): Row[] {
   const boundary = Math.max(
     state.contextBoundary,
     rows.findLast((row) => row.kind === 'epoch')?.seq ?? 1
@@ -47,7 +47,7 @@ export function journalContextReceipt(
 
 export function readJournalContextSince(
   state: JournalReducerState,
-  rowsAfter: (sequence: number) => JournalRow[],
+  rowsAfter: (sequence: number) => JournalRowsRead,
   cursor: AgentJournalCursor
 ) {
   return readJournalSince(
@@ -57,9 +57,31 @@ export function readJournalContextSince(
         lastSequence: state.lastSequence,
         oldestSequence: state.oldestSequence
       },
-      rowsAfter: (sequence) => projectJournalRows(state, rowsAfter(sequence))
+      rowsAfter: (sequence) => {
+        const read = rowsAfter(sequence)
+        return { ...read, rows: projectJournalRows(state, read.rows) }
+      }
     },
     cursor,
     () => journalContextCursor(state)
   )
+}
+
+export function readStoredJournalContextSince(
+  db: Database.Database,
+  state: JournalReducerState,
+  cursor: AgentJournalCursor,
+  limit?: number
+) {
+  return readJournalContextSince(
+    state,
+    journalRowsAfterReader(db, state.sessionId, state.epoch, limit),
+    cursor
+  )
+}
+
+export function physicalJournalCursor(
+  state: Pick<JournalReducerState, 'epoch' | 'lastSequence'>
+): AgentJournalCursor {
+  return { epoch: state.epoch, sequence: state.lastSequence }
 }

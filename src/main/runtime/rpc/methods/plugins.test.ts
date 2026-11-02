@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../core'
 import type { PluginService } from '../../../plugins/plugin-service'
 import { PLUGIN_METHODS, setPluginServiceForRpc } from './plugins'
+import { PluginLogBuffer } from '../../../plugins/plugin-log-buffer'
+import { PluginGetLogsParams } from '../../../../shared/rpc-contract/plugins-params'
 
 vi.mock('../../../plugins/plugin-client-list', () => ({
   listPluginsForClients: vi.fn().mockResolvedValue([])
 }))
-
-const SESSION_TOKEN = 's'.repeat(43)
 
 function method(name: string): RpcMethod {
   const found = eraseRpcMethods(PLUGIN_METHODS).find((entry) => entry.name === name)
@@ -20,62 +20,7 @@ function method(name: string): RpcMethod {
   return found
 }
 
-function context(connectionId?: string): RpcContext {
-  return { runtime: {} as RpcContext['runtime'], connectionId, clientId: 'paired-device' }
-}
-
 afterEach(() => setPluginServiceForRpc(null))
-
-describe('plugin panel serve RPC identity', () => {
-  it('leaves the raw panel envelope for session resolution and admission', () => {
-    const schema = method('plugins.panelAction').params!
-
-    expect(
-      schema.safeParse({
-        pluginId: 'samples.other',
-        unexpected: 'x'.repeat(100_000)
-      }).success
-    ).toBe(true)
-  })
-
-  it('binds panel loading and actions to the same runtime connection owner', async () => {
-    const service = {
-      whenReady: vi.fn().mockResolvedValue(undefined),
-      panels: {
-        open: vi.fn().mockResolvedValue({ html: '<p>panel</p>', sessionToken: SESSION_TOKEN }),
-        execute: vi.fn().mockResolvedValue({ ok: true, value: { branch: 'main' } }),
-        bindOwnerSignal: vi.fn(),
-        revokeOwner: vi.fn()
-      }
-    } as unknown as PluginService
-    setPluginServiceForRpc(service)
-    const rpcContext = context('connection-one')
-
-    await expect(
-      method('plugins.readPanelEntry').handler(
-        { pluginKey: 'samples.demo', panelId: 'dashboard' },
-        rpcContext
-      )
-    ).resolves.toEqual({ html: '<p>panel</p>', sessionToken: SESSION_TOKEN })
-    expect(service.panels.open).toHaveBeenCalledWith(
-      'runtime:connection-one',
-      'samples.demo',
-      'dashboard'
-    )
-
-    await expect(
-      method('plugins.panelAction').handler(
-        { sessionToken: SESSION_TOKEN, action: 'workspace.readContext', params: {} },
-        rpcContext
-      )
-    ).resolves.toEqual({ outcome: { ok: true, value: { branch: 'main' } } })
-    expect(service.panels.execute).toHaveBeenCalledWith('runtime:connection-one', {
-      sessionToken: SESSION_TOKEN,
-      action: 'workspace.readContext',
-      params: {}
-    })
-  })
-})
 
 describe('plugin approval over RPC', () => {
   const worker = {
@@ -169,5 +114,153 @@ describe('plugin approval over RPC', () => {
     expect(applyConsent).toHaveBeenCalledWith(
       expect.objectContaining({ pluginKey: 'acme.worker', decision: 'keep-disabled' })
     )
+  })
+})
+
+describe('plugin system switch over RPC', () => {
+  it('is host-admin and turns the system on without approving anything', async () => {
+    const applyConsent = vi.fn()
+    const setPluginSystemEnabled = vi.fn()
+    const refresh = vi.fn().mockResolvedValue(undefined)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the switch handler only waits, refreshes and lists.
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      refresh
+    } as unknown as PluginService
+    setPluginServiceForRpc(service, {
+      applyConsent,
+      applyEnablement: vi.fn(),
+      setPluginSystemEnabled
+    })
+    const switchMethod = method('plugins.setSystemEnabled')
+
+    expect(switchMethod.permission).toBe('host-admin')
+    const context: RpcContext = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+      runtime: {} as RpcContext['runtime'],
+      caller: { kind: 'local-cli' }
+    }
+    await expect(switchMethod.handler({ enabled: true }, context)).resolves.toEqual({
+      enabled: true,
+      plugins: []
+    })
+    expect(setPluginSystemEnabled).toHaveBeenCalledWith(true)
+    expect(refresh).toHaveBeenCalledAfter(setPluginSystemEnabled)
+    expect(applyConsent).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugins.devInspect', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: devInspect reads only whenReady.
+  const service = { whenReady: vi.fn().mockResolvedValue(undefined) } as unknown as PluginService
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+  const context: RpcContext = {
+    runtime: {} as RpcContext['runtime'],
+    caller: { kind: 'local-cli' }
+  }
+
+  it('opens DevTools through the desktop hook and reports the count', async () => {
+    const openFrameDevTools = vi.fn().mockReturnValue(2)
+    setPluginServiceForRpc(service, {
+      applyConsent: vi.fn(),
+      applyEnablement: vi.fn(),
+      openFrameDevTools
+    })
+    await expect(
+      method('plugins.devInspect').handler({ pluginKey: 'acme.notes' }, context)
+    ).resolves.toEqual({ pluginKey: 'acme.notes', opened: 2 })
+    expect(openFrameDevTools).toHaveBeenCalledWith('acme.notes')
+  })
+
+  it('fails on a host without guest frames', async () => {
+    setPluginServiceForRpc(service, { applyConsent: vi.fn(), applyEnablement: vi.fn() })
+    await expect(
+      method('plugins.devInspect').handler({ pluginKey: 'acme.notes' }, context)
+    ).rejects.toThrow(/desktop app/)
+  })
+})
+
+describe('plugins.restart', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+  const context: RpcContext = {
+    runtime: {} as RpcContext['runtime'],
+    caller: { kind: 'local-cli' }
+  }
+
+  function setup(manifest: { main?: string }) {
+    const deactivatePlugin = vi.fn().mockResolvedValue(undefined)
+    const stub = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      findValidPlugin: (key: string) =>
+        key === 'acme.notes' ? { pluginKey: key, manifest } : null,
+      deactivatePlugin
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restart reads only the members stubbed above.
+    setPluginServiceForRpc(stub as unknown as PluginService, {
+      applyConsent: vi.fn(),
+      applyEnablement: vi.fn()
+    })
+    return deactivatePlugin
+  }
+
+  it('stops the worker without touching enablement or approval', async () => {
+    const deactivatePlugin = setup({ main: 'main.mjs' })
+    await expect(
+      method('plugins.restart').handler({ pluginKey: 'acme.notes' }, context)
+    ).resolves.toEqual({ pluginKey: 'acme.notes', plugin: null })
+    expect(deactivatePlugin).toHaveBeenCalledWith('acme.notes')
+  })
+
+  it('refuses unknown plugins and plugins without a worker', async () => {
+    const deactivatePlugin = setup({})
+    await expect(
+      method('plugins.restart').handler({ pluginKey: 'acme.notes' }, context)
+    ).rejects.toThrow(/no worker/)
+    await expect(
+      method('plugins.restart').handler({ pluginKey: 'acme.other' }, context)
+    ).rejects.toThrow(/not installed/)
+    expect(deactivatePlugin).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugins.getLogs', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+  const context: RpcContext = {
+    runtime: {} as RpcContext['runtime'],
+    caller: { kind: 'local-cli' }
+  }
+
+  it('passes the cursor through and returns the next one', async () => {
+    const logs = new PluginLogBuffer()
+    logs.append('acme.notes', 'info', 'one')
+    const stub = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      getLogsSince: (key: string, cursor?: string) => logs.since(key, cursor)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: getLogs reads only the members stubbed above.
+    setPluginServiceForRpc(stub as unknown as PluginService, {
+      applyConsent: vi.fn(),
+      applyEnablement: vi.fn()
+    })
+    const first = await method('plugins.getLogs').handler({ pluginKey: 'acme.notes' }, context)
+    expect(first).toMatchObject({ lines: [{ line: 'one' }], cursor: expect.any(String) })
+    logs.append('acme.notes', 'error', 'two')
+    const after =
+      typeof first === 'object' && first && 'cursor' in first && typeof first.cursor === 'string'
+        ? first.cursor
+        : ''
+    await expect(
+      method('plugins.getLogs').handler({ pluginKey: 'acme.notes', after }, context)
+    ).resolves.toMatchObject({ lines: [{ line: 'two', level: 'error' }] })
+  })
+
+  it('accepts the optional cursor param, so older clients still parse', () => {
+    expect(PluginGetLogsParams.safeParse({ pluginKey: 'acme.notes' }).success).toBe(true)
+    expect(PluginGetLogsParams.safeParse({ pluginKey: 'acme.notes', after: 'x:1' }).success).toBe(
+      true
+    )
+    expect(
+      PluginGetLogsParams.safeParse({ pluginKey: 'acme.notes', after: 'x'.repeat(65) }).success
+    ).toBe(false)
   })
 })

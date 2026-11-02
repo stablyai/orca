@@ -1,18 +1,16 @@
 import { expect, it, vi } from 'vitest'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
-import { nativeChatTurnMembership } from '../../shared/native-chat-turn-membership'
-import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
+import { nativeChatTurnMembership } from '../../shared/native-chat/transcript/native-chat-turn-membership'
+import { projectStructuredItemsToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
-
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   chat as catchUpChat,
   codexWith as catchUpCodexWith,
   turn as catchUpTurn
 } from './codex-structured-thread-catch-up.test'
-
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 export function registerCodexHistoryVariantsTests(input: {
   codexWith: typeof catchUpCodexWith

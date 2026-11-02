@@ -1,14 +1,12 @@
 import { expect, it, vi } from 'vitest'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
-
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   chat as catchUpChat,
   codexWith as catchUpCodexWith,
   turn as catchUpTurn
 } from './codex-structured-thread-catch-up.test'
-
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 export function registerCodexHistoryBoundsTests(input: {
   codexWith: typeof catchUpCodexWith

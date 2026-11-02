@@ -106,9 +106,14 @@ describe('AgentBrowserBridge', () => {
   })
 
   it('uses the runtime mobile tap path when a nearby DOM target is handled', async () => {
+    const creditPageInput = vi.fn()
+    bridge = new AgentBrowserBridge(mockBrowserManager(undefined, undefined, { creditPageInput }))
+    bridge.setActiveTab(100)
     const wc = mockWebContents(100)
     wc.debugger.sendCommand.mockImplementation(async (method: string) => {
       if (method === 'Runtime.evaluate') {
+        // The DOM click fires no guest input event; a link it opens must already know who tapped.
+        expect(creditPageInput).toHaveBeenCalledWith(100)
         return { result: { value: { x: 12, y: 34, adjusted: true, handled: true } } }
       }
       return {}

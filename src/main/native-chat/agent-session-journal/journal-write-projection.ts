@@ -1,11 +1,11 @@
 import { isDeepStrictEqual } from 'node:util'
-import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { prepareJournalOutcomeWrite } from './journal-outcome-write'
 import { encodeJournalState } from './journal-state-codec'
 import { restoreJournal } from './journal-open'
+import type Database from '../../sqlite/sync-database'
 
 // A full restore per check: development samples each chat so long streams stay responsive.
 const DEVELOPMENT_VERIFY_INTERVAL_MS = 60_000

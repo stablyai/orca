@@ -1,24 +1,21 @@
-// Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
-
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
-import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/structured-agent-session-command-turn-identity'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { journalInputOrder } from './journal-input-order'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import { queuedHandOffInDoubt, queuedHandOffOutcome } from './journal-dispatch-settlement'
-import type { JournalDispatchRow } from './journal-row-schema'
+import type { JournalDispatchRow, JournalRow } from './journal-row-schema'
 import type { JournalQueueRow, JournalQueuedChange } from './journal-queue-events'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalRow } from './journal-row-schema'
 import { foldQueuedHandOffInDoubt, placeQueuedHandOffInDoubt } from './journal-submission-fold'
 import {
   QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
   type QueuedMessageRow
 } from './queued-message-table'
+// Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
 
 export type JournalQueueState = {
   cards: Map<string, QueuedMessageRow>
@@ -251,6 +248,7 @@ function spendReportedCommandCards(state: JournalReducerState): void {
 
 function setCard(state: JournalReducerState, card: QueuedMessageRow): void {
   if (state.queue.cards.get(card.messageId) !== card) {
+    const prior = state.queue.cards.get(card.messageId)
     state.queue.cards.set(card.messageId, card)
     if (card.state === 'returned' && card.body.command && card.consumedAs !== null) {
       state.queue.returnedCommands.add(card.messageId)
@@ -258,6 +256,7 @@ function setCard(state: JournalReducerState, card: QueuedMessageRow): void {
       state.queue.returnedCommands.delete(card.messageId)
     }
     state.queue.revision += 1
+    journalInputOrder(state).queueChanged(state, prior, card)
   }
 }
 

@@ -1,27 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
-  agentJournalItemKey,
   agentJournalSubmissionKey,
+  agentJournalItemKey,
   boundJournalKeyComponent
-} from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
-} from '../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session-wire'
-import {
-  REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
-  serializeRemoteRuntimePayload
-} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../shared/agent-session/agent-session-wire'
 import {
   openTestJournalHostDatabase,
   insertTestJournalRow
 } from '../agent-session-journal/journal-host-database-test-support'
+
+import {
+  REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
+  serializeRemoteRuntimePayload
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type {
   JournalItemRow,
   JournalRow,
@@ -30,7 +29,6 @@ import type {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
-
 import {
   fixture,
   journals,

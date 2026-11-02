@@ -1,9 +1,11 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
 /** Round controls on an action row: attach, mic, Send/Stop. */
 export const COMPOSER_CONTROL_SIZE = 38
+/** Grows a round control to a 44 pt touch box without crossing the action row's 8 pt gap. */
+export const COMPOSER_CONTROL_HIT_SLOP = (44 - COMPOSER_CONTROL_SIZE) / 2
 // Every input uses the composer's size, which also keeps the page above iOS's 16px focus-zoom floor.
 export const COMPOSER_TEXT_SIZE = 16
 export const COMPOSER_LINE_HEIGHT = 22
@@ -14,12 +16,23 @@ export const FORM_MESSAGE_MIN_HEIGHT = 3 * COMPOSER_LINE_HEIGHT + 2 * MESSAGE_PA
 export const MESSAGE_MAX_HEIGHT = 7 * COMPOSER_LINE_HEIGHT
 export const FIELD_MIN_HEIGHT = 44
 
-const roundControl = {
-  width: COMPOSER_CONTROL_SIZE,
-  height: COMPOSER_CONTROL_SIZE,
+const pillControl = {
   borderRadius: radii.pill,
   alignItems: 'center',
   justifyContent: 'center'
+} as const
+
+const roundControl = {
+  ...pillControl,
+  width: COMPOSER_CONTROL_SIZE,
+  height: COMPOSER_CONTROL_SIZE
+} as const
+
+const labelControl = {
+  ...pillControl,
+  flexShrink: 1,
+  minWidth: COMPOSER_CONTROL_SIZE,
+  minHeight: COMPOSER_CONTROL_SIZE
 } as const
 
 const surface = () =>
@@ -33,14 +46,27 @@ const surface = () =>
 export const composerInputStyles = themedStyleSheet(() => ({
   box: {
     ...surface(),
-    paddingTop: spacing.md,
-    paddingHorizontal: 10,
-    paddingBottom: 10,
+    padding: spacing.md,
     borderRadius: radii.floating
   },
   formBox: {
-    paddingTop: 10,
     borderRadius: radii.surface
+  },
+  inlineBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.xs,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs
+  },
+  inlineText: {
+    flex: 1,
+    paddingVertical: (COMPOSER_CONTROL_SIZE - MESSAGE_MIN_HEIGHT) / 2
+  },
+  inlineActions: {
+    marginTop: 0
   },
   formText: {
     minHeight: FORM_MESSAGE_MIN_HEIGHT
@@ -65,7 +91,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     paddingBottom: MESSAGE_PADDING_VERTICAL
   },
   actionRow: {
-    marginTop: 10,
+    marginTop: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm
@@ -87,8 +113,19 @@ export const composerInputStyles = themedStyleSheet(() => ({
   sendButtonDisabled: {
     backgroundColor: colors.composerControl
   },
+  // Save and Cancel hug their translated label and truncate only when the row runs out.
+  sendLabelButton: {
+    ...labelControl,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceBright
+  },
+  // Unframed, so a small inset is enough and leaves a long label more room.
+  ghostLabelButton: {
+    ...labelControl,
+    paddingHorizontal: spacing.xs
+  },
   pressed: {
-    opacity: 0.7
+    opacity: feedback.pressedOpacity
   },
   field: {
     ...surface(),
@@ -117,6 +154,6 @@ export const composerInputStyles = themedStyleSheet(() => ({
     color: 'transparent'
   },
   disabled: {
-    opacity: 0.5
+    opacity: feedback.disabledOpacity
   }
 }))

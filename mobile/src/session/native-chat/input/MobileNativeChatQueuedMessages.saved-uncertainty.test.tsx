@@ -5,7 +5,7 @@ import type { ActionSheetAction } from '../../../components/ActionSheetModal'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
 import { mobileQueuedMessageCards } from '../../mobile-structured-queued-message-cards'
 import { queuedMessagesQueuePause } from '../../../../../src/shared/structured-agent-session-queued-cards'
-import type { AgentSessionQueuedMessage } from '../../../../../src/shared/agent-session-wire'
+import type { AgentSessionQueuedMessage } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 
 const fontScale = 1
 vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))

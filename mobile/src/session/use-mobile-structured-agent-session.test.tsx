@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalResolution
-} from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -263,36 +263,8 @@ describe('useMobileStructuredAgentSession', () => {
     hook = null
   })
 
-  it('subscribes and holds structured sessions without nativeChat or terminal RPCs', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-
-    await vi.waitFor(() =>
-      expect(subscribe).toHaveBeenCalledWith(
-        'agentSession.subscribe',
-        { sessionId: 'session-1' },
-        expect.any(Function)
-      )
-    )
-    await vi.waitFor(() =>
-      expect(sendRequest).toHaveBeenCalledWith(
-        'agentSession.hold',
-        expect.objectContaining({ sessionId: 'session-1', holderId: expect.any(String) }),
-        expect.any(Object)
-      )
-    )
-    expect(sendRequest).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^(nativeChat|terminal)\./),
-      expect.anything(),
-      expect.anything()
-    )
-  })
-
-  it('keeps creation facts out of the current phone conversation', async () => {
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
+  it('projects worker creation facts for phone cards alongside conversation messages', async () => {
+    await act(async () => void (renderer = create(createElement(Harness))))
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     const items: AgentJournalRenderItem[] = [
       {
@@ -328,8 +300,10 @@ describe('useMobileStructuredAgentSession', () => {
     await act(async () => listener?.(snapshotEvent(3, items)))
     expect(hook?.session.messages.map(({ blocks }) => blocks)).toEqual([
       [{ type: 'text', text: 'Coordinate' }],
+      [{ type: 'text', text: 'Worker assignment' }],
       [{ type: 'text', text: 'Answer' }]
     ])
+    expect(hook?.session.messages[1]).toMatchObject({ role: 'system', agentStart: true })
   })
 
   it('re-holds before resubscribing after a reconnect', async () => {

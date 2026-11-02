@@ -1,7 +1,16 @@
 // @vitest-environment happy-dom
-
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  projectQueuedMessageCards,
+  queuedMessagesQueuePause,
+  type QueuedMessageCard
+} from '../../../../shared/structured-agent-session-queued-cards'
+import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
+import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
 const mocks = vi.hoisted(() => ({
   updateSettings: vi.fn()
@@ -19,17 +28,6 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-
-import { TooltipProvider } from '@/components/ui/tooltip'
-import {
-  projectQueuedMessageCards,
-  queuedMessagesQueuePause,
-  type QueuedMessageCard
-} from '../../../../shared/structured-agent-session-queued-cards'
-import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
-import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 
 function renderList(
   owner: StructuredAgentSessionQueuedMessagesController,

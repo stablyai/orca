@@ -1,9 +1,9 @@
-// Derive withdrawals at settlement execution so retries read the same landed journal state.
-
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../../../shared/agent-status-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+// Derive withdrawals at settlement execution so retries read the same landed journal state.
 
 /** Missing methods withdraw nothing. */
 export type UnopenedSendJournal = {

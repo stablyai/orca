@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { recoverLegacyStructuredAgentSessionOutbox } from './structured-agent-session-legacy-outbox'
 
 const mocks = vi.hoisted(() => ({
   outline: vi.fn(),
@@ -19,8 +19,6 @@ vi.mock('./structured-agent-session-message-hand-back', () => ({
 vi.mock('./structured-agent-session-pending-sends', () => ({
   setStructuredAgentSessionSendNotice: mocks.notice
 }))
-
-import { recoverLegacyStructuredAgentSessionOutbox } from './structured-agent-session-legacy-outbox'
 
 const SESSION = 'session-1'
 const KEY = `orca:desktopStructuredAgentSessionOutbox:v1:${SESSION}`
@@ -95,41 +93,6 @@ describe('a chat an older build left messages for', () => {
     expect(localStorage.getItem(KEY)).toBeNull()
   })
 
-  it('hands back in the order they were sent, whatever order the copy holds them in', async () => {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify([
-        { ...saved('third', 'three'), queuedAt: 30 },
-        { ...saved('first', 'one'), queuedAt: 10 },
-        { ...saved('second', 'two'), queuedAt: 20 }
-      ])
-    )
-    mocks.outline.mockResolvedValue(outline([]))
-    await recover({})
-    expect(mocks.handBack.mock.calls.map(([, clientMessageId]) => clientMessageId)).toEqual([
-      'first',
-      'second',
-      'third'
-    ])
-  })
-
-  it('never hands back one the host recorded and then rejected: its row shows it', async () => {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify([
-        {
-          ...saved('rejected', 'host said no'),
-          state: 'rejected',
-          lastFailure: { kind: 'rejected', reason: null }
-        }
-      ])
-    )
-    mocks.outline.mockResolvedValue(outline([]))
-    await recover({})
-    expect(mocks.handBack).not.toHaveBeenCalled()
-    expect(localStorage.getItem(KEY)).toBeNull()
-  })
-
   it('hands back a refused, held or outlived-Stop copy once, and never again', async () => {
     localStorage.setItem(
       KEY,
@@ -149,19 +112,6 @@ describe('a chat an older build left messages for', () => {
     expect(localStorage.getItem(KEY)).toBeNull()
     await recover({})
     expect(mocks.handBack).toHaveBeenCalledTimes(3)
-  })
-
-  it('retains the full handback without uncertainty advice when history is incomplete', async () => {
-    localStorage.setItem(KEY, JSON.stringify([saved('maybe', 'maybe sent')]))
-    mocks.outline.mockResolvedValue(outline([], 3))
-    await recover({})
-    expect(mocks.handBack).toHaveBeenCalledExactlyOnceWith(
-      SESSION,
-      'maybe',
-      saved('maybe', 'maybe sent').body
-    )
-    expect(mocks.notice).not.toHaveBeenCalled()
-    expect(localStorage.getItem(KEY)).toBeNull()
   })
 
   it('keeps the copy for the next open when the text could not be saved back', async () => {

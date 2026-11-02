@@ -3,21 +3,17 @@ import {
   fakeCodex,
   acquireReadyCodexForTest
 } from './codex-structured-session-adapter-fixture'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { expect, it, vi } from 'vitest'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
-
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
-
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   chat as catchUpChat,
   codexWith as catchUpCodexWith,
   turn as catchUpTurn
 } from './codex-structured-thread-catch-up.test'
-
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 export function registerCodexHistorySourcesTests(input: {
   codexWith: typeof catchUpCodexWith

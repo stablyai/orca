@@ -4,9 +4,8 @@ import {
   identityFor,
   THREAD_ID
 } from './codex-structured-session-adapter-fixture'
-
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { createAgentChildWorkAdmission } from '../../shared/agent-status-child-work-admission'
 import type { AgentChildWorkRecord } from '../../shared/agent-status-child-work'
 import { reconcileAgentChildWorkEvidence } from '../../shared/agent-status-child-work-reconciliation'

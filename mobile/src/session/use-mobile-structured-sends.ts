@@ -1,19 +1,16 @@
-// Ordinary in-memory input outlives its request; exact host IDs retire it.
-
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
-import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/structured-agent-session-message-projection'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends
-} from '../../../src/shared/structured-agent-session-send-settlement'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-send-settlement'
 import { mergeSentImagePreviews } from './native-chat/composer/mobile-native-chat-draft-reconcile'
-import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
+// Ordinary in-memory input outlives its request; exact host IDs retire it.
 
 type MobileStructuredSend = StructuredAgentSessionOptimisticMessage
 

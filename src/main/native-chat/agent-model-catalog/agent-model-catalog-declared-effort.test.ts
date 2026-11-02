@@ -10,16 +10,16 @@ import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
 import { applyAcpMessageOptions } from '../../acp/acp-message-execution-options'
 import type { AcpStructuredSession } from '../../acp/acp-structured-session'
 import { captureStructuredExecutionOptions } from '../agent-session-wire/structured-agent-session-execution-options'
-import { structuredAgentSessionSeedCatalog } from '../../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
-} from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   agentModelCatalogEntry,
   agentModelCatalogEntryWithSuccess,

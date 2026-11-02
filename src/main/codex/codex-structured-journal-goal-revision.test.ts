@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
-import { currentAgentSessionThreadGoal } from '../../shared/agent-session-thread-goal'
-import type { AgentSessionHistoryPage } from '../../shared/agent-session-wire'
+} from '../../shared/agent-session-journal-identity'
+import { currentAgentSessionThreadGoal } from '../../shared/agent-session/agent-session-thread-goal'
+import type { AgentSessionHistoryPage } from '../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
@@ -17,7 +17,7 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { CodexJournalGoals } from './codex-structured-journal-goals'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 const IDENTITY: AgentSessionJournalIdentity = {

@@ -1,4 +1,4 @@
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mocks,
@@ -11,9 +11,10 @@ import {
   flush,
   send,
   sendCalls,
-  phases
+  phases,
+  type Deferred
 } from './structured-agent-session-message-sender.test-fixture'
-import type { Deferred } from './structured-agent-session-message-sender.test-fixture'
+
 import {
   STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS,
   dropStructuredAgentSessionSends,

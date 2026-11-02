@@ -136,3 +136,4 @@ patchedDependencies:
   '@tiptap/markdown@3.31.3': config/patches/@tiptap__markdown@3.31.3.patch
   vitest@5.0.5: config/patches/vitest@5.0.5.patch
   pdfjs-dist@6.3.289: config/patches/pdfjs-dist@6.3.289.patch
+  prosemirror-view@1.42.3: config/patches/prosemirror-view@1.42.3.patch

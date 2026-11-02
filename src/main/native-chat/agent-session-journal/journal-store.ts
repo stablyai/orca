@@ -1,34 +1,33 @@
 import { journalInputSourceBody } from './journal-input-source'
-// Each session owns its fold and queue; all statements use the host's shared database connection.
-
+import { journalInputOrder } from './journal-input-order'
 import { JournalWriteProjection } from './journal-write-projection'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
-import * as journalInput from './journal-input-obligations'
+import { retireCoveredJournalFloor } from './journal-commit'
 import { createJournalPublicReader } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
-  AgentJournalCursor,
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
-  AgentJournalThreadGoal,
-  AgentJournalTurnLifecycle,
+  AgentJournalTurnLifecycle
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
-import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
+} from '../../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
 import {
   newestStructuredAgentSessionTurnBySequence,
   runningStructuredAgentSessionTurnItemBySequence
-} from '../../../shared/structured-agent-session-live-turn'
+} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { journalWroteBeforeOpen } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
-import { journalRowsAfterReader } from './journal-open'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
@@ -45,7 +44,6 @@ import type {
   JournalItemLinkageVisitor,
   JournalLifecycleBatchInput,
   JournalPlannedLifecycleBatchInput,
-  JournalReadSince,
   JournalTombstoneInput
 } from './journal-store-contracts'
 import {
@@ -58,10 +56,11 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
 import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
-import * as journalContext from './journal-context-cursor'
 import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
+// Each session owns its fold and queue; all statements use the host's shared database connection.
 
-export { AgentSessionJournalError } from './journal-write-guards'
+import * as journalInput from './journal-input-obligations'
+import * as journalContext from './journal-context-cursor'
 
 type JournalCollaborators = ReturnType<typeof createJournalStoreCollaborators>
 
@@ -100,6 +99,7 @@ export class AgentSessionJournal {
       state: () => this.state,
       adopt: (state) => {
         this.state = state
+        this.reopenUnmarked = retireCoveredJournalFloor(state, this.reopenUnmarked)
       }
     })
     const collaborators = createJournalStoreCollaborators({
@@ -112,11 +112,14 @@ export class AgentSessionJournal {
       readOnly: () => this.database.readOnly,
       cursor: this.cursor,
       adopt: (loaded) => {
+        journalInputOrder(loaded.state).carryRecovery(journalInputOrder(this.state))
         this.state = loaded.state
         this.onCommitted?.()
       },
-      prepare: (db, rows, savedAt, finishFold) =>
-        this.projection.prepare(db, rows, savedAt, finishFold),
+      prepare: (db, rows, savedAt, finishFold) => {
+        this.queuedMessages.inputState()
+        return this.projection.prepare(db, rows, savedAt, finishFold)
+      },
       commit: (rows) => {
         this.onCommitted?.(rows)
         this.projection.verify()
@@ -147,8 +150,11 @@ export class AgentSessionJournal {
     return this.identity.agent
   }
 
-  /** Whether a row at this sequence was on disk when this handle opened, so an earlier handle
-   *  wrote it. A provider-context boundary does not change that physical provenance. */
+  get inputOrder() {
+    return journalInputOrder(this.state)
+  }
+
+  /** Rows from a previous handle retain physical provenance through logical boundaries. */
   wroteBeforeOpen(sequence: number | undefined): boolean {
     return journalWroteBeforeOpen(this.state, this.openedThrough, sequence)
   }
@@ -161,6 +167,7 @@ export class AgentSessionJournal {
   async open(): Promise<void> {
     await this.restore()
     this.openedThrough = { epoch: this.state.epoch, sequence: this.state.lastSequence }
+    journalInputOrder(this.state).markOpeningRecovery()
   }
 
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */
@@ -227,7 +234,7 @@ export class AgentSessionJournal {
     journalThreadGoalSource(this.state.items.values())
 
   /** Read across the journal, beyond any client's loaded page. */
-  threadGoal = (): AgentJournalThreadGoal | null => this.threadGoalSource().goal
+  threadGoal = () => this.threadGoalSource().goal
 
   /** Read across the journal, beyond any client's loaded page. */
   contextUsage = (): AgentSessionContextUsage =>
@@ -257,10 +264,7 @@ export class AgentSessionJournal {
   receiptFor = (clientMessageId: string): AgentJournalAcceptanceReceipt | null =>
     journalContext.journalContextReceipt(this.state, clientMessageId)
 
-  physicalCursor = (): AgentJournalCursor => ({
-    epoch: this.state.epoch,
-    sequence: this.state.lastSequence
-  })
+  physicalCursor = (): AgentJournalCursor => journalContext.physicalJournalCursor(this.state)
 
   presentationRemoved = (itemId: string): boolean =>
     journalInput.journalInputPresentationRemoved(this.state, itemId)
@@ -272,10 +276,9 @@ export class AgentSessionJournal {
     return this.queue.readInOrder(read)
   }
 
-  readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
-    const { sessionId } = this.identity
-    const rowsAfter = journalRowsAfterReader(this.database.db, sessionId, this.state.epoch, limit)
-    return journalContext.readJournalContextSince(this.state, rowsAfter, cursor)
+  readSince(cursor: AgentJournalCursor, limit?: number) {
+    const { database, state } = this
+    return journalContext.readStoredJournalContextSince(database.db, state, cursor, limit)
   }
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */
@@ -336,7 +339,6 @@ export class AgentSessionJournal {
       const sequence = since ?? this.state.lastSequence + 1
       this.reopenUnmarked = { epoch: this.state.epoch, sequence }
       await this.appendQueueReopen(fence, since)
-      this.reopenUnmarked = null
     }
   }
 
@@ -365,10 +367,7 @@ export class AgentSessionJournal {
   }
 
   /** Failed initialization proves handed-over but unanswered sends never ran. */
-  async rejectPendingSubmissions(
-    fence: number,
-    rejection: AgentJournalDispatchRejection
-  ): Promise<string[]> {
+  async rejectPendingSubmissions(fence: number, rejection: AgentJournalDispatchRejection) {
     return rejectJournalPendingSubmissions(this, fence, rejection)
   }
 

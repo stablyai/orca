@@ -1,23 +1,20 @@
-// Ended generations must hold no work across projection, status, chat, Stop, prompts and queue,
-// even when settlement/release writes fail; live generations retain their work.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionStatusSnapshot } from '../../../shared/agent-session-status-snapshot-fold'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionStatusSnapshot } from '../../../shared/agent-session/view/agent-session-status-snapshot-fold'
 import {
   isActionableStructuredAgentSessionPrompt,
   runningStructuredAgentSessionTurnId
-} from '../../../shared/structured-agent-session-live-turn'
+} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import {
   readTestJournalOutcomes,
   openTestJournalHostDatabase
@@ -37,6 +34,8 @@ import {
   sendText,
   turnState
 } from './structured-agent-session-leftover-settlement.test-fixture'
+// Ended generations must hold no work across projection, status, chat, Stop, prompts and queue,
+// even when settlement/release writes fail; live generations retain their work.
 
 // Mobile has its own typecheck project; run its real consumer across the shared wire boundary.
 const phoneFeedPath = '../../../../mobile/src/session/mobile-structured-session-status-feed'

@@ -1,25 +1,23 @@
-import type {
-  AgentSessionHistoryDirection,
-  AgentSessionSubagentRosterEntry
-} from '../../../shared/agent-session-wire'
 import {
+  type AgentSessionHistoryDirection,
+  type AgentSessionSubagentRosterEntry,
   AGENT_SESSION_HISTORY_DEFAULT_LIMIT,
   AGENT_SESSION_HISTORY_MAX_LIMIT
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   agentJournalSubmissionKey,
   boundJournalKeyComponent
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
-import { agentSessionHostStatusBody } from '../../../shared/agent-session-host-status-rows'
-import { isSubagentBlock } from '../../../shared/native-chat-types'
+import { agentSessionHostStatusBody } from '../../../shared/agent-session/view/agent-session-host-status-rows'
+import { isSubagentBlock } from '../../../shared/native-chat/native-chat-types'
 import {
   subagentFoldKey,
   subagentItemBlock

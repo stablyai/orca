@@ -44,6 +44,7 @@ describe('original automation pane evidence', () => {
     expect(port.send.mock.calls[1]?.[1]).toEqual({
       worktree: 'id:folder:saved',
       includeVisualLayouts: false,
+      includePreview: false,
       limit: 206
     })
   })

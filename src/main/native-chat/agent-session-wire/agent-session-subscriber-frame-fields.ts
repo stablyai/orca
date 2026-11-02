@@ -1,15 +1,15 @@
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionPublishedWork } from './agent-session-published-work'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { Subscriber } from './structured-agent-session-subscribers'
-// Deduplicate against last sent values only; withheld fields must not suppress final replacements.
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 import { boundedFrames } from './agent-session-bounded-frames'
+// Deduplicate against last sent values only; withheld fields must not suppress final replacements.
 
 export type SubscriberFieldState = {
   commandsOnRequest?: boolean

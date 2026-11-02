@@ -3,13 +3,16 @@ import {
   type AgentSessionSlashCommand,
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { sameJournalCursor } from '../agent-session-journal/journal-cursor'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import { withPublishedWork, withPublishedWorkResult } from './agent-session-published-work'
+import {
+  withPublishedWork,
+  withPublishedWorkResult,
+  type AgentSessionPublishedWork
+} from './agent-session-published-work'
 import { refreshPublishedWork } from './agent-session-work-refresh'
-import type { AgentSessionPublishedWork } from './agent-session-published-work'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   createAgentSessionCatchUpReader,

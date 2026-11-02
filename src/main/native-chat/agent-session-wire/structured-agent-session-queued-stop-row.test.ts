@@ -1,16 +1,10 @@
-// Stop writes one event row before it interrupts, and the queue's pause is derived from it:
-// through the real host, the cards queued before a Stop wait, a card queued after it sends
-// normally but never ahead of them, an unconfirmed hand-off stays ordinary history, a crash keeps the
-// pause, any turn sent after it ends it, and no stored pause is ever written.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import Database from '../../sqlite/sync-database'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalDatabasePath } from '../agent-session-journal/journal-host-database'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalAnsweredTurnIdentity } from '../../../shared/agent-session-journal-types'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalAnsweredTurnIdentity } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
@@ -25,6 +19,12 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
+// Stop writes one event row before it interrupts, and the queue's pause is derived from it:
+// through the real host, the cards queued before a Stop wait, a card queued after it sends
+// normally but never ahead of them, an unconfirmed hand-off stays ordinary history, a crash keeps the
+// pause, any turn sent after it ends it, and no stored pause is ever written.
+
+import Database from '../../sqlite/sync-database'
 
 let rig: QueuedMessageTestRig
 

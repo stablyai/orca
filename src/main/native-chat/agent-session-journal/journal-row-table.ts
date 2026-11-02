@@ -1,6 +1,6 @@
-import type Database from '../../sqlite/sync-database'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
 import { AgentSessionJournalError } from './journal-write-guards'
+import type Database from '../../sqlite/sync-database'
 
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 

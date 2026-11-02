@@ -26,7 +26,7 @@ import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeCreateAgentSessionResult
-} from '../../src/shared/agent-session-host-authority'
+} from '../../src/shared/agent-session/agent-session-host-authority'
 import type { PtyRuntimeControllerDeps } from '../../src/main/ipc/pty/runtime/controller-deps'
 import type { ShellSpawnParams } from '../../src/main/providers/local-pty-utils'
 import { SHELL_READY_MARKER_PREFIX } from '../../src/main/shell-ready-marker-scanner'

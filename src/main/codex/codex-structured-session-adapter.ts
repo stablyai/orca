@@ -1,6 +1,5 @@
 import { projectCodexSessionOptions } from './codex-structured-service-tier'
-import * as codexRewind from './codex-structured-rewind'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
@@ -10,7 +9,8 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
-import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
+import { dispatchCodexTurn } from './codex-structured-turn-start'
+import { isCodexTurnOptionKey } from './codex-turn-option-keys'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
@@ -34,7 +34,6 @@ import {
   deliverCodexUnhandledFrame,
   translateCodexNotification
 } from './codex-structured-provider-events'
-import * as turnEnd from './codex-structured-turn-end-settlement'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
 import { codexStoppedRequestEndWait, settleCodexRequestEndWaiters } from './codex-request-end-wait'
@@ -47,12 +46,8 @@ import {
   cancelCodexStructuredTurn
 } from './codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
-
-export type {
-  CodexStructuredLaunch,
-  CodexStructuredSessionAdapterDeps,
-  CodexStructuredSessionEvent
-} from './codex-structured-session-state'
+import * as codexRewind from './codex-structured-rewind'
+import * as turnEnd from './codex-structured-turn-end-settlement'
 
 export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()

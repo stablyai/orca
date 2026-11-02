@@ -10,8 +10,8 @@ import {
 import { readReceiverThreadIds, readCodexCollabStates } from './codex-collab-agent-tool-call'
 import { imagePath, generatedImageUrl } from './codex-image-item-translation'
 import { readRecord, readString, readTextContent } from './codex-item-field-readers'
-
 import { HISTORY_ASSOCIATION, HISTORY_ITEM_TIMINGS } from './codex-history-source-facts'
+
 function copyKnown(
   source: Record<string, unknown>,
   keys: readonly string[]

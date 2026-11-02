@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
 import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'

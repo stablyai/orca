@@ -1,14 +1,13 @@
-// Turn ends release execution holds; only a user-message receipt confirms delivery.
-
 import {
   providerDiagnostic,
   type ProviderDiagnostic,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
+
 import type { CodexTurnEnd } from './codex-structured-dispatch-echo'
 import type { CodexSession } from './codex-structured-session-state'
 import { readCodexJournalRecord } from './codex-structured-journal-translation-values'
@@ -20,6 +19,7 @@ import {
 } from './codex-structured-thread-facts'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import { codexAuthenticationFailure } from './codex-authentication-failure'
+// Turn ends release execution holds; only a user-message receipt confirms delivery.
 
 export function codexDispatchRejection(
   failure: SubmissionRejectionFact,

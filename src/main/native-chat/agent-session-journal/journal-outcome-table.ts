@@ -1,6 +1,8 @@
-import type Database from '../../sqlite/sync-database'
-import type { JournalReducerState } from './journal-reducer'
-import { applyJournalRow } from './journal-reducer'
+import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
+import { isNativeOutcomeField } from './journal-outcome-format-2'
+import { journalInputOrder } from './journal-input-order'
+import { detachJournalNativePrefix, restoreJournalNativeState } from './journal-input-conversion'
+import { type JournalReducerState, applyJournalRow } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
 import type { JournalRow } from './journal-row-schema'
 import { journalRowReadBack } from './journal-row-table'
@@ -11,7 +13,7 @@ import {
   JOURNAL_PREFIX_ORDINAL
 } from './journal-outcome-codec'
 import type { JournalOutcomeSource } from './journal-outcome-format'
-import { OUTCOME_FORMAT_1_COLLECTIONS } from './journal-outcome-format-1'
+import type Database from '../../sqlite/sync-database'
 
 // The key index orders each key's records newest first, so a range seek past the last key read lands
 // on the next key's newest record: one indexed seek per key, whatever its revisions number.
@@ -29,12 +31,15 @@ export function readJournalOutcomes(
   baseline?: JournalReducerState
 ): JournalReducerState {
   const newest = db.prepare(JOURNAL_NEWEST_OUTCOME_SQL)
+  const prefix = detachJournalNativePrefix(baseline)
   const fold = new JournalOutcomeFold()
   let after = { field: '', key: '' }
   for (;;) {
     const row = newest.get(source.generation, after.field, after.key, source.through)
     if (!row) {
-      return fold.finish(sessionId, epoch, source.through, baseline)
+      const state = fold.finish(sessionId, epoch, source.through, baseline)
+      restoreJournalNativeState(db, state, source.format, fold, prefix)
+      return state
     }
     const value = fold.add(row)
     after = { field: value.field, key: value.key }
@@ -49,10 +54,12 @@ export function persistJournalOutcomeRows(
   source: Pick<JournalOutcomeSource, 'generation' | 'prefix'>,
   rows: readonly JournalRow[],
   savedAt?: number,
-  finishFold?: (draft: JournalReducerState) => void
+  upgradeNative = false,
+  finish?: (state: JournalReducerState) => void
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
+  journalInputOrder(transition.state).introduceOverlays(transition.state)
   const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
     WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
   const insert = db.prepare(`INSERT INTO journal_outcomes
@@ -64,11 +71,28 @@ export function persistJournalOutcomeRows(
     const { stored } = journalRowReadBack(state.sessionId, row)
     applyJournalRow(transition.state, transition.input(stored), savedAt ?? row.ts)
     if (row === rows.at(-1)) {
-      finishFold?.(transition.state)
+      finish?.(transition.state)
     }
     const changes = transition
       .changes(true)
-      .filter((entry) => OUTCOME_FORMAT_1_COLLECTIONS.some((path) => path === entry.path))
+      .filter(
+        (entry) =>
+          isNativeOutcomeField(entry.path) ||
+          OUTCOME_FORMAT_1_COLLECTIONS.some((path) => path === entry.path)
+      )
+    if (upgradeNative) {
+      for (const path of ['inputEntries', 'inputCards'] as const) {
+        const changed = new Set(
+          changes.filter((change) => change.path === path).map((change) => change.key)
+        )
+        for (const [key, value] of transition.state[path]) {
+          if (!changed.has(key)) {
+            changes.push({ path, key, value, deleted: false, reinsert: true })
+          }
+        }
+      }
+      upgradeNative = false
+    }
     // Only this row's own transition is recorded, never a snapshot of a prefix value it left alone.
     const encoded = encodeJournalOutcomes(transition.state, changes, scalar, transition.untracked)
     scalar = encoded.scalars

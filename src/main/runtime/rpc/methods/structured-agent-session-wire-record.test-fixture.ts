@@ -1,18 +1,18 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import {
   reduceStructuredAgentSession,
   EMPTY_STRUCTURED_AGENT_SESSION
-} from '../../../../shared/structured-agent-session-reducer'
-import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
+import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type { openStream } from './structured-agent-session-rpc.test-fixture'
 import { createHash } from 'node:crypto'
-import recorded from './structured-agent-session-released-reader-record.test-fixture.json'
 import { expect } from 'vitest'
-import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
+import recorded from './structured-agent-session-released-reader-record.test-fixture.json'
 
 export function createQueuedImageWireRecord(
   root: string,

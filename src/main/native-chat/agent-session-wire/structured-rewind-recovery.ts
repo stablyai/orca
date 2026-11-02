@@ -1,71 +1,32 @@
+import { persistRewindRecord, settleUnsupportedClaudeRewind } from './structured-rewind-record'
+export { persistRewindRecord } from './structured-rewind-record'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import type {
+  StructuredAgentSessionHostDeps,
+  StructuredAgentSessionHostSession
+} from './structured-agent-session-host-types'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { isDeepStrictEqual } from 'node:util'
 import { structuredRewindCut, type StructuredRewindCut } from './structured-rewind-cut'
-import type { AgentSessionRewindRecord } from '../../../shared/agent-session-rewind'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import { rewindRefusal } from './structured-rewind-refusal'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 
-type RewindRecoveryDeps = {
+export type RewindRecoveryDeps = {
   store: AgentSessionRecordStore
   logger: StructuredAgentSessionLogger
   nameProviderConversation?: (record: AgentSessionRecord) => void
-}
-
-export function persistRewindRecord(
-  store: AgentSessionRecordStore,
-  sessionId: string,
-  fence: number,
-  rewind: AgentSessionRewindRecord
-): Promise<unknown> {
-  // Drop legacy copied history; the retained journal remains authoritative.
-  const { retained: _retained, hydrationVerified: _hydrationVerified, ...current } = rewind
-  return store.transitionHandoff(sessionId, (record) => {
-    if (record.lease.runtimeFence !== fence) {
-      throw new Error('agent_session_checkpoint_stale')
-    }
-    return { ...record, rewind: current }
-  })
-}
-
-/** Pre-fork Claude rewinds never ran; refuse them without blocking the already-attached chat. */
-async function settleUnsupportedClaudeRewind(
-  { store, logger }: RewindRecoveryDeps,
-  sessionId: string,
-  fence: number,
-  rewind: AgentSessionRewindRecord
-): Promise<void> {
-  const refusal = rewindRefusal('unsupported').refusal
-  try {
-    await persistRewindRecord(store, sessionId, fence, {
-      ...rewind,
-      phase: 'refused',
-      reason: 'unsupported'
-    })
-    await store.recordOperationOutcome({
-      callerKey: rewind.callerKey,
-      operationId: rewind.operationId,
-      outcome: { status: 'failed', code: refusal.code, rewindReason: 'unsupported' }
-    })
-  } catch (error) {
-    logger.warn('a pending Claude rewind was not settled', {
-      scope: 'rewind-unsupported-settlement',
-      sessionId,
-      operationId: rewind.operationId,
-      error
-    })
-  }
 }
 
 type RecoveredRewind = Awaited<
@@ -287,6 +248,24 @@ export async function applyStructuredRewindRecovery(
       rewind: { itemId: rewind.itemId, epoch: cursor.epoch }
     }
   })
+}
+
+/** Settle prepared rewinds orphaned across processes; provider-only proof waits for the next proven start. */
+export async function settleInterruptedStructuredAgentSessionCommands(
+  deps: StructuredAgentSessionHostDeps,
+  sessionId: string,
+  session: StructuredAgentSessionHostSession
+): Promise<void> {
+  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
+  try {
+    await recoverStructuredRewind(deps, sessionId, session.journal, fence)
+  } catch (error) {
+    deps.logger.warn('settling an interrupted rewind on open failed', {
+      scope: 'rewind-recovery',
+      sessionId,
+      error
+    })
+  }
 }
 
 function inheritForkName(

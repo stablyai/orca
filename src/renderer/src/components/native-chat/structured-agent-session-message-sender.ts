@@ -1,17 +1,13 @@
-// Bound live sends independently of ordinary in-memory input; only exact host facts reconcile it.
-
 import { settleStructuredLaunchFirstMessageFromJournal } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionFirstMessage } from '../../../../shared/structured-agent-session-create'
-import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionFirstMessage } from '../../../../shared/agent-session/structured-agent-session-create'
+import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends
-} from '../../../../shared/structured-agent-session-send-settlement'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
 import {
@@ -44,6 +40,8 @@ import {
   type StructuredAgentSessionSendOutcome,
   type StructuredAgentSessionSent
 } from './structured-agent-session-send-runtime'
+// Bound live sends independently of ordinary in-memory input; only exact host facts reconcile it.
+
 export { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from './structured-agent-session-send-runtime'
 export type {
   StructuredAgentSessionSendOutcome,

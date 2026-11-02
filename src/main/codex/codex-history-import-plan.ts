@@ -1,14 +1,15 @@
 import { preserveSavedHistoryPayload } from './codex-history-projection'
 import { isDeepStrictEqual } from 'node:util'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody,
+  type AgentJournalRenderItem
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { codexJournalItem } from './codex-structured-item-translation'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
 import {
@@ -17,7 +18,6 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
 import { createCodexHistoryObservations } from './codex-history-observations'
 import type { HistoryAnchor } from './codex-history-source-facts'
-import { codexJournalItem } from './codex-structured-item-translation'
 import {
   CODEX_RESTORE_MAX_BYTES,
   historicalTurnLifecycle

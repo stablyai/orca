@@ -1,81 +1,91 @@
-import { useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ActivityIndicator, Animated, Easing, Pressable, Text, View } from 'react-native'
+import { Minus, MoreHorizontal, Plus } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MessageBox } from '../components/composer-input/MessageBox'
-import { composerInputStyles } from '../components/composer-input/composer-input-styles'
-import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { SHEET_CURVE } from '../components/sheet-motion-values'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
-import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { MobileSourceControlFileList } from './MobileSourceControlFileList'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
-import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
-const INITIAL_COMMIT_BAR_HEIGHT = 180
+const CLEAN_FADE_MS = 240
+const REDUCED_CLEAN_FADE_MS = 150
+
+// The clean state settles in when a commit empties the list; on load it is simply there.
+function CleanStateFade({ animate, children }: { animate: boolean; children: ReactNode }) {
+  const reducedMotion = useReducedMotionEnabled() === true
+  const shown = useRef(new Animated.Value(animate ? 0 : 1)).current
+  useEffect(() => {
+    if (!animate) {
+      return
+    }
+    Animated.timing(shown, {
+      toValue: 1,
+      duration: reducedMotion ? REDUCED_CLEAN_FADE_MS : CLEAN_FADE_MS,
+      easing: Easing.bezier(...SHEET_CURVE),
+      useNativeDriver: true
+    }).start()
+  }, [animate, reducedMotion, shown])
+  const scale = reducedMotion
+    ? 1
+    : shown.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] })
+  return (
+    <Animated.View style={[styles.state, { opacity: shown, transform: [{ scale }] }]}>
+      {children}
+    </Animated.View>
+  )
+}
 
 type Props = {
   state: Omit<MobileSourceControlState, 'primaryActionArgs'>
-  // The panel builds it once it knows the branch's review.
-  primaryAction: MobileSourceControlPrimaryAction
+  /** Clears the next-step bar the panel floats over the list. */
+  bottomInset: number
 }
 
-export function MobileSourceControlContent({ state, primaryAction }: Props) {
+export function MobileSourceControlContent({ state, bottomInset }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
-    insets,
     connState,
     busyAction,
-    commitMessage,
-    setCommitMessage,
-    generatingMessage,
     setShowActionSheet,
     setDiscardTarget,
     actionError,
     commitFailureRecovery,
     commitFailureRecoveryAction,
-    keyboardLift,
-    openingPath,
-    openingBranchPath,
     sections,
     hasVisibleChanges,
     status,
     stageablePaths,
     unstageablePaths,
-    stagedCount,
-    createPrAction,
     stageAll,
     unstageAll,
-    generateCommitMessage,
-    cancelGenerateCommitMessage,
-    openFile,
-    openBranchDiff,
+    openDiffForFile,
     resolveConflict,
     runGitAction
   } = state
-  const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const ioBusy = busyAction !== null
+  // Commit runners keep busyAction set ('commit…') until the refreshed status has landed.
+  const [listShown, setListShown] = useState(hasVisibleChanges)
+  const [cleanedByCommit, setCleanedByCommit] = useState(false)
+  if (listShown !== hasVisibleChanges) {
+    setListShown(hasVisibleChanges)
+    setCleanedByCommit(!hasVisibleChanges && busyAction?.startsWith('commit') === true)
+  }
   // A capped all-staged prefix can hide unstaged rows.
   const canStageAll = stageablePaths.length > 0 || status?.didHitLimit === true
-  const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
-  // Typed text blocks regeneration; the same button cancels active generation.
-  const generateBlockedByMessage = !generatingMessage && commitMessage.trim().length > 0
-  const generateDisabled = busyAction !== null || generateBlockedByMessage
-  const createPrHeroActive =
-    createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
-  // Measured, because the commit box grows as the message wraps; the first frame uses a one-line bar.
-  const [commitBarHeight, setCommitBarHeight] = useState(INITIAL_COMMIT_BAR_HEIGHT)
-  const listBottomInset = commitBarHeight + spacing.lg
+  const listBottomInset = bottomInset + spacing.lg
   const fileList = useMemo(
     () => (
       <MobileSourceControlFileList
         bottomInset={listBottomInset}
         state={{
           sections,
-          openFile,
+          openDiffForFile,
           resolveConflict,
           runGitAction,
           setDiscardTarget,
@@ -84,17 +94,14 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
           branchEntries: state.branchEntries,
           branchCompareState: state.branchCompareState,
           branchCompareResult: state.branchCompareResult,
-          busyAction,
-          openBranchDiff,
-          openingBranchPath,
-          openingPath
+          busyAction
         }}
       />
     ),
     [
       listBottomInset,
       sections,
-      openFile,
+      openDiffForFile,
       resolveConflict,
       runGitAction,
       setDiscardTarget,
@@ -103,10 +110,7 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
       state.branchEntries,
       state.branchCompareState,
       state.branchCompareResult,
-      busyAction,
-      openBranchDiff,
-      openingBranchPath,
-      openingPath
+      busyAction
     ]
   )
 
@@ -134,7 +138,6 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
             </Text>
           </View>
         ) : null}
-        <MobileSourceControlCreatePrEntry action={createPrAction} />
         <View style={styles.bulkRow}>
           <Pressable
             style={({ pressed }) => [
@@ -192,118 +195,17 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
       </View>
 
       {!hasVisibleChanges ? (
-        <View style={styles.state}>
+        <CleanStateFade animate={cleanedByCommit}>
           <Text style={styles.stateTitle}>
             {t('sourceControl.content.emptyTitle', 'No local changes')}
           </Text>
           <Text style={styles.stateText}>
             {t('sourceControl.content.emptyMessage', 'Working tree is clean.')}
           </Text>
-        </View>
+        </CleanStateFade>
       ) : (
         fileList
       )}
-
-      <View
-        onLayout={(event) => setCommitBarHeight(event.nativeEvent.layout.height)}
-        style={[
-          styles.commitBar,
-          {
-            bottom: keyboardLift > 0 ? keyboardLift + KEYBOARD_COMMIT_BAR_CLEARANCE : keyboardLift,
-            paddingBottom: keyboardLift > 0 ? spacing.md : spacing.md + insets.bottom
-          }
-        ]}
-      >
-        <MessageBox
-          value={stagedCount === 0 ? '' : commitMessage}
-          onChangeText={setCommitMessage}
-          placeholder={
-            stagedCount === 0
-              ? t('sourceControl.content.noStagedFiles', 'No staged files')
-              : t('sourceControl.content.commitMessagePlaceholder', 'Commit message')
-          }
-          editable={stagedCount > 0 && !ioBusy}
-          accessibilityLabel={
-            stagedCount === 0
-              ? t(
-                  'sourceControl.content.commitMessageDisabled',
-                  'Commit message disabled. No staged files.'
-                )
-              : undefined
-          }
-          leading={
-            shouldShowGenerateButton ? (
-              <Pressable
-                style={({ pressed }) => [
-                  composerInputStyles.controlButton,
-                  generateDisabled && composerInputStyles.disabled,
-                  pressed && composerInputStyles.pressed
-                ]}
-                // Keep commit-message AI with commit actions so Stage All remains unambiguous.
-                disabled={generateDisabled}
-                accessibilityState={{ disabled: generateDisabled }}
-                accessibilityHint={
-                  generateBlockedByMessage
-                    ? t('sourceControl.content.regenerateHint', 'Clear the message to regenerate.')
-                    : undefined
-                }
-                onPress={() =>
-                  generatingMessage ? cancelGenerateCommitMessage() : void generateCommitMessage()
-                }
-                accessibilityLabel={
-                  generatingMessage
-                    ? t(
-                        'sourceControl.content.cancelGeneration',
-                        'Cancel commit message generation'
-                      )
-                    : t('sourceControl.content.generateMessage', 'Generate commit message with AI')
-                }
-              >
-                {generatingMessage ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : (
-                  <Sparkles size={17} color={colors.textSecondary} strokeWidth={2} />
-                )}
-              </Pressable>
-            ) : null
-          }
-          trailing={
-            <Pressable
-              style={({ pressed }) => [
-                styles.commitButton,
-                createPrHeroActive && styles.commitButtonSecondary,
-                primaryAction.disabled && styles.commitButtonDisabled,
-                pressed && composerInputStyles.pressed
-              ]}
-              onPress={primaryAction.onPress}
-              disabled={primaryAction.disabled}
-              accessibilityLabel={primaryAction.accessibilityLabel}
-              accessibilityHint={primaryAction.accessibilityHint}
-            >
-              {primaryAction.loading ? (
-                <ActivityIndicator
-                  size="small"
-                  color={
-                    createPrHeroActive || primaryAction.disabled
-                      ? colors.textPrimary
-                      : colors.bgBase
-                  }
-                />
-              ) : (
-                <Text
-                  style={[
-                    styles.commitButtonText,
-                    createPrHeroActive && styles.commitButtonSecondaryText,
-                    primaryAction.disabled && styles.commitButtonDisabledText
-                  ]}
-                >
-                  {primaryAction.label}
-                </Text>
-              )}
-            </Pressable>
-          }
-        />
-      </View>
     </>
   )
 }

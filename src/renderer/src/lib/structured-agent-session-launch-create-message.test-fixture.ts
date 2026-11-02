@@ -1,16 +1,29 @@
 // @vitest-environment happy-dom
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../shared/agent-session-wire'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryPage } from '../../../shared/agent-session/agent-session-wire'
 import {
   CreateIntentParams,
   SetOptionParams,
   SendParams
 } from '../../../shared/rpc-contract/structured-agent-session-params'
-
 import type { Tab } from '../../../shared/tab-types'
-import type { HostCreateSupport } from './structured-agent-session-host-admission'
+import type { HostCreateSupport } from './agent-session/launch/structured-agent-session-host-admission'
+import { useAppStore } from '@/store'
+import { registerStructuredSelectionCatalogStore } from './structured-agent-session-selection-controller'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
+import { newAgentLaunchRequestId } from './agent-launch-request-id'
+import {
+  clearNativeChatDraftCacheForTests,
+  readNativeChatDraftCache
+} from '@/components/native-chat/native-chat-draft-cache'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 
 type CreateMessageFixtureMocks = {
   rpc: Mock
@@ -65,7 +78,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsStructuredAgentSessionCreateMessage: mocks.supports,
   structuredAgentSessionHostSupports: mocks.exactSupport
 }))
-vi.mock('./structured-agent-session-host-admission', () => ({
+vi.mock('./agent-session/launch/structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.admit
 }))
 vi.mock('@/runtime/structured-session-tab-inventory', () => ({
@@ -93,22 +106,6 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-chat-host-permission', () => ({
   readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
 }))
-
-import { useAppStore } from '@/store'
-import { registerStructuredSelectionCatalogStore } from './structured-agent-session-selection-controller'
-import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
-import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
-import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
-import { startStructuredAgentLaunch } from './structured-agent-session-launch'
-import { newAgentLaunchRequestId } from './agent-launch-request-id'
-
-import {
-  clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache
-} from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 
 export function resetCreateMessageFixture() {
   const restore = registerStructuredSelectionCatalogStore({

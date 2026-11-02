@@ -6,28 +6,28 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
-import * as records from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionJournalProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { nextSendableQueuedCard } from './queued-message-pause'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionStoppedHistoryOwed } from '../../../shared/agent-session-stopped-history'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionStoppedHistoryOwed } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import { structuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
 import { recordStructuredAgentSessionStartFailure } from '../agent-session-wire/structured-agent-session-start-failure-row'
 import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
 import { readQueuePublication } from '../agent-session-wire/structured-agent-session-queued-publication'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   appendTestJournalQueueRow,
   openTestJournalHostDatabase,
   createTrackedJournalOpener
 } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
+import * as records from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 const journals = createTrackedJournalOpener()
 const identity = {
@@ -632,7 +632,7 @@ it.each([100, 1000])(
     await receipt('candidate')
     expect(journal.queuedMessages.get(cardId('candidate'))).toBeNull()
     const { structuredAgentSessionCommandTurnIdentity } =
-      await import('../../../shared/structured-agent-session-command-turn-identity')
+      await import('../../../shared/agent-session/view/structured-agent-session-command-turn-identity')
     const command = { ...body('/compact'), command: { name: 'compact' as const } }
     applyJournalRow(state, {
       kind: 'queue',

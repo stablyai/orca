@@ -1,4 +1,4 @@
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
@@ -13,6 +13,8 @@ import { join } from 'node:path'
 export type StructuredClaudeAccountHomeDeps = {
   launchEnv: NodeJS.ProcessEnv
   wslDistro: string | null
+  /** `identity` names the selected account before its folder exists; the default checks availability. */
+  purpose?: 'identity'
   getClaudeConfigDirectory: (
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ) => string | null | undefined
@@ -22,7 +24,9 @@ export function resolveStructuredClaudeAccountHomePath(
   deps: StructuredClaudeAccountHomeDeps
 ): string {
   // Why only an account: System default keeps the launch-env and configured homes below.
-  const accountHome = deps.wslDistro ? null : getClaudeProfileRouter()?.routedHome()
+  const accountHome = deps.wslDistro
+    ? null
+    : getClaudeProfileRouter()?.routedHome(deps.purpose === 'identity' ? 'identity' : 'checked')
   if (accountHome) {
     return accountHome
   }

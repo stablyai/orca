@@ -12,6 +12,8 @@ export type ListMultiSelection<T> = {
   visibleKeys: string[]
   selectedKeys: Set<string>
   selectedItems: T[]
+  toggleSelection: (item: T) => void
+  setAllSelected: (selected: boolean) => void
   /** Returns true for selection-only gestures (Cmd/Ctrl/Shift), which must not navigate. */
   updateSelectionForGesture: (
     event: Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>,
@@ -129,10 +131,37 @@ export function useListMultiSelection<T>({
     [getKey]
   )
 
+  const toggleSelection = useCallback(
+    (item: T): void => {
+      const key = getKey(item)
+      setSelectedKeys((previous) => {
+        const next = new Set(previous)
+        if (next.has(key)) {
+          next.delete(key)
+        } else {
+          next.add(key)
+        }
+        return next
+      })
+      setSelectionAnchorKey(key)
+    },
+    [getKey]
+  )
+
+  const setAllSelected = useCallback(
+    (selected: boolean): void => {
+      setSelectedKeys(new Set(selected ? visibleKeys : []))
+      setSelectionAnchorKey(null)
+    },
+    [visibleKeys]
+  )
+
   return {
     visibleKeys,
     selectedKeys,
     selectedItems,
+    toggleSelection,
+    setAllSelected,
     updateSelectionForGesture,
     selectForContextMenu
   }

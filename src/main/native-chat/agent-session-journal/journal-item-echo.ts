@@ -1,10 +1,12 @@
 import type { JournalReducerState } from './journal-reducer'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import { isWriteFailureSubmission } from '../../../shared/structured-agent-session-dispatch-rejection'
-import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalSubmissionKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session/agent-session-context-clear'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 /** Absent permits legacy inference; preserve unknown declarations without authorizing delivery recovery. */
 export type JournalItemEcho = { echoOf?: unknown }
 

@@ -1,10 +1,7 @@
-// Older readers cannot edit images: retain their ordinary source row and exact idle-only controls.
-import type {
-  AgentSessionHistoryResult,
-  AgentSessionQueuedMessage
-} from '../../../../shared/agent-session-wire'
+import type { AgentSessionHistoryResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { QueuePublication } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-publication'
-import { AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RpcContext } from '../core'
 import {
   queuedCardHoldsImage,
@@ -14,6 +11,7 @@ import {
 } from '../../../native-chat/agent-session-wire/agent-session-queued-image-reader'
 import { CLIENT_HISTORY_READER } from '../../../native-chat/agent-session-wire/agent-session-item-wire-form'
 import { utf8Head } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+// Older readers retain the ordinary image source and their supported controls.
 
 type QueuedImageReader = Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
 export function readsQueuedImageCards(ctx: QueuedImageReader): boolean {

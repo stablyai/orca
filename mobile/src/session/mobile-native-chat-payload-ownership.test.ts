@@ -1,5 +1,4 @@
 import { createElement, Fragment } from 'react'
-import type * as React from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -17,6 +16,7 @@ import { useMobileNativeChatFileAttachments } from './native-chat/composer/use-m
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatImageAttachments } from './native-chat/composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
+import type * as React from 'react'
 
 const subscriptionWork = vi.hoisted(() => ({ active: 0, wakes: 0, snapshots: 0 }))
 vi.mock('react', async (importOriginal) => {

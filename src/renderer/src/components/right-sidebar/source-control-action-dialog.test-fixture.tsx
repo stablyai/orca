@@ -8,7 +8,6 @@ import {
   type SourceControlAgentActionDialogProps
 } from './SourceControlAgentActionDialog'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import type { Repo } from '../../../../shared/repo-types'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
 import { saveSourceControlAiActionRecipeForTarget } from './source-control/ai/recipe-persistence'
@@ -20,8 +19,11 @@ import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT
-} from '../../../../shared/protocol-version'
-import { normalizeSourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  type SourceControlActionRecipe,
+  normalizeSourceControlActionRecipe
+} from '../../../../shared/source-control-ai-actions'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
 import {
   render,

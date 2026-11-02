@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import '@testing-library/jest-dom/vitest'
 import {
   act,
   cleanup,
@@ -11,6 +10,33 @@ import {
 } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
+import {
+  getStructuredAgentSessionSendNotice,
+  setStructuredAgentSessionSendNotice
+} from './structured-agent-session-pending-sends'
+import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
+import {
+  clearNativeChatComposerDraftsForTests,
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from './native-chat-composer-draft-store'
+import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import {
+  NativeChatInterruptedContinueButton,
+  useNativeChatInterruptedContinuation
+} from './NativeChatInterruptedContinue'
+import '@testing-library/jest-dom/vitest'
 
 const mocks = vi.hoisted(() => {
   const hostLabel = (): string | null => 'studio-mac'
@@ -31,7 +57,7 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   ensureRuntimeEnvironmentCompatible: async () => {}
 }))
-vi.mock('@/lib/structured-agent-session-launch-label', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-label', () => ({
   structuredAgentLabel: () => 'Codex'
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -49,33 +75,6 @@ vi.mock('../native-chat-launch-resume-decision', () => ({
 vi.mock('./use-structured-agent-session-host-label', () => ({
   useStructuredAgentSessionHostLabel: () => mocks.hostLabel
 }))
-
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
-import {
-  getStructuredAgentSessionSendNotice,
-  setStructuredAgentSessionSendNotice
-} from './structured-agent-session-pending-sends'
-import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft,
-  updateNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from './native-chat-composer-draft-store'
-import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  NativeChatInterruptedContinueButton,
-  useNativeChatInterruptedContinuation
-} from './NativeChatInterruptedContinue'
 
 const TURN = agentJournalItemKey({ provider: 'codex', threadId: 't', turnId: 'cut', ordinal: 1 })
 const PAIRED: RuntimeClientTarget = { kind: 'environment', environmentId: 'studio-mac' }

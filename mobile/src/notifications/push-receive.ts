@@ -7,7 +7,11 @@ import { resolveHostIdForFingerprint } from './push-host-fingerprint'
 import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
 import type { NotificationBehavior } from 'expo-notifications'
 import { readNativeNotificationData } from './native-notification-data'
-import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
+import {
+  loadNotificationDeliveryPreferences,
+  type NotificationDeliveryPreferences
+} from './notification-delivery-preferences'
+import { allowsMobilePushAlertKind } from '../../../src/shared/mobile-push-alert'
 
 const RECENT_FOREGROUND_PUSH_CAP = 512
 const recentForegroundPushes = new Set<string>()
@@ -52,10 +56,9 @@ export async function foregroundNotificationBehavior(notification: {
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
   // Preserve unknown notifications; recognized pushes fail closed when eligibility/dismissal checks cannot complete.
-  const ineligible = await shouldSuppressForegroundPush(
-    payload,
-    preferences.suppressWhileViewing
-  ).catch(() => payload !== null)
+  const ineligible = await shouldSuppressForegroundPush(payload, preferences).catch(
+    () => payload !== null
+  )
   const suppressed = ineligible || (payload !== null && !claimForegroundPush(payload))
   return {
     shouldShowBanner: !suppressed,
@@ -67,7 +70,7 @@ export async function foregroundNotificationBehavior(notification: {
 
 export async function canPresentForegroundPush(payload: OrcaPushPayload): Promise<boolean> {
   const preferences = await loadNotificationDeliveryPreferences()
-  return !(await shouldSuppressForegroundPush(payload, preferences.suppressWhileViewing))
+  return !(await shouldSuppressForegroundPush(payload, preferences))
 }
 
 async function resolvePushHostId(payload: OrcaPushPayload): Promise<string | null> {
@@ -77,7 +80,7 @@ async function resolvePushHostId(payload: OrcaPushPayload): Promise<string | nul
 
 async function shouldSuppressForegroundPush(
   payload: OrcaPushPayload | null,
-  suppressWhileViewing: boolean
+  preferences: NotificationDeliveryPreferences
 ): Promise<boolean> {
   if (!payload) {
     return false
@@ -92,6 +95,10 @@ async function shouldSuppressForegroundPush(
     }
     return true
   }
+  // An older host ignores this registration filter, so its pushes are filtered here too.
+  if (!allowsMobilePushAlertKind(preferences, payload.source, payload.agentState)) {
+    return true
+  }
   const hostId = await resolvePushHostId(payload)
   // Suppress removed-host pushes: stale gateway registrations cannot route a useful tap and the phone can no longer disable them per host.
   if (!hostId) {
@@ -100,7 +107,7 @@ async function shouldSuppressForegroundPush(
   if (!(await loadPushNotificationsEnabled())) {
     return true
   }
-  if (shouldSuppressNotificationWhileViewing(payload, hostId, suppressWhileViewing)) {
+  if (shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing)) {
     return true
   }
   // Keep this last: a socket/native dismissal may land during any preference or host read.

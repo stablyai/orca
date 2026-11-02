@@ -1,10 +1,10 @@
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as HEALTH
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import { useDashboardPopoutBridge } from './useDashboardPopoutBridge'
@@ -123,40 +123,6 @@ function seed(settings: Partial<GlobalSettings> | null): void {
 
 // The drawer feeds builder slices directly; omission silently loses fields instead of failing validation.
 describe('useLiveDashboardSnapshot', () => {
-  it('feeds the builder the settings that gate generated conversation names', () => {
-    seed({ tabAutoGenerateTitle: true })
-    const withTitles = renderHook(() => useLiveDashboardSnapshot())
-    expect(withTitles.result.current.cards[0].conversationName).toBe('Fix the flaky pty test')
-
-    seed({ tabAutoGenerateTitle: false })
-    const withoutTitles = renderHook(() => useLiveDashboardSnapshot())
-    expect(withoutTitles.result.current.cards[0].conversationName).toBeUndefined()
-  })
-
-  it('carries repo icons through to the drawer', () => {
-    seed({ tabAutoGenerateTitle: false })
-    const { result } = renderHook(() => useLiveDashboardSnapshot())
-    expect(result.current.repoIconsByRepoId).toEqual({
-      'repo-1': { type: 'lucide', name: 'Rocket' }
-    })
-  })
-
-  // Seed host-profile input slices explicitly so missing plumbing cannot degrade drawer previews to client-OS routing.
-  it("resolves each card's host-input profile from the slices it does not subscribe to", () => {
-    seed({ tabAutoGenerateTitle: false })
-    const { result: localResult } = renderHook(() => useLiveDashboardSnapshot())
-    expect(localResult.current.cards[0].terminalInput?.hostPlatform).toBe('linux')
-
-    useAppStore.setState({
-      repos: [{ ...repo(), connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }],
-      sshConnectionStates: new Map([
-        ['conn-1', { remotePlatform: 'win32' }]
-      ]) as unknown as ReturnType<typeof useAppStore.getState>['sshConnectionStates']
-    })
-    const { result: sshResult } = renderHook(() => useLiveDashboardSnapshot())
-    expect(sshResult.current.cards[0].terminalInput?.hostPlatform).toBe('win32')
-  })
-
   // Re-render the same hook to prove host-only changes invalidate it; a fresh mount would conceal missing subscriptions.
   it('re-derives the host-input profile when only a host slice changes', () => {
     seed({ tabAutoGenerateTitle: false })

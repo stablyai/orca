@@ -1,7 +1,5 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalRenderItem
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isDeepStrictEqual } from 'node:util'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 import { readRecord } from './codex-item-field-readers'

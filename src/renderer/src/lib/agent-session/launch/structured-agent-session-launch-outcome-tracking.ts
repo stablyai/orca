@@ -1,4 +1,4 @@
-import { settleStructuredLaunchCreateOptions } from '../../structured-agent-session-launch-options'
+import { settleStructuredLaunchCreateOptions } from './structured-agent-session-launch-options'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { useAppStore } from '@/store/index'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
@@ -8,14 +8,14 @@ import { removeStructuredLaunchSlot } from './structured-agent-session-launch-sl
 import {
   materializeStructuredLaunchSurface,
   findStructuredLaunchTab
-} from '../../structured-agent-session-launch-surface'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+} from './structured-agent-session-launch-surface'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import {
   settleStructuredLaunchCallers,
   structuredLaunchCallersHavePendingWork
-} from '@/lib/structured-agent-session-launch-callers'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
-import { structuredLaunchFailure } from '../../structured-agent-session-launch-failure'
+import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
   deleteStructuredLaunchStateIfCurrent,
   notifyStructuredLaunchListeners,

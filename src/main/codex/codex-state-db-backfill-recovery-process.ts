@@ -8,7 +8,7 @@ import {
   createProviderSpawnSpec,
   type ProviderCloseRequest
 } from '../provider-process/provider-process-supervisor'
-import type { CodexAppServerSpawn } from './codex-app-server-process-tree-kill'
+import type { CodexAppServerSpawn } from './app-server/codex-app-server-process-tree-kill'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
 import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'

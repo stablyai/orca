@@ -18,6 +18,7 @@ import {
   mobileTasksItemMenuActions,
   renderMobileTasksItemActions
 } from './mobile-tasks-item-actions'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function MobileTasksItemDetailDrawer({ model }: { model: ConnectionPresentationModel }) {
   const { actionItem, detailLoading, taskDetailHandoff, setDetailRefreshSeq, taskUiReady } = model
@@ -40,7 +41,7 @@ export function MobileTasksItemDetailDrawer({ model }: { model: ConnectionPresen
                   {taskKindLabel(actionItem)}
                 </Text>
                 <Pressable
-                  style={styles.iconButton}
+                  style={({ pressed }) => [styles.iconButton, pressed && pressedStyle]}
                   disabled={detailLoading}
                   accessibilityRole="button"
                   accessibilityLabel={t('tasks.itemDetailDrawer.refreshDetails', 'Refresh details')}

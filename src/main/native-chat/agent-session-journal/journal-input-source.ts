@@ -1,4 +1,4 @@
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalInputSource } from './journal-input-source-schema'
 
 export function journalInputSourceId(source: JournalInputSource | undefined): string | undefined {

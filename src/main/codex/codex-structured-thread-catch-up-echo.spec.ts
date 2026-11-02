@@ -6,22 +6,23 @@ import {
   fakeCodex,
   acquireReadyCodexForTest
 } from './codex-structured-session-adapter-fixture'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { journalItemEchoFields } from '../native-chat/agent-session-journal/journal-item-echo'
 import { expect, it } from 'vitest'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
-
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import {
+  type AgentJournalMessageItem,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   chat as catchUpChat,
   codexWith as catchUpCodexWith,
   turn as catchUpTurn
 } from './codex-structured-thread-catch-up.test'
-import { agentSessionSendBodyFingerprint } from '../../shared/structured-agent-session-send-mutation'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { structuredRewindCut } from '../native-chat/agent-session-wire/structured-rewind-cut'
 import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
 

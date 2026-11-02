@@ -6,8 +6,8 @@ import { historySourceItem } from './codex-history-item-values'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/structured-agent-session-transition'
 import {
   codexNonMessageIdentity,
@@ -16,12 +16,10 @@ import {
   type CodexThreadItem
 } from './codex-thread-item-identity'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
-import type {
-  HistoryAnchor,
-  CodexHistoryObservation,
-  CodexHistoryObservedTurn
-} from './codex-history-source-facts'
 import {
+  type HistoryAnchor,
+  type CodexHistoryObservation,
+  type CodexHistoryObservedTurn,
   compatibleHistoryStatus,
   compatibleHistoryInvocation,
   historyInvocationFields,

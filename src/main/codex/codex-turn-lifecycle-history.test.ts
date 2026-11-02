@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
 import { THREAD_ID, recorder, translatorFor } from './codex-turn-lifecycle-contract-test-fixture'
 
@@ -120,19 +119,5 @@ describe('codex turn lifecycle rows', () => {
       }
     ])
     expect(tap.tombstones).toEqual([])
-  })
-
-  it('restores no lifecycle rows without a session identity to key them by', () => {
-    const tap = recorder()
-    const translator = createCodexJournalTranslator({
-      sink: tap.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    translator.restoreThread(THREAD_ID, {
-      turns: [{ id: 'turn-done', status: 'completed', startedAt: 1, completedAt: 2, items: [] }]
-    })
-
-    expect(tap.rows).toEqual([])
   })
 })

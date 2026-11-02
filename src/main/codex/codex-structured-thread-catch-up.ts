@@ -5,7 +5,7 @@ import {
   CodexTurnOrdinals,
   readCodexThreadItem
 } from './codex-structured-item-translation'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -13,7 +13,7 @@ import {
   continuedOutsideNotice,
   runHistoryCatchUp
 } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from './codex-app-server-connection'
+import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from './app-server/codex-app-server-connection'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { createCodexHistoryImportPlan } from './codex-history-import-plan'
 import {

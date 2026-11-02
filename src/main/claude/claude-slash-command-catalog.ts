@@ -1,4 +1,4 @@
-import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
 
 // Stream init carries name arrays; control initialization and reloads carry descriptors.
 const MAX_COMMANDS = 512

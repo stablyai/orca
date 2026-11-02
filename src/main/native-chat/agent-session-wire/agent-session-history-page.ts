@@ -1,23 +1,13 @@
 import { resolveHistoryLimit } from './agent-session-history-limit'
-export { resolveHistoryLimit } from './agent-session-history-limit'
-// Backward pages use the reduced timeline so compaction retains live items. Catch-up reads rows:
-// late revisions keep old creation positions and would be skipped by item windows. Only catch-up
-// can therefore return cursor_compacted.
-
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { snapshotLatestTurn } from './agent-session-history-latest-turn'
+
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalSnapshot
-} from '../../../shared/agent-session-journal-types'
-import {
-  AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage,
-  type AgentSessionHistoryRequest,
-  type AgentSessionHistoryResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
@@ -33,6 +23,17 @@ import {
   submissionBytesByItemId
 } from './agent-session-history-page-bounds'
 import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
+export { resolveHistoryLimit } from './agent-session-history-limit'
+// Backward pages use the reduced timeline so compaction retains live items. Catch-up reads rows:
+// late revisions keep old creation positions and would be skipped by item windows. Only catch-up
+// can therefore return cursor_compacted.
+
+import {
+  AGENT_SESSION_HISTORY_MAX_LIMIT,
+  type AgentSessionHistoryPage,
+  type AgentSessionHistoryRequest,
+  type AgentSessionHistoryResult
+} from '../../../shared/agent-session/agent-session-wire'
 
 export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 
@@ -276,7 +277,10 @@ function readForward(
     // client resumes from the live cursor past this row.
     return historyReset(journal, 'cursor_compacted', reader)
   }
-  const lastSequence = rows.at(-1)?.seq ?? cursor.sequence
+  const hasNewer = since.rows.length > rows.length
+  // A complete read moves past trailing writes that saved nothing. `through` cannot run ahead of
+  // `snapshot`: each write commits and adopts its state in one synchronous step on the write lane.
+  const lastSequence = hasNewer ? (rows.at(-1)?.seq ?? cursor.sequence) : since.through
   return {
     ok: true,
     page: buildPage({
@@ -286,7 +290,7 @@ function readForward(
       items: items.map(({ item }) => item),
       removedItemIds: projected.batch.removedItemIds,
       hasOlder: cursor.sequence > 0,
-      hasNewer: since.rows.length > rows.length,
+      hasNewer,
       fallbackCursor: cursor,
       nextCursor: { epoch: cursor.epoch, sequence: lastSequence }
     })

@@ -1,12 +1,12 @@
-import { structuredAgentSessionSeedCatalog } from '../../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
-} from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { piOptionRefreshHost } from './structured-agent-session-option-refresh.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -15,7 +15,7 @@ import {
   appendTestJournalQueueRow,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD as THREAD,
@@ -35,7 +35,6 @@ import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
 import { agentModelCatalogFingerprintForRecord } from '../agent-model-catalog/agent-model-catalog-fingerprint'
-
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig
@@ -117,6 +116,8 @@ describe("a Stop's queue pause", () => {
   installRigLifecycleHooks()
 
   it('replays a saved own-held copy, drains W1/W2 through normal Resume, and keeps its later refusal real', async () => {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({ restartable: true, legacyInputs: true })
     const originalId = await rig.workingSend()
     const first = await queuedDraft('W1')
     const second = await queuedDraft('W2')

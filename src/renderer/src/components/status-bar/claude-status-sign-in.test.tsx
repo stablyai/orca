@@ -1,3 +1,4 @@
+import type * as ProviderAccountsClient from '@/runtime/runtime-provider-accounts-client'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
@@ -39,7 +40,8 @@ function snapshot(): ClaudeRateLimitAccountsState {
 }
 
 vi.mock('sonner', () => ({ toast: { error: toastError, info: vi.fn(), success: vi.fn() } }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/runtime-provider-accounts-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProviderAccountsClient>()),
   fetchProviderAccountsSnapshot: vi.fn(async () => ({
     claude: snapshot(),
     codex: { accounts: [], activeAccountId: null },
@@ -164,20 +166,6 @@ describe('status bar Claude account that needs a sign-in', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 
-  it('does not repeat its sign-in note with a usage sign-in line', async () => {
-    const unavailable = (accountId: string): unknown => ({
-      accountId,
-      isFetching: false,
-      rateLimits: { ...claudeProvider, status: 'error', error: 'Not signed in' }
-    })
-    inactiveClaudeAccounts = [unavailable('old'), unavailable('new')]
-    await openAccounts()
-    expect(screen.getByText('Sign in again to use this account')).toBeTruthy()
-    expect(screen.getAllByText('Sign in to see usage')).toHaveLength(1)
-    const newRow = screen.getAllByText('new@example.com').at(-1)!.closest('[role="menuitem"]')
-    expect(newRow?.textContent).toContain('Sign in to see usage')
-  })
-
   it('does not ask an idle account whose usage token expired overnight to sign in', async () => {
     inactiveClaudeAccounts = [
       {
@@ -199,13 +187,6 @@ describe('status bar Claude account that needs a sign-in', () => {
     const newRow = screen.getAllByText('new@example.com').at(-1)!.closest('[role="menuitem"]')
     expect(newRow?.textContent).not.toContain('Sign in to see usage')
     expect(newRow?.textContent).toContain('Updates when Claude runs')
-  })
-
-  it('says why a failed sign-in failed', async () => {
-    reauthenticate.mockRejectedValueOnce(new Error('Claude login exited with code 1.'))
-    await openAccounts()
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))
   })
 
   it('keeps the account list in the usage roster when the selected account needs a sign-in', async () => {

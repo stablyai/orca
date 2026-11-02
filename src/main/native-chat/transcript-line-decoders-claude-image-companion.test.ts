@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeImageTranscriptMessages } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 
 // Claude 2.1.237 stores source paths in separate isMeta/turnCompanion rows; prompt base64 has no path.

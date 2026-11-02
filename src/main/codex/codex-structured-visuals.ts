@@ -2,7 +2,7 @@ import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { isCodexMethodNotFoundError } from './codex-app-server-session'
+import { isCodexMethodNotFoundError } from './app-server/codex-app-server-session'
 import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 
 /** Bound local setup requests so optional visuals do not delay the first prompt indefinitely. */

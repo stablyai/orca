@@ -1,7 +1,5 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 import {
   getStructuredLaunchStateBySessionId,
@@ -50,7 +48,7 @@ export function settleStructuredLaunchFirstMessageFromJournal(
   if (state) {
     state.visibilityUnknown = false
     state.callers.outcome = 'published'
-    state.promise = import('../../structured-agent-session-launch-create-message').then(
+    state.promise = import('./structured-agent-session-launch-create-message').then(
       ({ publishStructuredLaunchCreateOptions }) =>
         publishStructuredLaunchCreateOptions(state, {
           sessionId,

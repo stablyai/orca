@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import {
   pendingQueueSendsOnTheirWay,

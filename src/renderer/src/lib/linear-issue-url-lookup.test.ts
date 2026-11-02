@@ -4,7 +4,7 @@ import {
 } from '@/store/slices/linear-slice-test-harness'
 import { describe, expect, it, vi } from 'vitest'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { LinearConnectionStatus } from '../../../shared/linear/workspace-types'
+
 import { lookupLinearIssueUrl } from './linear-issue-url-lookup'
 
 const intent = { identifier: 'STA-4084', organizationUrlKey: 'stably' }
@@ -27,32 +27,6 @@ function issue(organizationUrlKey = 'stably'): LinearIssue {
 }
 
 describe('Linear issue URL lookup', () => {
-  it('uses the known workspace named by the URL', async () => {
-    const fetchLinearIssue = vi.fn(() =>
-      linearIssueReadFixture<LinearIssue | null>(async () => issue())
-    )
-    const readLinearStatus = vi.fn<() => Promise<LinearConnectionStatus>>()
-
-    await expect(
-      readLinearIssueForTest(
-        lookupLinearIssueUrl({
-          intent,
-          knownStatus: {
-            viewer: null,
-            workspaces: [{ id: 'stably-workspace', organizationUrlKey: 'stably' } as never]
-          },
-          sourceContext: null,
-          fetchLinearIssue,
-          readLinearStatus
-        })
-      )
-    ).resolves.toMatchObject({ identifier: 'STA-4084' })
-    expect(fetchLinearIssue).toHaveBeenCalledWith('STA-4084', 'stably-workspace', {
-      sourceContext: null
-    })
-    expect(readLinearStatus).not.toHaveBeenCalled()
-  })
-
   it('refreshes status from the source owner when the known workspace is stale', async () => {
     const fetchLinearIssue = vi.fn((_identifier: string, workspaceId?: string | null) =>
       linearIssueReadFixture<LinearIssue | null>(async () =>

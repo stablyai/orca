@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 const rpc = vi.hoisted(() => vi.fn())

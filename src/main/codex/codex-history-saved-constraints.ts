@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   codexItemBody,
   codexMessageBlocks,

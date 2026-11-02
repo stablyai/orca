@@ -1,6 +1,6 @@
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
 import { RELAY_REGION_METRIC_SEGMENTS, type RelayRegion } from '@orca-cloud/relay-contract'
-import type { ControlRenewalOutcome } from './assignment-store.js'
+import type { ControlRenewalOutcome } from './control-renewal-statement.js'
 import type { ControlRenewalFlush } from './control-renewal-batch.js'
 import type { CellInventoryHoldCounts } from './cell-inventory-hold-samples.js'
 import type { PostgresPoolPressureCounts } from './postgres-pool-pressure.js'

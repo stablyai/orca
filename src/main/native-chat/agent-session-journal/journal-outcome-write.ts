@@ -1,4 +1,5 @@
-import type Database from '../../sqlite/sync-database'
+import { journalInputAcceptance } from './journal-input-provenance'
+import { journalInputOrder } from './journal-input-order'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import {
@@ -7,6 +8,7 @@ import {
   startJournalOutcomeLog
 } from './journal-outcome-format'
 import { persistJournalOutcomeRows } from './journal-outcome-table'
+import type Database from '../../sqlite/sync-database'
 
 /** Every write stores outcome records, and nothing else: they are the saved chat. An input-only epoch
  * keeps its rows as they are and starts its records here, after them. */
@@ -17,13 +19,21 @@ export function prepareJournalOutcomeWrite(
   savedAt: number,
   finishFold?: (draft: JournalReducerState) => void
 ): { adopt: () => JournalReducerState } {
+  const previous = journalOutcomeSource(db, live.sessionId, live.epoch)
   const source =
-    journalOutcomeSource(db, live.sessionId, live.epoch) ??
-    startJournalOutcomeLog(db, live.sessionId, live.epoch, live.lastSequence, savedAt)
+    previous ?? startJournalOutcomeLog(db, live.sessionId, live.epoch, live.lastSequence, savedAt)
   if (source.through !== live.lastSequence) {
     throw new Error('journal outcome writer has stale coverage')
   }
-  const transition = persistJournalOutcomeRows(db, live, source, rows, savedAt, finishFold)
+  const transition = persistJournalOutcomeRows(
+    db,
+    live,
+    source,
+    rows,
+    savedAt,
+    !previous || previous.format < 2,
+    finishFold
+  )
   advanceJournalOutcomeSource(db, live.sessionId, live.epoch, transition.state.lastSequence)
   return { adopt: transition.adopt }
 }
@@ -40,8 +50,22 @@ export function publishJournalOutcomeEpoch(
     throw new Error('missing founding epoch')
   }
   const source = startJournalOutcomeLog(db, sessionId, epoch, 0, first.ts)
-  const initial = createJournalReducerState(sessionId, epoch)
-  const transition = persistJournalOutcomeRows(db, initial, source, rows)
+  const initial = createJournalReducerState(sessionId, epoch, (id) =>
+    journalInputAcceptance(db, sessionId, id)
+  )
+  journalInputOrder(initial).beginReconstruction()
+  const transition = persistJournalOutcomeRows(
+    db,
+    initial,
+    source,
+    rows,
+    undefined,
+    true,
+    (state) => {
+      journalInputOrder(state).restore(state)
+      journalInputOrder(state).finishReconstruction(state)
+    }
+  )
   advanceJournalOutcomeSource(db, sessionId, epoch, transition.state.lastSequence)
   return { adopt: transition.adopt }
 }
