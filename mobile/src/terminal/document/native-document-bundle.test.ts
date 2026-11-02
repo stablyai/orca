@@ -168,7 +168,12 @@ describe('the bundled native document', () => {
     window.dispatchEvent(
       new MessageEvent('message', { data: JSON.stringify({ type: 'ping', id: 9 }) })
     )
-    expect(posted).toContainEqual({ type: 'pong', pingId: 9 })
+    expect(posted).toContainEqual({
+      type: 'pong',
+      pingId: 9,
+      terminalAvailable: true,
+      cellBox: null
+    })
   })
 
   it('takes a theme and a write before init, and init is what decides they are stale', async () => {
@@ -205,7 +210,12 @@ describe('the bundled native document', () => {
     expect(written.join('')).toContain('replayed')
     expect(written.join('')).not.toContain('early chunk')
     post({ type: 'ping', id: 4 })
-    expect(posted).toContainEqual({ type: 'pong', pingId: 4 })
+    expect(posted).toContainEqual({
+      type: 'pong',
+      pingId: 4,
+      terminalAvailable: true,
+      cellBox: null
+    })
   })
 
   it('keeps the transport it installed, where the page installs none', () => {
@@ -226,7 +236,12 @@ describe('the bundled native document', () => {
       }
     })
     post({ type: 'ping', id: 7 })
-    expect(posted).toContainEqual({ type: 'pong', pingId: 7 })
+    expect(posted).toContainEqual({
+      type: 'pong',
+      pingId: 7,
+      terminalAvailable: true,
+      cellBox: null
+    })
 
     const host = document.createElement('div')
     host.innerHTML = TERMINAL_DOCUMENT_MARKUP

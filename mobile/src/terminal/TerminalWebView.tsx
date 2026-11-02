@@ -26,6 +26,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       clearEngineError,
       engineError,
       handle,
+      probeWebReady,
       receive,
       reportNativeEngineError,
       resetReadiness
@@ -55,9 +56,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     )
 
     const handleReload = useCallback(() => {
+      // Why: onLoadStart is not guaranteed for a reload; the dead document's readiness and queue
+      // must not survive into the next one either way.
+      resetReadiness()
       clearEngineError()
       webViewRef.current?.reload()
-    }, [clearEngineError])
+    }, [clearEngineError, resetReadiness])
 
     const handleContentProcessDidTerminate = useCallback(() => {
       // Content-process recovery must discard dead-document commands and prove new readiness before replay.
@@ -81,6 +85,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
           // Fix Android textZoom at 100 so OS font scaling cannot exceed xterm’s canvas-measured grid.
           textZoom={100}
           onLoadStart={resetReadiness}
+          // Why: web-ready is a one-shot bridge event that can land before the native message
+          // callback attaches; a post-load ping lets this document prove readiness again.
+          onLoadEnd={probeWebReady}
           onMessage={handleMessage}
           onError={(event) =>
             reportNativeEngineError(

@@ -1,4 +1,8 @@
-import { handleMsg, type TerminalHostMessage } from './host-message-router'
+import {
+  handleMsg,
+  replyToTerminalReadinessPing,
+  type TerminalHostMessage
+} from './host-message-router'
 import { notify, reportEngineError } from './host-notify'
 import { laidOutCellBox } from './laid-out-cell-box'
 import { prepareTerminal } from './terminal-init'
@@ -31,6 +35,8 @@ export function handleIncomingMessage(
 
 // Native receives events and may lack its engine script; embedded hosts call send and import the engine before startup.
 export function startMessageBridge(scope: TerminalDocumentScope) {
+  scope.webReadyReported = false
+  scope.pendingReadinessPingId = null
   scope.uninstallHostTransport = scope.installHostTransport((frame) =>
     handleIncomingMessage(scope, frame)
   )
@@ -44,7 +50,14 @@ export function startMessageBridge(scope: TerminalDocumentScope) {
         prepareTerminal(scope)
       }
       scope.reportedCellBox = laidOutCellBox(scope)
+      scope.webReadyReported = true
       notify(scope, { type: 'web-ready', cellBox: scope.reportedCellBox?.cellBox ?? null })
+      const pendingPingId = scope.pendingReadinessPingId
+      scope.pendingReadinessPingId = null
+      if (pendingPingId !== null) {
+        // Reply directly: the host-message deduper already accepted this ping before the font wait.
+        replyToTerminalReadinessPing(scope, pendingPingId)
+      }
     } else {
       reportEngineError(scope, 'terminal engine missing', 'xterm failed to load', true)
     }
@@ -125,6 +138,8 @@ function observeFontCompletion(loaded: Promise<FontFace[]>, completion: Terminal
 }
 
 export function stopMessageBridge(scope: TerminalDocumentScope) {
+  scope.webReadyReported = false
+  scope.pendingReadinessPingId = null
   scope.cancelFontReadiness?.()
   scope.cancelFontReadiness = null
   if (scope.uninstallHostTransport) {

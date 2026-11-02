@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import { createTerminalDocumentScope } from './document-scope'
-import { startMessageBridge, stopMessageBridge } from './message-bridge'
+import { handleIncomingMessage, startMessageBridge, stopMessageBridge } from './message-bridge'
 import { startTerminalDocument } from './create-terminal-document'
 import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html/document-markup'
 
@@ -38,6 +38,50 @@ function pendingFonts() {
 }
 
 describe('the terminal waits for its bundled glyphs', () => {
+  it.each(['loaded', 'deadline', 'failed'] as const)(
+    'answers a pending ping after %s even when web-ready is dropped',
+    async (completion) => {
+      vi.useFakeTimers()
+      const fonts = pendingFonts()
+      const delivered = vi.fn()
+      fonts.scope.postToHost = (message) => {
+        if (message.type !== 'web-ready') {
+          delivered(message)
+        }
+      }
+      const ready = startMessageBridge(fonts.scope)
+      handleIncomingMessage(fonts.scope, { type: 'ping', id: 1 })
+      expect(delivered).toHaveBeenLastCalledWith({
+        type: 'pong',
+        pingId: 1,
+        terminalAvailable: false,
+        cellBox: null
+      })
+      if (completion === 'loaded') {
+        fonts.finish()
+      } else if (completion === 'failed') {
+        fonts.fail()
+      } else {
+        await vi.advanceTimersByTimeAsync(2000)
+      }
+      await ready
+      expect(delivered).toHaveBeenLastCalledWith({
+        type: 'pong',
+        pingId: 1,
+        terminalAvailable: true,
+        cellBox: null
+      })
+      handleIncomingMessage(fonts.scope, { type: 'ping', id: 2 })
+      expect(delivered).toHaveBeenLastCalledWith({
+        type: 'pong',
+        pingId: 2,
+        terminalAvailable: true,
+        cellBox: null
+      })
+      stopMessageBridge(fonts.scope)
+    }
+  )
+
   it('starts once by the deadline if font loading never settles', async () => {
     vi.useFakeTimers()
     const fonts = pendingFonts()
