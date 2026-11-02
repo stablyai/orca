@@ -183,6 +183,7 @@ patchedDependencies:
   '@xterm/addon-webgl@0.20.0-beta.329': 3ee97834cfea40170579a67787eca5795747dde9e7580400ed124a4061027f45
   '@xterm/xterm@6.1.0-beta.336': 492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
+  jsonc-parser@3.3.1: 48ed22c11fbe0143d48acf61cff56885ebfb7f07237742bb84dd61ea8864f8e1
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
   node-pty@1.1.0: 37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5
@@ -232,7 +233,7 @@ importers:
         version: 26.5.11(typescript@7.0.2)
       jsonc-parser:
         specifier: ^3.3.1
-        version: 3.3.1
+        version: 3.3.1(patch_hash=48ed22c11fbe0143d48acf61cff56885ebfb7f07237742bb84dd61ea8864f8e1)
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0(patch_hash=37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5)
@@ -10220,7 +10221,7 @@ snapshots:
     dependencies:
       commander: 14.0.3
       ignore: 7.0.5
-      jsonc-parser: 3.3.1
+      jsonc-parser: 3.3.1(patch_hash=48ed22c11fbe0143d48acf61cff56885ebfb7f07237742bb84dd61ea8864f8e1)
       ora: 9.4.0
       package-manager-detector: 1.6.0
       picocolors: 1.1.1
@@ -12768,7 +12769,7 @@ snapshots:
       i18next-resources-for-ts: 2.1.1
       inquirer: 14.2.2(@types/node@24.19.2)
       jiti: 2.7.0
-      jsonc-parser: 3.3.1
+      jsonc-parser: 3.3.1(patch_hash=48ed22c11fbe0143d48acf61cff56885ebfb7f07237742bb84dd61ea8864f8e1)
       magic-string: 1.4.2
       minimatch: 10.2.6
       ora: 9.4.1
@@ -12944,7 +12945,7 @@ snapshots:
 
   json5@2.2.3: {}
 
-  jsonc-parser@3.3.1: {}
+  jsonc-parser@3.3.1(patch_hash=48ed22c11fbe0143d48acf61cff56885ebfb7f07237742bb84dd61ea8864f8e1): {}
 
   jsonfile@4.0.0:
     optionalDependencies:

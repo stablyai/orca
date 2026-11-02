@@ -1,0 +1,83 @@
+# Array removal: https://github.com/microsoft/node-jsonc-parser/pull/120
+# Drop when Orca adopts a jsonc-parser release containing upstream #120;
+# recheck the object-branch hunk then. The only-property trailing-comma
+# scan is not upstream and must be carried forward if still needed.
+diff --git a/lib/esm/impl/edit.js b/lib/esm/impl/edit.js
+--- a/lib/esm/impl/edit.js
++++ b/lib/esm/impl/edit.js
+@@ -5,6 +5,7 @@
+ 'use strict';
+ import { format, isEOL } from './format';
+ import { parseTree, findNodeAtLocation } from './parser';
++import { createScanner } from './scanner';
+ export function removeProperty(text, path, options) {
+     return setProperty(text, path, void 0, options);
+ }
+@@ -57,6 +58,14 @@
+                         // remove the comma of the next node
+                         let next = parent.children[1];
+                         removeEnd = next.offset;
++                    }
++                    else {
++                        // remove the trailing comma of the only node
++                        const scanner = createScanner(text, true);
++                        scanner.setPosition(removeEnd);
++                        if (scanner.scan() === 5 /* SyntaxKind.CommaToken */) {
++                            removeEnd = scanner.getPosition();
++                        }
+                     }
+                 }
+                 return withFormatting(text, { offset: removeBegin, length: removeEnd - removeBegin, content: '' }, options);
+@@ -115,7 +124,7 @@
+                 let previous = parent.children[removalIndex - 1];
+                 let offset = previous.offset + previous.length;
+                 let parentEndOffset = parent.offset + parent.length;
+-                edit = { offset, length: parentEndOffset - 2 - offset, content: '' };
++                edit = { offset, length: parentEndOffset - 1 - offset, content: '' };
+             }
+             else {
+                 edit = { offset: toRemove.offset, length: parent.children[removalIndex + 1].offset - toRemove.offset, content: '' };
+diff --git a/lib/umd/impl/edit.js b/lib/umd/impl/edit.js
+--- a/lib/umd/impl/edit.js
++++ b/lib/umd/impl/edit.js
+@@ -4,7 +4,7 @@
+         if (v !== undefined) module.exports = v;
+     }
+     else if (typeof define === "function" && define.amd) {
+-        define(["require", "exports", "./format", "./parser"], factory);
++        define(["require", "exports", "./format", "./parser", "./scanner"], factory);
+     }
+ })(function (require, exports) {
+     /*---------------------------------------------------------------------------------------------
+@@ -16,6 +16,7 @@
+     exports.isWS = exports.applyEdit = exports.setProperty = exports.removeProperty = void 0;
+     const format_1 = require("./format");
+     const parser_1 = require("./parser");
++    const scanner_1 = require("./scanner");
+     function removeProperty(text, path, options) {
+         return setProperty(text, path, void 0, options);
+     }
+@@ -70,6 +71,14 @@
+                             let next = parent.children[1];
+                             removeEnd = next.offset;
+                         }
++                        else {
++                            // remove the trailing comma of the only node
++                            const scanner = (0, scanner_1.createScanner)(text, true);
++                            scanner.setPosition(removeEnd);
++                            if (scanner.scan() === 5 /* SyntaxKind.CommaToken */) {
++                                removeEnd = scanner.getPosition();
++                            }
++                        }
+                     }
+                     return withFormatting(text, { offset: removeBegin, length: removeEnd - removeBegin, content: '' }, options);
+                 }
+@@ -127,7 +136,7 @@
+                     let previous = parent.children[removalIndex - 1];
+                     let offset = previous.offset + previous.length;
+                     let parentEndOffset = parent.offset + parent.length;
+-                    edit = { offset, length: parentEndOffset - 2 - offset, content: '' };
++                    edit = { offset, length: parentEndOffset - 1 - offset, content: '' };
+                 }
+                 else {
+                     edit = { offset: toRemove.offset, length: parent.children[removalIndex + 1].offset - toRemove.offset, content: '' };

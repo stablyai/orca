@@ -127,6 +127,7 @@ patchedDependencies:
   '@xterm/xterm@6.1.0-beta.336': config/patches/@xterm__xterm@6.1.0-beta.336.patch
   lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch
   '@vscode/windows-process-tree@0.8.0': config/patches/@vscode__windows-process-tree@0.8.0.patch
+  jsonc-parser@3.3.1: config/patches/jsonc-parser@3.3.1.patch
   i18next-cli@1.74.2: config/patches/i18next-cli@1.74.2.patch
   ws@8.22.0: config/patches/ws@8.22.0.patch
   oxlint-plugin-anti-slop@0.1.2: config/patches/oxlint-plugin-anti-slop@0.1.2.patch
