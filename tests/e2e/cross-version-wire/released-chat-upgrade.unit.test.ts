@@ -169,11 +169,16 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
 
         const database = openTestJournalHostDatabase(directory)
         const rows = liveTestJournalRows(database.db, identity.sessionId)
-        expect(rows.filter((row) => !parseJournalRow(row.rowJson).ok)).toEqual([])
+        // Releases with outcome storage close their rows with a marker only the outcome reader
+        // admits; restoreJournal below checks it.
+        const kindOf = (row: JournalStoredRow): unknown => JSON.parse(row.rowJson).kind
+        expect(
+          rows.filter((row) => kindOf(row) !== 'outcomes' && !parseJournalRow(row.rowJson).ok)
+        ).toEqual([])
         // Anti-vacuous: the release wrote every row kind a chat holds (cards in their own table
         // before they moved into the rows).
-        const kinds = new Set(rows.map((row) => JSON.parse(row.rowJson).kind))
-        expect([...kinds].filter((kind) => kind !== 'queue').sort()).toEqual(
+        const kinds = new Set(rows.map(kindOf))
+        expect([...kinds].filter((kind) => kind !== 'queue' && kind !== 'outcomes').sort()).toEqual(
           ['dispatch', 'epoch', 'item', 'lifecycle-batch', 'submission', 'tombstone'].sort()
         )
         expect(kinds.has('queue')).toBe(build !== 'the oldest release with this chat database')
