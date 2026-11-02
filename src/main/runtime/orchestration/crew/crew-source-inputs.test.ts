@@ -57,14 +57,20 @@ it('refreshes every overlapping alias mailbox while retaining unrelated reads, t
   const f = fixture()
   const worker = f.assign('term_worker')
   const runAddress = `run:${f.run.id}`
-  const send = (to: string, body: string) =>
-    f.db.insertMessage({
+  const now = Date.parse('2026-11-02T12:00:00.000Z')
+  const send = (to: string, body: string) => {
+    const message = f.db.insertMessage({
       runId: f.run.id,
       from: 'term_worker',
       to,
       subject: 'Update',
       body
     })
+    f.db.db
+      .prepare('UPDATE messages SET created_at = ? WHERE id = ?')
+      .run(new Date(now).toISOString(), message.id)
+    return message
+  }
   const ask = (to: string, question: string) =>
     f.db.createQuestion({
       runId: f.run.id,
@@ -79,7 +85,6 @@ it('refreshes every overlapping alias mailbox while retaining unrelated reads, t
   const selected = ['term_coord', runAddress]
   const overlapping = [runAddress]
   const unrelated = ['term_peer', 'term_helper']
-  const now = Date.now()
   for (const aliases of [selected, overlapping, unrelated]) {
     source.traffic(aliases, now)
     source.questions(aliases)

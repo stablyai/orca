@@ -206,4 +206,4 @@ it('reports finite production-seam costs at installed scale with separate clean 
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
   }
   console.info(`CREW_RUNTIME_COST ${JSON.stringify(report)}`)
-}, 120_000)
+})
