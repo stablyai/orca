@@ -1,4 +1,4 @@
-import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** Structured workers have no PTY; register their bearer handle, pane key and host scope as orchestration authority.
  * Random handles and leaves prevent session ids exposed in tab ids from yielding caller-supplied keys that read/consume worker mail. */
 

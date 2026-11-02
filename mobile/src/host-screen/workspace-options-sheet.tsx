@@ -9,7 +9,7 @@ import {
   OptionPager,
   useOptionPager,
   type OptionPagerControls
-} from '../components/BottomDrawer'
+} from '../components/bottom-drawer/BottomDrawer'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import {

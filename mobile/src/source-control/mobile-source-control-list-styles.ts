@@ -11,13 +11,21 @@ export const listStyles = themedStyleSheet(() => ({
   sectionHeaderBleed: {
     marginHorizontal: -spacing.lg
   },
-  branchCompareBlock: {
-    paddingBottom: spacing.sm
+  sectionAction: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600'
   },
-  branchSectionSubtitle: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    paddingBottom: spacing.xs
+  sectionActions: {
+    flexDirection: 'row',
+    gap: spacing.lg
+  },
+  sectionActionPressed: {
+    opacity: 0.6
+  },
+  sectionMeta: {
+    color: colors.textSecondary,
+    fontSize: 13
   },
   branchStateRow: {
     minHeight: 44,
@@ -34,20 +42,19 @@ export const listStyles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     lineHeight: 18
   },
+  // Opaque so a left swipe uncovers Discard only as the row slides.
   fileRow: {
     minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
+    backgroundColor: colors.bgBase,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
   },
   fileRowPressed: {
     backgroundColor: colors.bgPanel
-  },
-  fileRowDisabled: {
-    opacity: 0.78
   },
   fileRowUnavailable: {
     opacity: 0.72
@@ -66,22 +73,18 @@ export const listStyles = themedStyleSheet(() => ({
     flex: 1,
     minWidth: 0
   },
-  filePath: {
+  fileName: {
     color: colors.textPrimary,
     fontSize: typography.bodySize
   },
-  filePathDisabled: {
-    color: colors.textSecondary
+  fileNameGone: {
+    color: colors.textSecondary,
+    textDecorationLine: 'line-through'
   },
   fileMeta: {
     color: colors.textMuted,
     fontSize: typography.metaSize,
     marginTop: 2
-  },
-  rowActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
   },
   iconButton: {
     width: 32,
@@ -89,6 +92,23 @@ export const listStyles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  // Behind the row's right end; the row slides left to uncover it.
+  discardAction: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    backgroundColor: colors.statusRed
+  },
+  discardActionText: {
+    color: colors.onStatusRed,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   },
   conflictActions: {
     flexDirection: 'row',

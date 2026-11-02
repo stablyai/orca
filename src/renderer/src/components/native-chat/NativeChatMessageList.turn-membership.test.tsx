@@ -37,7 +37,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 

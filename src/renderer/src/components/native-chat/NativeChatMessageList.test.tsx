@@ -41,7 +41,7 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 
 {
   const session: NativeChatLiveSession = {

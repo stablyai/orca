@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitMerge, GitPullRequest, type LucideIcon } from 'lucide-react-native'
+import { GitMerge, GitPullRequest, Sparkles, type LucideIcon } from 'lucide-react-native'
 import { colors, feedback, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -7,19 +7,33 @@ import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-
 import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-request-merge-state'
 import { MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY } from '../../../../src/shared/source-control-runtime-capabilities'
 import { useRouteCapability } from '../../transport/use-workspace-client'
+import { buildResolveConflictsPrompt } from '../../session/pr-ai-triage-prompt'
+import { useMobileLaunchAgentLabel } from '../../session/use-mobile-launch-agent-label'
+import { useHostProtocolGates } from '../host-protocol-gates-context'
+import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { presentPrMerge } from './pr-actions-state'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 import { prTabStyles as styles } from './pr-tab-styles'
 
 type Tone = 'primary' | 'merge' | 'secondary'
 
-// The PR tab's foot: the diff-review dock always shows it, the hub only while its bar is on a local step.
+// The diff-review dock's bottom action; in the hub the next-step bar is the one bottom action instead.
 export function PrTabBottomAction({ tab, bottomInset }: { tab: MobilePrTab; bottomInset: number }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { state, actions } = tab
   const canMarkReady = useRouteCapability(MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY)
   const footerStyle = [styles.footer, { paddingBottom: Math.max(bottomInset, 12) }]
+  const conflicting =
+    state.kind === 'ready' && resolveGitHubPRMergeState(state.data.pr).kind === 'conflicts'
+  const { hostCapabilities } = useHostProtocolGates()
+  const agent = useMobileLaunchAgentLabel({
+    client: tab.client,
+    worktreeId: tab.worktreeId,
+    hostCapabilities,
+    actionId: 'resolveConflicts',
+    enabled: conflicting
+  })
 
   if (state.kind === 'none') {
     return (
@@ -82,6 +96,42 @@ export function PrTabBottomAction({ tab, bottomInset }: { tab: MobilePrTab; bott
   const merge = presentPrMerge(effective, defaultMethod)
   const decision = resolveGitHubPRMergeState(effective)
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
+  // The dock has no bar, so conflicts get the bar's own fix here, named by the button rather than a reason line.
+  if (decision.kind === 'conflicts') {
+    const notice = tab.triage.noticeFor('resolve-conflicts')
+    return (
+      <View style={footerStyle}>
+        {errorLine}
+        <AgentLaunchNotice
+          availability={tab.triage.availability}
+          success={notice.success}
+          error={notice.error}
+          warning={notice.warning}
+          undeliveredPrompt={notice.undeliveredPrompt}
+          errorStyle={styles.errorText}
+        />
+        <ActionButton
+          tone="primary"
+          icon={Sparkles}
+          label={t('sourceControl.nextStep.resolveWithAgent', 'Resolve with {{agent}}', {
+            agent: agent ?? t('sourceControl.nextStep.genericAgent', 'AI')
+          })}
+          onPress={() =>
+            void tab.triage.launch('resolve-conflicts', () =>
+              buildResolveConflictsPrompt({
+                prNumber: pr.number,
+                baseRef: pr.conflictSummary?.baseRef ?? pr.baseRefName ?? null,
+                files: pr.conflictSummary?.files ?? [],
+                worktreeId: tab.worktreeId
+              })
+            )
+          }
+          busy={tab.triage.isBusy('resolve-conflicts')}
+          disabled={tab.triage.availability !== 'available'}
+        />
+      </View>
+    )
+  }
   const reason = merge.hint ? (
     <Text style={styles.reason}>
       <Text style={styles.reasonStrong}>
