@@ -5,6 +5,7 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 const WT = 'repo::/srv/project'
 const ENV = 'env-1'
 const T1 = toWebTerminalSurfaceTabId('host-tab-1')
+const T2 = toWebTerminalSurfaceTabId('host-tab-2')
 
 type MockStore = {
   state: Record<string, unknown>

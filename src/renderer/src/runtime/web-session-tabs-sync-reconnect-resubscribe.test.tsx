@@ -28,7 +28,7 @@ import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
-import './use-runtime-session-mirror-environment-key'
+import { buildRuntimeSessionMirrorEnvironmentKeys } from './use-runtime-session-mirror-environment-key'
 import { publicRuntimeEnvironment } from './paired-runtime-environment-test-fixture'
 
 const ENV_A = 'env-a'
@@ -91,6 +91,22 @@ function makeStatus(runtimeId: string): RuntimeStatus {
     liveTabCount: 0,
     liveLeafCount: 0
   }
+}
+
+/** The dependencies the mirror-subscription effects actually read, rebuilt from current state. */
+function mirrorKeys(): ReturnType<typeof buildRuntimeSessionMirrorEnvironmentKeys> {
+  const state = useAppStore.getState()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder takes the whole app state; only the fields below reach the mirror-target scan.
+  return buildRuntimeSessionMirrorEnvironmentKeys({
+    activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId ?? null,
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    projectGroups: state.projectGroups,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId
+  } as Parameters<typeof buildRuntimeSessionMirrorEnvironmentKeys>[0])
 }
 
 /** Connect, then lose contact over a still-ready transport: the stream ends, the probe cannot ask. */
