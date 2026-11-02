@@ -15,7 +15,8 @@ export function SmartWorkspaceSourceResultList({
   isLinked,
   beforeResults,
   emptyHint,
-  isRowDisabled
+  isRowDisabled,
+  focusBehavior
 }: {
   model: Pick<
     WorkItemSourceSearch,
@@ -40,6 +41,7 @@ export function SmartWorkspaceSourceResultList({
   beforeResults?: React.ReactNode
   emptyHint?: string
   isRowDisabled?: (row: RowEntry) => boolean
+  focusBehavior?: 'page'
 }): React.JSX.Element {
   const {
     mode,
@@ -83,7 +85,10 @@ export function SmartWorkspaceSourceResultList({
           ))}
         </div>
       ) : null}
-      <CommandList className="!max-h-none min-h-0 flex-1 scrollbar-sleek">
+      <CommandList
+        className="!max-h-none min-h-0 flex-1 scrollbar-sleek"
+        data-focus-behavior={focusBehavior}
+      >
         {beforeResults}
         {typedTextActionRow ? (
           <div
