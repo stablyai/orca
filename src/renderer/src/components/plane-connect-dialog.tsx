@@ -137,10 +137,13 @@ export function PlaneConnectDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Lock className="size-4 text-muted-foreground" aria-hidden="true" />
-            Connect Plane
+            {translate('auto.components.plane.connect.dialog.title', 'Connect Plane')}
           </DialogTitle>
           <DialogDescription id="plane-connect-dialog-description">
-            Connect your Plane workspace to browse issues and open worktrees with ticket context.
+            {translate(
+              'auto.components.plane.connect.dialog.description',
+              'Connect your Plane workspace to browse issues and open worktrees with ticket context.'
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -152,7 +155,9 @@ export function PlaneConnectDialog({
           }}
         >
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-muted-foreground">Deployment Type</Label>
+            <Label className="text-xs font-medium text-muted-foreground">
+              {translate('auto.components.plane.connect.dialog.deploymentType', 'Deployment Type')}
+            </Label>
             <ToggleGroup
               type="single"
               value={instanceType}
@@ -163,13 +168,13 @@ export function PlaneConnectDialog({
                 value="cloud"
                 className="h-8 text-xs font-medium data-[state=on]:bg-background data-[state=on]:shadow-sm"
               >
-                Plane Cloud
+                {translate('auto.components.plane.connect.dialog.planeCloud', 'Plane Cloud')}
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="self_hosted"
                 className="h-8 text-xs font-medium data-[state=on]:bg-background data-[state=on]:shadow-sm"
               >
-                Self-Hosted
+                {translate('auto.components.plane.connect.dialog.selfHosted', 'Self-Hosted')}
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -177,7 +182,7 @@ export function PlaneConnectDialog({
           {!isCloud && (
             <div className="space-y-1.5">
               <Label htmlFor={instanceUrlId} className="text-xs font-medium">
-                Instance URL
+                {translate('auto.components.plane.connect.dialog.instanceUrl', 'Instance URL')}
               </Label>
               <Input
                 id={instanceUrlId}
@@ -187,7 +192,10 @@ export function PlaneConnectDialog({
                   setInstanceUrl(e.target.value)
                   clearErrorOnEdit()
                 }}
-                placeholder="https://plane.yourcompany.com"
+                placeholder={translate(
+                  'auto.components.plane.connect.dialog.instanceUrlPlaceholder',
+                  'https://plane.yourcompany.com'
+                )}
                 disabled={connectState === 'connecting'}
                 autoComplete="off"
                 spellCheck={false}
@@ -198,7 +206,10 @@ export function PlaneConnectDialog({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor={tokenId} className="text-xs font-medium">
-                Personal API Token
+                {translate(
+                  'auto.components.plane.connect.dialog.personalApiToken',
+                  'Personal API Token'
+                )}
               </Label>
               <a
                 href={apiTokensUrl}
@@ -206,7 +217,10 @@ export function PlaneConnectDialog({
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
               >
-                Create API Token
+                {translate(
+                  'auto.components.plane.connect.dialog.createApiToken',
+                  'Create API Token'
+                )}
                 <ExternalLink className="size-3" />
               </a>
             </div>
@@ -218,7 +232,10 @@ export function PlaneConnectDialog({
                 setApiToken(e.target.value)
                 clearErrorOnEdit()
               }}
-              placeholder="plane_api_..."
+              placeholder={translate(
+                'auto.components.plane.connect.dialog.apiTokenPlaceholder',
+                'plane_api_...'
+              )}
               disabled={connectState === 'connecting'}
               autoComplete="off"
               spellCheck={false}
@@ -248,10 +265,10 @@ export function PlaneConnectDialog({
               {connectState === 'connecting' ? (
                 <>
                   <LoaderCircle className="mr-2 size-4 animate-spin" />
-                  Connecting...
+                  {translate('auto.components.plane.connect.dialog.connecting', 'Connecting...')}
                 </>
               ) : (
-                'Connect'
+                translate('common.connect', 'Connect')
               )}
             </Button>
           </DialogFooter>

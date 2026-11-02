@@ -113,12 +113,7 @@ export function PlaneIntegrationCard(): React.JSX.Element {
             {translate('common.disconnect', 'Disconnect')}
           </Button>
         ) : (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setDialogOpen(true)}
-            disabled={checking}
-          >
+          <Button type="button" size="sm" onClick={() => setDialogOpen(true)} disabled={checking}>
             {translate('common.connect', 'Connect')}
           </Button>
         )
@@ -135,7 +130,10 @@ export function PlaneIntegrationCard(): React.JSX.Element {
                   </span>
                 )}
                 <span className="text-muted-foreground">
-                  ({planeStatus.instanceUrl || 'Plane Cloud'})
+                  (
+                  {planeStatus.instanceUrl ||
+                    translate('auto.components.settings.plane.cloud', 'Plane Cloud')}
+                  )
                 </span>
               </div>
               <Button

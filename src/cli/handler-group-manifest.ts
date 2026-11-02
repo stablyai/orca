@@ -271,7 +271,6 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/managed-server.js')).MANAGED_SERVER_HANDLERS
   },
   {
-  {
     name: 'plane',
     keys: [
       'plane status',
@@ -291,6 +290,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('./handlers/plane.js')).PLANE_HANDLERS
   },
+  {
     name: 'vm',
     keys: ['vm recipe doctor'],
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS
