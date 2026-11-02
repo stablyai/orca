@@ -2,10 +2,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
-import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import { repairTranslatedValue } from './locale-catalog/locale-translation-policy.mjs'
 
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
-const SUPPORTED_LOCALES = new Set(['de', 'es', 'fr', 'ja', 'ko', 'ru', 'zh'])
+const SUPPORTED_LOCALES = new Set(['de', 'es', 'fr', 'ja', 'ko', 'pt', 'ru', 'tr', 'zh', 'zh-Hant'])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 
 function placeholders(value) {

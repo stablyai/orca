@@ -17,7 +17,7 @@ export type StructuredAgentSessionViewArgs = {
   launch?: StructuredAgentSessionLaunchView
   /** Composer destination for preserved text from queued-card edits. */
   composerScopeKey?: string
-  /** The chat-wide "queue follow-ups" setting; off keeps mid-turn sends immediate. */
+  /** The chat-wide follow-up setting is Queue; otherwise mid-turn sends steer. */
   queueFollowUps?: boolean
   /** The host says a person's Stop is still ending this session's work. */
   hostStopping?: boolean

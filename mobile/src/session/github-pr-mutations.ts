@@ -1,12 +1,12 @@
 import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
 import {
   githubPrAutoMergeSet,
+  githubPrBodySet,
   githubPrChecksRerun,
   githubPrIssueCommentAdd,
   githubPrIssueCommentDelete,
   githubPrIssueCommentEdit,
   githubPrMergeRun,
-  githubPrReadyForReviewMark,
   githubPrReviewCommentReplyAdd,
   githubPrReviewersRemove,
   githubPrReviewersRequest,
@@ -25,6 +25,7 @@ import {
   type GitHubPrRepoSlug
 } from './github-pr-repo-slug'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { translate } from '../i18n/mobile-i18n'
 
 export type { GitHubPrMutationOutcome } from './github-pr-mutation-outcome'
 
@@ -62,7 +63,22 @@ export function fetchUpdatePRTitle(
           prRepo: args.prRepo
         })
       ),
-    'Failed to update title.'
+    translate('session.githubPrMutations.titleUpdateFailed', 'Failed to update title.')
+  )
+}
+
+export function fetchUpdatePRBody(
+  client: RpcOperationSender,
+  worktreeId: string,
+  args: { prNumber: number; body: string; prRepo?: GitHubPrRepoSlug | null }
+): Promise<GitHubPrMutationOutcome> {
+  const params = { prNumber: args.prNumber, updates: { body: args.body } }
+  const method = githubPrBodySet.operation.method
+  return settleGithubPrMutation(githubPrBodySet, () =>
+    githubPrBodySet.request(
+      client,
+      githubPrRequestParams(method, worktreeId, params, { prRepo: args.prRepo })
+    )
   )
 }
 
@@ -102,24 +118,6 @@ export function fetchUpdatePRState(
         githubPrStateSet.operation.method,
         worktreeId,
         { prNumber: args.prNumber, updates: { state: args.state } },
-        { prRepo: args.prRepo }
-      )
-    )
-  )
-}
-
-export function fetchMarkPRReadyForReview(
-  client: RpcOperationSender,
-  worktreeId: string,
-  args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null }
-): Promise<GitHubPrMutationOutcome> {
-  return settleGithubPrMutation(githubPrReadyForReviewMark, () =>
-    githubPrReadyForReviewMark.request(
-      client,
-      githubPrRequestParams(
-        githubPrReadyForReviewMark.operation.method,
-        worktreeId,
-        { prNumber: args.prNumber },
         { prRepo: args.prRepo }
       )
     )
@@ -264,7 +262,10 @@ export function fetchResolveReviewThread(
           { prRepo: args.prRepo }
         )
       ),
-    'Failed to update review thread.'
+    translate(
+      'session.githubPrMutations.reviewThreadUpdateFailed',
+      'Failed to update review thread.'
+    )
   )
 }
 

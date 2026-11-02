@@ -3,7 +3,7 @@
 import {
   readAgentSessionRequestTimeout,
   type AgentSessionRequestTimeout
-} from '../../shared/agent-session-request-timeout'
+} from '../../shared/agent-session/agent-session-request-timeout'
 import { findInErrorChain } from './provider-error-chain'
 
 export function withProviderRequestTimeout<TError extends Error>(

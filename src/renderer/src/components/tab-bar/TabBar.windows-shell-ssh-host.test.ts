@@ -24,6 +24,7 @@ import {
 } from './tab-bar-windows-shell-launch-test-harness'
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 vi.mock('@dnd-kit/sortable', () => stubSortableContext())
@@ -67,6 +68,9 @@ describe('TabBar PowerShell launch wiring', () => {
       hostPlatform: 'win32'
     })
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         preflight: {
           detectRemoteWindowsTerminalCapabilities
@@ -138,6 +142,9 @@ describe('TabBar PowerShell launch wiring', () => {
       hostPlatform: 'linux'
     })
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         preflight: {
           detectRemoteWindowsTerminalCapabilities

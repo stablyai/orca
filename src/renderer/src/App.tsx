@@ -29,6 +29,7 @@ import { useAppShellServices } from './app-shell/use-app-shell-services'
 import { useAppStartupHydration } from './app-shell/use-app-startup-hydration'
 import { startNativeChatDraftLoad } from './app-shell/native-chat-draft-startup'
 import { runWslMoveRendererStoreRewrites } from './lib/wsl-move-renderer-store-rewrites'
+import { runWslDriveUncRendererStoreRewrites } from './lib/wsl-drive-unc-renderer-store-rewrites'
 import { useDocumentAppearance } from './app-shell/use-document-appearance'
 import { useFloatingWorkspacePanel } from './app-shell/use-floating-workspace-panel'
 import { useGlobalKeybindings } from './app-shell/use-global-keybindings'
@@ -38,6 +39,7 @@ import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
+import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
 
 function App(): React.JSX.Element {
@@ -51,6 +53,8 @@ function App(): React.JSX.Element {
   useEffect(startNativeChatDraftLoad, [])
   // Committed WSL moves only: the list is empty otherwise, and always with the internal gate closed.
   useEffect(() => void runWslMoveRendererStoreRewrites(), [])
+  // A Windows-drive conversion's own stores, after the restart that converted the project.
+  useEffect(() => void runWslDriveUncRendererStoreRewrites(), [])
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
   useRuntimeGraphSync()
@@ -117,6 +121,7 @@ function App(): React.JSX.Element {
           document.body
         )}
         <PlainSshTerminalPanels />
+        <PluginShotReplayMount />
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />

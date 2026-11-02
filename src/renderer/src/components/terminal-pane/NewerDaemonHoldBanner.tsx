@@ -59,7 +59,8 @@ export function NewerDaemonHoldBanner({
                   'terminal.newerDaemonBanner.reopenTerminal',
                   'Reopen {{count}} terminals',
                   {
-                    count: hold.heldCount
+                    count: hold.heldCount,
+                    defaultValue_one: 'Reopen terminal'
                   }
                 )}
         </Button>

@@ -6,7 +6,9 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
 import CacheTimer from './CacheTimer'
 import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
-import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
+import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
+import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
+import { conflictOperationLabel } from './WorktreeCardHelpers'
 import { TruncatedSidebarLabel } from './truncated-sidebar-label'
 import { getDirectoryName } from './worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
@@ -43,6 +45,9 @@ export function WorktreeCardMetaRow({
     showMetaRowDetails,
     detailsAndPorts
   } = presentation
+  const wslDistro = useWslHostDistro(
+    showHostContextBadge ? getWorktreeExecutionHostId(worktree, repo) : null
+  )
 
   return (
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
@@ -57,7 +62,12 @@ export function WorktreeCardMetaRow({
           </div>
         )}
 
-        {showHostContextBadge && <WorktreeHostContextBadge label={contextLabel ?? ''} />}
+        {showHostContextBadge &&
+          (wslDistro ? (
+            <WslHostMark distro={wslDistro} />
+          ) : (
+            <WorktreeHostContextBadge label={contextLabel ?? ''} />
+          ))}
 
         {showIdentityInNewCard ? (
           <TruncatedSidebarLabel
@@ -94,7 +104,7 @@ export function WorktreeCardMetaRow({
             className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
           >
             <GitMerge className="size-2.5" />
-            {CONFLICT_OPERATION_LABELS[conflictOperation]}
+            {conflictOperationLabel(conflictOperation)}
           </Badge>
         )}
 

@@ -12,7 +12,11 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { installAutomationHostDiagnostic } from './components/automations/automation-host-diagnostics'
-import { applyDocumentTheme } from './lib/document-theme'
+import {
+  applyCachedPluginAppTheme,
+  applyDocumentTheme,
+  readCachedPluginAppTheme
+} from './lib/document-theme'
 import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
 import { installAppKeyboardRouter } from './lib/app-keyboard-router'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
@@ -26,6 +30,7 @@ import { registerBrowserClientPageGuestMessageHandler } from './components/brows
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { applyWindowMaterialToDocument } from './lib/window-material-runtime'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -48,7 +53,12 @@ if (
   void import('react-grab/styles.css')
 }
 
-applyDocumentTheme('system', { disableTransitions: false })
+applyWindowMaterialToDocument()
+const cachedPluginTheme = readCachedPluginAppTheme()
+applyDocumentTheme(cachedPluginTheme?.base ?? 'system', { disableTransitions: false })
+if (cachedPluginTheme) {
+  applyCachedPluginAppTheme(cachedPluginTheme)
+}
 registerBrowserClientPageGuestMessageHandler(handleGuestWindowCloseMessage)
 const browserClientPageRenderer = installBrowserClientPageRenderer()
 import.meta.hot?.dispose(() => browserClientPageRenderer?.dispose())

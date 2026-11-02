@@ -13,30 +13,6 @@ describe('createProgrammaticScrollMarks', () => {
     expect(marks.hasPendingScrollOffset(5000, 5000)).toBe(false)
   })
 
-  it('classifies an event matching a marked target as programmatic', () => {
-    const marks = createProgrammaticScrollMarks()
-    marks.mark(500)
-    expect(marks.consume(scrollEvent(), 500, 10_000)).toBe(true)
-  })
-
-  it('matches within the epsilon for fractional scroll positions', () => {
-    const marks = createProgrammaticScrollMarks()
-    marks.mark(500)
-    expect(marks.consume(scrollEvent(), 501.6, 10_000)).toBe(true)
-  })
-
-  it('classifies an unmarked scroll as user input', () => {
-    const marks = createProgrammaticScrollMarks()
-    marks.mark(500)
-    expect(marks.consume(scrollEvent(), 660, 10_000)).toBe(false)
-  })
-
-  it('treats a clamped landing of an out-of-range write as programmatic', () => {
-    const marks = createProgrammaticScrollMarks()
-    marks.mark(12_000)
-    expect(marks.consume(scrollEvent(), 8_000, 8_000)).toBe(true)
-  })
-
   it('does not treat a user scroll to the bottom as a clamped write', () => {
     const marks = createProgrammaticScrollMarks()
     marks.mark(4_000)

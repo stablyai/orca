@@ -12,6 +12,7 @@ import {
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM,
   UI_LANGUAGE_TURKISH,
+  UI_LANGUAGE_NATIVE_NAMES,
   type BuiltInUiLanguage,
   type UiLanguage
 } from '../../../shared/ui-language'
@@ -43,26 +44,11 @@ export const UI_LANGUAGE_CHOICES: UiLanguageChoice[] = [
   { value: UI_LANGUAGE_GERMAN, labelKey: 'settings.appearance.language.german' }
 ]
 
-const UI_LANGUAGE_CHOICE_FALLBACKS: Record<BuiltInUiLanguage, string> = {
-  [UI_LANGUAGE_SYSTEM]: 'System',
-  [UI_LANGUAGE_ENGLISH]: 'English',
-  [UI_LANGUAGE_CHINESE]: '中文（简体）',
-  [UI_LANGUAGE_CHINESE_TRADITIONAL]: '繁體中文（台灣）',
-  [UI_LANGUAGE_KOREAN]: '한국어',
-  [UI_LANGUAGE_JAPANESE]: '日本語',
-  [UI_LANGUAGE_SPANISH]: 'Español',
-  [UI_LANGUAGE_FRENCH]: 'Français',
-  [UI_LANGUAGE_PORTUGUESE]: 'Português (Brasil)',
-  [UI_LANGUAGE_RUSSIAN]: 'Русский',
-  [UI_LANGUAGE_TURKISH]: 'Türkçe',
-  [UI_LANGUAGE_GERMAN]: 'Deutsch'
-}
-
 export function getUiLanguageChoiceLabel(
   choice: UiLanguageChoice,
   translateFn: (key: string, fallback: string) => string
 ): string {
-  return translateFn(choice.labelKey, UI_LANGUAGE_CHOICE_FALLBACKS[choice.value])
+  return translateFn(choice.labelKey, UI_LANGUAGE_NATIVE_NAMES[choice.value])
 }
 
 export function resolveUiLocale(language: UiLanguage): string {
@@ -70,5 +56,5 @@ export function resolveUiLocale(language: UiLanguage): string {
 }
 
 export function getUiLanguageNativeLabel(language: BuiltInUiLanguage): string {
-  return UI_LANGUAGE_CHOICE_FALLBACKS[language]
+  return UI_LANGUAGE_NATIVE_NAMES[language]
 }

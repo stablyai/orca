@@ -130,13 +130,15 @@ export function markRuntimeEnvironmentCompatible(environmentId: string): void {
  */
 export function peekRuntimeEnvironmentCapability(
   environmentId: string,
-  capability: RuntimeCapability
+  capability: RuntimeCapability,
+  runtimeId?: string
 ): boolean | undefined {
   const cached = runtimeCompatibilityChecks.get(environmentId.trim())
   if (
     !cached ||
     cached.failedAt !== null ||
     !cached.status ||
+    (runtimeId !== undefined && cached.status.runtimeId !== runtimeId) ||
     cached.statusObservedAt === null ||
     Date.now() - cached.statusObservedAt >= RUNTIME_CAPABILITY_STATUS_TTL_MS
   ) {

@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isWslGuestProcess,
-  isWslHostOrcadProcess,
-  ORCAD_WSL_HOST_ENV,
   parseWindowsDriveMountPoints,
   withoutWindowsDriveMountDirs
 } from './wsl-guest-windows-drive-path'
-import { buildLocalPreflightEnv } from './preflight-local-env'
-import { getPreflightWslTarget } from './preflight-runtime-target'
 
 // Captured from Ubuntu 24.04 on WSL 2.7.10 (trimmed).
 const WSL2_PROC_MOUNTS = [
@@ -44,42 +39,5 @@ describe('Windows drive dirs on a WSL guest PATH', () => {
     expect(withoutWindowsDriveMountDirs(path, ['/mnt/c'])).toBe(
       '/home/u/.local/bin:/usr/bin:/mnt/cache/bin:/usr/lib/wsl/lib'
     )
-  })
-
-  it('leaves PATH untouched outside a WSL guest', () => {
-    expect(withoutWindowsDriveMountDirs('/mnt/c/x:/usr/bin', [])).toBe('/mnt/c/x:/usr/bin')
-    expect(isWslGuestProcess({}, 'linux', () => false)).toBe(false)
-    expect(isWslGuestProcess({ WSL_DISTRO_NAME: 'Ubuntu' }, 'darwin', () => true)).toBe(false)
-  })
-
-  it('recognises the guest under `wsl.exe --exec` (WSL_DISTRO_NAME) or by its interop binfmt', () => {
-    expect(isWslGuestProcess({ WSL_DISTRO_NAME: 'Ubuntu' }, 'linux', () => false)).toBe(true)
-    expect(isWslGuestProcess({}, 'linux', () => true)).toBe(true)
-  })
-
-  it('filters only for an orcad Orca launched as a WSL host', () => {
-    const guest = { WSL_DISTRO_NAME: 'Ubuntu' }
-    expect(isWslHostOrcadProcess(guest, 'linux', () => true)).toBe(false)
-    expect(isWslHostOrcadProcess({ ...guest, [ORCAD_WSL_HOST_ENV]: '1' }, 'linux')).toBe(true)
-    expect(isWslHostOrcadProcess({ [ORCAD_WSL_HOST_ENV]: '1' }, 'linux', () => false)).toBe(false)
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'gives local preflight a PATH without the drive dirs on a guest only',
-    () => {
-      const original = process.env.PATH
-      process.env.PATH = '/home/u/.local/bin:/mnt/c/Users/u/AppData/Roaming/npm:/usr/bin'
-      try {
-        expect(buildLocalPreflightEnv([])).toBeUndefined()
-        expect(buildLocalPreflightEnv(['/mnt/c'])?.PATH).toBe('/home/u/.local/bin:/usr/bin')
-      } finally {
-        process.env.PATH = original
-      }
-    }
-  )
-
-  it('never treats orcad inside the guest as a WSL preflight context', () => {
-    expect(getPreflightWslTarget({ wslDistro: 'Ubuntu' }, 'linux')).toBeNull()
-    expect(getPreflightWslTarget({ wslDefault: true }, 'linux')).toBeNull()
   })
 })

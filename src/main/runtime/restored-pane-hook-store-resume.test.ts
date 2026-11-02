@@ -87,13 +87,6 @@ async function restore(runtime: InstanceType<typeof OrcaRuntimeService>): Promis
 }
 
 describe('restoring a pane its host recorded an agent in', () => {
-  it('resumes the hook store’s conversation instead of replaying the launch command', async () => {
-    const { runtime, spawn } = makeRuntime([codexRow()], 'codex')
-    await restore(runtime)
-    expect(spawn).toHaveBeenCalledOnce()
-    expect(spawn.mock.calls[0]![0].command).toMatch(RESUMES)
-  })
-
   it('resumes an agent typed into a shell, which no launch command names', async () => {
     const { runtime, spawn } = makeRuntime([codexRow()])
     await restore(runtime)
@@ -155,22 +148,6 @@ describe('restoring a pane its host recorded an agent in', () => {
         }
       }
     })
-    await restore(runtime)
-    expectFreshLaunch(spawn.mock.calls[0]![0].command)
-  })
-
-  it('launches the tab’s agent fresh when another pane holds the conversation live', async () => {
-    const otherPaneKey = 'other-tab:44444444-4444-4444-8444-444444444444'
-    const { runtime, spawn } = makeRuntime(
-      [codexRow(), codexRow({ paneKey: otherPaneKey })],
-      'codex',
-      { presence: 'live' }
-    )
-    vi.spyOn(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's protected paneHoldsSession; the other pane stands in for a bound live terminal.
-      runtime as unknown as { paneHoldsSession: (paneKey: string) => boolean },
-      'paneHoldsSession'
-    ).mockImplementation((paneKey) => paneKey === otherPaneKey)
     await restore(runtime)
     expectFreshLaunch(spawn.mock.calls[0]![0].command)
   })

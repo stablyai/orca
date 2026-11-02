@@ -1,3 +1,4 @@
+import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 // @vitest-environment happy-dom
 
 // Local layout-owner main records cancellation; paired hosts retain tombstones in either build.
@@ -26,7 +27,7 @@ vi.mock('../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwnerIsMain
   }
 }))
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: vi.fn()
 }))
 vi.mock('./structured-agent-session-close', () => ({
@@ -45,7 +46,6 @@ import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
-  markStructuredAgentSessionLaunchCancelled,
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState,
   type StructuredLaunchState
@@ -55,7 +55,7 @@ import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
 } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/agent-session/launch/structured-agent-session-local-launch-cancel'
 import {
   beginStructuredAgentSessionTabClose,
   suppressCancelledStructuredSessionTabs
@@ -125,7 +125,7 @@ function pendingLaunch(executionHostId: ExecutionHostId, target: RuntimeClientTa
     promise: new Promise(() => undefined),
     visibilityUnknown: false,
     cancelled: false,
-    selection: { held: {} }
+    selection: {}
   } satisfies StructuredLaunchState)
 }
 

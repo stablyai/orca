@@ -2,7 +2,7 @@ import { memo, useContext, useMemo, type ComponentProps } from 'react'
 import {
   MobileNativeChatItemSourceContext,
   MobileNativeChatRootItemSourceContext
-} from '../../mobile-native-chat-item-read'
+} from '../mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import {
   resolveMobileNativeChatRowProps,
@@ -11,7 +11,7 @@ import {
 import { equalMobileNativeChatRowContent } from './mobile-native-chat-row-projection'
 import type { MobileNativeChatVisualSource } from '../visual/mobile-native-chat-visual-read'
 import type { MobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 
 type Recovery = MobileNativeChatVisualSource & {
   load: (id: string) => Promise<void>

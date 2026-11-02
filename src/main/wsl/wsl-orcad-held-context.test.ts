@@ -63,7 +63,6 @@ vi.mock('../managed-server/install/orcad-remote-context', async () => {
 import { runProcess } from '@orca/process-host'
 import {
   holdWslDistroWithContext,
-  isWsl1KernelRelease,
   readWslHostFacts,
   WSL_HOST_FACTS_COMMAND
 } from './wsl-orcad-held-context'
@@ -86,8 +85,8 @@ function holderRejectingOn(gate: Promise<void>): WslDistroHolder {
 }
 
 /** What WSL_HOST_FACTS_COMMAND prints. */
-function facts(kernel: string, home: string, uname: string): string {
-  return `__ORCA_WSL_KERNEL__ ${kernel}\n__ORCA_WSL_HOME__ ${home}\n\n__ORCA_REMOTE_PLATFORM__ ${uname}\n`
+function facts(kernel: string, home: string, uname: string, libc = 'ldd (GNU libc) 2.39'): string {
+  return `__ORCA_WSL_KERNEL__ ${kernel}\n__ORCA_WSL_HOME__ ${home}\n\n__ORCA_REMOTE_PLATFORM__ ${uname}\n\n__ORCA_WSL_LIBC__\n${libc}\n`
 }
 
 beforeEach(() => {
@@ -192,14 +191,21 @@ describe('the folded host facts probe', () => {
     expect(mocks.spawned.filter((label) => label === 'host-facts')).toHaveLength(1)
     expect(mocks.contextArgs).toEqual([
       expect.objectContaining({ os: 'linux', arch: 'x64' }),
-      '/home/u'
+      {
+        loginHome: '/home/u',
+        firstLibcProbeOutput: 'ldd (GNU libc) 2.39\n',
+        readActivationRecord: expect.any(Function)
+      }
     ])
   })
 
   it('leaves the context to probe what the facts did not prove', async () => {
     await resolveWith(facts('5.15.167.4-microsoft-standard-WSL2', '', 'Linux sparc'))
 
-    expect(mocks.contextArgs).toEqual([undefined, undefined])
+    expect(mocks.contextArgs).toEqual([
+      undefined,
+      { loginHome: undefined, readActivationRecord: expect.any(Function) }
+    ])
     expect(mocks.spawned[0]).toBe('host-facts')
     expect(mocks.spawned).not.toContain('uname -r')
   })
@@ -207,7 +213,10 @@ describe('the folded host facts probe', () => {
   it('falls back to the separate probes for a HOME with a newline, never a truncated path', async () => {
     await resolveWith(facts('5.15.167.4-microsoft-standard-WSL2', '/home/a\nb', 'Linux x86_64'))
 
-    expect(mocks.contextArgs).toEqual([undefined, undefined])
+    expect(mocks.contextArgs).toEqual([
+      undefined,
+      { loginHome: undefined, readActivationRecord: expect.any(Function) }
+    ])
     expect(mocks.spawned.slice(0, 2)).toEqual(['host-facts', 'uname -r'])
   })
 
@@ -216,8 +225,23 @@ describe('the folded host facts probe', () => {
       `Welcome to Ubuntu\n${facts('5.15.167.4-microsoft-standard-WSL2', '/home/u', 'Linux x86_64')}`
     )
 
-    expect(mocks.contextArgs).toEqual([undefined, undefined])
+    expect(mocks.contextArgs).toEqual([
+      undefined,
+      { loginHome: undefined, readActivationRecord: expect.any(Function) }
+    ])
     expect(mocks.spawned.slice(0, 2)).toEqual(['host-facts', 'uname -r'])
+  })
+
+  it('keeps a multi-line libc answer whole, and rejects output missing the libc section', () => {
+    const musl = 'musl libc (x86_64)\nVersion 1.2.4\nDynamic Program Loader'
+    expect(
+      readWslHostFacts(facts('5.15.167.4-microsoft-standard-WSL2', '/home/u', 'Linux x86_64', musl))
+    ).toMatchObject({ firstLibcProbeOutput: `${musl}\n` })
+    expect(
+      readWslHostFacts(
+        '__ORCA_WSL_KERNEL__ 5.15\n__ORCA_WSL_HOME__ /home/u\n\n__ORCA_REMOTE_PLATFORM__ Linux x86_64\n'
+      )
+    ).toBeNull()
   })
 
   it('refuses WSL 1 from the kernel line before holding or probing', async () => {
@@ -247,15 +271,5 @@ describe.skipIf(process.platform === 'win32')('WSL_HOST_FACTS_COMMAND under a re
       kernel: expect.stringMatching(/\S/),
       loginHome: '/home/orca user'
     })
-  })
-})
-
-describe('isWsl1KernelRelease', () => {
-  it('tells the WSL 1 syscall layer from a WSL 2 kernel, stock or custom', () => {
-    expect(isWsl1KernelRelease('4.4.0-19041-Microsoft')).toBe(true)
-    expect(isWsl1KernelRelease('4.4.0-22621-Microsoft\n')).toBe(true)
-    expect(isWsl1KernelRelease('5.15.167.4-microsoft-standard-WSL2')).toBe(false)
-    expect(isWsl1KernelRelease('6.6.36.6-microsoft-standard-WSL2+')).toBe(false)
-    expect(isWsl1KernelRelease('6.10.0-custom')).toBe(false)
   })
 })

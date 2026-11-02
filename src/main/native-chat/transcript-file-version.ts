@@ -55,3 +55,23 @@ export function transcriptFileVersionChanged(
     current.ctimeMs !== previous.ctimeMs
   )
 }
+
+export function transcriptFileReplacement(
+  current: TranscriptFileVersion,
+  watchedVersion: TranscriptFileVersion | null,
+  state: { offset: number; boundary: Buffer },
+  currentBoundary: string
+): { identityChanged: boolean; contentReplaced: boolean } {
+  const identityChanged = watchedVersion !== null && current.identity !== watchedVersion.identity
+  const sameSizeVersionChanged =
+    watchedVersion !== null &&
+    current.identity === watchedVersion.identity &&
+    current.size === watchedVersion.size &&
+    transcriptFileVersionChanged(current, watchedVersion)
+  const contentReplaced =
+    identityChanged ||
+    sameSizeVersionChanged ||
+    current.size < state.offset ||
+    (state.offset > 0 && state.boundary.toString('base64') !== currentBoundary)
+  return { identityChanged, contentReplaced }
+}

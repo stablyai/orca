@@ -597,6 +597,46 @@ describe('fetchWorktrees', () => {
     expect(result).toBe(false)
   })
 
+  it('keeps the scanned rows and their tabs when a stopped WSL distro returns stored rows', async () => {
+    const store = createTestStore()
+    const scanned = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature'
+    })
+    const notStored = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
+    const stored = { ...scanned, branch: '', head: '' }
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('repo1', [stored], {
+        authoritative: false,
+        source: 'metadata-fallback',
+        unavailableReason: "WSL distro 'Ubuntu' is not running.",
+        wslDistroStopped: { distro: 'Ubuntu', state: 'stopped' }
+      })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only these tab fields.
+    store.setState({
+      worktreesByRepo: { repo1: [scanned, notStored] },
+      sortEpoch: 7,
+      tabsByWorktree: { [notStored.id]: [{ id: 'tab-2', worktreeId: notStored.id }] }
+    } as unknown as Partial<AppState>)
+
+    const result = await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([scanned, notStored])
+    expect(store.getState().tabsByWorktree[notStored.id]).toEqual([
+      { id: 'tab-2', worktreeId: notStored.id }
+    ])
+    expect(store.getState().detectedWorktreesByRepo.repo1?.wslDistroStopped).toEqual({
+      distro: 'Ubuntu',
+      state: 'stopped'
+    })
+    expect(store.getState().sortEpoch).toBe(7)
+    expect(result).toBe(false)
+  })
+
   it('reports unchanged non-authoritative refreshes as not fully refreshed', async () => {
     const store = createTestStore()
     const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

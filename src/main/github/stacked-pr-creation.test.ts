@@ -270,6 +270,7 @@ describe('registerGitHubStackedPullRequest', () => {
     expect(result).toMatchObject({
       ok: false,
       error: 'The pull request already belongs to a different GitHub stack.',
+      reason: 'stack_conflict',
       createdReview: currentReview
     })
   })

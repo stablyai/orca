@@ -190,7 +190,8 @@ describe('OpenCode model probe termination evidence', () => {
 
     expect(await probe).toBeNull()
     expect(terminateProviderProcessTree).toHaveBeenCalledWith(child, {
-      site: 'opencode-launch-model-preflight'
+      site: 'opencode-launch-model-preflight',
+      supervised: true
     })
   })
 

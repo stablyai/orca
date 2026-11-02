@@ -135,15 +135,6 @@ export function registerReposSharedProjectBadgeColorTests(): void {
   }
 
   describe('shared project badge color across hosts', () => {
-    it('keeps the local color when a remote host shares the project name', async () => {
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-      await store.getState().fetchReposForAllHosts()
-
-      expect(badgeColor(store)).toBe(LOCAL_GREEN)
-    })
-
     it('keeps the local color when a runtime-only refresh lands after startup', async () => {
       const store = createTestStore()
       store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })

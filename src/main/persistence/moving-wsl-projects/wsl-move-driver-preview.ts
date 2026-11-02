@@ -2,7 +2,7 @@
 import type { WslMovePreview, WslMoveRequest } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveDriverDeps } from './wsl-move-driver-ports'
 import { prepareWslMove, refusal, type WslMoveInterruptedSettle } from './wsl-move-driver-plan'
-import { claimWslMoveRun, releaseWslMoveRun } from './wsl-move-running-moves'
+import { claimWslMoveRun, releaseWslMoveRun, wslMoveClaimRefusal } from './wsl-move-running-moves'
 import { unreadableSleptHistory } from './wsl-move-slept-scrollback'
 
 export async function previewWslMove(
@@ -17,7 +17,7 @@ export async function previewWslMove(
   // Settling writes the journal and asks the host, so it holds the distro's run like a move.
   const running = claimWslMoveRun(request.distro)
   if (!running) {
-    return refusal('wsl_move_already_running')
+    return refusal(wslMoveClaimRefusal(request.distro))
   }
   try {
     return await previewPrepared(deps, request, options.settleInterrupted)

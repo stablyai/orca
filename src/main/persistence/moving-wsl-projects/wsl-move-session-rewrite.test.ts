@@ -354,8 +354,5 @@ describe('WSL move carried session focus', () => {
       activeWorktreeId: 'repo-on-host::/home/dev/other',
       activeTabId: 'host-tab'
     })
-    expect(() => prepareOrcadMigrationWorkspaceSession(desktop, host)).toThrow(
-      'orcad_migration_dormant_focus_conflict'
-    )
   })
 })

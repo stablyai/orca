@@ -3,7 +3,7 @@ import { ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
@@ -157,6 +157,8 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               ['clone', '--progress', '--', args.url, clonePath],
               {
                 cwd: args.destination,
+                // Host Git on purpose: the clone makes a new repo no project owns, even inside one.
+                hostGit: true,
                 admissionTier: 'interactive',
                 // Suppress Windows Git Credential Manager OAuth windows during noninteractive cloning (#7652).
                 env: promptGuardGitEnv(),

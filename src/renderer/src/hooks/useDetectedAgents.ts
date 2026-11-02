@@ -179,9 +179,10 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
+    // Only the refresh control calls this: a user act that may start a stopped WSL distro.
     return includeDisabled
-      ? state.refreshAllDetectedAgents(localWorktreeId)
-      : state.refreshDetectedAgents(localWorktreeId)
+      ? state.refreshAllDetectedAgents(localWorktreeId, { wakeWslDistro: true })
+      : state.refreshDetectedAgents(localWorktreeId, { wakeWslDistro: true })
   }, [includeDisabled, isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
 
   useEffect(() => {

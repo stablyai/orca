@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS,
   AGENT_SESSION_ATTACHMENT_MAX_BYTES
-} from '../agent-session-attachments'
+} from '../agent-session/agent-session-attachments'
 import { isValidBase64 } from './clipboard-params'
 import { Identifier, SessionId } from './structured-agent-session-params'
 

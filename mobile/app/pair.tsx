@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 
 export default function PairRedirectScreen() {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouter()
   const params = useLocalSearchParams<{ code?: string }>()
   const [missingCode, setMissingCode] = useState(false)
@@ -48,9 +50,12 @@ export default function PairRedirectScreen() {
     <View style={styles.container}>
       {missingCode ? (
         <>
-          <Text style={styles.errorText}>Missing pairing code</Text>
-          <Pressable style={styles.primaryButton} onPress={goHome}>
-            <Text style={styles.primaryButtonText}>Back to home</Text>
+          <Text style={styles.errorText}>{t('app.pair.missingCode', 'Missing pairing code')}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+            onPress={goHome}
+          >
+            <Text style={styles.primaryButtonText}>{t('app.pair.backToHome', 'Back to home')}</Text>
           </Pressable>
         </>
       ) : (
@@ -78,7 +83,7 @@ const styles = themedStyleSheet(() => ({
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.textPrimary,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2
   },

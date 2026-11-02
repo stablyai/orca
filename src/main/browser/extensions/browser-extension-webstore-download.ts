@@ -1,9 +1,12 @@
-import { net } from 'electron'
 import { createHash } from 'node:crypto'
+import { fetchWithElectronManualRedirects } from '../../host/electron-manual-redirect-fetch'
+import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import { verifyCrx3, type VerifiedCrx } from './browser-extension-crx'
 
 const MAX_CRX_BYTES = 256 * 1024 * 1024
 const MAX_ICON_BYTES = 1024 * 1024
+const MAX_REDIRECTS = 20
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const CRX_HOST_SUFFIXES = ['google.com', 'googleusercontent.com', 'googleapis.com', 'gvt1.com']
 const ICON_HOST_SUFFIXES = ['googleusercontent.com', 'ggpht.com', 'gstatic.com']
 const ICON_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
@@ -31,6 +34,34 @@ export function isAllowedCrxDownloadUrl(rawUrl: string): boolean {
 
 export function isAllowedWebStoreIconUrl(rawUrl: string): boolean {
   return isHttpsUrlOnHosts(rawUrl, ICON_HOST_SUFFIXES)
+}
+
+async function fetchWebStoreResource(
+  url: string,
+  fetcher: Fetcher,
+  signal: AbortSignal,
+  isAllowedUrl: (url: string) => boolean,
+  redirectError: string
+): Promise<Response> {
+  for (let redirects = 0; ; redirects++) {
+    const response = await fetcher(url, { credentials: 'omit', redirect: 'manual', signal })
+    if (!REDIRECT_STATUSES.has(response.status)) {
+      return response
+    }
+    try {
+      const location = response.headers.get('location')
+      const next = location && URL.canParse(location, url) ? new URL(location, url).href : ''
+      if (redirects >= MAX_REDIRECTS) {
+        throw new Error('Download has too many redirects')
+      }
+      if (!isAllowedUrl(next)) {
+        throw new Error(redirectError)
+      }
+      url = next
+    } finally {
+      await cancelUnreadResponseBody(response)
+    }
+  }
 }
 
 /** Download URL shape from electron-chrome-web-store (MIT, Samuel Maddock). */
@@ -84,14 +115,16 @@ export async function downloadWebStoreCrx(
   if (!isAllowedCrxDownloadUrl(url)) {
     throw new Error('Extension download address is not a Chrome Web Store address')
   }
-  const fetcher: Fetcher = options.fetcher ?? ((target, init) => net.fetch(target, init))
+  const fetcher: Fetcher = options.fetcher ?? fetchWithElectronManualRedirects
   const controller = new AbortController()
   try {
-    const response = await fetcher(url, {
-      credentials: 'omit',
-      redirect: 'follow',
-      signal: controller.signal
-    })
+    const response = await fetchWebStoreResource(
+      url,
+      fetcher,
+      controller.signal,
+      isAllowedCrxDownloadUrl,
+      'Extension download was redirected away from Google'
+    )
     if (!response.ok) {
       throw new Error(`Chrome Web Store download failed (${response.status})`)
     }
@@ -117,18 +150,20 @@ export async function downloadWebStoreCrx(
 /** The store's listing icon as a data URL for Orca's prompt (the renderer CSP blocks remote images). */
 export async function fetchWebStoreIconDataUrl(
   iconUrl: string,
-  fetcher: Fetcher = (target, init) => net.fetch(target, init)
+  fetcher: Fetcher = fetchWithElectronManualRedirects
 ): Promise<string> {
   if (!isAllowedWebStoreIconUrl(iconUrl)) {
     throw new Error('Invalid icon url')
   }
   const controller = new AbortController()
   try {
-    const response = await fetcher(iconUrl, {
-      credentials: 'omit',
-      redirect: 'follow',
-      signal: controller.signal
-    })
+    const response = await fetchWebStoreResource(
+      iconUrl,
+      fetcher,
+      controller.signal,
+      isAllowedWebStoreIconUrl,
+      'Icon could not be loaded'
+    )
     const mime = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
     if (
       !response.ok ||

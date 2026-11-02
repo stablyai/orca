@@ -49,14 +49,43 @@ export async function readConfirmedRunningWslDistros(
   }
 }
 
+export type WslDistroGateNote = { kind: 'stopped' | 'woken'; distro: string }
+const noteListeners = new Set<(note: WslDistroGateNote) => void>()
+
+function ensureStopSubscription(): void {
+  unsubscribeStops ??= onRunningWslDistrosStopped((stopped) => {
+    for (const candidate of stopped) {
+      noteWslDistroMayHaveStopped(candidate)
+    }
+  })
+}
+
+/** Stop and wake notes, for a utility process (the session scanner) whose own gate never hears them. */
+export function onWslDistroGateNote(listener: (note: WslDistroGateNote) => void): () => void {
+  ensureStopSubscription()
+  noteListeners.add(listener)
+  return () => noteListeners.delete(listener)
+}
+
+// A user act's onSettled notes its wake while the act still holds; listeners are background work.
+function notifyGateNoteListeners(note: WslDistroGateNote): void {
+  outsideWslUserAct(() => {
+    for (const listener of noteListeners) {
+      listener(note)
+    }
+  })
+}
+
 /** A link into the distro died, or a read saw it stop: later running reads must start after it settles. */
 export function noteWslDistroMayHaveStopped(distro: string): void {
   mayHaveStoppedAt.set(distroKey(distro), performance.now())
+  notifyGateNoteListeners({ kind: 'stopped', distro })
 }
 
 /** A user act just touched the distro, which starts it: an older 'stopped' read no longer answers. */
 export function noteWslDistroWoken(distro: string): void {
   wokenAt.set(distroKey(distro), performance.now())
+  notifyGateNoteListeners({ kind: 'woken', distro })
 }
 
 /** A wsl.exe launch starts its distro: if the last read said stopped, that read no longer answers. */
@@ -85,11 +114,7 @@ export async function settledWslRunningReadAnchor(
   distro: string,
   startedAfter: number | undefined
 ): Promise<number | undefined> {
-  unsubscribeStops ??= onRunningWslDistrosStopped((stopped) => {
-    for (const candidate of stopped) {
-      noteWslDistroMayHaveStopped(candidate)
-    }
-  })
+  ensureStopSubscription()
   const floor = settledRunningFloor(distro)
   const anchor = floor === -Infinity ? startedAfter : Math.max(startedAfter ?? -Infinity, floor)
   // Timers truncate to whole ms on a ms clock and can wake ~2ms short; sleep until the anchor has passed.
@@ -100,12 +125,20 @@ export async function settledWslRunningReadAnchor(
   return anchor
 }
 
-/** Without probing: the last confirmed list names `distro` and was probed after any stop settled. */
-export function wasWslDistroLastSeenRunningSettled(distro: string): boolean {
+/**
+ * Without probing: the last confirmed list names `distro` and was probed after any stop settled.
+ * `maxAgeMs` also bounds the list's age, for stops nothing reports (e.g. WSL's own idle stop).
+ */
+export function wasWslDistroLastSeenRunningSettled(
+  distro: string,
+  options: { maxAgeMs?: number } = {}
+): boolean {
   const observation = peekConfirmedRunningWslDistrosObservation()
   return (
     observation !== null &&
     observation.probeStartedAt >= settledRunningFloor(distro) &&
+    (options.maxAgeMs === undefined ||
+      performance.now() - observation.probeStartedAt <= options.maxAgeMs) &&
     observation.distros.some((candidate) => distroKey(candidate) === distroKey(distro))
   )
 }
@@ -252,4 +285,5 @@ export function _resetWslBackgroundDistroGateForTests(): void {
   wokenAt.clear()
   unsubscribeStops?.()
   unsubscribeStops = null
+  noteListeners.clear()
 }

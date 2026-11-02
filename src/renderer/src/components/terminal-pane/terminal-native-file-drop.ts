@@ -128,17 +128,11 @@ async function uploadRuntimeDropPaths(
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
   const destinationDir = joinRuntimeTerminalDropDir(args.worktreePath)
   const pending = toast.loading(
-    args.dataPaths.length === 1
-      ? translate(
-          'auto.components.terminal.pane.terminal.drop.handler.uploadingFileSingular',
-          'Uploading {{count}} file to runtime…',
-          { count: args.dataPaths.length }
-        )
-      : translate(
-          'auto.components.terminal.pane.terminal.drop.handler.uploadingFilePlural',
-          'Uploading {{count}} files to runtime…',
-          { count: args.dataPaths.length }
-        )
+    translate(
+      'auto.components.terminal.pane.terminal.drop.handler.uploadingFiles',
+      'Uploading {{count}} files to runtime…',
+      { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to runtime…' }
+    )
   )
   try {
     const { results } = await importExternalPathsToRuntime(
@@ -174,7 +168,10 @@ async function uploadRuntimeDropPaths(
 }
 
 async function pasteLocalDropPaths(
-  args: NativeDropFlowArgs & { localWslDrop: boolean; targetShell: 'posix' | 'windows' }
+  args: NativeDropFlowArgs & {
+    localWslDrop: boolean
+    targetShell: 'posix' | 'windows'
+  }
 ): Promise<void> {
   // Local WSL shells need distro-aware POSIX paths despite their Windows host.
   if (isWslUncPath(args.worktreePath)) {
@@ -200,20 +197,17 @@ async function pasteLocalDropPaths(
 }
 
 async function uploadRemoteDropPaths(
-  args: NativeDropFlowArgs & { connectionId: string; targetShell: 'posix' | 'windows' }
+  args: NativeDropFlowArgs & {
+    connectionId: string
+    targetShell: 'posix' | 'windows'
+  }
 ): Promise<void> {
   const pending = toast.loading(
-    args.dataPaths.length === 1
-      ? translate(
-          'auto.components.terminal.pane.terminal.drop.handler.uploadingFileToRemoteSingular',
-          'Uploading {{count}} file to remote…',
-          { count: args.dataPaths.length }
-        )
-      : translate(
-          'auto.components.terminal.pane.terminal.drop.handler.uploadingFileToRemotePlural',
-          'Uploading {{count}} files to remote…',
-          { count: args.dataPaths.length }
-        )
+    translate(
+      'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote',
+      'Uploading {{count}} files to remote…',
+      { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to remote…' }
+    )
   )
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
@@ -234,7 +228,10 @@ async function uploadRemoteDropPaths(
 }
 
 async function pasteResolvedDropPaths(
-  args: NativeDropFlowArgs & { paths: string[]; targetShell: 'posix' | 'windows' }
+  args: NativeDropFlowArgs & {
+    paths: string[]
+    targetShell: 'posix' | 'windows'
+  }
 ): Promise<void> {
   args.assertCurrent?.()
   // Upload/resolution can outlive the pane; recheck before writing to its PTY.

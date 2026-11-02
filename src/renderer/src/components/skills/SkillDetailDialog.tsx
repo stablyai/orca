@@ -12,15 +12,18 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { sourceKindLabel } from './skill-display-labels'
 import { skillAgentLabel } from './skill-agent-filter'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
-const updatedFormatter = new Intl.DateTimeFormat(undefined, {
+const UPDATED_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric'
-})
+}
 
 function DetailRow({
   label,
@@ -59,7 +62,8 @@ export function SkillDetailDialog({
   onOpenChange,
   onShare,
   onDelete,
-  onReveal
+  onReveal,
+  ownerHostId
 }: {
   skill: DiscoveredSkill | null
   agentByRootPath: ReadonlyMap<string, string>
@@ -71,13 +75,17 @@ export function SkillDetailDialog({
   onShare: () => void
   onDelete: () => void
   onReveal: () => void
+  /** Host the skill file lives on. */
+  ownerHostId: ExecutionHostId
 }): React.JSX.Element | null {
   if (!skill) {
     return null
   }
 
   const copyPath = async (): Promise<void> => {
-    await window.api.ui.writeClipboardText(skill.skillFilePath)
+    await window.api.ui.writeClipboardText(
+      formatClipboardFilePath(skill.skillFilePath, ownerHostId)
+    )
     toast.success(translate('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
   }
 
@@ -120,7 +128,7 @@ export function SkillDetailDialog({
               label={translate('auto.components.skills.SkillDetailDialog.updated', 'Updated')}
             >
               {skill.updatedAt
-                ? updatedFormatter.format(new Date(skill.updatedAt))
+                ? uiDateTimeFormat(UPDATED_OPTIONS).format(new Date(skill.updatedAt))
                 : translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')}
             </DetailRow>
             <DetailRow label={translate('auto.components.skills.SkillRow.detailPath', 'Path')}>

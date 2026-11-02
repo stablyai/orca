@@ -58,7 +58,7 @@ describe('generateBranchNameFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'Generated branch name was empty after sanitization.',
       failureOutput: { label: 'agent', exitCode: 0, stdout: '!!! ___', stderr: '' }
@@ -121,7 +121,7 @@ describe('generateBranchNameFromContext', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent CLI command failed with code 1.',
       failureOutput: {

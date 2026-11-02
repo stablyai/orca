@@ -1,4 +1,6 @@
 import { isRenderableImageUri } from '../visual/mobile-native-chat-image-preview'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   ActivityIndicator,
   Image,
@@ -9,7 +11,7 @@ import {
   View
 } from 'react-native'
 import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
-import { colors, radii, spacing } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { formatPreviewByteLength } from '../../../files/mobile-file-preview-response'
@@ -17,12 +19,20 @@ import type { PendingNativeChatImage } from './mobile-native-chat-image-attachme
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 
 const THUMB_SIZE = 58
+// Items sit 12pt in from the composer box's edge (box padding plus strip padding).
+const ITEM_RADIUS = concentricRadius(radii.floating, 12)
 
-function composerFileMeta(file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>) {
+function composerFileMeta(
+  file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>,
+  t: Translate
+) {
   const extension = /\.([a-z0-9]{1,8})$/i.exec(file.name)?.[1]
   const subtype = /^[^/]+\/([a-z0-9]{1,8})$/i.exec(file.mime)?.[1]
-  const type = (extension ?? subtype ?? 'File').toUpperCase()
-  return `${type} · ${formatPreviewByteLength(file.byteLength)}`
+  const type = (extension ?? subtype ?? t('chat.composerAttachments.file', 'File')).toUpperCase()
+  return t('chat.composerAttachments.fileMeta', '{{type}} · {{size}}', {
+    type,
+    size: formatPreviewByteLength(file.byteLength)
+  })
 }
 
 export function MobileNativeChatComposerAttachments({
@@ -37,6 +47,7 @@ export function MobileNativeChatComposerAttachments({
   onRemoveFile?: (id: string) => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (images.length === 0 && files.length === 0) {
     return null
   }
@@ -60,13 +71,19 @@ export function MobileNativeChatComposerAttachments({
             <View
               style={styles.fileIcon}
               accessible
-              accessibilityLabel={image.path.split(/[\\/]/).at(-1) || 'Attached image'}
+              accessibilityLabel={
+                image.path.split(/[\\/]/).at(-1) ||
+                t('chat.composerAttachments.attachedImage', 'Attached image')
+              }
             >
               <ImageIcon size={17} color={colors.textSecondary} strokeWidth={2} />
             </View>
           )}
           {onRemoveImage ? (
-            <RemoveBadge label="Remove image" onPress={() => onRemoveImage(image.id)} />
+            <RemoveBadge
+              label={t('chat.composerAttachments.removeImage', 'Remove image')}
+              onPress={() => onRemoveImage(image.id)}
+            />
           ) : null}
         </View>
       ))}
@@ -80,16 +97,28 @@ export function MobileNativeChatComposerAttachments({
               {file.name}
             </Text>
             <Text style={styles.fileMeta} numberOfLines={1}>
-              {composerFileMeta(file)}
+              {composerFileMeta(file, t)}
             </Text>
           </View>
           {file.path === null ? (
-            <View style={styles.uploading} accessibilityLabel={`Uploading ${file.name}`}>
+            <View
+              style={styles.uploading}
+              accessibilityLabel={t(
+                'chat.composerAttachments.uploadingFile',
+                'Uploading {{name}}',
+                { name: file.name }
+              )}
+            >
               <ActivityIndicator size="small" color={colors.onAccent} />
             </View>
           ) : null}
           {onRemoveFile ? (
-            <RemoveBadge label={`Remove ${file.name}`} onPress={() => onRemoveFile(file.id)} />
+            <RemoveBadge
+              label={t('chat.composerAttachments.removeFile', 'Remove {{name}}', {
+                name: file.name
+              })}
+              onPress={() => onRemoveFile(file.id)}
+            />
           ) : null}
         </View>
       ))}
@@ -100,7 +129,12 @@ export function MobileNativeChatComposerAttachments({
 function RemoveBadge({ label, onPress }: { label: string; onPress: () => void }) {
   useMobileColorScheme()
   return (
-    <Pressable accessibilityLabel={label} style={styles.remove} onPress={onPress} hitSlop={8}>
+    <Pressable
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.remove, pressed && pressedStyle]}
+      onPress={onPress}
+      hitSlop={8}
+    >
       <X size={11} color={colors.textPrimary} strokeWidth={3} />
     </Pressable>
   )
@@ -121,13 +155,13 @@ const styles = themedStyleSheet(() => ({
   thumb: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     backgroundColor: colors.composerControl
   },
   thumbImage: {
     width: '100%',
     height: '100%',
-    borderRadius: radii.composerItem
+    borderRadius: ITEM_RADIUS
   },
   fileCard: {
     height: THUMB_SIZE,
@@ -138,13 +172,13 @@ const styles = themedStyleSheet(() => ({
     gap: 9,
     paddingLeft: 10,
     paddingRight: spacing.md,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     backgroundColor: colors.composerControl
   },
   fileIcon: {
     width: 32,
     height: 36,
-    borderRadius: 7,
+    borderRadius: concentricRadius(ITEM_RADIUS, 10),
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised
@@ -165,7 +199,7 @@ const styles = themedStyleSheet(() => ({
   },
   uploading: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: radii.composerItem,
+    borderRadius: ITEM_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.45)'
@@ -177,7 +211,7 @@ const styles = themedStyleSheet(() => ({
     right: -5,
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,

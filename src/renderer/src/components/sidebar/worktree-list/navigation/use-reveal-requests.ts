@@ -66,7 +66,10 @@ export function useSidebarRevealRequests(args: {
   })
 
   useEffect(() => {
-    if (!pendingRevealSidebarRow) {
+    if (
+      !pendingRevealSidebarRow ||
+      useAppStore.getState().pendingRevealSidebarRow !== pendingRevealSidebarRow
+    ) {
       return
     }
     const rowKey = pendingRevealSidebarRow.rowKey

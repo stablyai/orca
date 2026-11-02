@@ -10,12 +10,25 @@ function statSignature(value: { mtimeMs: number; ctimeMs: number; ino: number })
   return `${value.mtimeMs}:${value.ctimeMs}:${value.ino}`
 }
 
-export async function gitCommonDirectorySignature(path: string): Promise<string> {
+export async function gitCommonDirectorySignature(
+  path: string,
+  previousSignature = 'missing',
+  onMissing?: () => void
+): Promise<string> {
   try {
     const value = await stat(path)
     return `${statSignature(value)}:${value.size}`
-  } catch {
-    return 'missing'
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+    ) {
+      onMissing?.()
+      return 'missing'
+    }
+    return previousSignature
   }
 }
 

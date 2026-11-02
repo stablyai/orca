@@ -6,6 +6,7 @@ import {
 import { FENCED_TERMINATION_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
+import { logWslPaneDiagnostic } from './daemon-wsl-diagnostic-log'
 import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-bridge-exit'
 import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
@@ -193,7 +194,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         // Kept per incarnation: the report can land before its own spawn reply.
         this.inputClosedIncarnations.record(event.sessionId, event.payload.incarnationId)
       } else if (event.event === 'exit') {
-        const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
+        const currentIncarnationId = this.ptyInventory.currentIncarnation(event.sessionId)
         const pendingOperations = new Set([
           ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),
           ...this.pendingClaimSpawnOperations
@@ -204,11 +205,11 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             continue
           }
           const exits = operation.exitsBySessionId.get(event.sessionId) ?? []
-          exits.push(
-            event.payload.incarnationId
-              ? { code: event.payload.code, incarnationId: event.payload.incarnationId }
-              : { code: event.payload.code }
-          )
+          exits.push({
+            code: event.payload.code,
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
+            ...(event.payload.cause ? { cause: event.payload.cause } : {})
+          })
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
         const wslDistro = this.wslDistrosBySessionId.get(event.sessionId)
@@ -258,8 +259,14 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
     )
     // Lost, or booted again since the spawn, keeps the tab; an unanswered check reads as an exit.
     // The code shows a verify run which codes a terminate yields.
-    console.info(
-      `[pty] WSL bridge exit: ${verdict} (distro ${wslDistro}, code ${exit.code}, probe ${Math.round(performance.now() - exitAt)}ms)`
+    const probeMs = Math.round(performance.now() - exitAt)
+    logWslPaneDiagnostic(
+      'wsl.bridge-exit',
+      {
+        console: `[pty] WSL bridge exit: ${verdict} (distro ${wslDistro}, code ${exit.code}, probe ${probeMs}ms)`,
+        trace: `[pty] WSL bridge exit: ${verdict} (code ${exit.code}, probe ${probeMs}ms)`
+      },
+      { verdict, code: exit.code, probeMs }
     )
     // A spawn that replaced this incarnation meanwhile owns the session now.
     const current = this.sessionIncarnations.get(sessionId)

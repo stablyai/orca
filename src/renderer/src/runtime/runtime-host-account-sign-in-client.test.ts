@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostAccountSignInStatus } from '../../../shared/host-account-sign-in-types'
+import { i18n } from '@/i18n/i18n'
+import es from '@/i18n/locales/es.json'
 
 type RecordedCall = { method: string; params: unknown; revision: number | undefined }
 const rpc = vi.hoisted(() => {
@@ -33,6 +35,7 @@ import {
   HOST_SIGN_IN_RETRY_WINDOW_MS,
   addCodexAccountOnHost,
   cancelHostAccountSignIn,
+  hostAccountSignInFailureText,
   retryLostAnswers,
   runningHostAccountSignInOwner
 } from './runtime-host-account-sign-in-client'
@@ -135,6 +138,32 @@ describe('host account sign-in client', () => {
     await expect(cancelHostAccountSignIn(OWNER, 'codex')).rejects.toThrow('unavailable')
     await expect(adding).rejects.toThrow('Codex sign-in was cancelled.')
     expect(cancels).toBe(2)
+  })
+})
+
+describe('hostAccountSignInFailureText', () => {
+  it('translates a coded host failure and keeps uncoded login text verbatim', async () => {
+    const originalLanguage = i18n.language
+    i18n.addResourceBundle('es', 'translation', es)
+    await i18n.changeLanguage('es')
+    try {
+      const english = 'An account change on this host stopped the sign-in. Start it again.'
+      expect(
+        hostAccountSignInFailureText(
+          status({ phase: 'failed', error: english, errorCode: 'superseded' })
+        )
+      ).toBe(es.accounts.hostSignIn.errors.superseded)
+      expect(
+        hostAccountSignInFailureText(
+          status({ phase: 'failed', error: english, errorCode: 'fromNewerHost' })
+        )
+      ).toBe(english)
+      expect(
+        hostAccountSignInFailureText(status({ phase: 'failed', error: 'Codex login failed: boom' }))
+      ).toBe('Codex login failed: boom')
+    } finally {
+      await i18n.changeLanguage(originalLanguage)
+    }
   })
 })
 

@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
@@ -66,7 +67,7 @@ function chatCreateRuntime(args: {
     getSettings: () => ({
       ...runtimeStore.getSettings(),
       setupScriptLaunchMode: args.setupScriptLaunchMode,
-      ...(args.nativeChat ? { experimentalNativeChat: true } : {})
+      ...(args.nativeChat ? { nativeChatProviders: EVERY_AGENT_CHAT } : {})
     })
   })
   const spawn = vi.fn<NonNullable<RuntimePtyController['spawn']>>(async () => {
@@ -83,7 +84,7 @@ function chatCreateRuntime(args: {
   ensurePathWithinWorkspaceMock.mockReturnValue(path)
   vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm install' } })
   vi.mocked(getDefaultTabsLaunch).mockReturnValue(args.withDefaults ? DEFAULTS : undefined)
-  vi.mocked(createSetupRunnerScript).mockReturnValue({
+  vi.mocked(createSetupRunnerScript).mockResolvedValue({
     runnerScriptPath: '/repo/setup.sh',
     envVars: {},
     ...(args.wait ? { waitForAgentStartup: true } : {})

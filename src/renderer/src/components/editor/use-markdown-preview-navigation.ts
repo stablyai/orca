@@ -1,3 +1,4 @@
+import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import { useEffect, useImperativeHandle, useMemo, useRef, type RefObject } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
@@ -123,6 +124,7 @@ export function useMarkdownPreviewNavigation({
               Number(node.dataset.sourceLine) <= anchor.line &&
               Number(node.dataset.sourceEndLine) >= anchor.line
           )) ?? block
+    revealMarkdownNavigationDetails(target)
     const top = Math.min(
       getMarkdownPreviewAnchorScrollTop(
         container,

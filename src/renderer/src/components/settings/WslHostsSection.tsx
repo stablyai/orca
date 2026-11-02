@@ -31,6 +31,7 @@ import {
   getWslHostsPausedLabel,
   getWslHostsTurnedOffLabel
 } from '../sidebar/wsl-host-row-status'
+import { wslHostStatusDetailMessage } from '../sidebar/wsl-host-failure-text'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { DropdownMenuItem } from '../ui/dropdown-menu'
@@ -142,7 +143,7 @@ export function WslHostsSection({
                 ? getWslHostsPausedLabel()
                 : translate(
                     'auto.components.settings.wslHosts.description',
-                    'Orca runs a server inside each distro. A stopped distro starts only when you open one of its projects or connect it here.'
+                    'Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.'
                   ))}
           </p>
         </div>
@@ -200,7 +201,9 @@ export function WslHostsSection({
                           { version: deferred.candidateVersion }
                         )} ${managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code })}`
                       : `${unavailableLabel ?? getWslHostRowDetail(status)}${
-                          !unavailableLabel && status?.detail ? ` — ${status.detail}` : ''
+                          !unavailableLabel && status?.detail
+                            ? ` — ${wslHostStatusDetailMessage(status)}`
+                            : ''
                         }`}
                   </span>
                 }

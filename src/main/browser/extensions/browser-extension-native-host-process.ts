@@ -12,6 +12,7 @@ import {
   createNativeHostMessageReader,
   encodeNativeHostMessage
 } from './browser-extension-native-host-framing'
+import { createNativeHostWriteAdmission } from './browser-extension-native-host-write-admission'
 
 /** Chrome's EnsureProcessTerminated: a host gets this long after its stdin closes, then is killed. */
 const CLOSE_GRACE_MS = 2_000
@@ -39,11 +40,12 @@ export type NativeHostConnection = {
 
 export type NativeHostSpawner = (spec: PipedProcessSpec) => PipedChildProcess
 
-const liveHosts = new Set<PipedChildProcess>()
+const liveHosts = new Map<PipedChildProcess, () => void>()
 
 /** Quit: kill every host now; a pending grace timer would never fire. */
 export function killAllNativeHosts(): void {
-  for (const child of liveHosts) {
+  for (const [child, stopWrites] of liveHosts) {
+    stopWrites()
     if (process.platform === 'win32') {
       child.kill('SIGKILL')
     } else {
@@ -112,8 +114,15 @@ export function startNativeHost(
     let ready = false
     let pendingClose: string | undefined
     let startTimer: NodeJS.Timeout | undefined
+    let outgoingClosed = false
+    const writes = createNativeHostWriteAdmission(() => closeChannel(NATIVE_HOST_ERRORS.io))
+    const stopWrites = (): void => {
+      outgoingClosed = true
+      writes.close()
+    }
 
     const terminate = (): void => {
+      stopWrites()
       clearTimeout(killTimer)
       if (terminating) {
         return
@@ -128,6 +137,7 @@ export function startNativeHost(
     }
 
     const release = (): void => {
+      stopWrites()
       child.stdin.destroy()
       child.stdout.destroy()
       if (!spawned) {
@@ -179,8 +189,24 @@ export function startNativeHost(
     })
     const connection: NativeHostConnection = {
       send: (json) => {
-        if (!closed) {
-          child.stdin.write(encodeNativeHostMessage(json))
+        if (closed || outgoingClosed) {
+          return
+        }
+        const releaseWrite = writes.claim(Buffer.byteLength(json, 'utf8'))
+        if (!releaseWrite) {
+          closeChannel(NATIVE_HOST_ERRORS.io)
+          return
+        }
+        try {
+          child.stdin.write(encodeNativeHostMessage(json), (error) => {
+            releaseWrite()
+            if (error && !outgoingClosed) {
+              closeChannel(NATIVE_HOST_ERRORS.io)
+            }
+          })
+        } catch {
+          releaseWrite()
+          closeChannel(NATIVE_HOST_ERRORS.io)
         }
       },
       close: () => {
@@ -194,7 +220,7 @@ export function startNativeHost(
     child.once('spawn', () => {
       spawned = true
       if (!childProcessHasExited(child)) {
-        liveHosts.add(child)
+        liveHosts.set(child, stopWrites)
       }
       if (!supervised) {
         announceReady()

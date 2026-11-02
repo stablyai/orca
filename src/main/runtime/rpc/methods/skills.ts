@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
 import {
+  BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
   BundledSkillPlanRequestSchema
 } from '../../../../shared/bundled-skill-plan'
@@ -141,6 +142,12 @@ export const SKILL_METHODS = [
     handler: (params, { runtime }) => runtime.executeLocalBundledSkills(params)
   }),
   defineMethod({
+    name: 'skills.autoUpdateBundledOrca',
+    permission: 'skills-admin',
+    params: BundledSkillAutoUpdateRequestSchema,
+    handler: (params, { runtime }) => runtime.autoUpdateLocalBundledSkills(params)
+  }),
+  defineMethod({
     name: 'skills.share',
     permission: 'skills-admin',
     params: AgentSkillShareRequestSchema,
@@ -160,15 +167,34 @@ export const SKILL_METHODS = [
         )
       }
       // Sharing named skills is a user act: it may start the workspace's distro.
-      const discovered = await runAsWslUserAct(
-        resolvedTarget.cwd ? wslDistroForPath(resolvedTarget.cwd) : null,
-        async () =>
-          discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
-            providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
-            refresh: true,
-            gateStoppedWslDistros: false
-          })
-      )
+      const discover = async (readStoppedWslRootsFor?: { distros: readonly string[] }) =>
+        runAsWslUserAct(
+          resolvedTarget.cwd ? wslDistroForPath(resolvedTarget.cwd) : null,
+          async () =>
+            discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
+              providerRootOverrides:
+                await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
+              refresh: true,
+              ...(readStoppedWslRootsFor ? { readStoppedWslRootsFor } : {})
+            })
+        )
+      // Selectors name skills, not folders: when one is missing, start only the distros left unread.
+      let discovered = await discover()
+      const unreadDistros = [
+        ...new Set(
+          discovered.sources.flatMap((source) =>
+            source.skippedReason === 'unavailable' ? (wslDistroForPath(source.path) ?? []) : []
+          )
+        )
+      ]
+      if (
+        unreadDistros.length > 0 &&
+        !params.skillSelectors.every((selector) =>
+          discovered.skills.some((skill) => skill.id === selector || skill.name === selector)
+        )
+      ) {
+        discovered = await discover({ distros: unreadDistros })
+      }
       return runtime.publishDiscoveredSkillsFromAgent(params, discovered.skills, signal)
     }
   }),

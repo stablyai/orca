@@ -1,4 +1,6 @@
+import type { AiVaultScanIssueText } from './ai-vault-scan-issue-copy'
 import type { TuiAgent } from './tui-agent'
+import type { AgentSessionAccountHome } from './agent-session/lifecycle/agent-session-account-home'
 import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [
@@ -106,6 +108,9 @@ export type AiVaultSessionSubagentInfo = {
 }
 
 export type AiVaultSession = {
+  /** Recorded account home; null proves System default, absent means unknown. */
+  accountHome?: AgentSessionAccountHome | null
+  accountWslDistro?: string | null
   id: string
   executionHostId: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
@@ -113,7 +118,7 @@ export type AiVaultSession = {
   sessionId: string
   title: string
   cwd: string | null
-  /** The host's spellings of `cwd` under a symlinked scope path. Scope matching only; resume reads `cwd`. */
+  /** Host-proven spellings of `cwd` for matching scopes and resume targets; launch paths remain separate. */
   cwdAliases?: string[]
   branch: string | null
   model: string | null
@@ -213,7 +218,7 @@ export type AiVaultScanIssue = {
   kind?: 'host' | 'scope' | 'notice'
   path: string
   message: string
-}
+} & Omit<AiVaultScanIssueText, 'message'>
 
 export type AiVaultListArgs = {
   /** Opts a selected runtime-host refresh into content-conditional replies. */

@@ -2,14 +2,13 @@ import { createPortal } from 'react-dom'
 import { memo, useEffect, useRef, useLayoutEffect, useState } from 'react'
 import { Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import type {
-  ComposerAutocomplete,
-  NativeChatPickerItem
-} from '../../../../shared/native-chat-composer-autocomplete'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
@@ -27,6 +26,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   onChoose: (item: NativeChatPickerItem) => void
   onRetry: () => void
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
   const commands = autocomplete.items.filter(
     (item): item is Extract<NativeChatPickerItem, { kind: 'command' }> => item.kind === 'command'
@@ -278,7 +278,8 @@ function PickerListbox({
               width: bounds.width,
               bottom: window.innerHeight - bounds.top + 4
             }}
-            className="scrollbar-sleek z-50 max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating"
+            // Inside a popover (the launch setup), take the menu layer Select and DropdownMenu use above popovers.
+            className={`scrollbar-sleek max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating ${marker.current?.closest('[data-slot="popover-content"]') ? 'z-[70]' : 'z-50'}`}
           >
             {children}
           </div>,
@@ -368,6 +369,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   listboxId: string
   onChoose: (path: string) => void
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
   const { files } = mention
   const selectedIndex = Math.min(activeIndex, files.length - 1)
@@ -387,23 +389,21 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   return (
     <PickerListbox id={listboxId}>
-      {files.map((path, index) => {
-        return (
-          <PickerOptionButton
-            key={path}
-            id={`${listboxId}-option-${index}`}
-            selected={index === selectedIndex}
-            activeItemRef={activeItemRef}
-            onChoose={() => onChoose(path)}
-          >
-            <FileTypeIcon
-              filePath={path}
-              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-            />
-            <FilenameFirstPath path={path} />
-          </PickerOptionButton>
-        )
-      })}
+      {files.map((path, index) => (
+        <PickerOptionButton
+          key={path}
+          id={`${listboxId}-option-${index}`}
+          selected={index === selectedIndex}
+          activeItemRef={activeItemRef}
+          onChoose={() => onChoose(path)}
+        >
+          <FileTypeIcon
+            filePath={path}
+            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+          />
+          <FilenameFirstPath path={path} />
+        </PickerOptionButton>
+      ))}
       {statusText ? (
         <PickerStatus>
           {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}

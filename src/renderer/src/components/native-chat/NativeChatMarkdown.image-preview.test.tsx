@@ -11,6 +11,7 @@ import {
   resetLocalImageSrcStateForTests
 } from '@/components/editor/useLocalImageSrc'
 import { useAppStore } from '@/store'
+import * as imageCache from '@/components/editor/local-image-src-cache'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import {
   NativeChatMarkdownImageOwnerContext,
@@ -317,12 +318,11 @@ describe('native chat Markdown image preview', () => {
     expect(trigger).toHaveStyle({ aspectRatio: '640 / 360' })
   })
 
-  it('retries a cache-budget rejection on open after another image releases its lease', async () => {
+  it('retries a cache-byte-budget rejection on open after another image releases its lease', async () => {
     vi.stubGlobal('IntersectionObserver', ImageVisibilityObserver)
-    const content = Array.from(
-      { length: 101 },
-      (_, index) => `![Chart ${index}](chart-${index}.png)`
-    ).join('\n\n')
+    imageCache.pinLocalImageCache('reserved')
+    expect(imageCache.cacheLocalImageBlob('reserved', 'blob:reserved', 2 ** 27 - 2)).toBe(true)
+    const content = [0, 1, 2].map((i) => `![Chart ${i}](chart-${i}.png)`).join('\n\n')
     const { container } = render(<Transcript content={content} />)
     const triggers = screen.getAllByRole('button')
     expect(mocks.readRuntimeFilePreview).not.toHaveBeenCalled()
@@ -331,13 +331,13 @@ describe('native chat Markdown image preview', () => {
         ImageVisibilityObserver.current.emit(trigger, true)
       }
     })
-    expect(container.querySelectorAll('img')).toHaveLength(100)
-    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(101)
+    expect(container.querySelectorAll('img')).toHaveLength(2)
+    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(3)
     act(() => ImageVisibilityObserver.current.emit(triggers[0]!, false))
-    fireEvent.click(triggers[100]!)
-    const dialog = screen.getByRole('dialog', { name: 'Chart 100' })
-    expect(await within(dialog).findByRole('img')).toHaveAttribute('src', 'blob:image-102')
-    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(102)
+    fireEvent.click(triggers[2]!)
+    const dialog = screen.getByRole('dialog', { name: 'Chart 2' })
+    expect(await within(dialog).findByRole('img')).toHaveAttribute('src', 'blob:image-4')
+    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(4)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
     act(() => {
       for (const trigger of triggers) {
@@ -345,7 +345,8 @@ describe('native chat Markdown image preview', () => {
       }
     })
     expect(container.querySelectorAll('img')).toHaveLength(0)
-    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(102)
+    imageCache.unpinLocalImageCache('reserved')
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(4)
   })
 
   it.each([false, true])(

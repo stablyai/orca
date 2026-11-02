@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./structured-agent-session-client', () => ({ callStructuredAgentSession: mocks.call }))
-vi.mock('./local-structured-chats', () => ({ localStructuredChatsInUse: async () => true }))
 vi.mock('./local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => mocks.capabilities,
@@ -27,7 +26,7 @@ vi.mock('./host-structured-agents', () => ({
   }
 }))
 
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { useAppStore } from '@/store'
@@ -94,6 +93,33 @@ describe('host model catalog snapshots', () => {
       })
     ).toBeUndefined()
   })
+
+  it('retires a workspace answer and its derived account fallback, retaining independent answers', () => {
+    const worldwide = { ...list(true), defaultHoldsInEveryWorkspace: true as const }
+    const scoped = { ...list(false), modelsDifferByWorkspace: true as const }
+    const other = { ...NEW_CHAT, worktree: 'wt-2' }
+    recordHostModelCatalogSnapshot(PAIRED, 'grok', 'wt-1', worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'omp', 'wt-1', scoped)
+    for (const retired of [{ origin: 'unknown' } as const, { ...worldwide, models: [] }]) {
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-2', scoped)
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
+      recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', retired)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBeUndefined()
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', other)).toBe(scoped)
+      expect(readHostModelCatalogSnapshot(PAIRED, 'grok', NEW_CHAT)).toBe(worldwide)
+      expect(readHostModelCatalogSnapshot(LOCAL, 'omp', NEW_CHAT)).toBe(scoped)
+    }
+    const newer = { ...worldwide, fetchedAt: 2 }
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-2', newer)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(newer)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', null, worldwide)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', scoped)
+    recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
+  })
 })
 
 const SAVED_ONLY = 'agent-session.model-catalog.saved-only.v1'
@@ -116,12 +142,43 @@ describe('host model catalog snapshots sync', () => {
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/tmp/orca-workspaces'),
+        agentDefaultSurface: 'chat',
         nativeChatSessionOptions: { claude: { model: 'opus[1m]' }, codex: {} }
       },
       runtimeStatusByEnvironmentId: new Map()
     })
   })
   afterEach(() => stop?.())
+
+  it.each(['chat', 'terminal', undefined] as const)(
+    'preloads registered saved catalogs through the production %s aggregate',
+    async (surface) => {
+      mocks.capabilities = [SAVED_ONLY]
+      useAppStore.setState({
+        settings: {
+          ...getDefaultSettings('/tmp/orca-workspaces'),
+          agentDefaultSurface: surface,
+          nativeChatProviders: {},
+          nativeChatSessionOptions: {}
+        }
+      })
+      mocks.agents.set('local', { runtimeId: null, agents: REGISTERED })
+      stop = installHostModelCatalogSnapshotsSync()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (surface === 'chat') {
+        await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(REGISTERED.length))
+        expect(mocks.call.mock.calls).toEqual(
+          REGISTERED.map(({ agent }) => [
+            LOCAL,
+            'agentSession.modelCatalog',
+            { agent, savedOnly: true }
+          ])
+        )
+      } else {
+        expect(mocks.call).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it('retires reconnect observers after catalog removals while preserving live hosts', async () => {
     const count = 10

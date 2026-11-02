@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import { memoizeStringResult } from '../string-result-cache'
+
+// ~300 declarations repeat ~170 messages; zod schemas are immutable, so equal messages can share one instance.
+const MAX_CACHED_VALIDATION_MESSAGES = 256
 
 // Preserve legacy nonnumeric/nonfinite limits as absent. Zod v4 needs outer optional(): one hidden by pipe
 // still makes object keys required.
@@ -55,22 +59,28 @@ export const BrowserTarget = z.object({
   page: OptionalString
 })
 
-export function requiredString(message: string) {
-  return z
-    .unknown()
-    .transform((value) => (typeof value === 'string' ? value : ''))
-    .pipe(z.string().min(1, message))
-}
+export const requiredString = memoizeStringResult(
+  (message: string) =>
+    z
+      .unknown()
+      .transform((value) => (typeof value === 'string' ? value : ''))
+      .pipe(z.string().min(1, message)),
+  MAX_CACHED_VALIDATION_MESSAGES
+)
 
-export function requiredStringAllowingEmpty(message: string) {
-  return z.unknown().refine((value): value is string => typeof value === 'string', { message })
-}
+export const requiredStringAllowingEmpty = memoizeStringResult(
+  (message: string) =>
+    z.unknown().refine((value): value is string => typeof value === 'string', { message }),
+  MAX_CACHED_VALIDATION_MESSAGES
+)
 
-export function requiredNumber(message: string) {
-  return z
-    .unknown()
-    .transform((value) =>
-      typeof value === 'number' && Number.isFinite(value) ? value : Number.NaN
-    )
-    .pipe(z.number().refine((v) => Number.isFinite(v), { message }))
-}
+export const requiredNumber = memoizeStringResult(
+  (message: string) =>
+    z
+      .unknown()
+      .transform((value) =>
+        typeof value === 'number' && Number.isFinite(value) ? value : Number.NaN
+      )
+      .pipe(z.number().refine((v) => Number.isFinite(v), { message })),
+  MAX_CACHED_VALIDATION_MESSAGES
+)

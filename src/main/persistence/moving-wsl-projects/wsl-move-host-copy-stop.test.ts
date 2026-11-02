@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { stopWslMoveHostCopies, type WslMoveHostCopyPort } from './wsl-move-host-copy-stop'
+import {
+  probeWslMoveHostCopies,
+  stopWslMoveHostCopies,
+  type WslMoveHostCopyPort
+} from './wsl-move-host-copy-stop'
 
 function port(overrides: Partial<WslMoveHostCopyPort> = {}): WslMoveHostCopyPort {
   return {
@@ -11,32 +15,9 @@ function port(overrides: Partial<WslMoveHostCopyPort> = {}): WslMoveHostCopyPort
   }
 }
 
+const SLEPT = { outcome: 'stopped', slept: true }
+
 describe("undo's stop of the host's copies", () => {
-  // The host's agent kept running beside the one undo resumed here.
-  it('sleeps every host workspace and reports stopped once none of their terminals runs', async () => {
-    let checks = 0
-    const host = port({ liveTerminals: vi.fn(async () => (checks++ < 4 ? 1 : 0)) })
-
-    expect(await stopWslMoveHostCopies(['wt-a', 'wt-b'], host)).toBe('stopped')
-    expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-a')
-    expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-b')
-    expect(host.wait).toHaveBeenCalled()
-  })
-
-  it('reports still running when a terminal outlives the wait, never assuming it exited', async () => {
-    const host = port({ liveTerminals: vi.fn(async () => 1) })
-    expect(await stopWslMoveHostCopies(['wt-a'], host, 1_000)).toBe('still-running')
-  })
-
-  it('reports unreachable when the host does not answer the sleep or the check', async () => {
-    expect(await stopWslMoveHostCopies(['wt-a'], port({ sleepWorkspace: async () => null }))).toBe(
-      'unreachable'
-    )
-    expect(await stopWslMoveHostCopies(['wt-a'], port({ liveTerminals: async () => null }))).toBe(
-      'unreachable'
-    )
-  })
-
   // A host that answers for one workspace only must have none of them stopped.
   it('stops nothing when the host does not answer for every workspace up front', async () => {
     const host = port({ liveTerminals: vi.fn(async (id: string) => (id === 'wt-b' ? null : 1)) })
@@ -44,9 +25,19 @@ describe("undo's stop of the host's copies", () => {
     expect(host.sleepWorkspace).not.toHaveBeenCalled()
   })
 
-  it('checks exit even when the host refused the sleep itself', async () => {
-    const host = port({ sleepWorkspace: async () => false })
-    expect(await stopWslMoveHostCopies(['wt-a'], host)).toBe('stopped')
+  // The sleep already reached a running workspace, so its terminals wait in Sleep either way.
+  it('says the host was put to sleep when it then stops answering or a terminal outlives the wait', async () => {
+    let checks = 0
+    const silent = port({ liveTerminals: vi.fn(async () => (checks++ < 1 ? 1 : null)) })
+    expect(await stopWslMoveHostCopies(['wt-a'], silent)).toEqual({
+      outcome: 'unreachable',
+      slept: true
+    })
+    const busy = port({ liveTerminals: vi.fn(async () => 1) })
+    expect(await stopWslMoveHostCopies(['wt-a'], busy, 1_000)).toEqual({
+      outcome: 'still-running',
+      slept: true
+    })
   })
 
   // verify-15c: with the host's orcad stopped, undo of a project this computer kept no tabs for
@@ -63,8 +54,40 @@ describe("undo's stop of the host's copies", () => {
       workspacesWithTerminals: vi.fn(async () => ['wt-host-only']),
       liveTerminals: vi.fn(async () => (checks++ < 2 ? 1 : 0))
     })
-    expect(await stopWslMoveHostCopies([], host)).toBe('stopped')
+    expect(await stopWslMoveHostCopies([], host)).toEqual(SLEPT)
     expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-host-only')
+  })
+
+  // An automatic bring-back must never end a live terminal, so it reads and refuses instead.
+  describe('refusing live terminals rather than sleeping them', () => {
+    it('probes without sleeping: running, idle, or unanswering', async () => {
+      const running = port({
+        workspacesWithTerminals: vi.fn(async () => ['wt-a']),
+        liveTerminals: vi.fn(async () => 1)
+      })
+      expect(await probeWslMoveHostCopies([], running)).toBe('still-running')
+      expect(await probeWslMoveHostCopies(['wt-a'], port())).toBe('stopped')
+      expect(
+        await probeWslMoveHostCopies([], port({ workspacesWithTerminals: vi.fn(async () => null) }))
+      ).toBe('unreachable')
+      expect(running.sleepWorkspace).not.toHaveBeenCalled()
+    })
+
+    // A sleep after the census would end a terminal started in between, so refuse-live never sleeps.
+    it('never sleeps: refuses a live terminal, and reports an idle host stopped untouched', async () => {
+      const live = port({ liveTerminals: vi.fn(async () => 1) })
+      expect(await stopWslMoveHostCopies(['wt-a'], live, undefined, undefined, 'refuse-live')).toBe(
+        'still-running'
+      )
+      expect(live.sleepWorkspace).not.toHaveBeenCalled()
+
+      const idle = port({ workspacesWithTerminals: vi.fn(async () => ['wt-host-only']) })
+      expect(await stopWslMoveHostCopies(['wt-a'], idle, undefined, undefined, 'refuse-live')).toBe(
+        'stopped'
+      )
+      expect(idle.sleepWorkspace).not.toHaveBeenCalled()
+      expect(idle.wait).not.toHaveBeenCalled()
+    })
   })
 
   describe('on a slow host', () => {
@@ -92,7 +115,7 @@ describe("undo's stop of the host's copies", () => {
           vi.advanceTimersByTime(ms)
         })
       })
-      expect(await stopWslMoveHostCopies([], host, 30_000)).toBe('stopped')
+      expect(await stopWslMoveHostCopies([], host, 30_000)).toEqual(SLEPT)
     })
 
     // Polls counted, not timed: a host taking 10 s per answer stretched the wait 40-fold.
@@ -109,7 +132,9 @@ describe("undo's stop of the host's copies", () => {
           vi.advanceTimersByTime(ms)
         })
       })
-      expect(await stopWslMoveHostCopies([], host, 30_000)).toBe('still-running')
+      expect(await stopWslMoveHostCopies([], host, 30_000)).toMatchObject({
+        outcome: 'still-running'
+      })
       // The preflight and one exit check, two workspaces each: well short of 40 polls.
       expect(vi.mocked(host.liveTerminals).mock.calls.length).toBeLessThanOrEqual(4)
       expect(Date.now() - started).toBeLessThan(60_000)

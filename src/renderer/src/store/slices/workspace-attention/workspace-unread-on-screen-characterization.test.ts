@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   registerAgentSubjectReadCapture,
   subscribeAgentSubjectReads,

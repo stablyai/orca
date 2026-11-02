@@ -1,14 +1,15 @@
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import type { MobileNativeChatDraftDestination } from './composer/mobile-native-chat-draft-inputs'
 import {
   assignNativeChatPendingOccurrence,
   nativeChatPendingContentKey
-} from '../../../../src/shared/native-chat-pending-occurrence'
+} from '../../../../src/shared/native-chat/transcript/native-chat-pending-occurrence'
 import {
   NATIVE_CHAT_PENDING_SEND_LIMIT,
   prunePendingSends,
   visibleNativeChatPendingSends,
   type NativeChatPendingSend
-} from '../../../../src/shared/native-chat-pending-sends'
+} from '../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
 
 export type MobileNativeChatPendingMessage = NativeChatPendingSend & {
   // Phone-local preview URIs; these echoes retire only once their preview binds to a transcript row.
@@ -17,6 +18,7 @@ export type MobileNativeChatPendingMessage = NativeChatPendingSend & {
 
 export type MobileNativeChatSendOrigin = {
   draftKey: string
+  draftDestination: MobileNativeChatDraftDestination
   draftEditGeneration: number
   pendingKey: string | null
   normalizedText: string

@@ -1,10 +1,24 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ ipcRenderer: { invoke: vi.fn(), on: vi.fn() } }))
 
 import { getWslHostsApi } from './wsl-hosts-api'
 
 describe('WSL hosts preload API', () => {
+  beforeEach(() => {
+    vi.stubEnv('MODE', 'e2e')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('ignores the e2e fake outside an e2e build', () => {
+    vi.stubEnv('MODE', 'production')
+    const env = { ORCA_INTERNAL_WSL_HOSTS: '1', ORCA_E2E_FAKE_WSL_HOSTS: '{}' }
+    expect(getWslHostsApi(env, 'linux')).toBeUndefined()
+    expect(getWslHostsApi(env, 'win32')).toBeDefined()
+  })
+
   it('is absent on Windows and under the e2e fake while the internal gate is closed', () => {
     expect(getWslHostsApi({}, 'win32', [])).toBeUndefined()
     expect(getWslHostsApi({ ORCA_INTERNAL_WSL_HOSTS: 'true' }, 'win32', [])).toBeUndefined()
@@ -25,5 +39,12 @@ describe('WSL hosts preload API', () => {
     expect(getWslHostsApi({ ORCA_E2E_FAKE_WSL_HOSTS: '{}' }, 'linux', argv)).toBeDefined()
     expect(getWslHostsApi({}, 'darwin', argv)).toBeUndefined()
     expect(getWslHostsApi({}, 'win32', [])).toBeUndefined()
+  })
+
+  it('is absent behind an open gate a remote policy blocked, unless main stamped serve-only', () => {
+    const env = { ORCA_INTERNAL_WSL_HOSTS: '1' }
+    const blocked = '--orca-wsl-hosts-policy-blocked'
+    expect(getWslHostsApi(env, 'win32', [blocked])).toBeUndefined()
+    expect(getWslHostsApi(env, 'win32', [blocked, '--orca-wsl-hosts-serve-only'])).toBeDefined()
   })
 })

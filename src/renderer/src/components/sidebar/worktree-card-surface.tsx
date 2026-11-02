@@ -140,6 +140,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             open={showRenameErrorDialog}
             onOpenChange={setShowRenameErrorDialog}
             worktreeId={worktree.id}
+            executionHostId={worktree.hostId}
             worktreeName={worktree.displayName}
             error={worktree.firstAgentMessageRenameError}
           />

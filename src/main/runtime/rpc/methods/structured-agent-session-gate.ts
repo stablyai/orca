@@ -1,13 +1,13 @@
 // Require structured.v1 across every agentSession method before exposing journals or mutations.
 // Legacy tab restore may still install the host for fallback rows; that never admits agentSession calls.
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
-import { structuredAgentSessionHostRefusal } from '../../structured-agent-session-host-refusal'
+import { structuredAgentSessionHostRefusal } from '../../agent-session/structured-agent-session-host-refusal'
 import {
   createSupportFollowsHostSetting,
   clientReadsStructuredSessionAgent,

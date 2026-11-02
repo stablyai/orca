@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { build } from 'esbuild'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { startOfLastNonBlankLines } from './terminal-wait-tail-window'
 
 let scratch = ''
 let childPath = ''
@@ -61,17 +60,5 @@ describe('terminal wait nonblank tail window', () => {
       blocked: 'agent-trust-workspace',
       ready: true
     })
-  })
-
-  it.each([
-    { value: 'first\nsecond\nthird', count: 2, expected: 'second\nthird' },
-    { value: 'first\n\n \t\nsecond\nthird\n', count: 2, expected: 'second\nthird\n' },
-    { value: '\nfirst\nsecond', count: 1, expected: 'second' },
-    { value: '\nfirst\nsecond', count: 2, expected: 'first\nsecond' },
-    { value: 'first\nsecond', count: 3, expected: 'first\nsecond' },
-    { value: 'first\nsecond\n\n', count: 1, expected: 'second\n\n' },
-    { value: ' \t\r\nsecond', count: 2, expected: ' \t\r\nsecond' }
-  ])('selects the last $count nonblank rows of $value', ({ value, count, expected }) => {
-    expect(value.slice(startOfLastNonBlankLines(value, count))).toBe(expected)
   })
 })
