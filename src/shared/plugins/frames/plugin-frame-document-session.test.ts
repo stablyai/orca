@@ -17,6 +17,16 @@ const doc = (version: number, text: string, readOnly = false) => ({
   event: 'editor.document',
   payload: { version, readOnly, content: { kind: 'text', text } }
 })
+const bytesDoc = (version: number, bytes: number[]) => ({
+  orca: 1,
+  kind: 'evt',
+  event: 'editor.document',
+  payload: {
+    version,
+    readOnly: false,
+    content: { kind: 'bytes', bytes: new Uint8Array(bytes).buffer }
+  }
+})
 const accept = (id: number) => ({ orca: 1, kind: 'res', id, result: null })
 const refuse = (id: number, code: string) => ({
   orca: 1,
@@ -269,6 +279,66 @@ describe('orca.document.session', () => {
     fromHost(refuse(0, 'conflict'))
     await expect(flushed).rejects.toMatchObject({ code: 'conflict' })
     expect(session.value).toBe('outside')
+  })
+
+  it('keeps a flush going until a change typed during it commits too', async () => {
+    const { session, fromHost, edits } = await open()
+    session.change('b')
+    const flushed = vi.fn()
+    void session.flush().then(flushed)
+    session.change('c')
+    fromHost(accept(0))
+    await settle()
+    expect(flushed).not.toHaveBeenCalled()
+    expect(edits().map(sentText)).toEqual(['b', 'c'])
+    fromHost(accept(1))
+    await settle()
+    expect(flushed).toHaveBeenCalled()
+  })
+
+  it('rejects a waiting flush when a conflict drops a newer draft too', async () => {
+    const { session, fromHost } = await open({ debounceMs: 0 })
+    session.change('mine')
+    await settle()
+    session.change('mine, more')
+    const flushed = session.flush()
+    fromHost(doc(2, 'outside'))
+    fromHost(refuse(0, 'conflict'))
+    await expect(flushed).rejects.toMatchObject({ code: 'conflict' })
+    expect(session.value).toBe('outside')
+  })
+
+  it("keeps merge's base apart from a value buffer reused after it was accepted", async () => {
+    const merge = vi.fn((base: Uint8Array, outside: Uint8Array, mine: Uint8Array) => [
+      ...base,
+      ...outside,
+      ...mine
+    ])
+    const buffer = new Uint8Array([1])
+    const { session, fromHost } = await open(
+      {
+        debounceMs: 0,
+        merge,
+        decode: (content: Content) =>
+          content.kind === 'bytes' ? new Uint8Array(content.bytes) : new Uint8Array(),
+        encode: (value: Uint8Array | number[]) => ({
+          kind: 'bytes',
+          bytes: Uint8Array.from(value).buffer
+        })
+      },
+      bytesDoc(1, [0])
+    )
+    session.change(buffer)
+    await settle()
+    fromHost(accept(0))
+    await settle()
+    buffer[0] = 9
+    session.change(buffer)
+    await settle()
+    fromHost(bytesDoc(2, [5]))
+    fromHost(refuse(1, 'conflict'))
+    await settle()
+    expect([...(merge.mock.calls[0]?.[0] ?? [])]).toEqual([1])
   })
 
   it('neither merges nor sends after dispose', async () => {

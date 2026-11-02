@@ -76,6 +76,8 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       // Bumped by change() only, so a reused object or buffer still counts as a new change.
       var generation = 0
       var sentGeneration = 0
+      // Bumped when a conflict drops the draft for the outside document; a waiting flush rejects.
+      var discards = 0
       var inFlight = null
       var timer = null
       var disposed = false
@@ -102,6 +104,7 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
         if (!merge) {
           value = outside
           dirty = false
+          discards += 1
           emitReplace(outside)
           throw error
         }
@@ -124,7 +127,8 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
         sentGeneration = generation
         var mine = sentGeneration
         var attempt = applyEdit({ baseVersion: baseVersion, content: content }).then(function () {
-          base = sent
+          // Decoded from the sent snapshot, so a reused value buffer cannot change merge's base.
+          base = decode(content)
           baseContent = content
           if (generation === mine) dirty = false
         }, refused)
@@ -142,13 +146,15 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       function flush() {
         clearTimer()
         if (disposed) return Promise.resolve()
-        var current = inFlight
-        if (!current) return dirty && !doc.readOnly ? send() : Promise.resolve()
+        var current = inFlight || (dirty && !doc.readOnly ? send() : null)
+        if (!current) return Promise.resolve()
         var waited = sentGeneration
+        var discarded = discards
+        // Keeps draining: a change made while this edit was in flight must commit too.
         return current.then(function () {
           return generation !== waited ? flush() : undefined
         }, function (error) {
-          if (!disposed && generation !== waited) return flush()
+          if (!disposed && generation !== waited && discards === discarded) return flush()
           throw error
         })
       }
