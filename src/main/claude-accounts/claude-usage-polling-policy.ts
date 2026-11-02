@@ -29,7 +29,7 @@ export function shouldPollClaudeUsage(settings: ClaudeUsagePollingSettings): boo
 export function createClaudeUsagePollingSwitch(
   rateLimits: UsagePollingRateLimits,
   getSettings: () => ClaudeUsagePollingSettings
-): { apply: (updates?: object) => boolean; polling: () => boolean } {
+): { apply: (updates?: Partial<GlobalSettings>) => boolean; polling: () => boolean } {
   let release: (() => void) | null = null
   return {
     polling: () => release !== null,

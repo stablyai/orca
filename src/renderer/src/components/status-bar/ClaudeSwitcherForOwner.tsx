@@ -344,9 +344,7 @@ export function ClaudeSwitcherForOwner({
         panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
         badge={
           accounts.pool === 'on' ? (
-            <Badge variant="hostContext" className="text-3xs">
-              {translate('accounts.claude.pool.badge', 'Pool')}
-            </Badge>
+            <Badge variant="hostContext">{translate('accounts.claude.pool.badge', 'Pool')}</Badge>
           ) : undefined
         }
         onOpenSettings={() => {

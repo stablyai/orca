@@ -27,7 +27,7 @@ export function ClaudePaneAccountChip({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge variant="hostContext" aria-label={name} className="mr-1 max-w-32 text-3xs">
+        <Badge variant="hostContext" aria-label={name} className="mr-1 max-w-32">
           <span className="truncate">{label}</span>
         </Badge>
       </TooltipTrigger>
