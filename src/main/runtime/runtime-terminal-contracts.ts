@@ -81,6 +81,8 @@ export type TerminalCreateOptions = {
   targetGroupId?: string
   /** Main-internal placement anchor; removed before PTY dispatch. */
   afterTabId?: string
+  /** A tab this create makes takes the launch's initial place (afterTabId, else first). */
+  placeNewTab?: true
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   /** Attribute host-built startupAgent launches by surface; missing/unknown surface becomes unknown. Ignore without startupAgent. */

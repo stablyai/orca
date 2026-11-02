@@ -7,7 +7,7 @@ import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
-import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
+import { placeCreatedTerminalTab } from '@/lib/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
@@ -38,6 +38,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         viewMode,
         targetGroupId,
         afterTabId,
+        newTabPlacement,
         shellOverride,
         title,
         ptyId,
@@ -104,10 +105,11 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           if (frameDrawnTab) {
             reusedTab = frameDrawnTab
           }
+          const newTabGroupId = targetGroupId ?? newTabPlacement?.groupId
           const tab =
             reusedTab ??
             (ptyId
-              ? store.createTab(worktreeId, targetGroupId, shellOverride, {
+              ? store.createTab(worktreeId, newTabGroupId, shellOverride, {
                   initialPtyId: ptyId,
                   activate:
                     shouldActivate ||
@@ -143,14 +145,11 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                       }
                 ))
           if (afterTabId) {
-            const unifiedTabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
-            const createdUnified = unifiedTabs.find((item) => item.entityId === tab.id)?.id
-            const anchorUnified = unifiedTabs.find(
-              (item) => item.id === afterTabId || item.entityId === afterTabId
-            )?.id
-            if (createdUnified && anchorUnified) {
-              insertUnifiedTabAfterAnchor(worktreeId, createdUnified, anchorUnified)
-            }
+            placeCreatedTerminalTab(worktreeId, tab.id, afterTabId)
+          }
+          // Only the tab this reveal made takes the launch's initial place; an existing one keeps the user's.
+          if (newTabPlacement && !reusedTab) {
+            placeCreatedTerminalTab(worktreeId, tab.id, newTabPlacement.afterTabId ?? null)
           }
           // Different reused IDs break the PTY’s baked-in paneKey attribution; warn in dev.
           if (tabId !== undefined && tab.id !== tabId) {

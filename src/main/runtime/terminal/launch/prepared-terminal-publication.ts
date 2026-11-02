@@ -157,6 +157,8 @@ async function publish(
     // Later attachments are rejoins: only the first publication applies the view and holds sends.
     ...(publication.viewMode && !status.published ? { viewMode: publication.viewMode } : {}),
     ...(status.published ? {} : { preparedFirstPublication: true as const }),
+    // The layout owner places the agent tab only when it creates it; reattaching keeps the user's order.
+    ...(!status.published && descriptor.presentation.primary ? { placeNewTab: true as const } : {}),
     ...(descriptor.presentation.title ? { title: descriptor.presentation.title } : {}),
     ...(descriptor.presentation.groupId ? { targetGroupId: descriptor.presentation.groupId } : {}),
     ...(descriptor.presentation.splitPlacement?.afterTabId

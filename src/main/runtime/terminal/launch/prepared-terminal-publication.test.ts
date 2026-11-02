@@ -363,6 +363,11 @@ describe('prepared terminal publication recovery', () => {
     await reconcilePreparedTerminalPublications(f.ports)
     expect(f.ports.placePrimary).toHaveBeenCalledTimes(1)
     expect(f.create).toHaveBeenCalledTimes(2)
+    // The window-owned layout gets the same placement on the agent's reveal, never Setup's.
+    expect(f.createTerminal.mock.calls.map(([, options]) => options.placeNewTab)).toEqual([
+      undefined,
+      true
+    ])
   })
 
   it('retains the physical owner when the user closed its pane before publication', async () => {

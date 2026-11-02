@@ -28,6 +28,7 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
+  RuntimeNewTerminalTabPlacement,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -79,6 +80,7 @@ export type RuntimeNotifier = {
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       afterTabId?: string
+      newTabPlacement?: RuntimeNewTerminalTabPlacement
       shellOverride?: string
       activate?: boolean
       presentation?: RuntimeTerminalPresentation

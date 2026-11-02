@@ -129,6 +129,7 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
           ...(opts.afterTabId ? { afterTabId: opts.afterTabId } : {}),
+          ...(opts.newTabPlacement ? { newTabPlacement: opts.newTabPlacement } : {}),
           ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),

@@ -59,6 +59,14 @@ export function revealCreatedTerminal(args: {
           ...(launchToken ? { launchToken } : {}),
           ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
           ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+          ...(launchOpts.placeNewTab
+            ? {
+                newTabPlacement: {
+                  ...(launchOpts.targetGroupId ? { groupId: launchOpts.targetGroupId } : {}),
+                  ...(launchOpts.afterTabId ? { afterTabId: launchOpts.afterTabId } : {})
+                }
+              }
+            : {}),
           activate: presentation === 'focused',
           ...(presentation ? { presentation } : {}),
           ...dependencies.terminalRevealViewerOptions(opts),

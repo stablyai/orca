@@ -93,12 +93,24 @@ export function prepareWebSessionTabsSnapshotGroups(
         })
       }
     }
+    // The host's order proposes only where a never-seen tab first lands; known tabs keep the client's order.
+    const hostOrders = (snapshot.tabGroups ?? []).map((group) =>
+      group.tabOrder.flatMap((hostTabId) => hostToLocalTabId.get(hostTabId) ?? [])
+    )
+    const nextKnownInHostOrder = (tabId: string): string | undefined => {
+      const order = hostOrders.find((candidate) => candidate.includes(tabId))
+      return order?.slice(order.indexOf(tabId) + 1).find((id) => knownGroupTabIds.has(id))
+    }
     const adoptedTabs = mirroredUnifiedTabs
       .filter((tab) => !knownGroupTabIds.has(tab.id))
-      .map((tab) => ({
-        tabId: tab.id,
-        groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId
-      }))
+      .map((tab) => {
+        const beforeTabId = nextKnownInHostOrder(tab.id)
+        return {
+          tabId: tab.id,
+          groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId,
+          ...(beforeTabId ? { beforeTabId } : {})
+        }
+      })
     return reconcileClientOwnedTabPlacement({
       currentGroups,
       worktreeId,

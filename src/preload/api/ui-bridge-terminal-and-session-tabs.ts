@@ -24,6 +24,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   RuntimeMobileSessionTabMove,
+  RuntimeNewTerminalTabPlacement,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -44,6 +45,7 @@ export const uiTerminalAndSessionTabsApi = {
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       afterTabId?: string
+      newTabPlacement?: RuntimeNewTerminalTabPlacement
       shellOverride?: string
       title?: string
       ptyId?: string
@@ -74,6 +76,7 @@ export const uiTerminalAndSessionTabsApi = {
         viewMode?: 'terminal' | 'chat'
         targetGroupId?: string
         afterTabId?: string
+        newTabPlacement?: RuntimeNewTerminalTabPlacement
         shellOverride?: string
         title?: string
         ptyId?: string

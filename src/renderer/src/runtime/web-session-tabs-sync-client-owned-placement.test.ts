@@ -233,6 +233,51 @@ describe('client-owned tab placement for paired worktrees', () => {
     expect(groupById(patch, HOST_GROUP)?.tabOrder).toEqual([T1, T2, T3, BROWSER_HOST_TAB])
   })
 
+  // A prepared agent publishes after Setup but first in the host's order; known tabs never move.
+  it('first places an unseen host tab before the next tab the client already holds', () => {
+    const clientWith = (tabOrder: string[]) =>
+      makeState({
+        activeGroupIdByWorktree: { [WT]: HOST_GROUP },
+        groupsByWorktree: { [WT]: [{ id: HOST_GROUP, worktreeId: WT, activeTabId: T2, tabOrder }] },
+        layoutByWorktree: { [WT]: { type: 'leaf', groupId: HOST_GROUP } },
+        unifiedTabsByWorktree: {
+          [WT]: tabOrder.map((id, index) => terminalUnifiedTab(id, HOST_GROUP, index))
+        }
+      })
+    const agentFirst = (snapshotVersion: number) =>
+      makeSnapshot(
+        [
+          terminalSurface('host-tab-1', LEAF_ID, 'terminal-1'),
+          terminalSurface('host-tab-2', SECOND_LEAF_ID, 'terminal-2', true)
+        ],
+        {
+          snapshotVersion,
+          activeGroupId: HOST_GROUP,
+          activeTabId: `host-tab-2::${SECOND_LEAF_ID}`,
+          tabGroups: [
+            {
+              id: HOST_GROUP,
+              activeTabId: 'host-tab-2',
+              tabOrder: ['host-tab-1', 'host-tab-2'],
+              recentTabIds: []
+            }
+          ]
+        }
+      )
+
+    const adopted = applyWebSessionTabsSnapshot(clientWith([T2]), agentFirst(2), ENV, NOW)
+    expect(groupById(adopted as Partial<WebSessionTabsSyncState>, HOST_GROUP)?.tabOrder).toEqual([
+      T1,
+      T2
+    ])
+    // The paired user moved the agent after Setup; the same host order must not undo that.
+    const later = applyWebSessionTabsSnapshot(clientWith([T2, T1]), agentFirst(3), ENV, NOW + 1)
+    // No group patch means the client's order stands.
+    expect(
+      groupById(later as Partial<WebSessionTabsSyncState>, HOST_GROUP)?.tabOrder ?? [T2, T1]
+    ).toEqual([T2, T1])
+  })
+
   // Ambient host activeTabId must not override client focus.
   it('leaves every split group active tab untouched when a snapshot carries no navigation intent', () => {
     recordWebSessionBrowserPlacement({

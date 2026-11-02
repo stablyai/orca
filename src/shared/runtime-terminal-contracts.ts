@@ -238,6 +238,9 @@ export type RuntimeTerminalAgentStatus = {
 
 export type RuntimeTerminalPresentation = 'background' | 'focused'
 
+/** Where a reveal puts a tab it creates: after `afterTabId` when given, else first. A tab that already exists keeps its place. */
+export type RuntimeNewTerminalTabPlacement = { groupId?: string; afterTabId?: string }
+
 type RuntimeTerminalCreateBaseRequestPayload = {
   requestId: string
   worktreeId?: string

@@ -49,6 +49,7 @@ import type {
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type {
   RuntimeMobileSessionTabMove,
+  RuntimeNewTerminalTabPlacement,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -193,6 +194,7 @@ export type UiCommandEventApi = {
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       afterTabId?: string
+      newTabPlacement?: RuntimeNewTerminalTabPlacement
       shellOverride?: string
       title?: string
       ptyId?: string

@@ -231,7 +231,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithPrepa
             activate: presentation === 'focused',
             selectIfNoActiveTab: presentation !== 'background',
             ...(launch.effectiveViewMode ? { viewMode: launch.effectiveViewMode } : {}),
-            ...(savedStartupCwd !== workspace.path ? { startupCwd: savedStartupCwd } : {})
+            ...(savedStartupCwd !== workspace.path ? { startupCwd: savedStartupCwd } : {}),
+            ...(launchOpts.placeNewTab && !launchOpts.afterTabId ? { placeFirst: true } : {})
           })
         }
         const reveal = revealCreatedTerminal({

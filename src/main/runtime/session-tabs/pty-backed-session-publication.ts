@@ -52,6 +52,8 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       viewMode?: 'terminal' | 'chat'
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
       notify?: boolean
+      /** A tab no row or group lists yet goes first; a listed one keeps its place. */
+      placeFirst?: boolean
     }
   ): void {
     if (
@@ -147,6 +149,10 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       })),
       [tab]
     )
+    const isNewTab =
+      !existing?.tabs.some(
+        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === args.tabId
+      ) && !existing?.tabGroups?.some((group) => group.tabOrder.includes(args.tabId))
     const activeTab =
       (tab.isActive ? tab : tabs.find((candidate) => candidate.id === existing?.activeTabId)) ??
       tabs.find((candidate) => candidate.isActive) ??
@@ -160,16 +166,19 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       activeGroupId: existing?.activeGroupId ?? getHeadlessMobileSessionGroupId(worktreeId),
       activeTabId: activeTab?.id ?? null,
       activeTabType: activeTab?.type ?? null,
-      tabGroups: appendChatTabOrder(
-        mergeMobileSessionTabGroups(
-          worktreeId,
+      tabGroups: placeTabFirst(
+        appendChatTabOrder(
+          mergeMobileSessionTabGroups(
+            worktreeId,
+            existing?.tabGroups ?? [],
+            tabs,
+            activeTab?.type === 'terminal' ? activeTab : null
+          ),
           existing?.tabGroups ?? [],
           tabs,
-          activeTab?.type === 'terminal' ? activeTab : null
+          activeTab?.id ?? null
         ),
-        existing?.tabGroups ?? [],
-        tabs,
-        activeTab?.id ?? null
+        args.placeFirst && isNewTab ? [args.tabId, tab.id] : []
       ),
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
@@ -213,4 +222,20 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     }
     return worktreeIds
   }
+}
+
+/** Moves a just-admitted tab's order ids to the front of the group that lists them. */
+function placeTabFirst<T extends { tabOrder: string[] }>(groups: T[], orderIds: string[]): T[] {
+  if (orderIds.length === 0) {
+    return groups
+  }
+  return groups.map((group) => {
+    const placed = group.tabOrder.filter((id) => orderIds.includes(id))
+    return placed.length === 0
+      ? group
+      : {
+          ...group,
+          tabOrder: [...placed, ...group.tabOrder.filter((id) => !orderIds.includes(id))]
+        }
+  })
 }
