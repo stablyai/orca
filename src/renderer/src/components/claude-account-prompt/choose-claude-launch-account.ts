@@ -159,8 +159,7 @@ export async function chooseClaudeLaunchAccountIdForRepo(
     : resolveLaunchClaudeAccountId(findLaunchRepo(useAppStore.getState(), { repoId }))
 }
 
-// Why: launch synchronously when no prompt can apply so menu-close focus handoffs keep today's timing.
-/** A delayed launch resolves to its result, or undefined when the prompt is cancelled. */
+// Why sync when no prompt applies: menu-close focus handoffs keep their timing. A cancelled prompt resolves undefined.
 export function launchWithClaudeAccountChoice<R>(
   agent: TuiAgent,
   target: { repoId?: string; worktreeId?: string; afterDeferredLaunch?: () => void },
