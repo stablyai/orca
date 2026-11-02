@@ -89,8 +89,11 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const recall = useNativeChatComposerRecall({
       draft,
       source: recallSource,
-      inputRef: textareaRef
+      inputRef: textareaRef,
+      setDraft,
+      setCaret
     })
+    const promptSearch = editSession ? undefined : recall.promptSearch
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
       targetPtyId,
@@ -336,6 +339,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       activeSuggestion,
       draft,
       recall: editSession ? undefined : recall.recall,
+      promptSearch,
       isComposing: imeEnterGesture.isComposing,
       completePickerItem: editSession ? chooseEditItem : goalMode.interceptPick(completeItem),
       dispatchPickerCommand: editSession
@@ -375,6 +379,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           autocomplete={autocomplete}
           mentionFiles={mentionFiles}
           activeSuggestion={activeSuggestion}
+          promptSearch={promptSearch}
           notices={notices}
           imageAttachments={imageAttachments}
           numberImages={Boolean(structuredTransport)}

@@ -7,6 +7,8 @@ import {
 } from 'react'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isMacPlatform } from './native-chat-shortcut'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-types'
@@ -16,6 +18,7 @@ import {
   stepNativeChatPromptRecall,
   type NativeChatComposerRecall
 } from './native-chat-sent-prompt-history'
+import type { NativeChatComposerPromptSearch } from './use-native-chat-composer-prompt-search'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete
@@ -26,6 +29,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   /** Image chips count as composer content, like typed text. */
   hasAttachments?: boolean
   recall?: NativeChatComposerRecall | undefined
+  promptSearch?: NativeChatComposerPromptSearch | undefined
   isComposing: () => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
@@ -47,6 +51,7 @@ export function useNativeChatComposerKeyDown({
   draft,
   hasAttachments = false,
   recall,
+  promptSearch,
   isComposing,
   completePickerItem,
   dispatchPickerCommand,
@@ -61,6 +66,8 @@ export function useNativeChatComposerKeyDown({
   // Read through a ref: the transcript changes on every streamed frame.
   const recallRef = useRef(recall)
   recallRef.current = recall
+  const promptSearchRef = useRef(promptSearch)
+  promptSearchRef.current = promptSearch
   return useCallback(
     (event) => {
       if (isComposing() || event.nativeEvent.isComposing || event.keyCode === 229) {
@@ -69,6 +76,38 @@ export function useNativeChatComposerKeyDown({
           event.preventDefault()
         }
         return
+      }
+      const search = promptSearchRef.current
+      // Ctrl, not Cmd, on every platform: the reverse search that shells and agent CLIs bind.
+      if (search && keybindingMatchesInput('Ctrl+R', event, getShortcutPlatform())) {
+        event.preventDefault()
+        // Repeating the chord steps to the next older match, as in a shell.
+        search.setStep({ query: draft, index: search.matches ? search.activeIndex + 1 : 0 })
+        return
+      }
+      if (search?.matches) {
+        const { matches, activeIndex } = search
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault()
+          const delta = event.key === 'ArrowDown' ? 1 : -1
+          search.setStep({ query: draft, index: Math.max(activeIndex + delta, 0) })
+          return
+        }
+        if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
+          event.preventDefault()
+          const match = matches[activeIndex]
+          if (match) {
+            search.choose(match.prompt)
+          } else {
+            search.setStep(null)
+          }
+          return
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          search.setStep(null)
+          return
+        }
       }
       // An open layer that keeps focus here, like the context card, already spent this Escape closing
       // itself; a layer around the composer (a launch panel) leaves an open picker to take it.

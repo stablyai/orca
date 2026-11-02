@@ -9,7 +9,8 @@ import { cn } from '@/lib/utils'
 import { useNotificationCardComposerClearance } from '@/lib/notification-card-composer-clearance'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
-import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
+import { NativeChatComposerMenu, nativeChatComposerMenuState } from './NativeChatComposerMenu'
+import type { NativeChatComposerPromptSearch } from './use-native-chat-composer-prompt-search'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
@@ -47,6 +48,7 @@ export type NativeChatComposerFieldProps = {
   autocomplete: ComposerAutocomplete
   mentionFiles: NativeChatMentionFiles
   activeSuggestion: number
+  promptSearch?: NativeChatComposerPromptSearch | undefined
   notices: readonly NativeChatComposerNotice[]
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   /** A structured chat numbers its images, as its chips in the prompt read. */
@@ -140,6 +142,7 @@ export function NativeChatComposerField({
   autocomplete,
   mentionFiles,
   activeSuggestion,
+  promptSearch,
   notices,
   imageAttachments,
   numberImages = false,
@@ -181,12 +184,8 @@ export function NativeChatComposerField({
   launchPrompt
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
-  const optionCount =
-    autocomplete.mode === 'slash'
-      ? autocomplete.items.length
-      : autocomplete.mode === 'mention'
-        ? mentionFiles.files.length
-        : 0
+  const menuSources = { autocomplete, mentionFiles, activeSuggestion, promptSearch }
+  const menu = nativeChatComposerMenuState(menuSources)
   // Value the IME started from, and whether a programmatic clear was dropped on top of it.
   const compositionBaseRef = useRef('')
   const imageRow = useMemo(() => imageAttachments.map(({ id }) => id), [imageAttachments])
@@ -245,7 +244,11 @@ export function NativeChatComposerField({
   const dictationToggle = useLatestHandler(onDictationToggle)
   const dictationHoldStart = useLatestHandler(onDictationHoldStart)
   const dictationHoldEnd = useLatestHandler(onDictationHoldEnd)
-  const send = useLatestHandler(onSend)
+  const send = useLatestHandler(() => {
+    // The draft a send clears is no query to keep searching on.
+    promptSearch?.setStep(null)
+    onSend()
+  })
   const stop = useLatestHandler(onStop ?? noop)
   const exitGoalMode = useLatestHandler(goalMode?.exit ?? noop)
 
@@ -283,23 +286,13 @@ export function NativeChatComposerField({
           ref={columnRef}
           className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
         >
-          {autocomplete.mode === 'slash' ? (
-            <NativeChatPickerMenu
-              autocomplete={autocomplete}
-              activeIndex={activeSuggestion}
-              listboxId={pickerListboxId}
-              onChoose={onChoosePickerItem}
-              onRetry={onRetrySkills}
-            />
-          ) : null}
-          {autocomplete.mode === 'mention' ? (
-            <NativeChatMentionMenu
-              mention={mentionFiles}
-              activeIndex={activeSuggestion}
-              listboxId={pickerListboxId}
-              onChoose={onChooseMentionFile}
-            />
-          ) : null}
+          <NativeChatComposerMenu
+            {...menuSources}
+            listboxId={pickerListboxId}
+            onChoosePickerItem={onChoosePickerItem}
+            onRetrySkills={onRetrySkills}
+            onChooseMentionFile={onChooseMentionFile}
+          />
           <NativeChatComposerNotices
             notices={notices.map((notice) =>
               // A dismissed row takes its focused × with it; the message box gets focus back.
@@ -356,11 +349,11 @@ export function NativeChatComposerField({
               onCompositionEnd={editorCompositionEnd}
               onPasteCapture={editorPaste}
               onSelect={editorSelect}
-              aria-expanded={autocomplete.mode !== 'none'}
-              aria-controls={autocomplete.mode !== 'none' ? pickerListboxId : undefined}
+              aria-expanded={menu.open}
+              aria-controls={menu.open ? pickerListboxId : undefined}
               aria-activedescendant={
-                optionCount > 0
-                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, optionCount - 1)}`
+                menu.optionCount > 0
+                  ? `${pickerListboxId}-option-${Math.min(menu.activeOption, menu.optionCount - 1)}`
                   : undefined
               }
               placeholder={

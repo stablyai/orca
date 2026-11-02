@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   nativeChatSentPrompts,
+  searchNativeChatSentPrompts,
   stepNativeChatPromptRecall
 } from './native-chat-sent-prompt-history'
 
@@ -93,6 +94,33 @@ describe('nativeChatSentPrompts', () => {
       '/model opus',
       'after',
       '/compact'
+    ])
+  })
+})
+
+describe('searchNativeChatSentPrompts', () => {
+  const prompts = [
+    { id: '1', prompt: 'Fix the build' },
+    { id: '2', prompt: 'write docs' },
+    { id: '3', prompt: 'fix the build' },
+    { id: '4', prompt: 'fix the tests' },
+    { id: '5', prompt: 'Fix the build' }
+  ]
+
+  it('matches case-insensitively, newest first, listing a repeated prompt once', () => {
+    expect(searchNativeChatSentPrompts(prompts, ' FIX ')).toEqual([
+      { id: '5', prompt: 'Fix the build' },
+      { id: '4', prompt: 'fix the tests' },
+      { id: '3', prompt: 'fix the build' }
+    ])
+  })
+
+  it('lists every prompt for an empty query', () => {
+    expect(searchNativeChatSentPrompts(prompts, '').map(({ id }) => id)).toEqual([
+      '5',
+      '4',
+      '3',
+      '2'
     ])
   })
 })
