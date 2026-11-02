@@ -3,22 +3,22 @@
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { createJiti } from 'jiti'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from '../counterbalanced-benchmark-schedule.mjs'
 
 const ROUND_COUNT = 6
 const MIN_ROUND_MS = 120
 const jiti = createJiti(import.meta.url, {
   jsx: true,
-  alias: { '@': fileURLToPath(new URL('../../src/renderer/src', import.meta.url)) }
+  alias: { '@': fileURLToPath(new URL('../../../src/renderer/src', import.meta.url)) }
 })
 const { compareBaseSensitivityLocaleText } = await jiti.import(
-  '../../src/shared/locale-text-collators.ts'
+  '../../../src/shared/locale-text-collators.ts'
 )
 const { sortJiraIssues } = await jiti.import(
-  '../../src/renderer/src/components/jira-issue-sorter.ts'
+  '../../../src/renderer/src/components/jira-issue-sorter.ts'
 )
 const { sortAutomationListViewItems } = await jiti.import(
-  '../../src/renderer/src/components/automations/automation-list-view.ts'
+  '../../../src/renderer/src/components/automations/automation-list-view.ts'
 )
 const automationLocale = 'en-US'
 

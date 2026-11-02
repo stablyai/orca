@@ -11,12 +11,6 @@ import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
 import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
 import { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
 
-export { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mjs'
-export { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
-export { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
-export { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
-export { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
-
 const AGENT_CATALOG_PREFIX = 'auto.lib.agent.catalog.'
 const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
 
