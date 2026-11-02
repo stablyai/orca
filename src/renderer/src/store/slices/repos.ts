@@ -17,6 +17,7 @@ import { createProjectUpdateActions } from '../projects/project-update'
 import { createRepoUpdateActions } from '../repos/repo-update'
 import { createRepoOrderingActions } from '../repos/repo-ordering'
 import { fetchWslMovedProjects } from '../repos/wsl-moved-projects'
+import { seedReposFromHostCatalogSnapshots } from '../repos/host-repo-catalog-seed'
 
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => {
   const repoCatalogActions = createRepoCatalogActions(set, get)
@@ -42,6 +43,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     folderWorkspaces: [],
     wslMovedProjects: [],
     fetchWslMovedProjects: () => fetchWslMovedProjects(set),
+    seedReposFromHostCatalogSnapshots: () => seedReposFromHostCatalogSnapshots(set),
     folderWorkspacePathStatuses: {},
     floatingWorkspacePath: null,
     setFloatingWorkspacePath: (path) =>

@@ -126,7 +126,8 @@ describe('WSL hosts with the internal gate closed', () => {
     getWorkspaceSessionHostIds: () => [],
     updateSettings: vi.fn(),
     removeWorkspaceSessionHost: vi.fn(),
-    setRemoteLayoutSnapshot: vi.fn()
+    setRemoteLayoutSnapshot: vi.fn(),
+    setHostRepoCatalogSnapshot: vi.fn()
   }
 
   beforeEach(() => {
