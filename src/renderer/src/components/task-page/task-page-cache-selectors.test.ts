@@ -4,6 +4,8 @@ import { shallow } from 'zustand/shallow'
 import { workItemsCacheKey } from '@/store/github/cache-identity'
 import type { CacheEntry } from '@/store/github/cache-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { Repo } from '../../../../shared/repo-types'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import {
   buildTaskPageRepoSourceState,
@@ -25,6 +27,13 @@ import { reconcileTaskPageLinearIssuesAfterLandingRefresh } from './linear/task-
 function entry<T>(data: T): CacheEntry<T> {
   return { data, fetchedAt: 1 }
 }
+
+// Rows are store rows: a row's cache key binds from the row, exactly as the fetch that wrote it.
+function repoRow(fields: Pick<Repo, 'id' | 'path'> & Partial<Repo>): Repo {
+  return { displayName: fields.path, badgeColor: '#000', addedAt: 1, ...fields }
+}
+const rowKey = (repo: Repo, scope?: string, owner = repo.id) =>
+  workItemsCacheKey(owner, 20, '', scope, githubTaskBinding(repo))
 
 function workItem(id: string, repoId: string): GitHubWorkItem {
   return { id, repoId, title: id } as GitHubWorkItem
@@ -77,10 +86,10 @@ describe('task page cache selectors', () => {
   })
 
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {
-    const repo = { id: 'repo-1', path: '/repo/one' }
+    const repo = repoRow({ id: 'repo-1', path: '/repo/one' })
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
     const firstCache = {
-      [workItemsCacheKey(repo.id, 20, '')]: selectedEntry
+      [rowKey(repo)]: selectedEntry
     }
     const secondCache = {
       ...firstCache,
@@ -172,7 +181,7 @@ describe('task page cache selectors', () => {
   })
 
   it('keeps an unknown twin retryable while omitting only its proven other-forge source', () => {
-    const unknown = { id: 'twin', path: '/same/path', displayName: 'unknown twin' }
+    const unknown = repoRow({ id: 'twin', path: '/same/path', displayName: 'unknown twin' })
     const sources = { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
     const unknownEntry = { data: [], fetchedAt: 1, sources }
     const ineligibleEntry = {
@@ -192,8 +201,8 @@ describe('task page cache selectors', () => {
     for (const { repoFields, scope } of pairedScopes) {
       const provenOther = { ...unknown, ...repoFields, displayName: 'proven other-forge twin' }
       const cache = {
-        [workItemsCacheKey('twin', 20, '', 'local')]: unknownEntry,
-        [workItemsCacheKey('twin', 20, '', scope)]: ineligibleEntry
+        [rowKey(unknown, 'local')]: unknownEntry,
+        [rowKey(provenOther, scope)]: ineligibleEntry
       }
       for (const repos of [
         [unknown, provenOther],
@@ -247,24 +256,24 @@ describe('task page cache selectors', () => {
   })
 
   it('selects work-item cache entries by repo id, not legacy path keys', () => {
-    const repo = { id: 'repo-1', path: '/same/path' }
+    const repo = repoRow({ id: 'repo-1', path: '/same/path' })
     const repoEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
     const pathEntry = entry<GitHubWorkItem[]>([workItem('stale', 'legacy')])
     const cache = {
-      [workItemsCacheKey(repo.id, 20, '')]: repoEntry,
-      [workItemsCacheKey(repo.path, 20, '')]: pathEntry
+      [rowKey(repo)]: repoEntry,
+      [rowKey(repo, undefined, repo.path)]: pathEntry
     }
 
     expect(selectTaskPageWorkItemsCacheEntries(cache, [repo], 20, '')).toEqual([repoEntry])
   })
 
   it('selects host-scoped work-item cache entries for remote repos', () => {
-    const repo = { id: 'repo-1', path: '/same/path', executionHostId: 'runtime:env-1' }
+    const repo = repoRow({ id: 'repo-1', path: '/same/path', executionHostId: 'runtime:env-1' })
     const remoteEntry = entry<GitHubWorkItem[]>([workItem('issue-remote', 'repo-1')])
     const localEntry = entry<GitHubWorkItem[]>([workItem('issue-local', 'repo-1')])
     const cache = {
-      [workItemsCacheKey(repo.id, 20, '')]: localEntry,
-      [workItemsCacheKey(repo.id, 20, '', repo.executionHostId)]: remoteEntry
+      [rowKey(repo)]: localEntry,
+      [rowKey(repo, repo.executionHostId)]: remoteEntry
     }
 
     expect(selectTaskPageWorkItemsCacheEntries(cache, [repo], 20, '')).toEqual([remoteEntry])

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
-import { githubTaskBinding } from '@/lib/github-task-observation'
 import { selectTaskPageWorkItemsCacheEntries } from '../../components/task-page/task-page-cache-selectors'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -54,7 +53,7 @@ describe('work-item cache for a repo id on this computer and over SSH', () => {
 
     const entries = selectTaskPageWorkItemsCacheEntries(
       store.getState().workItemsCache,
-      [localRow, sshRow].map((row) => ({ ...row, binding: githubTaskBinding(row) })),
+      [localRow, sshRow],
       24,
       ''
     )
@@ -72,7 +71,7 @@ describe('work-item cache for a repo id on this computer and over SSH', () => {
 
     const [entry] = selectTaskPageWorkItemsCacheEntries(
       store.getState().workItemsCache,
-      [{ ...localRow, binding: githubTaskBinding(localRow) }],
+      [localRow],
       24,
       ''
     )

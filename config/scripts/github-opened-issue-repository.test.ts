@@ -83,7 +83,7 @@ import {
   runGHEditLabelToggle,
   runGHEditStateChange
 } from '../../src/renderer/src/components/github-item-dialog/edit-item-fields/gh-edit-section-mutations'
-import { findTaskPageDialogWorkItem } from '../../src/renderer/src/components/task-page/task-page-cache-selectors'
+import { findTaskPageDialogWorkItem } from '../../src/renderer/src/components/task-page/task-page-dialog-work-item'
 import { getTaskPageRepoSourceContext } from '../../src/renderer/src/components/task-page/task-page-source-context'
 import { workItemsCacheKey } from '../../src/renderer/src/store/github/cache-identity'
 import { createTestStore } from '../../src/renderer/src/store/slices/github-slice-test-harness'

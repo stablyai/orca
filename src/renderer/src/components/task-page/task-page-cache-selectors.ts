@@ -1,5 +1,7 @@
 import { shallow } from 'zustand/shallow'
 import { workItemsCacheKey } from '@/store/github/cache-identity'
+import { githubTaskBinding } from '@/lib/github-task-observation'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   CacheEntry,
@@ -20,9 +22,12 @@ export type TaskPageRepoCacheInput = {
   executionHostId?: string | null
   connectionId?: string | null
   sourceCacheScope?: string | null
-  binding?: string
   candidateOwner?: string
 }
+
+/** A store row, so its cache key binds from the row exactly as the fetch that wrote it did. */
+export type TaskPageRepoCacheRowInput = Repo &
+  Pick<TaskPageRepoCacheInput, 'sourceCacheScope' | 'candidateOwner'>
 
 export type TaskPageRepoSourceState = {
   repoId: string
@@ -64,20 +69,23 @@ function taskPageRepoSourceKey(repo: TaskPageRepoCacheInput): string {
 export type TaskPageRepoCacheRow = { sourceKey: string; cacheKey: string; binding?: string }
 
 export function getTaskPageRepoCacheRows(
-  repos: readonly TaskPageRepoCacheInput[],
+  repos: readonly TaskPageRepoCacheRowInput[],
   limit: number,
   query: string
 ): TaskPageRepoCacheRow[] {
-  return repos.map((repo) => ({
-    sourceKey: taskPageRepoSourceKey(repo),
-    binding: repo.binding,
-    cacheKey: workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo), repo.binding)
-  }))
+  return repos.map((repo) => {
+    const binding = githubTaskBinding(repo)
+    return {
+      sourceKey: taskPageRepoSourceKey(repo),
+      binding,
+      cacheKey: workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo), binding)
+    }
+  })
 }
 
 export function selectTaskPageWorkItemsCacheEntries(
   workItemsCache: WorkItemsCache,
-  repos: readonly TaskPageRepoCacheInput[],
+  repos: readonly TaskPageRepoCacheRowInput[],
   limit: number,
   query: string
 ): (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] {
