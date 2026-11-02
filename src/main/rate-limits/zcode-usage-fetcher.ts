@@ -1,6 +1,7 @@
 import {
   readZcodeUsageCredentials,
   resolveUsageCredentials,
+  zcodeCredentialStorePath,
   ZCODE_PLAN_CREDENTIAL_SOURCE,
   type ZcodePlanCredential,
   type ZcodeUsageCredentials,
@@ -11,7 +12,9 @@ export {
   ZCODE_PLAN_CREDENTIAL_SOURCE,
   type ZcodePlanCredential
 } from './zcode-usage-credentials'
+import { ZCODE_PLAN_SITE_BASE_URLS, type ZcodePlanSite } from '../../shared/zcode-plan-sites'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { fetchZcodeResetCredits, readZcodeResetAccountId } from '../zcode/zcode-reset-credits'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 
@@ -126,6 +129,16 @@ function asWindow(limit: QuotaLimit | undefined): RateLimitWindow | null {
   }
 }
 
+/** The credential `fetchZcodeRateLimits` spends, from the settings-resolved plan config. */
+export function zcodePlanCredentialOf(config: {
+  site: ZcodePlanSite
+  apiKey: string
+}): ZcodePlanCredential | null {
+  return config.apiKey
+    ? { apiKey: config.apiKey, baseUrl: ZCODE_PLAN_SITE_BASE_URLS[config.site] }
+    : null
+}
+
 export async function fetchZcodeRateLimits(
   options: ZcodeUsageCredentialOptions & {
     planCredential?: ZcodePlanCredential | null
@@ -149,16 +162,44 @@ export async function fetchZcodeRateLimits(
   }
   const source = saved ? ZCODE_PLAN_CREDENTIAL_SOURCE : cli?.status === 'ok' ? cli.source : ''
   const result = await fetchUsage(credentials, source, options.signal)
-  if (!saved) {
-    const current = readZcodeUsageCredentials(options)
-    if (
-      current.status !== 'ok' ||
-      current.credentials.authProvenance !== credentials.authProvenance
-    ) {
-      return unavailable('ZCode Coding Plan account changed during refresh')
-    }
+  const credentialStorePath = zcodeCredentialStorePath(options)
+  const resetLookupEnabled = !saved && !(options.configPath && !options.credentialHost)
+  const resetAccountId = resetLookupEnabled
+    ? readZcodeResetAccountId(credentialStorePath, options.credentialHost)
+    : null
+  if (!saved && !sameZcodeUsageCredential(options, credentials.authProvenance)) {
+    return unavailable('ZCode Coding Plan account changed during refresh')
   }
-  return { ...result, usageMetadata: { ...result.usageMetadata, credentialSource: source } }
+  // The reset-credit inventory rides beside the quota (presence-only): an endpoint or credential
+  // hiccup omits it instead of failing the whole refresh.
+  const rateLimitResetCredits = !resetLookupEnabled
+    ? null
+    : await fetchZcodeResetCredits({
+        credentialStorePath,
+        ...(options.credentialHost ? { host: options.credentialHost } : {}),
+        ...(resetAccountId ? { accountId: resetAccountId } : {}),
+        ...(options.signal ? { signal: options.signal } : {})
+      }).catch(() => null)
+  if (
+    resetLookupEnabled &&
+    (!sameZcodeUsageCredential(options, credentials.authProvenance) ||
+      readZcodeResetAccountId(credentialStorePath, options.credentialHost) !== resetAccountId)
+  ) {
+    return unavailable('ZCode Coding Plan account changed during refresh')
+  }
+  return {
+    ...result,
+    ...(rateLimitResetCredits ? { rateLimitResetCredits } : {}),
+    usageMetadata: { ...result.usageMetadata, credentialSource: source }
+  }
+}
+
+function sameZcodeUsageCredential(
+  options: ZcodeUsageCredentialOptions,
+  authProvenance: string
+): boolean {
+  const current = readZcodeUsageCredentials(options)
+  return current.status === 'ok' && current.credentials.authProvenance === authProvenance
 }
 
 async function fetchUsage(

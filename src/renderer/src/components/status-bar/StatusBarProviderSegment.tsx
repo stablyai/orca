@@ -23,7 +23,7 @@ import {
 } from './tooltip'
 import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
 import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
-import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
+import { getStatusBarPrioritySection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 import { getStatusBarUsageSections } from './status-bar-usage-sections'
@@ -113,7 +113,7 @@ export type UsageTone = 'urgent' | 'warning' | 'normal'
 
 /** Urgency by consumption, matching the usage bar colors, whatever % display the user chose. */
 export function getUsageTone(p: ProviderRateLimits): UsageTone {
-  const tightest = getTightestUsageSection(p)
+  const tightest = getStatusBarPrioritySection(p)
   const used = tightest ? clampUsedPercent(tightest.window.usedPercent) : 0
   return used >= USAGE_URGENT_PERCENT
     ? 'urgent'
@@ -140,7 +140,7 @@ export function UsageOverflowChip({
       : 'normal'
   const names = hidden
     .map((p) => {
-      const tightest = getTightestUsageSection(p)
+      const tightest = getStatusBarPrioritySection(p)
       const name = getProviderDisplayName(p.provider)
       return tightest
         ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display)}`
@@ -250,7 +250,7 @@ export function ProviderSegment({
   const tightest = p
     ? mode === 'compact'
       ? getUsageHeadlineSection(p)
-      : getTightestUsageSection(p)
+      : getStatusBarPrioritySection(p)
     : null
   const sections = getStatusBarUsageSections(p, mode)
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)

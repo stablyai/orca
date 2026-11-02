@@ -28,10 +28,16 @@ function usedSections(p: ProviderRateLimits): UsageSection[] {
   )
 }
 
-function providerMaxUsed(sections: UsageSection[]): number {
-  return sections.length > 0
-    ? Math.max(...sections.map((s) => clampUsedPercent(s.window.usedPercent)))
-    : 0
+function headlineSections(p: ProviderRateLimits): UsageSection[] {
+  const sections = usedSections(p)
+  if (p.provider !== 'zcode' || (!p.session && !p.weekly)) {
+    return sections
+  }
+  return sections.filter((section) => section.window !== p.monthly)
+}
+
+function providerPriorityUsed(p: ProviderRateLimits): number {
+  return clampUsedPercent(getStatusBarPrioritySection(p)?.window.usedPercent ?? 0)
 }
 
 // Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
@@ -69,6 +75,22 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
+function tightestSection(p: ProviderRateLimits, sections: UsageSection[]): UsageSection | null {
+  if (sections.length === 0) {
+    return null
+  }
+  const tightest = sections.reduce((current, candidate) =>
+    clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
+      ? candidate
+      : current
+  )
+  return { ...tightest, label: shortLabel(p, tightest, true) }
+}
+
+export function getStatusBarPrioritySection(p: ProviderRateLimits): UsageSection | null {
+  return tightestSection(p, headlineSections(p))
+}
+
 export function getUsageHeadlineSection(p: ProviderRateLimits): UsageSection | null {
   if (p.provider === 'cursor') {
     const primary = usedSections(p).find((section) => section.label === CURSOR_MODELS_BUCKET_NAME)
@@ -76,7 +98,7 @@ export function getUsageHeadlineSection(p: ProviderRateLimits): UsageSection | n
       return { ...primary, label: shortLabel(p, primary, true) }
     }
   }
-  return getTightestUsageSection(p)
+  return getStatusBarPrioritySection(p)
 }
 
 function soonestResetLabel(sections: UsageSection[], now: number): string | null {
@@ -229,9 +251,7 @@ export function UsageRosterPanel({
       usedSections(provider).map((section) => section.window.resetsAt)
     )
   )
-  const sorted = [...providers].sort(
-    (a, b) => providerMaxUsed(usedSections(b)) - providerMaxUsed(usedSections(a))
-  )
+  const sorted = [...providers].sort((a, b) => providerPriorityUsed(b) - providerPriorityUsed(a))
 
   return (
     <div className="w-[360px] text-xs">

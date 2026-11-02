@@ -29,7 +29,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { UsageRosterPanel, UsageRow } from './UsageRosterPanel'
+import { getStatusBarPrioritySection, UsageRosterPanel, UsageRow } from './UsageRosterPanel'
 
 const signedOutCodex: ProviderRateLimits = {
   provider: 'codex',
@@ -300,7 +300,7 @@ describe('UsageRow', () => {
     expect(markup).toContain('60%')
   })
 
-  it('labels ZCode MCP separately from Coding Plan windows in both roster modes', () => {
+  it('keeps ZCode MCP visible in details but prioritizes Coding Plan windows in summaries', () => {
     const zcode: ProviderRateLimits = {
       provider: 'zcode',
       session: { usedPercent: 1, windowMinutes: 300, resetsAt: null, resetDescription: null },
@@ -322,11 +322,32 @@ describe('UsageRow', () => {
         />
       )
 
+    expect(getStatusBarPrioritySection(zcode)?.window).toBe(zcode.weekly)
     expect(renderRow('verbose')).toContain('data-usage-window="MCP"')
-    expect(renderRow('verbose')).toContain('MCP')
-    expect(renderRow('verbose')).not.toContain('30d')
-    expect(renderRow('compact')).toContain('MCP')
-    expect(renderRow('compact')).not.toContain('30d')
+    expect(renderRow('verbose')).toContain('97%')
+    expect(renderRow('compact')).toContain('94%')
+    expect(renderRow('compact')).not.toContain('97%')
+    expect(renderRow('compact')).not.toContain('MCP')
+  })
+
+  it('falls back to MCP when ZCode reports no Coding Plan window', () => {
+    const monthly = {
+      usedPercent: 63,
+      windowMinutes: 43_200,
+      resetsAt: null,
+      resetDescription: null
+    }
+    const zcode: ProviderRateLimits = {
+      provider: 'zcode',
+      session: null,
+      weekly: null,
+      monthly,
+      updatedAt: mocks.now,
+      status: 'ok',
+      error: null
+    }
+
+    expect(getStatusBarPrioritySection(zcode)?.window).toBe(monthly)
   })
 })
 
