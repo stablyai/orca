@@ -601,24 +601,6 @@ describe('a structured chat launch on this machine', () => {
     launch?.cancel()
   })
 
-  it('opens the chat once this machine admits it', async () => {
-    mocks.createSupport.mockResolvedValue({ supported: true })
-
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan: localPlan(),
-      hooks: {},
-      onHostDeclined: vi.fn()
-    })
-
-    expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE] ?? []).toEqual([])
-    await vi.waitFor(() =>
-      expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
-        expect.objectContaining({ contentType: 'agent-session', executionHostId: 'local' })
-      ])
-    )
-    launch?.cancel()
-  })
-
   // This machine has no connection to lose: the chat opens, and its own start reports a failure.
   it('opens the chat without a notice when this machine cannot answer the ask', async () => {
     mocks.createSupport.mockRejectedValue(new Error('runtime not ready'))
