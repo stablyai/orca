@@ -85,7 +85,9 @@ describe('Gitea scan invalidation after creation', () => {
 
     expect(await getGiteaPullRequestForBranch('/repo', branch)).toBeNull()
     expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toBeNull()
-    expect(listCalls).toBe(2)
+    // One head= probe answers both modes: the empty page is a definitive miss
+    // cached for the shared probe key.
+    expect(listCalls).toBe(1)
     expect(await createReview()).toMatchObject({ ok: true, number: 7 })
 
     const refreshed = await Promise.all([
@@ -95,10 +97,12 @@ describe('Gitea scan invalidation after creation', () => {
       getGiteaPullRequestForBranch('/repo', branch)
     ])
     expect(refreshed.map((review) => review?.number)).toEqual([7, 7, 7, 7])
-    expect(listCalls).toBe(4)
+    // Invalidation drops the probe cache, so the four readers coalesce into
+    // one head= probe returning the created PR.
+    expect(listCalls).toBe(2)
     expect(createCalls).toBe(1)
     expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toMatchObject({ number: 7 })
-    expect(listCalls).toBe(4)
+    expect(listCalls).toBe(2)
   })
 
   it('retires a strict miss when a create attempt recovers an existing pull request', async () => {
@@ -123,7 +127,9 @@ describe('Gitea scan invalidation after creation', () => {
       existingReview: { number: 7 }
     })
     expect(await getGiteaPullRequestForBranchOrThrow('/repo', branch)).toMatchObject({ number: 7 })
-    expect(listCalls).toBe(3)
+    // One probe for the strict miss, one after the invalidation recovers the
+    // existing PR; the final read comes from the probe cache.
+    expect(listCalls).toBe(2)
   })
 
   it.each(['before', 'after'] as const)(
