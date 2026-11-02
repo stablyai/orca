@@ -209,6 +209,30 @@ close returns a failing `unverifiable` result rather than claiming the processes
   handle, run `orca terminal list --json` and reacquire the handle.
 </Callout>
 
+### Terminal identity and visibility
+
+A terminal handle is the runtime-scoped target for terminal commands. For a terminal currently
+bound to a pane, `tabId` and `leafId` identify its position in layout topology; they do not say
+whether Orca's window or pane is currently visible to a person.
+
+| Field              | What it describes                                                                                                                                                                                                                                              | What it does not establish                                                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `paneRuntimeId`    | The runtime pane identifier returned by `terminal show`. A live PTY summarized from its process record can have `-1`; a pane-backed result returns that pane's runtime ID. This version's field is numeric, not nullable.                                      | Whether a renderer is showing the pane or a person can see it. `-1` is not a visibility result.         |
+| `tabId` / `leafId` | For `terminal list`, an orphaned PTY summary can use synthetic `pty:<ptyId>` values. For a PTY-backed `terminal show` result without a current pane binding, these can be the last recorded tab and leaf IDs, which may no longer exist in the current layout. | Whether the IDs name a currently mounted pane, whether a tab is selected, or whether a pane is visible. |
+| `connected`        | The PTY connection state reported for the terminal.                                                                                                                                                                                                            | Whether its pane is attached to a renderer or its window is in front.                                   |
+| `visualLayouts`    | When present, a layout snapshot of worktree groups, tabs, pane splits, and active tab/leaf markers.                                                                                                                                                            | Whether Orca's window is foreground, unobscured, or currently visible on screen.                        |
+
+To inspect the reported tab and pane topology, request it explicitly:
+
+```bash
+orca terminal list --include-visual-layouts --json
+```
+
+JSON omits `visualLayouts` by default, and the field can be absent when no layout is available.
+This CLI surface does not provide a machine-readable operator-visibility predicate. If a field is
+missing from an older or different host response, treat it as unavailable; do not infer that the
+terminal is hidden. The current `paneRuntimeId` contract uses a number and `-1`, not `null`.
+
 `terminal list` reports each terminal's `executionHostId` when Orca can verify it, plus a result-level `hostScope` with covered and omitted host IDs. Treat a missing host identity or scope as **unverifiable**, not local. A missing terminal is evidence that it exited only when its execution host is listed in `hostScope.hostIds`.
 
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
