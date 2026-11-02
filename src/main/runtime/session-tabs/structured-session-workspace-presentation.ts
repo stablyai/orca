@@ -11,29 +11,34 @@ export abstract class OrcaRuntimeWithStructuredSessionWorkspacePresentation exte
     eligible?: (change: ChatTabChange) => boolean
   ): Promise<void>
 
-  /** Drop a moved chat's rows at its one former workspace now; ingress, preservation and restore keep it out after. */
-  async retireMovedStructuredSessionPlacement(sessionId: string, oldId: string): Promise<void> {
-    const moved = () => !structuredSessionPlacementAllowed(this.store, oldId, sessionId)
-    if (!moved()) {
-      return
-    }
-    const tab = this.store
-      ?.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID)
-      ?.unifiedTabs?.[oldId]?.find(
+  /** After a chat moves, each layout still holding it, under any workspace spelling, re-derives
+   *  without it: a host-owned saved tab closes, and every stored frame republishes at a newer
+   *  version so clients holding the old one replace it. Runs only on an actual move. */
+  async retireMovedStructuredSessionPlacement(sessionId: string): Promise<void> {
+    const misplaced = (workspaceId: string) =>
+      !structuredSessionPlacementAllowed(workspaceId, sessionId)
+    const saved = this.store?.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs ?? {}
+    for (const [workspaceId, tabs] of Object.entries(saved)) {
+      const tab = tabs.find(
         (candidate) =>
           savedSessionId(candidate) === sessionId &&
           (!candidate.executionHostId || candidate.executionHostId === LOCAL_EXECUTION_HOST_ID)
       )
-    if (tab) {
-      await this.changeWindowlessChatTabs(oldId, [{ close: sessionId, tabId: tab.id }], moved)
+      if (tab && misplaced(workspaceId)) {
+        await this.changeWindowlessChatTabs(
+          workspaceId,
+          [{ close: sessionId, tabId: tab.id }],
+          () => misplaced(workspaceId)
+        )
+      }
     }
-    const raw = this.mobileSessionTabsByWorktree
-      .get(oldId)
-      ?.tabs.find(
-        (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
-      )
-    if (raw && moved()) {
-      this.retireStructuredAgentSessionTabFromSnapshot(sessionId, raw.id, oldId)
+    for (const [workspaceId, snapshot] of this.mobileSessionTabsByWorktree) {
+      if (
+        misplaced(workspaceId) &&
+        snapshot.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === sessionId)
+      ) {
+        this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(workspaceId, snapshot))
+      }
     }
   }
 }

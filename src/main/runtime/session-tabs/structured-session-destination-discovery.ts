@@ -1,4 +1,7 @@
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import {
+  agentSessionExecutionLocationsEqual,
+  type AgentSessionExecutionLocation
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -8,6 +11,12 @@ import {
 } from '../../../shared/execution-host'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import {
+  buildProjectGroupChildIndex,
+  collectProjectGroupSubtreeIds
+} from '../../../shared/project-groups'
+import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
@@ -19,15 +28,11 @@ import {
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
 import { areWorktreePathsEqual, canonicalWorktreePath } from '../../git/worktree-path-comparison'
-import {
-  getLocalWorktreeScanGeneration,
-  isLocalWorktreeScanGenerationCurrent
-} from '../../local-worktree-scan-generation'
 import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-moved-projects'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
 import type { RuntimeStore } from '../runtime-store-contract'
-import { scanUntilNotOvertaken } from '../../ipc/worktrees/listing/overtaken-scan-rerun'
 import { resolveLocalProjectRuntimesForRepos } from '../../local-project-runtime-resolution'
+import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../project-runtime-git-options'
 import { StructuredWorkspaceUnavailable } from './structured-workspace-authority'
 
 type Target = {
@@ -35,17 +40,17 @@ type Target = {
   executionHostId: AgentSessionExecutionLocation['executionHostId']
 }
 
+type Runtimes = ReturnType<typeof resolveLocalProjectRuntimesForRepos>
+
 type DiscoveryDeps = {
   store: RuntimeStore
-  scan: (
-    repo: Repo,
-    runtimes?: ReturnType<typeof resolveLocalProjectRuntimesForRepos>
-  ) => Promise<RuntimeWorktreeScanResult>
+  /** The shared catalog's listing, scanning only when its entry is missing or stale. */
+  scan: (repo: Repo, runtimes?: Runtimes) => Promise<RuntimeWorktreeScanResult>
+  /** The shared catalog's current fresh entry, without scanning; null when it has none. */
+  listing: (repo: Repo, runtimes?: Runtimes) => RuntimeWorktreeScanResult | null
   locate: (target: Target) => AgentSessionExecutionLocation
   folderTarget: (folder: FolderWorkspace) => Target['worktree']
 }
-
-const ownerKey = (repo: Repo) => `${getRepoExecutionHostId(repo)}\0${repo.id}\0${repo.path}`
 
 /** The source's registration is gone on its host, so only a same-directory destination can hold it. */
 export function isRetiredStructuredSessionSource(
@@ -64,10 +69,21 @@ export function isRetiredStructuredSessionSource(
   )
 }
 
-// One indexed pass: roots and scoped folders at the directory, plus every Git owner that could list it.
+function bucket<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const rows = map.get(key)
+  if (rows) {
+    rows.push(value)
+  } else {
+    map.set(key, [value])
+  }
+}
+
+// One indexed pass over the current catalog: roots and scoped folders at the directory, and every
+// Git owner in the record's own namespace that could list it.
 function catalog(store: RuntimeStore, location: AgentSessionExecutionLocation) {
   const repos = store.getRepos()
   const folders = store.getFolderWorkspaces?.() ?? []
+  const projectGroups = store.getProjectGroups?.() ?? []
   const moved = new Set(listWslMovedProjects(repos, folders).map((row) => `${row.kind}\0${row.id}`))
   const local = location.executionHostId === LOCAL_EXECUTION_HOST_ID
   const available = repos.filter(
@@ -75,21 +91,77 @@ function catalog(store: RuntimeStore, location: AgentSessionExecutionLocation) {
       getRepoExecutionHostId(repo) === location.executionHostId &&
       !(local && moved.has(`repo\0${repo.id}`))
   )
+  const gitOwners = available.filter((repo) => !isFolderRepo(repo))
+  const runtimes = resolveLocalProjectRuntimesForRepos(store, gitOwners)
+  // An owner proven to run Git in another distro (or natively) lists only checkouts of that
+  // namespace; one whose runtime is unresolved could list this one, so it still counts.
+  const owners = gitOwners.filter((owner) => {
+    const runtime = runtimes.get(owner.id)
+    return (
+      !local ||
+      runtime?.status === 'repair-required' ||
+      (getLocalProjectWorktreeGitOptionsForRuntime(owner, runtime).wslDistro ?? null) ===
+        location.wslDistro
+    )
+  })
   const foldersById = new Map<string, FolderWorkspace[]>()
   for (const folder of folders) {
-    foldersById.set(folder.id, [...(foldersById.get(folder.id) ?? []), folder])
+    bucket(foldersById, folder.id, folder)
+  }
+  const groupsById = new Map<string, ProjectGroup[]>()
+  for (const group of projectGroups) {
+    bucket(groupsById, group.id, group)
+  }
+  const reposByGroup = new Map<string, Repo[]>()
+  for (const repo of repos) {
+    if (typeof repo.projectGroupId === 'string') {
+      bucket(reposByGroup, repo.projectGroupId, repo)
+    }
+  }
+  const children = buildProjectGroupChildIndex(projectGroups)
+  const reposInside = new Map<string, Repo[]>()
+  const qualified = new Map<string, ReturnType<typeof resolveQualifiedFolderWorkspaceResult>>()
+  // The shared resolver reads only a folder's own groups, their subtree, and repos in that subtree
+  // or under its path; handing it just those keeps its semantics without a whole-catalog pass per folder.
+  const qualify = (id: string) => {
+    let result = qualified.get(id)
+    if (!result) {
+      const rows = foldersById.get(id) ?? []
+      const groupIds = new Set(
+        rows.flatMap((row) => [...collectProjectGroupSubtreeIds(children, row.projectGroupId)])
+      )
+      const scoped = new Set([...groupIds].flatMap((groupId) => reposByGroup.get(groupId) ?? []))
+      for (const row of rows) {
+        let inside = reposInside.get(row.folderPath)
+        if (!inside) {
+          inside = repos.filter((repo) => isPathInsideOrEqual(row.folderPath, repo.path))
+          reposInside.set(row.folderPath, inside)
+        }
+        inside.forEach((repo) => scoped.add(repo))
+      }
+      result = resolveQualifiedFolderWorkspaceResult(
+        {
+          repos: [...scoped],
+          folderWorkspaces: rows,
+          projectGroups: [...groupIds].flatMap((groupId) => groupsById.get(groupId) ?? [])
+        },
+        id,
+        location.executionHostId
+      )
+      qualified.set(id, result)
+    }
+    return result
   }
   return {
-    repos,
     available,
-    owners: available.filter((repo) => !isFolderRepo(repo)),
+    owners,
+    runtimes,
     folders: folders.filter((folder) => !(local && moved.has(`folder\0${folder.id}`))),
-    foldersById,
-    projectGroups: store.getProjectGroups?.() ?? []
+    qualify
   }
 }
 
-/** Nominate from current registrations and complete owner listings; decide only after coalescing. */
+/** Nominate from current registrations and the catalog's fresh owner listings; decide only after coalescing. */
 export async function discoverStructuredSessionDestination(
   deps: DiscoveryDeps,
   location: AgentSessionExecutionLocation
@@ -98,28 +170,7 @@ export async function discoverStructuredSessionDestination(
   // Remote hosts keep their own path rules; only this machine's comparison may fold /private/tmp.
   const platform = location.executionHostId === LOCAL_EXECUTION_HOST_ID ? process.platform : 'linux'
   const samePath = (path: string) => areWorktreePathsEqual(path, source.worktreePath, platform)
-  const scans = new Map<string, RuntimeWorktreeScanResult & { scanGeneration: number }>()
-  const owners = catalog(deps.store, location).owners
-  const runtimes = resolveLocalProjectRuntimesForRepos(deps.store, owners)
-  await Promise.all(
-    owners.map(async (owner) => {
-      // The same generation witness and overtake bound as authority, minus its prune capture.
-      const scan = await scanUntilNotOvertaken(
-        owner.id,
-        async () => {
-          const scanGeneration = getLocalWorktreeScanGeneration(owner.id)
-          const result = await withTimeout(deps.scan(owner, runtimes), 5_000, {
-            ok: false,
-            worktrees: []
-          })
-          const stale = !isLocalWorktreeScanGenerationCurrent(owner.id, scanGeneration)
-          return { ...result, scanGeneration, superseded: result.ok && stale }
-        },
-        () => true
-      )
-      scans.set(ownerKey(owner), scan)
-    })
-  )
+  // Synchronous, so the rebind receipt re-runs it over whatever the catalog holds at commit.
   const nominate = (): AgentSessionExecutionLocation => {
     if (!isRetiredStructuredSessionSource(deps.store, location)) {
       throw new StructuredWorkspaceUnavailable('obsolete')
@@ -146,15 +197,15 @@ export async function discoverStructuredSessionDestination(
       }
     }
     for (const owner of current.owners) {
-      const scan = scans.get(ownerKey(owner))
-      // An owner added, moved or rescanned since discovery could list the directory unseen.
-      if (!scan || !isLocalWorktreeScanGenerationCurrent(owner.id, scan.scanGeneration)) {
+      // A missing, replaced or expired listing could hide this directory: prepare afresh.
+      const listing = deps.listing(owner, current.runtimes)
+      if (!listing) {
         throw new StructuredWorkspaceUnavailable('obsolete')
       }
-      if (!scan.ok) {
+      if (!listing.ok) {
         throw new StructuredWorkspaceUnavailable('unknown')
       }
-      for (const row of scan.worktrees) {
+      for (const row of listing.worktrees) {
         if (samePath(row.path)) {
           // Git's spelling keys the catalog's workspace, so it replaces the registration spelling.
           add(owner.id, {
@@ -167,7 +218,7 @@ export async function discoverStructuredSessionDestination(
       }
     }
     for (const folder of current.folders) {
-      // An explicit foreign host settles the row without resolving the rest of the catalog.
+      // An explicit foreign host settles the row without resolving it.
       const explicit = parseExecutionHostId(folder.executionHostId)
       const explicitHost =
         explicit?.kind === 'ssh'
@@ -182,15 +233,7 @@ export async function discoverStructuredSessionDestination(
       ) {
         continue
       }
-      const selected = resolveQualifiedFolderWorkspaceResult(
-        {
-          repos: current.repos,
-          folderWorkspaces: current.foldersById.get(folder.id),
-          projectGroups: current.projectGroups
-        },
-        folder.id,
-        location.executionHostId
-      )
+      const selected = current.qualify(folder.id)
       if (selected.kind === 'selected' && selected.value.workspace === folder) {
         add(folderWorkspaceKey(folder.id), {
           ...deps.folderTarget(folder),
@@ -203,15 +246,29 @@ export async function discoverStructuredSessionDestination(
     }
     return [...candidates.values()][0]
   }
-  const destination = nominate()
-  return {
-    destination,
-    /** The destination owner's validated listing, so authority needs no second scan. */
-    scanned: async (repo: Repo) => scans.get(ownerKey(repo)) ?? deps.scan(repo),
-    /** Synchronous commit-time proof: still retired, still the one current destination. */
-    admit: () => {
-      if (nominate().workspaceId !== destination.workspaceId) {
-        throw new StructuredWorkspaceUnavailable('obsolete')
+  for (let attempt = 0; ; attempt++) {
+    const { owners, runtimes } = catalog(deps.store, location)
+    // A timed-out scan leaves no fresh entry, which nomination treats as unproven.
+    await Promise.all(owners.map((owner) => withTimeout(deps.scan(owner, runtimes), 5_000, null)))
+    try {
+      const destination = nominate()
+      return {
+        destination,
+        /** Commit-time proof from the catalog as it is now: same retired source, same one destination. */
+        admit: () => {
+          if (!agentSessionExecutionLocationsEqual(nominate(), destination)) {
+            throw new StructuredWorkspaceUnavailable('obsolete')
+          }
+        }
+      }
+    } catch (error) {
+      // Listings replaced or expired while scanning: rescan, a bounded number of times.
+      if (
+        !(error instanceof StructuredWorkspaceUnavailable) ||
+        error.reason !== 'obsolete' ||
+        attempt >= 2
+      ) {
+        throw error
       }
     }
   }

@@ -14,24 +14,31 @@ import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-work
 import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
 import { StructuredWorkspaceUnavailable } from '../../src/main/runtime/session-tabs/structured-workspace-authority'
 import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
+import type { ProjectGroup } from '../../src/shared/project-group-types'
+import type { Project } from '../../src/shared/project-types'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../../src/main/wsl'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined
 }))
 vi.mock('../../src/shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-/** Each Git owner answers with its own listing; no listing is warm before the open. */
+/** Each Git owner answers with its own listing; no listing is warm before the open. Only the
+ *  catalog's scan I/O is replaced, so its cache, freshness and in-flight rules stay real. */
 class ListingRuntime extends AuthorityRuntime {
   listings = new Map<string, RuntimeWorktreeScanResult>()
   scans: string[] = []
-  protected override async listRepoWorktreesForResolution(repo: Repo) {
+  protected override async refreshRepoWorktreeScan(repo: Repo) {
     this.scans.push(repo.id)
-    return (
-      this.listings.get(repo.id) ?? {
+    return {
+      result: this.listings.get(repo.id) ?? {
         ok: true as const,
         worktrees: [checkout(repo.path, true)]
-      }
-    )
+      },
+      adminFingerprint: null,
+      adminFingerprintProbe: null,
+      scannedAt: Date.now()
+    }
   }
 }
 
@@ -112,9 +119,14 @@ it('refuses while any same-host owner listing is unavailable', async () => {
 })
 
 it.each([
-  ['a second registration appears', 'late'],
-  ['the source registration returns', 'retired']
-])('re-derives the destination at commit when %s', async (_label, id) => {
+  [
+    'a second registration appears',
+    'late',
+    { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
+  ],
+  // Preparing again finds the source registered: the chat opens where it already is.
+  ['the source registration returns', 'retired', { ok: true, workspaceId: 'retired::' }]
+])('re-derives the destination at commit when %s', async (_label, id, result) => {
   const rig = await retired(root, 'folder')
   rig.profile.addRepo(storeRepo({ id: 'current', path: root, kind: 'folder' }))
   const rebind = rig.store.rebindWorkspace.bind(rig.store)
@@ -122,10 +134,8 @@ it.each([
     rig.profile.addRepo(storeRepo({ id, path: root, kind: 'folder' }))
     return rebind(...args)
   })
-  expect(await reveal(rig)).toMatchObject({
-    ok: true,
-    result: { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
-  })
+  const opened = 'workspaceId' in result ? { ...result, workspaceId: `retired::${root}` } : result
+  expect(await reveal(rig)).toMatchObject({ ok: true, result: opened })
   expect(rig.store.getRecord(B)?.location.workspaceId).toBe(`retired::${root}`)
 })
 
@@ -148,13 +158,31 @@ it.each([
   }
 })
 
-it('keeps destination discovery linear in repos, folders and metadata rows', async () => {
+const folderRow = (id: string, extra: Partial<FolderWorkspace>): FolderWorkspace => ({
+  id,
+  projectGroupId: `group-${id}`,
+  name: 'Elsewhere',
+  folderPath: `${root}/topic`,
+  linkedTask: null,
+  comment: '',
+  isArchived: false,
+  isUnread: false,
+  isPinned: false,
+  sortOrder: 0,
+  lastActivityAt: 0,
+  createdAt: 0,
+  updatedAt: 0,
+  ...extra
+})
+
+it('keeps destination discovery linear in repos, folders, groups and metadata rows', async () => {
   const rig = await retired(`${root}/topic`)
   rig.profile.addRepo(storeRepo({ id: 'current', path: `${root}/main` }))
   rig.runtime.listings.set('current', {
     ok: true,
     worktrees: [checkout(`${root}/main`, true), checkout(`${root}/topic`)]
   })
+  // Every read of a catalog row counts, including the reads inside the shared host resolver.
   let reads = 0
   const counted = <T extends object>(rows: readonly T[]) =>
     rows.map(
@@ -171,11 +199,14 @@ it('keeps destination discovery linear in repos, folders and metadata rows', asy
   const folders = store.getFolderWorkspaces.bind(store)
   const groups = store.getProjectGroups.bind(store)
   let foreign: FolderWorkspace[] = []
+  let foreignGroups: ProjectGroup[] = []
   vi.spyOn(store, 'getRepos').mockImplementation(() => counted(repos()))
   vi.spyOn(store, 'getFolderWorkspaces').mockImplementation(() =>
     counted([...folders(), ...foreign])
   )
-  vi.spyOn(store, 'getProjectGroups').mockImplementation(() => counted(groups()))
+  vi.spyOn(store, 'getProjectGroups').mockImplementation(() =>
+    counted([...groups(), ...foreignGroups])
+  )
   const counts: { reads: number; scans: number }[] = []
   let added = 0
   for (const population of [20, 200]) {
@@ -186,20 +217,22 @@ it('keeps destination discovery linear in repos, folders and metadata rows', asy
         {}
       )
     }
-    // Same-directory folders on other hosts must each be rejected without a catalog-wide lookup.
-    foreign = Array.from({ length: population }, (_, i) => ({
-      id: `foreign-${i}`,
-      projectGroupId: `group-${i}`,
+    // Same-directory folders on other hosts, pinned on the row or through their group, are
+    // supported and must each be rejected without a catalog-wide lookup.
+    foreign = Array.from({ length: population }, (_, i) => [
+      folderRow(`pinned-${i}`, { executionHostId: `ssh:elsewhere-${i}` }),
+      folderRow(`grouped-${i}`, {})
+    ]).flat()
+    foreignGroups = Array.from({ length: population }, (_, i): ProjectGroup => ({
+      id: `group-grouped-${i}`,
+      name: `Group ${i}`,
+      parentPath: `${root}/elsewhere-${i}`,
+      parentGroupId: null,
       executionHostId: `ssh:elsewhere-${i}`,
-      name: 'Elsewhere',
-      folderPath: `${root}/topic`,
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
+      createdFrom: 'manual',
+      tabOrder: i,
+      isCollapsed: false,
+      color: null,
       createdAt: 0,
       updatedAt: 0
     }))
@@ -211,6 +244,96 @@ it('keeps destination discovery linear in repos, folders and metadata rows', asy
     expect(prepared.location.workspaceId).toBe(`current::${root}/topic`)
     counts.push({ reads, scans: rig.runtime.scans.length })
   }
-  expect(counts[1].scans).toBe(counts[0].scans + 180)
+  // Fresh listings are reused across opens; only owners new since the first open are scanned.
+  expect(counts.map((count) => count.scans)).toEqual([21, 180])
   expect(counts[1].reads).toBeLessThanOrEqual(12 * counts[0].reads)
+})
+
+function withWindowsProjects(rig: Awaited<ReturnType<typeof retired>>, projects: Project[]) {
+  vi.spyOn(rig.profile, 'getProjects').mockReturnValue(projects)
+  const platform = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  return () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+    _resetWslCachesForTests()
+  }
+}
+
+it('a stopped owner in another distro does not block a native chat; an owner whose runtime is unresolved does', async () => {
+  const rig = await retired(root, 'folder')
+  rig.profile.addRepo(storeRepo({ id: 'current', path: root, kind: 'folder' }))
+  rig.profile.addRepo(storeRepo({ id: 'ubuntu-owner', path: `${root}-other` }))
+  // A stopped distro answers a cold listing with a failure.
+  rig.runtime.listings.set('ubuntu-owner', { ok: false, worktrees: [] })
+  const restore = withWindowsProjects(rig, [
+    {
+      id: 'ubuntu-project',
+      displayName: 'Ubuntu project',
+      badgeColor: '#000',
+      sourceRepoIds: ['ubuntu-owner'],
+      createdAt: 0,
+      updatedAt: 0,
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    }
+  ])
+  try {
+    const prepared = await rig.runtime.prepareStructuredAgentSessionRevealWorkspace(rig.location)
+    prepared.admit()
+    prepared.release()
+    expect(prepared.location.workspaceId).toBe(`current::${root}`)
+    expect(rig.runtime.scans).not.toContain('ubuntu-owner')
+    // With Ubuntu missing the owner's runtime is unresolved, so it could still list this directory.
+    _setWslCachesForTests({ available: true, distros: ['Debian'] })
+    await expect(
+      rig.runtime.prepareStructuredAgentSessionRevealWorkspace(rig.location)
+    ).rejects.toBeInstanceOf(StructuredWorkspaceUnavailable)
+    expect(rig.runtime.scans).toContain('ubuntu-owner')
+  } finally {
+    restore()
+  }
+})
+
+async function withListedOwner() {
+  const rig = await retired(root, 'folder')
+  rig.profile.addRepo(storeRepo({ id: 'current', path: root, kind: 'folder' }))
+  rig.profile.addRepo(storeRepo({ id: 'other', path: `${root}-other` }))
+  const owner = rig.profile.getRepos().find((repo) => repo.id === 'other')!
+  // Past the catalog's listing lifetime, without any invalidation event.
+  const later = () => vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 31_000)
+  return { ...rig, owner, later }
+}
+
+it.each([
+  ['a refreshed listing shows a competing checkout', true],
+  ['a refreshed listing is unchanged', false]
+])('commit reads the catalog as it is when %s', async (_label, competitor) => {
+  const rig = await withListedOwner()
+  const prepared = await rig.runtime.prepareStructuredAgentSessionRevealWorkspace(rig.location)
+  rig.later()
+  rig.runtime.listings.set('other', {
+    ok: true,
+    worktrees: [checkout(`${root}-other`, true), ...(competitor ? [checkout(root)] : [])]
+  })
+  // An ordinary catalog read replaces the expired entry.
+  await rig.runtime['listRepoWorktreesForResolution'](rig.owner)
+  if (competitor) {
+    expect(() => prepared.admit()).toThrow(StructuredWorkspaceUnavailable)
+  } else {
+    expect(() => prepared.admit()).not.toThrow()
+  }
+  prepared.release()
+})
+
+it('a listing that expires before commit is prepared again, then the chat moves', async () => {
+  const rig = await withListedOwner()
+  const rebind = rig.store.rebindWorkspace.bind(rig.store)
+  vi.spyOn(rig.store, 'rebindWorkspace').mockImplementationOnce(async (...args) => {
+    rig.later()
+    return rebind(...args)
+  })
+  expect(await reveal(rig)).toMatchObject({
+    ok: true,
+    result: { ok: true, workspaceId: `current::${root}` }
+  })
+  expect(rig.runtime.scans.filter((id) => id === 'other')).toHaveLength(2)
 })

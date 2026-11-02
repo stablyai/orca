@@ -45,23 +45,44 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         const host = requireStructuredHost(ctx)
         requireStructuredAgentAudience(ctx, host.sessionAgent(params.sessionId) ?? '')
         const original = host.deps.store.getConversation(params.sessionId)
-        if (original) {
-          workspace = await ctx.runtime.prepareStructuredAgentSessionRevealWorkspace(
-            original.location
-          )
-          if (workspace.location.workspaceId !== original.location.workspaceId) {
+        let stale: StructuredWorkspaceUnavailable | undefined
+        for (let attempt = 0; original; attempt++) {
+          // A retry that cannot prepare reports the original stale refusal, not its own failure.
+          workspace = await ctx.runtime
+            .prepareStructuredAgentSessionRevealWorkspace(original.location)
+            .catch((error: unknown) => {
+              throw stale ?? error
+            })
+          if (workspace.location.workspaceId === original.location.workspaceId) {
+            break
+          }
+          const prepared = workspace
+          try {
             await host.rebindWorkspace(
               params.sessionId,
               original.location,
-              workspace.location,
+              prepared.location,
               () => {
-                workspace!.check()
-                workspace!.admit()
+                prepared.check()
+                prepared.admit()
                 if (getStructuredAgentSessionHost() !== host) {
                   throw new StructuredWorkspaceUnavailable('obsolete')
                 }
               }
             )
+            break
+          } catch (error) {
+            // Evidence that changed or expired before commit is re-prepared, a bounded number of times.
+            if (
+              !(error instanceof StructuredWorkspaceUnavailable) ||
+              error.reason !== 'obsolete' ||
+              attempt >= 1
+            ) {
+              throw error
+            }
+            stale = error
+            workspace = undefined
+            prepared.release()
           }
         }
         const revealed: StructuredAgentSessionReveal = await host.revealSession(params.sessionId)
@@ -93,10 +114,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           }
         }
         if (original && original.location.workspaceId !== revealed.workspaceId) {
-          await ctx.runtime.retireMovedStructuredSessionPlacement(
-            revealed.sessionId,
-            original.location.workspaceId
-          )
+          await ctx.runtime.retireMovedStructuredSessionPlacement(revealed.sessionId)
           check()
         }
         await ctx.runtime.publishStructuredAgentSessionTab({

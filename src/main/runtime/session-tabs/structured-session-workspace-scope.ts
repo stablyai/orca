@@ -45,6 +45,10 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     ...args: Parameters<RuntimeWorkspaceSelectors['matchWorktreeSelector']>
   ): ReturnType<RuntimeWorkspaceSelectors['matchWorktreeSelector']>
 
+  protected abstract currentRepoWorktreeListing(
+    ...args: Parameters<RuntimeWorkspaceCatalog['currentRepoWorktreeListing']>
+  ): ReturnType<RuntimeWorkspaceCatalog['currentRepoWorktreeListing']>
+
   protected abstract listRepoWorktreesForResolution(
     ...args: Parameters<RuntimeWorkspaceCatalog['listRepoWorktreesForResolution']>
   ): ReturnType<RuntimeWorkspaceCatalog['listRepoWorktreesForResolution']>
@@ -59,16 +63,18 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
       const authority = await prepareStructuredWorkspaceAuthority(store, location, scan)
       return { ...authority, location, admit: () => {} }
     }
-    const { destination, scanned, admit } = await discoverStructuredSessionDestination(
+    const { destination, admit } = await discoverStructuredSessionDestination(
       {
         store,
         scan,
+        listing: (repo, runtimes) => this.currentRepoWorktreeListing(repo, runtimes),
         locate: (target) => this.structuredAgentSessionLocationForTarget(target),
         folderTarget: (folder) => this.folderWorkspaceToResolvedWorktree(folder)
       },
       location
     )
-    const authority = await prepareStructuredWorkspaceAuthority(store, destination, scanned)
+    // The destination's own listing comes from the same catalog, fresh or rescanned.
+    const authority = await prepareStructuredWorkspaceAuthority(store, destination, scan)
     return { ...authority, location: destination, admit }
   }
 

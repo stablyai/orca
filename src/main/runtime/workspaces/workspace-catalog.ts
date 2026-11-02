@@ -31,17 +31,13 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
-import {
-  getRepoExecutionHostId,
-  getRepoSshConnectionId,
-  LOCAL_EXECUTION_HOST_ID
-} from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
-import { resolveWorktreeScanCacheTtlMs } from '../runtime-worktree-scan-cache'
+import { resolveWorktreeScanCacheTtlMs, worktreeScanScope } from '../runtime-worktree-scan-cache'
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
   protected abstract refreshRepoWorktreeScan(
@@ -231,26 +227,35 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     return listing
   }
 
+  private worktreeScanScope(
+    repo: Repo,
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+  ) {
+    return worktreeScanScope(
+      repo,
+      this.worktreeScanGenerations,
+      () => resolveLocalProjectRuntimeForRepo(this.requireStore(), repo),
+      projectRuntimeByRepoId
+    )
+  }
+
+  /** The listing this catalog would answer for `repo` right now without scanning; null once replaced, expired or invalidated. */
+  protected currentRepoWorktreeListing(
+    repo: Repo,
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+  ): RuntimeWorktreeScanResult | null {
+    const { scanScopeKey, fresh } = this.worktreeScanScope(repo, projectRuntimeByRepoId)
+    const cached = this.worktreeScanCache.get(scanScopeKey)
+    return cached && fresh(cached, Date.now()) ? cached.result : null
+  }
+
   protected async listRepoWorktreesForResolution(
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
-    // Resolve executionHostId-only SSH rows too; local routing would miskey caches and miss provider replacements.
-    const sshConnectionId = getRepoSshConnectionId(repo)
-    const projectRuntime = projectRuntimeByRepoId
-      ? projectRuntimeByRepoId.get(repo.id)
-      : !sshConnectionId
-        ? resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
-        : undefined
-    const runtimeKey = projectRuntime
-      ? projectRuntime.status === 'resolved'
-        ? projectRuntime.runtime.cacheKey
-        : projectRuntime.repair.cacheKey
-      : sshConnectionId
-        ? `ssh:${sshConnectionId}`
-        : 'local:default'
+    const { sshConnectionId, projectRuntime, runtimeKey, scanScopeKey, generation, fresh } =
+      this.worktreeScanScope(repo, projectRuntimeByRepoId)
     const now = Date.now()
-    const scanScopeKey = `${repo.id}\0${getRepoExecutionHostId(repo)}`
     const retryCurrent = (): Promise<RuntimeWorktreeScanResult> => {
       const current = this.store
         ?.getRepos()
@@ -263,13 +268,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
         ? this.listRepoWorktreesForResolution(current)
         : Promise.resolve({ ok: false, worktrees: [] })
     }
-    const generation = this.worktreeScanGenerations.get(scanScopeKey) ?? 0
     const cached = this.worktreeScanCache.get(scanScopeKey)
-    if (
-      cached?.generation === generation &&
-      cached.runtimeKey === runtimeKey &&
-      cached.expiresAt > now
-    ) {
+    if (cached && fresh(cached, now)) {
       return cached.result
     }
     const inFlight = this.worktreeScanInFlight.get(scanScopeKey)

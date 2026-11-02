@@ -72,7 +72,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       host,
       restored,
       (id) => this.hasCurrentLocalStructuredSessionTab(id),
-      (id, worktreeId) => structuredSessionPlacementAllowed(this.store, worktreeId, id)
+      (id, worktreeId) => structuredSessionPlacementAllowed(worktreeId, id)
     )
     for (const [worktreeId, worktreeChanges] of changes) {
       // A chat moved before its old tab was dropped closes there without retiring the chat.
@@ -80,8 +80,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         worktreeId,
         worktreeChanges,
         (change) =>
-          ('close' in change &&
-            !structuredSessionPlacementAllowed(this.store, worktreeId, change.close)) ||
+          ('close' in change && !structuredSessionPlacementAllowed(worktreeId, change.close)) ||
           this.passiveStructuredSessionTabChangeEligible(change)
       )
     }

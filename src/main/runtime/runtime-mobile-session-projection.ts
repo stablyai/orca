@@ -20,6 +20,7 @@ import {
 } from './runtime-mobile-agent-status-projection'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
 import { withStructuredChatStatus } from './runtime-mobile-structured-tab-status'
+import { structuredSessionPlacementAllowed } from './session-tabs/structured-session-placement'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import {
   getLatestAgentCandidateTitle,
@@ -115,7 +116,10 @@ export function projectRuntimeMobileSessionTabs(
       continue
     }
     if (tab.type === 'agent-session') {
-      tabs.push(withStructuredChatStatus(tab, snapshot.worktree, getHookRowsForPane))
+      // The chat's record, not this frame's row, decides where it shows.
+      if (structuredSessionPlacementAllowed(snapshot.worktree, tab.sessionId)) {
+        tabs.push(withStructuredChatStatus(tab, snapshot.worktree, getHookRowsForPane))
+      }
       continue
     }
     const syncedTab = host.tabs.get(tab.parentTabId)

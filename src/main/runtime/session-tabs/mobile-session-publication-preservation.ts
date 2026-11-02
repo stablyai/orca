@@ -71,7 +71,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     tab: RuntimeMobileSessionSnapshotTab
   ): boolean {
     if (tab.type === 'agent-session') {
-      return structuredSessionPlacementAllowed(this.store, snapshot.worktree, tab.sessionId)
+      return structuredSessionPlacementAllowed(snapshot.worktree, tab.sessionId)
     }
     if (tab.type === 'browser') {
       const liveClientPage =
