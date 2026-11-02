@@ -162,7 +162,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   })
 
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
-  const wslHostOffer = useAddRepoWslHostOffer(isOpen, hostSelection.selectedHostId)
+  const wslHostOffer = useAddRepoWslHostOffer(isOpen, hostSelection)
   const { handleBrowse, resetLocalFolderFlow, handleAddLocalPath } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath: modalPaths.droppedLocalPath,
@@ -261,7 +261,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   // Apply dropped paths after host reset so the switch cannot erase them.
   const { browseWslHost, prefilledServerPath, clearPrefilledServerPath } = useAddRepoWslHostPaths({
     isOpen,
-    droppedHostPath: modalPaths.droppedHostPath,
+    droppedHostPath: wslHostOffer.hostPath ?? modalPaths.droppedHostPath,
     selectedHostId: hostSelection.selectedHostId,
     setServerPath,
     setStep,
