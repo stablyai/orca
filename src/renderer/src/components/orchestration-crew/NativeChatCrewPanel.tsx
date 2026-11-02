@@ -1,5 +1,5 @@
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../../shared/orca-session-address'
-import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
+import { LazyOrchestrationCrewPanel } from './LazyOrchestrationCrewPanel'
 import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
@@ -20,7 +20,7 @@ export function NativeChatCrewPanel({
   if (!target || !party) {
     return null
   }
-  return <OrchestrationCrewPanel target={target} party={party} isVisible={isVisible} />
+  return <LazyOrchestrationCrewPanel target={target} party={party} isVisible={isVisible} />
 }
 
 /** Wraps a native chat's transcript: the crew panel overlays it, never the header's buttons or the composer below it. */

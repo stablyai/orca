@@ -4,7 +4,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneController } from '../terminal-pane/use-terminal-pane-controller'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useTerminalCrewIdentity } from './use-terminal-crew-identity'
-import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
+import { LazyOrchestrationCrewPanel } from './LazyOrchestrationCrewPanel'
 import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
 
 type CrewPortalController = Pick<
@@ -42,7 +42,7 @@ function TerminalCrewPortal({
     return null
   }
   return createPortal(
-    <OrchestrationCrewPanel
+    <LazyOrchestrationCrewPanel
       target={target}
       party={party}
       isVisible={

@@ -17,15 +17,22 @@ import { createIpcPtyTransport } from '../terminal-pane/pty-transport'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
 import { holdPhysicalCloseTasks } from './crew-menu.test-fixture'
 
-const rig = vi.hoisted(() => ({ open: vi.fn(), copy: vi.fn() }))
+const rig = vi.hoisted(() => ({ open: vi.fn(), copy: vi.fn(), identity: vi.fn(), crew: vi.fn() }))
 vi.mock('./use-terminal-crew-identity', () => ({
-  useTerminalCrewIdentity: (paneKey: string) => ({ target: { kind: 'local' }, party: paneKey })
+  useTerminalCrewIdentity: (paneKey: string) => {
+    rig.identity(paneKey)
+    return { target: { kind: 'local' }, party: paneKey }
+  }
 }))
 vi.mock('../native-chat/use-orchestration-crew', () => ({
-  useOrchestrationCrew: () => ({
-    ...emptyCrew('ok'),
-    sections: { managedBy: [], managing: [worker], talkingWith: [] }
-  })
+  useOrchestrationCrew: () => {
+    rig.crew()
+    return { ...emptyCrew('ok'), sections: { managedBy: [], managing: [worker], talkingWith: [] } }
+  }
+}))
+// Render the real panel synchronously; the lazy chunk boundary is the app's load detail.
+vi.mock('./LazyOrchestrationCrewPanel', async () => ({
+  LazyOrchestrationCrewPanel: (await import('./OrchestrationCrewPanel')).OrchestrationCrewPanel
 }))
 vi.mock('@/lib/open-agent-message-sender', () => ({ openOrchestrationCrewAgent: rig.open }))
 // happy-dom has no canvas; actual PaneManager identity/layout does not need xterm opened.
@@ -116,6 +123,28 @@ afterEach(() => {
   useAppStore.setState(initialStore, true)
   vi.restoreAllMocks()
   vi.clearAllMocks()
+})
+
+it('mounts no pane panel, identity lookup or crew read while the setting is off, live both ways', () => {
+  useAppStore.setState({ settings: { experimentalOrchestrationPanel: false } as GlobalSettings })
+  const { first, second } = mount()
+  expect(document.querySelector('[data-orchestration-crew]')).toBeNull()
+  expect(rig.identity).not.toHaveBeenCalled()
+  expect(rig.crew).not.toHaveBeenCalled()
+
+  act(() =>
+    useAppStore.setState({ settings: { experimentalOrchestrationPanel: true } as GlobalSettings })
+  )
+  for (const pane of [first, second]) {
+    expect(
+      within(pane.container).getByRole('button', { name: /^Show orchestration: 1 worker,/ })
+    ).toBeInTheDocument()
+  }
+
+  act(() =>
+    useAppStore.setState({ settings: { experimentalOrchestrationPanel: false } as GlobalSettings })
+  )
+  expect(document.querySelector('[data-orchestration-crew]')).toBeNull()
 })
 
 it('retires only the hidden menu before deferred physical close and never replays it on show', async () => {

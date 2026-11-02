@@ -49,6 +49,11 @@ const crew = vi.hoisted(() => {
   const subscribe = vi.fn((_listener: () => void) => release)
   return { snapshot, release, subscribe }
 })
+// Render the real panel synchronously; the lazy chunk boundary is the app's load detail.
+vi.mock('../orchestration-crew/LazyOrchestrationCrewPanel', async () => ({
+  LazyOrchestrationCrewPanel: (await import('../orchestration-crew/OrchestrationCrewPanel'))
+    .OrchestrationCrewPanel
+}))
 vi.mock('../orchestration-crew/orchestration-crew-follow', () => ({
   observeCrew: () => ({ subscribe: crew.subscribe, read: () => crew.snapshot })
 }))
