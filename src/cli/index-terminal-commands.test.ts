@@ -356,11 +356,41 @@ describe('orca cli worktree awareness', () => {
       error: {
         code: 'invalid_argument',
         message:
-          'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree.'
+          'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree. Pass --worktree <selector> (or --worktree auto).'
       }
     })
     expect(errSpy).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
+  })
+
+  it('auto-resolves remote terminal create worktree with --worktree auto', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_list', {
+        terminals: [
+          {
+            handle: 'term_1',
+            worktreeId: 'folder:auto-detected-folder'
+          }
+        ]
+      }),
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_2',
+          worktreeId: 'folder:auto-detected-folder'
+        }
+      })
+    )
+
+    await main(
+      ['terminal', 'create', '--pairing-code', 'remote-runtime', '--worktree', 'auto', '--json'],
+      '/tmp/client/repo/src'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.create',
+      expect.objectContaining({ worktree: 'folder:auto-detected-folder' })
+    )
   })
 
   it('rejects an empty --terminal instead of sending to the active pane', async () => {

@@ -161,11 +161,43 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalSetPaneTitle)
   },
   'terminal create': async ({ flags, client, cwd, json }) => {
-    if (client.isRemote && !flags.has('worktree')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree.'
-      )
+    let worktree: string | undefined
+    const worktreeFlag = flags.get('worktree')
+    if (client.isRemote) {
+      if (worktreeFlag === 'auto' || worktreeFlag === 'active' || worktreeFlag === 'current') {
+        try {
+          const listing = await client.call<{ terminals?: Array<{ worktreeId?: string }> }>(
+            'terminal.list',
+            { limit: 10 }
+          )
+          const remoteWorktrees = Array.from(
+            new Set(
+              listing.result?.terminals
+                ?.map((t) => t.worktreeId)
+                .filter((id): id is string => Boolean(id))
+            )
+          )
+          if (remoteWorktrees.length > 0) {
+            worktree = remoteWorktrees[0]
+          }
+        } catch {
+          // If remote terminal listing is unavailable or fails, fall through
+        }
+        if (!worktree) {
+          throw new RuntimeClientError(
+            'not_found',
+            'Could not auto-resolve server worktree because no active workspaces or terminals were found on the remote host. Pass an explicit --worktree <selector>.'
+          )
+        }
+      } else if (!flags.has('worktree')) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree. Pass --worktree <selector> (or --worktree auto).'
+        )
+      }
+    }
+    if (!worktree) {
+      worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     }
     const command = getOptionalStringFlag(flags, 'command')
     const useRendererBackedInteractiveTerminal =
@@ -200,7 +232,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-      worktree: await getBrowserWorktreeSelector(flags, cwd, client),
+      worktree,
       command,
       ...(shell !== undefined ? { shell } : {}),
       title: getOptionalStringFlag(flags, 'title'),

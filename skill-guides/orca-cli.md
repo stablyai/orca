@@ -246,7 +246,18 @@ Terminal rules:
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - `terminal read` returns accumulated output with escape sequences stripped, not the rendered screen, so anything that repaints (shells, progress bars, TUIs) reads as stacked fragments. Use `--screen` whenever the answer depends on what the terminal actually shows.
 - `--screen` and `--cursor` are mutually exclusive: a screen read is the current frame and has no history to page.
-- Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
+- **NEVER hijack active user terminals or unowned shells with `terminal send`**: Pre-existing terminals in `terminal list` usually belong to human interactive sessions or other running tasks. Sending commands into them clobbers user input, corrupts terminal history, and disrupts active sessions.
+- **Dedicated worker terminal pattern**: Whenever an agent needs to execute shell commands, scripts, or SSH on an environment (local or remote), **ALWAYS create a dedicated terminal**:
+  ```text
+  ORCA terminal create [--environment <name>] [--worktree <selector>|--worktree auto] --title "worker-<purpose>" [--command "<cmd>"] --json
+  ```
+  (Note: With `--environment`, pass `--worktree auto` to auto-resolve the server's worktree, or specify `--worktree <id>` from `terminal list --environment <name> --json`).
+  Read output via `ORCA terminal read --terminal <handle>` or wait with `ORCA terminal wait`.
+  When finished, clean it up:
+  ```text
+  ORCA terminal close [--environment <name>] --terminal <handle> --json
+  ```
+- Use `terminal send` ONLY for terminals created by the agent itself for that task, or when delivering an explicit prompt to an agent CLI during a handoff. Never use it for arbitrary shell execution in unowned terminals.
 - `accepted: true` proves input acceptance, not a started turn. Use the receipt's `turn_started` stage when submission proof is needed; never resend on silence.
 - A text-plus-Enter agent prompt is refused with `agent_prompt_blocked` while the agent shows a permission or trust menu. To answer the menu, send `--text` and `--enter` as separate commands.
 - A text-plus-Enter agent prompt returns a durable request ID and additive stages: `input_accepted`, then `turn_started` once the agent's turn is proven. Raw text-only, bare Enter, interrupt, and terminal query replies keep their existing direct-input behavior.
