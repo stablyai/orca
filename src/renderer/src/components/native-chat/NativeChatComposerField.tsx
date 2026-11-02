@@ -393,8 +393,9 @@ export function NativeChatComposerField({
             <div
               className={cn(
                 'flex flex-wrap items-center gap-2 pt-0.5',
-                // An empty launch prompt is one line; Attach appears once it has focus or content.
+                // An empty launch prompt is one line; its controls appear once it has focus, content or live dictation.
                 launch &&
+                  !isDictating &&
                   draft === '' &&
                   imageAttachments.length === 0 &&
                   'hidden group-focus-within/composer:flex'
@@ -425,7 +426,7 @@ export function NativeChatComposerField({
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
                 focusComposer={focusComposer}
                 onExitGoalMode={goalMode?.active ? exitGoalMode : undefined}
-                attachOnly={launch}
+                launchPrompt={launch}
                 {...(agent ? { agent } : {})}
               />
             </div>

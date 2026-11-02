@@ -51,8 +51,8 @@ export type NativeChatComposerActionsProps = {
   contextUsage?: NativeChatContextUsageSummary | null
   /** The chat's agent, whose permission modes the picker describes. */
   agent?: string
-  /** A launch prompt: Attach is its only control; launching is the panel's. */
-  attachOnly?: boolean
+  /** A launch prompt: Attach and dictation are its only controls; launching is the panel's. */
+  launchPrompt?: boolean
 }
 
 // Memoized: typing re-renders the composer per keystroke, and these controls rarely change with it.
@@ -82,7 +82,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   contextUsage,
   focusComposer,
   agent,
-  attachOnly = false
+  launchPrompt = false
 }: NativeChatComposerActionsProps): React.JSX.Element {
   useUiLanguageRevision()
   // Like Enter, a typed draft sends while the agent works; Esc still stops.
@@ -166,8 +166,55 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
       </TooltipContent>
     </Tooltip>
   )
-  if (attachOnly) {
-    return <div className="flex w-full items-center text-muted-foreground">{attach}</div>
+  const dictation = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant={isDictating ? 'secondary' : 'ghost'}
+          size="icon-sm"
+          aria-label={dictationLabel}
+          disabled={dictationDisabled}
+          onClick={isDictationHoldMode ? undefined : onDictationToggle}
+          onPointerDown={(event) => {
+            if (!isDictationHoldMode || dictationDisabled) {
+              return
+            }
+            event.preventDefault()
+            onDictationHoldStart()
+          }}
+          onPointerUp={() => {
+            if (isDictationHoldMode && !dictationDisabled) {
+              onDictationHoldEnd()
+            }
+          }}
+          onPointerCancel={() => {
+            if (isDictationHoldMode && !dictationDisabled) {
+              onDictationHoldEnd()
+            }
+          }}
+          onPointerLeave={(event) => {
+            if (isDictationHoldMode && event.buttons === 1 && !dictationDisabled) {
+              onDictationHoldEnd()
+            }
+          }}
+          className="pointer-coarse:size-11"
+        >
+          {isDictating ? <Square className="size-3.5 fill-current" /> : <Mic className="size-4" />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {dictationLabel}
+      </TooltipContent>
+    </Tooltip>
+  )
+  if (launchPrompt) {
+    return (
+      <div className="flex w-full items-center justify-between text-muted-foreground">
+        {attach}
+        {dictation}
+      </div>
+    )
   }
 
   return (
@@ -191,50 +238,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           focusComposer={focusComposer}
         />
         {contextUsage ? <NativeChatContextUsageRing usage={contextUsage} /> : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant={isDictating ? 'secondary' : 'ghost'}
-              size="icon-sm"
-              aria-label={dictationLabel}
-              disabled={dictationDisabled}
-              onClick={isDictationHoldMode ? undefined : onDictationToggle}
-              onPointerDown={(event) => {
-                if (!isDictationHoldMode || dictationDisabled) {
-                  return
-                }
-                event.preventDefault()
-                onDictationHoldStart()
-              }}
-              onPointerUp={() => {
-                if (isDictationHoldMode && !dictationDisabled) {
-                  onDictationHoldEnd()
-                }
-              }}
-              onPointerCancel={() => {
-                if (isDictationHoldMode && !dictationDisabled) {
-                  onDictationHoldEnd()
-                }
-              }}
-              onPointerLeave={(event) => {
-                if (isDictationHoldMode && event.buttons === 1 && !dictationDisabled) {
-                  onDictationHoldEnd()
-                }
-              }}
-              className="pointer-coarse:size-11"
-            >
-              {isDictating ? (
-                <Square className="size-3.5 fill-current" />
-              ) : (
-                <Mic className="size-4" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {dictationLabel}
-          </TooltipContent>
-        </Tooltip>
+        {dictation}
         <DraftNotSavedIcon shown={draftNotSaved === true} />
         {editSession ? (
           <Button type="button" variant="ghost" size="sm" onClick={editSession.cancel}>
