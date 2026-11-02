@@ -99,15 +99,16 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
         session,
         source.worktreeId
       )
-      const group = loaded.layout.workspaces[source.worktreeId]?.groups.find((row) =>
-        row.tabOrder.includes(source.tabId)
-      )
-      return group
-        ? {
-            groupId: group.id,
-            afterTabId: source.tabId,
-            index: group.tabOrder.indexOf(source.tabId)
-          }
+      // The tab holding this terminal: a switch may have left it in a tab with another id.
+      const workspace = loaded.layout.workspaces[source.worktreeId]
+      const tabId = workspace?.tabs.find(
+        (tab) => tab.kind === 'terminal' && tab.entityId === source.tabId
+      )?.id
+      const group = tabId
+        ? workspace?.groups.find((row) => row.tabOrder.includes(tabId))
+        : undefined
+      return tabId && group
+        ? { groupId: group.id, afterTabId: tabId, index: group.tabOrder.indexOf(tabId) }
         : undefined
     }
     const originalPlacement = readPlacement()

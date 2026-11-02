@@ -16,6 +16,7 @@ import {
   partitionPinnedTabOrder
 } from '../../../shared/workspace-layout/tab-order'
 import { swapSessionTabContent } from './session-tab-content-swap'
+import { logicalTabIdOf, tabBarIdOf } from '../../../shared/runtime-mobile-session-tab-contracts'
 
 export type StructuredSessionTabPublicationInput = {
   workspaceId: string
@@ -216,7 +217,14 @@ export function projectStructuredSessionTab(
   ]
   // Why: the window can list the chat before main restores its row; keep the place it gave it.
   const listingGroupId = priorGroups.find((group) => group.tabOrder.includes(id))?.id
-  const { placement } = input
+  // Placement names a layout tab; this snapshot's group orders name a terminal's tab by the
+  // terminal, so a switched tab is found by the layout id its rows carry.
+  const afterRow =
+    input.placement?.afterTabId &&
+    existing?.tabs.find((row) => logicalTabIdOf(row) === input.placement?.afterTabId)
+  const placement = afterRow
+    ? { ...input.placement, afterTabId: tabBarIdOf(afterRow) }
+    : input.placement
   const groupId =
     listingGroupId ??
     priorGroups.find((group) => group.id === placement?.groupId)?.id ??

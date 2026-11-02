@@ -262,6 +262,97 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
   }
 )
 
+it('opens a split pane’s chat right after its tab when an earlier switch gave that tab its own id', async () => {
+  await savedTranscript(rig)
+  const { runtime, session, setSession } = setupMainOwnedWorkspace({ split: true })
+  expect(
+    await runtime.applyLayoutCommand({
+      type: 'openAgentSessionTab',
+      workspace: WORKTREE_ID,
+      sessionId: 'later-tab',
+      agent: 'codex',
+      tabId: 'agent-session:later-tab'
+    })
+  ).toMatchObject({ ok: true })
+  // An earlier switch left this terminal in a tab whose id is not the terminal's.
+  const SWITCHED_TAB = 'switched-tab'
+  const rename = (tabId: string) => (tabId === TAB_ID ? SWITCHED_TAB : tabId)
+  const before = session()
+  setSession({
+    ...before,
+    unifiedTabs: {
+      ...before.unifiedTabs,
+      [WORKTREE_ID]: [
+        {
+          id: SWITCHED_TAB,
+          entityId: TAB_ID,
+          groupId: before.tabGroups![WORKTREE_ID]![0]!.id,
+          worktreeId: WORKTREE_ID,
+          contentType: 'terminal',
+          label: 'Terminal',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        },
+        ...(before.unifiedTabs?.[WORKTREE_ID] ?? [])
+      ]
+    },
+    tabGroups: {
+      ...before.tabGroups,
+      [WORKTREE_ID]: (before.tabGroups?.[WORKTREE_ID] ?? []).map((group) => ({
+        ...group,
+        activeTabId: group.activeTabId ? rename(group.activeTabId) : group.activeTabId,
+        tabOrder: group.tabOrder.map(rename)
+      }))
+    }
+  })
+  expect(session().unifiedTabs?.[WORKTREE_ID]?.find((tab) => tab.entityId === TAB_ID)?.id).toBe(
+    SWITCHED_TAB
+  )
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
+  if (!source.presentation) {
+    throw new Error('missing captured source')
+  }
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    stopAndWait: async () => {
+      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+      return true
+    },
+    getForegroundProcess: async () => 'codex'
+  })
+  expect(
+    await executeStructuredSessionSwitch(
+      {
+        sessionId: id,
+        execution: {
+          invocationId: 'split-in-switched-tab',
+          source: {
+            terminal: source.handle,
+            expectedIncarnationId: incarnationId,
+            originalPresentation: source.presentation
+          }
+        }
+      },
+      { runtime },
+      'chat'
+    )
+  ).toEqual({ status: 'completed', sessionId: id })
+  const chat = session().unifiedTabs?.[WORKTREE_ID]?.find(
+    (tab) => tab.contentType === 'agent-session' && tab.entityId === id
+  )?.id
+  // The pane closed, not the tab: the chat sits right after the tab it came from.
+  expect(
+    session().tabGroups?.[WORKTREE_ID]?.find((group) => group.tabOrder.includes(SWITCHED_TAB))
+      ?.tabOrder
+  ).toEqual([SWITCHED_TAB, chat, 'agent-session:later-tab'])
+  expect(session().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({ type: 'leaf', leafId: LEAF_B })
+})
+
 it('leaves a chat already open in this workspace where it is, without a second copy', async () => {
   await savedTranscript(rig)
   const { runtime, session } = setupMainOwnedWorkspace()

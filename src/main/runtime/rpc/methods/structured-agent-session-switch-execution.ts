@@ -291,7 +291,11 @@ async function switchToChat(
     {
       terminalId: sameWorkspace ? close.source.tabId : undefined,
       wholeTab: sameWorkspace && close.wholeTab(),
-      besideTabId: close ? (sameWorkspace ? close.source.tabId : undefined) : execution.sourceTabId,
+      besideTerminalId: close
+        ? sameWorkspace
+          ? close.source.tabId
+          : undefined
+        : execution.sourceTabId,
       placement: close?.placement
     },
     check

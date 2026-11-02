@@ -103,26 +103,27 @@ export class SwitchSlotAnchors {
 }
 
 /**
- * Where a switch's chat opens when it can't take the source's tab: right after the source's tab
- * when it keeps that tab, else at the end with no anchor. A captured split pane's tab also decides
- * the selection (the chat takes it only from that tab); a tab the client could only name (History,
- * or a pane with no binding) just places the chat, which the user asked to see.
+ * Where a switch's chat opens when it can't take the source's tab: right after the tab holding the
+ * source terminal when that tab stays, else at the end with no anchor. Clients get the terminal
+ * (each finds the tab holding it); main's layout gets that tab's own id. A captured split pane's
+ * tab also decides the selection (the chat takes it only from that tab); a tab the client could
+ * only name (History, or a pane with no binding) just places the chat, which the user asked to see.
  */
 export function switchChatSlot(
-  besideTabId: string | undefined,
+  beside: { terminalId: string; tabId: string } | undefined,
   capturedPlacement?: () => ChatTabPlacement | undefined
 ): {
   anchor?: SlotAnchor
   publish: { placement?: ChatTabPlacement; sourceTabId?: string }
 } {
-  if (!besideTabId) {
+  if (!beside) {
     return { publish: {} }
   }
   return {
-    anchor: { after: { tabId: besideTabId } },
+    anchor: { after: { tabId: beside.terminalId } },
     publish: capturedPlacement
-      ? { placement: capturedPlacement(), sourceTabId: besideTabId }
-      : { placement: { afterTabId: besideTabId } }
+      ? { placement: capturedPlacement(), sourceTabId: beside.tabId }
+      : { placement: { afterTabId: beside.tabId } }
   }
 }
 

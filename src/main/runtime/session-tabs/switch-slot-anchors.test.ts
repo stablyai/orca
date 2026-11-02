@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../shared/agent-session-switch-execution'
-import { SwitchSlotAnchors } from './switch-slot-anchors'
+import { SwitchSlotAnchors, switchChatSlot } from './switch-slot-anchors'
+import { projectStructuredSessionTab } from './structured-session-tab-publication'
 
 const terminal = (tabId: string) => ({
   type: 'terminal' as const,
@@ -82,5 +83,37 @@ it.each([100, 1_000])('stamps %i rows in one pass, and touches none without an a
   // Only the destination's row is new.
   expect(stamped.tabs.filter((row, index) => row !== source.tabs[index])).toEqual([
     { ...source.tabs[7], after: { tabId: 'source' } }
+  ])
+})
+
+it('opens a split pane’s chat right after its tab, found by its terminal, in a tab a switch renamed', () => {
+  // An earlier switch left terminal-2 in tab `switched`; its rows name the terminal.
+  const shown: RuntimeMobileSessionTabsSnapshot = {
+    ...frame(['left', 'terminal-2', 'right']),
+    tabs: frame(['left', 'terminal-2', 'right']).tabs.map((row) =>
+      row.parentTabId === 'terminal-2' ? { ...row, logicalTabId: 'switched' } : row
+    ),
+    tabGroups: [{ id: 'g', activeTabId: null, tabOrder: ['left', 'terminal-2', 'right'] }]
+  }
+  const slot = switchChatSlot({ terminalId: 'terminal-2', tabId: 'switched' }, () => ({
+    groupId: 'g',
+    afterTabId: 'switched'
+  }))
+  // Clients get the terminal; main's layout and this snapshot get the tab holding it.
+  expect(slot.anchor).toEqual({ after: { tabId: 'terminal-2' } })
+  let stored: RuntimeMobileSessionTabsSnapshot | undefined
+  projectStructuredSessionTab(
+    {
+      mobileSessionTabsByWorktree: new Map([['ws', shown]]),
+      storeMobileSessionSnapshot: (_workspace, snapshot) => (stored = snapshot)
+    },
+    { workspaceId: 'ws', sessionId: 'chat-1', agent: 'codex', activate: true, ...slot.publish },
+    () => {}
+  )
+  expect(stored?.tabGroups?.[0]?.tabOrder).toEqual([
+    'left',
+    'terminal-2',
+    'agent-session:chat-1',
+    'right'
   ])
 })

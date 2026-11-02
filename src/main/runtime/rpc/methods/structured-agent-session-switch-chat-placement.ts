@@ -21,7 +21,8 @@ export async function placeSwitchChat(
      *  tab's only pane. */
     terminalId?: string
     wholeTab: boolean
-    besideTabId?: string
+    /** The terminal the chat opens beside, in the tab holding it. */
+    besideTerminalId?: string
     placement?: () => ChatTabPlacement | undefined
   },
   check: () => void
@@ -55,7 +56,16 @@ export async function placeSwitchChat(
     })
     return true
   }
-  const slot = switchChatSlot(source.besideTabId, source.placement)
+  const beside = source.besideTerminalId
+  const slot = switchChatSlot(
+    beside
+      ? {
+          terminalId: beside,
+          tabId: logicalTabHolding(shown, { kind: 'terminal', terminalId: beside }) ?? beside
+        }
+      : undefined,
+    source.placement
+  )
   await ctx.runtime.switchSlotAnchors.recordFor(
     workspaceId,
     agentSessionRowId(sessionId),
