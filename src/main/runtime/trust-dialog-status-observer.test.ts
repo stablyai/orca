@@ -228,6 +228,16 @@ describe('TrustDialogStatusObserver', () => {
     )
   })
 
+  // A stale aimed card would send its old arrows from wherever the terminal moved the highlight.
+  it('drops the startup card answers once the highlight stays unaimable', async () => {
+    const { prompts, recording, write } = await pane('claude-2-1-316-startup-mcp-server')
+    await write(recording)
+    await write('\x1b[10;1H\x1b[2K    Continue without using this MCP server')
+    await vi.advanceTimersByTimeAsync(2_000)
+    const card = parseInteractivePrompt(prompts.at(-1), undefined, 'claude')
+    expect(card?.kind === 'approval' && card.approval.options).toEqual([])
+  })
+
   it('ignores the dialog wording quoted in ordinary output', async () => {
     const { published, write } = await pane('codex-0-158-0-trustprompt', 'codex')
     const reply = [
@@ -303,10 +313,11 @@ describe('TrustDialogStatusObserver', () => {
     // The shell prompt lands inside the stale frame, so the screen still shows the dialog.
     await write('user@host repo $ ')
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting'])
+    // The prompt can leave the trust choice unaimable, which re-publishes the card; it must not settle.
+    expect(published).not.toContain('done')
     foreground.mockResolvedValue('shell')
     await write(' ')
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(published).toEqual(['waiting', 'done'])
+    expect(published.at(-1)).toBe('done')
   })
 })

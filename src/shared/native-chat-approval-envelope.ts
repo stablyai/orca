@@ -54,8 +54,7 @@ export function parseNativeChatApprovalEnvelope(
   }
 }
 
-/** A folder-trust dialog read off the screen; `trustSend` moves to the trust choice and confirms. */
-/** A null `trustSend` means the trust choice could not be aimed; the card then offers only Exit. */
+/** A folder-trust dialog read off the screen; a null `trustSend` (unaimable trust choice) leaves only Exit. */
 export function buildNativeChatFolderTrustPrompt(trustSend: string | null): string {
   return JSON.stringify({ folderTrust: trustSend ? { trustSend } : {} })
 }

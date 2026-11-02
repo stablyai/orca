@@ -25,6 +25,8 @@ type PaneScan = {
   owned?: { agent: 'claude' | 'codex'; receivedAt: number }
   /** The card we published; republished when the terminal moves the cursor. */
   prompt?: string
+  /** An unaimable card seen once; it replaces ours only if the next read still shows it. */
+  unaimedPrompt?: string
   misses: number
   outputSinceRead?: boolean
   readTimer?: ReturnType<typeof setTimeout>
@@ -105,7 +107,8 @@ export class TrustDialogStatusObserver {
     ptyId: string,
     pane: PaneScan,
     agent: TuiAgent | null,
-    emulator: HeadlessEmulator
+    emulator: HeadlessEmulator,
+    read?: { prompt: string }
   ): void {
     // Only Claude's and Codex's dialogs are verified to precede their hooks and repaint without flicker.
     if (agent !== 'claude' && agent !== 'codex') {
@@ -116,7 +119,7 @@ export class TrustDialogStatusObserver {
       return
     }
     // Chat views answer or lock on this card; without it a sent message's Return picks the highlighted choice.
-    const card = startupDialogPrompt(emulator, agent)
+    const card = read ?? startupDialogPrompt(emulator, agent)
     if (!card) {
       return
     }
@@ -180,9 +183,12 @@ export class TrustDialogStatusObserver {
       return false
     }
     pane.misses = 0
-    // A mid-repaint read cannot aim, so only an aimed card replaces the one up.
-    if (card.aimed && card.prompt !== pane.prompt) {
-      this.publishWaiting(ptyId, pane, owned.agent, emulator)
+    // A mid-repaint read cannot aim; a stale aimed card would send old arrows, so a steady unaimed one replaces it.
+    const awaitingSteadyRead =
+      card.prompt !== pane.prompt && !card.aimed && pane.unaimedPrompt !== card.prompt
+    pane.unaimedPrompt = awaitingSteadyRead ? card.prompt : undefined
+    if (card.prompt !== pane.prompt && !awaitingSteadyRead) {
+      this.publishWaiting(ptyId, pane, owned.agent, emulator, card)
       owned = pane.owned ?? owned
     }
     // A killed agent can leave its frame above the shell prompt; only a proven shell foreground settles it.
@@ -194,7 +200,7 @@ export class TrustDialogStatusObserver {
       this.settle(ptyId, owned)
       return false
     }
-    return pane.outputSinceRead
+    return pane.outputSinceRead || awaitingSteadyRead
   }
 
   private settle(ptyId: string, owned: NonNullable<PaneScan['owned']>): void {

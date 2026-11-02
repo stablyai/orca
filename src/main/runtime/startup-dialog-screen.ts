@@ -38,18 +38,18 @@ const TRUST_DIALOG_CHOICE_RE =
 const TRUST_DIALOG_CHOICE_ROWS = 6
 const TRUST_DIALOG_CURSOR_RE = /^[\u276f\u203a]/
 
-function visibleLines(emulator: HeadlessEmulator): string[] {
-  return emulator
-    .getVisibleLines()
-    .map((line) => line.trim().toLowerCase())
-    .filter(Boolean)
+function normalizedLines(rows: string[]): string[] {
+  return rows.map((line) => line.trim().toLowerCase()).filter(Boolean)
 }
 
 /** The startup dialog owning the screen, or null when the screen is anything else. */
 export function startupDialogReason(
   emulator: HeadlessEmulator
 ): RuntimeTerminalWaitBlockedReason | null {
-  const lines = visibleLines(emulator)
+  return dialogReason(normalizedLines(emulator.getVisibleLines()))
+}
+
+function dialogReason(lines: string[]): RuntimeTerminalWaitBlockedReason | null {
   if (!TRUST_DIALOG_FOOTER_RE.test(lines.at(-1) ?? '')) {
     return null
   }
@@ -62,9 +62,9 @@ export function startupDialogReason(
 }
 
 /** The rows of the Ink select just above the key footer, aimed from the highlighted row; [] when they do not read as one. */
-function inkMenuChoices(rows: string[]): NativeChatStartupMenuChoice[] {
-  const screen = rows.map((row) => row.trim().toLowerCase()).join(' ')
-  const expected = CLAUDE_MENU_CHOICE_COUNTS.find(([heading]) => heading.test(screen))?.[1]
+function inkMenuChoices(rows: string[], heading: string): NativeChatStartupMenuChoice[] {
+  // The dialog's own heading, not leftover text above it, sets how many rows are choices.
+  const expected = CLAUDE_MENU_CHOICE_COUNTS.find(([re]) => re.test(heading.toLowerCase()))?.[1]
   let end = rows.length - 1
   while (end >= 0 && !rows[end].trim()) {
     end -= 1
@@ -109,21 +109,22 @@ export function startupDialogPrompt(
   emulator: HeadlessEmulator,
   agent: TuiAgent
 ): { prompt: string; aimed: boolean } | null {
-  const reason = startupDialogReason(emulator)
+  const rows = emulator.getVisibleLines()
+  const lines = normalizedLines(rows)
+  const reason = dialogReason(lines)
   if (!reason) {
     return null
   }
   if (TRUST_REASONS.has(reason)) {
-    const keys = trustChoiceKeys(emulator)
+    const keys = trustChoiceKeys(lines)
     return { prompt: buildNativeChatFolderTrustPrompt(keys), aimed: keys !== null }
   }
   // Only Claude's menu keys are verified (2.1.316); other agents' menus get a card without answers.
   if (agent !== 'claude' || reason !== 'agent-startup-menu-prompt') {
     return { prompt: buildNativeChatStartupMenuPrompt({ choices: [] }), aimed: true }
   }
-  const rows = emulator.getVisibleLines()
-  const choices = inkMenuChoices(rows)
   const description = inkMenuHeading(rows)
+  const choices = inkMenuChoices(rows, description ?? '')
   return {
     prompt: buildNativeChatStartupMenuPrompt({ ...(description ? { description } : {}), choices }),
     aimed: choices.length > 0
@@ -131,8 +132,8 @@ export function startupDialogPrompt(
 }
 
 /** Arrow keys from the highlighted choice to the trust choice, then Return; null when the layout is not the known two-choice one. */
-function trustChoiceKeys(emulator: HeadlessEmulator): string | null {
-  const choices = visibleLines(emulator).slice(-TRUST_DIALOG_CHOICE_ROWS, -1)
+function trustChoiceKeys(lines: string[]): string | null {
+  const choices = lines.slice(-TRUST_DIALOG_CHOICE_ROWS, -1)
   const cursor = choices.findIndex((line) => TRUST_DIALOG_CURSOR_RE.test(line))
   const trust = choices.findIndex((line) => TRUST_DIALOG_CHOICE_RE.test(line))
   // Rows between the two choices may be wrapped text, not choices, so only adjacent rows are trusted.
