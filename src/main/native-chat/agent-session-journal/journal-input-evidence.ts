@@ -15,7 +15,7 @@ import { JournalSubmissionLinks } from './journal-submission-links'
 
 /** Reconstructible query evidence on the input owner; canonical records remain authoritative. */
 export class JournalInputEvidence extends JournalInputObservations {
-  private readonly links = new JournalSubmissionLinks()
+  readonly links = new JournalSubmissionLinks()
   private readonly recoverable = new Map<string, AgentJournalSubmission>()
   private readonly nonRefused = new JournalInputPlaceIndex('')
   private readonly submissionRows = new Map<number, string>()

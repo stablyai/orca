@@ -129,8 +129,9 @@ it.each([100, 1000])(
       bodyLookups: 4,
       submissionsCopied: 0,
       submissionVisits: 0,
-      lineageCopied: 2 * n,
-      lineageVisits: 2 * n,
+      // One cold read of saved lineage; later identity lookups reuse it until a record joins, leaves or clears.
+      lineageCopied: n,
+      lineageVisits: n,
       snapshots: 1,
       projectedItems: 2 * n + 5,
       materializedItems: 2 * n + 5,

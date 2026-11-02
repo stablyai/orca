@@ -1,3 +1,4 @@
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalInputSourceFamily, journalInputSourceSequence } from './journal-input-source'
 import type { JournalReducerState } from './journal-reducer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -8,9 +9,15 @@ export class JournalSubmissionLinks {
   private readonly ids = new Map<string, { family: string; sequence: number }>()
   private readonly latest = new Map<string, string>()
   private revision = 0
+  /** Where the latest provider-accepted input was actually handed over; the admission cursor the queue
+   *  pauses by can predate it. Derived with the links, so a restore rebuilds it. */
+  private acceptedHandoverAt = 0
 
   version(): number {
     return this.revision
+  }
+  acceptedHandover(): number {
+    return this.acceptedHandoverAt
   }
   to(id: string): Iterable<AgentJournalSubmission> {
     return this.linked.get(id)?.values() ?? []
@@ -20,6 +27,11 @@ export class JournalSubmissionLinks {
     return id ? this.linked.get(family)?.get(id) : undefined
   }
   refreshInput(state: JournalReducerState, id: string): void {
+    const entry = state.submissions.get(id)
+    if (entry?.dispatchState === 'accepted') {
+      const handedOverAt = state.items.get(agentJournalSubmissionKey(id))?.sequence ?? 0
+      this.acceptedHandoverAt = Math.max(this.acceptedHandoverAt, handedOverAt)
+    }
     const source = state.inputs.sources.get(id)
     this.refresh(
       id,

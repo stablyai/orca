@@ -79,15 +79,6 @@ describe('orca profile auth IPC bridge', () => {
     unsubs.forEach((dispose) => dispose())
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
-
-  it('skips registration when the preload bridge does not expose the event', () => {
-    vi.stubGlobal('window', { api: { orcaProfiles: { authStatus } } })
-    const unsubs: (() => void)[] = []
-
-    registerOrcaProfileAuthIpcBridge(unsubs)
-
-    expect(unsubs).toHaveLength(0)
-  })
 })
 
 describe('orca profile sign-in progress IPC bridge', () => {

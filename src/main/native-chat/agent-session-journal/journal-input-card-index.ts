@@ -14,13 +14,10 @@ import {
   mergeInputPlaces,
   type InputPlaceQuery
 } from './journal-input-place-index'
-import {
-  type JournalInputLineageOwner,
-  type JournalInputCard,
-  queryInputContext
-} from './journal-input-lineage'
+import { type JournalInputLineageOwner, queryInputContext } from './journal-input-lineage'
 import { isLiveJournalQueueCard } from './journal-queue-retention'
-import { JournalInputDomainIndex } from './journal-input-domain-index'
+import { JournalInputDomainIndex, type JournalIndexedInputCard } from './journal-input-domain-index'
+import { JournalInputCandidates } from './journal-input-candidates'
 
 export class JournalInputCardIndex {
   private index: JournalInputPlaceIndex | undefined
@@ -30,15 +27,8 @@ export class JournalInputCardIndex {
   private readonly current = new Map<string, QueuedMessageRow>()
   private readonly positions = new JournalInputPlaceIndex('')
   private currentRevision = 0
-  private readonly indexed = new Map<
-    string,
-    {
-      card: QueuedMessageRow
-      actionable: boolean
-      handoff: boolean
-      source?: JournalInputCard
-    }
-  >()
+  private readonly indexed = new Map<string, JournalIndexedInputCard>()
+  readonly candidates = new JournalInputCandidates()
   // Derived current membership only; the prepared transition owns introduction values.
   private readonly unintroduced = new Set<string>()
   private overlayRows: readonly QueuedMessageRow[] = []
@@ -195,6 +185,7 @@ export class JournalInputCardIndex {
           this.indexCard(state, card)
         }
       } else {
+        this.currentRevision++
         for (const card of this.current.values()) {
           this.indexCard(state, card)
         }
@@ -266,6 +257,10 @@ export class JournalInputCardIndex {
       introduced: this.lineage.at(state.lastSequence),
       baseline: { coordinate: card.queuedAt }
     }
+    this.candidates.set(
+      card,
+      (card.state === 'waiting' && card.holdReason === null) || card.state === 'returned'
+    )
     this.currentCoordinates!.set(card, actionable, handoff)
     this.index!.set(card, actionable, handoff, {
       epoch: 'introduction',

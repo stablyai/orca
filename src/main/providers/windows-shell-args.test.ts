@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildWslInteractiveLoginShellCommand } from '../../shared/wsl-login-shell-command'
+import { WSL_GUEST_ROOT_MARKER_COMMAND } from '../../shared/wsl-guest-root-marker'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 // Resolve content-addressed wrapper paths instead of assuming a fixed directory.
@@ -14,7 +15,7 @@ const CMD_CODEX_LAUNCH_PREFLIGHT =
   'if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
 
 function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
-  const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
+  const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${WSL_GUEST_ROOT_MARKER_COMMAND} && ${buildWslInteractiveLoginShellCommand()}`
   // Spell out --exec so a regressed -- separator cannot change both implementation and expected args.
   const shellArgs = ['--exec', 'sh', '-c', command]
   return distro ? ['-d', distro, ...shellArgs] : shellArgs

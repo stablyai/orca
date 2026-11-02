@@ -1,32 +1,23 @@
-/** What the structured mailbox lane needs from a chat host: session reads and admission-checked sends. */
+/** What the structured mailbox lane needs from a chat host: ordinary sends, and reads of what became of them. */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredPointerSubmission } from './structured-pointer-operation-id'
-import type { StructuredDispatchState } from './structured-session-pointer-delivery'
+import type { StructuredSendAnswer } from '../../native-chat/agent-session-wire/structured-agent-session-queued-send-answer'
 
 export type StructuredPointerSendOutcome =
-  | { kind: 'sent'; state: StructuredDispatchState }
-  | { kind: 'held' }
-  /** The chat's queue took it, as it takes a person's message. */
+  /** The chat's queue took it, as it takes a person's message sent while the agent works. */
   | { kind: 'queued' }
+  /** Sent at once; `pending` is still waiting on the agent's answer. */
+  | { kind: 'sent'; state: 'accepted' | 'pending' | 'rejected' | 'unknown' }
+  /** Refused before anything was recorded (for example a full queue); nothing to observe. */
+  | { kind: 'refused' }
   | { kind: 'unattached' }
   /** A check took or a waiter claimed its mail before admission; nothing ran. */
   | { kind: 'obsolete' }
 
-export type StructuredPointerSessionFacts = {
-  /** Named attempt plus submitted/accepted extrema in the current record context. */
-  submissions: readonly StructuredPointerSubmission[]
-}
+/** What became of one earlier send, as the chat's host answers it without replaying it. */
+export type StructuredMailSendState = StructuredSendAnswer
 
 export type StructuredMailboxPointerHost = {
-  /** `null` when the session cannot be read. */
-  readSessionFacts: (
-    sessionId: string,
-    inputId?: string
-  ) => Promise<StructuredPointerSessionFacts | null>
-  hasActionablePromptNow: (sessionId: string) => boolean | null
-  /** False for a conversation the idle sweep closed: it runs no turn. */
-  isWorkingNow: (sessionId: string) => boolean
   send: (input: {
     sessionId: string
     dispatchId: string | null
@@ -34,12 +25,16 @@ export type StructuredMailboxPointerHost = {
     expectedRuntimeFence: number
     /** Names its senders as `from`. */
     body: AgentJournalMessageItem
-    /** Hold rather than steer when a turn is running at admission. */
-    holdWhileWorking: boolean
-    /** Rechecked at admission: the batch may have been consumed while the send waited. */
+    /** Rechecked at admission: the mail may have been taken, or its owner changed, while the send waited. */
     stillOwed: () => boolean
   }) => Promise<StructuredPointerSendOutcome>
+  observe: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
+  /** Have the chat's queue look again: a card it passed over may be decidable now. */
+  wakeQueue: (sessionId: string) => void
+  /** Delete a card still waiting in the queue; false when it could not be deleted now. */
+  withdraw: (sessionId: string, operationId: string) => Promise<boolean>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
-  currentContextClearOperationId: (sessionId: string) => string | undefined
+  /** Coalesced journal publications of a session; returns the unsubscribe. */
+  watchJournal: (sessionId: string, onActivity: () => void) => () => void
 }

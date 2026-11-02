@@ -24,6 +24,7 @@ import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-wr
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
+import type { QueuedMessageOwed } from './queued-message-consume-error'
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
@@ -140,6 +141,8 @@ export type JournalSubmissionConsume = {
   expect: 'waiting' | 'returned'
   /** Automatic drain honors pauses in the consume transaction; Send now omits this. */
   yieldsToPause?: true
+  /** Re-asked in the handover transaction: an agent's message can stop being owed while it waits. */
+  owed?: () => QueuedMessageOwed
 }
 
 export type JournalItemAppendInput = {

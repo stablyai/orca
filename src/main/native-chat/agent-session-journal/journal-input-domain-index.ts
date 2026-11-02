@@ -11,6 +11,13 @@ import {
 import type { QueuedMessageRow } from './queued-message-table'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 
+export type JournalIndexedInputCard = {
+  card: QueuedMessageRow
+  actionable: boolean
+  handoff: boolean
+  source?: JournalInputCard
+}
+
 type Node = { index: JournalInputPlaceIndex; left?: Node; right?: Node }
 const LIMIT = Number.MAX_SAFE_INTEGER
 

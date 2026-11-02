@@ -10,6 +10,10 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import {
+  queuedSendAnswer,
+  structuredSendAnswer
+} from './structured-agent-session-queued-send-answer'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -48,28 +52,21 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       )
     }
   }))
+  const journalOf = async (id: string) => (await context().conversation(id)).journal
   return {
     journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) =>
       (await context().conversation(sessionId)).journal.currentRead(inputIds),
 
-    pointerInputs: async (sessionId: string, inputId?: string) => {
-      const journal = (await context().conversation(sessionId)).journal
-      const afterFence =
-        context().deps.store.getConversation(sessionId)?.providerContextBoundary?.afterFence ??
-        -Infinity
-      const named = inputId === undefined ? undefined : journal.submission(inputId)
-      return {
-        submissions: [
-          ...new Map(
-            [
-              ...journal.inputOrder.submissionExtremaAfterFence(afterFence),
-              ...(named && named.fence > afterFence ? [named] : [])
-            ].map((send) => [send.clientMessageId, send])
-          ).values()
-        ]
-      }
-    },
     readModelCatalog,
+    queuedSendAnswer: async (id: string, messageId: string) =>
+      queuedSendAnswer(await journalOf(id), messageId),
+    sendAnswer: async (id: string, messageId: string) =>
+      structuredSendAnswer(
+        await journalOf(id),
+        (operationId) => context().deps.store.readCommandReceipt({ kind: 'global' }, operationId),
+        id,
+        messageId
+      ),
     readCommands: (id: string, commandsOnRequest = false) =>
       context().readCommands(id, commandsOnRequest),
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>

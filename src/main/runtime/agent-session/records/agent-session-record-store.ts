@@ -130,6 +130,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
+  lineageRevision = (): object => this.transactions.lineageRevision()
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>

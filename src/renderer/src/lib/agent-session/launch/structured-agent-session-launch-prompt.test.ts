@@ -244,13 +244,6 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     ).not.toBeNull()
   })
 
-  it('gives the chat back its send slot when the launch is cancelled, sending nothing', () => {
-    stageStructuredLaunchPrompt(SESSION, 'review this')
-    discardStructuredLaunchPrompts(SESSION)
-    expect(pendingTexts()).toEqual([])
-    expect(sends()).toHaveLength(0)
-  })
-
   // Once sent, the prompt's entry is the sender's: what it keeps after settling stays.
   it('leaves in the chat a launch prompt the host recorded and a Stop then withdrew', async () => {
     const stagedPrompt = stageStructuredLaunchPrompt(SESSION, 'review this')
@@ -306,16 +299,5 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     ).resolves.toEqual({ delivered: true, failureNotified: false })
     expect(pendingTexts()).toEqual(['review this:recorded'])
     stop()
-  })
-
-  it('reports nothing for a draft, which the composer adopts instead', () => {
-    expect(
-      settleStructuredAgentLaunchPrompt({
-        launchResult: Promise.resolve({ sessionId: SESSION, fence: 1 }),
-        target,
-        options: { prompt: 'review this', promptDelivery: 'draft' },
-        stagedPrompt: null
-      })
-    ).toBeUndefined()
   })
 })

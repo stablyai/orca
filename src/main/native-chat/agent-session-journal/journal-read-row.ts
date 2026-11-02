@@ -2,6 +2,7 @@ import type Database from '../../sqlite/sync-database'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { journalOutcomeSource, type JournalOutcomeSource } from './journal-outcome-format'
 import { readJournalRowsAfter } from './journal-row-table'
+import { decodingOutcome, JournalOutcomeDecodeError } from './journal-outcome-codec'
 
 /** In-process change index only; the public wire still contains items and submissions. */
 export type JournalOutcomeReadRow = {
@@ -31,18 +32,12 @@ export function readJournalOutcomeGroups(
     WHERE generation = ? AND seq = ? AND field IN ('items', 'submissions') ORDER BY field, entry_key`)
   return groups.map(({ seq }) => {
     if (typeof seq !== 'number') {
-      throw new Error('invalid journal outcome group')
+      throw new JournalOutcomeDecodeError('invalid journal outcome group')
     }
     const itemIds: string[] = []
     const submissionIds: string[] = []
     for (const entry of touched.iterate(source.generation, seq)) {
-      if (typeof entry.entry_key !== 'string') {
-        throw new Error('invalid journal outcome key')
-      }
-      const key: unknown = JSON.parse(entry.entry_key)
-      if (typeof key !== 'string') {
-        throw new Error('invalid journal public outcome key')
-      }
+      const key = publicOutcomeKey(entry.entry_key)
       if (entry.field === 'items') {
         itemIds.push(key)
       } else {
@@ -108,4 +103,14 @@ export function readJournalRowsAfterCursor(
       ? { rows, through: source.through }
       : stopped()
   }
+}
+
+function publicOutcomeKey(stored: unknown): string {
+  return decodingOutcome(() => {
+    const key: unknown = typeof stored === 'string' ? JSON.parse(stored) : undefined
+    if (typeof key !== 'string') {
+      throw new Error('invalid journal public outcome key')
+    }
+    return key
+  })
 }
