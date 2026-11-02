@@ -66,6 +66,124 @@ describe('gitlab client — MR operations', () => {
       }))
     })
 
+    it('merges authored and assigned streams before paging on the owning host', async () => {
+      resolveIssueSourceMock.mockResolvedValue({
+        source: { host: 'gitlab.example.com', path: 'g/p' }
+      })
+      glabExecFileAsyncMock.mockResolvedValue({ stdout: '{"id":42}' })
+      const raw = (iid: number, date: string) => ({
+        iid,
+        title: `MR ${iid}`,
+        state: 'opened',
+        updated_at: date,
+        source_branch: `feat-${iid}`
+      })
+      glabApiWithHeadersMock
+        .mockResolvedValueOnce({
+          body: JSON.stringify([raw(4, '2026-10-04'), raw(2, '2026-10-02')]),
+          headers: { 'x-total': '3', 'x-total-pages': '2' }
+        })
+        .mockResolvedValueOnce({
+          body: JSON.stringify([raw(1, '2026-10-01')]),
+          headers: { 'x-total': '3', 'x-total-pages': '2' }
+        })
+        .mockResolvedValueOnce({
+          body: JSON.stringify([raw(3, '2026-10-03')]),
+          headers: { 'x-total': '1', 'x-total-pages': '1' }
+        })
+      const result = await listMergeRequests(
+        '/repo',
+        'opened',
+        2,
+        2,
+        undefined,
+        'fix login',
+        'ssh-1',
+        {},
+        'mine'
+      )
+      expect(result.items.map((item) => item.number)).toEqual([2, 1])
+      expect(result).toMatchObject({ totalCount: 4, totalPages: 2, page: 2 })
+      expect(result.items[0]).toMatchObject({
+        branchName: 'feat-2',
+        projectRef: { host: 'gitlab.example.com', path: 'g/p' }
+      })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', '--hostname', 'gitlab.example.com', 'user'],
+        {}
+      )
+      expect(glabApiWithHeadersMock.mock.calls[2][0]).toEqual([
+        '--hostname',
+        'gitlab.example.com',
+        expect.stringContaining('assignee_id=42&not[author_id]=42')
+      ])
+    })
+
+    it('filters by reviewer on WSL and preserves a next-page probe without totals', async () => {
+      glabExecFileAsyncMock.mockResolvedValue({ stdout: '{"id":42}' })
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: '[{"iid":8,"title":"Review","state":"opened"}]',
+        headers: {}
+      })
+      const result = await listMergeRequests(
+        '/repo',
+        'opened',
+        1,
+        1,
+        undefined,
+        undefined,
+        null,
+        { wslDistro: 'Ubuntu' },
+        'needs-review'
+      )
+      expect(result.items.map((item) => item.number)).toEqual([8])
+      expect(result.totalPages).toBe(2)
+      expect(glabApiWithHeadersMock).toHaveBeenCalledWith(
+        ['--hostname', 'gitlab.com', expect.stringContaining('scope=all&reviewer_id=42')],
+        { cwd: '/repo', wslDistro: 'Ubuntu' }
+      )
+    })
+
+    it('deduplicates overlapping Mine rows when a proxy strips pagination totals', async () => {
+      glabExecFileAsyncMock.mockResolvedValue({ stdout: '{"id":42}' })
+      glabApiWithHeadersMock.mockResolvedValue({
+        body: '[{"iid":7,"title":"Both authored and assigned","state":"opened"}]',
+        headers: {}
+      })
+      const result = await listMergeRequests(
+        '/repo',
+        'opened',
+        1,
+        2,
+        undefined,
+        undefined,
+        null,
+        {},
+        'mine'
+      )
+      expect(result.items.map((item) => item.number)).toEqual([7])
+      expect(result.totalPages).toBe(1)
+    })
+
+    it('reports authentication failures instead of returning unfiltered MRs', async () => {
+      glabExecFileAsyncMock.mockRejectedValue(new Error('401 Unauthorized'))
+      const result = await listMergeRequests(
+        '/repo',
+        'opened',
+        1,
+        20,
+        undefined,
+        undefined,
+        null,
+        {},
+        'mine'
+      )
+      expect(result.items).toEqual([])
+      expect(result.error).toBeDefined()
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+      expect(releaseMock).toHaveBeenCalled()
+    })
+
     it('returns MRs via the GitLab API', async () => {
       glabApiWithHeadersMock.mockResolvedValueOnce({
         body: JSON.stringify([

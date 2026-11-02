@@ -120,7 +120,14 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
             return gitLabApiFor(selector)
               .listMRs({
                 ...selector,
-                state: activeMRFilter ?? 'opened',
+                state:
+                  activeMRFilter === 'mine' || activeMRFilter === 'needs-review'
+                    ? 'opened'
+                    : (activeMRFilter ?? 'opened'),
+                involvement:
+                  activeMRFilter === 'mine' || activeMRFilter === 'needs-review'
+                    ? activeMRFilter
+                    : undefined,
                 page: 1,
                 perPage: 50
               })
