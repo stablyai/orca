@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { useWorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 import { createCmdJTaskSearchRequests } from '../cmd-j/task-search-requests'
 import { jiraTaskResult } from '../cmd-j/task-search.test-fixture'
@@ -218,13 +218,17 @@ it('filters to open after pending edits apply: a pending reopen shows and a fail
   useAppStore.setState({ repos: [] })
 })
 
+let actualCreateRequests: typeof createCmdJTaskSearchRequests
+beforeAll(async () => {
+  const actual = await vi.importActual<{
+    createCmdJTaskSearchRequests: typeof createCmdJTaskSearchRequests
+  }>('../cmd-j/task-search-requests')
+  actualCreateRequests = actual.createCmdJTaskSearchRequests
+})
 it.each([false, true])(
   'answers a GitHub search held by a source save once it settles, or reads nothing once closed (closed=%s)',
   async (closed) => {
-    const actual = await vi.importActual<{
-      createCmdJTaskSearchRequests: typeof createCmdJTaskSearchRequests
-    }>('../cmd-j/task-search-requests')
-    vi.mocked(createCmdJTaskSearchRequests).mockImplementation(actual.createCmdJTaskSearchRequests)
+    vi.mocked(createCmdJTaskSearchRequests).mockImplementation(actualCreateRequests)
     const repo: Repo = {
       id: 'held-repo',
       path: '/held-repo',

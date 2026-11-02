@@ -6,12 +6,14 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { CacheEntry } from './cache-model'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 import { githubTaskBinding } from '@/lib/github-task-observation'
-import { bindingKey, type TaskBinding } from './task-record-model'
+import { bindingKey, type BindingIncarnation, type TaskBinding } from './task-record-model'
 import { isHostIdentityContinued } from '../host-catalog-fencing'
 import { nextProviderRequestId } from './request-coordination'
 import { createSourceWrite, waitForWriteEnd, type SourceWrite } from './source-write'
 
 const unsafeTarget = () => false
+/** What one recovery readback repairs: a failed write, or a contradicted binding incarnation. */
+type RecoveryEpisode = SourceWrite | BindingIncarnation
 export const githubCandidateOwner = (repo: Repo) =>
   githubTaskBinding({ ...repo, issueSourcePreference: undefined })
 export const githubCollectionScope = (repo: Repo | undefined, source?: TaskSourceContext | null) =>
@@ -42,7 +44,7 @@ export type Attempt = {
 export abstract class GitHubSourceOwnership {
   protected writes = new Map<string, SourceWrite>()
   protected owners = new Map<string, CollectionOwner>()
-  private recoveries = new WeakMap<object, Promise<void>>()
+  private recoveries = new WeakMap<RecoveryEpisode, Promise<void>>()
   /** Shared by every catalog request until a write begins or settles or owners change; never mutated. */
   private snapshot?: Map<
     string,
@@ -171,7 +173,7 @@ export abstract class GitHubSourceOwnership {
   }
 
   /** One catalog readback per episode at a time; re-armed only when no row came back, so Refresh can retry. */
-  recover(repo: Repo, episode: object) {
+  recover(repo: Repo, episode: RecoveryEpisode) {
     let running = this.recoveries.get(episode)
     if (!running) {
       const owner = this.owners.get(bindingKey(repo))

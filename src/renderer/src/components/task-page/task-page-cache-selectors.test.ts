@@ -287,13 +287,16 @@ describe('task page cache selectors', () => {
 
   it('searches only the current binding once an older copy is found, and nothing on an unchanged cache', () => {
     let rowVisits = 0
-    const counted = (row: GitHubWorkItem) =>
-      new Proxy(row, {
-        get: (target, key, receiver) => {
-          rowVisits += key === 'id' ? 1 : 0
-          return Reflect.get(target, key, receiver)
+    const counted = (row: GitHubWorkItem) => {
+      const copy = { ...row }
+      Object.defineProperty(copy, 'id', {
+        get: () => {
+          rowVisits++
+          return row.id
         }
       })
+      return copy
+    }
     const picked = { ...workItem('issue:12', 'repo-1'), url: 'https://github.com/o/r/issues/12' }
     const binding = (sourceBinding: string, rows: GitHubWorkItem[]) => ({
       ...entry(rows.map(counted)),
