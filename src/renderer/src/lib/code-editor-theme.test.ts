@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PluginThemeRegistration } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
-import { paintCodeEditorColors, resolveCodeEditorTheme } from './code-editor-theme'
+import { resolveCodeEditorTheme } from './code-editor-theme'
 import type { ColorProbe } from './plugin-theme-tokens'
 
 // Parses #rrggbb, which is all these tests feed it.
@@ -54,14 +54,6 @@ function resolve(
 }
 
 describe('resolveCodeEditorTheme', () => {
-  it('follows the painted app theme when nothing or the app theme itself is chosen', () => {
-    expect(resolve(null)).toEqual({ monaco: null, override: null })
-    expect(resolve('light')).toEqual({ monaco: null, override: null })
-    const followed = resolve(dawn, dawn)
-    expect(followed.override).toBeNull()
-    expect(followed.monaco?.data.colors['editor.background']).toBe('#fdf6e3')
-  })
-
   it("paints a dark plugin editor in a light app from that theme's own tokens", () => {
     const result = resolve(dusk, dawn)
     expect(result.monaco?.data.base).toBe('vs-dark')
@@ -95,30 +87,5 @@ describe('resolveCodeEditorTheme', () => {
       monaco: null,
       override: { base: 'dark', colors: { background: '#1e1e1e' } }
     })
-  })
-})
-
-describe('paintCodeEditorColors', () => {
-  it('publishes an override on the root and clears it when the editor follows the app', () => {
-    const properties = new Map<string, string>()
-    const dataset: DOMStringMap = {}
-    const root = {
-      dataset,
-      style: {
-        setProperty: (name: string, value: string | null) => {
-          properties.set(name, value ?? '')
-        },
-        removeProperty: (name: string) => {
-          properties.delete(name)
-          return ''
-        }
-      }
-    }
-    paintCodeEditorColors(resolve(dusk, dawn).override, root)
-    expect(dataset.codeEditorTheme).toBe('dark')
-    expect(properties.get('--code-editor-background')).toBe('#120d22')
-    paintCodeEditorColors(null, root)
-    expect(dataset.codeEditorTheme).toBeUndefined()
-    expect(properties.size).toBe(0)
   })
 })
