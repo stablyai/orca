@@ -195,11 +195,15 @@ describe('runSourceControlAgentActionStart', () => {
     ).resolves.toBe(true)
 
     expect(onStart).toHaveBeenCalledWith({
+      signal: undefined,
+      onCreateAccepted: undefined,
+      onFailureNotified: expect.any(Function),
       agent: 'codex',
       commandInput: 'Fix the bug',
       agentArgs: '--model gpt-5',
       agentLaunchPreferences: undefined,
-      chatSessionOptions: { model: 'gpt-5' }
+      chatSessionOptions: { model: 'gpt-5' },
+      preferredSurface: undefined
     })
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
