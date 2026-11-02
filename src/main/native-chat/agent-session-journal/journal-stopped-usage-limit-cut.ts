@@ -27,7 +27,10 @@ function mayRevealCut(row: JournalRow): boolean {
       return row.mutations.some((mutation) => mutation.kind === 'item' && mayEndWork(mutation.body))
     case 'dispatch':
       return true
-    default:
+    case 'epoch':
+    case 'tombstone':
+    case 'submission':
+    case 'queue':
       return false
   }
 }
