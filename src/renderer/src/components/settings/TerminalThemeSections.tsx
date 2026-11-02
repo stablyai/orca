@@ -5,7 +5,10 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { parseCustomTerminalThemeSelection } from '../../../../shared/terminal-custom-themes'
-import { terminalCustomThemeRemoval } from '../../../../shared/terminal-theme-selection'
+import {
+  terminalCustomThemeRemoval,
+  type TerminalCustomThemeRemoval
+} from '../../../../shared/terminal-theme-selection'
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING,
@@ -41,6 +44,17 @@ function rememberTerminalThemeTarget(target: TerminalThemeSlot): void {
 
 export function resetTerminalThemeTargetMemoryForTests(): void {
   lastEditedTerminalThemeTarget = null
+}
+
+// Why a queue: the store applies a write only once it is acknowledged, so each delete or undo must
+// read the list the previous one saved or a quick second delete would revive the first.
+let customThemeWrites: Promise<void> = Promise.resolve()
+
+function queueCustomThemeWrite(build: (settings: GlobalSettings) => Partial<GlobalSettings>): void {
+  customThemeWrites = customThemeWrites.then(() => {
+    const { settings, updateSettings } = useAppStore.getState()
+    return settings ? updateSettings(build(settings)) : undefined
+  })
 }
 
 function isCustomizedTheme(themeName: string, defaultThemeName: string): boolean {
@@ -119,10 +133,11 @@ export function TerminalThemeCatalogSection({
     if (!themeId) {
       return
     }
-    // Why latest: settings props trail the async write, so a second quick delete would revive the first.
-    const latestSettings = (): GlobalSettings => useAppStore.getState().settings ?? settings
-    const { updates, undo } = terminalCustomThemeRemoval(latestSettings(), themeId)
-    updateSettings(updates)
+    let removal: TerminalCustomThemeRemoval | null = null
+    queueCustomThemeWrite((current) => {
+      removal = terminalCustomThemeRemoval(current, themeId)
+      return removal.updates
+    })
     toast(
       translate(
         'auto.components.settings.TerminalThemeSections.deleted_imported_theme',
@@ -132,7 +147,7 @@ export function TerminalThemeCatalogSection({
       {
         action: {
           label: translate('auto.components.settings.TerminalThemeSections.undo', 'Undo'),
-          onClick: () => updateSettings(undo(latestSettings()))
+          onClick: () => queueCustomThemeWrite((current) => removal?.undo(current) ?? {})
         }
       }
     )

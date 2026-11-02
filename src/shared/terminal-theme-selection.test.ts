@@ -175,11 +175,19 @@ describe('deleting an imported terminal theme (#32138)', () => {
     })
   })
 
-  it('undo keeps a slot the user changed after the delete', () => {
+  it('undo keeps what the user changed after the delete', () => {
     const { updates, undo } = terminalCustomThemeRemoval(settings, 'warp:dusk')
-    const restored = undo({ ...settings, ...updates, terminalThemeDark: 'Tokyo Night' })
-    expect(restored).not.toHaveProperty('terminalThemeDark')
-    expect(restored).toHaveProperty('terminalThemeLight', 'custom:warp:dusk')
+    const afterDelete = { ...settings, ...updates, terminalCustomThemes: [kept] }
+    const restored = undo({
+      ...afterDelete,
+      terminalThemeDark: 'Tokyo Night',
+      terminalColorOverridesLight: { cursor: '#ff00ff' }
+    })
+    expect(restored).toEqual({ terminalCustomThemes: [kept, imported] })
+    const reimported = { ...imported, name: 'Dusk v2' }
+    expect(undo({ ...afterDelete, terminalCustomThemes: [kept, reimported] })).not.toHaveProperty(
+      'terminalCustomThemes'
+    )
   })
 
   it('leaves slots showing another theme untouched', () => {
