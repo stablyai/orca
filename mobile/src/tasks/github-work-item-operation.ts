@@ -61,15 +61,16 @@ export async function withGitHubTargetOperation<T>(args: {
       status.runtimeId && status.hostDescriptor?.installationId
         ? { sourceId: status.hostDescriptor.installationId, runtimeId: status.runtimeId }
         : null
-    // Mixed versions: a host advertising explicit intent receives it; a canonical-only host reads ordinary loads
-    // without the owner and Refresh with the owner only; a host with neither keeps today's params for both.
+    // Mixed versions: a host advertising explicit intent receives it; a canonical-only host predates exact targets, so
+    // it reads ordinary loads without the owner and Refresh with the owner only, unbound as the desktop sends it; a
+    // host with neither keeps today's params for both.
     const capabilities = args.canonical === undefined ? [] : (status.capabilities ?? [])
     const explicitIntent = capabilities.includes(
       GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
     )
-    const legacyCanonical = capabilities.includes(GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY)
-    const sendOwner =
-      supports && source !== null && (explicitIntent || !legacyCanonical || args.canonical === true)
+    const canonicalOnly =
+      !explicitIntent && capabilities.includes(GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY)
+    const sendOwner = canonicalOnly ? args.canonical === true : supports && source !== null
     if ((!supports || !source) && !args.read) {
       // Name the build to update: the relaying desktop when only it lacks the check, else the executing server.
       throw new Error(

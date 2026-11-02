@@ -475,26 +475,30 @@ describe('fetch wrappers', () => {
   })
 
   it.each([
-    // A host advertising the read intent gets it on both loads, with the owner.
+    // The capability sets real builds advertise. One with the read intent gets it on both loads, with the owner.
     [
       'explicit intent',
-      [GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY],
+      [
+        GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY,
+        GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY,
+        GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY
+      ],
       { ownerRepo: true, canonical: false },
       { ownerRepo: true, canonical: true }
     ],
-    // A canonical-only host reads an ordinary load without the owner, and Refresh with the owner only.
+    // A canonical-only build predates exact targets: an ordinary load without the owner, Refresh with the owner only.
     [
       'canonical only',
       [GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY],
       { ownerRepo: false, canonical: undefined },
       { ownerRepo: true, canonical: undefined }
     ],
-    // A host with neither keeps today's params for both.
+    // A build with neither keeps today's params for both.
     [
       'neither',
       [],
-      { ownerRepo: true, canonical: undefined },
-      { ownerRepo: true, canonical: undefined }
+      { ownerRepo: false, canonical: undefined },
+      { ownerRepo: false, canonical: undefined }
     ]
   ])(
     'fetchWorkItemDetails sends the addressed read intent a %s host understands',
@@ -507,7 +511,7 @@ describe('fetch wrappers', () => {
           return okResponse({
             runtimeId: 'r',
             hostDescriptor: { installationId: 'r' },
-            capabilities: [GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY, ...capabilities]
+            capabilities
           })
         }
         sent.push(params)
