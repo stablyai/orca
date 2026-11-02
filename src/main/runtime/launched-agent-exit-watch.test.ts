@@ -24,8 +24,8 @@ const ZSH_PROMPT_AFTER_EXIT = [
 const NESTED_SHELL_COMMAND = '\x1b]133;C\x07ls\n\x1b]133;D;0\x07'
 
 /** Past every re-read the watch makes after a shell return. */
-function runRereads(): Promise<void> {
-  return vi.advanceTimersByTimeAsync(10_000)
+async function runRereads(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(10_000)
 }
 
 function watchedLaunch(options: {
