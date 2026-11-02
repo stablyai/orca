@@ -15,18 +15,26 @@ import {
 } from './structured-agent-session-input-admission'
 import type { AgentSessionHandoverContext } from './structured-agent-session-host-types'
 import { prepareRecoveryDelivery } from './structured-agent-session-recovery-delivery'
+import {
+  agentSessionProviderHandleChainHead,
+  type AgentSessionProviderHandleChain
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { classifyNativeChatSend } from '../../../shared/native-chat/input/native-chat-slash-commands'
 
 /** One preparation per actual target; the pending callback co-commits first-input and inline facts. */
 export function prepareRecoveryCarrier(
   ctx: AgentSessionHandoverContext,
-  submission: AgentJournalSubmission
+  submission: AgentJournalSubmission,
+  input: AgentJournalMessageItem
 ) {
   const { clientMessageId } = submission
-  const state = deriveContextTransferState(
-    ctx.journal.contextTransfers.read(),
-    ctx.record()?.providerHandleChain ?? []
-  )
-  const required = state.kind !== 'none' && state.kind !== 'settled'
+  const chain = ctx.record()?.providerHandleChain ?? []
+  const state = deriveContextTransferState(ctx.journal.contextTransfers.read(), chain)
+  // A typed agent command goes as typed, like Compact; the next ordinary input carries the context.
+  const required =
+    state.kind !== 'none' &&
+    state.kind !== 'settled' &&
+    !((state.kind === 'owed' || state.kind === 'uncertain') && typedAgentCommand(ctx, chain, input))
   return {
     required,
     async run(
@@ -98,4 +106,24 @@ function historyWriteUncertain(ctx: AgentSessionHandoverContext, prepared: Conte
   } catch {
     return false
   }
+}
+
+/** Pi and ACP agents run a line-leading `/command` they advertise; with no list, any leading slash. */
+function typedAgentCommand(
+  ctx: AgentSessionHandoverContext,
+  chain: AgentSessionProviderHandleChain,
+  input: AgentJournalMessageItem
+): boolean {
+  const transport = agentSessionProviderHandleChainHead(chain)?.handle.transport
+  if (transport !== 'acp' && transport !== 'jsonl-rpc') {
+    return false
+  }
+  const advertised = ctx.adapter.readCommands?.(ctx.sessionId)
+  const kind = classifyNativeChatSend(
+    input.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n'),
+    advertised ?? [],
+    null,
+    null
+  )
+  return kind === 'command' || (advertised === undefined && kind === 'unknown-token')
 }

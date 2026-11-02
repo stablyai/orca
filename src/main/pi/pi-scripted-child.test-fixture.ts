@@ -9,6 +9,7 @@ import { JsonlRpcResponseError, type JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
 import type { PiRpcConnection } from './rpc-session'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 
 type PiScriptOptions = {
   signedOut?: boolean
@@ -20,6 +21,8 @@ type PiScriptOptions = {
   }
   /** Recorded native responses for requested levels, rather than a second clamp implementation. */
   appliedEfforts?: Readonly<Record<string, string>>
+  /** What `get_commands` reports, in Pi's own shape. */
+  commands?: readonly { name: string; source: 'extension' | 'prompt' | 'skill' }[]
 }
 
 class ScriptedPiConnection implements PiRpcConnection {
@@ -84,7 +87,7 @@ class ScriptedPiConnection implements PiRpcConnection {
       return { models: this.signedOut ? [] : [this.model] }
     }
     if (command === 'get_commands') {
-      return { commands: [] }
+      return { commands: this.options.commands ?? [] }
     }
     if (
       command === 'set_model' &&
@@ -228,6 +231,8 @@ export type ScriptedPiChild = ScriptedAgentChild & {
   inputs(): readonly { command: string; params: Record<string, unknown> }[]
   signIn(): void
   setNativeEffort(level: string): void
+  /** While set, the pinned session file reads as missing and this link is the lost source. */
+  missingHistory?: () => AgentSessionProviderHandleLink | undefined
 }
 
 export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild => {
@@ -246,6 +251,16 @@ export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild 
         const handle = identity.providerHandle
         if (handle && (handle.transport !== 'jsonl-rpc' || handle.agent !== 'pi')) {
           throw new Error('Scripted Pi received another provider handle')
+        }
+        const lost = handle ? script.missingHistory?.() : undefined
+        if (lost) {
+          return {
+            command: join(tmpdir(), 'orca-scripted-pi', 'fake-pi'),
+            cwd: tmpdir(),
+            fullAccess: true,
+            previous: lost,
+            historyUnavailable: true
+          }
         }
         return {
           command: join(tmpdir(), 'orca-scripted-pi', 'fake-pi'),

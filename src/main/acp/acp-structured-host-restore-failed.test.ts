@@ -264,6 +264,46 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
     await host.close(SESSION, 'user-close')
   })
 
+  it('sends a typed advertised command as typed and leaves saved context owed for the next input', async () => {
+    const { host, fence, ready, exchange, rig, journalDatabase } = await openRestoreRig(
+      -32002,
+      'Resource not found'
+    )
+    expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+    await ready()
+    await exchange('remember review context 42', 'saved for review', PROVIDER_SESSION)
+    await host.close(SESSION, 'user-close')
+    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+    await ready()
+    rig.child().agent.notify('session/update', {
+      sessionId: FRESH,
+      update: {
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'review', description: 'Review changes' }]
+      }
+    })
+    await rig.settle()
+    await host.flushStreamedEvents(SESSION)
+    const target = currentContextTransferTarget(readContextTransfers(journalDatabase.db, SESSION))!
+    const command = await exchange('/review src/main', 'reviewed', FRESH)
+    expect(command.params).toMatchObject({ prompt: [{ type: 'text', text: '/review src/main' }] })
+    expect(z.object({ prompt: z.array(z.unknown()) }).parse(command.params).prompt).toHaveLength(1)
+    const afterCommand = readContextTransfers(journalDatabase.db, SESSION)
+    expect(afterCommand.some((row) => row.kind === 'delivery')).toBe(false)
+    expect(contextTransferDelivered(afterCommand, target.id)).toBe(false)
+
+    const next = await exchange('continue', 'still 42', FRESH)
+    const blocks = z
+      .object({ prompt: z.array(z.object({ text: z.string() })) })
+      .parse(next.params).prompt
+    expect(blocks[0]?.text).toContain('remember review context 42')
+    expect(blocks.at(-1)?.text).toBe('continue')
+    expect(
+      contextTransferDelivered(readContextTransfers(journalDatabase.db, SESSION), target.id)
+    ).toBe(true)
+    await host.close(SESSION, 'user-close')
+  })
+
   it('accepts a lost carrier reply from exact ACP load replay without exposing its historical prefix', async () => {
     const { host, fence, ready, exchange, rig, replays, messages, journalDatabase } =
       await openRestoreRig(-32002, 'Resource not found')
