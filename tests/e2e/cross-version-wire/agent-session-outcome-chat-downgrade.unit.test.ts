@@ -18,8 +18,13 @@ import {
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
+import {
+  JOURNAL_OUTCOME_FORMAT,
+  JOURNAL_OUTCOME_MARKER_VERSION,
+  journalOutcomeSource
+} from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
 import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
+import { renderJournalState } from '../../../src/main/native-chat/agent-session-journal/journal-reducer'
 import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import {
@@ -30,12 +35,11 @@ import {
   resolveRecentStableReleaseRefs
 } from './release-checkout'
 
-// A chat this build has written, new or an existing one whose input rows an older build wrote, is
-// refused by each of the two newest releases (the downgrade window) as a newer Orca's, which leaves
-// every byte as it was; a build from before that reason opens it read-only, as it does any newer
-// row, and changes no saved row (it only adds a table of its own). The existing chat's input rows
-// stay byte for byte throughout, and this build reads the whole chat again afterwards.
+// A compatible release continues this build's chat; one without its outcome format refuses without
+// changing a byte. A build before that refusal reason opens read-only, preserving every saved row.
+// The existing chat's input rows stay byte for byte, and this build reads the whole chat afterwards.
 const SUITE_TIMEOUT_MS = 180_000
+const BEFORE_OUTCOMES_REF = 'v1.4.245'
 // A main build sharing this database and schema; the releases in the window are probed as well.
 const WRITABLE_BASELINE_REF = '3727100cc9dbcea6201f8a3e506676a3c4b53b18'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
@@ -52,8 +56,8 @@ const OLDER_HANDLE: AgentSessionJournalProviderHandle = { kind: 'codex', threadI
 const OLDER_IDENTITY = { ...IDENTITY, providerHandle: OLDER_HANDLE }
 
 type ReleasedJournal = {
-  snapshot: () => { items: unknown[] }
-  appendItem: (identity: unknown, body: unknown, options: unknown) => Promise<unknown>
+  snapshot: AgentSessionJournal['snapshot']
+  appendItem: AgentSessionJournal['appendItem']
 }
 type ReleasedOpener = {
   open: (options: { identity: unknown; stateDirectory: string }) => Promise<ReleasedJournal>
@@ -76,8 +80,8 @@ const appendStatus = (journal: Pick<AgentSessionJournal, 'appendItem'>, ordinal:
   )
 
 /** A chat this build writes: new, or existing with three input rows of items an older build wrote
- * before this build's first write. Returns that prefix as stored. */
-async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> {
+ * before this build's first write. */
+async function savedChat(kind: 'new' | 'existing') {
   let prefix: JournalStoredRow[] = []
   if (kind === 'existing') {
     const older = createTrackedJournalOpener({ legacyInputs: true })
@@ -94,6 +98,13 @@ async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> 
   for (let ordinal = 3; ordinal < 6; ordinal++) {
     await appendStatus(journal, ordinal)
   }
+  const items = journal.snapshot().items
+  expect(items.map((item) => item.body)).toEqual(
+    (kind === 'existing' ? [0, 1, 2, 3, 4, 5] : [3, 4, 5]).map((ordinal) => ({
+      kind: 'status',
+      text: `item ${ordinal}`
+    }))
+  )
   await journals.closeAll()
   const database = openTestJournalHostDatabase(directory)
   expect(journalOutcomeSource(database.db, IDENTITY.sessionId, journal.epoch)).toMatchObject({
@@ -104,7 +115,7 @@ async function savedChat(kind: 'new' | 'existing'): Promise<JournalStoredRow[]> 
   // One appended marker, after the prefix, where outcome records begin.
   expect(rows.map((row) => row.seq)).toEqual([...prefix.map((row) => row.seq), prefix.length + 1])
   await closeTestJournalHostDatabase(directory)
-  return prefix
+  return { prefix, items }
 }
 
 /** The database file and its log, by content; SQLite's shared-memory index is not data. */
@@ -146,12 +157,15 @@ describe('a chat this build wrote, opened by a shipped build', () => {
     ['existing', 'the newest release'],
     ['new', 'the release before it'],
     ['existing', 'the release before it'],
+    ['new', 'the release before outcomes'],
+    ['existing', 'the release before outcomes'],
     ['new', 'the writable baseline'],
     ['existing', 'the writable baseline']
   ] as const)(
-    'keeps a %s chat from %s, leaving every byte as it was, and reads whole again after',
+    'round-trips a %s chat through %s or refuses without changing it, then reads whole again',
     async (kind, build) => {
-      const prefix = await savedChat(kind)
+      const { prefix, items } = await savedChat(kind)
+      let expectedItems = items
       const before = databaseBytes()
       const saved = savedContent()
       expect(before['agent-session-journal.db']).toBeDefined()
@@ -159,10 +173,24 @@ describe('a chat this build wrote, opened by a shipped build', () => {
       const checkout = await materializeReleaseCheckout(
         build === 'the newest release'
           ? resolveBaselineReleaseRef()
-          : inWindow
-            ? resolveRecentStableReleaseRefs(2)[1]!
-            : WRITABLE_BASELINE_REF
+          : build === 'the release before outcomes'
+            ? BEFORE_OUTCOMES_REF
+            : inWindow
+              ? resolveRecentStableReleaseRefs(2)[1]!
+              : WRITABLE_BASELINE_REF
       )
+      const formatPath = `${JOURNAL}/journal-outcome-format.ts`
+      const format = existsSync(join(checkout.root, formatPath))
+        ? await importReleaseCheckoutModule(checkout, formatPath)
+        : null
+      const compatible =
+        format !== null &&
+        releaseModuleExport<number>(format, 'JOURNAL_OUTCOME_FORMAT') >= JOURNAL_OUTCOME_FORMAT &&
+        releaseModuleExport<number>(format, 'JOURNAL_OUTCOME_MARKER_VERSION') ===
+          JOURNAL_OUTCOME_MARKER_VERSION
+      if (build === 'the release before outcomes') {
+        expect(compatible).toBe(false)
+      }
       const support = await importReleaseCheckoutModule(
         checkout,
         `${JOURNAL}/journal-host-database-test-support.ts`
@@ -176,7 +204,15 @@ describe('a chat this build wrote, opened by a shipped build', () => {
         'closeTestJournalHostDatabase'
       )
       try {
-        if (inWindow) {
+        if (compatible) {
+          const opened = await older.open({ identity: IDENTITY, stateDirectory: directory })
+          expect(opened.snapshot().items).toEqual(items)
+          await appendStatus(opened, 9)
+          expectedItems = opened.snapshot().items
+          expect(expectedItems).toHaveLength(items.length + 1)
+          expect(expectedItems.slice(0, items.length)).toEqual(items)
+          expect(expectedItems.at(-1)?.body).toEqual({ kind: 'status', text: 'item 9' })
+        } else if (inWindow) {
           const failure = await older.open({ identity: IDENTITY, stateDirectory: directory }).then(
             () => null,
             (error: unknown) => error
@@ -198,9 +234,9 @@ describe('a chat this build wrote, opened by a shipped build', () => {
         await older.closeAll()
         close(directory)
       }
-      if (inWindow) {
+      if (inWindow && !compatible) {
         expect(databaseBytes()).toEqual(before)
-      } else {
+      } else if (!compatible) {
         const after = savedContent()
         expect(
           [...saved].filter(([name, content]) => !isDeepStrictEqual(after.get(name), content))
@@ -211,7 +247,10 @@ describe('a chat this build wrote, opened by a shipped build', () => {
       try {
         const reopened = restoreJournal(database.db, IDENTITY.sessionId)
         expect(reopened).toMatchObject({ newer: null, damage: null })
-        expect(reopened?.state.items.size).toBe(kind === 'existing' ? 6 : 3)
+        if (!reopened) {
+          throw new Error('the saved chat did not reopen')
+        }
+        expect(renderJournalState(reopened.state).items).toEqual(expectedItems)
         const rows = liveTestJournalRows(database.db, IDENTITY.sessionId)
         expect(rows.slice(0, prefix.length)).toEqual(prefix)
       } finally {

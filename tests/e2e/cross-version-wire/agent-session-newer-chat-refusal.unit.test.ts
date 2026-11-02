@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -143,11 +143,22 @@ async function releasedReader(ref: string) {
   const checkout = await materializeReleaseCheckout(ref)
   const notice = await importReleaseCheckoutModule(
     checkout,
-    'src/shared/agent-session-refusal-notice.ts'
+    existsSync(
+      join(checkout.root, 'src/shared/agent-session/failures/agent-session-refusal-notice.ts')
+    )
+      ? 'src/shared/agent-session/failures/agent-session-refusal-notice.ts'
+      : 'src/shared/agent-session-refusal-notice.ts'
   )
   const readRefusal = await importReleaseCheckoutModule(
     checkout,
-    'src/shared/structured-agent-session-read-refusal.ts'
+    existsSync(
+      join(
+        checkout.root,
+        'src/shared/agent-session/failures/structured-agent-session-read-refusal.ts'
+      )
+    )
+      ? 'src/shared/agent-session/failures/structured-agent-session-read-refusal.ts'
+      : 'src/shared/structured-agent-session-read-refusal.ts'
   )
   const parts = releaseModuleExport<ReadHistoryParts>(notice, 'agentSessionReadHistoryRefusalParts')
   const english = releaseModuleExport<NoticeEnglish>(notice, 'agentSessionWriteNoticeEnglish')

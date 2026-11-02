@@ -7,11 +7,16 @@ import {
   createTrackedJournalOpener,
   liveTestJournalRows,
   openTestJournalHostDatabase,
+  readTestJournalOutcomes,
   type TrackedJournalOpener
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
 import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
-import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
+import {
+  JOURNAL_OUTCOME_MARKER_VERSION,
+  journalOutcomeSource,
+  type JournalOutcomeSource
+} from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
 import type { AgentJournalSnapshot } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
@@ -89,7 +94,7 @@ async function carryOn(
   agent: Agent,
   stateDirectory: string,
   written: Written,
-  prefix?: JournalStoredRow[]
+  storage: { rows: JournalStoredRow[]; source: JournalOutcomeSource | null }
 ) {
   const options = {
     identity: identityOf(agent),
@@ -101,16 +106,39 @@ async function carryOn(
     .open(options)
     .then(async (journal) => {
       const opened = view(journal)
+      const database = openTestJournalHostDatabase(stateDirectory)
+      const cardOrdinal = database.db.prepare(`SELECT ordinal FROM journal_outcomes
+        WHERE generation = ? AND field = 'queue.cards' AND entry_key = '"card-2"'
+        ORDER BY seq DESC LIMIT 1`)
+      const ordinal = storage.source
+        ? cardOrdinal.get(storage.source.generation)?.ordinal
+        : undefined
+      if (storage.source) {
+        expect(ordinal).toEqual(expect.any(String))
+      }
+      const outcomes = readTestJournalOutcomes(database.db, options.identity.sessionId)
       await editReleasedCard(journal)
-      if (prefix) {
-        // The release's rows stay byte for byte; one marker follows them, where records begin.
-        const database = openTestJournalHostDatabase(stateDirectory)
-        const rows = liveTestJournalRows(database.db, options.identity.sessionId)
-        expect(rows.slice(0, prefix.length)).toEqual(prefix)
-        expect(rows).toHaveLength(prefix.length + 1)
+      const rows = liveTestJournalRows(database.db, options.identity.sessionId)
+      const source = journalOutcomeSource(database.db, options.identity.sessionId, journal.epoch)
+      if (!source) {
+        throw new Error('the card edit wrote no journal outcome source')
+      }
+      expect(rows.slice(0, storage.rows.length)).toEqual(storage.rows)
+      if (storage.source) {
         expect(
-          journalOutcomeSource(database.db, options.identity.sessionId, journal.epoch)?.prefix
-        ).toBe(prefix.length)
+          readTestJournalOutcomes(database.db, options.identity.sessionId).slice(0, outcomes.length)
+        ).toEqual(outcomes)
+        expect(cardOrdinal.get(source.generation)?.ordinal).toBe(ordinal)
+        expect(rows).toEqual(storage.rows)
+        expect(source).toMatchObject({
+          generation: storage.source.generation,
+          prefix: storage.source.prefix
+        })
+        expect(source.through).toBeGreaterThan(storage.source.through)
+      } else {
+        // The first outcome write appends its marker after the release's frozen input rows.
+        expect(rows).toHaveLength(storage.rows.length + 1)
+        expect(source.prefix).toBe(storage.rows.length)
       }
       await sendAfterUpgrade(journal)
       const sent = view(journal)
@@ -169,14 +197,37 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
 
         const database = openTestJournalHostDatabase(directory)
         const rows = liveTestJournalRows(database.db, identity.sessionId)
-        expect(rows.filter((row) => !parseJournalRow(row.rowJson).ok)).toEqual([])
-        // Anti-vacuous: the release wrote every row kind a chat holds (cards in their own table
-        // before they moved into the rows).
-        const kinds = new Set(rows.map((row) => JSON.parse(row.rowJson).kind))
-        expect([...kinds].filter((kind) => kind !== 'queue').sort()).toEqual(
-          ['dispatch', 'epoch', 'item', 'lifecycle-batch', 'submission', 'tombstone'].sort()
+        const source = journalOutcomeSource(
+          database.db,
+          identity.sessionId,
+          written.snapshot.cursor.epoch
         )
-        expect(kinds.has('queue')).toBe(build !== 'the oldest release with this chat database')
+        const input = source ? rows.slice(0, source.prefix) : rows
+        expect(input.filter((row) => !parseJournalRow(row.rowJson).ok)).toEqual([])
+        if (source) {
+          expect(input).toHaveLength(source.prefix)
+          expect(rows).toHaveLength(source.prefix + 1)
+          const marker = rows[source.prefix]
+          expect(JSON.parse(marker.rowJson)).toEqual({
+            v: JOURNAL_OUTCOME_MARKER_VERSION,
+            kind: 'outcomes',
+            epoch: marker.epoch,
+            seq: source.prefix + 1,
+            ts: marker.ts
+          })
+          const outcomes = readTestJournalOutcomes(database.db, identity.sessionId)
+          expect(outcomes.length).toBeGreaterThan(0)
+          expect([...new Set(outcomes.map((outcome) => outcome.field))]).toEqual(
+            expect.arrayContaining(['items', 'submissions', 'queue.cards'])
+          )
+        } else {
+          // Input writers cover every row kind; the oldest kept cards in their own table.
+          const kinds = new Set(rows.map((row) => JSON.parse(row.rowJson).kind))
+          expect([...kinds].filter((kind) => kind !== 'queue').sort()).toEqual(
+            ['dispatch', 'epoch', 'item', 'lifecycle-batch', 'submission', 'tombstone'].sort()
+          )
+          expect(kinds.has('queue')).toBe(build !== 'the oldest release with this chat database')
+        }
         expect(restoreJournal(database.db, identity.sessionId)).toMatchObject({
           newer: null,
           damage: null
@@ -184,7 +235,10 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
         await closeTestJournalHostDatabase(directory)
         cpSync(directory, shipped, { recursive: true })
 
-        const ours = await carryOn(createTrackedJournalOpener(), agent, directory, written, rows)
+        const ours = await carryOn(createTrackedJournalOpener(), agent, directory, written, {
+          rows,
+          source
+        })
         if (build !== 'the oldest release with this chat database') {
           // A release in the window wrote the shapes this build reads, so it opens as written,
           // and the edit records the card the old rows hold in its place among them.
@@ -193,7 +247,9 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
             .db.prepare(`SELECT ordinal FROM journal_outcomes
             WHERE field = 'queue.cards' AND entry_key = '"card-2"'`)
             .all()
-          expect(edits).toContainEqual({ ordinal: JOURNAL_PREFIX_ORDINAL })
+          if (!source) {
+            expect(edits).toContainEqual({ ordinal: JOURNAL_PREFIX_ORDINAL })
+          }
           await closeTestJournalHostDatabase(directory)
         }
         // This build opens the chat as the newest release does.

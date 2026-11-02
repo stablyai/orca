@@ -1,6 +1,8 @@
 // Pair real attention feeds and RPC dispatchers across versions: send prompt frames only to opted-in clients.
 // Older hosts must ignore includePrompts, still deliver completion, and expose acknowledgement only with its capability.
 
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
@@ -25,7 +27,7 @@ import {
 const SUITE_TIMEOUT_MS = 180_000
 const FEED_PATH =
   'src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed.ts'
-const PROJECTION_PATH = 'src/shared/structured-agent-session-projection.ts'
+const PROJECTION_PATH = 'src/shared/agent-session/view/structured-agent-session-projection.ts'
 const ACK_METHOD = 'agentSession.acknowledgeAttention'
 
 const LOCATION = {
@@ -70,7 +72,14 @@ beforeAll(async () => {
     StructuredAgentSessionTurnCompletionFeed,
     projectStructuredAgentSessionStatusState
   } as unknown as FeedBuild
-  baselineFeed = await loadFeedBuild((path) => importReleaseCheckoutModule(checkout, path))
+  baselineFeed = await loadFeedBuild((path) =>
+    importReleaseCheckoutModule(
+      checkout,
+      path === PROJECTION_PATH && !existsSync(join(checkout.root, path))
+        ? 'src/shared/structured-agent-session-projection.ts'
+        : path
+    )
+  )
 }, SUITE_TIMEOUT_MS)
 
 const USER: AgentJournalRenderItem = {

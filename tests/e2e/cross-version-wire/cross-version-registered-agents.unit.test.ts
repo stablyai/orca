@@ -1,6 +1,8 @@
 // Pair new registered agents across real builds: old clients must not render unknown chats or lose known tabs/records.
 // Derive old capability lists from their checkout and remove the tested capability so rolling releases cannot erase the skew.
 
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/main/ipc/desktop-renderer-runtime-capabilities'
@@ -57,9 +59,9 @@ type Baseline = {
 let baseline: Baseline
 let current: AgentSessionWireBuild
 
-// v1.4.228 moved `isStructuredTab` to shared code; keeping both locations lets the rolling baseline
-// cross that move and an older pinned ref still load.
+// Select the defining owner in each release; pinned releases retain their historical paths.
 const BASELINE_STRUCTURED_TAB_SOURCES = [
+  'src/shared/agent-session/view/structured-agent-session-tab.ts',
   'src/shared/structured-agent-session-tab.ts',
   'src/renderer/src/components/native-chat/structured-agent-session-tabs.ts'
 ] as const
@@ -68,9 +70,8 @@ async function importBaselineStructuredTab(
   checkout: ReleaseCheckout
 ): Promise<Record<string, unknown>> {
   for (const file of BASELINE_STRUCTURED_TAB_SOURCES) {
-    const loaded = await importReleaseCheckoutModule(checkout, file).catch(() => null)
-    if (loaded?.isStructuredTab !== undefined) {
-      return loaded
+    if (existsSync(join(checkout.root, file))) {
+      return importReleaseCheckoutModule(checkout, file)
     }
   }
   throw new Error(
@@ -89,7 +90,12 @@ beforeAll(async () => {
     ),
     importReleaseCheckoutModule(checkout, 'src/shared/workspace-session-schema.ts'),
     importBaselineStructuredTab(checkout),
-    importReleaseCheckoutModule(checkout, 'src/shared/agent-session-record.ts')
+    importReleaseCheckoutModule(
+      checkout,
+      existsSync(join(checkout.root, 'src/shared/agent-session/lifecycle/agent-session-record.ts'))
+        ? 'src/shared/agent-session/lifecycle/agent-session-record.ts'
+        : 'src/shared/agent-session-record.ts'
+    )
   ])
   current = await loadAgentSessionWireBuild(WORKING_TREE)
   const wire = await loadAgentSessionWireBuild(ref)
