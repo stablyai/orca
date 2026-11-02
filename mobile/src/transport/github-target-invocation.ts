@@ -7,6 +7,7 @@ import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../src/s
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../src/shared/github/work-item-target'
 
 export const GITHUB_CONNECTION_CHANGED = 'The Orca server connection changed. Try again.'
+export const GITHUB_TARGET_CHECK_TIMED_OUT = 'Timed out confirming the executing Orca server.'
 const statusRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'status.github-target-authority',
@@ -32,13 +33,13 @@ export function captureGitHubInvocation(client: RpcClient, isCurrent: () => bool
       retired = true
     }
   })
+  const current = () =>
+    !retired &&
+    isCurrent() &&
+    client.getGeneration?.() === generation &&
+    client.getState() === 'connected'
   const assertCurrent = () => {
-    if (
-      retired ||
-      !isCurrent() ||
-      client.getGeneration?.() !== generation ||
-      client.getState() !== 'connected'
-    ) {
+    if (!current()) {
       throw new Error(GITHUB_CONNECTION_CHANGED)
     }
   }
@@ -51,6 +52,7 @@ export function captureGitHubInvocation(client: RpcClient, isCurrent: () => bool
     // The check runs before the action is sent, so its failures say what the user can do, not which RPC failed.
     async status(options: SendRequestOptions) {
       assertCurrent()
+      const startedAt = Date.now()
       let reply: RpcResponse
       try {
         reply = await statusRead.request(client, undefined, {
@@ -61,8 +63,13 @@ export function captureGitHubInvocation(client: RpcClient, isCurrent: () => bool
         if (error instanceof Error && error.message === GITHUB_CONNECTION_CHANGED) {
           throw error
         }
-        // A timeout or lost connection: nothing was sent, so trying again is safe.
-        throw new Error(GITHUB_CONNECTION_CHANGED)
+        // Nothing was sent, so trying again is safe. A check that ran out its own deadline on a connection that
+        // never changed timed out; any other failure is a lost or changed connection.
+        const timedOut =
+          options.timeoutMs !== undefined &&
+          Date.now() - startedAt >= options.timeoutMs &&
+          current()
+        throw new Error(timedOut ? GITHUB_TARGET_CHECK_TIMED_OUT : GITHUB_CONNECTION_CHANGED)
       }
       let status: ReturnType<typeof statusRead.interpret>
       try {

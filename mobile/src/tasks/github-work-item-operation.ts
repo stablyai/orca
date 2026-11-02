@@ -3,7 +3,7 @@ import type { GitHubOwnerRepo } from '../../../src/shared/github/pull-request-ty
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../src/shared/github/work-item-target'
 import {
   captureGitHubInvocation,
-  GITHUB_CONNECTION_CHANGED,
+  GITHUB_TARGET_CHECK_TIMED_OUT,
   supportsExactGitHubOperations,
   githubOperationResponse
 } from '../transport/github-target-invocation'
@@ -30,7 +30,7 @@ export async function withGitHubTargetOperation<T>(args: {
   const remaining = () => {
     const ms = (budget.deadline ?? Date.now()) - Date.now()
     if (ms <= 0) {
-      throw new Error(GITHUB_CONNECTION_CHANGED)
+      throw new Error(GITHUB_TARGET_CHECK_TIMED_OUT)
     }
     return ms
   }

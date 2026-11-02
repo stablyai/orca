@@ -1,6 +1,7 @@
 import { classifyExactGitHubOperation } from '../../../src/shared/github/exact-work-item-operation'
 import {
   captureGitHubInvocation,
+  GITHUB_TARGET_CHECK_TIMED_OUT,
   requireExactGitHubOperations,
   githubOperationResponse
 } from '../transport/github-target-invocation'
@@ -105,7 +106,7 @@ export class BridgeHostRequests {
       }
       const ms = budget.deadline - Date.now()
       if (ms <= 0) {
-        throw new Error('Timed out confirming the executing Orca server.')
+        throw new Error(GITHUB_TARGET_CHECK_TIMED_OUT)
       }
       return ms
     }

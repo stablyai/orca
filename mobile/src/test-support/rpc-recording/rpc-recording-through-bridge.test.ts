@@ -10,7 +10,10 @@ import {
   type RecordedValue,
   type Settlement
 } from './recording-values'
-import { GITHUB_CONNECTION_CHANGED } from '../../transport/github-target-invocation'
+import {
+  GITHUB_CONNECTION_CHANGED,
+  GITHUB_TARGET_CHECK_TIMED_OUT
+} from '../../transport/github-target-invocation'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
 import { operationModuleLoader, type OperationMutation } from './operation-module-loader'
 import {
@@ -53,13 +56,17 @@ const probeInputs = [
 
 type ProbePartition = (typeof probeInputs)[number][0]
 type ProbeLifecycle = 'before-probe' | 'during-probe' | 'between-probe-and-operation'
-// The probe's own failure is never shown: a lost or timed-out check says the connection changed, and a refused or
-// unreadable answer says to update the executing server.
+// The probe's own failure is never shown: a lost check says the connection changed, one that ran out its deadline on
+// an unchanged connection says it timed out, and a refused or unreadable answer says to update the executing server.
 function probeFailure(partition: ProbePartition, lifecycle: ProbeLifecycle): string {
+  if (lifecycle === 'during-probe') {
+    return GITHUB_CONNECTION_CHANGED
+  }
+  if (partition === 'deadline') {
+    return GITHUB_TARGET_CHECK_TIMED_OUT
+  }
   if (
-    lifecycle === 'during-probe' ||
     partition === 'transport-throw' ||
-    partition === 'deadline' ||
     (partition === 'capable' && lifecycle !== 'before-probe')
   ) {
     return GITHUB_CONNECTION_CHANGED
