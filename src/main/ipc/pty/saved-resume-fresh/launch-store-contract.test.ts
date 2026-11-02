@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync
@@ -11,25 +12,60 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getPosixClaudeShellFunction } from '../../../../shared/claude-shell-function'
+import { getPosixAgentShellFunctions } from '../../../../shared/agent-shell-functions'
+import {
+  SAVED_RESTORE_CHECK_ENV,
+  SAVED_RESTORE_FRESH_ARGS_ENV,
+  SAVED_RESTORE_ROOT_KEYS,
+  withSavedRestoreProof
+} from '../../../../shared/saved-restore-dispatch'
 import { encodeClaudeProjectPath } from '../../../ai-vault/claude-project-dir-encoding'
 import { stripInheritedOrcaCodexHomeOverride } from '../host-env/codex-home'
-import { claudeStorePresence } from './claude-store-presence'
+import {
+  CODEX_HEADER,
+  CODEX_ID,
+  CODEX_ROLLOUT,
+  codexSessionsDay,
+  writeStoreFile
+} from './agent-store.test-fixture'
 import { probeSavedResumeStore } from './store-presence'
-import type { SavedResumeStoreQuery } from './store-query'
-import { newStoreReadBudget } from './store-walk'
+import type { SavedRestoreRoots } from './store-query'
 
-// Experiment for R1-PANEL-3: does the store the check reads equal the store the launched agent
-// uses? Each row runs a fake `claude` under the real generated shell function, in the order the
-// bash wrapper runs it (user profile, then Orca's function), and plants the conversation only in
-// the folder the agent actually used. found = the check read that folder; unknown = safe;
-// missing = the check read another store, so a restore would start fresh wrongly.
+// The store a restore checks is the one its launched agent uses: each row runs the generated line
+// under the real shell functions, in the order the bash wrapper runs them (user profile, then
+// Orca's functions), with a stand-in CLI that records the roots the check reports from inside the
+// invocation. The conversation is planted only where the agent actually ran, so the check must
+// read found there, or unknown (resume) where no check ran; never missing.
 const BASH = '/bin/bash'
 const ID = '21f5e73a-4a3a-42ac-bd73-bc8d88256d65'
+const PROOF = '0123456789abcdef0123456789abcdef'
 const roots: string[] = []
 afterEach(() => {
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
 })
+
+/** A stand-in for the bundled CLI: records what the check reports and answers resume. */
+function writeCheck(root: string): { path: string; reported: () => SavedRestoreRoots | null } {
+  const path = join(root, 'orca-check')
+  const out = join(root, 'reported')
+  writeFileSync(
+    path,
+    `#!/bin/sh\n[ "$3" = --phase ] && exit 0\n{ ${SAVED_RESTORE_ROOT_KEYS.map((key) => `printf '%s=%s\\n' ${key} "\${${key}-}"`).join('; ')}; } > "${out}"\nexit 0\n`
+  )
+  chmodSync(path, 0o700)
+  return {
+    path,
+    reported: () =>
+      existsSync(out)
+        ? Object.fromEntries(
+            readFileSync(out, 'utf8')
+              .split('\n')
+              .map((line) => line.split(/=(.*)/s).slice(0, 2))
+              .filter(([key, value]) => key && value)
+          )
+        : null
+  }
+}
 
 function claudeFixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-launch-store-')))
@@ -45,8 +81,9 @@ function claudeFixture() {
   const fake = join(bin, 'claude')
   writeFileSync(fake, '#!/bin/sh\nprintf "%s" "${CLAUDE_CONFIG_DIR-}"\n')
   chmodSync(fake, 0o700)
+  const gate = writeCheck(root)
   /** The folder the launched agent read, with the conversation planted only there. */
-  const launch = (env: string[], command = 'claude'): string => {
+  const launch = (env: string[], command = `claude '--resume' '${ID}'`): string => {
     const result = spawnSync(
       '/usr/bin/env',
       [
@@ -54,14 +91,16 @@ function claudeFixture() {
         `HOME=${root}`,
         `PATH=${bin}:/usr/bin:/bin`,
         `ORCA_CLAUDE_PROFILE_POINTER=${pointer}`,
+        `${SAVED_RESTORE_CHECK_ENV}=${gate.path}`,
+        `${SAVED_RESTORE_FRESH_ARGS_ENV}=`,
         ...env,
         BASH,
         '--norc',
         '--noprofile',
         '-c',
-        `[ -f "$HOME/.bash_profile" ] && . "$HOME/.bash_profile"\n${getPosixClaudeShellFunction()}\n${command}`
+        `[ -f "$HOME/.bash_profile" ] && . "$HOME/.bash_profile"\n${getPosixAgentShellFunctions()}\n${withSavedRestoreProof(command, PROOF, 'posix')}`
       ],
-      { encoding: 'utf8', cwd: root }
+      { encoding: 'utf8', cwd }
     )
     expect(result.stderr).toBe('')
     const home = result.stdout || join(root, '.claude')
@@ -74,24 +113,20 @@ function claudeFixture() {
     }
     return home
   }
-  const check = (env: string[]) =>
-    claudeStorePresence(
-      {
-        agent: 'claude',
-        providerSession: { key: 'session_id', id: ID },
-        launchEnv: {
-          HOME: root,
-          SHELL: BASH,
-          ORCA_CLAUDE_PROFILE_POINTER: pointer,
-          ...Object.fromEntries(env.map((entry) => entry.split(/=(.*)/s).slice(0, 2)))
-        },
-        cwd,
-        codexHome: { selected: null, verified: false },
-        recipeArgs: '',
-        settings: undefined
-      },
-      newStoreReadBudget()
-    )
+  /** What main reads for the check the launch just ran; no check at all resumes. */
+  const check = async () => {
+    const reported = gate.reported()
+    return reported
+      ? probeSavedResumeStore({
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: ID },
+          roots: reported,
+          cwd,
+          recipeArgs: '',
+          settings: undefined
+        })
+      : 'unknown'
+  }
   return { root, a, b, bin, pointer, launch, check }
 }
 
@@ -107,50 +142,28 @@ describe.skipIf(process.platform === 'win32' || !existsSync(BASH))(
       const f = claudeFixture()
       writeFileSync(f.pointer, f.b)
       expect(f.launch(injected(f.a))).toBe(f.b)
-      await expect(f.check(injected(f.a))).resolves.toBe('found')
+      await expect(f.check()).resolves.toBe('found')
     })
 
-    it('row 2: a sourced startup file selecting B overrides injection A; the check reads A', async () => {
+    it('row 2: a sourced startup file selecting B overrides injection A; the check reads B too', async () => {
       const f = claudeFixture()
       writeFileSync(f.pointer, f.a)
       writeFileSync(join(f.root, '.bash_profile'), '. "$HOME/.orca-extra"\n')
       writeFileSync(join(f.root, '.orca-extra'), `export CLAUDE_CONFIG_DIR=${f.b}\n`)
       expect(f.launch(injected(f.a))).toBe(f.b)
-      // Violation: the static startup scan cannot see a sourced file, so the check follows A.
-      await expect(f.check(injected(f.a))).resolves.toBe('missing')
+      await expect(f.check()).resolves.toBe('found')
     })
 
-    it('row 3: pointer A, no injection, absolute binary: launch reads the default; the check reads A', async () => {
+    it('row 3: an absolute binary bypasses the function, so nothing checks and the restore resumes', async () => {
       const f = claudeFixture()
       writeFileSync(f.pointer, f.a)
-      expect(f.launch([], join(f.bin, 'claude'))).toBe(join(f.root, '.claude'))
-      // Violation: only the word `claude` runs Orca's function; a path bypasses the pointer.
-      await expect(f.check([])).resolves.toBe('missing')
+      expect(f.launch([], `${join(f.bin, 'claude')} '--resume' '${ID}'`)).toBe(
+        join(f.root, '.claude')
+      )
+      await expect(f.check()).resolves.toBe('unknown')
     })
 
-    it('row 4: an invocation prefix pins the check folder only by overriding the user and account choices', () => {
-      const f = claudeFixture()
-      // The existing invocation pin is the CODEX_HOME=<home> prefix (ai-vault-resume-command.ts).
-      // Its Claude analogue, set to the folder the check read for each of rows 1-3's inputs:
-      const pin = (home: string, command = 'claude') => `CLAUDE_CONFIG_DIR='${home}' ${command}`
-      // Row 1 inputs (check read B): pinning B keeps B, which the pointer already chose.
-      writeFileSync(f.pointer, f.b)
-      expect(f.launch(injected(f.a), pin(f.b))).toBe(f.b)
-      // Row 2 inputs (check read A): the pin replaces the user's own startup-file choice B with A.
-      writeFileSync(f.pointer, f.a)
-      writeFileSync(join(f.root, '.bash_profile'), `export CLAUDE_CONFIG_DIR=${f.b}\n`)
-      expect(f.launch(injected(f.a))).toBe(f.b)
-      expect(f.launch(injected(f.a), pin(f.a))).toBe(f.a)
-      rmSync(join(f.root, '.bash_profile'))
-      // Row 3 inputs (check read A): the absolute binary reads the default today; the pin forces A.
-      expect(f.launch([], join(f.bin, 'claude'))).toBe(join(f.root, '.claude'))
-      expect(f.launch([], pin(f.a, join(f.bin, 'claude')))).toBe(f.a)
-      // A pin equal to the injected twin pins nothing: the function rereads the pointer at launch.
-      writeFileSync(f.pointer, f.b)
-      expect(f.launch(injected(f.a), pin(f.a))).toBe(f.b)
-    })
-
-    it("today's behavior, kept separately: a user override and the account pointer both win at launch", () => {
+    it('precedence is unchanged by the check: a user override and the account pointer both win at launch', () => {
       const f = claudeFixture()
       writeFileSync(f.pointer, f.a)
       expect(f.launch(['CLAUDE_CONFIG_DIR=/user/own'])).toBe('/user/own')
@@ -162,25 +175,48 @@ describe.skipIf(process.platform === 'win32' || !existsSync(BASH))(
 )
 
 describe('the Codex store a non-daemon restore checks against the one its child gets', () => {
-  it('F1: an inherited CODEX_HOME=ORCA_CODEX_HOME is stripped for the child but read by the check', async () => {
+  it('F1: an inherited CODEX_HOME the provider strips for the child is not what the check reads', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-launch-store-codex-')))
     roots.push(root)
     const inherited = join(root, 'inherited-managed-home')
     mkdirSync(join(inherited, 'sessions'), { recursive: true })
+    writeStoreFile(join(codexSessionsDay(join(root, '.codex')), CODEX_ROLLOUT), CODEX_HEADER)
     const childEnv: Record<string, string> = { CODEX_HOME: inherited, ORCA_CODEX_HOME: inherited }
     // The local provider's own step when no home is routed (local-configure.ts → buildPtyHostEnv).
     stripInheritedOrcaCodexHomeOverride(childEnv)
     expect(childEnv.CODEX_HOME).toBeUndefined()
-    const query: SavedResumeStoreQuery = {
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: '019f1abc-0000-7000-8000-00000000aaaa' },
-      launchEnv: { HOME: root, SHELL: BASH, CODEX_HOME: inherited, ORCA_CODEX_HOME: inherited },
-      cwd: root,
-      codexHome: { selected: null, verified: false },
-      recipeArgs: '',
-      settings: { codexManagedAccounts: [] }
-    }
-    // Violation: the child reads ~/.codex, but the check read the stripped home and found it empty.
-    await expect(probeSavedResumeStore(query)).resolves.toBe('missing')
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    writeFileSync(join(bin, 'codex'), '#!/bin/sh\nexit 0\n')
+    chmodSync(join(bin, 'codex'), 0o700)
+    const gate = writeCheck(root)
+    const result = spawnSync(
+      '/usr/bin/env',
+      [
+        '-i',
+        `HOME=${root}`,
+        `PATH=${bin}:/usr/bin:/bin`,
+        `${SAVED_RESTORE_CHECK_ENV}=${gate.path}`,
+        `${SAVED_RESTORE_FRESH_ARGS_ENV}=`,
+        ...Object.entries(childEnv).map(([key, value]) => `${key}=${value}`),
+        BASH,
+        '--norc',
+        '--noprofile',
+        '-c',
+        `${getPosixAgentShellFunctions()}\n${withSavedRestoreProof(`codex 'resume' '${CODEX_ID}'`, PROOF, 'posix')}`
+      ],
+      { encoding: 'utf8', cwd: root }
+    )
+    expect(result.stderr).toBe('')
+    await expect(
+      probeSavedResumeStore({
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: CODEX_ID },
+        roots: gate.reported() ?? {},
+        cwd: root,
+        recipeArgs: '',
+        settings: { codexManagedAccounts: [] }
+      })
+    ).resolves.toBe('found')
   })
 })

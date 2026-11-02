@@ -45,6 +45,11 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
       this.subscribeAgentProviderSessionChangesFn?.(onChange) ?? (() => {})
   })
 
+  /** A saved restore in `paneKey` started fresh: a later resume of its conversation opens elsewhere. */
+  releaseAgentSessionResumeHold(paneKey: string, session: ResumedAgentSession): void {
+    this.agentSessionResumeClaims.releasePane(session, paneKey)
+  }
+
   /** Automatic activation must not respawn deliberately slept/hibernated panes. pending-handle alone cannot prove parking; explicit tab open remains a wake gesture. */
   protected isDeliberatelyParkedPane(
     worktreeId: string,

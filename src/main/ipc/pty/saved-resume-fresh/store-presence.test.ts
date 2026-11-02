@@ -69,9 +69,8 @@ function query(overrides: Partial<SavedResumeStoreQuery> = {}): SavedResumeStore
   return {
     agent: 'codex',
     providerSession: { key: 'session_id', id: CODEX_ID },
-    launchEnv: { HOME: root, SHELL: '/bin/zsh', CODEX_HOME: codexHome, ORCA_CODEX_HOME: codexHome },
+    roots: { HOME: root, CODEX_HOME: codexHome },
     cwd: root,
-    codexHome: { selected: codexHome, verified: false },
     recipeArgs: '',
     settings: { codexManagedAccounts: [] },
     ...overrides
@@ -101,27 +100,15 @@ describe('Codex store', () => {
     await expect(probeSavedResumeStore(query())).resolves.toBe('found')
   })
 
-  it('counts the verified original home as found even when the selected home lacks it', async () => {
-    mkdirSync(join(root, 'codex', 'sessions'), { recursive: true })
-    const verified = query({ codexHome: { selected: join(root, 'codex'), verified: true } })
-    await expect(probeSavedResumeStore(verified)).resolves.toBe('found')
-  })
-
   it.each<[string, Partial<SavedResumeStoreQuery>]>([
     ['the sessions root is absent', {}],
-    [
-      'a custom CODEX_HOME points elsewhere',
-      { launchEnv: { HOME: root, CODEX_HOME: '/elsewhere' } }
-    ],
+    ['the reported CODEX_HOME is relative', { roots: { HOME: root, CODEX_HOME: 'codex' } }],
     [
       'shared history may still be linking in from other accounts',
       { settings: { codexManagedAccounts: [{ id: 'a' }] as never } }
     ],
     ['settings are unknown', { settings: undefined }],
-    [
-      "the spawn's CODEX_HOME disagrees with the routed home",
-      { launchEnv: { HOME: root, CODEX_HOME: '/other', ORCA_CODEX_HOME: '/other' } }
-    ]
+    ['the invocation reported no home', { roots: {} }]
   ])('stays unknown when %s', async (_label, overrides) => {
     await expect(probeSavedResumeStore(query(overrides))).resolves.toBe('unknown')
   })
@@ -149,10 +136,7 @@ describe('Codex check cost', () => {
         )
       }
       vi.mocked(opendir).mockClear()
-      const probe = query({
-        launchEnv: { HOME: root, SHELL: '/bin/zsh', CODEX_HOME: home, ORCA_CODEX_HOME: home },
-        codexHome: { selected: home, verified: false }
-      })
+      const probe = query({ roots: { HOME: root, CODEX_HOME: home } })
       await expect(probeSavedResumeStore(probe)).resolves.toBe('missing')
       return vi.mocked(opendir).mock.calls.length
     }
@@ -192,7 +176,7 @@ describe('Claude store', () => {
     query({
       agent: 'claude',
       providerSession: { key: 'session_id', id: CLAUDE_ID },
-      launchEnv: { HOME: root, SHELL: '/bin/zsh', CLAUDE_CONFIG_DIR: join(root, 'claude') },
+      roots: { HOME: root, CLAUDE_CONFIG_DIR: join(root, 'claude') },
       ...overrides
     })
   const project = (cwd = root, home = join(root, 'claude')) =>
@@ -258,60 +242,16 @@ describe('Claude store', () => {
     expect(open).not.toHaveBeenCalled()
   })
 
-  describe('an account pane, whose shell function reads its profile pointer at launch', () => {
-    const profileHome = () => join(root, 'profile')
-    const pointer = () => join(root, 'pointer')
-    const accountQuery = (env: Record<string, string> = {}) =>
-      claudeQuery({
-        launchEnv: {
-          HOME: root,
-          SHELL: '/bin/zsh',
-          ORCA_CLAUDE_PROFILE_POINTER: pointer(),
-          ...env
-        }
-      })
-
-    beforeEach(() => {
-      // The profile keeps its own projects; the folder the spawn env names does not have it.
-      writeStoreFile(join(project(root, profileHome()), `${CLAUDE_ID}.jsonl`), CLAUDE_HEADER)
-      mkdirSync(project(), { recursive: true })
-    })
-
-    it('reads the profile the pointer names, not the injected folder', async () => {
-      writeStoreFile(pointer(), `${profileHome()}\n`)
-      const injected = join(root, 'claude')
-      await expect(
-        probeSavedResumeStore(
-          accountQuery({ CLAUDE_CONFIG_DIR: injected, ORCA_CLAUDE_INJECTED_CONFIG_DIR: injected })
-        )
-      ).resolves.toBe('found')
-    })
-
-    it.each<[string, () => void, Record<string, string>]>([
-      ['a relative pointer target', () => writeStoreFile(pointer(), 'profile'), {}],
-      ['a guest-home pointer', () => {}, { ORCA_CLAUDE_PROFILE_POINTER: '~/.orca/pointer' }],
-      [
-        'a startup file that sets its own config folder',
-        () => {
-          writeStoreFile(pointer(), profileHome())
-          writeStoreFile(join(root, '.zshrc'), `export CLAUDE_CONFIG_DIR=${join(root, 'mine')}\n`)
-        },
-        {}
-      ]
-    ])('stays unknown for %s', async (_label, write, env) => {
-      write()
-      await expect(probeSavedResumeStore(accountQuery(env))).resolves.toBe('unknown')
-    })
-
-    posixIt('stays unknown when the pointer cannot be read', async () => {
-      writeStoreFile(pointer(), profileHome())
-      chmodSync(pointer(), 0o000)
-      try {
-        await expect(probeSavedResumeStore(accountQuery())).resolves.toBe('unknown')
-      } finally {
-        chmodSync(pointer(), 0o600)
-      }
-    })
+  it('reads the folder the invocation reported, or its home default when none was set', async () => {
+    writeStoreFile(join(project(root, join(root, 'profile')), `${CLAUDE_ID}.jsonl`), CLAUDE_HEADER)
+    mkdirSync(project(), { recursive: true })
+    await expect(probeSavedResumeStore(claudeQuery())).resolves.toBe('missing')
+    const profile = { HOME: root, CLAUDE_CONFIG_DIR: join(root, 'profile') }
+    await expect(probeSavedResumeStore(claudeQuery({ roots: profile }))).resolves.toBe('found')
+    writeStoreFile(join(project(root, join(root, '.claude')), `${CLAUDE_ID}.jsonl`), CLAUDE_HEADER)
+    await expect(probeSavedResumeStore(claudeQuery({ roots: { HOME: root } }))).resolves.toBe(
+      'found'
+    )
   })
 })
 
@@ -320,12 +260,7 @@ describe('the check limiter', () => {
     query({
       agent: 'opencode',
       providerSession: { key: 'session_id', id: OPENCODE_ID },
-      launchEnv: {
-        HOME: root,
-        SHELL: '/bin/zsh',
-        XDG_DATA_HOME: join(root, 'data'),
-        OPENCODE_DB: 'opencode.db'
-      }
+      roots: { HOME: root, XDG_DATA_HOME: join(root, 'data'), OPENCODE_DB: 'opencode.db' }
     })
   beforeEach(() => {
     writeOpenCodeDatabase(join(root, 'data', 'opencode', 'opencode.db'), 'session_v2', [])
@@ -371,12 +306,7 @@ describe('OpenCode store', () => {
     query({
       agent: 'opencode',
       providerSession: { key: 'session_id', id: OPENCODE_ID },
-      launchEnv: {
-        HOME: root,
-        SHELL: '/bin/zsh',
-        XDG_DATA_HOME: dataHome(),
-        OPENCODE_DB: 'opencode.db'
-      }
+      roots: { HOME: root, XDG_DATA_HOME: dataHome(), OPENCODE_DB: 'opencode.db' }
     })
 
   it.each(['session_v2', 'session'] as const)('reads the %s dialect table', async (table) => {
@@ -387,20 +317,13 @@ describe('OpenCode store', () => {
     await expect(probeSavedResumeStore(openCodeQuery())).resolves.toBe('missing')
   })
 
-  it("reads an account pane's own data folder, which its shell re-exports after startup files", async () => {
-    writeStoreFile(join(root, '.zshrc'), `export XDG_DATA_HOME=${join(root, 'elsewhere')}\n`)
-    await expect(probeSavedResumeStore(openCodeQuery())).resolves.toBe('unknown')
+  it("reads the data folder the invocation reported, such as an account pane's", async () => {
     const account = join(root, 'account-data')
     writeOpenCodeDatabase(join(account, 'opencode', 'opencode.db'), 'session_v2', [OPENCODE_ID])
     const accountQuery = query({
       agent: 'opencode',
       providerSession: { key: 'session_id', id: OPENCODE_ID },
-      launchEnv: {
-        HOME: root,
-        SHELL: '/bin/zsh',
-        ORCA_DATA_ACCOUNT_DATA_HOME: account,
-        ORCA_DATA_ACCOUNT_PROVIDER: 'opencode'
-      }
+      roots: { HOME: root, XDG_DATA_HOME: account, OPENCODE_DB: 'opencode.db' }
     })
     await expect(probeSavedResumeStore(accountQuery)).resolves.toBe('found')
   })

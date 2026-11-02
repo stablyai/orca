@@ -24,10 +24,10 @@ import type { PtySpawnOperationState } from '../spawn-operation-state'
 import { isWslTerminalSpawn } from '../wsl-terminal-spawn'
 import { probeSavedResumeStore } from './store-presence'
 
-const STORE_AGENTS = new Set(['codex', 'claude', 'opencode', 'opencode2', 'pi'])
-// A local-provider launch builds these agents' store environment later, inside the provider.
-const PROVIDER_ENV_AGENTS = new Set(['claude', 'opencode', 'opencode2'])
-const SEQUENCED_STARTUP_ENV = [
+// Pi resumes an exact session file named in its arguments, so main can check it before spawn.
+// Agents whose store the pane's env selects check from inside the invocation (saved-restore-arm.ts).
+const PRE_SPAWN_AGENTS = new Set(['pi'])
+export const SEQUENCED_STARTUP_ENV = [
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV
@@ -62,8 +62,7 @@ function eligibleSavedRestore(
     providerSession &&
     agent &&
     isResumableTuiAgent(agent) &&
-    STORE_AGENTS.has(agent) &&
-    (ctx.isDaemonHostSpawn || !PROVIDER_ENV_AGENTS.has(agent)) &&
+    PRE_SPAWN_AGENTS.has(agent) &&
     !args.connectionId &&
     ctx.expectedWslDistro === null &&
     !isWslTerminalSpawn(launch.shellOverride, ctx.cwd) &&
@@ -91,16 +90,14 @@ export async function startSavedResumeFreshWhenMissing(
   if (!stillSeed) {
     return false
   }
-  const settings = ctx.deps.getSettings?.()
   const recipe = admission.sourceRecord?.launchConfig ?? ctx.args.launchConfig
   const presence = await probeSavedResumeStore({
     agent,
     providerSession,
-    launchEnv: effectiveLaunchEnv(ctx),
+    roots: {},
     cwd: ctx.cwd,
-    codexHome: { selected: ctx.selectedCodexHomePath, verified: ctx.codexResumeHomeSelected },
     recipeArgs: `${recipe?.agentCommand ?? ''} ${recipe?.agentArgs ?? ''}`,
-    settings
+    settings: ctx.deps.getSettings?.()
   })
   return (
     presence === 'missing' &&
@@ -146,14 +143,13 @@ function effectiveLaunchEnv(ctx: PtySpawnOperationState): Record<string, string>
   return launchEnv
 }
 
-async function applyFreshLaunch(
+/** The saved recipe's fresh launch, decorated as this spawn decorates its own command. */
+export async function buildSavedResumeFreshCommand(
   ctx: PtySpawnOperationState,
   launch: SavedResumeLaunchFacts,
   agent: ResumableTuiAgent,
-  recipe: SleepingAgentLaunchConfig | undefined,
-  stillCurrent: () => boolean
-): Promise<boolean> {
-  const args = ctx.args
+  recipe: SleepingAgentLaunchConfig | undefined
+) {
   const env = ctx.spawnOptions.env ?? {}
   const settings = ctx.deps.getSettings?.()
   const shell = resolveAgentLaunchShell(
@@ -170,7 +166,7 @@ async function applyFreshLaunch(
     ...resolveResumeLaunchRecipe(recipe)
   })
   if (!fresh) {
-    return false
+    return null
   }
   const decorated = decorateAgentLaunchCommand({
     command:
@@ -186,15 +182,27 @@ async function applyFreshLaunch(
     shellOverride: launch.shellOverride
   })
   const command = decorated.command ? await decorated.command : decorated.launchCommand
-  if (!command || !stillCurrent()) {
+  return command ? { fresh, shell, command, launchCommand: decorated.launchCommand } : null
+}
+
+async function applyFreshLaunch(
+  ctx: PtySpawnOperationState,
+  launch: SavedResumeLaunchFacts,
+  agent: ResumableTuiAgent,
+  recipe: SleepingAgentLaunchConfig | undefined,
+  stillCurrent: () => boolean
+): Promise<boolean> {
+  const built = await buildSavedResumeFreshCommand(ctx, launch, agent, recipe)
+  if (!built || !stillCurrent()) {
     return false
   }
-  args.command = fresh.command
-  args.launchConfig = fresh.launchConfig
+  const args = ctx.args
+  args.command = built.fresh.command
+  args.launchConfig = built.fresh.launchConfig
   delete args.resumeProviderSession
-  ctx.launchCommand = decorated.launchCommand
-  ctx.spawnOptions.command = command
-  launch.applyLaunchConfig?.(fresh.launchConfig)
+  ctx.launchCommand = built.launchCommand
+  ctx.spawnOptions.command = built.command
+  launch.applyLaunchConfig?.(built.fresh.launchConfig)
   return true
 }
 

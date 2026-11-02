@@ -5,6 +5,7 @@ import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-ope
 import { beginPtySpawn, reportPtyPaneAdoption } from './spawn-begin'
 import { executePtySpawn } from './spawn-execute'
 import { forgetStartedFreshResume } from './saved-resume-fresh/saved-resume-fresh-launch'
+import { settleSavedRestoreLaunch } from './saved-resume-fresh/saved-restore-receipt'
 import { prepareSavedPtyResume } from './spawn-resume'
 import { resolveEarlyPaneKey, resolveEarlyPaneSpawnReservationKey } from './spawn-pane-coordinates'
 import { consumeExitedPaneOperation } from './pane/adopt-stable'
@@ -171,8 +172,15 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       }
       if (!ctx.result.isReattach) {
         runtime?.rememberSavedTerminalLaunchResult?.(outcome.result.id, outcome.result)
+        settleSavedRestoreLaunch(ctx.savedRestoreProof, {
+          ptyId: outcome.result.id,
+          incarnationId: outcome.result.incarnationId,
+          owner: ctx.result.agentSessionEnsure?.owner,
+          launchToken: typeof args.launchToken === 'string' ? args.launchToken : undefined
+        })
       }
     }
+    settleSavedRestoreLaunch(ctx.savedRestoreProof, null)
     finish(outcome)
     // Runtime hidden P2 follows the awaited prompt-intent wrapper and never an exited result.
     if (outcome.kind !== 'registration-exited') {
@@ -279,5 +287,6 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     cancelRegistration(ctx)
     ctx.releaseWorktreeSpawn?.()
     ctx.finishTerminalInstall()
+    settleSavedRestoreLaunch(ctx.savedRestoreProof, null)
   }
 }

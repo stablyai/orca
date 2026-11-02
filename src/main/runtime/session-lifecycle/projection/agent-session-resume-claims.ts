@@ -82,6 +82,14 @@ export class AgentSessionResumeClaims {
     return this.share(hold, request)
   }
 
+  /** The pane's agent started another conversation in place of this one: it holds it no more. */
+  releasePane(session: ResumedAgentSession, paneKey: string): void {
+    const held = this.find(session)
+    if (held?.paneKey === paneKey) {
+      this.end(held)
+    }
+  }
+
   private find(session: ResumedAgentSession): Hold | undefined {
     for (const hold of this.holds) {
       if (

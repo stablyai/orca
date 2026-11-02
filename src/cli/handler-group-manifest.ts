@@ -1,4 +1,5 @@
 import type { CommandHandler } from './dispatch'
+import { AGENT_HOOK_HANDLER_GROUPS } from './agent-hook-handler-groups'
 import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
@@ -202,11 +203,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('./handlers/computer.js')).COMPUTER_HANDLERS
   },
-  {
-    name: 'agent-hooks',
-    keys: ['agent hooks prepare-codex', 'agent hooks status', 'agent hooks off', 'agent hooks on'],
-    load: async () => (await import('./handlers/agent-hooks.js')).AGENT_HOOK_HANDLERS
-  },
+  ...AGENT_HOOK_HANDLER_GROUPS,
   {
     name: 'agent-launch',
     keys: ['agent launch'],

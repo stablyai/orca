@@ -32,20 +32,23 @@ vi.mock('./spawn-options', () => ({
   })
 }))
 
-const ID = '019f1abc-0000-7000-8000-00000000aaaa'
-const RESUME = `codex 'resume' '${ID}'`
+// Pi resumes an exact session file, so it alone is still decided before spawn.
+const ID = '019f1abe-902b-7b79-8a12-c0169ed3e187'
+const TRANSCRIPT = `/home/u/.pi/agent/sessions/--repo--/2026-06-30T22-55-24-203Z_${ID}.jsonl`
+const SESSION = { key: 'session_id' as const, id: ID, transcriptPath: TRANSCRIPT }
+const RESUME = `pi '--session' '${TRANSCRIPT}'`
 
 const SEED_ROWS = () => [
   {
     paneKey: 'tab-1:leaf',
     connectionId: null,
-    agentType: 'codex' as const,
+    agentType: 'pi' as const,
     state: 'done' as const,
     prompt: '',
     receivedAt: 5,
     stateStartedAt: 5,
     providerSessionOnly: true,
-    providerSession: { key: 'session_id' as const, id: ID }
+    providerSession: SESSION
   }
 ]
 const host = () => savedResumeHost(SEED_ROWS)
@@ -64,11 +67,11 @@ async function spawnSaved(
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       command: RESUME,
-      launchAgent: 'codex',
+      launchAgent: 'pi',
       resumeOrigin: 'saved',
-      resumeProviderSession: { key: 'session_id', id: ID },
+      resumeProviderSession: SESSION,
       launchConfig: {
-        agentCommand: 'codex --sandbox workspace-write',
+        agentCommand: 'pi --thinking high',
         agentArgs: '',
         agentEnv: {}
       },
@@ -89,13 +92,13 @@ describe('a saved restore whose conversation is gone', () => {
     const runtime = host()
     const { result, dispatched, onResumeOutcome } = await spawnSaved(runtime)
 
-    expect(dispatched?.command).toMatch(/^codex --sandbox workspace-write\b/)
+    expect(dispatched?.command).toMatch(/^pi --thinking high\b/)
     expect(dispatched?.command).not.toContain(ID)
     expect(dispatched?.env).toEqual({ ORCA_AGENT_LAUNCH_TOKEN: 'token' })
     expect(result).toMatchObject({
       agentResumeUnavailable: true,
-      launchAgent: 'codex',
-      launchConfig: { agentCommand: 'codex --sandbox workspace-write' },
+      launchAgent: 'pi',
+      launchConfig: { agentCommand: 'pi --thinking high' },
       savedResumeDecision: { verdict: 'admitted' }
     })
     expect(result).not.toHaveProperty('resumeProviderSession', expect.anything())
@@ -126,7 +129,7 @@ describe('a saved restore whose conversation is gone', () => {
   it('never consults the store for a typed resume and leaves its command byte-for-byte', async () => {
     hooks.captureLaunchSeed.mockClear()
     probe.mockClear()
-    const typed = `  codex   resume ${ID} --sandbox "read only" # mine`
+    const typed = `  pi   --session ${TRANSCRIPT} --thinking "very high" # mine`
     const { dispatched } = await spawnSaved(host(), { resumeOrigin: undefined, command: typed })
     expect(dispatched?.command).toBe(typed)
     expect(hooks.captureLaunchSeed).not.toHaveBeenCalled()
@@ -137,7 +140,7 @@ describe('a saved restore whose conversation is gone', () => {
     hooks.captureLaunchSeed.mockReturnValue(() => true)
     probe.mockResolvedValue('missing')
     const claim = {
-      agent: 'codex',
+      agent: 'pi',
       digestVersion: 1,
       keyId: 'key',
       identityDigest: 'old-conversation',
@@ -160,7 +163,7 @@ describe('a saved restore whose conversation is gone', () => {
     }
   })
 
-  const TYPED = `codex  resume ${ID}   --search`
+  const TYPED = `pi  --session ${TRANSCRIPT}   --thinking low`
   it.each<[string, Record<string, unknown>]>([
     ['a saved restore of it starts fresh too', {}],
     ['an explicit resume of it keeps its own command', { resumeOrigin: undefined, command: TYPED }]
@@ -169,7 +172,7 @@ describe('a saved restore whose conversation is gone', () => {
     let reportMissing: (presence: string) => void = () => {}
     probe.mockReset().mockImplementation(() => new Promise((resolve) => (reportMissing = resolve)))
     const claim = {
-      agent: 'codex' as const,
+      agent: 'pi' as const,
       digestVersion: 1 as const,
       keyId: 'key',
       identityDigest: 'joined-conversation',
@@ -190,10 +193,10 @@ describe('a saved restore whose conversation is gone', () => {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
         command: RESUME,
-        launchAgent: 'codex',
+        launchAgent: 'pi',
         resumeOrigin: 'saved',
-        resumeProviderSession: { key: 'session_id', id: ID },
-        launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+        resumeProviderSession: SESSION,
+        launchConfig: { agentCommand: 'pi', agentArgs: '', agentEnv: {} },
         env: {},
         agentSessionEnsure: ensure,
         ...overrides
@@ -230,17 +233,18 @@ describe('a saved restore whose conversation is gone', () => {
     ['an SSH pane', { connectionId: 'ssh-1' }, {}],
     ['a WSL pane', {}, { expectedWslDistro: 'Ubuntu' }],
     ['a sequenced startup script', { env: { ORCA_SEQUENCED_STARTUP_COMMAND: RESUME } }, {}],
-    ['an agent with no readable store', { launchAgent: 'gemini' }, {}]
+    ['an agent with no readable store', { launchAgent: 'gemini' }, {}],
+    ['an agent whose own function checks in the pane', { launchAgent: 'codex' }, {}]
   ])('reads no store for %s', async (_label, args, state) => {
     hooks.captureLaunchSeed.mockReset().mockReturnValue(() => true)
     probe.mockClear()
     const ctx = {
       args: {
         command: RESUME,
-        launchAgent: 'codex',
+        launchAgent: 'pi',
         resumeOrigin: 'saved',
-        resumeProviderSession: { key: 'session_id', id: ID },
-        launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+        resumeProviderSession: SESSION,
+        launchConfig: { agentCommand: 'pi', agentArgs: '', agentEnv: {} },
         ...args
       },
       spawnOptions: { cols: 80, rows: 24, command: RESUME, env: {} },
@@ -251,7 +255,7 @@ describe('a saved restore whose conversation is gone', () => {
     }
     const admitted = {
       verdict: 'admitted' as const,
-      refused: { agent: 'codex' as const, providerSession: { key: 'session_id' as const, id: ID } }
+      refused: { agent: 'pi' as const, providerSession: SESSION }
     }
     await expect(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eligibility reads only these members.

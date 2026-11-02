@@ -3,7 +3,10 @@ import { paneCacheKeyMatchesTab } from './server-status-identity'
 import { AgentHookServerCleanup } from './server-cleanup'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { releaseAgentExitKey } from './agent-exit-evidence'
-import type { RefusedPaneResume } from '../../../shared/agent-status-types'
+import type {
+  AgentStatusCacheIdentity,
+  RefusedPaneResume
+} from '../../../shared/agent-status-types'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata
@@ -23,6 +26,27 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       return null
     }
     return () => this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey)) === row
+  }
+
+  /** The pane's row when it is a seed for this resume written at or after `since`, as only the
+   *  seed of the launch that began then can be; any hook reported since withdraws it. */
+  launchSeedSince(
+    paneKey: string,
+    agent: string,
+    providerSession: AgentProviderSessionMetadata,
+    since: number
+  ): AgentStatusCacheIdentity | null {
+    const ownerKey = this.resolvePaneKeyAlias(paneKey)
+    const row = this.state.lastStatusByPaneKey.get(ownerKey)
+    return row &&
+      isLaunchSeedRow(row, agent, providerSession) &&
+      'receivedAt' in row &&
+      typeof row.receivedAt === 'number' &&
+      row.receivedAt >= since &&
+      'stateStartedAt' in row &&
+      typeof row.stateStartedAt === 'number'
+      ? { paneKey: ownerKey, receivedAt: row.receivedAt, stateStartedAt: row.stateStartedAt }
+      : null
   }
 
   /** The host refused `paneKey`'s saved resume, or started its agent fresh instead: forget the

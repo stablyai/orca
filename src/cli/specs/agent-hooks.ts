@@ -28,5 +28,12 @@ export const AGENT_HOOK_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca agent hooks on [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS],
     examples: ['orca agent hooks on']
+  },
+  {
+    path: ['agent', 'saved-restore-check'],
+    summary:
+      "Used by Orca's agent functions: check a restored pane's conversation before it starts",
+    usage: 'orca agent saved-restore-check --token <token> [--agent <agent>] [--phase dispatched]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'token', 'agent', 'phase']
   }
 ]

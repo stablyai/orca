@@ -63,7 +63,7 @@ import {
   SelectCodexAccountForTargetParams,
   SelectDataAccountParams
 } from './accounts-params'
-import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
+import { PrepareCodexForWslPaneParams, SavedRestoreCheckParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
 import {
@@ -768,6 +768,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
+  'agentHooks.savedRestore': SavedRestoreCheckParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,

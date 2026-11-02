@@ -1,7 +1,14 @@
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-status-hooks-setting'
 import { prepareManagedWslCodexHomeBeforeShellLaunch } from '../../../codex/managed-wsl-home-shell-preflight'
 import { defineMethod } from '../core'
-import { PrepareCodexForWslPaneParams } from '../../../../shared/rpc-contract/agent-hooks-params'
+import {
+  PrepareCodexForWslPaneParams,
+  SavedRestoreCheckParams
+} from '../../../../shared/rpc-contract/agent-hooks-params'
+import {
+  completeSavedRestoreFresh,
+  decideSavedRestore
+} from '../../../ipc/pty/saved-resume-fresh/saved-restore-receipt'
 
 export const AGENT_HOOK_METHODS = [
   defineMethod({
@@ -23,6 +30,21 @@ export const AGENT_HOOK_METHODS = [
           'codex'
         )
       })
+    }
+  }),
+  defineMethod({
+    name: 'agentHooks.savedRestore',
+    permission: 'workspace',
+    params: SavedRestoreCheckParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind !== undefined) {
+        throw new Error('Saved restore checks are only available to the local Orca CLI.')
+      }
+      if (params.phase === 'dispatched') {
+        completeSavedRestoreFresh(params.token, runtime)
+        return { fresh: false }
+      }
+      return { fresh: (await decideSavedRestore(params)) === 'fresh' }
     }
   })
 ]

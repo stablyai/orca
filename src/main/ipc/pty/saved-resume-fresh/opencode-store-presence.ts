@@ -10,7 +10,7 @@ import {
   type StorePresence,
   type StoreReadBudget
 } from './store-walk'
-import { shellStartupAssigns, type SavedResumeStoreQuery } from './store-query'
+import { reportedHome, type SavedResumeStoreQuery } from './store-query'
 
 /** OpenCode keeps sessions in one SQLite database of its data folder. Another channel's database,
  *  or legacy file sessions not yet imported, leave which store it reads open, so a miss is unknown. */
@@ -18,21 +18,12 @@ export async function openCodeStorePresence(
   query: SavedResumeStoreQuery,
   budget: StoreReadBudget
 ): Promise<StorePresence> {
-  const accountData = query.launchEnv.ORCA_DATA_ACCOUNT_DATA_HOME?.trim()
-  // An account pane's shell re-exports its data folder after startup files run; otherwise a
-  // startup file's assignment replaces the spawn's value.
-  const env = accountData
-    ? { ...query.launchEnv, XDG_DATA_HOME: accountData, OPENCODE_DB: 'opencode.db' }
-    : query.launchEnv
-  if (
-    accountData
-      ? query.launchEnv.ORCA_DATA_ACCOUNT_PROVIDER !== 'opencode'
-      : shellStartupAssigns('XDG_DATA_HOME', env) || shellStartupAssigns('OPENCODE_DB', env)
-  ) {
+  const home = reportedHome(query.roots)
+  if (!home) {
     return 'unknown'
   }
-  const dbPath = resolveOpenCodeDatabasePath(env)
-  const dataDirectory = resolveOpenCodeDataDirectory(env)
+  const dbPath = resolveOpenCodeDatabasePath(query.roots, home)
+  const dataDirectory = resolveOpenCodeDataDirectory(query.roots, home)
   if (!dbPath || (await statStoreFile(join(dataDirectory, 'storage', 'session'))) !== 'missing') {
     return 'unknown'
   }

@@ -1,7 +1,4 @@
 import { dirname, basename, isAbsolute, join } from 'node:path'
-import { getSystemCodexHomePath } from '../../../codex/codex-home-paths'
-import { codexHomePathsEqual } from '../host-env/codex-home'
-import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/codex-real-home-path'
 import { isCodexHistorySharedAcrossAccounts } from '../../../codex-accounts/codex-history-sharing'
 import {
   findStoreFile,
@@ -12,7 +9,7 @@ import {
 } from './store-walk'
 import { claudeStorePresence } from './claude-store-presence'
 import { openCodeStorePresence } from './opencode-store-presence'
-import type { SavedResumeStoreQuery } from './store-query'
+import { reportedHome, type SavedResumeStoreQuery } from './store-query'
 
 const MAX_CONCURRENT_CHECKS = 2
 const waiting: (() => void)[] = []
@@ -51,9 +48,13 @@ function releaseCheckSlot(): void {
 
 /** found / missing / unknown for the conversation in the store this launch's agent reads. Only
  *  this launch's own store is read; a store another account or host keeps is never consulted.
- *  Every wait, queued or in a worker, ends by the check's deadline as unknown. */
-export async function probeSavedResumeStore(query: SavedResumeStoreQuery): Promise<StorePresence> {
+ *  Every wait, queued or in a worker, ends by the check's deadline, or the caller's earlier one, as unknown. */
+export async function probeSavedResumeStore(
+  query: SavedResumeStoreQuery,
+  deadline = Infinity
+): Promise<StorePresence> {
   const budget = newStoreReadBudget()
+  budget.deadline = Math.min(budget.deadline, deadline)
   if (!(await acquireCheckSlot(budget.deadline))) {
     return 'unknown'
   }
@@ -94,24 +95,16 @@ async function codexStorePresence(
   query: SavedResumeStoreQuery,
   budget: StoreReadBudget
 ): Promise<StorePresence> {
-  if (query.codexHome.verified) {
-    return 'found'
-  }
   // Shared history links in from other accounts in the background, with no completion proof.
   const bridged =
     !query.settings ||
     (isCodexHistorySharedAcrossAccounts(query.settings) &&
       query.settings.codexManagedAccounts.length > 0)
-  if (bridged || hasCustomCodexHomeOverrideForLaunch(query.launchEnv)) {
+  const reported = reportedHome(query.roots)
+  const home = query.roots.CODEX_HOME?.trim() || (reported && join(reported, '.codex'))
+  if (bridged || !home || !isAbsolute(home)) {
     return 'unknown'
   }
-  // The spawn's own CODEX_HOME is what Codex reads; a routed home it disagrees with is unsettled.
-  const launchHome = query.launchEnv.CODEX_HOME?.trim()
-  const selected = query.codexHome.selected
-  if (launchHome && selected && !codexHomePathsEqual(launchHome, selected)) {
-    return 'unknown'
-  }
-  const home = selected ?? launchHome ?? getSystemCodexHomePath()
   // Reverting a thread adds `_<rollout>`; compressed rollouts still count as the conversation.
   const name = new RegExp(
     `-${escapeRegExp(query.providerSession.id)}(?:_[\\w-]+)?\\.jsonl(?:\\.zst)?$`,

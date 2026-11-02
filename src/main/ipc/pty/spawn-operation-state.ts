@@ -35,8 +35,6 @@ export type PtySpawnOperationState = Pick<
   | 'ownsNewIncarnation'
   | 'resumeAdmission'
   | 'launchCommand'
-  | 'selectedCodexHomePath'
-  | 'codexResumeHomeSelected'
 > & {
   deps: Pick<
     PtyRuntimeControllerDeps,
@@ -51,6 +49,8 @@ export type PtySpawnOperationState = Pick<
   >
   /** The admitted saved resume was rebuilt as a fresh launch of the same agent. */
   savedResumeStartedFresh?: true
+  /** This launch's generated line carries a one-shot in-pane restore check. */
+  savedRestoreProof?: string
   args: Omit<
     RuntimePtySpawnArgs,
     'spawnIntent' | 'terminalColorQueryReplies' | 'placement' | 'launchToken' | 'resumeOrigin'

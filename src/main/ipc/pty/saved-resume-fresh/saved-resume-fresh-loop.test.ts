@@ -11,10 +11,13 @@ import { spawnPtyFromRuntimeController } from '../runtime/spawn'
 import type { createRuntimePtySpawnState } from '../runtime/spawn-state'
 import { savedResumeDeps, savedResumeHost } from '../runtime/spawn-saved-resume.test-fixture'
 import { CODEX_HEADER, codexSessionsDay, writeStoreFile } from './agent-store.test-fixture'
+import { SAVED_RESTORE_CHECK_ENV } from '../../../../shared/saved-restore-dispatch'
+import { armSavedRestoreCheck } from './saved-restore-arm'
 import {
-  forgetStartedFreshResume,
-  startSavedResumeFreshWhenMissing
-} from './saved-resume-fresh-launch'
+  completeSavedRestoreFresh,
+  decideSavedRestore,
+  settleSavedRestoreLaunch
+} from './saved-restore-receipt'
 
 const live = vi.hoisted(() => ({ server: null as unknown as AgentHookServer, home: '' }))
 
@@ -35,6 +38,13 @@ vi.mock('../../../agent-hooks/server', async (importOriginal) => {
   return { ...actual, agentHookServer }
 })
 
+vi.mock('../../../cli/orca-cli-child-path', () => ({
+  prependOrcaCliDirToChildPath: () => '/app/bin/orca'
+}))
+vi.mock('../../../../shared/app-environment', () => ({
+  getAppEnvironment: () => ({ isPackaged: () => true, getPath: () => '/user-data' }),
+  hasAppEnvironment: () => true
+}))
 vi.mock('../runtime/spawn-preflight', () => ({ prepareRuntimePtySpawn: vi.fn(async () => null) }))
 // Host env routing settled on this Codex home; everything after it is the real spawn and commit.
 vi.mock('../runtime/spawn-options', () => ({
@@ -102,6 +112,7 @@ function savedRestore(id: string) {
   const ctx = {
     args: {
       command,
+      worktreeId: 'wt-1',
       launchAgent: 'codex',
       resumeProviderSession: providerSession,
       resumeOrigin: 'saved',
@@ -122,8 +133,6 @@ function savedRestore(id: string) {
     cwd: home,
     expectedWslDistro: null,
     isDaemonHostSpawn: true,
-    selectedCodexHomePath: codexHome,
-    codexResumeHomeSelected: false,
     launchCommand: command,
     deps: { getSettings: () => ({ codexManagedAccounts: [], agentCmdOverrides: {} }) }
   }
@@ -146,23 +155,50 @@ function savedRestore(id: string) {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the decision reads only these members of the spawn state.
   const state = ctx as unknown as PtySpawnOperationState
+  const runtime = {
+    releaseAgentSessionResumeHold: vi.fn(),
+    forgetRefusedSavedResume: vi.fn(async () => {}),
+    publishTerminalSavedRestoreFresh: vi.fn()
+  }
   return {
     state,
-    choose: () =>
-      startSavedResumeFreshWhenMissing(state, PANE, { shellOverride: undefined }, admission),
-    /** What commit does once the PTY is up: resumes seed this launch; a fresh start consumes the old seed. */
-    commit: (startedFresh: boolean) => {
-      if (startedFresh) {
-        forgetStartedFreshResume(PANE, admission)
-      } else {
-        live.server.recordLaunchResumeIdentity({
-          paneKey: PANE,
-          agentType: 'codex',
-          providerSession,
-          launchedAt: Date.now() + 1
-        })
-      }
-    }
+    runtime,
+    /** Main before spawn: arms the generated line's in-pane check when the pane shows only a seed. */
+    arm: async () => {
+      await armSavedRestoreCheck(state, PANE, { shellOverride: undefined }, admission)
+      return state.savedRestoreProof
+    },
+    /** What commit does once the PTY is up: the resumed launch seeds, and the check may now run. */
+    commit: () => {
+      live.server.recordLaunchResumeIdentity({
+        paneKey: PANE,
+        agentType: 'codex',
+        providerSession,
+        launchedAt: Date.now() + 1
+      })
+      settleSavedRestoreLaunch(state.savedRestoreProof, {
+        ptyId: 'restored-pty',
+        incarnationId: undefined,
+        owner: undefined,
+        launchToken: undefined
+      })
+    },
+    /** Codex's function at its call-through, in the pane's own env. */
+    check: (args = ['resume', id]) =>
+      decideSavedRestore({
+        token: state.savedRestoreProof ?? '',
+        agent: 'codex',
+        args,
+        roots: { HOME: home, CODEX_HOME: codexHome },
+        cwd: home,
+        remainingMs: 4_000
+      }),
+    dispatched: () =>
+      completeSavedRestoreFresh(
+        state.savedRestoreProof ?? '',
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only these members.
+        runtime as never
+      )
   }
 }
 
@@ -175,50 +211,67 @@ async function hook(event: string, id: string): Promise<void> {
   expect(response.status).toBe(204)
 }
 
+const ARMED = /^ORCA_SAVED_RESTORE_PROOF=[0-9a-f]{32} codex 'resume' '/
+
 describe('a saved pane whose conversation its agent no longer has', () => {
   it('resumes once, starts fresh on the next restart, then follows the new conversation', async () => {
     await restart()
     await hook('SessionStart', OLD)
     await hook('Stop', OLD)
 
-    // Restart 1: the latest row is the agent's own hook, so the saved resume runs and re-seeds.
+    // Restart 1: the latest row is the agent's own hook, so the saved resume runs with no check.
     let launch = savedRestore(OLD)
-    await expect(launch.choose()).resolves.toBe(false)
+    await expect(launch.arm()).resolves.toBeUndefined()
     expect(launch.state.spawnOptions.command).toBe(`codex 'resume' '${OLD}'`)
-    launch.commit(false)
+    launch.commit()
 
-    // Restart 2: nothing reported since that launch and Codex's store lacks it: fresh, same recipe.
+    // Restart 2: the command is unchanged but carries the check; the pane's store lacks it.
     await restart()
     launch = savedRestore(OLD)
-    await expect(launch.choose()).resolves.toBe(true)
-    expect(launch.state.spawnOptions.command).toMatch(/^codex --sandbox workspace-write\b/)
-    expect(launch.state.spawnOptions.command).not.toContain(OLD)
-    expect(launch.state.args.resumeProviderSession).toBeUndefined()
-    launch.commit(true)
+    await expect(launch.arm()).resolves.toMatch(/^[0-9a-f]{32}$/)
+    expect(launch.state.spawnOptions.command).toMatch(ARMED)
+    expect(launch.state.spawnOptions.env).toMatchObject({
+      [SAVED_RESTORE_CHECK_ENV]: '/app/bin/orca',
+      ORCA_SAVED_RESTORE_FRESH_ARGS: expect.stringMatching(/^'--sandbox' 'workspace-write'/)
+    })
+    launch.commit()
+    await expect(launch.check()).resolves.toBe('fresh')
+    // Nothing is forgotten or shown until the generated line reports it ran the fresh arguments.
+    expect(live.server.getStatusSnapshotForPane(PANE)).not.toEqual([])
+    launch.dispatched()
+    launch.dispatched()
     expect(live.server.getStatusSnapshotForPane(PANE)).toEqual([])
+    expect(launch.runtime.publishTerminalSavedRestoreFresh).toHaveBeenCalledOnce()
+    expect(launch.runtime.publishTerminalSavedRestoreFresh).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: PANE, ptyId: 'restored-pty' })
+    )
+    expect(launch.runtime.forgetRefusedSavedResume).toHaveBeenCalledOnce()
+    expect(launch.runtime.releaseAgentSessionResumeHold).toHaveBeenCalledOnce()
+    // A replay of the generated line finds its proof spent and resumes.
+    await expect(launch.check()).resolves.toBe('resume')
     await hook('SessionStart', NEW)
 
-    // Restart 3: the new conversation resumes; the old one is gone from main's rows.
+    // Restart 3: the new conversation resumes, with no check of the old one.
     await restart()
     expect(
       live.server.getStatusSnapshotForPane(PANE).map((row) => row.providerSession?.id)
     ).toEqual([NEW])
     launch = savedRestore(NEW)
-    await expect(launch.choose()).resolves.toBe(false)
+    await expect(launch.arm()).resolves.toBeUndefined()
     expect(launch.state.spawnOptions.command).toBe(`codex 'resume' '${NEW}'`)
   })
 
   it('keeps resuming when the agent reported anything after the launch', async () => {
     await restart()
-    savedRestore(OLD).commit(false)
+    savedRestore(OLD).commit()
     await hook('UserPromptSubmit', OLD)
     await restart()
-    await expect(savedRestore(OLD).choose()).resolves.toBe(false)
+    await expect(savedRestore(OLD).arm()).resolves.toBeUndefined()
   })
 
   it('keeps resuming when a terminal observation followed a hook and the pane was torn down', async () => {
     await restart()
-    savedRestore(OLD).commit(false)
+    savedRestore(OLD).commit()
     await hook('SessionStart', OLD)
     live.server.ingestTerminalStatus({
       paneKey: PANE,
@@ -228,40 +281,51 @@ describe('a saved pane whose conversation its agent no longer has', () => {
     live.server.dropStatusEntry(PANE)
     await restart()
     expect(live.server.getStatusSnapshotForPane(PANE)[0]?.providerSession?.id).toBe(OLD)
-    await expect(savedRestore(OLD).choose()).resolves.toBe(false)
+    await expect(savedRestore(OLD).arm()).resolves.toBeUndefined()
   })
 
-  it('keeps resuming while the store still has it, or when main kept no row at all', async () => {
+  it('resumes while the store still has it, for a changed command, or a lost answer', async () => {
     await restart()
-    await expect(savedRestore(OLD).choose()).resolves.toBe(false)
-    const launch = savedRestore(OLD)
-    launch.commit(false)
-    launch.commit(false)
+    savedRestore(OLD).commit()
     writeStoreFile(
       join(codexSessionsDay(join(home, 'codex')), `rollout-2026-06-30T10-00-00-${OLD}.jsonl`),
       CODEX_HEADER
     )
     await restart()
-    await expect(savedRestore(OLD).choose()).resolves.toBe(false)
+    let launch = savedRestore(OLD)
+    await launch.arm()
+    launch.commit()
+    await expect(launch.check()).resolves.toBe('resume')
+
+    rmSync(join(home, 'codex', 'sessions'), { recursive: true })
+    mkdirSync(join(home, 'codex', 'sessions'))
+    launch = savedRestore(OLD)
+    await launch.arm()
+    launch.commit()
+    await expect(launch.check(['resume', OLD, '--search'])).resolves.toBe('resume')
+
+    // A fresh answer the shell never received: no report, so nothing is forgotten or shown.
+    launch = savedRestore(OLD)
+    await launch.arm()
+    launch.commit()
+    await expect(launch.check()).resolves.toBe('fresh')
+    expect(live.server.getStatusSnapshotForPane(PANE)).not.toEqual([])
+    expect(launch.runtime.publishTerminalSavedRestoreFresh).not.toHaveBeenCalled()
   })
 
-  it('withdraws a fresh start when a hook lands while the store is read', async () => {
+  it('withdraws a fresh answer when a hook lands while the store is read', async () => {
     await restart()
-    savedRestore(OLD).commit(false)
+    savedRestore(OLD).commit()
     await restart()
     const launch = savedRestore(OLD)
-    const choice = launch.choose()
-    live.server.recordLaunchResumeIdentity({
-      paneKey: PANE,
-      agentType: 'codex',
-      providerSession: { key: 'session_id', id: OLD },
-      launchedAt: Date.now() + 1
-    })
-    await expect(choice).resolves.toBe(false)
-    expect(launch.state.spawnOptions.command).toBe(`codex 'resume' '${OLD}'`)
+    await launch.arm()
+    launch.commit()
+    const choice = launch.check()
+    await hook('UserPromptSubmit', OLD)
+    await expect(choice).resolves.toBe('resume')
   })
 
-  it('re-seeds over the retained remnant teardown leaves, so the next restart can start fresh', async () => {
+  it('re-seeds over the retained remnant teardown leaves, so the next restart checks in the pane', async () => {
     await restart()
     await hook('SessionStart', OLD)
     await hook('Stop', OLD)
@@ -289,13 +353,25 @@ describe('a saved pane whose conversation its agent no longer has', () => {
         }
       )
     try {
-      // Restart 1, through the real spawn and commit: the remnant names a hook, so this resumes.
+      // Restart 1, through the real spawn and commit: the remnant names a hook, so no check.
       await restore()
       expect(spawn.mock.calls[0]?.[0].command).toBe(`codex 'resume' '${OLD}'`)
       await restart()
-      // Restart 2: that resumed launch's own seed is last and the store lacks it.
+      // Restart 2: that resumed launch's own seed is last; the pane's function asks main.
       await restore()
-      expect(spawn.mock.calls[1]?.[0].command).not.toContain(OLD)
+      const armed = spawn.mock.calls[1]?.[0]
+      expect(armed?.command).toMatch(ARMED)
+      const token = armed?.command?.match(/PROOF=([0-9a-f]{32})/)?.[1] ?? ''
+      await expect(
+        decideSavedRestore({
+          token,
+          agent: 'codex',
+          args: ['resume', OLD],
+          roots: { HOME: home, CODEX_HOME: join(home, 'codex') },
+          cwd: home,
+          remainingMs: 4_000
+        })
+      ).resolves.toBe('fresh')
     } finally {
       spawn.mockRestore()
     }
