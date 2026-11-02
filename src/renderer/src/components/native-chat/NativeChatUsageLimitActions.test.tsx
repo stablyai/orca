@@ -109,6 +109,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  vi.useRealTimers()
   mocks.follows = true
 })
 
@@ -338,12 +339,15 @@ it('hands off database-backed chats using labelled recent messages when no nativ
 it('withdraws the source schedule after hand-off starts without waiting for cancellation', async () => {
   const target: RuntimeClientTarget = { kind: 'environment', environmentId: 'chat-host' }
   const resetsAt = 1_800_000_000_000
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(resetsAt - 60_000)
   status.set('chat', { usageLimitContinue: { turnItemId: 'cut', resetsAt, state: 'scheduled' } })
   mocks.follows = false
   function ScheduledRow() {
     const automatic = useNativeChatUsageLimitAutoContinue(target, 'chat', {
       turnItemId: 'cut',
-      resetsAt
+      resetsAt,
+      turnEndedAt: resetsAt - 120_000
     })
     return row(target, true, 'codex', [], undefined, automatic)
   }

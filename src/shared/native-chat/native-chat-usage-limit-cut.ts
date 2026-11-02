@@ -29,6 +29,23 @@ export type NativeChatUsageLimitCut = {
   turnEndedAt?: number
 }
 
+/** How long after its reset a cut can still be continued automatically; older cuts stay manual. */
+export const NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS = 24 * 60 * 60 * 1000
+
+/** Whether Orca could ever continue this cut by itself: a known reset after its turn ended, at most a day ago. */
+export function isNativeChatUsageLimitCutSchedulable(
+  cut: NativeChatUsageLimitCut,
+  now: number
+): cut is NativeChatUsageLimitCut & { resetsAt: number; turnEndedAt: number } {
+  return (
+    cut.resetsAt !== undefined &&
+    Number.isFinite(cut.resetsAt) &&
+    cut.turnEndedAt !== undefined &&
+    cut.resetsAt > cut.turnEndedAt &&
+    now - cut.resetsAt <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
+  )
+}
+
 /** The latest root turn, when a usage limit ended it and nothing was sent since. Null otherwise. */
 export function latestNativeChatUsageLimitCut(
   items: readonly AgentJournalRenderItem[],

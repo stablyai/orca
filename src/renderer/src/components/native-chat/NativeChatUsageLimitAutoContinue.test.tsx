@@ -2,10 +2,11 @@
 import '@testing-library/jest-dom/vitest'
 import { useMemo } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
@@ -31,15 +32,21 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
 }))
 vi.mock('./NativeChatUsageLimitActions', () => ({ NativeChatUsageLimitActions: () => null }))
 
+const reset = 1_800_000_000_000
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(reset - 60_000)
+})
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  vi.useRealTimers()
 })
-const reset = 1_800_000_000_000
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
 function Row({ target = LOCAL, known = true }: { target?: RuntimeClientTarget; known?: boolean }) {
   const state = useNativeChatUsageLimitAutoContinue(target, 'chat', {
     turnItemId: 'cut',
+    turnEndedAt: reset - 120_000,
     ...(known ? { resetsAt: reset } : {})
   })
   const value = useMemo(
@@ -63,7 +70,7 @@ function Row({ target = LOCAL, known = true }: { target?: RuntimeClientTarget; k
             type: 'text',
             text: 'Usage limit',
             usageLimitTurnItemId: 'cut',
-            failure: { kind: 'usageLimitReached' }
+            failure: { kind: 'usageLimitReached', usageLimit: { resetsAt: reset } }
           }}
         />
       </NativeChatOrcaStopContext.Provider>
@@ -120,4 +127,20 @@ it('hides new controls on old hosts, missing resets, stale summaries, and remote
   expect(
     screen.queryByRole('button', { name: 'Continue automatically when limits reset' })
   ).toBeNull()
+})
+
+it('shows only the manual actions once a cut is more than a day past its reset, setting on or off', () => {
+  vi.setSystemTime(reset + NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 1_000)
+  // A summary from before the cutoff: 'off' with the setting off, 'scheduled' with it on.
+  for (const state of ['off', 'scheduled'] as const) {
+    setState(state)
+    const view = render(<Row />)
+    expect(
+      screen.queryByRole('button', { name: 'Continue automatically when limits reset' })
+    ).toBeNull()
+    expect(screen.queryByText(/Orca will continue/)).toBeNull()
+    expect(screen.queryByRole('button', { name: "Don't continue" })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Continue Now' })).toBeInTheDocument()
+    view.unmount()
+  }
 })
