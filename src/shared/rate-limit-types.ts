@@ -74,6 +74,8 @@ export type UsageRateLimitMetadata = {
   source?: UsageRateLimitSource
   attemptedSources?: UsageRateLimitSource[]
   failureKind?: UsageRateLimitFailureKind
+  /** HTTP status from the usage endpoint, when the failure was an HTTP error. */
+  httpStatus?: number
   credentialSource?: string
   authProvenance?: string
   lastSuccessfulSource?: UsageRateLimitSource

@@ -65,11 +65,14 @@ export async function fetchActiveClaudeRateLimits(
     return { ...usage, usageMetadata: { ...metadata, ...usage.usageMetadata } }
   } catch (error) {
     const { failureKind } = classifyClaudeOAuthUsageError(error)
+    const httpStatus = error instanceof OAuthUsageError ? error.status : undefined
+    const httpMeta = httpStatus ? { httpStatus } : {}
     if (failureKind === 'stale-token' && !canClaudeRenewLogin(credentials, error)) {
       return makeClaudeUsageResult('error', 'Sign in again to use this account.', {
         ...metadata,
         failureKind: 'missing-credentials',
-        attemptedSources: ['oauth']
+        attemptedSources: ['oauth'],
+        ...httpMeta
       })
     }
     // Retain both the 429 polling delay and its user-visible cause.
@@ -87,6 +90,7 @@ export async function fetchActiveClaudeRateLimits(
         ...metadata,
         failureKind,
         attemptedSources: ['oauth'],
+        ...httpMeta,
         ...(retryAfterMs ? { retryAtMs: Date.now() + retryAfterMs } : {})
       }
     )

@@ -105,6 +105,53 @@ describe('RateLimitService', () => {
     expect(service.getState().inactiveClaudeAccounts).toEqual([])
   })
 
+  it('logs an inactive Claude fetch and keeps a thrown keychain failure on the row', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      const service = new RateLimitService()
+      service.setInactiveClaudeAccountsResolver(() => [{ id: 'account-1' }, { id: 'account-2' }])
+      const denied = Object.assign(new Error('User interaction is not allowed.'), { code: 36 })
+      vi.mocked(fetchManagedAccountUsage)
+        .mockRejectedValueOnce(denied)
+        .mockResolvedValueOnce({
+          ...errorProvider('claude', 'Claude usage updates the next time Claude runs.'),
+          usageMetadata: { failureKind: 'stale-token', httpStatus: 401 }
+        })
+
+      await service.fetchInactiveClaudeAccountsOnOpen()
+
+      const lines = info.mock.calls.map((call) => String(call[0]))
+      expect(lines).toContain('[claude-usage] inactive fetch start n=2')
+      expect(lines).toContain('[claude-usage] inactive fetch done n=2 ok=0 failed=2')
+      expect(lines).toContain(
+        '[claude-usage] inactive fetch account=account-1 failure=keychain-unavailable'
+      )
+      expect(lines).toContain(
+        '[claude-usage] inactive fetch account=account-2 failure=stale-token http=401'
+      )
+      expect(lines.join('\n')).not.toContain('User interaction is not allowed')
+      const rows = service.getState().inactiveClaudeAccounts
+      expect(rows).toEqual([
+        expect.objectContaining({
+          accountId: 'account-1',
+          rateLimits: expect.objectContaining({
+            status: 'error',
+            usageMetadata: expect.objectContaining({ failureKind: 'keychain-unavailable' })
+          })
+        }),
+        expect.objectContaining({
+          accountId: 'account-2',
+          rateLimits: expect.objectContaining({
+            status: 'error',
+            usageMetadata: expect.objectContaining({ failureKind: 'stale-token', httpStatus: 401 })
+          })
+        })
+      ])
+    } finally {
+      info.mockRestore()
+    }
+  })
+
   it('aborts inactive Codex preview fetches on stop', async () => {
     const service = new RateLimitService()
     const account = inactiveCodexAccount('account-1', '/tmp/account-1/home')

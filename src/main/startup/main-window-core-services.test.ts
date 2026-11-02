@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   attachMainWindowServicesMock,
@@ -13,6 +13,7 @@ const {
     flushPendingOrThrowAsync: vi.fn(async () => {}),
     writeLatestProfileStateJsonExportAsync: vi.fn(async () => {}),
     getSettings: vi.fn(() => ({})),
+    onSettingsChanged: vi.fn((_listener: (updates: object) => void) => () => {}),
     getSshTargets: vi.fn(() => [{ id: 'ssh-1', reconnectOnLaunch: false }])
   }
   return {
@@ -151,4 +152,92 @@ describe('main window profile-state update preparation', () => {
       expect(options).toHaveProperty('onBeforeUpdateQuitFailure', 'abort')
     }
   )
+})
+
+const usageOff = {
+  claudeAutoSwitchEnabled: false,
+  claudeSessionMover: 'off' as const,
+  claudeAccountPool: 'off' as const,
+  claudeModelPolicy: { enabled: false }
+}
+
+describe('serve usage polling', () => {
+  const start = state.rateLimits.start
+
+  function attach(onClosed?: (listener: () => void) => void): void {
+    const window = {
+      webContents: { id: 17 },
+      on: (event: string, listener: () => void) => {
+        if (event === 'closed') {
+          onClosed?.(listener)
+        }
+      }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mocked BrowserWindow only needs webContents and on for this composition-root wiring test.
+    attachMainWindowCoreServices(window as never, {
+      markExpectedRendererReload: vi.fn(),
+      recordRendererReload: vi.fn()
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    state.isServeMode = false
+    store.getSettings.mockImplementation(() => ({}))
+    store.onSettingsChanged.mockImplementation(() => () => {})
+  })
+
+  afterEach(() => {
+    state.isServeMode = false
+  })
+
+  it('keeps the desktop focus gate when serve mode is off', () => {
+    attach()
+    expect(start).toHaveBeenCalledTimes(1)
+    expect(start).toHaveBeenCalledWith({ fetchImmediately: false })
+  })
+
+  it('starts inactive Claude polling from Electron serve when a usage feature is on', () => {
+    state.isServeMode = true
+    attach()
+    expect(start).toHaveBeenCalledTimes(1)
+    expect(start).toHaveBeenCalledWith({
+      fetchImmediately: true,
+      pollWithoutWindow: true,
+      pollInactiveClaude: true
+    })
+  })
+
+  it('does not poll when every usage feature is off, then starts when one turns on', () => {
+    state.isServeMode = true
+    store.getSettings.mockImplementation(() => usageOff)
+    let listener: ((updates: object) => void) | undefined
+    store.onSettingsChanged.mockImplementation((callback) => {
+      listener = callback
+      return () => {
+        listener = undefined
+      }
+    })
+    let closed: (() => void) | undefined
+    attach((listenerOnClosed) => {
+      closed = listenerOnClosed
+    })
+    expect(start).not.toHaveBeenCalled()
+
+    store.getSettings.mockImplementation(() => ({
+      ...usageOff,
+      claudeModelPolicy: { enabled: true }
+    }))
+    listener?.({ claudeModelPolicy: { enabled: true } })
+    expect(start).toHaveBeenCalledTimes(1)
+    expect(start).toHaveBeenCalledWith({
+      fetchImmediately: true,
+      pollWithoutWindow: true,
+      pollInactiveClaude: true
+    })
+
+    closed?.()
+    listener?.({ claudeModelPolicy: { enabled: false } })
+    expect(start).toHaveBeenCalledTimes(1)
+  })
 })

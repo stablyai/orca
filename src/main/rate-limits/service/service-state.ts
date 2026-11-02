@@ -42,6 +42,8 @@ export abstract class RateLimitServiceState {
   protected cursorAuthConfigured = false
   protected openCodeGoApiKeyConfigured = false
   protected pollWithoutWindow = false
+  /** Headless hosts have no usage panel. The same timer fills inactive-account windows. */
+  protected pollInactiveClaude = false
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
   protected deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null

@@ -23,6 +23,7 @@ import {
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
 import { holdLaunchReconnectOptOuts } from '../ipc/ssh/ssh-host-user-disconnect'
+import { createClaudeUsagePollingSwitch } from '../claude-accounts/claude-usage-polling-policy'
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -161,6 +162,16 @@ export function attachMainWindowCoreServices(
   // Attach durable diagnostic pulls now, defer process launch past first paint.
   initTccPromptNotice(window, { deferWatchUntilReadyToShow: true })
   rateLimits.attach(window)
+  if (state.isServeMode) {
+    // Electron `orca serve` is the Studio process. The orcad switch never runs on this path.
+    const polling = createClaudeUsagePollingSwitch(rateLimits, () => store.getSettings())
+    polling.apply()
+    const unsubscribePolling = store.onSettingsChanged((updates) => {
+      polling.apply(updates)
+    })
+    window.on('closed', unsubscribePolling)
+    return
+  }
   // Quota probes spawn CLIs/use network; defer to show/focus refresh so they do not compete with first paint.
   rateLimits.start({ fetchImmediately: false })
 }

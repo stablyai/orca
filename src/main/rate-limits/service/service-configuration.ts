@@ -120,10 +120,17 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.detachWindowListeners = detachWindowListeners
   }
 
-  start(options: { fetchImmediately?: boolean; pollWithoutWindow?: boolean } = {}): void {
+  start(
+    options: {
+      fetchImmediately?: boolean
+      pollWithoutWindow?: boolean
+      pollInactiveClaude?: boolean
+    } = {}
+  ): void {
     this.pollWithoutWindow = options.pollWithoutWindow === true
+    this.pollInactiveClaude = options.pollInactiveClaude === true
     if (options.fetchImmediately !== false) {
-      void this.fetchAll()
+      void this.fetchAll().finally(() => this.afterBackgroundFetch())
     } else {
       this.scheduleDeferredStartupRefresh()
     }
@@ -132,6 +139,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   stop(): void {
     this.pollWithoutWindow = false
+    this.pollInactiveClaude = false
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()

@@ -24,7 +24,11 @@ export function createClaudeUsagePollingSwitch(
       }
       const wanted = shouldPollClaudeUsage(getSettings())
       if (wanted && !polling) {
-        rateLimits.start({ fetchImmediately: true, pollWithoutWindow: true })
+        rateLimits.start({
+          fetchImmediately: true,
+          pollWithoutWindow: true,
+          pollInactiveClaude: true
+        })
         polling = true
       } else if (!wanted && polling) {
         rateLimits.stop()

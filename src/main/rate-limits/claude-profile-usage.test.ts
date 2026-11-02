@@ -104,7 +104,7 @@ it('lets the server decide a locally expired token and never refreshes it', asyn
   expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
     status: 'error',
     error: 'Claude usage updates the next time Claude runs.',
-    usageMetadata: { failureKind: 'stale-token' }
+    usageMetadata: { failureKind: 'stale-token', httpStatus: 401 }
   })
   expect(calls.usage.mock.calls.map(([token]) => token)).toEqual(['expired-fake'])
   const system = systemDefault()
@@ -147,7 +147,7 @@ it.each([
   expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
     status: 'error',
     error: 'Sign in again to use this account.',
-    usageMetadata: { failureKind: 'missing-credentials' }
+    usageMetadata: { failureKind: 'missing-credentials', httpStatus: 401 }
   })
 })
 it('reads only the requested scoped Keychain, with no unsuffixed fallback', async () => {
@@ -200,6 +200,42 @@ it('strict Keychain lookup never falls back to the unsuffixed service', async ()
   await expect(actual.readActiveClaudeKeychainCredentialsStrict(f.home)).rejects.toThrow('locked')
   expect(calls.keychainService).toHaveBeenCalledTimes(1)
 })
+it('uses the credentials file when the keychain denies the read', async () => {
+  const f = profile()
+  const denied = Object.assign(new Error('User interaction is not allowed.'), { code: 36 })
+  calls.keychain.mockRejectedValue(denied)
+  writeFileSync(
+    join(f.home, '.credentials.json'),
+    JSON.stringify({
+      claudeAiOauth: { accessToken: 'file-fake', expiresAt: Date.now() + 3_600_000 }
+    })
+  )
+  calls.usage.mockResolvedValueOnce({ provider: 'claude', status: 'ok' })
+  expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({ status: 'ok' })
+  expect(calls.usage.mock.calls.map(([token]) => token)).toEqual(['file-fake'])
+  if (process.platform === 'darwin') {
+    expect(calls.keychain).toHaveBeenCalled()
+  } else {
+    expect(calls.keychain).not.toHaveBeenCalled()
+  }
+})
+it('reports keychain denial when the credentials file is also absent', async () => {
+  const f = profile()
+  calls.keychain.mockRejectedValue(
+    Object.assign(new Error('User interaction is not allowed.'), { code: 36 })
+  )
+  const result = await fetchActiveClaudeRateLimits(f.options)
+  if (process.platform === 'darwin') {
+    expect(calls.keychain).toHaveBeenCalled()
+    expect(result).toMatchObject({
+      status: 'error',
+      usageMetadata: { failureKind: 'keychain-unavailable' }
+    })
+  } else {
+    expect(calls.keychain).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ usageMetadata: { failureKind: 'missing-credentials' } })
+  }
+})
 it('treats an unreadable credential file as unavailable, not a missing login', async () => {
   const f = profile()
   mkdirSync(join(f.home, '.credentials.json'))
@@ -231,7 +267,7 @@ it("keeps a 429's Retry-After and rate-limit message so polling waits it out", a
   expect(limited).toMatchObject({
     status: 'error',
     error: message,
-    usageMetadata: { failureKind: 'rate-limited' }
+    usageMetadata: { failureKind: 'rate-limited', httpStatus: 429 }
   })
   expect(limited.usageMetadata?.retryAtMs).toBeGreaterThanOrEqual(before + 3_000_000)
   expect(limited.usageMetadata?.retryAtMs).toBeLessThanOrEqual(Date.now() + 3_000_000)
