@@ -62,6 +62,11 @@ export async function acquireClaudeSession({
   const initProof = createClaudeInitProof()
   // Owned by this acquisition alone, so a late frame cannot fail a replacement's open.
   const startup = createClaudeStartupOutcome()
+  const childFailed = (error: Error): void => {
+    childEnded ??= error
+    startup.fail(error)
+    initProof.reject(error)
+  }
   const translator = createClaudeSessionJournalTranslator(
     input.events,
     String(input.fence),
@@ -210,10 +215,7 @@ export async function acquireClaudeSession({
           onMessage,
           canUseTool,
           onUserDialog,
-          onFault: (error) => {
-            childEnded ??= error
-            initProof.reject(error)
-          },
+          onFault: childFailed,
           onExit: (error, exit) => {
             if (exit?.expected) {
               naming?.failed()
@@ -221,9 +223,7 @@ export async function acquireClaudeSession({
               return
             }
             // Mark in place because the fault report may retain this error object.
-            withObservedProviderExit(error)
-            childEnded ??= error
-            initProof.reject(error)
+            childFailed(withObservedProviderExit(error))
             callbacks.handleExit(sessionId, attempt, error)
           }
         }

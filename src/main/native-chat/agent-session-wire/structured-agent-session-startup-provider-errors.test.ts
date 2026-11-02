@@ -173,13 +173,13 @@ async function settled(clientMessageId: string) {
   return items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
 }
 
-it.each(['result', 'stderr exit', 'result then exit'] as const)(
+it.each(['result', 'stderr exit', 'result then exit', 'stderr exit then result'] as const)(
   'ends a resume whose saved conversation is gone in one attempt and one Claude row (%s)',
   async (order) => {
     const handles = store.getRecord(SESSION)!.providerHandleChain
     const id = await send('continue this chat')
     const connection = await starting(1)
-    if (order !== 'stderr exit') {
+    if (order === 'result' || order === 'result then exit') {
       frame(connection, MISSING)
     }
     if (order === 'result') {
@@ -187,6 +187,10 @@ it.each(['result', 'stderr exit', 'result then exit'] as const)(
       connection.initialization.resolve({})
     } else {
       exit(connection, MISSING_TEXT)
+    }
+    if (order === 'stderr exit then result') {
+      // The exit's own refusal already carries this result's text, so it adds no row.
+      frame(connection, MISSING)
     }
     const errors = await settled(id)
     expect(claude.connections).toHaveLength(1)

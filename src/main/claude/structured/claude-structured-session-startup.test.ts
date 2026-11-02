@@ -17,6 +17,7 @@ import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-r
 import { claudeRecord } from './journal/claude-structured-item-translation'
 import { startupAcquisitionRefusal } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { providerDiagnosticOf } from '../../../shared/agent-session/failures/agent-session-failure'
+import { claudeStreamJsonExitError } from '../claude-stream-json-exit-error'
 
 const owned: {
   claude: ReturnType<typeof fakeClaude>
@@ -191,6 +192,38 @@ describe('Claude host-awaited open', () => {
       audience: 'log'
     })
     expect(errorRows(appendItem)).toHaveLength(0)
+  })
+
+  // Recorded result; the orderings are constructed. A start another failure ended reports that cause.
+  it.each([
+    ['initialize rejected', 1],
+    ['an exit with no stderr', 1],
+    ['an exit naming the missing conversation', 0],
+    ['the same result', 0]
+  ] as const)('a startup failure result after %s keeps %i rows', async (ended, rows) => {
+    const claude = fakeClaude({ holdInit: true, initProof: 'none' })
+    const { adapter } = adapterFor(claude)
+    const appendItem = vi.fn()
+    await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
+    const connection = claude.connections[0]!
+    const open = claudeOpened(adapter, 'session-1').catch((failure: unknown) => failure)
+    if (ended === 'initialize rejected') {
+      connection.initialization.reject(new Error('initialize rejected'))
+      expect(await open).toHaveProperty('message', 'initialize rejected')
+    } else if (ended === 'the same result') {
+      claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+    } else {
+      connection.closed = true
+      connection.exitVerdict = { root: 'exited', tree: 'exited' }
+      const stderr = ended === 'an exit with no stderr' ? '' : String(MISSING.errors)
+      connection.handlers.onExit?.(
+        claudeStreamJsonExitError(stderr, { code: 1, signal: null, processless: false })
+      )
+    }
+    // An exit declines at once, before the buffered result drains.
+    claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
+    await open
+    expect(errorRows(appendItem)).toHaveLength(rows)
   })
 
   it('fails the open with a startup failure Claude reported before publication', async () => {

@@ -12,14 +12,18 @@ import type {
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 
-export async function openClaudeStructuredSession(input: {
+type ClaudeOpenInput = {
   request: StructuredAgentSessionProviderOpenInput
   session: ClaudeSession
   sessions: Map<string, ClaudeSession>
   deps: ClaudeStructuredSessionAdapterDeps
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
-}): Promise<StructuredAgentSessionProviderOpenResult> {
-  const { request, session, sessions, deps, emit } = input
+}
+
+export async function openClaudeStructuredSession(
+  input: ClaudeOpenInput
+): Promise<StructuredAgentSessionProviderOpenResult> {
+  const { request, session } = input
   request.signal.throwIfAborted()
   if (
     session.fence !== request.fence ||
@@ -27,6 +31,21 @@ export async function openClaudeStructuredSession(input: {
   ) {
     throw new Error('claude session was replaced before open')
   }
+  try {
+    return await openStartingClaudeSession(input)
+  } catch (error) {
+    // This failure is the start's report; a Stop stays Stop, so a later result is still taken.
+    if (!request.signal.aborted) {
+      session.initialization.startup.fail(error)
+    }
+    throw error
+  }
+}
+
+async function openStartingClaudeSession(
+  input: ClaudeOpenInput
+): Promise<StructuredAgentSessionProviderOpenResult> {
+  const { request, session, sessions, deps, emit } = input
   const { proof, account, resumesTranscript, onLateRefusal, startup } = session.initialization
   const opened = openClaudeSession({
     session,
