@@ -6,7 +6,8 @@ import {
   settleWslMoveWindowWriteHoldForCommit,
   isWslMoveWindowWriteHeld,
   reloadWslMoveWindowWithWritesHeld,
-  setWslMoveReloadableWindow
+  setWslMoveReloadableWindow,
+  setWslMoveReloadLanding
 } from './wsl-move-window-write-hold'
 
 function fakeWindow() {
@@ -104,5 +105,33 @@ describe('WSL move window write hold', () => {
     await nextTurn()
     expect(window.reload).toHaveBeenCalledOnce()
     expect(isWslMoveWindowWriteHeld()).toBe(true)
+  })
+
+  it('picks the landing view before the reload, and still when the window is gone', async () => {
+    const order: string[] = []
+    setWslMoveReloadLanding(() => order.push('land'))
+    const { window } = fakeWindow()
+    window.reload.mockImplementation(() => order.push('reload'))
+    holdWslMoveWindowWrites()
+    reloadWslMoveWindowWithWritesHeld()
+    await nextTurn()
+    expect(order).toEqual(['land', 'reload'])
+
+    order.length = 0
+    holdWslMoveWindowWrites()
+    window.isDestroyed.mockReturnValue(true)
+    reloadWslMoveWindowWithWritesHeld()
+    await nextTurn()
+    // The next launch restores what was saved, so it must not reopen Settings either.
+    expect(order).toEqual(['land'])
+    expect(isWslMoveWindowWriteHeld()).toBe(false)
+  })
+
+  it('picks no landing view when nothing was held', () => {
+    const land = vi.fn()
+    setWslMoveReloadLanding(land)
+    fakeWindow()
+    reloadWslMoveWindowWithWritesHeld()
+    expect(land).not.toHaveBeenCalled()
   })
 })

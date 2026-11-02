@@ -13,16 +13,10 @@ export function leaveSettingsForWslMoveReload(ui: Pick<Store, 'getUI' | 'updateU
   }
 }
 
-export function wslMoveReloadableWindow(
-  contents: WebContents,
-  ui: Pick<Store, 'getUI' | 'updateUI'>
-): WslMoveReloadableWindow {
+export function wslMoveReloadableWindow(contents: WebContents): WslMoveReloadableWindow {
   return {
     isDestroyed: () => contents.isDestroyed(),
-    reload: () => {
-      leaveSettingsForWslMoveReload(ui)
-      contents.reload()
-    },
+    reload: () => contents.reload(),
     allowUnload: () => {
       const allow = (event: Electron.Event): void => event.preventDefault()
       contents.on('will-prevent-unload', allow)

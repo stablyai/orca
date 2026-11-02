@@ -2,12 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { WebContents } from 'electron'
 import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
-import {
-  leaveSettingsForWslMoveReload,
-  wslMoveReloadableWindow
-} from './wsl-move-reloadable-window'
+import { leaveSettingsForWslMoveReload } from './wsl-move-reloadable-window'
 
 const testState = { dir: '' }
 
@@ -60,21 +56,5 @@ describe('WSL move window reload landing', () => {
     leaveSettingsForWslMoveReload(store)
 
     expect(store.getUI().activeView).toBe('tasks')
-  })
-
-  it('leaves Settings before the window reloads', async () => {
-    const store = await openStore()
-    store.updateUI({ activeView: 'settings' })
-    const viewAtReload: string[] = []
-    const contents = {
-      isDestroyed: () => false,
-      reload: () => viewAtReload.push(store.getUI().activeView ?? '')
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reload() touches only isDestroyed/reload on the contents.
-    const window = wslMoveReloadableWindow(contents as unknown as WebContents, store)
-
-    window.reload()
-
-    expect(viewAtReload).toEqual(['terminal'])
   })
 })
