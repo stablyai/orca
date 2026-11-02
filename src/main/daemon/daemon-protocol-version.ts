@@ -1,7 +1,7 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
+// v56 relays an OSC 133 `D;0` it joined mid-stream only when the shell's next prompt follows it.
 // v55 observes the foreground group at the physical PTY owner.
 // v54 reads the macOS process table in process instead of forking setuid ps on every poll (#31783).
-// v51 relays an OSC 133 `D;0` it joined mid-stream only when the shell's next prompt follows it.
 // v53 rolls the daemon-side terminal fixes since v1.4.241 (foreground confirmation for chat continuation, ConPTY reflow, WSL malloc tunables) into a fresh daemon.
 // v52 rolls the daemon-side terminal fixes since v1.4.240 (ConPTY, teardown, spawn pane keys) into a fresh daemon.
 // v51 checks terminal identity, ownership and attachments before reserving teardown.
@@ -15,8 +15,8 @@
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
 // Why: older relays read an app's own `B C D;0` zone close (OMP, #10923) as a finished command.
-export const UNSEEN_OSC133_ZONE_DAEMON_PROTOCOL_VERSION = 51
-export const PROTOCOL_VERSION = 55
+export const UNSEEN_OSC133_ZONE_DAEMON_PROTOCOL_VERSION = 56
+export const PROTOCOL_VERSION = 56
 export const PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION = 55
 export const FENCED_TERMINATION_PROTOCOL_VERSION = 51
 export const CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION = 42
@@ -53,7 +53,7 @@ export const MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION = 29
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52, 53, 54
+  52, 53, 54, 55
 ] as const
 
 export function supportsColorQueryReplyColors(protocolVersion: number): boolean {

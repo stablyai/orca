@@ -106,7 +106,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it.each([
       { protocolVersion: 50, expected: ['bell'] },
-      { protocolVersion: PROTOCOL_VERSION, expected: ['command-finished', 'bell'] }
+      { protocolVersion: 51, expected: ['bell'] },
+      { protocolVersion: 55, expected: ['bell'] },
+      { protocolVersion: 56, expected: ['command-finished', 'bell'] },
+      { protocolVersion: 57, expected: ['command-finished', 'bell'] }
     ])(
       'drops a queued command exit from a v$protocolVersion relay that misreads app zones',
       ({ protocolVersion, expected }) => {
@@ -160,7 +163,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it.each([
       { protocolVersion: 50, background: false },
-      { protocolVersion: PROTOCOL_VERSION, background: true }
+      { protocolVersion: 51, background: false },
+      { protocolVersion: 55, background: false },
+      { protocolVersion: 56, background: true },
+      { protocolVersion: 57, background: true }
     ])(
       'gives v$protocolVersion background scan authority: $background',
       ({ protocolVersion, background }) => {
