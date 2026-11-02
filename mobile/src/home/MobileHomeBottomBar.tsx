@@ -15,6 +15,8 @@ export function MobileHomeBottomBar(props: {
   contentMaxWidth: number
   isWideLayout: boolean
   connectedHosts: HostProfile[]
+  /** A desktop is still on its first connect; the "connect first" note waits so it cannot flash at launch. */
+  hostsConnecting: boolean
   onOpenTasks: (hostId: string) => void
   onOpenAutomations: (hostId: string) => void
   onCreateWorkspace: () => void
@@ -26,7 +28,7 @@ export function MobileHomeBottomBar(props: {
   const enabled = props.connectedHosts.length > 0
   return (
     <MobileHomeBottomBarFrame {...props}>
-      {enabled ? null : (
+      {enabled || props.hostsConnecting ? null : (
         <Text style={styles.note}>
           {t('home.bottomBar.connectFirst', 'Connect a desktop to start new work.')}
         </Text>

@@ -49,6 +49,7 @@ export function EditorEditFileSurface({
   monacoLanguage,
   isMarkdown,
   isMermaid,
+  isSvg = false,
   isCsv,
   isNotebook,
   customEditor,
@@ -82,6 +83,7 @@ export function EditorEditFileSurface({
   monacoLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
+  isSvg?: boolean
   isCsv: boolean
   isNotebook: boolean
   customEditor?: ActivePluginCustomEditor | null
@@ -134,6 +136,7 @@ export function EditorEditFileSurface({
         code={fileContent.loadErrorCode}
         worktreeId={activeFile.worktreeId}
         onRetry={() => reloadContent(activeFile, USER_RETRY)}
+        onHostStarted={() => reloadContent(activeFile)}
       />
     )
   }
@@ -309,6 +312,13 @@ export function EditorEditFileSurface({
       handleContentChange={handleContentChange}
       handleDirtyStateHint={handleDirtyStateHint}
       monacoEditor={monacoEditor}
+    />
+  ) : isSvg && mdViewMode === 'rich' ? (
+    <ImageViewer
+      key={activeFile.id}
+      svgSource={currentContent}
+      filePath={activeFile.filePath}
+      mimeType="image/svg+xml"
     />
   ) : isMermaid && mdViewMode === 'rich' ? (
     <MermaidViewer

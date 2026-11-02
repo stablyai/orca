@@ -1,7 +1,7 @@
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
-} from './agent-session-conversation-command-record'
+} from './agent-session/records/agent-session-conversation-command-record'
 import { structuredAgentSessionReceivingAccount } from '../native-chat/agent-session-wire/structured-agent-session-receiving-account'
 import { describe, expect, it } from 'vitest'
 import {
@@ -14,7 +14,7 @@ import {
   RECEIVING_A,
   SELECTED_B
 } from '../native-chat/agent-session-wire/structured-agent-session-receiving-account.test-support'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import {
   proveAgentSessionOwner,
   withLease

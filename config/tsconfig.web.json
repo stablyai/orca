@@ -12,7 +12,11 @@
     "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
     "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx",
     "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-isolation.test.tsx",
-    "../src/renderer/src/hooks/useGitHubRepoMetadata.target-sharing.test.tsx"
+    "../src/renderer/src/hooks/useGitHubRepoMetadata.target-sharing.test.tsx",
+    "../src/renderer/src/runtime/observed-provider-accounts.test.tsx",
+    "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx",
+    "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
+    "../src/renderer/src/runtime/provider-account-observation.test-fixture.ts"
   ],
   "compilerOptions": {
     "composite": true,

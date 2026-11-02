@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { launchDraftResolvedByTranscript } from './native-chat-launch-draft-resolution'
 
 function userMessage(id: string, text: string): NativeChatMessage {

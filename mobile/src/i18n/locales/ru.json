@@ -21,7 +21,6 @@
     "panel": {
       "all": "Все",
       "emptyScope": "В выбранной области нет предыдущих сессий агентов.",
-      "loadFailed": "Не удалось загрузить",
       "missingResumeId": "У этой сессии нет идентификатора для продолжения.",
       "noSearchResults": "По вашему запросу сессий не найдено.",
       "noSessions": "Нет сессий агентов",
@@ -596,6 +595,10 @@
       "disconnected": "Не удалось прикрепить (нет соединения)",
       "imageTooLarge": "Изображение слишком большое для прикрепления",
       "permissionDenied": "Нет доступа к фото"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Передано агенту",
+      "startedAgent": "Агент запущен"
     }
   },
   "common": {
@@ -730,17 +733,14 @@
       "loadingDiff": "Загрузка различий…",
       "loadingReview": "Загрузка данных проверки…",
       "noReviewableChanges": "Нет изменений для проверки",
-      "retryLabel": "Повторить загрузку данных проверки",
       "reviewUnavailable": "Проверка недоступна",
       "selectFile": "Выберите файл для проверки.",
-      "tooLargeMessage": "Объём изменений слишком велик для предпросмотра на мобильном устройстве.",
-      "tryDifferentFilter": "Попробуйте другой фильтр проверки."
+      "tooLargeMessage": "Объём изменений слишком велик для предпросмотра на мобильном устройстве."
     },
     "diffReviewDrawers": {
       "addNote": "Добавить заметку",
       "cancelNote": "Отменить ввод заметки",
       "clearSentNotes": "Удалить отправленные заметки",
-      "completeTitle": "Проверка завершена",
       "copyNotes": "Скопировать заметки",
       "deleteNote": "Удалить заметку",
       "discard": "Отменить изменения",
@@ -748,17 +748,8 @@
       "discardTitle": "Отменить изменения в файле",
       "editNote": "Изменить заметку",
       "fileNote": "Заметка к файлу",
-      "fileSummary_few": "Проверен {{fileCount}} файл; {{count}} заметки",
-      "fileSummary_many": "Проверен {{fileCount}} файл; {{count}} заметок",
-      "fileSummary_one": "Проверен {{fileCount}} файл; {{count}} заметка",
-      "fileSummary_other": "Проверен {{fileCount}} файл; {{count}} заметки",
-      "filesSummary_few": "Проверено файлов: {{fileCount}}; {{count}} заметки",
-      "filesSummary_many": "Проверено файлов: {{fileCount}}; {{count}} заметок",
-      "filesSummary_one": "Проверено файлов: {{fileCount}}; {{count}} заметка",
-      "filesSummary_other": "Проверено файлов: {{fileCount}}; {{count}} заметки",
       "lineNumber": "Строка {{lineNumber}}",
       "loadingSessions": "Загрузка сессий агентов…",
-      "markUnreviewed": "Отметить непроверенным",
       "newAgentSession": "Новая сессия агента",
       "openInSession": "Открыть в сессии",
       "reviewNote": "Заметка по проверке",
@@ -766,13 +757,6 @@
       "sendNotes": "Отправить заметки",
       "sendNotesLabel": "Отправить заметки агенту",
       "sendUnsentNotes": "Отправить неотправленные заметки",
-      "stageReviewed": "Добавить проверенные в индекс",
-      "stageReviewedFiles": "Добавить проверенные файлы в индекс",
-      "stageReviewedLabel": "Добавить проверенные файлы в индекс",
-      "stageableFiles_few": "В индекс можно добавить {{count}} проверенных файла с изменениями не в индексе",
-      "stageableFiles_many": "В индекс можно добавить {{count}} проверенных файлов с изменениями не в индексе",
-      "stageableFiles_one": "В индекс можно добавить {{count}} проверенный файл с изменениями не в индексе",
-      "stageableFiles_other": "В индекс можно добавить {{count}} проверенного файла с изменениями не в индексе",
       "statusUnreadable": "Не удалось получить статус этого сервера. Повторная попытка…",
       "terminal": "Терминал",
       "terminalLabel": "{{title}} ({{id}})",
@@ -783,61 +767,17 @@
       "updateRequired": "Обновите Orca на компьютере"
     },
     "diffReviewFileSummary": {
-      "branch": "Ветка",
-      "branchFrom": "Ветка · из {{oldPath}}",
       "changed": "Изменён",
       "editFileNote": "Изменить заметку к файлу",
-      "hunk": "Фрагмент",
-      "nextHunk": "Следующий фрагмент изменений",
-      "notes_few": "{{count}} заметки",
-      "notes_many": "{{count}} заметок",
-      "notes_one": "{{count}} заметка",
-      "notes_other": "{{count}} заметки",
-      "previousHunk": "Предыдущий фрагмент изменений",
-      "reviewed": "Проверен",
-      "staged": "В индексе",
-      "stagedFrom": "В индексе · из {{oldPath}}",
-      "stale": "Устарела",
-      "staleCount": "Устаревших: {{count}}",
-      "unstaged": "Не в индексе",
-      "unstagedFrom": "Не в индексе · из {{oldPath}}"
+      "stale": "Устарела"
     },
     "diffReviewFooter": {
-      "addFileNote": "Добавить заметку к файлу",
-      "discard": "Отменить изменения",
-      "discardFile": "Отменить изменения в файле",
-      "markFileReviewed": "Отметить файл как проверенный",
-      "markReviewed": "Отметить проверенным",
       "nextFile": "Следующий файл",
-      "note": "Заметка",
-      "previousFile": "Предыдущий файл",
-      "reviewed": "Проверен",
-      "stage": "Добавить в индекс",
-      "stageFile": "Добавить файл в индекс",
-      "unstage": "Убрать из индекса",
-      "unstageFile": "Убрать файл из индекса"
+      "previousFile": "Предыдущий файл"
     },
     "diffReviewHeader": {
-      "filterAll": "Все",
-      "filterBranch": "Ветка",
-      "filterNotes": "Заметки",
-      "filterStaged": "В индексе",
-      "filterUnreviewed": "Непроверенные",
-      "filterUnstaged": "Не в индексе",
-      "openPullRequestSidebar": "Открыть боковую панель пул-реквеста",
       "openReviewActions": "Открыть меню проверки",
-      "reviewedProgress": "Проверено {{reviewedCount}}/{{queueLength}}",
-      "showAllFiles": "Показать все файлы для проверки",
-      "showBranchFiles": "Показать файлы с изменениями в ветке",
-      "showNotesFiles": "Показать файлы с заметками",
-      "showStagedFiles": "Показать файлы с изменениями в индексе",
-      "showUnreviewedFiles": "Показать непроверенные файлы",
-      "showUnstagedFiles": "Показать файлы с изменениями не в индексе",
-      "title": "Изменения",
-      "unsentNotes_few": "{{count}} неотправленные заметки",
-      "unsentNotes_many": "{{count}} неотправленных заметок",
-      "unsentNotes_one": "{{count}} неотправленная заметка",
-      "unsentNotes_other": "{{count}} неотправленной заметки"
+      "title": "Изменения"
     },
     "diffReviewLine": {
       "addNoteOnLine": "Добавить заметку к строке {{number}}",
@@ -936,10 +876,8 @@
       "selectRunTarget": "Выберите сервер для запуска"
     },
     "prSidebar": {
-      "loadFailed": "Что-то пошло не так.",
       "loading": "Загрузка пул-реквеста…",
-      "notPermitted": "Доступ запрещён — ваша учётная запись GitHub не подключена.",
-      "retryLoading": "Повторить загрузку пул-реквеста"
+      "notPermitted": "Доступ запрещён — ваша учётная запись GitHub не подключена."
     },
     "protocolBlockScreen": {
       "backToHosts": "Вернуться к серверам",
@@ -1090,6 +1028,16 @@
       "title": "Что-то пошло не так",
       "tryAgain": "Повторить",
       "home": "Главная"
+    },
+    "svgPreview": {
+      "drawFailed": "Не удалось отобразить этот SVG",
+      "label": "Рисунок {{title}}",
+      "previewDrawing": "Просмотр рисунка",
+      "viewSource": "Показать исходный код SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Развернуть диаграмму",
+      "label": "Диаграмма Mermaid"
     }
   },
   "connection": {
@@ -1619,44 +1567,19 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "Требуется действие",
-      "cancelled": "Отменено",
-      "checkDetails": "Сведения о проверке {{name}}",
-      "failed": "Ошибка",
       "failing": "С ошибкой: {{count}}",
-      "failingChecks_few": "{{count}} проверки с ошибками",
-      "failingChecks_many": "{{count}} проверок с ошибками",
-      "failingChecks_one": "{{count}} проверка с ошибками",
-      "failingChecks_other": "{{count}} проверки с ошибками",
-      "fix": "Исправить",
-      "fixFailing": "Исправить ошибки проверок с ИИ",
-      "inProgress": "Выполняется",
-      "inspectOrFix": "Изучите сведения или запустите исправление с ИИ.",
-      "loadDetailsFailed": "Не удалось загрузить сведения о проверке",
-      "neutral": "Нейтрально",
-      "neutralCount": "Нейтрально: {{count}}",
       "noChecks": "Нет проверок",
       "openOnWeb": "Открыть {{name}} в браузере",
       "passed": "Успешно: {{count}}",
-      "pending": "Ожидает",
-      "pendingCount": "В ожидании: {{count}}",
-      "queued": "В очереди",
-      "rerunFailing": "Перезапустить проверки с ошибками",
-      "skipped": "Пропущена",
-      "successful": "Успешно",
-      "timedOut": "Время ожидания истекло",
-      "title": "Проверки",
-      "unavailable": "Проверки недоступны"
+      "title": "Проверки"
     },
     "commentCard": {
       "daysAgo_few": "{{count}} дн. назад",
       "daysAgo_many": "{{count}} дн. назад",
       "daysAgo_one": "{{count}} дн. назад",
       "daysAgo_other": "{{count}} дн. назад",
-      "deleteComment": "Удалить комментарий",
       "deleteConfirmMessage": "Комментарий на GitHub будет удалён безвозвратно.",
       "deleteConfirmTitle": "Удалить комментарий?",
-      "editComment": "Изменить комментарий",
       "editPlaceholder": "Измените комментарий…",
       "hoursAgo_few": "{{count}} ч назад",
       "hoursAgo_many": "{{count}} ч назад",
@@ -1671,57 +1594,22 @@
       "monthsAgo_many": "{{count}} мес. назад",
       "monthsAgo_one": "{{count}} мес. назад",
       "monthsAgo_other": "{{count}} мес. назад",
-      "openOnGitHub": "Открыть комментарий на GitHub",
       "reply": "Ответить",
-      "replyPlaceholder": "Напишите ответ…",
-      "replyToComment": "Ответить на комментарий",
       "resolve": "Закрыть",
-      "resolveThread": "Закрыть обсуждение",
-      "resolved": "обсуждение закрыто",
       "unresolve": "Открыть заново",
-      "unresolveThread": "Открыть обсуждение заново",
       "yearsAgo_few": "{{count}} года назад",
       "yearsAgo_many": "{{count}} лет назад",
       "yearsAgo_one": "{{count}} год назад",
       "yearsAgo_other": "{{count}} года назад"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "Добавить комментарий…",
-      "all": "Все",
-      "bots": "Боты",
       "comment": "Добавить комментарий",
-      "commentsLoadFailed": "Не удалось загрузить комментарии. Нажмите кнопку обновления, чтобы повторить попытку.",
       "description": "Описание",
       "descriptionLoadFailed": "Не удалось загрузить описание. Нажмите кнопку обновления, чтобы повторить попытку.",
-      "humans": "Люди",
-      "noBotComments": "Комментариев ботов нет.",
       "noComments": "Комментариев пока нет.",
       "noDescription": "Описание не добавлено.",
-      "noHumanComments": "Комментариев людей нет.",
-      "resolvedCommentCount": "Закрытый комментарий от {{author}} ({{count}})",
-      "resolvedCommentSingle": "Закрытый комментарий от {{author}}",
-      "resolvedThreadCount": "Закрытое обсуждение от {{author}} ({{count}})",
-      "resolvedThreadSingle": "Закрытое обсуждение от {{author}}",
       "showMore": "Показать ещё {{count}}",
-      "showMoreOf": "Показать ещё {{count}} из {{remaining}}",
       "title": "Комментарии"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_few": "Отставание на {{count}} коммита (базовый коммит: {{baseCommit}})",
-      "commitsBehind_many": "Отставание на {{count}} коммитов (базовый коммит: {{baseCommit}})",
-      "commitsBehind_one": "Отставание на {{count}} коммит (базовый коммит: {{baseCommit}})",
-      "commitsBehind_other": "Отставание на {{count}} коммита (базовый коммит: {{baseCommit}})",
-      "copyCommands": "Скопировать команды",
-      "copyFailed": "Не удалось скопировать текст",
-      "copyRefreshCommands": "Скопировать команды для повторной проверки возможности слияния",
-      "detailsUnavailable": "Сведения о конфликтующих файлах недоступны",
-      "filesHeading": "Конфликтующие файлы",
-      "localMergeClean": "GitHub сообщает о конфликтах, но локальный Git их не воспроизвёл. Обновите PR или отправьте ветку, чтобы повторно проверить возможность слияния.",
-      "mustResolve": "В этой ветке есть конфликты, которые нужно разрешить",
-      "refreshing": "Обновление сведений о конфликтах…",
-      "resolveWithAi": "Разрешить конфликты с помощью ИИ",
-      "runFromWorktree": "Выполните в этом рабочем дереве",
-      "title": "Конфликты"
     },
     "linkPrForm": {
       "linkButton": "Привязать пул-реквест",
@@ -1734,27 +1622,14 @@
       "details": "Подробности"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "Переключить автослияние",
-      "autoMergeLabel": "Автослияние по готовности",
-      "autoMergeOff": "Выключено",
-      "autoMergeOn": "Включено",
-      "closeAccessibilityLabel": "Закрыть пул-реквест",
       "closeConfirmMessage": "Пул-реквест #{{number}} будет закрыт без слияния.",
       "closeConfirmTitle": "Закрыть пул-реквест?",
-      "markReadyAccessibilityLabel": "Отметить пул-реквест как готовый к проверке",
       "markReadyButton": "Передать на проверку",
-      "mergeAccessibilityLabel": "Слить пул-реквест",
-      "mergeButton": "Слить",
-      "mergeConfirmTitle": "Слить пул-реквест?",
-      "recheckAccessibilityLabel": "Повторно проверить статус слияния",
-      "recheckButton": "Проверить снова",
       "reopenAccessibilityLabel": "Открыть пул-реквест заново",
       "reopenButton": "Открыть заново",
       "reopenConfirmMessage": "Пул-реквест #{{number}} будет открыт заново.",
       "reopenConfirmTitle": "Открыть пул-реквест заново?",
-      "unlinkAccessibilityLabel": "Отвязать пул-реквест",
-      "unlinkButton": "Отвязать",
-      "unlinkFailed": "Не удалось отвязать пул-реквест."
+      "unlinkButton": "Отвязать"
     },
     "prActionsState": {
       "behindHint": "Обновите ветку перед слиянием",
@@ -1859,25 +1734,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "Ветка {{branch}} не связана с открытым PR.",
-      "branchRequired": "Переключитесь на ветку перед созданием пул-реквеста.",
-      "createFailed": "Не удалось создать пул-реквест.",
-      "createPr": "Создать PR",
-      "createPullRequest": "Создать пул-реквест",
       "currentBranchNotLinked": "Текущая ветка не связана с открытым PR.",
-      "linkExistingPr": "Связать с существующим PR",
       "linkExistingPullRequest": "Связать с существующим пул-реквестом",
       "linkedPrUnavailable": "Связанный PR #{{number}} недоступен",
-      "noOpenPullRequest": "Нет открытого пул-реквеста",
-      "refreshOrCreate": "Обновите данные, чтобы проверить ещё раз, или создайте новый PR для этой ветки.",
-      "refreshPullRequest": "Обновить пул-реквест",
-      "title": "Пул-реквест"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "Отменить изменение заголовка",
-      "editTitle": "Изменить заголовок пул-реквеста",
-      "openInBrowser": "Открыть пул-реквест #{{number}} в браузере",
-      "openOnWeb": "Открыть пул-реквест #{{number}} в браузере",
-      "saveTitle": "Сохранить заголовок"
+      "refreshOrCreate": "Обновите данные, чтобы проверить ещё раз, или создайте новый PR для этой ветки."
     },
     "prViewPanel": {
       "branchUnavailable": "Текущая ветка недоступна.",
@@ -1885,20 +1745,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Не удалось загрузить пользователей",
-      "noMatches": "Подходящие пользователи не найдены",
-      "removeReviewer": "Убрать {{login}} из рецензентов",
-      "requestReviewer": "Запросить проверку у {{login}}",
-      "searchPeople": "Поиск пользователей",
-      "title": "Рецензенты"
+      "noMatches": "Подходящие пользователи не найдены"
     },
     "reviewersSection": {
-      "addOrRemove": "Добавить или удалить рецензентов",
       "approved": "Одобрено",
       "changesRequested": "Запрошены изменения",
       "commented": "Оставлен комментарий",
       "dismissed": "Проверка отозвана",
-      "loadFailed": "Не удалось загрузить рецензентов. Нажмите кнопку обновления, чтобы повторить попытку.",
-      "loading": "Загрузка рецензентов…",
       "noReviewers": "Нет запросов на проверку",
       "pending": "Ожидает отправки",
       "removeReviewer": "Удалить {{login}}",
@@ -2554,11 +2407,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "Не удалось выполнить действие управления версиями",
-      "reviewedFilesStaged_few": "{{count}} проверенных файла добавлены в индекс",
-      "reviewedFilesStaged_many": "{{count}} проверенных файлов добавлено в индекс",
-      "reviewedFilesStaged_one": "{{count}} проверенный файл добавлен в индекс",
-      "reviewedFilesStaged_other": "{{count}} проверенного файла добавлено в индекс",
-      "stageResults": "Добавлено в индекс: {{staged}}, не удалось: {{failed}}",
       "waitingForDesktop": "Ожидание подключения к компьютеру…"
     },
     "useDiffReviewInteractions": {
@@ -2619,8 +2467,7 @@
       "actionFailed": "Не удалось выполнить действие с комментарием"
     },
     "usePrTitleAction": {
-      "disconnected": "Нет подключения к компьютеру.",
-      "updateFailed": "Не удалось обновить заголовок."
+      "disconnected": "Нет подключения к компьютеру."
     },
     "useQuickCommands": {
       "loadFailed": "Не удалось загрузить быстрые команды",
@@ -2950,7 +2797,6 @@
       "checkingReviewStatus": "Получение статуса PR/MR.",
       "checkoutBeforePublish": "Переключитесь на ветку перед публикацией коммитов.",
       "commitStagedChanges": "Создать коммит с изменениями в индексе.",
-      "commits": "Коммиты",
       "committing": "Создаётся коммит.",
       "createPr": "Создать PR",
       "enterCommitMessage": "Введите сообщение, чтобы создать коммит.",
@@ -2982,37 +2828,15 @@
       "resolveFailed": "Не удалось определить базовую ветку"
     },
     "branchCard": {
-      "branchCount": "В ветке: {{count}}",
-      "changedCount": "Изменено: {{count}}",
-      "cherryPickState": "cherry-pick",
-      "mergeState": "слияние",
-      "rebaseState": "перебазирование",
-      "stagedCount": "В индексе: {{count}}",
       "completingMerge": "Завершение…",
       "completeMerge": "Завершить слияние"
     },
     "branchCompare": {
-      "commits_few": "{{count}} коммита",
-      "commits_many": "{{count}} коммитов",
-      "commits_one": "{{count}} коммит",
-      "commits_other": "{{count}} коммита",
-      "files_few": "{{count}} файла",
-      "files_many": "{{count}} файлов",
-      "files_one": "{{count}} файл",
-      "files_other": "{{count}} файла",
-      "sectionTitle": "Закоммичено в ветке",
-      "summary": "{{files}} — по сравнению с {{baseRef}}",
-      "summaryWithCommits": "{{files}} — {{commits}} — по сравнению с {{baseRef}}"
+      "sectionTitle": "Закоммичено в ветке"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "Не удалось определить базовую ветку для сравнения.",
       "loadFailed": "Не удалось загрузить закоммиченные изменения"
-    },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Закрыть предпросмотр закоммиченных изменений",
-      "committedOnBranch": "Закоммичено в ветке",
-      "loadFailed": "Не удалось загрузить различия",
-      "truncated": "В мобильном предпросмотре показана часть различий."
     },
     "commitDropdown": {
       "checkOutBranchToPush": "Переключитесь на ветку перед отправкой коммитов",
@@ -3067,12 +2891,8 @@
       "emptyMessage": "В рабочем дереве нет изменений.",
       "emptyTitle": "Нет локальных изменений",
       "generateMessage": "Создать сообщение коммита с помощью ИИ",
-      "noStagedFiles": "В индексе нет файлов",
-      "openActions": "Открыть меню управления версиями",
       "reconnecting": "Переподключение к компьютеру…",
-      "regenerateHint": "Очистите сообщение для повторного создания.",
-      "stageAll": "Добавить всё в индекс",
-      "unstageAll": "Убрать всё из индекса"
+      "regenerateHint": "Очистите сообщение для повторного создания."
     },
     "createPrAction": {
       "checkingStatus": "Получение статуса PR/MR…",
@@ -3115,20 +2935,15 @@
       "titleUnpublishedForcePushCount_one": "Принудительно отправьте {{count}} коммит этой ветки с проверкой состояния удалённой ветки и при необходимости настройте отслеживаемую удалённую ветку.",
       "titleUnpublishedForcePushCount_other": "Принудительно отправьте {{count}} коммита этой ветки с проверкой состояния удалённой ветки и при необходимости настройте отслеживаемую удалённую ветку."
     },
-    "fileList": {
-      "committedSection": "Закоммичено в ветке"
-    },
     "fileRows": {
       "addedByThem": "Добавлен ими",
       "addedByUs": "Добавлен нами",
       "bothAdded": "Добавлен с обеих сторон",
       "bothDeleted": "Удалён с обеих сторон",
       "bothModified": "Изменён с обеих сторон",
-      "committedSection": "Закоммичено в ветке",
       "committedUnavailable": "Закоммиченные изменения недоступны.",
       "deletedByThem": "Удалён ими",
       "deletedByUs": "Удалён нами",
-      "discardFile": "Отменить изменения в «{{path}}»",
       "loadingCommitted": "Загрузка закоммиченных изменений…",
       "openChangedFile": "Открыть изменённый файл {{path}}",
       "openCommittedChange": "Открыть закоммиченные изменения в «{{path}}»",
@@ -3171,9 +2986,7 @@
       "waitingForDesktop": "Ожидание ответа от компьютера…"
     },
     "gitStatus": {
-      "changes": "Изменения",
-      "conflicts": "Конфликты",
-      "stagedChanges": "Изменения в индексе"
+      "conflicts": "Конфликты"
     },
     "header": {
       "backToSession": "Вернуться к сессии",
@@ -3232,9 +3045,7 @@
       "pushBeforeCreateFailed": "Не удалось отправить изменения. Устраните причину ошибки отправки, затем повторите попытку."
     },
     "hubTab": {
-      "changes": "Изменения",
-      "commits": "Коммиты",
-      "pullRequest": "Пул-реквест"
+      "changes": "Изменения"
     },
     "loaders": {
       "connectingToDesktop": "Подключение к компьютеру…",
@@ -3243,7 +3054,6 @@
       "waitingForDesktop": "Ожидание подключения к компьютеру…"
     },
     "modals": {
-      "actionsTitle": "Управление версиями",
       "currentBranch": "текущая",
       "discardButton": "Отменить изменения",
       "discardConfirmMessage": "Отменить изменения в «{{path}}»? Это действие необратимо.",
@@ -3253,25 +3063,8 @@
       "prCreatedTitle": "Пул-реквест создан",
       "switchBranchTitle": "Переключиться на ветку"
     },
-    "openers": {
-      "openDiffFailed": "Не удалось открыть сравнение",
-      "tabNotReady": "Файл открыт, но его вкладка ещё не готова. Повторите попытку.",
-      "waitingForDesktop": "Ожидание подключения к компьютеру…"
-    },
     "panel": {
-      "loadFailedTitle": "Не удалось загрузить",
       "unavailableTitle": "Управление версиями недоступно"
-    },
-    "prChip": {
-      "createPr": "Создать пул-реквест",
-      "loading": "Загрузка пул-реквеста…",
-      "loadingLabel": "Загрузка пул-реквеста",
-      "openLabel": "Пул-реквест #{{number}}, {{state}}, {{checks}}. Открыть пул-реквест.",
-      "openWithComments_few": "Пул-реквест #{{number}}, {{state}}, {{checks}}, {{count}} неразрешённых комментария. Открыть пул-реквест.",
-      "openWithComments_many": "Пул-реквест #{{number}}, {{state}}, {{checks}}, {{count}} неразрешённых комментариев. Открыть пул-реквест.",
-      "openWithComments_one": "Пул-реквест #{{number}}, {{state}}, {{checks}}, {{count}} неразрешённый комментарий. Открыть пул-реквест.",
-      "openWithComments_other": "Пул-реквест #{{number}}, {{state}}, {{checks}}, {{count}} неразрешённого комментария. Открыть пул-реквест.",
-      "unavailableLabel": "Пул-реквест недоступен: {{message}}"
     },
     "prCreate": {
       "authRequired": "Прежде чем создать {{reviewLabel}}, пройдите аутентификацию.",
@@ -3302,7 +3095,6 @@
       "publishBranch": "Опубликовать ветку",
       "pull": "Получить и слить",
       "push": "Отправить",
-      "stageAll": "Добавить всё в индекс",
       "sync": "Синхронизировать"
     },
     "remoteDropdown": {
@@ -3361,7 +3153,6 @@
       "noBranch": "Нет ветки"
     },
     "state": {
-      "noUpstream": "Нет отслеживаемой ветки",
       "syncStatus": "Опережает на {{ahead}}, отстаёт на {{behind}}"
     },
     "textGenerationFailure": {
@@ -3450,9 +3241,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Не удалось сгенерировать сообщение коммита"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "Перед созданием пул-реквеста переключитесь на ветку."
     },
     "useMobileGitRequests": {
       "actionFailed": "Не удалось выполнить операцию управления версиями",
@@ -4113,8 +3901,7 @@
       "noFilterMatches": "Нет рабочих пространств, соответствующих фильтрам",
       "noMatches": "Подходящие рабочие пространства не найдены",
       "reopen": "Откройте заново для обновления",
-      "reopenDetail": "Этот сервер возвращает список рабочих пространств в формате, который эта страница пока не поддерживает.",
-      "retrying": "Сбой worktree.ps ({{error}}) — автоматическая повторная попытка"
+      "reopenDetail": "Этот сервер возвращает список рабочих пространств в формате, который эта страница пока не поддерживает."
     },
     "workspaceListSections": {
       "all": "Все",

@@ -37,19 +37,31 @@ describe('typecheck project coverage', () => {
     expect(tests.filter((file) => !project.files.has(resolve(root, file)))).toEqual([])
   })
 
-  it('assigns cross-process integrations to the scheduled mixed project', () => {
-    const suites = [
+  it('assigns cross-process integrations and their producer fixture to the mixed project', () => {
+    const files = [
       'src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts',
       'src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx',
       'src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-isolation.test.tsx',
-      'src/renderer/src/hooks/useGitHubRepoMetadata.target-sharing.test.tsx'
+      'src/renderer/src/hooks/useGitHubRepoMetadata.target-sharing.test.tsx',
+      'src/renderer/src/runtime/observed-provider-accounts.test.tsx',
+      'src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx',
+      'src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx',
+      'src/renderer/src/runtime/provider-account-observation.test-fixture.ts'
     ]
-    for (const suite of suites) {
+    for (const file of files) {
       expect(
         projects
-          .filter((project) => project.files.has(resolve(root, suite)))
-          .map((project) => project.config)
+          .filter((project) => project.files.has(resolve(root, file)))
+          .map((project) => project.config),
+        file
       ).toEqual(['config/tsconfig.test.pane-launch.json'])
+    }
+    for (const config of ['config/tsconfig.web.json', 'config/tsconfig.tc.web.json']) {
+      const parsed = ts.readConfigFile(resolve(root, config), ts.sys.readFile)
+      expect(parsed.error).toBeUndefined()
+      expect(parsed.config.exclude).toEqual(
+        expect.arrayContaining(files.map((file) => `../${file}`))
+      )
     }
     const combined = projects.find(
       (project) => project.config === 'config/tsconfig.test.pane-launch.json'

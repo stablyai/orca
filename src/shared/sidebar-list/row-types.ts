@@ -62,6 +62,7 @@ export type WorktreeRow = {
   groupDepth: number
   isLastLineageChild: boolean
   lineageChildCount: number
+  lineageChildWorktreeIds?: readonly string[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
   hostContextLabel?: string
@@ -129,4 +130,14 @@ export type Row =
 /** The registration a project header reorders by, or none for a repeated copy. */
 export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
   return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
+}
+
+/** A project header whose rows all sit on its own repo's host; one spanning hosts still lists them in hostRepos.
+ * A header with no rows is not one: its repo is whichever registration repoMap kept, not proof of a host. */
+export function isSingleHostProjectHeader(row: GroupHeaderRow): boolean {
+  return (
+    row.repo !== undefined &&
+    row.hostRepos === undefined &&
+    (row.hostId !== undefined || row.count > 0)
+  )
 }

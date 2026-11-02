@@ -1964,6 +1964,7 @@
       "androidDeviceNotRunning": "Android device \"{{device}}\" is not running. Boot it first.",
       "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
       "avdBootTimeout": "AVD \"{{avdName}}\" did not finish booting in time.",
+      "avdExitedBeforeBoot": "AVD \"{{avdName}}\" stopped before it finished booting: {{detail}}",
       "disabled": "Mobile Emulator is disabled in Settings.",
       "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",
       "noDeviceSpecified": "No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.",
@@ -1974,6 +1975,7 @@
       "scrcpyDownloadFailed": "Could not download scrcpy server: {{detail}}",
       "scrcpyServerInvalid": "Downloaded scrcpy server was invalid or truncated.",
       "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimUnavailable": "serve-sim is unavailable.",
       "simctlUnavailable": "xcrun simctl is unavailable.",
@@ -2251,6 +2253,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} is already a host.",
         "distroStopped": "{{distro}} stopped since the list was read. Choose Start and add to start it.",
+        "distroUnverifiable": "WSL didn’t answer whether {{distro}} is running. Refresh the list, or add it from the dialog, which starts it if needed.",
         "notRegistered": "{{distro}} is not an installed WSL distro. Run {{command}} in a Windows terminal to see the installed ones, or reinstall it and try again.",
         "sshManaged": "{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet.",
         "wsl1": "{{distro}} runs WSL 1, which Orca no longer supports. Convert it to WSL 2 in a Windows terminal with: {{command}}"

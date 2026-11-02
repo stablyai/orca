@@ -1,6 +1,8 @@
 import { track } from '@/lib/telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { FeatureTipId } from '../../../../shared/feature-tips'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type OrcaCliFeatureTipSource = EventProps<'orca_cli_feature_tip_shown'>['source']
 export type OrcaCliFeatureTipSetupResult = EventProps<'orca_cli_feature_tip_setup_result'>['result']
@@ -56,5 +58,40 @@ export function trackChatUiFeatureTipAction(
 ): void {
   if (variant !== 'none') {
     track('chat_ui_feature_tip_action', { variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant], action })
+  }
+}
+
+/** Control profiles never see the Chat UI launch tip; unenrolled ones (no consent, contributor builds) do. */
+export function isChatUiLaunchTipHeldOut(
+  settings: Pick<GlobalSettings, 'telemetry'> | null
+): boolean {
+  return settings?.telemetry?.chatUiLaunchTipCohort === 'control'
+}
+
+export function wasChatUiLaunchTipShown(
+  seenTipIds: readonly FeatureTipId[],
+  settings: Pick<GlobalSettings, 'telemetry'> | null
+): boolean {
+  return seenTipIds.includes('chat-ui-here') && !isChatUiLaunchTipHeldOut(settings)
+}
+
+export function trackChatUiFeatureTipExposure(
+  variant: ChatUiLaunchTipVariant,
+  settings: Pick<GlobalSettings, 'telemetry'> | null
+): void {
+  if (variant !== 'none') {
+    track('chat_ui_feature_tip_exposure', {
+      variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
+      launch_tip_cohort: settings?.telemetry?.chatUiLaunchTipCohort ?? 'unassigned',
+      shown: !isChatUiLaunchTipHeldOut(settings)
+    })
+  }
+}
+
+export function trackAgentDefaultSurfaceChanged(
+  props: EventProps<'agent_default_surface_changed'>
+): void {
+  if (props.from_mode !== props.to_mode) {
+    track('agent_default_surface_changed', props)
   }
 }

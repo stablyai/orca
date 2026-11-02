@@ -1,7 +1,7 @@
 import { MobileFileMediaPreview } from './MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { ActivityIndicator, Image, ScrollView, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { Text, View } from 'react-native'
+import { FileText } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
@@ -10,7 +10,13 @@ import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSour
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobilePanZoomImage } from '../components/MobilePanZoomImage'
+import { MobileSvgPreview } from '../components/MobileSvgPreview'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
@@ -25,8 +31,6 @@ type Props = {
   draftContent: string
   saveError: string
   lineColumn: MobileFilePreviewLineColumn | null
-  imageWidth: number
-  imageHeight: number
   onDraftChange: (content: string) => void
   onImageError: () => void
   onOpenFile?: (pathText: string) => void
@@ -38,23 +42,19 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   if (preview.status === 'loading') {
-    return (
-      <View style={styles.state}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-        <Text style={styles.stateText}>{preview.message}</Text>
-      </View>
-    )
+    return <MobileStateView loading title={preview.message} />
   }
-  if (preview.status === 'error' || preview.status === 'waiting') {
-    return <MobileLoadErrorState message={preview.message} onRetry={options.onRetry} />
+  if (preview.status === 'waiting') {
+    return <MobileOfflineState onReconnect={options.onRetry} />
+  }
+  if (preview.status === 'error') {
+    return <MobileLoadErrorState error={preview.message} onRetry={options.onRetry} />
   }
   if (preview.status === 'empty') {
     return options.editable ? (
       <EditablePreviewSource {...options} />
     ) : (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>{t('files.filePreviewBody.emptyFile', 'Empty file')}</Text>
-      </View>
+      <MobileStateView icon={FileText} title={t('files.filePreviewBody.emptyFile', 'Empty file')} />
     )
   }
   if (preview.kind === 'media') {
@@ -69,23 +69,13 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
   if (preview.kind === 'image') {
     return (
       <View style={styles.imageContainer}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.imageScrollContent}
-          maximumZoomScale={4}
-          minimumZoomScale={1}
-          centerContent
-        >
-          <Image
-            source={{ uri: preview.dataUri }}
-            style={[styles.image, { width: options.imageWidth, height: options.imageHeight }]}
-            resizeMode="contain"
-            onError={options.onImageError}
-            accessibilityLabel={t('files.filePreviewBody.imageLabel', '{{title}} image', {
-              title: options.title
-            })}
-          />
-        </ScrollView>
+        <MobilePanZoomImage
+          uri={preview.dataUri}
+          onError={options.onImageError}
+          label={t('files.filePreviewBody.imageLabel', '{{title}} image', {
+            title: options.title
+          })}
+        />
       </View>
     )
   }
@@ -103,6 +93,33 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
         onOpenFile={options.onOpenFile}
+      />
+    )
+  }
+  if (preview.kind === 'svg' && !preview.truncated) {
+    return (
+      <MobileSvgPreview
+        // A writable artifact previews its unsaved draft, as desktop does.
+        markup={options.editable ? options.draftContent : preview.content}
+        title={options.title}
+        notice={
+          options.editable && options.saveError ? (
+            <Text style={styles.previewSaveErrorText}>{options.saveError}</Text>
+          ) : null
+        }
+        renderSource={() =>
+          options.editable ? (
+            <EditablePreviewSource {...options} />
+          ) : (
+            <MobileFilePreviewSourceText
+              relativePath={options.relativePath}
+              content={preview.content}
+              truncated={false}
+              byteLength={preview.byteLength}
+              initialLine={options.lineColumn?.line}
+            />
+          )
+        }
       />
     )
   }

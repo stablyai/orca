@@ -21,7 +21,6 @@
     "panel": {
       "all": "全部",
       "emptyScope": "此范围内暂无历史智能体会话。",
-      "loadFailed": "无法加载",
       "missingResumeId": "此会话缺少恢复 ID。",
       "noSearchResults": "没有符合搜索条件的会话。",
       "noSessions": "暂无智能体会话",
@@ -522,6 +521,10 @@
       "disconnected": "添加失败（连接已断开）",
       "imageTooLarge": "图片过大，无法添加",
       "permissionDenied": "照片访问权限被拒绝"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "已移交给智能体",
+      "startedAgent": "已启动智能体"
     }
   },
   "common": {
@@ -654,17 +657,14 @@
       "loadingDiff": "加载差异…",
       "loadingReview": "正在加载评审…",
       "noReviewableChanges": "没有可评审的更改",
-      "retryLabel": "重试加载评审内容",
       "reviewUnavailable": "评审不可用",
       "selectFile": "请选择要评审的文件。",
-      "tooLargeMessage": "此差异过大，无法在移动端预览。",
-      "tryDifferentFilter": "请尝试其他评审筛选条件。"
+      "tooLargeMessage": "此差异过大，无法在移动端预览。"
     },
     "diffReviewDrawers": {
       "addNote": "添加备注",
       "cancelNote": "取消备注编辑",
       "clearSentNotes": "清除已发送的备注",
-      "completeTitle": "评审完成",
       "copyNotes": "复制备注",
       "deleteNote": "删除注释",
       "discard": "放弃",
@@ -672,13 +672,8 @@
       "discardTitle": "放弃文件更改",
       "editNote": "编辑备注",
       "fileNote": "文件备注",
-      "fileSummary_one": "已评审 {{fileCount}} 个文件，{{count}} 条备注",
-      "fileSummary_other": "已评审 {{fileCount}} 个文件，{{count}} 条备注",
-      "filesSummary_one": "已评审 {{fileCount}} 个文件，{{count}} 条备注",
-      "filesSummary_other": "已评审 {{fileCount}} 个文件，{{count}} 条备注",
       "lineNumber": "第 {{lineNumber}} 行",
       "loadingSessions": "正在加载智能体会话…",
-      "markUnreviewed": "标记为未评审",
       "newAgentSession": "新建智能体会话",
       "openInSession": "在会话中打开",
       "reviewNote": "评审备注",
@@ -686,11 +681,6 @@
       "sendNotes": "发送备注",
       "sendNotesLabel": "向智能体发送备注",
       "sendUnsentNotes": "发送未发送的备注",
-      "stageReviewed": "暂存已评审文件",
-      "stageReviewedFiles": "暂存已评审文件",
-      "stageReviewedLabel": "暂存已评审文件",
-      "stageableFiles_one": "{{count}} 个已评审的未暂存文件可暂存",
-      "stageableFiles_other": "{{count}} 个已评审的未暂存文件可暂存",
       "statusUnreadable": "无法读取此主机的状态。正在重试…",
       "terminal": "终端",
       "terminalLabel": "{{title}} ({{id}})",
@@ -699,57 +689,17 @@
       "updateRequired": "请更新电脑上的 Orca"
     },
     "diffReviewFileSummary": {
-      "branch": "分支",
-      "branchFrom": "分支，原路径：{{oldPath}}",
       "changed": "已更改",
       "editFileNote": "编辑文件备注",
-      "hunk": "差异块",
-      "nextHunk": "下一个差异块",
-      "notes_one": "{{count}} 条备注",
-      "notes_other": "{{count}} 条备注",
-      "previousHunk": "上一个差异块",
-      "reviewed": "已评审",
-      "staged": "已暂存",
-      "stagedFrom": "已暂存，原路径：{{oldPath}}",
-      "stale": "已过时",
-      "staleCount": "{{count}} 条已过时",
-      "unstaged": "未暂存",
-      "unstagedFrom": "未暂存，原路径：{{oldPath}}"
+      "stale": "已过时"
     },
     "diffReviewFooter": {
-      "addFileNote": "添加文件备注",
-      "discard": "放弃",
-      "discardFile": "放弃文件更改",
-      "markFileReviewed": "将文件标记为已评审",
-      "markReviewed": "标记为已评审",
       "nextFile": "下一个文件",
-      "note": "备注",
-      "previousFile": "上一个文件",
-      "reviewed": "已评审",
-      "stage": "暂存",
-      "stageFile": "暂存文件",
-      "unstage": "取消暂存",
-      "unstageFile": "取消暂存文件"
+      "previousFile": "上一个文件"
     },
     "diffReviewHeader": {
-      "filterAll": "全部",
-      "filterBranch": "分支",
-      "filterNotes": "备注",
-      "filterStaged": "已暂存",
-      "filterUnreviewed": "未评审",
-      "filterUnstaged": "未暂存",
-      "openPullRequestSidebar": "打开 PR 侧边栏",
       "openReviewActions": "打开评审操作",
-      "reviewedProgress": "已评审 {{reviewedCount}}/{{queueLength}}",
-      "showAllFiles": "显示所有评审文件",
-      "showBranchFiles": "显示分支评审文件",
-      "showNotesFiles": "显示有备注的评审文件",
-      "showStagedFiles": "显示已暂存的评审文件",
-      "showUnreviewedFiles": "显示尚未评审的文件",
-      "showUnstagedFiles": "显示未暂存的评审文件",
-      "title": "更改",
-      "unsentNotes_one": "{{count}} 条未发送备注",
-      "unsentNotes_other": "{{count}} 条未发送备注"
+      "title": "更改"
     },
     "diffReviewLine": {
       "addNoteOnLine": "在第 {{number}} 行添加备注",
@@ -848,10 +798,8 @@
       "selectRunTarget": "选择运行目标"
     },
     "prSidebar": {
-      "loadFailed": "发生错误。",
       "loading": "正在加载 PR…",
-      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。",
-      "retryLoading": "重试加载 PR"
+      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主机列表",
@@ -1000,6 +948,16 @@
       "title": "出了点问题",
       "tryAgain": "重试",
       "home": "首页"
+    },
+    "svgPreview": {
+      "drawFailed": "无法绘制此 SVG",
+      "label": "{{title}} 图形",
+      "previewDrawing": "预览图形",
+      "viewSource": "查看 SVG 源代码"
+    },
+    "mermaidDiagram": {
+      "expand": "展开图表",
+      "label": "Mermaid 图表"
     }
   },
   "connection": {
@@ -1529,40 +1487,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "需要操作",
-      "cancelled": "已取消",
-      "checkDetails": "{{name}} 检查详情",
-      "failed": "失败",
       "failing": "{{count}} 项失败",
-      "failingChecks_one": "{{count}} 项检查失败",
-      "failingChecks_other": "{{count}} 项检查失败",
-      "fix": "修复",
-      "fixFailing": "使用 AI 修复失败的检查",
-      "inProgress": "进行中",
-      "inspectOrFix": "检查详细信息或启动 AI 修复过程。",
-      "loadDetailsFailed": "加载检查详情失败",
-      "neutral": "中性",
-      "neutralCount": "{{count}} 项中性",
       "noChecks": "无检查项",
       "openOnWeb": "在网页上打开 {{name}}",
       "passed": "{{count}} 项通过",
-      "pending": "待处理",
-      "pendingCount": "{{count}} 项待处理",
-      "queued": "已加入队列",
-      "rerunFailing": "重新运行失败的检查",
-      "skipped": "已跳过",
-      "successful": "成功",
-      "timedOut": "已超时",
-      "title": "检查项",
-      "unavailable": "检查不可用"
+      "title": "检查项"
     },
     "commentCard": {
       "daysAgo_one": "{{count}} 天前",
       "daysAgo_other": "{{count}} 天前",
-      "deleteComment": "删除评论",
       "deleteConfirmMessage": "这将永久删除 GitHub 上的这条评论。",
       "deleteConfirmTitle": "删除评论？",
-      "editComment": "编辑评论",
       "editPlaceholder": "编辑评论…",
       "hoursAgo_one": "{{count}} 小时前",
       "hoursAgo_other": "{{count}} 小时前",
@@ -1571,53 +1506,20 @@
       "minutesAgo_other": "{{count}} 分钟前",
       "monthsAgo_one": "{{count}} 个月前",
       "monthsAgo_other": "{{count}} 个月前",
-      "openOnGitHub": "在 GitHub 上打开评论",
       "reply": "回复",
-      "replyPlaceholder": "撰写回复…",
-      "replyToComment": "回复评论",
       "resolve": "解决",
-      "resolveThread": "解决讨论串",
-      "resolved": "已解决",
       "unresolve": "标记为未解决",
-      "unresolveThread": "将讨论串标记为未解决",
       "yearsAgo_one": "{{count}} 年前",
       "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "添加评论…",
-      "all": "全部",
-      "bots": "机器人",
       "comment": "评论",
-      "commentsLoadFailed": "无法加载评论。请点按刷新重试。",
       "description": "描述",
       "descriptionLoadFailed": "无法加载描述。请点按刷新重试。",
-      "humans": "人类",
-      "noBotComments": "没有机器人评论。",
       "noComments": "还没有评论。",
       "noDescription": "没有提供描述。",
-      "noHumanComments": "没有人类评论。",
-      "resolvedCommentCount": "{{author}} 的已解决评论（{{count}}）",
-      "resolvedCommentSingle": "{{author}} 的已解决评论",
-      "resolvedThreadCount": "{{author}} 的已解决讨论串（{{count}}）",
-      "resolvedThreadSingle": "{{author}} 的已解决讨论串",
       "showMore": "再显示 {{count}} 条",
-      "showMoreOf": "再显示 {{count}} 条（剩余 {{remaining}} 条）",
       "title": "评论"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "落后 {{count}} 个提交（基础提交：{{baseCommit}}）",
-      "commitsBehind_other": "落后 {{count}} 个提交（基础提交：{{baseCommit}}）",
-      "copyCommands": "复制命令",
-      "copyFailed": "复制文本失败",
-      "copyRefreshCommands": "复制可合并性刷新命令",
-      "detailsUnavailable": "冲突文件详细信息不可用",
-      "filesHeading": "冲突的文件",
-      "localMergeClean": "GitHub 提示存在冲突，但本地 Git 未能复现。请刷新 PR 或推送分支，以重新计算可合并性。",
-      "mustResolve": "该分支存在必须解决的冲突",
-      "refreshing": "刷新冲突细节…",
-      "resolveWithAi": "使用 AI 解决冲突",
-      "runFromWorktree": "从此工作树运行",
-      "title": "冲突"
     },
     "linkPrForm": {
       "linkButton": "关联 PR",
@@ -1630,27 +1532,14 @@
       "details": "详情"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "切换自动合并",
-      "autoMergeLabel": "满足条件后自动合并",
-      "autoMergeOff": "关闭",
-      "autoMergeOn": "开启",
-      "closeAccessibilityLabel": "关闭PR",
       "closeConfirmMessage": "#{{number}} 将被关闭，不会合并。",
       "closeConfirmTitle": "关闭 PR？",
-      "markReadyAccessibilityLabel": "将 PR 标记为已准备好接受评审",
       "markReadyButton": "标记为可评审",
-      "mergeAccessibilityLabel": "合并 PR",
-      "mergeButton": "合并",
-      "mergeConfirmTitle": "合并 PR？",
-      "recheckAccessibilityLabel": "重新检查合并状态",
-      "recheckButton": "重新检查",
       "reopenAccessibilityLabel": "重新开启 PR",
       "reopenButton": "重新开启",
       "reopenConfirmMessage": "#{{number}} 将被重新开启。",
       "reopenConfirmTitle": "重新开启 PR？",
-      "unlinkAccessibilityLabel": "取消 PR 关联",
-      "unlinkButton": "取消关联",
-      "unlinkFailed": "取消 PR 关联失败。"
+      "unlinkButton": "取消关联"
     },
     "prActionsState": {
       "behindHint": "合并前更新分支",
@@ -1743,25 +1632,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} 未关联到开放的 PR。",
-      "branchRequired": "创建 PR 前，请先检出分支。",
-      "createFailed": "创建 PR 失败。",
-      "createPr": "创建PR",
-      "createPullRequest": "创建 PR",
       "currentBranchNotLinked": "当前分支未关联到开放的 PR。",
-      "linkExistingPr": "关联现有 PR",
       "linkExistingPullRequest": "关联现有 PR",
       "linkedPrUnavailable": "关联的 PR #{{number}} 不可用",
-      "noOpenPullRequest": "暂无开放的 PR",
-      "refreshOrCreate": "刷新以重新检查，或为此分支创建新的 PR。",
-      "refreshPullRequest": "刷新 PR",
-      "title": "PR"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "取消编辑标题",
-      "editTitle": "编辑 PR 标题",
-      "openInBrowser": "在浏览器中打开 PR #{{number}}",
-      "openOnWeb": "在网页上打开 PR #{{number}}",
-      "saveTitle": "保存标题"
+      "refreshOrCreate": "刷新以重新检查，或为此分支创建新的 PR。"
     },
     "prViewPanel": {
       "branchUnavailable": "当前分支不可用。",
@@ -1769,20 +1643,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "加载人员失败",
-      "noMatches": "没有匹配的人员",
-      "removeReviewer": "移除 {{login}}",
-      "requestReviewer": "请求 {{login}} 评审",
-      "searchPeople": "搜索人员",
-      "title": "评审人"
+      "noMatches": "没有匹配的人员"
     },
     "reviewersSection": {
-      "addOrRemove": "添加或移除评审人",
       "approved": "已批准",
       "changesRequested": "要求更改",
       "commented": "已评论",
       "dismissed": "已撤销",
-      "loadFailed": "无法加载评审人。请点按刷新重试。",
-      "loading": "正在加载评审人…",
       "noReviewers": "尚未请求评审",
       "pending": "待处理",
       "removeReviewer": "移除 {{login}}",
@@ -2402,9 +2269,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "源代码控制操作失败",
-      "reviewedFilesStaged_one": "已暂存 {{count}} 个已评审文件",
-      "reviewedFilesStaged_other": "已暂存 {{count}} 个已评审文件",
-      "stageResults": "已暂存 {{staged}} 个，失败 {{failed}} 个",
       "waitingForDesktop": "等待桌面连接…"
     },
     "useDiffReviewInteractions": {
@@ -2465,8 +2329,7 @@
       "actionFailed": "评论操作失败"
     },
     "usePrTitleAction": {
-      "disconnected": "未连接到桌面。",
-      "updateFailed": "更新标题失败。"
+      "disconnected": "未连接到桌面。"
     },
     "useQuickCommands": {
       "loadFailed": "加载快捷命令失败",
@@ -2788,7 +2651,6 @@
       "checkingReviewStatus": "正在检查评审状态。",
       "checkoutBeforePublish": "请先检出分支再发布提交。",
       "commitStagedChanges": "提交已暂存的更改。",
-      "commits": "提交",
       "committing": "正在提交。",
       "createPr": "创建PR",
       "enterCommitMessage": "请输入提交信息后再提交。",
@@ -2816,33 +2678,15 @@
       "resolveFailed": "无法解析基础分支"
     },
     "branchCard": {
-      "branchCount": "已提交 {{count}} 个文件",
-      "changedCount": "已更改 {{count}} 个文件",
-      "cherryPickState": "cherry-pick",
-      "mergeState": "合并",
-      "rebaseState": "变基",
-      "stagedCount": "已暂存 {{count}} 个文件",
       "completingMerge": "正在完成…",
       "completeMerge": "完成合并"
     },
     "branchCompare": {
-      "commits_one": "{{count}} 次提交",
-      "commits_other": "{{count}} 次提交",
-      "files_one": "{{count}} 个文件",
-      "files_other": "{{count}} 个文件",
-      "sectionTitle": "已提交的更改",
-      "summary": "{{files}} - 与 {{baseRef}} 比较",
-      "summaryWithCommits": "{{files}} - {{commits}} - 与 {{baseRef}} 比较"
+      "sectionTitle": "已提交的更改"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "无法解析用于比较的基础分支。",
       "loadFailed": "无法加载已提交的更改"
-    },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "关闭已提交更改的差异预览",
-      "committedOnBranch": "已提交到分支",
-      "loadFailed": "无法加载差异",
-      "truncated": "移动端预览中的差异已截断。"
     },
     "commitDropdown": {
       "checkOutBranchToPush": "请先检出分支再推送提交",
@@ -2897,12 +2741,8 @@
       "emptyMessage": "工作树无更改。",
       "emptyTitle": "无本地更改",
       "generateMessage": "使用 AI 生成提交信息",
-      "noStagedFiles": "没有已暂存的文件",
-      "openActions": "打开源代码控制操作菜单",
       "reconnecting": "正在重新连接桌面…",
-      "regenerateHint": "清除消息以重新生成。",
-      "stageAll": "暂存全部",
-      "unstageAll": "取消全部暂存"
+      "regenerateHint": "清除消息以重新生成。"
     },
     "createPrAction": {
       "checkingStatus": "正在检查评审状态…",
@@ -2931,20 +2771,15 @@
       "titleUnpublishedForcePushCount_one": "使用 lease 强制推送 {{count}} 个分支提交，并在需要时设置上游。",
       "titleUnpublishedForcePushCount_other": "使用 lease 强制推送 {{count}} 个分支提交，并在需要时设置上游。"
     },
-    "fileList": {
-      "committedSection": "已提交的更改"
-    },
     "fileRows": {
       "addedByThem": "对方已添加",
       "addedByUs": "我方已添加",
       "bothAdded": "双方均已添加",
       "bothDeleted": "双方均已删除",
       "bothModified": "双方均已修改",
-      "committedSection": "已提交的更改",
       "committedUnavailable": "已提交的更改不可用。",
       "deletedByThem": "对方已删除",
       "deletedByUs": "我方已删除",
-      "discardFile": "放弃 {{path}} 的更改",
       "loadingCommitted": "正在加载已提交的更改…",
       "openChangedFile": "打开已更改的文件 {{path}}",
       "openCommittedChange": "打开 {{path}} 中已提交的更改",
@@ -2977,9 +2812,7 @@
       "waitingForDesktop": "正在等待桌面…"
     },
     "gitStatus": {
-      "changes": "更改",
-      "conflicts": "冲突",
-      "stagedChanges": "已暂存的更改"
+      "conflicts": "冲突"
     },
     "header": {
       "backToSession": "返回会话",
@@ -3038,9 +2871,7 @@
       "pushBeforeCreateFailed": "推送失败。请解决推送错误后重试。"
     },
     "hubTab": {
-      "changes": "更改",
-      "commits": "提交",
-      "pullRequest": "PR"
+      "changes": "更改"
     },
     "loaders": {
       "connectingToDesktop": "正在连接桌面…",
@@ -3049,7 +2880,6 @@
       "waitingForDesktop": "正在等待桌面…"
     },
     "modals": {
-      "actionsTitle": "源代码控制",
       "currentBranch": "当前",
       "discardButton": "放弃",
       "discardConfirmMessage": "放弃对“{{path}}”的更改？此操作无法撤销。",
@@ -3059,23 +2889,8 @@
       "prCreatedTitle": "PR 已创建",
       "switchBranchTitle": "切换分支"
     },
-    "openers": {
-      "openDiffFailed": "无法打开差异",
-      "tabNotReady": "文件已打开，但标签页尚未就绪。请重试。",
-      "waitingForDesktop": "正在等待桌面…"
-    },
     "panel": {
-      "loadFailedTitle": "无法加载",
       "unavailableTitle": "源代码控制不可用"
-    },
-    "prChip": {
-      "createPr": "创建 PR",
-      "loading": "正在加载 PR…",
-      "loadingLabel": "正在加载 PR",
-      "openLabel": "PR #{{number}}，{{state}}，{{checks}}。打开 PR。",
-      "openWithComments_one": "PR #{{number}}，{{state}}，{{checks}}，{{count}} 条未解决的评论。打开 PR。",
-      "openWithComments_other": "PR #{{number}}，{{state}}，{{checks}}，{{count}} 条未解决的评论。打开 PR。",
-      "unavailableLabel": "PR 不可用：{{message}}"
     },
     "prCreate": {
       "authRequired": "请在创建 {{reviewLabel}} 之前完成身份验证。",
@@ -3106,7 +2921,6 @@
       "publishBranch": "发布分支",
       "pull": "拉",
       "push": "推",
-      "stageAll": "暂存全部",
       "sync": "同步"
     },
     "remoteDropdown": {
@@ -3165,7 +2979,6 @@
       "noBranch": "无分支"
     },
     "state": {
-      "noUpstream": "无上游分支",
       "syncStatus": "领先 {{ahead}}，落后 {{behind}}"
     },
     "textGenerationFailure": {
@@ -3254,9 +3067,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "生成提交信息失败"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "创建 PR 前，请先检出分支。"
     },
     "useMobileGitRequests": {
       "actionFailed": "源代码控制操作失败",
@@ -3893,8 +3703,7 @@
       "noFilterMatches": "没有符合筛选条件的工作区",
       "noMatches": "没有匹配的工作区",
       "reopen": "重新打开以更新",
-      "reopenDetail": "此页面尚无法识别此主机的工作区列表格式。",
-      "retrying": "worktree.ps 失败（{{error}}），正在自动重试"
+      "reopenDetail": "此页面尚无法识别此主机的工作区列表格式。"
     },
     "workspaceListSections": {
       "all": "全部",

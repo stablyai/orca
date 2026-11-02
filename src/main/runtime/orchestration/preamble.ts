@@ -26,6 +26,8 @@ export type PreambleParams = {
   canDispatchSubWorkers?: boolean
   // Federated workers have no local Dispatch row to parent helpers.
   subWorkersInOwnRun?: boolean
+  // Mail already in the Dispatch's mailbox, which no wake will announce.
+  unreadMail?: boolean
 }
 
 /** A session address names a chat worker; any other handle is a terminal. */
@@ -70,10 +72,17 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
 === CLI COMMANDS ===
 
 \`\`\`sh
-  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
+${
+  params.unreadMail
+    ? `  # Messages for this task are waiting; read them:
+  ${cli} orchestration check${chat ? '' : ` --terminal ${params.workerHandle}`}
+
+`
+    : ''
+}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
-  ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>" --options "<optional,comma,separated>"
+  ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>"
 
   # Blocked, and the coordinator must act before you can continue:
   ${cli} orchestration send --from ${params.workerHandle} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
@@ -121,10 +130,10 @@ export function dispatchPreambleSendOptions(requestId: string): DispatchPreamble
 }
 
 export const TERMINAL_REDISPATCH_PARAGRAPH = `Do not exit the shell. More supervised work arrives here as a fresh preamble
-and TASK block; follow it under its new Dispatch and ignore stale follow-ups.`
+and TASK block; follow it under its new Dispatch.`
 
 export const CHAT_REDISPATCH_PARAGRAPH = `More supervised work arrives in this chat as a fresh preamble and TASK
-block; follow it under its new Dispatch and ignore stale follow-ups.`
+block; follow it under its new Dispatch.`
 
 function buildPostWorkerDoneInstructions({
   cli,

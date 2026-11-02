@@ -3,11 +3,11 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
   cancelStructuredAgentLaunch,
-  startStructuredAgentLaunch,
-  type StructuredAgentLaunchOptions
-} from '@/lib/structured-agent-session-launch'
-import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
-import { StructuredAgentSessionCreateAbandonedError } from './structured-agent-session-launch-errors'
+  startStructuredAgentLaunch
+} from '@/lib/agent-session/launch/structured-agent-session-launch'
+import type { StructuredAgentLaunchOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
+import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
+import { StructuredAgentSessionCreateAbandonedError } from './agent-session/launch/structured-agent-session-launch-errors'
 
 export type StructuredAgentLaunchSettlement =
   | {

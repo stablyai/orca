@@ -11,11 +11,11 @@ import { recordedOmpOptions } from './acp-thinking-options.test-fixture'
 import { SessionConfigSelectOptionSchema } from './generated/acp-protocol.generated'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentModelCatalogListingKey } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
-import { OMP_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-omp'
+import { OMP_SESSION_OPTION_CATALOG } from '../../shared/agent-session/options/agent-session-option-catalog-omp'
 import {
   applyStructuredAgentSessionModelCatalog,
   createStructuredAgentSessionOptionState
-} from '../../shared/structured-agent-session-options'
+} from '../../shared/agent-session/options/structured-agent-session-options'
 
 const mobileProducer = { AcpStructuredOptions } satisfies AcpCommandOptionsFixtureModule
 

@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
-import type { AgentJournalQuestion } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
+import type { AgentJournalQuestion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
 import {
   structuredQuestionAnswers,
   structuredQuestionCard

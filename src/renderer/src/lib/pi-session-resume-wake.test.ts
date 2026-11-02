@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'

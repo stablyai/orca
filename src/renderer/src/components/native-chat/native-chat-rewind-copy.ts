@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindReason
-} from '../../../../shared/agent-session-rewind'
+} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 
 const reasonCopy = {
   unsupported: () =>

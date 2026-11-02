@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from './agent-session-host-authority'
+} from './agent-session/agent-session-host-authority'
 import {
   ClaimedAgentPtyOwnerRegistry,
   MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES

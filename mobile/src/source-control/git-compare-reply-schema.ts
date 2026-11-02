@@ -44,26 +44,20 @@ export const gitBranchCompareResultSchema = z.looseObject({
   entries: salvagingArray(gitBranchChangeEntrySchema).nullish()
 })
 
+// The diff screen diffs a commit's files against this parent; null is a root commit.
 export const gitCommitCompareResultSchema = z.looseObject({
+  summary: salvagedOptional(
+    'summary',
+    z.looseObject({
+      parentOid: z.string().nullable().optional(),
+      status: z.string().optional(),
+      errorMessage: z.string().optional()
+    })
+  ),
   entries: salvagingArray(gitChangedFileSchema)
 })
-
-// Text requires both contents; unknown kinds must reach the consumer’s unsupported-kind error.
-const gitDiffTextSchema = z.looseObject({
-  kind: z.literal('text'),
-  originalContent: z.string(),
-  modifiedContent: z.string()
-})
-
-// Normalize non-text discriminants so the consumer narrows on kind without requiring their payloads.
-const gitDiffOtherKindSchema = z
-  .object({ kind: z.string() })
-  .transform(() => ({ kind: 'not-text' as const }))
-
-export const gitDiffResultSchema = z.union([gitDiffTextSchema, gitDiffOtherKindSchema])
 
 export type MobileGitChangedFile = z.output<typeof gitChangedFileSchema>
 export type MobileGitBranchChangeEntry = z.output<typeof gitBranchChangeEntrySchema>
 export type MobileGitBranchCompareSummary = z.output<typeof gitBranchCompareSummarySchema>
 export type MobileGitBranchCompareReply = z.output<typeof gitBranchCompareResultSchema>
-export type MobileGitDiffReply = z.output<typeof gitDiffResultSchema>

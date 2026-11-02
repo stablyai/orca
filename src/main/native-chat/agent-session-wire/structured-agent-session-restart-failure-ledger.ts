@@ -1,18 +1,17 @@
 // Keep actionable failures after offers are spent; retire on independent startup, successful retry or dismissal.
 
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type {
   AgentSessionResumeFailureInput,
   AgentSessionResumeFailureRecord
-} from '../../runtime/agent-session-recovery-capsule-entries'
+} from '../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker
-} from '../../../shared/agent-session-resume-marker'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
-import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
 import type {
   StructuredAgentSessionRestartAudience,
   StructuredAgentSessionResumeCandidate,
@@ -22,7 +21,10 @@ import {
   STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE,
   type StructuredAgentSessionResumeOutcome
 } from './structured-agent-session-restart-resume-runner'
-import { RESTART_CONTINUATION_SUPERSEDED } from './structured-agent-session-restart-continuation'
+import {
+  type StructuredAgentSessionContinuationOutcome,
+  RESTART_CONTINUATION_SUPERSEDED
+} from './structured-agent-session-restart-continuation'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 type FailureCapsule = Pick<

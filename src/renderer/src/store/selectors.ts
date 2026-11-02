@@ -21,6 +21,7 @@ import { findKnownWorktreeById } from './slices/worktrees/listing/detected-workt
 import { selectWorktreesByRepo } from './workspace-record-selectors'
 import { worktreeCopyOwnerKey } from './slices/worktrees/metadata/worktree-copy-review-clear'
 import { findSoleHostCopy } from '../../../shared/worktree/host-qualified-identity'
+import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
 
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 export {
@@ -207,6 +208,23 @@ export function selectRepoByIdForActiveWorkspace(
 
 export const useRepoById = (repoId: string | null) =>
   useAppStore((s) => selectRepoByIdForActiveWorkspace(s, repoId))
+
+export function selectReviewRepositoryForWorkspace(
+  state: ActiveWorkspaceRepoState,
+  workspace: Pick<Worktree, 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'> | null
+): Repo | null {
+  if (!workspace) {
+    return null
+  }
+  const selectedRepo = selectRepoByIdForActiveWorkspace(state, workspace.repoId)
+  return resolveReviewRepository(
+    state.repos,
+    workspace,
+    selectedRepo && reviewRepositoryMatchesWorkspace(selectedRepo, workspace)
+      ? selectedRepo
+      : undefined
+  )
+}
 export const useProjectHostSetupProjection = () =>
   useAppStore((s) => getProjectHostSetupProjectionFromState(s))
 

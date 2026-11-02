@@ -2,7 +2,7 @@ import { selectableStructuredSubmission } from './structured-agent-session-input
 import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { holdClosedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'

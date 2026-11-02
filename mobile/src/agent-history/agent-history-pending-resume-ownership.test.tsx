@@ -1,5 +1,12 @@
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import {
+  activateMobileUiLocale,
+  mobileI18n,
+  setMobilePseudoLocalization
+} from '../i18n/mobile-i18n'
+import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'
 import React from 'react'
+import { Text } from 'react-native'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import { CreateTerminalTab } from '../../../src/shared/rpc-contract/session-tabs-schemas-params'
 import type { RpcClient } from '../transport/rpc-client'
@@ -14,6 +21,7 @@ const state = vi.hoisted(
     legacy: boolean
     completedBoundary: boolean
     session: AiVaultSession | null
+    resumeAction?: { disabled: boolean; loading: boolean }
     onResume?: (session: AiVaultSession) => Promise<void>
   } => ({
     generation: 1,
@@ -24,6 +32,14 @@ const state = vi.hoisted(
     session: null
   })
 )
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Animated: { View: 'View' },
@@ -64,7 +80,11 @@ vi.mock('lucide-react-native', () => ({
 }))
 // Reanimated needs native modules; the eased height is not under test.
 vi.mock('../components/AutoHeight', () => ({
-  AutoHeight: ({ children }: { children: unknown }) => children
+  AutoHeight: ({ children, open = true }: { children: unknown; open?: boolean }) =>
+    open ? children : null
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
 }))
 const notifications = vi.hoisted(() => ({
   error: vi.fn(),
@@ -112,7 +132,9 @@ vi.mock('./use-mobile-agent-history-state', () => ({
 vi.mock('./MobileAgentSessionHistoryList', () => ({
   MobileAgentSessionHistoryList: (props: {
     onResume: (session: AiVaultSession) => Promise<void>
+    resumeActionStateBySessionId: ReadonlyMap<string, { disabled: boolean; loading: boolean }>
   }) => {
+    state.resumeAction = props.resumeActionStateBySessionId.get(state.session?.id ?? '')
     state.onResume = props.onResume
     return null
   }
@@ -121,6 +143,12 @@ import { MobileAgentSessionHistoryPanel } from './MobileAgentSessionHistoryPanel
 import { useProvideSessionScreenHandlers } from '../session/session-screen-handlers'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+afterEach(async () => {
+  vi.useRealTimers()
+  setMobilePseudoLocalization(false)
+  mobileI18n.removeResourceBundle('fr', 'translation')
+  await activateMobileUiLocale('en')
+})
 
 function ownedSession(): AiVaultSession {
   return {
@@ -417,8 +445,6 @@ it('resuming into the session it was opened from shows the resumed terminal ther
   const onResumedTerminal = vi.fn()
   function SessionBelow() {
     useProvideSessionScreenHandlers('owned-host', 'owned-worktree', {
-      onFileOpenStart: vi.fn(),
-      onOpenedFileDiff: vi.fn(),
       onResumedTerminal
     })
     return null
@@ -452,3 +478,202 @@ it('resuming into the session it was opened from shows the resumed terminal ther
     await act(async () => tree?.unmount())
   }
 })
+
+it.each([
+  'opened',
+  'old-host',
+  'timeout',
+  'unsupported-agent',
+  'generation without render',
+  'generation fallback'
+] as const)(
+  'a native History tap opens in place, with safe legacy fallback only: %s',
+  async (mode) => {
+    await activateMobileUiLocale('en')
+    notifications.replace.mockClear()
+    notifications.success.mockClear()
+    notifications.error.mockClear()
+    state.generation = 1
+    state.connection = 'connected'
+    state.legacy = true
+    state.completedBoundary = true
+    state.session = {
+      ...ownedSession(),
+      agent: mode === 'unsupported-agent' ? 'qoder' : 'codex',
+      sessionId: mode === 'opened' ? '' : 'provider-session',
+      structuredSession: { sessionId: 'native-root', workspaceId: 'owned-worktree' }
+    }
+    let revealed = false
+    const delayed =
+      mode === 'timeout' || mode === 'generation without render' || mode === 'generation fallback'
+    const revealReply = Promise.withResolvers<RpcResponse>()
+    if (delayed) {
+      vi.useFakeTimers()
+    }
+    const send = vi.fn<RpcClient['sendRequest']>(async (method) => {
+      if (method === 'agentSession.reveal') {
+        if (delayed) {
+          return revealReply.promise
+        }
+        if (mode === 'unsupported-agent') {
+          return {
+            id: 'unsupported-agent',
+            ok: true,
+            result: {
+              ok: false,
+              refusal: {
+                code: 'structured_agent_session_unsupported',
+                message: 'host cannot open this agent'
+              }
+            }
+          }
+        }
+        if (mode === 'old-host') {
+          return {
+            id: 'old-host',
+            ok: false,
+            error: { code: 'invalid_argument', message: 'old host' }
+          }
+        }
+        revealed = true
+      }
+      const results: Record<string, unknown> = {
+        'orchestration.partyLocation': {
+          location: { kind: 'chat', sessionId: 'native-live', worktreeId: 'owned-worktree' }
+        },
+        'session.tabs.list': {
+          tabs: revealed
+            ? [
+                {
+                  type: 'agent-session',
+                  id: 'issued-tab',
+                  sessionId: 'native-live',
+                  agent: 'codex'
+                }
+              ]
+            : []
+        },
+        'agentSession.reveal': {
+          ok: true,
+          sessionId: 'native-live',
+          workspaceId: 'owned-worktree',
+          agent: 'codex',
+          readable: true
+        },
+        'session.tabs.activate': {},
+        'repo.list': {
+          repos: [{ id: 'owned-repo', path: '/owned/workspace', connectionId: null }]
+        },
+        'folderWorkspace.list': { workspaces: [] },
+        'projectGroup.list': { groups: [] },
+        'worktree.ps': {
+          worktrees: [
+            { worktreeId: 'owned-worktree', repoId: 'owned-repo', path: '/owned/workspace' }
+          ]
+        },
+        'settings.get': {},
+        'aiVault.prepareSessionResume': { useRealCodexHome: true },
+        'session.tabs.createTerminal': {
+          tab: { type: 'terminal', id: 'fallback-tab', terminal: 'fallback-pty', title: 'Terminal' }
+        },
+        'terminal.send': { send: { accepted: true } }
+      }
+      return { id: 'reply', ok: true, result: results[method] }
+    })
+    state.client = {
+      ...createFakeRpcClient({ getGeneration: () => state.generation }),
+      sendRequest: send
+    }
+    const rendered: { tree?: ReactTestRenderer } = {}
+    await act(async () => {
+      rendered.tree = create(
+        React.createElement(MobileAgentSessionHistoryPanel, {
+          hostId: 'owned-host',
+          worktreeId: 'owned-worktree'
+        })
+      )
+    })
+    const idleTimers = delayed ? vi.getTimerCount() : 0
+    try {
+      let completion: Promise<void> | undefined
+      await act(async () => {
+        if (!state.onResume || !state.session) {
+          throw new Error('missing row')
+        }
+        completion = state.onResume(state.session)
+        if (!delayed) {
+          await completion
+        }
+      })
+      if (delayed) {
+        expect(send.mock.calls.filter(([method]) => method === 'agentSession.reveal')).toHaveLength(
+          1
+        )
+        expect(state.resumeAction).toEqual({ disabled: true, loading: true })
+        if (mode !== 'generation fallback') {
+          mobileI18n.addResourceBundle('fr', 'translation', {
+            'session.structuredOpen.unreachable': 'Conversation de {{agent}} : réessayez.',
+            'agentHistory.resume.hostConnectionChanged': 'Connexion modifiée. Réessayez.'
+          })
+          await act(async () => {
+            await activateMobileUiLocale('fr')
+            setMobilePseudoLocalization(true)
+          })
+        }
+        await act(async () => {
+          if (mode === 'timeout') {
+            await vi.advanceTimersByTimeAsync(5_000)
+          } else {
+            // Change the live generation after locale rendering, without rerendering the owner.
+            state.generation = 2
+            revealReply.resolve({
+              id: 'late',
+              ok: false,
+              error: { code: 'request_timeout', message: 'late' }
+            })
+          }
+          await completion
+        })
+        const message =
+          mode === 'timeout'
+            ? 'Conversation de Codex : réessayez.'
+            : mode === 'generation fallback'
+              ? 'Host connection changed. Retry resume.'
+              : 'Connexion modifiée. Réessayez.'
+        const expected =
+          mode === 'generation fallback' ? message : pseudoLocalizeString(message, { expand: true })
+        const banners = rendered.tree?.root.findAll(
+          (node) => node.type === Text && node.props.children === expected
+        )
+        expect(banners).toHaveLength(1)
+        expect(notifications.error).toHaveBeenCalledTimes(1)
+        expect(notifications.success).not.toHaveBeenCalled()
+        expect(notifications.replace).not.toHaveBeenCalled()
+        expect(state.resumeAction).toEqual({ disabled: false, loading: false })
+        expect(send.mock.calls.map(([method]) => method)).not.toContain(
+          'session.tabs.createTerminal'
+        )
+        expect(vi.getTimerCount()).toBe(idleTimers)
+      }
+      const methods = send.mock.calls.map(([method]) => method)
+      expect(methods.includes('session.tabs.createTerminal')).toBe(
+        mode === 'old-host' || mode === 'unsupported-agent'
+      )
+      if (mode === 'old-host' || mode === 'unsupported-agent') {
+        expect(notifications.error).not.toHaveBeenCalled()
+      }
+      if (mode === 'opened') {
+        expect(notifications.replace).toHaveBeenCalledWith(
+          expect.stringContaining('/session/owned-worktree?paneKey=issued-tab')
+        )
+        expect(methods).not.toContain('repo.list')
+      }
+      if (mode === 'timeout') {
+        expect(notifications.replace).not.toHaveBeenCalled()
+      }
+      expect(send.mock.calls.filter(([method]) => method === 'agentSession.reveal')).toHaveLength(1)
+    } finally {
+      await act(async () => rendered.tree?.unmount())
+    }
+  }
+)

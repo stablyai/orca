@@ -8,18 +8,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import WebSocket from 'ws'
 import { z } from 'zod'
-import {
-  decrypt,
-  decryptBytes,
-  deriveSharedKey,
-  encrypt,
-  generateKeyPair,
-  publicKeyFromBase64,
-  publicKeyToBase64
-} from '../../../shared/e2ee-crypto'
-import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DelegatedMobileDeviceSyncParamsSchema
@@ -31,6 +20,9 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { setRuntimeBrowserCommandsFactory } from '../runtime-browser-commands-factory'
 import { readRuntimeMetadata } from '../runtime-metadata'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { ORCHESTRATION_CALLER_METHODS } from '../rpc/methods/orchestration/caller-show'
+import { MOBILE_RPC_METHOD_ROUTES } from '../runtime-rpc/runtime-rpc-mobile-method-routing'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import { STATUS_METHODS } from '../rpc/methods/status'
 import { TERMINAL_METHODS } from '../rpc/methods/terminal'
 import { BROWSER_CORE_METHODS } from '../rpc/methods/browser-core'
@@ -44,6 +36,7 @@ import { sendRequest } from '../runtime-rpc-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import type * as PassthroughSocketModule from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import { connectPhone, pair, TARGET, type Frame } from './mobile-desktop-relay-phone.test-fixture'
 
 const passthroughOpens = vi.hoisted(() => {
   const hostReplies: string[] = []
@@ -120,8 +113,6 @@ class SeatObservableRuntime extends OrcaRuntimeService {
 }
 
 const WORKTREE = 'id:repo-1::/tmp/worktree-a'
-const TARGET = 'runtime:env-1'
-type Frame = Record<string, unknown>
 
 describe('mobile desktop relay: phone -> desktop -> server', () => {
   const cleanups: (() => Promise<void> | void)[] = []
@@ -139,7 +130,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     }
   })
 
-  async function startRuntime(spawnedOnThisHost: string[] = []) {
+  async function startRuntime(spawnedOnThisHost: string[] = [], locator = true) {
     const writes: string[] = []
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store carries the surface these RPCs read, as in the sibling streaming tests.
     const runtime = new SeatObservableRuntime(makeStore() as never)
@@ -164,6 +155,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       methods: [
         ...STATUS_METHODS,
         ...GITHUB_ISSUE_METHODS,
+        ...(locator ? ORCHESTRATION_CALLER_METHODS : []),
         ...TERMINAL_METHODS,
         ...BROWSER_CORE_METHODS,
         ...BROWSER_SCREENCAST_METHODS,
@@ -183,20 +175,8 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     return { server, runtime, writes, userDataPath }
   }
 
-  function pair(
-    server: OrcaRuntimeRpcServer,
-    scope: 'mobile' | 'runtime',
-    name: string
-  ): PairingOffer {
-    const offer = server.createPairingOffer({ address: '127.0.0.1', name, scope })
-    if (!offer.available) {
-      throw new Error('pairing unavailable')
-    }
-    return parsePairingCode(offer.pairingUrl)!
-  }
-
-  async function startTopology() {
-    const host = await startRuntime()
+  async function startTopology(locator = true) {
+    const host = await startRuntime([], locator)
     const desktopSpawns: string[] = []
     const desktop = await startRuntime(desktopSpawns)
     const desktopOnHost = pair(host.server, 'runtime', 'MacBook')
@@ -268,83 +248,61 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     return { host, desktop, desktopSpawns, children, syncedNames, state, handle }
   }
 
-  async function connectPhone(desktop: OrcaRuntimeRpcServer, name: string) {
-    const pairing = pair(desktop, 'mobile', name)
-    const keys = generateKeyPair()
-    const sharedKey = deriveSharedKey(keys.secretKey, publicKeyFromBase64(pairing.publicKeyB64))
-    const ws = new WebSocket(pairing.endpoint)
-    const frames: Frame[] = []
-    const binaries: Uint8Array[] = []
-    let authenticated = false
-    const ready = new Promise<void>((resolve) => {
-      ws.on('message', (data: Buffer, isBinary) => {
-        if (isBinary) {
-          binaries.push(decryptBytes(new Uint8Array(data), sharedKey)!)
-          return
-        }
-        const text = data.toString()
-        if (text.includes('e2ee_ready')) {
-          ws.send(
-            encrypt(
-              JSON.stringify({ type: 'e2ee_auth', deviceToken: pairing.deviceToken }),
-              sharedKey
-            )
-          )
-          return
-        }
-        const frame = z.record(z.string(), z.unknown()).parse(JSON.parse(decrypt(text, sharedKey)!))
-        if (!authenticated) {
-          authenticated = frame.type === 'e2ee_authenticated'
-          resolve()
-          return
-        }
-        frames.push(frame)
-      })
-    })
-    ws.once('open', () =>
-      ws.send(
-        JSON.stringify({ type: 'e2ee_hello', publicKeyB64: publicKeyToBase64(keys.publicKey) })
-      )
-    )
-    await ready
-    cleanups.push(() => ws.close())
-    const token = pairing.deviceToken
-    return {
-      token,
-      deviceId: pairing.pairedDeviceId!,
-      frames,
-      binaries,
-      close: () => ws.close(),
-      send(
-        id: string,
-        method: string,
-        params: unknown,
-        executionHost: string | null = TARGET,
-        expectedRuntimeSource?: { sourceId: string; runtimeId: string }
-      ) {
-        ws.send(
-          encrypt(
-            JSON.stringify({
-              id,
-              deviceToken: token,
-              method,
-              params,
-              executionHost: executionHost ?? undefined,
-              ...(expectedRuntimeSource ? { expectedRuntimeSource } : {})
-            }),
-            sharedKey
-          )
-        )
-      },
-      next: (id: string, predicate: (frame: Frame) => boolean = () => true) =>
-        vi.waitFor(() => {
-          const frame = frames.find((candidate) => candidate.id === id && predicate(candidate))
-          expect(frame).toBeDefined()
-          return frame!
-        })
-    }
-  }
   type Phone = Awaited<ReturnType<typeof connectPhone>>
+
+  it('admits a proven phone locator on the configured delegated target, never the relay owner', async () => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get('orchestration.partyLocation')).toBe('execution-host')
+    const { host, desktop, handle } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'sender-open', cleanups)
+    const atHost = vi.spyOn(host.runtime, 'getTerminalPaneKey')
+    const atDesktop = vi.spyOn(desktop.runtime, 'getTerminalPaneKey')
+    phone.send('locate', 'orchestration.partyLocation', { address: handle, messageIds: [] })
+    expect(await phone.next('locate')).toMatchObject({
+      ok: true,
+      result: { location: { kind: 'terminal', handle } }
+    })
+    expect(atHost).toHaveBeenCalledWith(handle)
+    expect(atDesktop).not.toHaveBeenCalled()
+    phone.send('forged', 'orchestration.partyLocation', { address: handle, callerScope: 'owner' })
+    expect(await phone.next('forged')).toMatchObject({
+      ok: true,
+      result: { location: { kind: 'terminal', handle } }
+    })
+    phone.send('unlisted', 'orchestration.callerShow', {}, TARGET, undefined, {
+      callerScope: 'owner',
+      clientKind: 'runtime'
+    })
+    expect(await phone.next('unlisted')).toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    phone.send(
+      'unknown-target',
+      'orchestration.partyLocation',
+      { address: handle },
+      'runtime:not-configured'
+    )
+    expect(await phone.next('unknown-target')).toMatchObject({ ok: false })
+    expect(atDesktop).not.toHaveBeenCalled()
+    // Historical hops refuse before forwarding; do not substitute the relay's local authority.
+    MOBILE_RPC_METHOD_ALLOWLIST.delete('orchestration.partyLocation')
+    try {
+      phone.send('old-hop', 'orchestration.partyLocation', { address: handle })
+      expect(await phone.next('old-hop')).toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    } finally {
+      MOBILE_RPC_METHOD_ALLOWLIST.add('orchestration.partyLocation')
+    }
+    expect(atHost).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a target missing the locator as a refusal, with no relay-local substitution', async () => {
+    const { desktop, handle } = await startTopology(false)
+    const phone = await connectPhone(desktop.server, 'old-target', cleanups)
+    const local = vi.spyOn(desktop.runtime, 'getTerminalPaneKey')
+    phone.send('old-target', 'orchestration.partyLocation', { address: handle })
+    expect(await phone.next('old-target')).toMatchObject({
+      ok: false,
+      error: { code: 'method_not_found' }
+    })
+    expect(local).not.toHaveBeenCalled()
+  })
 
   async function subscribe(phone: Phone, handle: string, id = 'sub') {
     phone.send(id, 'terminal.subscribe', {
@@ -379,7 +337,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     registry.upsertDelegatedMobileDevices(otherDesktop, [
       { phoneKey: 'p', name: 'iPad via Other Mac' }
     ])
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
 
     const streamId = await subscribe(phone, handle)
     const hostStreamId = z
@@ -427,8 +385,8 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
 
   it('gives two phones on one server terminal their own seats, and cleans up the one that disconnects', async () => {
     const { host, desktop, children, handle } = await startTopology()
-    const phoneA = await connectPhone(desktop.server, 'Phone A')
-    const phoneB = await connectPhone(desktop.server, 'Phone B')
+    const phoneA = await connectPhone(desktop.server, 'Phone A', cleanups)
+    const phoneB = await connectPhone(desktop.server, 'Phone B', cleanups)
     const streamA = await subscribe(phoneA, handle)
     const streamB = await subscribe(phoneB, handle)
     expect(streamA).not.toBe(streamB)
@@ -443,7 +401,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
 
   it('applies a phone capability update on the desktop and on its open server socket, answering once', async () => {
     const { desktop, handle } = await startTopology()
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     await subscribe(phone, handle)
     phone.send(
       'caps',
@@ -471,8 +429,8 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
 
   it('drops a phone from the server as soon as the desktop unpairs it', async () => {
     const { host, desktop, children, handle } = await startTopology()
-    const kept = await connectPhone(desktop.server, 'Kept')
-    const unpaired = await connectPhone(desktop.server, 'Unpaired')
+    const kept = await connectPhone(desktop.server, 'Kept', cleanups)
+    const unpaired = await connectPhone(desktop.server, 'Unpaired', cleanups)
     await subscribe(kept, handle)
     expect(children().map((device) => device.phoneKey)).toEqual([kept.deviceId, unpaired.deviceId])
 
@@ -485,7 +443,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
 
   it('stops relaying a phone the server revoked until the next sync', async () => {
     const { host, desktop, children, state, handle } = await startTopology()
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     await subscribe(phone, handle)
     const revoked = children()[0]!
 
@@ -512,7 +470,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       defaultTuiAgent: 'pi',
       disabledTuiAgents: ['claude']
     })
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     const opensBefore = passthroughOpens.count
 
     phone.send('settings:targeted', 'settings.get', {})
@@ -540,7 +498,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
   it('serves a browser call on the desktop when the desktop renders that server page itself', async () => {
     const { host, desktop, state } = await startTopology()
     state.hostedPages.add('hosted-page')
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     const desktopGoto = vi.spyOn(desktop.runtime, 'browserGoto').mockResolvedValue({
       url: 'http://example.test/',
       title: 'Example'
@@ -572,7 +530,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
   it('streams a desktop-hosted page and releases it through the subscription id, never on the server', async () => {
     const { host, desktop, state } = await startTopology()
     state.hostedPages.add('hosted-page')
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     const subscriptionId = mintBrowserScreencastSubscriptionId('hosted-page', 'nonce')
     let release = (): void => {}
     const released = new Promise<void>((resolve) => (release = resolve))
@@ -625,7 +583,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
 
   it('answers a targeted status from the server, so a server workspace gates on its own features', async () => {
     const { host, desktop } = await startTopology()
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     const StatusSchema = z.looseObject({ runtimeId: z.string(), capabilities: z.array(z.string()) })
 
     phone.send('status:server', 'status.get', {})
@@ -639,7 +597,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
 
   it("answers a targeted SSH state from the server, which holds a server workspace's SSH targets", async () => {
     const { desktop } = await startTopology()
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     const answeredByServer = (id: string) =>
       passthroughOpens.hostReplies.some((frame) => JSON.parse(frame).id === id)
 
@@ -653,7 +611,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
 
   it('refuses binary-frame methods and unknown servers without running anything on the desktop', async () => {
     const { desktop, desktopSpawns } = await startTopology()
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
 
     phone.send('multiplex', 'terminal.multiplex', {})
     expect(errorCode(await phone.next('multiplex'))).toBe('forbidden')
@@ -681,7 +639,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
   it('reports a server without delegated devices as update-needed and relays nothing to it', async () => {
     const { desktop, state } = await startTopology()
     state.capable = false
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     const opensBefore = passthroughOpens.count
     phone.send('list', 'terminal.list', {})
     expect(await phone.next('list')).toMatchObject({
@@ -698,7 +656,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     async (capable) => {
       const { host, desktop, state } = await startTopology()
       const aWrite = vi.spyOn(host.runtime, 'updateRepoIssue').mockResolvedValue({ ok: true })
-      const phone = await connectPhone(desktop.server, 'iPhone')
+      const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
       phone.send('probe-a', 'status.get', {})
       const parseStatus = z.object({
         runtimeId: z.string(),
@@ -779,7 +737,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
   it('retires an in-flight same-socket proof, settles its claim and never forwards the old mutation on a replacement', async () => {
     const { host, desktop, state } = await startTopology()
     const write = vi.spyOn(host.runtime, 'updateRepoIssue').mockResolvedValue({ ok: true })
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     phone.send('initial', 'status.get', {})
     const status = z
       .object({ runtimeId: z.string(), hostDescriptor: z.object({ installationId: z.string() }) })
@@ -814,7 +772,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
   it('retires during the actual passthrough socket open and settles without forwarding or opening a replacement', async () => {
     const { host, desktop, state } = await startTopology()
     const write = vi.spyOn(host.runtime, 'updateRepoIssue').mockResolvedValue({ ok: true })
-    const phone = await connectPhone(desktop.server, 'iPhone')
+    const phone = await connectPhone(desktop.server, 'iPhone', cleanups)
     phone.send('probe-open', 'status.get', {})
     const status = z
       .object({ runtimeId: z.string(), hostDescriptor: z.object({ installationId: z.string() }) })

@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import {
+  type AgentJournalMessageItem,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener

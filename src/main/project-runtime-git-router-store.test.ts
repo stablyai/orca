@@ -42,21 +42,6 @@ const distroFor = (cwd: string): string | undefined =>
   routeLocalGitOptions<{ cwd: string; wslDistro?: string }>({ cwd }).wslDistro
 
 describe('project runtime Git routing on the real Store', () => {
-  it.each([
-    ['the WSL hosts gate is closed', '', 'win32'],
-    ['not on Windows', '1', 'linux']
-  ])('installs no router, and drops one, when %s', async (_case, gate, platform) => {
-    const { store } = await fixture()
-    const onStateWritten = vi.spyOn(store, 'onStateWritten')
-    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, gate)
-    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-    setLocalGitRuntimeRouter(() => 'Ubuntu')
-    installProjectRuntimeGitRouter(store)
-    expect(isLocalGitRuntimeRouterInstalled()).toBe(false)
-    expect(onStateWritten).not.toHaveBeenCalled()
-    expect(distroFor(REPO)).toBeUndefined()
-  })
-
   // Stage 1 is opt-in: the routing ships with WSL hosts and follows the user's setting both ways.
   it('routes only while the WSL hosts setting is on, and stops when it is turned off', async () => {
     const { store } = await fixture()

@@ -27,7 +27,7 @@ import {
 } from '../tasks/smart-source-paste-intent'
 import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from './BottomDrawer'
@@ -234,11 +234,14 @@ export function SmartWorkspaceSourceDrawer({
                 )}
               </Text>
               <View style={styles.crossRepoActions}>
-                <Pressable style={styles.crossRepoDismiss} onPress={dismissCrossRepoPrompt}>
+                <Pressable
+                  style={({ pressed }) => [styles.crossRepoDismiss, pressed && pressedStyle]}
+                  onPress={dismissCrossRepoPrompt}
+                >
                   <Text style={styles.crossRepoDismissText}>{t('common.cancel', 'Cancel')}</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.crossRepoSwitch}
+                  style={({ pressed }) => [styles.crossRepoSwitch, pressed && pressedStyle]}
                   onPress={() => void handleAcceptCrossRepo()}
                 >
                   <Text style={styles.crossRepoSwitchText}>
@@ -319,7 +322,11 @@ export function SmartWorkspaceSourceDrawer({
                 return (
                   <Pressable
                     key={option.id}
-                    style={[styles.chip, selected && styles.chipSelected]}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      selected && styles.chipSelected,
+                      pressed && pressedStyle
+                    ]}
                     onPress={() => setMrStateFilter(option.id)}
                   >
                     <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
@@ -338,7 +345,11 @@ export function SmartWorkspaceSourceDrawer({
               return (
                 <Pressable
                   key={option.id}
-                  style={[styles.tab, selected && styles.tabSelected]}
+                  style={({ pressed }) => [
+                    styles.tab,
+                    selected && styles.tabSelected,
+                    pressed && pressedStyle
+                  ]}
                   onPress={() => setMode(option.id)}
                 >
                   <SmartSourceModeIcon icon={option.icon} color={tint} />

@@ -1,4 +1,4 @@
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'

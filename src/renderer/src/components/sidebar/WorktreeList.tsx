@@ -9,7 +9,7 @@ import {
 } from '@/store/selectors'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getHeaderCreateWorkspaceTarget } from './header-create-workspace-target'
+import { openHeaderCreateComposer } from './header-create-workspace-target'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
@@ -164,17 +164,6 @@ const WorktreeList = React.memo(function WorktreeList({
     markSidebarWorktreeActiveImmediately(worktreeId, rowKey)
   }, [])
 
-  const handleCreateForRepo = useCallback(
-    (repo: Repo, { pinHost }: { pinHost: boolean }) => {
-      const { repos, projectHostSetups } = useAppStore.getState()
-      openModal('new-workspace-composer', {
-        initialRepoId: repo.id,
-        ...(pinHost ? getHeaderCreateWorkspaceTarget(repo, repos, projectHostSetups) : {}),
-        telemetrySource: 'sidebar'
-      })
-    },
-    [openModal]
-  )
   const handleOpenRepoSettings = useCallback(
     (projectId: string, sectionId?: string) => {
       openSettingsTarget({ pane: 'repo', repoId: projectId, ...(sectionId ? { sectionId } : {}) })
@@ -275,7 +264,7 @@ const WorktreeList = React.memo(function WorktreeList({
         projectOrderBy={projectOrderBy}
         toggleGroup={toggleGroup}
         collapsedGroups={effectiveCollapsedGroups}
-        handleCreateForRepo={handleCreateForRepo}
+        handleCreateForRepo={openHeaderCreateComposer}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}

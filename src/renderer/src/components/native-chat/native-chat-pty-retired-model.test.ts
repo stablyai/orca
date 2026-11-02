@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mergeDiscoveredAuthoritativeModels } from '../../../../shared/agent-session-option-catalog'
-import { GROK_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-grok'
+import { mergeDiscoveredAuthoritativeModels } from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import { GROK_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-grok'
 import {
   applyNativeChatSessionOptionSettingsMutation,
   updateNativeChatSessionOptionDefaults

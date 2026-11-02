@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog } from '../../../../../../shared/agent-session-option-catalog'
-import { resolveAgentSessionOptionLaunch } from '../../../../../../shared/agent-session-option-launch'
+import { getAgentSessionOptionCatalog } from '../../../../../../shared/agent-session/options/agent-session-option-catalog'
+import { resolveAgentSessionOptionLaunch } from '../../../../../../shared/agent-session/options/agent-session-option-launch'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,

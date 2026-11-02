@@ -21,7 +21,7 @@ import {
 } from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { settleUnheldStructuredAgentSessionTurns } from './structured-agent-session-unheld-turns'
 import {
   applyStructuredRewindRecovery,

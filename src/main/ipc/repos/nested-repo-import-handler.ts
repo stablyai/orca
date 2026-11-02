@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroupImportResult } from '../../../shared/project-group-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'

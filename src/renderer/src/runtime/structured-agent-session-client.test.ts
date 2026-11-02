@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
 
 const mocks = vi.hoisted(() => ({
   subscribe: vi.fn(),

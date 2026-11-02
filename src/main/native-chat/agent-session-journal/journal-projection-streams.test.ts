@@ -4,15 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import {
   codexProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/structured-agent-session-event-sink'
 import {
@@ -31,6 +29,8 @@ import {
 } from './journal-projection-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
+import { JournalOutcomeSweeper } from './journal-outcome-cleanup'
+import { encodeJournalState } from './journal-state-codec'
 
 const sessionId = 'session-1'
 let root: string
@@ -79,7 +79,7 @@ it.each(['claude', 'codex'] as const)(
       providerHandle:
         agent === 'codex' ? codexProviderHandle('thread-1') : claudeProviderHandle('claude-1', null)
     }
-    const journal = await journals.open({ identity, stateDirectory: root, now: () => at })
+    let journal = await journals.open({ identity, stateDirectory: root, now: () => at })
     const expected = restoreJournal(database.db, sessionId)!.state
     let commits = 0
     let planRevisions = 0
@@ -164,7 +164,7 @@ it.each(['claude', 'codex'] as const)(
           turnId = turn.id
         }
         if (record.method === 'turn/completed') {
-          for (const status of ['inProgress', 'completed']) {
+          for (const status of ['pending', 'inProgress', 'completed']) {
             translator.handle({
               type: 'notification',
               sessionId,
@@ -196,6 +196,13 @@ it.each(['claude', 'codex'] as const)(
       { kind: 'turn', turnId: 'stop-turn', state: 'running' },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
+    for (let revision = 0; revision < 8; revision++) {
+      await journal.appendItem(
+        stoppedTurn,
+        { kind: 'turn', turnId: 'stop-turn', state: 'running', startedAt: at + revision },
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
     await journal.appendStopEvent({ reason: 'user-stop', turnId: 'stop-turn' }, 1)
     const settle = journal.stopMarks.beginSettle(true)
     await journal.appendLifecycleBatch({
@@ -215,6 +222,41 @@ it.each(['claude', 'codex'] as const)(
     expect(
       restoreJournal(database.db, sessionId)?.state.appliedSettlementIds.has('stop-settlement')
     ).toBe(true)
+    const count = () =>
+      Number(database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n)
+    const before = count()
+    const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: async () => {} })
+    disposals.push(() => sweeper.stop())
+    await sweeper.pass()
+    expect(count()).toBeLessThan(before)
+    expectProjectionMatches(database, expected)
+    const cleaned = journal.snapshot()
+    await journals.closeAll()
+    database = openTestJournalHostDatabase(root)
+    journal = await journals.open({ identity, stateDirectory: root, now: () => at })
+    expect(journal.snapshot()).toEqual(cleaned)
+    expectProjectionMatches(database, expected)
+    await journal.replaceEpochItems('handle_forked', 1, [
+      {
+        identity: stoppedTurn,
+        body: { kind: 'turn', turnId: 'stop-turn', state: 'interrupted', completedAt: at + 1 },
+        ownerFence: 1
+      }
+    ])
+    const rewound = journal.snapshot()
+    const saved = encodeJournalState(restoreJournal(database.db, sessionId)!.state)
+    await sweeper.pass()
+    expect(encodeJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(saved)
+    expect(
+      database.db
+        .prepare(`SELECT COUNT(*) AS n FROM journal_outcomes WHERE generation NOT IN
+      (SELECT generation FROM journal_outcome_epochs)`)
+        .get()?.n
+    ).toBe(0)
+    await journals.closeAll()
+    expect(
+      (await journals.open({ identity, stateDirectory: root, now: () => at })).snapshot()
+    ).toEqual(rewound)
   }
 )
 

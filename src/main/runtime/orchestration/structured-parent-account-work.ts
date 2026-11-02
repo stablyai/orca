@@ -1,6 +1,6 @@
 import { structuredWorkerAddressable } from '../structured-worker-custody'
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { OrchestrationDb } from './db'
 import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
 import { dispatchReportMailbox } from './dispatch-report-mailbox'

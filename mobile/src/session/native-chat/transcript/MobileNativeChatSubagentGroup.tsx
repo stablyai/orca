@@ -7,11 +7,11 @@ import {
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-group-header'
 import { sayMobileNativeChatSubagentGroup as say } from './native-chat-subagent-group-copy'
 import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
-import { formatNativeChatDuration } from '../../../../../src/shared/native-chat-turn-status'
+import { formatNativeChatDuration } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import type {
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { useNow } from '../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

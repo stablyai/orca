@@ -4,16 +4,13 @@ import { join } from 'node:path'
 import { afterEach } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
   type AgentJournalToolCallItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionSinkWatermarks
-} from './structured-agent-session-event-sink'
+import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
 import type { StructuredAgentSessionTransitionStep } from './structured-agent-session-transition'
 
@@ -60,7 +57,7 @@ export function itemStep(
   }
 }
 
-export async function rig(watermarks: Partial<StructuredAgentSessionSinkWatermarks> = {}) {
+export async function rig() {
   const root = await mkdtemp(join(tmpdir(), 'orca-transition-'))
   roots.push(root)
   const journal: AgentSessionJournal = await journals.open({
@@ -75,10 +72,7 @@ export async function rig(watermarks: Partial<StructuredAgentSessionSinkWatermar
     now: () => 1_000
   })
   const publishes: number[] = []
-  const deferred = createDeferredStructuredAgentSessionEventSink({
-    ...testEventSinkLogging(SESSION),
-    watermarks
-  })
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging(SESSION))
   const bind = () => deferred.bind({ journal, fence: 1, publish: () => publishes.push(1) })
   return { root, journal, deferred, sink: deferred.sink, publishes, bind }
 }

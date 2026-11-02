@@ -2,14 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import {
   createTrackedJournalOpener,

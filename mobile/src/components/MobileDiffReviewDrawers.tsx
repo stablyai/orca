@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
-import { Check, Copy, Plus, Send, Trash2, X } from 'lucide-react-native'
+import { Copy, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -18,18 +18,30 @@ import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-st
 import { MessageBox } from './composer-input/MessageBox'
 import { composerInputStyles } from './composer-input/composer-input-styles'
 import { hostOs } from '../platform/host-os'
+import { MobileDiffReviewFilesSheet } from './MobileDiffReviewFilesSheet'
+import { MobileDiffReviewRangeSheet } from './MobileDiffReviewRangeSheet'
+import { mobileDiffReviewFilesSubtitle } from '../session/mobile-diff-review-screen-model'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
 }
 
 export function MobileDiffReviewDrawers({ controller }: Props) {
+  // Jump to file stays full height through its close, after the request has cleared.
+  const [lastKind, setLastKind] = useState<ReviewSheet['kind'] | null>(null)
+  if (controller.sheet && controller.sheet.kind !== lastKind) {
+    setLastKind(controller.sheet.kind)
+  }
+  const filesSheet = (controller.sheet?.kind ?? lastKind) === 'files'
   // One drawer for every review sheet: iOS cannot present a sheet while another is still closing.
   return (
     <KeyedBottomDrawer
       sheet={controller.sheet}
       sheetKey={reviewSheetKey}
       onClose={(presented) => controller.closeSheet(presented.kind)}
+      fillAvailable={filesSheet}
+      contentScrollable={!filesSheet}
+      dragContentToDismiss={!filesSheet}
     >
       {(presented) => <ReviewSheetContent controller={controller} sheet={presented} />}
     </KeyedBottomDrawer>
@@ -40,7 +52,7 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
   const t = useMobileTranslation()
   switch (sheet.kind) {
     case 'send':
-      return <SendNotesContent controller={controller} load={sheet.load} />
+      return <SendNotesContent controller={controller} load={sheet.load} only={sheet.only} />
     case 'discard':
       return (
         <ConfirmContent
@@ -63,12 +75,36 @@ function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet 
       return <NoteComposerContent controller={controller} composer={sheet.composer} />
     case 'completion':
       return <CompletionContent controller={controller} />
+    case 'range':
+      return <MobileDiffReviewRangeSheet controller={controller} range={sheet} />
+    case 'files':
+      return (
+        <MobileDiffReviewFilesSheet
+          queue={controller.filteredQueue}
+          currentKey={controller.currentItem?.key ?? null}
+          subtitle={mobileDiffReviewFilesSubtitle({
+            scope: controller.currentItem?.scope ?? null,
+            count: controller.filteredQueue.length,
+            viewedCount: controller.reviewedCount
+          })}
+          onSelect={(item) => {
+            controller.selectItem(item)
+            controller.closeSheet('files')
+          }}
+          onToggleViewed={(item) => void controller.toggleItemViewed(item)}
+          onClose={() => controller.closeSheet('files')}
+        />
+      )
   }
 }
 
-function SendNotesContent({ controller, load }: Props & { load: SendSheetState }) {
+function SendNotesContent({
+  controller,
+  load,
+  only
+}: Props & { load: SendSheetState; only?: readonly string[] }) {
   const t = useMobileTranslation()
-  const sendActions = useSendActions(controller, load)
+  const sendActions = useSendActions(controller, load, only)
   return (
     <ActionSheetContent
       title={t('components.diffReviewDrawers.sendNotes', 'Send Notes')}
@@ -81,11 +117,14 @@ function SendNotesContent({ controller, load }: Props & { load: SendSheetState }
 
 function useSendActions(
   controller: ReturnType<typeof useMobileDiffReviewController>,
-  load: SendSheetState
+  load: SendSheetState,
+  only: readonly string[] | undefined
 ) {
   const t = useMobileTranslation()
   return useMemo<ActionSheetAction[]>(() => {
-    const comments = controller.unsentComments
+    const comments = only
+      ? controller.unsentComments.filter((comment) => only.includes(comment.id))
+      : controller.unsentComments
     const terminalActions =
       load.kind === 'ready' || load.kind === 'error'
         ? load.terminals.map((terminal) => ({
@@ -126,12 +165,14 @@ function useSendActions(
         id: 'copyNotes',
         label: t('components.diffReviewDrawers.copyNotes', 'Copy Notes'),
         icon: Copy,
-        disabled:
-          controller.screenState.kind !== 'ready' || controller.screenState.comments.length === 0,
-        onPress: () => void controller.copyNotes()
+        // A sheet for one new note copies that note, not every note in the workspace.
+        disabled: only
+          ? comments.length === 0
+          : controller.screenState.kind !== 'ready' || controller.screenState.comments.length === 0,
+        onPress: () => void controller.copyNotes(only ? comments : undefined)
       }
     ]
-  }, [controller, load, t])
+  }, [controller, load, only, t])
 }
 
 function NoteComposerContent({ controller, composer }: Props & { composer: ComposerState }) {
@@ -217,58 +258,27 @@ function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
 function CompletionContent({ controller }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const fileCount = controller.queue.length
+  const fileCount = controller.filteredQueue.length
   const count = controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0
+  const files =
+    fileCount === 1
+      ? t('components.diffReviewDrawers.viewedFiles_one', '{{count}} file viewed', {
+          count: fileCount
+        })
+      : t('components.diffReviewDrawers.viewedFiles_other', '{{count}} files viewed', {
+          count: fileCount
+        })
+  const notes =
+    count === 1
+      ? t('components.diffReviewDrawers.notes_one', '{{count}} note', { count })
+      : t('components.diffReviewDrawers.notes_other', '{{count}} notes', { count })
   return (
     <>
       <Text style={styles.drawerTitle}>
-        {t('components.diffReviewDrawers.completeTitle', 'Review Complete')}
+        {t('components.diffReviewDrawers.allViewedTitle', 'All files viewed')}
       </Text>
-      <Text style={styles.drawerSubtitle}>
-        {fileCount === 1
-          ? count === 1
-            ? t(
-                'components.diffReviewDrawers.fileSummary_one',
-                '{{fileCount}} file reviewed, {{count}} note',
-                { fileCount, count }
-              )
-            : t(
-                'components.diffReviewDrawers.fileSummary_other',
-                '{{fileCount}} file reviewed, {{count}} notes',
-                { fileCount, count }
-              )
-          : count === 1
-            ? t(
-                'components.diffReviewDrawers.filesSummary_one',
-                '{{fileCount}} files reviewed, {{count}} note',
-                { fileCount, count }
-              )
-            : t(
-                'components.diffReviewDrawers.filesSummary_other',
-                '{{fileCount}} files reviewed, {{count}} notes',
-                { fileCount, count }
-              )}
-      </Text>
+      <Text style={styles.drawerSubtitle}>{`${files} · ${notes}`}</Text>
       <View style={styles.drawerButtonRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            styles.sheetSecondaryButton,
-            pressed && styles.buttonPressed
-          ]}
-          disabled={controller.reviewedUnstagedCount === 0}
-          onPress={() => void controller.stageReviewedFiles()}
-          accessibilityRole="button"
-          accessibilityLabel={t(
-            'components.diffReviewDrawers.stageReviewedLabel',
-            'Stage reviewed files'
-          )}
-        >
-          <Check size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.secondaryButtonText}>
-            {t('components.diffReviewDrawers.stageReviewed', 'Stage Reviewed')}
-          </Text>
-        </Pressable>
         <Pressable
           style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
           disabled={controller.unsentComments.length === 0}

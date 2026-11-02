@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import {
   SHADOW_SEAT_OUTRANK_SKEW_MS,

@@ -1,15 +1,14 @@
-import { ActivityIndicator, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
+import { FolderGit2 } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
+import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
 import { MobileAgentIcon } from './MobileAgentIcon'
-import { LIST_LEADING_INSET, ListGroup } from './list/ListGroup'
-import { ListRow } from './list/ListRow'
-import { SectionHeader } from './list/SectionHeader'
+import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from './list/ListGroup'
 import { SheetHeader } from './nav-bar/SheetHeader'
 import type { NewWorktreeAgentOption } from './new-worktree-agent-selection'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
@@ -28,6 +27,8 @@ export function NewWorktreeFormSheet(props: {
   interactive: boolean
   loading: boolean
   hasRepos: boolean
+  loadError: string | null
+  onRetryLoad: () => void
   project: Selection | null
   runTarget: (Selection & { hostId: string }) | null
   projectBadgeColor: string | null
@@ -85,15 +86,21 @@ export function NewWorktreeFormSheet(props: {
       </View>
 
       {props.loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
+        <View style={styles.formPlaceholder}>
+          <MobileStateView
+            loading
+            title={t('components.newWorktreeFormSheet.loadingProjects', 'Loading projects…')}
+          />
+        </View>
+      ) : props.loadError !== null ? (
+        <View style={styles.formPlaceholder}>
+          <MobileLoadErrorState error={props.loadError} onRetry={props.onRetryLoad} />
         </View>
       ) : !props.hasRepos ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.emptyText}>
-            {t('components.newWorktreeFormSheet.noProjectsFound', 'No projects found')}
-          </Text>
-        </View>
+        <MobileStateView
+          icon={FolderGit2}
+          title={t('components.newWorktreeFormSheet.noProjectsFound', 'No projects found')}
+        />
       ) : (
         <>
           <NewWorktreeProjectTargetFields

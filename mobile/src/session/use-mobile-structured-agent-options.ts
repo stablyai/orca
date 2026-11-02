@@ -1,18 +1,18 @@
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
-import { structuredAgentSessionSeedCatalog } from '../../../src/shared/structured-agent-session-seed-catalog'
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session-wire'
-import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/structured-agent-session-options'
+import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import { structuredAgentSessionSeedCatalog } from '../../../src/shared/agent-session/options/structured-agent-session-seed-catalog'
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
+import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection,
   structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
-} from '../../../src/shared/structured-agent-session-option-view'
+} from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { agentChatPermissionModes } from '../../../src/shared/agent-chat-permission-mode'
-import { legacyHostPermissionDescriptor } from '../../../src/shared/structured-agent-session-permission-option'
+import { legacyHostPermissionDescriptor } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'

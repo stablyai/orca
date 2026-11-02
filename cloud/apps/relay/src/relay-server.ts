@@ -26,7 +26,7 @@ import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
 import { CellReserveBook } from './cell-reserve-book.js'
 import type { DemoteRequest, ReserveRequest } from './cell-reserve-contract.js'
 import { AssignmentLeaseShadow } from './assignment/assignment-lease-shadow.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
 import {

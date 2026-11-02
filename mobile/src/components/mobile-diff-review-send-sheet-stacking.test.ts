@@ -41,6 +41,10 @@ vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('./mobile-diff-review-screen-styles', () => ({
   mobileDiffReviewStyles: new Proxy({}, { get: () => ({}) })
 }))
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('./mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'MountedBottomDrawer' }))
 const loadSnapshot = vi.hoisted(() => vi.fn())
 vi.mock('../session/mobile-diff-review-loaders', () => ({
@@ -48,7 +52,12 @@ vi.mock('../session/mobile-diff-review-loaders', () => ({
   loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
 }))
 vi.mock('../session/use-mobile-pr-sidebar-controller', () => ({
-  useMobilePrSidebarController: () => ({})
+  useMobilePrSidebarController: () => ({
+    prSidebarState: { kind: 'hidden' },
+    prSidebarIsGithubRepo: false,
+    refetchPRSidebar: async () => {},
+    ensurePrSidebarDetails: async () => {}
+  })
 }))
 
 const { MobileDiffReviewDrawers } = await import('./MobileDiffReviewDrawers')
@@ -120,6 +129,7 @@ function Screen({ client }: { client: RpcClient }) {
     name: 'review',
     initialFilter: 'all',
     initialTarget: null,
+    commitOid: null,
     onOpenSession: () => {},
     onReconnect: null
   })
@@ -222,12 +232,12 @@ describe('review screen sheets never stack', () => {
   it('Review Complete → Send shows Send Notes only after Review Complete has closed', async () => {
     await mountScreen()
     await completeReview()
-    expect(shownSheets()).toEqual(['Review Complete'])
+    expect(shownSheets()).toEqual(['All files viewed'])
 
-    press(drawer('Review Complete'), 'Send notes to agent')
+    press(drawer('All files viewed'), 'Send notes to agent')
     expect(shownSheets()).toEqual([])
 
-    finishClosing('Review Complete')
+    finishClosing('All files viewed')
     expect(shownSheets()).toEqual(['Send Notes'])
   })
 
@@ -235,8 +245,8 @@ describe('review screen sheets never stack', () => {
     await mountScreen()
     await completeReview()
 
-    act(() => drawer('Review Complete').props.onClose())
-    finishClosing('Review Complete')
+    act(() => drawer('All files viewed').props.onClose())
+    finishClosing('All files viewed')
 
     expect(shownSheets()).toEqual([])
   })
@@ -255,7 +265,7 @@ describe('review screen sheets never stack', () => {
     expect(shownSheets()).toEqual([])
 
     finishClosing('Discard File')
-    expect(shownSheets()).toEqual(['Review Complete'])
+    expect(shownSheets()).toEqual(['All files viewed'])
   })
 
   it('a sheet replaced before it was ever shown is never mounted', async () => {

@@ -3,22 +3,20 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { applyCodexConfiguredLaunchDefaults } from '../../codex/codex-configured-launch-defaults'
-import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
   commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
-import { cloneStructuredAgentSessionOptionRecord } from '../../../shared/structured-agent-session-option-state'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
+import { cloneStructuredAgentSessionOptionRecord } from '../../../shared/agent-session/options/structured-agent-session-option-state'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
-import { structuredAgentSessionShownSnapshot } from '../../../shared/structured-agent-session-option-view'
+import { structuredAgentSessionShownSnapshot } from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogScopeFingerprint

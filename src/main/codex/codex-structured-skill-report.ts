@@ -1,4 +1,4 @@
-import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { isCodexSkillsListUnsupported, requestCodexSkillReport } from './codex-skill-list'

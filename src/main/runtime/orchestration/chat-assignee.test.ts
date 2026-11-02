@@ -1,6 +1,6 @@
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { sessionRecord } from '../rpc/orchestration-session-caller-test-fixture'
 import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'

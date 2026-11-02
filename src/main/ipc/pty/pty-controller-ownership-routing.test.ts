@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import type { AgentSessionOwnerBinding } from '../../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
 import { registerPtyHandlers } from './register-handlers'
 import { clearPtyOwnershipForConnection, clearProviderPtyState } from './provider/state-cleanup'

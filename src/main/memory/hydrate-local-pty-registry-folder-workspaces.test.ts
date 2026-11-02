@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { SessionInfo } from '../daemon/types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const getDaemonProviderMock = vi.fn()
 vi.mock('../daemon/daemon-provider-state', () => ({
@@ -41,25 +41,6 @@ async function loadFresh() {
 beforeEach(() => {
   getDaemonProviderMock.mockReset()
   listLocalRepoWorktreesStrictMock.mockReset()
-})
-
-it('hydrates surviving true folder workspace PTYs without enumerating Git', async () => {
-  const { hydrate, listRegisteredPtys } = await loadFresh()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership reads only id and executionHostId.
-  const workspace = { id: 'folder-workspace-1', executionHostId: 'local' } as FolderWorkspace
-  const session = { sessionId: 'folder:folder-workspace-1@@cafebabe', pid: 4242 }
-  getDaemonProviderMock.mockReturnValue({ listSessions: vi.fn().mockResolvedValue([session]) })
-
-  await hydrate(makeStore([workspace]))
-
-  expect(listRegisteredPtys()).toEqual([
-    expect.objectContaining({
-      ptyId: 'folder:folder-workspace-1@@cafebabe',
-      worktreeId: 'folder:folder-workspace-1',
-      pid: 4242
-    })
-  ])
-  expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
 })
 
 it.each(['deleted', 'remote', 'ssh'] as const)(

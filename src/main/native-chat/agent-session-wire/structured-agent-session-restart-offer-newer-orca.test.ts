@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_RECOVERY_CAPSULE_FILE,
   AgentSessionRecoveryCapsule
-} from '../../runtime/agent-session-recovery-capsule'
+} from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import {
   liveTestJournalRows,
   openTestJournalHostDatabase,

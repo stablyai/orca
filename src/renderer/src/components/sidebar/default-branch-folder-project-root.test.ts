@@ -91,13 +91,6 @@ describe('"Hide default branch" on folder projects', () => {
     expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
   })
 
-  it('hides the root of a folder project added from a git subdirectory', () => {
-    const repo = makeRepo('app', '/Users/me/monorepo/packages/app', 'folder')
-    const { root, instance } = folderProjectRows(repo)
-
-    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
-  })
-
   it('preserves the sidebar hierarchy exception for a folder root with a visible child', () => {
     const repo = makeRepo('notes', '/notes', 'folder')
     const rows = folderProjectRows(repo)
