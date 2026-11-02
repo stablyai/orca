@@ -24,6 +24,14 @@ describe('RepoIconGlyph', () => {
     expect(container.querySelector('svg')?.getAttribute('class')).toContain('lucide-folder')
   })
 
+  it('rounds image icons with the same radius as mobile', () => {
+    const { container } = render(
+      <RepoIconGlyph repoIcon={{ type: 'image', src: GHE_AVATAR, source: 'github' }} />
+    )
+
+    expect(container.querySelector('img')?.className).toContain('rounded-[4px]')
+  })
+
   it('retries the image when the icon changes to a different src', () => {
     const { container, rerender } = render(
       <RepoIconGlyph repoIcon={{ type: 'image', src: GHE_AVATAR, source: 'github' }} />
