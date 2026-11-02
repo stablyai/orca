@@ -33,7 +33,7 @@ export function resolveRuntimeMethodKeepaliveTotalMs(
   method: string,
   params: unknown,
   timeoutMs: number
-): number {
+): number | undefined {
   const createsWorkspace =
     (method === 'agent.launch' || method === 'agent.launchReplay') &&
     typeof params === 'object' &&
@@ -43,7 +43,8 @@ export function resolveRuntimeMethodKeepaliveTotalMs(
     params.target !== null &&
     'kind' in params.target &&
     params.target.kind === 'create-worktree'
-  return createsWorkspace ? Math.max(SETUP_LAUNCH_TOTAL_TIMEOUT_MS, timeoutMs) : timeoutMs
+  // Other requests keep only their idle timeout.
+  return createsWorkspace ? Math.max(SETUP_LAUNCH_TOTAL_TIMEOUT_MS, timeoutMs) : undefined
 }
 
 // Give server-side waits time to finish before the client transport times out.

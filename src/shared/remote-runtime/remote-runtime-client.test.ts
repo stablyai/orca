@@ -15,7 +15,11 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from '../e2ee-crypto'
-import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
+import {
+  sendRemoteRuntimeRequest,
+  sendRemoteRuntimeRequestWithStatusPreflight,
+  subscribeRemoteRuntimeRequest
+} from './remote-runtime-client'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 import { MAX_TIMER_DELAY_MS } from '../timer-delay'
 import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from '../browser-runtime-capabilities'
@@ -334,6 +338,40 @@ describe('sendRemoteRuntimeRequest', () => {
           keepaliveTotalMs
         )
       ).rejects.toMatchObject({ code: 'runtime_timeout' })
+    }
+  )
+
+  it.each([undefined, 1000])(
+    'gives the request its whole budget after a slow status check (total %s)',
+    async (keepaliveTotalMs) => {
+      const methods = new Map<string, unknown>()
+      const server = await createOneShotServer({
+        keepalive: false,
+        responseDelayMs: 600,
+        onRequest: (request) => methods.set(String(request.id), request.method),
+        response: (id) => ({
+          id,
+          ok: true,
+          result: methods.get(id) === 'status.get' ? {} : [],
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      })
+
+      const response = await sendRemoteRuntimeRequestWithStatusPreflight(
+        server.pairing,
+        'worktree.list',
+        {},
+        1000,
+        () => {},
+        undefined,
+        [],
+        undefined,
+        undefined,
+        keepaliveTotalMs
+      )
+
+      expect(response).toMatchObject({ ok: true, result: [] })
+      expect([...methods.values()]).toEqual(['status.get', 'worktree.list'])
     }
   )
 

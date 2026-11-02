@@ -84,9 +84,9 @@ describe('RuntimeClient orchestration recovery identity', () => {
     expect(resolveRuntimeMethodKeepaliveTotalMs('agent.launch', launch, 60_000)).toBe(
       DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + 10 * 60_000
     )
-    expect(resolveRuntimeMethodKeepaliveTotalMs('agent.launch', { agent: 'codex' }, 60_000)).toBe(
-      60_000
-    )
+    expect(
+      resolveRuntimeMethodKeepaliveTotalMs('agent.launch', { agent: 'codex' }, 60_000)
+    ).toBeUndefined()
   })
 
   it('rejects a worker-start timeout whose client grace would overflow timers', () => {
