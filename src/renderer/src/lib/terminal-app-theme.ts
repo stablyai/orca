@@ -4,6 +4,7 @@ import {
   completePluginAppThemeTokens,
   type PluginThemeTokenColorRule
 } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
+import { pluginAppThemeCssFallback } from '../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
 import { MATCH_TERMINAL_APP_THEME } from '../../../shared/plugin-theme-settings'
 import {
   resolveTerminalPalette,
@@ -177,7 +178,18 @@ export function synthesizeTerminalAppTheme(
     ? towardText
     : surfacesToward(light ? [255, 255, 255, 1] : [0, 0, 0, 1])
   const text = legible(foreground, [background, ...Object.values(surfaces)], light)
-  const mutedText = legible(mix(foreground, background, 0.7), [background, surfaces.muted], light)
+  // Why: the host pill paints muted text on the accent, as main.css tints it over the sidebar.
+  const hostBadgeRule = pluginAppThemeCssFallback('--host-badge', base)
+  const hostBadge = mix(
+    surfaces.accent,
+    background,
+    hostBadgeRule && 'tint' in hostBadgeRule ? hostBadgeRule.percent / 100 : 1
+  )
+  const mutedText = legible(
+    mix(foreground, background, 0.7),
+    [background, surfaces.muted, hostBadge],
+    light
+  )
   const accentColor = [ansi('blue'), ansi('brightBlue')].find(
     (color): color is Rgba =>
       color !== null && contrastRatio(color, background) >= MIN_ACCENT_CONTRAST
