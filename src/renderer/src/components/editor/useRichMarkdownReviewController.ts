@@ -1,5 +1,8 @@
+import { useOwnedDiffCommentTarget } from '../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { Editor } from '@tiptap/react'
 import type { AppState } from '@/store'
 import { richMarkdownAnnotationHighlightPluginKey } from './rich-markdown-annotation-highlight'
@@ -29,6 +32,7 @@ type UseRichMarkdownReviewControllerOptions = {
   markdownSourceLineOffset: number
   rootRef: MutableRefObject<HTMLDivElement | null>
   scrollContainerRef: MutableRefObject<HTMLDivElement | null>
+  runtimeEnvironmentId?: string | null
   worktreeId: string
   worktreeRoot: string | null
 }
@@ -45,15 +49,15 @@ export function useRichMarkdownReviewController({
   markdownSourceLineOffset,
   rootRef,
   scrollContainerRef,
+  runtimeEnvironmentId,
   worktreeId,
   worktreeRoot
 }: UseRichMarkdownReviewControllerOptions) {
   const [annotationTarget, setAnnotationTarget] = useState<RichMarkdownAnnotationTarget | null>(
     null
   )
-  const [annotationPopover, setAnnotationPopover] = useState<RichMarkdownAnnotationTarget | null>(
-    null
-  )
+  const [annotationPopover, setAnnotationPopover, annotationOwnerRef] =
+    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(worktreeId, { runtimeEnvironmentId })
   const annotationPopoverRef = useRef<RichMarkdownAnnotationTarget | null>(null)
   const canAnnotateRichMarkdownRef = useRef(false)
   const markdownCommentsRef = useRef<DiffComment[]>([])
@@ -164,7 +168,11 @@ export function useRichMarkdownReviewController({
         return
       }
       const submittedEditor = editorRef.current
-      const result = await addDiffComment({
+      const owner = annotationOwnerRef.current
+      if (!owner) {
+        return
+      }
+      const result = await addDiffComment(owner, {
         worktreeId,
         filePath: sourceRelativePath,
         source: 'markdown',
@@ -178,7 +186,10 @@ export function useRichMarkdownReviewController({
         side: 'modified'
       })
       if (!result) {
-        console.error('Failed to add markdown comment — draft preserved')
+        // The draft stays open for retry.
+        toast.error(
+          translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+        )
         return
       }
       if (
@@ -203,11 +214,13 @@ export function useRichMarkdownReviewController({
     },
     [
       addDiffComment,
+      annotationOwnerRef,
       annotationPopover,
       clearAnnotationHighlight,
       editorRef,
       markdownSourceLineOffset,
       sourceRelativePath,
+      setAnnotationPopover,
       worktreeId
     ]
   )
@@ -262,6 +275,7 @@ export function useRichMarkdownReviewController({
       markdownComments,
       markdownSourceLineOffset,
       rootRef,
+      setAnnotationPopover,
       setReviewRailOpen
     ]
   )
@@ -276,7 +290,7 @@ export function useRichMarkdownReviewController({
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setAnnotationPopover(null)
     clearAllAnnotationHighlights()
-  }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights])
+  }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights, setAnnotationPopover])
 
   return {
     ...copyFeedback,

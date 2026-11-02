@@ -16,6 +16,8 @@ export function MarkdownPreviewReviewToolbar({
   const {
     markdownReviewNotes,
     reviewNotesCopied,
+    commentOwner,
+    notesKnown,
     sourceWorktree,
     unsentMarkdownReviewScope,
     clearDeliveredDiffComments
@@ -67,12 +69,16 @@ export function MarkdownPreviewReviewToolbar({
       </button>
       {sourceWorktree ? (
         <NotesSendMenu
+          // Until the shown copy is listed its notes are unknown, not all sent.
+          owner={notesKnown ? commentOwner : null}
           worktreeId={sourceWorktree.id}
           groupId={sourceWorktree.id}
           modeIdParts={['markdown-notes', sourceWorktree.id, filePath, 'preview-toolbar']}
           scopes={unsentMarkdownReviewScope}
           triggerClassName="markdown-review-icon-button"
-          onDelivered={(notes) => void clearDeliveredDiffComments(sourceWorktree.id, notes)}
+          onDelivered={(notes) =>
+            void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
+          }
         />
       ) : null}
     </div>

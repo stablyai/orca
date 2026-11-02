@@ -8,6 +8,7 @@ import type { Virtualizer } from '@tanstack/react-virtual'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import { DiffSectionItem } from '../../DiffSectionItem'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
 import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
@@ -19,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 export function CombinedDiffSectionList({
   activeGroupId,
   canOpenWorkspaceFileBrowserForPath,
+  commentOwner,
   diffCommentsForWorktree,
   file,
   handleSectionSaveRef,
@@ -47,6 +49,7 @@ export function CombinedDiffSectionList({
 }: {
   activeGroupId: string | undefined
   canOpenWorkspaceFileBrowserForPath: (path: string) => boolean
+  commentOwner: DiffCommentOwner | null
   diffCommentsForWorktree: DiffComment[]
   file: OpenFile
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']
@@ -117,6 +120,7 @@ export function CombinedDiffSectionList({
                   isDark={isDark}
                   sectionHeight={sectionHeights[virtualItem.index]}
                   worktreeId={file.worktreeId}
+                  runtimeEnvironmentId={file.runtimeEnvironmentId}
                   loadSection={loadSection}
                   loadDeferredSection={loadDeferredSection}
                   retrySection={retrySection}
@@ -150,6 +154,7 @@ export function CombinedDiffSectionList({
                     const fileNoteCount = commentCountByFilePath.get(section.path) ?? 0
                     return fileNoteCount > 0 ? (
                       <DiffNotesSendMenu
+                        owner={commentOwner}
                         worktreeId={file.worktreeId}
                         groupId={activeGroupId ?? file.worktreeId}
                         comments={diffCommentsForWorktree}

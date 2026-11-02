@@ -1,3 +1,5 @@
+import { useDiffCommentView } from '@/components/diff-comments/use-diff-comment-owner'
+import type { AppState } from '@/store'
 import React from 'react'
 import { Check, ChevronDown, Copy, MessageSquare, MoreHorizontal, Trash2 } from 'lucide-react'
 import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
@@ -36,9 +38,10 @@ export function SourceControlNotesShelf({
   diffCommentsCopied: boolean
   handleCopyDiffComments: () => Promise<void>
   setPendingDiffCommentsClear: React.Dispatch<React.SetStateAction<PendingDiffCommentsClear | null>>
-  deleteDiffComment: (worktreeId: string, id: string) => Promise<void> | void
+  deleteDiffComment: AppState['deleteDiffComment']
   handleOpenComment: (comment: DiffComment) => void
 }): React.JSX.Element {
+  const { owner } = useDiffCommentView(activeWorktreeId)
   return (
     <div className="border-b border-border">
       <div className="flex items-center gap-1 pl-3 pr-2 py-1.5">
@@ -74,6 +77,7 @@ export function SourceControlNotesShelf({
         </button>
         <div className="ml-1 flex shrink-0 items-center gap-1.5">
           <DiffNotesSendMenu
+            owner={owner}
             worktreeId={activeWorktreeId}
             groupId={activeGroupId ?? activeWorktreeId}
             comments={diffCommentsForActive}
@@ -139,10 +143,15 @@ export function SourceControlNotesShelf({
                 className="text-destructive focus:text-destructive"
                 disabled={diffCommentCount === 0}
                 onSelect={() => {
-                  if (!activeWorktreeId || diffCommentCount === 0) {
+                  if (!owner || !activeWorktreeId || diffCommentCount === 0) {
                     return
                   }
-                  setPendingDiffCommentsClear({ kind: 'all', worktreeId: activeWorktreeId })
+                  setPendingDiffCommentsClear({
+                    kind: 'all',
+                    worktreeId: activeWorktreeId,
+                    owner,
+                    count: diffCommentCount
+                  })
                 }}
               >
                 <Trash2 className="size-3.5" />
@@ -158,13 +167,16 @@ export function SourceControlNotesShelf({
       {diffCommentsExpanded && (
         <DiffCommentsInlineList
           comments={diffCommentsForActive}
-          onDelete={(id) => void deleteDiffComment(activeWorktreeId, id)}
+          onDelete={(id) => void (owner && deleteDiffComment(owner, id))}
           onOpen={(comment) => handleOpenComment(comment)}
           onClearFile={(filePath) =>
+            owner &&
             setPendingDiffCommentsClear({
               kind: 'file',
+              owner,
               worktreeId: activeWorktreeId,
-              filePath
+              filePath,
+              count: diffCommentsForActive.filter((comment) => comment.filePath === filePath).length
             })
           }
         />

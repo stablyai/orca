@@ -1,3 +1,4 @@
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
@@ -10,6 +11,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 const OPEN_REQUEST_TTL_MS = 5000
 
 export function DiffNotesSendMenu({
+  owner,
   worktreeId,
   groupId,
   comments,
@@ -23,6 +25,8 @@ export function DiffNotesSendMenu({
   align = 'end',
   respondToOpenRequest = false
 }: {
+  /** The copy `comments` were read from, so delivered notes clear there. */
+  owner: DiffCommentOwner | null
   worktreeId: string
   groupId: string
   comments: readonly DiffComment[]
@@ -82,6 +86,7 @@ export function DiffNotesSendMenu({
 
   return (
     <NotesSendMenu
+      owner={owner}
       worktreeId={worktreeId}
       groupId={groupId}
       modeIdParts={['diff-notes', worktreeId, groupId, filePath ?? 'all']}
@@ -97,7 +102,7 @@ export function DiffNotesSendMenu({
       openRequestNonce={openRequestNonce}
       openRequestExpiresAt={openRequestExpiresAt}
       onOpenRequestHandled={handleOpenRequestHandled}
-      onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+      onDelivered={(notes) => void (owner && clearDeliveredDiffComments(owner, notes))}
     />
   )
 }

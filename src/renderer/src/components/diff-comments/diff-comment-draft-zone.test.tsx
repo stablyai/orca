@@ -310,3 +310,31 @@ describe('useDiffCommentDraftZone teardown', () => {
     expect(fake.zones.size).toBe(0)
   })
 })
+
+it('submits a local draft through the owner callback captured when it opened', async () => {
+  const fake = createFakeDiffCommentEditor()
+  const onA = vi.fn().mockResolvedValue(true)
+  const onB = vi.fn().mockResolvedValue(true)
+  const hook = renderHook(
+    ({ onCreateComment }) =>
+      useDiffCommentDraftZone({
+        editor: fake.editor,
+        onCreateComment,
+        captureCreateComment: true
+      }),
+    { initialProps: { onCreateComment: onA } }
+  )
+  act(() => {
+    hook.result.current.onAddCommentClickRef.current({ lineNumber: DRAFT_LINE, top: 0 })
+  })
+  hook.rerender({ onCreateComment: onB })
+  await act(async () => {
+    submitDraft(fake, BODY)
+  })
+  expect(onA).toHaveBeenCalledExactlyOnceWith({
+    lineNumber: DRAFT_LINE,
+    startLine: undefined,
+    body: BODY
+  })
+  expect(onB).not.toHaveBeenCalled()
+})

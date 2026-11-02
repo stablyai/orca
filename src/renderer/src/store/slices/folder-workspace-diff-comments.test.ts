@@ -1,3 +1,4 @@
+import { selectDiffCommentView, type DiffCommentOwner } from '../diff-comment-owner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -5,6 +6,7 @@ import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { SELF_LOCAL_AUTHORITY } from '../../../../shared/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -78,7 +80,7 @@ function addNote(
   body: string,
   lineNumber = 1
 ): Promise<DiffComment | null> {
-  return store.getState().addDiffComment({
+  return store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
     worktreeId: workspaceKey,
     filePath: 'README.md',
     source: 'markdown',
@@ -113,14 +115,16 @@ describe('folder workspace diff comments', () => {
       ...updates
     }))
 
-    const saved = await store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 1,
-      body: 'folder note',
-      side: 'modified'
-    })
+    const saved = await store
+      .getState()
+      .addDiffComment(capturedOwner(store, folderWorkspaceKey(folderWorkspace.id)), {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        filePath: 'README.md',
+        source: 'markdown',
+        lineNumber: 1,
+        body: 'folder note',
+        side: 'modified'
+      })
 
     expect(saved).toEqual(expect.objectContaining({ body: 'folder note' }))
     expect(store.getState().getDiffComments(folderWorkspaceKey(folderWorkspace.id))).toEqual([
@@ -146,23 +150,27 @@ describe('folder workspace diff comments', () => {
       return { ...folderWorkspace, ...updates }
     })
 
-    const addFirst = store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 1,
-      body: 'first note',
-      side: 'modified'
-    })
+    const addFirst = store
+      .getState()
+      .addDiffComment(capturedOwner(store, folderWorkspaceKey(folderWorkspace.id)), {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        filePath: 'README.md',
+        source: 'markdown',
+        lineNumber: 1,
+        body: 'first note',
+        side: 'modified'
+      })
     await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledTimes(1))
-    const addSecond = store.getState().addDiffComment({
-      worktreeId: folderWorkspaceKey(folderWorkspace.id),
-      filePath: 'README.md',
-      source: 'markdown',
-      lineNumber: 2,
-      body: 'second note',
-      side: 'modified'
-    })
+    const addSecond = store
+      .getState()
+      .addDiffComment(capturedOwner(store, folderWorkspaceKey(folderWorkspace.id)), {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        filePath: 'README.md',
+        source: 'markdown',
+        lineNumber: 2,
+        body: 'second note',
+        side: 'modified'
+      })
     releaseFirstWrite?.()
 
     await Promise.all([addFirst, addSecond])
@@ -237,7 +245,7 @@ describe('folder workspace diff comments', () => {
           : [localWorkspace, runtimeWorkspace]
       })
 
-      const localAdd = store.getState().addDiffComment({
+      const localAdd = store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
         worktreeId: workspaceKey,
         filePath: 'LOCAL.md',
         source: 'markdown',
@@ -248,7 +256,7 @@ describe('folder workspace diff comments', () => {
       await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledOnce())
 
       store.setState({ activeWorkspaceExecutionHostId: 'runtime:env-owner' })
-      const runtimeAdd = store.getState().addDiffComment({
+      const runtimeAdd = store.getState().addDiffComment(capturedOwner(store, workspaceKey), {
         worktreeId: workspaceKey,
         filePath: 'REMOTE.md',
         source: 'markdown',
@@ -690,3 +698,14 @@ describe('folder workspace diff comment rollback convergence', () => {
     expect(bodies(store, key)).toEqual(['runtime note'])
   })
 })
+
+function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
+  return (
+    // An unlisted id stands for a copy that is gone, so actions on it are refused.
+    selectDiffCommentView(store.getState(), worktreeId).owner ?? {
+      kind: 'worktree',
+      worktreeId,
+      authority: SELF_LOCAL_AUTHORITY
+    }
+  )
+}

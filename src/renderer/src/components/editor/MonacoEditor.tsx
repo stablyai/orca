@@ -48,6 +48,8 @@ type MonacoEditorProps = {
   revealMatchLength?: number
   markdownDocuments?: MarkdownDocument[]
   worktreeId?: string
+  /** The open file's server (`null` this app); its review notes belong to that copy. */
+  runtimeEnvironmentId?: string | null
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
@@ -72,6 +74,7 @@ export default function MonacoEditor({
   revealMatchLength,
   markdownDocuments,
   worktreeId,
+  runtimeEnvironmentId,
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
@@ -160,6 +163,7 @@ export default function MonacoEditor({
     content,
     language,
     worktreeId,
+    runtimeEnvironmentId,
     markdownAnnotationsEnabled
   })
 

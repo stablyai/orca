@@ -1,6 +1,9 @@
+import type { AppState } from '../types'
+import { selectDiffCommentView, type DiffCommentOwner } from '../diff-comment-owner'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { SELF_LOCAL_AUTHORITY } from '../../../../shared/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -174,7 +177,7 @@ describe('addDiffComment', () => {
     const store = createTestStore()
     seed(store, [])
 
-    const saved = await store.getState().addDiffComment({
+    const saved = await store.getState().addDiffComment(capturedOwner(store, WT), {
       worktreeId: WT,
       filePath: 'README.md',
       source: 'markdown',
@@ -194,6 +197,7 @@ describe('addDiffComment', () => {
       })
     )
     expect(updateMeta).toHaveBeenCalledWith({
+      executionHostId: 'local',
       worktreeId: WT,
       updates: {
         diffComments: [
@@ -239,7 +243,9 @@ describe('updateDiffComment', () => {
     }
     seed(store, [original])
 
-    const ok = await store.getState().updateDiffComment(WT, 'c1', '  new body  ')
+    const ok = await store
+      .getState()
+      .updateDiffComment(capturedOwner(store, WT), 'c1', '  new body  ')
 
     expect(ok).toBe(true)
     const saved = store.getState().getDiffComments(WT)[0]
@@ -277,7 +283,9 @@ describe('updateDiffComment', () => {
       { hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' }
     )
 
-    const ok = await store.getState().updateDiffComment(WT, 'c1', 'remote body')
+    const ok = await store
+      .getState()
+      .updateDiffComment(capturedOwner(store, WT), 'c1', 'remote body')
 
     expect(ok).toBe(true)
     expect(updateMeta).not.toHaveBeenCalled()
@@ -309,10 +317,13 @@ describe('updateDiffComment', () => {
     })
     seed(store, [makeComment({ id: 'c1', body: 'old body' })])
 
-    const ok = await store.getState().updateDiffComment(WT, 'c1', 'local body')
+    const ok = await store
+      .getState()
+      .updateDiffComment(capturedOwner(store, WT), 'c1', 'local body')
 
     expect(ok).toBe(true)
     expect(updateMeta).toHaveBeenCalledWith({
+      executionHostId: 'local',
       worktreeId: WT,
       updates: {
         diffComments: [expect.objectContaining({ id: 'c1', body: 'local body' })]
@@ -335,7 +346,7 @@ describe('updateDiffComment', () => {
       }
     ])
 
-    const ok = await store.getState().updateDiffComment(WT, 'c1', '   ')
+    const ok = await store.getState().updateDiffComment(capturedOwner(store, WT), 'c1', '   ')
 
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)[0].body).toBe('old body')
@@ -356,7 +367,7 @@ describe('updateDiffComment', () => {
       }
     ])
 
-    const ok = await store.getState().updateDiffComment(WT, 'c1', 'same')
+    const ok = await store.getState().updateDiffComment(capturedOwner(store, WT), 'c1', 'same')
 
     expect(ok).toBe(true)
     expect(updateMeta).not.toHaveBeenCalled()
@@ -366,7 +377,9 @@ describe('updateDiffComment', () => {
     const store = createTestStore()
     seed(store, [])
 
-    const ok = await store.getState().updateDiffComment(WT, 'missing', 'anything')
+    const ok = await store
+      .getState()
+      .updateDiffComment(capturedOwner(store, WT), 'missing', 'anything')
 
     expect(ok).toBe(false)
     expect(updateMeta).not.toHaveBeenCalled()
@@ -388,7 +401,7 @@ describe('updateDiffComment', () => {
     updateMeta.mockRejectedValueOnce(new Error('disk full'))
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const ok = await store.getState().updateDiffComment(WT, 'c1', 'new body')
+    const ok = await store.getState().updateDiffComment(capturedOwner(store, WT), 'c1', 'new body')
 
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)[0].body).toBe('old body')
@@ -421,7 +434,7 @@ describe('markDiffCommentsSent', () => {
       makeComment({ id: 'c2', filePath: 'src/bar.ts' })
     ])
 
-    const ok = await store.getState().markDiffCommentsSent(WT, ['c1'], 3000)
+    const ok = await store.getState().markDiffCommentsSent(capturedOwner(store, WT), ['c1'], 3000)
 
     expect(ok).toBe(true)
     const saved = store.getState().getDiffComments(WT)
@@ -430,6 +443,7 @@ describe('markDiffCommentsSent', () => {
     expect(saved[1].sentAt).toBeUndefined()
     expect(updateMeta).toHaveBeenCalledTimes(1)
     expect(updateMeta).toHaveBeenCalledWith({
+      executionHostId: 'local',
       worktreeId: WT,
       updates: {
         diffComments: [expect.objectContaining({ id: 'c1', sentAt: 3000 }), expect.any(Object)]
@@ -445,7 +459,9 @@ describe('markDiffCommentsSent', () => {
     const comments = [makeComment({ id: 'c1' })]
     seed(store, comments)
 
-    const ok = await store.getState().markDiffCommentsSent(WT, ['missing'], 3000)
+    const ok = await store
+      .getState()
+      .markDiffCommentsSent(capturedOwner(store, WT), ['missing'], 3000)
 
     expect(ok).toBe(true)
     expect(store.getState().getDiffComments(WT)).toBe(comments)
@@ -476,12 +492,15 @@ describe('clearDeliveredDiffComments', () => {
     const pending = makeComment({ id: 'c2', filePath: 'src/bar.ts' })
     seed(store, [delivered, pending])
 
-    const ok = await store.getState().clearDeliveredDiffComments(WT, [delivered])
+    const ok = await store
+      .getState()
+      .clearDeliveredDiffComments(capturedOwner(store, WT), [delivered])
 
     expect(ok).toBe(true)
     expect(store.getState().getDiffComments(WT)).toEqual([pending])
     expect(updateMeta).toHaveBeenCalledTimes(1)
     expect(updateMeta).toHaveBeenCalledWith({
+      executionHostId: 'local',
       worktreeId: WT,
       updates: { diffComments: [pending] }
     })
@@ -494,11 +513,14 @@ describe('clearDeliveredDiffComments', () => {
     const delivered = makeComment({ id: 'c2', body: 'unchanged' })
     seed(store, [edited, delivered])
 
-    const ok = await store.getState().clearDeliveredDiffComments(WT, [sentSnapshot, delivered])
+    const ok = await store
+      .getState()
+      .clearDeliveredDiffComments(capturedOwner(store, WT), [sentSnapshot, delivered])
 
     expect(ok).toBe(true)
     expect(store.getState().getDiffComments(WT)).toEqual([edited])
     expect(updateMeta).toHaveBeenCalledWith({
+      executionHostId: 'local',
       worktreeId: WT,
       updates: { diffComments: [edited] }
     })
@@ -511,7 +533,9 @@ describe('clearDeliveredDiffComments', () => {
     updateMeta.mockRejectedValueOnce(new Error('disk full'))
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const ok = await store.getState().clearDeliveredDiffComments(WT, [comments[0]])
+    const ok = await store
+      .getState()
+      .clearDeliveredDiffComments(capturedOwner(store, WT), [comments[0]])
 
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)).toBe(comments)
@@ -543,12 +567,13 @@ describe('bulk clear diff comments', () => {
       makeComment({ id: 'c2', filePath: 'src/bar.ts' })
     ])
 
-    const ok = await store.getState().clearDiffComments(WT)
+    const ok = await store.getState().clearDiffComments(capturedOwner(store, WT))
 
     expect(ok).toBe(true)
     expect(store.getState().getDiffComments(WT)).toEqual([])
     expect(updateMeta).toHaveBeenCalledTimes(1)
     expect(updateMeta).toHaveBeenCalledWith({
+      executionHostId: 'local',
       worktreeId: WT,
       updates: { diffComments: [] }
     })
@@ -562,7 +587,9 @@ describe('bulk clear diff comments', () => {
       makeComment({ id: 'c3', filePath: 'src/foo.ts', lineNumber: 20 })
     ])
 
-    const ok = await store.getState().clearDiffCommentsForFile(WT, 'src/foo.ts')
+    const ok = await store
+      .getState()
+      .clearDiffCommentsForFile(capturedOwner(store, WT), 'src/foo.ts')
 
     expect(ok).toBe(true)
     expect(
@@ -573,6 +600,7 @@ describe('bulk clear diff comments', () => {
     ).toEqual(['c2'])
     expect(updateMeta).toHaveBeenCalledTimes(1)
     expect(updateMeta).toHaveBeenCalledWith({
+      executionHostId: 'local',
       worktreeId: WT,
       updates: { diffComments: [expect.objectContaining({ id: 'c2' })] }
     })
@@ -586,7 +614,9 @@ describe('bulk clear diff comments', () => {
       makeComment({ id: 'other', filePath: 'src/foo.ts' })
     ])
 
-    await store.getState().clearDiffCommentsForFile(WT, 'README.md', { keepMarkdownNotes: true })
+    await store
+      .getState()
+      .clearDiffCommentsForFile(capturedOwner(store, WT), 'README.md', { keepMarkdownNotes: true })
     expect(
       store
         .getState()
@@ -594,7 +624,7 @@ describe('bulk clear diff comments', () => {
         .map((c) => c.id)
     ).toEqual(['md', 'other'])
 
-    await store.getState().clearDiffComments(WT, { keepMarkdownNotes: true })
+    await store.getState().clearDiffComments(capturedOwner(store, WT), { keepMarkdownNotes: true })
     expect(
       store
         .getState()
@@ -608,7 +638,9 @@ describe('bulk clear diff comments', () => {
     const comments = [makeComment({ id: 'md', filePath: 'README.md', source: 'markdown' })]
     seed(store, comments)
 
-    const ok = await store.getState().clearDiffComments(WT, { keepMarkdownNotes: true })
+    const ok = await store
+      .getState()
+      .clearDiffComments(capturedOwner(store, WT), { keepMarkdownNotes: true })
 
     expect(ok).toBe(true)
     expect(store.getState().getDiffComments(WT)).toBe(comments)
@@ -620,7 +652,9 @@ describe('bulk clear diff comments', () => {
     const comments = [makeComment({ id: 'c1', filePath: 'src/foo.ts' })]
     seed(store, comments)
 
-    const ok = await store.getState().clearDiffCommentsForFile(WT, 'src/missing.ts')
+    const ok = await store
+      .getState()
+      .clearDiffCommentsForFile(capturedOwner(store, WT), 'src/missing.ts')
 
     expect(ok).toBe(true)
     expect(store.getState().getDiffComments(WT)).toBe(comments)
@@ -642,7 +676,7 @@ describe('bulk clear diff comments', () => {
       runtimeOwnerEnvironmentId: 'env-1'
     })
 
-    const ok = await store.getState().clearDiffComments(WT)
+    const ok = await store.getState().clearDiffComments(capturedOwner(store, WT))
 
     expect(ok).toBe(true)
     expect(updateMeta).not.toHaveBeenCalled()
@@ -664,7 +698,7 @@ describe('bulk clear diff comments', () => {
     updateMeta.mockRejectedValueOnce(new Error('disk full'))
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const ok = await store.getState().clearDiffComments(WT)
+    const ok = await store.getState().clearDiffComments(capturedOwner(store, WT))
 
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)).toBe(comments)
@@ -685,7 +719,7 @@ describe('bulk clear diff comments', () => {
     )
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const clearPromise = store.getState().clearDiffComments(WT)
+    const clearPromise = store.getState().clearDiffComments(capturedOwner(store, WT))
     await Promise.resolve()
     seed(store, laterComments)
     rejectPersist(new Error('disk full'))
@@ -723,7 +757,7 @@ describe('worktree diff comment rollback convergence', () => {
   })
 
   function addNote(store: ReturnType<typeof createTestStore>, body: string, lineNumber: number) {
-    return store.getState().addDiffComment({
+    return store.getState().addDiffComment(capturedOwner(store, WT), {
       worktreeId: WT,
       filePath: 'src/foo.ts',
       lineNumber,
@@ -752,8 +786,8 @@ describe('worktree diff comment rollback convergence', () => {
     seed(store, comments)
     updateMeta.mockRejectedValue(new Error('disk full'))
 
-    const removed = store.getState().deleteDiffComment(WT, 'c1')
-    const marked = store.getState().markDiffCommentsSent(WT, ['c2'], 3000)
+    const removed = store.getState().deleteDiffComment(capturedOwner(store, WT), 'c1')
+    const marked = store.getState().markDiffCommentsSent(capturedOwner(store, WT), ['c2'], 3000)
 
     // deleteDiffComment returns no boolean; absent return must not hide write failures.
     await expect(removed).resolves.toBeUndefined()
@@ -777,3 +811,14 @@ describe('worktree diff comment rollback convergence', () => {
     expect(store.getState().getDiffComments(WT)).toBe(comments)
   })
 })
+
+function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
+  return (
+    // An unlisted id stands for a copy that is gone, so actions on it are refused.
+    selectDiffCommentView(store.getState(), worktreeId).owner ?? {
+      kind: 'worktree',
+      worktreeId,
+      authority: SELF_LOCAL_AUTHORITY
+    }
+  )
+}

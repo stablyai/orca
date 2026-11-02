@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import {
   resolvePendingDiffCommentsClear,
   type PendingDiffCommentsClear
 } from './source-control/notes/diff-comments-clear-dialog-state'
 
-const allPending: PendingDiffCommentsClear = { kind: 'all', worktreeId: 'wt-1' }
+const owner: DiffCommentOwner = {
+  kind: 'worktree',
+  worktreeId: 'wt-1',
+  authority: { endpoint: { kind: 'self' }, at: 'local' }
+}
+const allPending: PendingDiffCommentsClear = { kind: 'all', worktreeId: 'wt-1', owner, count: 1 }
 const filePending: PendingDiffCommentsClear = {
   kind: 'file',
+  owner,
   worktreeId: 'wt-1',
-  filePath: 'src/app.tsx'
+  filePath: 'src/app.tsx',
+  count: 1
 }
 
 describe('diff comments clear dialog state', () => {

@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
 import { DiffNotesPreviewPopover } from './combined-diff-notes-popover'
 
@@ -40,6 +41,7 @@ export function CombinedDiffToolbar({
   allSectionsCollapsed,
   branchCompare,
   commitCompare,
+  commentOwner,
   diffCommentCount,
   diffCommentsForWorktree,
   diffShowWhitespace,
@@ -66,6 +68,7 @@ export function CombinedDiffToolbar({
   allSectionsCollapsed: boolean
   branchCompare: NonNullable<OpenFile['branchCompare']> | null
   commitCompare: NonNullable<OpenFile['commitCompare']> | null
+  commentOwner: DiffCommentOwner | null
   diffCommentCount: number
   diffCommentsForWorktree: DiffComment[]
   diffShowWhitespace: boolean | undefined
@@ -152,6 +155,7 @@ export function CombinedDiffToolbar({
               </PopoverContent>
             </Popover>
             <DiffNotesSendMenu
+              owner={commentOwner}
               worktreeId={file.worktreeId}
               groupId={activeGroupId ?? file.worktreeId}
               comments={diffCommentsForWorktree}

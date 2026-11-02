@@ -11,6 +11,7 @@ export type DiffSectionItemProps = {
   isDark: boolean
   sectionHeight: number | undefined
   worktreeId?: string
+  runtimeEnvironmentId?: string | null
   loadSection: (index: number) => void
   loadDeferredSection?: (index: number) => void
   retrySection: (index: number) => void

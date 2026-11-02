@@ -2,7 +2,9 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import {
   createRichMarkdownAnnotationHighlightExtension,
@@ -67,7 +69,9 @@ function mountReview() {
   const editorRef: { current: Editor | null } = { current: editor }
   const rootRef: { current: HTMLDivElement | null } = { current: document.createElement('div') }
   const pending = Promise.withResolvers<DiffComment | null>()
-  const addDiffComment = vi.fn((_input: Omit<DiffComment, 'id' | 'createdAt'>) => pending.promise)
+  const addDiffComment = vi.fn(
+    (_owner: unknown, _input: Omit<DiffComment, 'id' | 'createdAt'>) => pending.promise
+  )
   let comments: DiffComment[] = []
   const hook = renderHook(() =>
     useRichMarkdownReviewController({
@@ -98,7 +102,21 @@ function mountReview() {
   }
 }
 
+const initialState = useAppStore.getState()
+
+beforeEach(() => {
+  // The draft captures the listed copy it opens on.
+  useAppStore.setState({
+    worktreesByRepo: {
+      'folder-owner': [
+        makeWorktree({ id: 'folder-owner', repoId: 'folder-owner', path: '/workspace' })
+      ]
+    }
+  })
+})
+
 afterEach(() => {
+  useAppStore.setState(initialState, true)
   cleanup()
   for (const editor of editors.splice(0)) {
     editor.destroy()
@@ -115,6 +133,7 @@ describe('review submission owner', () => {
       review.pending.resolve(saved)
       await submission
     })
+    expect(review.addDiffComment).toHaveBeenCalledOnce()
     expect(review.result.current.annotationPopover).toEqual(nextTarget)
   })
 

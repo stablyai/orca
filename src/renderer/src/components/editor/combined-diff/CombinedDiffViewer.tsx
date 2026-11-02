@@ -68,8 +68,8 @@ export default function CombinedDiffViewer({
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
-  const { comments: diffCommentsForWorktree, markdownReviewNotesEnabled } =
-    useVisibleWorktreeDiffComments(file.worktreeId)
+  // The notes of the copy this diff was read from (the file's server when it names one).
+  const notesView = useVisibleWorktreeDiffComments(file.worktreeId, file)
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
   const isDark = useDocumentDarkTheme()
@@ -90,10 +90,10 @@ export default function CombinedDiffViewer({
     sectionsRef: registry.sectionsRef
   })
   const notes = useCombinedDiffNotesActions({
+    owner: notesView.owner,
     clearDiffComments,
-    diffCommentsForWorktree,
-    markdownReviewNotesEnabled,
-    worktreeId: file.worktreeId
+    diffCommentsForWorktree: notesView.comments,
+    markdownReviewNotesEnabled: notesView.markdownReviewNotesEnabled
   })
   const preferences = useCombinedDiffViewPreferences({
     combinedDiffFileTreeVisibleByDefault,
@@ -338,7 +338,8 @@ export default function CombinedDiffViewer({
           branchCompare={entrySet.branchCompare}
           commitCompare={entrySet.commitCompare}
           diffCommentCount={notes.diffCommentCount}
-          diffCommentsForWorktree={diffCommentsForWorktree}
+          commentOwner={notesView.owner}
+          diffCommentsForWorktree={notesView.comments}
           diffShowWhitespace={diffShowWhitespace}
           diffWordWrap={diffWordWrap}
           file={file}
@@ -377,7 +378,8 @@ export default function CombinedDiffViewer({
           <CombinedDiffSectionList
             activeGroupId={activeGroupId}
             canOpenWorkspaceFileBrowserForPath={canOpenWorkspaceFileBrowserForPath}
-            diffCommentsForWorktree={diffCommentsForWorktree}
+            commentOwner={notesView.owner}
+            diffCommentsForWorktree={notesView.comments}
             file={file}
             handleSectionSaveRef={handleSectionSaveRef}
             isAllMode={entrySet.isAllMode}
@@ -406,7 +408,7 @@ export default function CombinedDiffViewer({
         </div>
       </div>
       <ClearDiffNotesDialog
-        diffCommentCount={notes.diffCommentCount}
+        diffCommentCount={notes.clearNotesCount}
         isClearingNotes={notes.isClearingNotes}
         onConfirm={() => void notes.handleConfirmClearNotes()}
         open={notes.clearNotesDialogVisible}

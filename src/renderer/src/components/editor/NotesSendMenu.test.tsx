@@ -234,6 +234,11 @@ function renderMenu(
   hookRuntime.index = 0
   return expand(
     <NotesSendMenu<TestNote>
+      owner={{
+        kind: 'worktree',
+        worktreeId: 'wt-1',
+        authority: { endpoint: { kind: 'self' }, at: 'local' }
+      }}
       worktreeId="wt-1"
       groupId="group-1"
       modeIdParts={['markdown-notes', 'wt-1', 'README.md', 'rail']}
@@ -293,6 +298,17 @@ describe('NotesSendMenu', () => {
     expect(findByType(tree, 'button').props.disabled).toBe(true)
     expect(findByType(tree, 'button').props.title).toBe('All notes sent')
     expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+  })
+
+  it('disables the trigger without claiming the notes were sent while their copy is unknown', () => {
+    const tree = renderMenu({
+      owner: null,
+      scopes: [{ id: 'all', label: 'All unsent notes', notes: [note('1')], formatPrompt: () => '' }]
+    })
+
+    expect(findByType(tree, 'button').props.disabled).toBe(true)
+    expect(findByType(tree, 'button').props.title).toBeUndefined()
+    expect(findAllByType(tree, 'TooltipContent')).toHaveLength(0)
   })
 
   it('uses caller-provided disabled tooltip copy for disabled note actions', () => {
