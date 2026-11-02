@@ -73,43 +73,47 @@ export async function retirePreparedDescriptor(
   descriptor: PreparedAgentLaunchDescriptor,
   final?: PreparedLaunchFinal
 ): Promise<void> {
+  const explanation = final ? explanationOf(final) : null
+  // Setup's owner answers before the launch retires: a lost reply leaves it for a later observer
+  // to ask again, so an unknown write never turns into a second surface.
+  const inSetup =
+    explanation?.setupLine && explanation.kind !== 'prompt-uncertain'
+      ? await writeSetupLine(
+          ports,
+          identity,
+          preparedLaunchFailureText(explanation.kind, descriptor.claim.agent)
+        )
+      : false
   const removed = await ports.store.retirePreparedAgentLaunch({
     callerKey: PREPARED_LAUNCH_ROW_CALLER,
     ...identity,
     ...(final ? { outcome: recordedOutcome(final, descriptor) } : {})
   })
   forgetPreparedPromptContinuation(identity)
-  const explanation = removed && final ? explanationOf(final) : null
-  if (explanation) {
-    await explain(ports, identity, descriptor, explanation)
+  if (removed && explanation && !inSetup) {
+    ports.notifyLaunchNotice?.({
+      operationId: identity.operationId,
+      worktreeId: descriptor.surface.worktreeId,
+      agent: descriptor.claim.agent,
+      kind: explanation.kind
+    })
   }
 }
 
-/** One place per outcome: Setup's last line when that exact Setup confirms it, else one toast. */
-async function explain(
+/** The owner's one answer: true when the line is in Setup, false when it never will be. */
+async function writeSetupLine(
   ports: PreparedLaunchOutcomePorts,
   identity: PreparedAgentLaunchIdentity,
-  descriptor: PreparedAgentLaunchDescriptor,
-  { kind, setupLine }: Explanation
-): Promise<void> {
-  const agent = descriptor.claim.agent
-  if (setupLine && kind !== 'prompt-uncertain') {
-    const reply = await ports.controller
-      .preparedAgentLaunch?.({
-        action: 'writeSetupOutcome',
-        identity,
-        text: preparedLaunchFailureText(kind, agent)
-      })
-      .catch(() => null)
-    // An unconfirmed write may not be on screen, so it never stands in for the notice.
-    if (typeof reply === 'object' && reply !== null && 'written' in reply && reply.written) {
-      return
-    }
-  }
-  ports.notifyLaunchNotice?.({
-    operationId: identity.operationId,
-    worktreeId: descriptor.surface.worktreeId,
-    agent,
-    kind
+  text: string
+): Promise<boolean> {
+  const reply = await ports.controller.preparedAgentLaunch?.({
+    action: 'writeSetupOutcome',
+    identity,
+    text
   })
+  if (typeof reply !== 'object' || reply === null || !('written' in reply)) {
+    // No answer is not a "no": the launch stays unretired until its owner says which.
+    throw new Error('agent_session_ownership_unknown')
+  }
+  return reply.written === true
 }

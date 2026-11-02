@@ -154,8 +154,14 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithPrepa
         hint.consume()
         const savedStartupCwd = result.savedStartupCwd ?? cwd
         // Why here: refused before a handle, snapshot or reveal could pose the live PTY as new.
+        // A later attachment of a launch whose startup already ran never reapplies its first view.
+        const startupRan =
+          launchOpts.preparedFirstPublication === true &&
+          result.incarnationId !== undefined &&
+          this.ptysById.get(result.id)?.preparedStartupIncarnationId === result.incarnationId
         const launch = resolveTerminalLaunchResult(result, {
           ...launchOpts,
+          ...(startupRan ? { viewMode: undefined } : {}),
           launchConfig: effectiveLaunchConfig,
           launchToken
         })
@@ -191,11 +197,14 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithPrepa
             launch,
             launchOpts.command
           )
-          // Registration restores a prepared agent's identity, so only publication knows it is new.
-          this.watchLaunchComposer(
-            result.id,
-            launchOpts.preparedFirstPublication ? pty.launchAgent : launchedAgent
-          )
+          // This process's own record owns its one startup; an overlapping publication joins it.
+          const startup =
+            launchOpts.preparedFirstPublication === true &&
+            pty.preparedStartupIncarnationId !== pty.incarnationId
+          if (startup && pty.incarnationId) {
+            pty.preparedStartupIncarnationId = pty.incarnationId
+          }
+          this.watchLaunchComposer(result.id, startup ? pty.launchAgent : launchedAgent)
           if (
             launchOpts.attachOnly &&
             launchOpts.expectedIncarnationId === pty.incarnationId &&

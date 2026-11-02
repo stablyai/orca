@@ -32,6 +32,8 @@ export type LaunchWork = {
   stopSetupScan?: () => void
   /** The exact Setup process while it runs; a replacement under its id is never returned. */
   liveSetup?: () => SetupOutputSession | undefined
+  /** The one answer to main's Setup line, kept with the launch so a repeat never writes again. */
+  setupOutcomeWritten?: boolean
   cancelDeadline?: () => void
   releaseCapacity?: () => void
   changed: Set<() => void>
@@ -262,12 +264,15 @@ export abstract class PreparedAgentLaunchExecution {
 
   /** Writes main's explanation into this launch's own Setup, only while that exact process runs. */
   protected writeSetupOutcome(work: LaunchWork, text: string): boolean {
-    const session = work.status.physical ? undefined : work.liveSetup?.()
-    if (!session || !isOneLine(text)) {
-      return false
+    // Decided once: a repeat after a lost reply, even once Setup has closed, gets the same answer.
+    if (work.setupOutcomeWritten === undefined) {
+      const session = work.status.physical ? undefined : work.liveSetup?.()
+      work.setupOutcomeWritten = session !== undefined && isOneLine(text)
+      if (session && work.setupOutcomeWritten) {
+        session.startupIngress.accept(`\r\n[orca] ${text}\r\n`)
+      }
     }
-    session.startupIngress.accept(`\r\n[orca] ${text}\r\n`)
-    return true
+    return work.setupOutcomeWritten
   }
 
   /** Command, env and authority die with the launch obligation; the status stays readable. */

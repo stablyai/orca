@@ -31,6 +31,8 @@ type FixtureOptions = {
   agentCreateFails?: boolean
   /** Whether that Setup's session can take output when main asks; false before registration. */
   setupSessionLive?: () => boolean
+  /** The connection drops once around the Setup line request: before it reaches the daemon, or after. */
+  setupWriteFault?: 'request-lost' | 'reply-lost'
 }
 
 async function fixture(options: FixtureOptions = {}) {
@@ -38,6 +40,8 @@ async function fixture(options: FixtureOptions = {}) {
   let setupObserver: RawPtySpawnObserver | undefined
   const incarnation = randomUUID()
   const setupLines: string[] = []
+  const setupWrites: string[] = []
+  let setupWriteFault = options.setupWriteFault
   const create = vi.fn(async (opts: InternalCreateOrAttachOptions) => {
     if (opts.rawSpawnObserver) {
       setupObserver = opts.rawSpawnObserver()
@@ -86,7 +90,20 @@ async function fixture(options: FixtureOptions = {}) {
     | undefined
   const ports = {
     controller: controllerDouble({
-      preparedAgentLaunch: (request: Parameters<typeof owner.handle>[0]) => owner.handle(request)
+      preparedAgentLaunch: async (request: Parameters<typeof owner.handle>[0]) => {
+        if (request.action === 'writeSetupOutcome') {
+          setupWrites.push(request.text)
+          const fault = setupWriteFault
+          setupWriteFault = undefined
+          if (fault === 'reply-lost') {
+            await owner.handle(request)
+          }
+          if (fault) {
+            throw new Error('Terminal host connection closed')
+          }
+        }
+        return owner.handle(request)
+      }
     }),
     store: {
       recordPreparedAgentLaunch: vi.fn(
@@ -184,6 +201,7 @@ async function fixture(options: FixtureOptions = {}) {
     runtime,
     create,
     setupLines,
+    setupWrites,
     notifier,
     wait,
     setupObserver: () => setupObserver!
@@ -444,6 +462,40 @@ describe('final outcome explanation', () => {
       notices: []
     })
   })
+
+  it.each(['reply-lost', 'request-lost'] as const)(
+    'shows a failed Setup on one surface after its line request was %s, once the owner answers',
+    async (setupWriteFault) => {
+      let setupOpen = true
+      const f = await fixture({ setupWriteFault, setupSessionLive: () => setupOpen })
+      const started = await startPreparedWorktreeTerminals({
+        worktreeId: 'wt',
+        targetKind: 'new-git',
+        setup: SETUP,
+        startupOptions: { command: 'codex', launchAgent: 'codex' },
+        ports: f.startPorts
+      })
+      const attemptId = f.ports.store.listOperationRows()[0]?.preparedLaunch?.setup?.attemptId
+      f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:2\n`)
+      await vi.advanceTimersByTimeAsync(0)
+      // An unknown answer is not a "no": nothing is shown and the launch is not retired yet.
+      expect(f.setupWrites).toHaveLength(1)
+      expect(explained(f).notices).toEqual([])
+      expect(f.ports.store.listOperationRows()[0]?.preparedLaunch).toBeDefined()
+      // After a write whose reply was lost, Setup closes before the rejoin: the owner's answer stands.
+      setupOpen = setupWriteFault === 'request-lost'
+      await expect(f.wait(started.pending)).rejects.toThrow(
+        'Setup failed, so Codex was not started.'
+      )
+      await expect(f.wait(started.pending)).rejects.toThrow(
+        'Setup failed, so Codex was not started.'
+      )
+      expect(explained(f)).toEqual({
+        lines: [expect.stringContaining('Setup failed, so Codex was not started.')],
+        notices: []
+      })
+    }
+  )
 
   it.each([
     ['takes the line', true, { lines: 1, notices: [] }],

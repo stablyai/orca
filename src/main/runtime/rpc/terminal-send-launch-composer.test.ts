@@ -5,6 +5,10 @@ import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
 import { AGENT_PROMPT_TEST_WORKTREE_PATH } from '../agent-prompt-submission-runtime-test-fixture'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { randomUUID } from 'node:crypto'
+import { publishPreparedTerminal } from '../terminal/launch/prepared-terminal-publication'
+import type { PreparedAgentLaunchRequest } from '../../daemon/prepared-agent-launch-protocol'
+import type { PreparedAgentLaunchDescriptor } from '../../../shared/prepared-agent-launch'
 
 vi.mock('../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -224,5 +228,186 @@ describe('terminal.send into a published prepared Claude', () => {
       result: { send: { accepted: true } }
     })
     expect(writes).toEqual([PASTE, '\r'])
+  })
+})
+
+const WORKTREE_ID = 'repo-1::/tmp/worktree-a'
+const CLAIM = {
+  kind: 'fresh-launch' as const,
+  agent: 'claude' as const,
+  keyId: 'key',
+  identityDigest: 'a'.repeat(43),
+  worktreeScopeDigest: 'b'.repeat(43),
+  digestVersion: 1 as const
+}
+
+/** One accepted prepared Claude whose daemon owner answers every publication controller. */
+function preparedLaunch(incarnationId: string) {
+  const surface = {
+    worktreeId: WORKTREE_ID,
+    tabId: 'tab_agent',
+    leafId: randomUUID(),
+    terminalHandle: `term_${randomUUID()}`
+  }
+  const identity = {
+    operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+    fingerprint: 'fingerprint',
+    daemonGeneration: 'daemon',
+    reservationGeneration: 'reservation'
+  }
+  const descriptor: PreparedAgentLaunchDescriptor = {
+    daemonGeneration: identity.daemonGeneration,
+    reservationGeneration: identity.reservationGeneration,
+    hostScope: { hostId: 'local' },
+    claim: CLAIM,
+    surface,
+    targetKind: 'new-git',
+    launchTokenHash: null,
+    presentation: { tabId: surface.tabId, leafId: surface.leafId, primary: false }
+  }
+  let published = false
+  const status = () => ({
+    ...identity,
+    claim: CLAIM,
+    surface,
+    accepted: true,
+    execution: 'started',
+    retirement: published ? 'unused-retired' : 'retained-live',
+    physical: { sessionId: PTY_ID, incarnationId, startedAt: 0 },
+    published
+  })
+  const owner = async (request: PreparedAgentLaunchRequest['payload']) => {
+    if (request.action === 'ackPublication') {
+      published = true
+    }
+    return status()
+  }
+  return { identity, descriptor, owner }
+}
+
+/** Publication ports of one controller scope; its daemon replies can be held by the test. */
+function publicationScope(
+  runtime: OrcaRuntimeService,
+  launch: ReturnType<typeof preparedLaunch>,
+  hold?: Promise<void>
+) {
+  const controller = {
+    write: () => false,
+    kill: () => false,
+    getForegroundProcess: async () => null,
+    preparedAgentLaunch: async (request: PreparedAgentLaunchRequest['payload']) => {
+      // The recipe read follows this scope's first status, so its snapshot can go stale meanwhile.
+      if (hold && request.action === 'status' && request.publication) {
+        await hold
+      }
+      return launch.owner(request)
+    }
+  }
+  return {
+    controller,
+    store: {
+      listOperationRows: () => [],
+      getOperationRow: () => null,
+      retirePreparedAgentLaunch: async () => false
+    },
+    createTerminal: (
+      selector: string,
+      options: Parameters<OrcaRuntimeService['createTerminal']>[1]
+    ) => runtime.createTerminal(selector, options),
+    setTabColor: async () => {}
+  }
+}
+
+/** A runtime whose PTY host attaches the daemon's accepted Claude process. */
+function preparedRuntime() {
+  const runtime = new OrcaRuntimeService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; terminal create and send read only its repo and worktree members.
+    makeStore() as never
+  )
+  const writes: string[] = []
+  let incarnationId = 'incarnation-1'
+  runtime.setPtyController({
+    spawn: async (args) => {
+      runtime.registerPty(PTY_ID, args.worktreeId ?? '', null, {
+        tabId: args.tabId ?? '',
+        leafId: args.leafId ?? '',
+        incarnationId,
+        providerReattachLaunchIdentity: { incarnationId, launchAgent: 'claude' }
+      })
+      return { id: PTY_ID, incarnationId, isReattach: true, launchAgent: 'claude' }
+    },
+    write: (_ptyId, data) => {
+      writes.push(data)
+      return true
+    },
+    kill: () => true,
+    getForegroundProcess: async () => 'claude'
+  })
+  vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
+  const watches = vi.spyOn(runtime, 'watchLaunchComposer')
+  const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+  const send = (terminal: string, text: string) =>
+    dispatcher.dispatch({
+      id: 'rpc-send',
+      authToken: 'token',
+      method: 'terminal.send',
+      params: { terminal, text, enter: true }
+    })
+  const replace = (next: string) => {
+    incarnationId = next
+  }
+  return { runtime, writes, send, replace, watches }
+}
+
+describe('overlapping publications of one prepared Claude', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('starts one startup hold per process, so a late publication never holds a ready agent', async () => {
+    vi.useFakeTimers()
+    const { runtime, writes, send, replace, watches } = preparedRuntime()
+    const launch = preparedLaunch('incarnation-1')
+    const late = Promise.withResolvers<void>()
+    // B reads the unpublished status first, then waits; A publishes the same process meanwhile.
+    const b = publishPreparedTerminal(
+      launch.identity,
+      launch.descriptor,
+      publicationScope(runtime, launch, late.promise)
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    const a = await publishPreparedTerminal(
+      launch.identity,
+      launch.descriptor,
+      publicationScope(runtime, launch)
+    )
+    runtime.onPtyData(PTY_ID, CLAUDE_COMPOSER_READY_OUTPUT, Date.now())
+    await vi.advanceTimersByTimeAsync(3_000)
+    // The ready marker leaves recent output long before B is released.
+    runtime.onPtyData(PTY_ID, 'x'.repeat(70 * 1024), Date.now())
+    late.resolve()
+    await b
+    const sending = send(a!.handle, PASTE)
+    // Well inside the startup hold's own deadline: a held send would still have written nothing.
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(writes).toEqual([PASTE, '\r'])
+    await expect(sending).resolves.toMatchObject({ ok: true, result: { send: { accepted: true } } })
+    const initializations = () => watches.mock.calls.filter(([, agent]) => agent !== null)
+    expect(initializations()).toHaveLength(1)
+
+    // A genuine replacement process is a new launch and gets its own startup hold.
+    replace('incarnation-2')
+    const next = preparedLaunch('incarnation-2')
+    const replaced = await publishPreparedTerminal(
+      next.identity,
+      next.descriptor,
+      publicationScope(runtime, next)
+    )
+    expect(initializations()).toHaveLength(2)
+    writes.length = 0
+    const held = send(replaced!.handle, PASTE)
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(writes).toEqual([])
+    runtime.onPtyData(PTY_ID, CLAUDE_COMPOSER_READY_OUTPUT, Date.now())
+    await vi.runAllTimersAsync()
+    await expect(held).resolves.toMatchObject({ ok: true, result: { send: { accepted: true } } })
   })
 })

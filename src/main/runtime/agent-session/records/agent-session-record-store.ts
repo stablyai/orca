@@ -16,7 +16,6 @@ import {
   admitAndClaimAgentSessionOperationInto,
   type ClaimAfterAdmission,
   settleAgentSessionOperationInto,
-  retirePreparedAgentLaunchInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
 } from '../ownership/agent-session-operation-admission'
@@ -71,6 +70,7 @@ import type { JournalOperationReceipt } from '../../../native-chat/agent-session
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import { createPreparedLaunchRetirements } from './prepared-launch-retirements'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import {
   compareAndSetAgentSessionRecordName,
@@ -272,10 +272,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       return { decision, claim: claimAgentSessionOperationInto(draft, args) }
     })
 
-  /** True only for the transaction that removed the descriptor; its final answer is kept for replay. */
-  retirePreparedAgentLaunch = (
-    args: Parameters<typeof retirePreparedAgentLaunchInto>[1]
-  ): Promise<boolean> => this.transact((draft) => retirePreparedAgentLaunchInto(draft, args))
+  /** Removes the exact descriptor and records its answer; only one request per descriptor wins. */
+  retirePreparedAgentLaunch = createPreparedLaunchRetirements(this.transactions)
 
   /** Durable CAS decides which pending replay may run its effect; reading pending alone cannot grant it. */
   claimOperation = (args: Parameters<typeof claimAgentSessionOperationInto>[1]) =>

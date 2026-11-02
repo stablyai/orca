@@ -139,6 +139,24 @@ export class AgentSessionStoreTransactions {
     return run
   }
 
+  /**
+   * In transaction order, `select` reads the published state first; null skips the draft, diff and
+   * SQL transaction entirely, so a request that is already satisfied costs no full-store work.
+   */
+  transactSelected<S, T>(
+    select: (state: AgentSessionStoreState) => S | null,
+    apply: (draft: AgentSessionStoreState, selected: S) => T
+  ): Promise<{ selected: S; result: T } | null> {
+    const run = this.queue.then(() => {
+      const selected = select(this.published)
+      return selected === null
+        ? null
+        : { selected, result: this.commit((draft) => apply(draft, selected), false) }
+    })
+    this.queue = run.catch(() => {})
+    return run
+  }
+
   /** Co-write in the caller's journal transaction; write/committed must run synchronously to prevent interleaving. */
   receipt(
     apply: (draft: AgentSessionStoreState) => void,
