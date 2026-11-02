@@ -42,6 +42,9 @@ it('opens the phone attachment card, scrolls the actual RN-web list to its tail 
     )
   const height = (node: HTMLElement): number => {
     const style = getComputedStyle(node)
+    if (node.style.height.endsWith('px')) {
+      return Number.parseFloat(node.style.height)
+    }
     if ([style.overflowX, style.overflowY].some((value) => ['auto', 'scroll'].includes(value))) {
       return viewportHeight
     }

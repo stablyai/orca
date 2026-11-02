@@ -236,6 +236,23 @@ it('reads a committed text attachment through the registered mobile RPC and vali
       )
       await source.block(0)
       expect(new AttachmentTextViewport(source, 20, 3000).rows(0)[0]?.text).toBe('HEAD\n')
+      for (let block = 15; block < 100; block++) {
+        await source.block(block)
+      }
+      await source.block(source.blockCount - 1)
+      const previous = new AttachmentTextViewport(source, 20, 600)
+      const grown = new AttachmentTextViewport(source, 20, 3000)
+      const oldEnd = previous.total - previous.height
+      const back = oldEnd - 2400
+      expect(previous.prefixes.at(-1)).toBe(1_735_816)
+      expect(back).toBe(previous.total - grown.height)
+      expect(previous.anchor(back).block).toBe(3415)
+      expect(previous.anchor(back).row).toBeCloseTo(1169.264134908095, 6)
+      expect
+        .soft(grown.restore(previous, back))
+        .toBeCloseTo(grown.position(previous.anchor(back)), 6)
+      expect(grown.position(previous.anchor(back))).toBeCloseTo(7_998_151.9358067745, 6)
+      expect(grown.restore(previous, oldEnd)).toBe(grown.total - grown.height)
     } finally {
       source.dispose()
     }

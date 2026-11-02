@@ -98,14 +98,14 @@ export function AttachmentTextScrollView({
       horizontal
       style={styles.scroll}
       contentContainerStyle={{ flexGrow: 1 }}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onLayout={(event) => {
+        setWidth(event.nativeEvent.layout.width)
+        setPosition((old) => ({ ...old, height: event.nativeEvent.layout.height }))
+      }}
     >
       <ScrollView
         ref={scroll}
-        style={{ width: contentWidth }}
-        onLayout={(event) =>
-          setPosition((old) => ({ ...old, height: event.nativeEvent.layout.height }))
-        }
+        style={{ width: contentWidth, height: layout.height, flexGrow: 0, flexShrink: 0 }}
         scrollEventThrottle={16}
         onScroll={(event) => {
           const top = event.nativeEvent.contentOffset.y

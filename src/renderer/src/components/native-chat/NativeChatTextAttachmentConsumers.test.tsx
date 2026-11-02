@@ -161,7 +161,13 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     horizontal.set(this, Math.max(0, Math.min(value, this.scrollWidth - this.clientWidth)))
   })
   const measurements = new Set<() => void>()
-  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => viewportHeight)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this.classList.contains('scrollbar-editor')
+      ? Number.parseFloat(this.style.height) || viewportHeight
+      : viewportHeight
+  })
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => viewportHeight)
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
     this: HTMLElement
@@ -281,6 +287,13 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
       expect(measured.textContent).toContain('END35636')
       expect(measured.scrollTop + measured.clientHeight).toBe(measured.scrollHeight)
     })
+    const oldEnd = measured.scrollTop
+    viewportHeight = 3000
+    expect.soft(measured.scrollTop).toBe(oldEnd)
+    act(() => measurements.forEach((notify) => notify()))
+    await waitFor(() =>
+      expect(measured.scrollTop + measured.clientHeight).toBe(measured.scrollHeight)
+    )
     fireEvent.keyDown(measured, { key: 'Home' })
     await waitFor(() => {
       expect(measured.scrollTop).toBe(0)

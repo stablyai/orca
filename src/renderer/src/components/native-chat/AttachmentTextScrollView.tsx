@@ -22,6 +22,7 @@ function TextViewport({
   demand: (window: AttachmentTextWindow) => void
 }) {
   const scroll = useRef<HTMLDivElement>(null)
+  const viewport = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ height: 0, rowHeight: 20, cellWidth: 8 })
   const measured = useMemo(
@@ -48,7 +49,7 @@ function TextViewport({
     setProjection((old) => (old.top === node.scrollTop ? old : { ...old, top: node.scrollTop }))
   }, [layout])
   useLayoutEffect(() => {
-    const node = scroll.current
+    const node = viewport.current
     if (!node) {
       return
     }
@@ -107,59 +108,62 @@ function TextViewport({
     return () => node.removeEventListener('wheel', wheel)
   }, [])
   return (
-    <div
-      ref={scroll}
-      tabIndex={0}
-      className="scrollbar-editor min-h-0 flex-1 overflow-auto px-4"
-      onKeyDown={(event) => {
-        const node = event.currentTarget
-        const pixels =
-          event.key === 'ArrowDown'
-            ? position.rowHeight
-            : event.key === 'ArrowUp'
-              ? -position.rowHeight
-              : event.key === 'PageDown' || event.key === ' '
-                ? node.clientHeight
-                : event.key === 'PageUp'
-                  ? -node.clientHeight
-                  : null
-        if (pixels !== null) {
-          event.preventDefault()
-          node.scrollTop = layout.move(layout.anchor(node.scrollTop), pixels)
-        } else if (event.key === 'Home' || event.key === 'End') {
-          event.preventDefault()
-          node.scrollTop = event.key === 'Home' ? 0 : layout.total
-        }
-      }}
-      onScroll={(event) => {
-        const node = event.currentTarget
-        setProjection((old) => ({ ...old, top: node.scrollTop }))
-      }}
-    >
+    <div ref={viewport} className="min-h-0 flex-1 overflow-hidden">
       <div
-        ref={probe}
-        aria-hidden
-        className="pointer-events-none absolute invisible whitespace-pre font-mono text-sm"
-      >
-        M
-      </div>
-      <div
-        style={{
-          height: layout.total,
-          position: 'relative',
-          minWidth: source.displayUnits * position.cellWidth
+        ref={scroll}
+        tabIndex={0}
+        className="scrollbar-editor overflow-auto px-4"
+        style={{ height: layout.height }}
+        onKeyDown={(event) => {
+          const node = event.currentTarget
+          const pixels =
+            event.key === 'ArrowDown'
+              ? position.rowHeight
+              : event.key === 'ArrowUp'
+                ? -position.rowHeight
+                : event.key === 'PageDown' || event.key === ' '
+                  ? node.clientHeight
+                  : event.key === 'PageUp'
+                    ? -node.clientHeight
+                    : null
+          if (pixels !== null) {
+            event.preventDefault()
+            node.scrollTop = layout.move(layout.anchor(node.scrollTop), pixels)
+          } else if (event.key === 'Home' || event.key === 'End') {
+            event.preventDefault()
+            node.scrollTop = event.key === 'Home' ? 0 : layout.total
+          }
+        }}
+        onScroll={(event) => {
+          const node = event.currentTarget
+          setProjection((old) => ({ ...old, top: node.scrollTop }))
         }}
       >
-        {layout.rows(projection.top).map((row) => (
-          <div
-            key={row.key}
-            data-text-segment
-            className="whitespace-pre font-mono text-sm"
-            style={{ position: 'absolute', top: row.top, height: layout.rowHeight }}
-          >
-            {row.text.replace(/\n$/, '') || '\u00a0'}
-          </div>
-        ))}
+        <div
+          ref={probe}
+          aria-hidden
+          className="pointer-events-none absolute invisible whitespace-pre font-mono text-sm"
+        >
+          M
+        </div>
+        <div
+          style={{
+            height: layout.total,
+            position: 'relative',
+            minWidth: source.displayUnits * position.cellWidth
+          }}
+        >
+          {layout.rows(projection.top).map((row) => (
+            <div
+              key={row.key}
+              data-text-segment
+              className="whitespace-pre font-mono text-sm"
+              style={{ position: 'absolute', top: row.top, height: layout.rowHeight }}
+            >
+              {row.text.replace(/\n$/, '') || '\u00a0'}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

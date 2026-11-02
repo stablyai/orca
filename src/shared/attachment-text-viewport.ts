@@ -43,10 +43,7 @@ export class AttachmentTextViewport {
     if (this.sameGeometry(previous)) {
       return top
     }
-    if (
-      top > 0 &&
-      top >= previous.total - Math.max(previous.height, this.height) - previous.scale / 2
-    ) {
+    if (top > 0 && top >= previous.total - previous.height - previous.scale / 2) {
       return Math.max(0, this.total - this.height)
     }
     const anchor = previous.anchor(top)
