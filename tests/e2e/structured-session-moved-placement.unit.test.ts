@@ -19,8 +19,6 @@ import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-ap
 import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
 import { editPersistedTestAgentSessionStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
-import { withChatTabChanges } from '../../src/main/runtime/agent-session/agent-session-tab-layout'
-import { getRepoMainWorktreeId } from '../../src/shared/worktree/id'
 import {
   withPlacedSavedChatTabPatch,
   withPlacedSavedChatTabs
@@ -39,45 +37,25 @@ import { retireMovedSessionPlacement } from '../../src/renderer/src/lib/retire-m
 import { restoredChatTabChanges } from '../../src/main/runtime/session-tabs/restored-chat-tab-changes'
 import { structuredSessionPlacementAllowed } from '../../src/main/runtime/session-tabs/structured-session-placement'
 import type {
-  RuntimeMobileSessionFileTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
+import {
+  retired,
+  attachWindow,
+  windowFrame,
+  notes,
+  resultAt,
+  listAll,
+  graphPublished,
+  ids
+} from './structured-session-placement.test-fixture'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined
 }))
 // The shipped layout owner: a window saves its own layout whole.
 vi.mock('../../src/shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
-
-/** B, and any `kept` chats, live in a workspace whose registration is gone; `visible` chats show. */
-async function retired(kept: string[] = [], visible = kept) {
-  const old = `retired-project::${root}`
-  const input = await inWorkspace(old, 'folder', 'local', visible)
-  input.profile.removeFolderWorkspace(input.folderId)
-  input.profile.setWorkspaceSession(
-    withChatTabChanges(
-      'local',
-      getDefaultWorkspaceSession(),
-      old,
-      [B, ...kept].map((sessionId) => ({
-        open: { sessionId, agent: 'codex' as const, tabId: `agent-session:${sessionId}` }
-      }))
-    )!
-  )
-  const rig = await openAuthorityRuntime(input)
-  const repo = storeRepo({ id: 'current-project', path: root, kind: 'folder' })
-  rig.profile.addRepo(repo)
-  return { ...rig, old, destination: getRepoMainWorktreeId(repo) }
-}
-
-// Only the host's window availability seam; no app or window is launched.
-const attachWindow = (rig: AuthorityRig) =>
-  vi.spyOn(rig.runtime, 'getAvailableAuthoritativeWindow' as never).mockReturnValue({
-    id: 1,
-    isDestroyed: () => false,
-    webContents: { isDestroyed: () => false, send: vi.fn() }
-  } as never)
 
 const project = (rig: AuthorityRig, workspaceId: string) =>
   rig.runtime.projectStructuredAgentSessionTab({
@@ -98,39 +76,6 @@ const savedAt = (rig: AuthorityRig, workspace: string, derived = true) => {
   return (
     (derived ? withPlacedSavedChatTabs(saved, 'local') : saved).unifiedTabs?.[workspace] ?? []
   ).filter((tab) => tab.entityId === B)
-}
-
-// A window's own frame for a workspace: its non-chat rows, and its chats only as group order.
-const windowFrame = (
-  worktree: string,
-  snapshotVersion: number,
-  tabs: RuntimeMobileSessionTabsSnapshot['tabs'] = [],
-  chats: string[] = []
-): RuntimeMobileSessionTabsSnapshot => ({
-  worktree,
-  publicationEpoch: 'renderer',
-  snapshotVersion,
-  activeGroupId: null,
-  activeTabId: null,
-  activeTabType: null,
-  tabGroups: [
-    {
-      id: 'window-group',
-      activeTabId: null,
-      tabOrder: [...tabs.map((tab) => tab.id), ...chats.map((id) => `agent-session:${id}`)]
-    }
-  ],
-  tabs
-})
-const notes: RuntimeMobileSessionFileTab = {
-  type: 'file',
-  id: 'notes-tab',
-  title: 'notes.md',
-  filePath: '/project/notes.md',
-  relativePath: 'notes.md',
-  language: 'markdown',
-  isDirty: false,
-  isActive: false
 }
 
 it('a phone move with an attached window republishes the old frame without the chat, even when the destination tab already exists and the old registration returns', async () => {
@@ -236,38 +181,11 @@ const withoutLabels = (rig: AuthorityRig & { old: string }) => {
     }
   })
 }
-const resultAt = (rig: AuthorityRig, workspace: string) =>
-  rig.runtime['toMobileSessionTabsResult'](rig.runtime.mobileSessionTabsByWorktree.get(workspace)!)
-
 beforeEach(() => {
   resetLocalStructuredSessionVersionForTests()
   resetWebSessionTabsSyncTestState()
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
-
-// The real public read: the production restore gate runs before any inventory is collected.
-const listAll = async (rig: AuthorityRig) => {
-  const response = await new RpcDispatcher({
-    runtime: rig.runtime,
-    methods: SESSION_TAB_METHODS
-  }).dispatch(
-    { id: 'phone-list', authToken: 'token', method: 'session.tabs.listAll', params: null },
-    {
-      clientKind: 'mobile',
-      pairedDeviceId: 'phone',
-      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-    }
-  )
-  expect(response).toMatchObject({ ok: true })
-  return (response as { result: { snapshots: RuntimeMobileSessionTabsResult[] } }).result.snapshots
-}
-// The window's graph has published once, so inventory reads wait only on chat restoration.
-const graphPublished = (rig: AuthorityRig) => {
-  rig.runtime['graphStatus'] = 'ready'
-  rig.runtime['markSessionTabsInventoryPublished']()
-}
-const ids = (frame: RuntimeMobileSessionTabsResult | undefined) =>
-  (frame?.tabs ?? []).map((tab) => (tab.type === 'agent-session' ? tab.sessionId : tab.id)).sort()
 
 // K13. The reachable form of the K9 interleaving: C is restored by the production gate before any
 // client reads, so the host holds its row. The out-of-contract form (a subscribed client while
@@ -632,17 +550,20 @@ it('keeps the placement of a chat whose record is unreadable but observable', as
   expect(changes.get(old)?.filter((change) => 'close' in change) ?? []).toEqual([])
 })
 
-it('derives one stale frame of N moved chats in one pass at N and 10N', async () => {
+it('derives one stale frame of N moved chats in one pass at N and 10N, one record read per row', async () => {
   const rig = await retired()
   const record = rig.store.getRecord(B)!
   // Every chat in the frame belongs to the destination now.
-  vi.spyOn(rig.store, 'getRecord').mockImplementation(() => ({
+  const reads = vi.spyOn(rig.store, 'getRecord').mockImplementation(() => ({
     ...record,
     location: { ...record.location, workspaceId: rig.destination }
   }))
-  const counts: number[] = []
+  const readable = vi.spyOn(rig.store, 'isSessionUnreadable')
+  const counts: { ids: number; records: number; readability: number }[] = []
   for (const n of [20, 200]) {
-    let count = 0
+    let ids = 0
+    reads.mockClear()
+    readable.mockClear()
     const snapshot: RuntimeMobileSessionTabsSnapshot = {
       worktree: rig.old,
       publicationEpoch: 'delayed-renderer',
@@ -653,7 +574,7 @@ it('derives one stale frame of N moved chats in one pass at N and 10N', async ()
       tabs: Array.from({ length: n }, (_, i) => ({
         type: 'agent-session' as const,
         get id() {
-          count++
+          ids++
           return `agent-session:chat-${i}`
         },
         sessionId: `chat-${i}`,
@@ -663,9 +584,18 @@ it('derives one stale frame of N moved chats in one pass at N and 10N', async ()
       }))
     }
     expect(rig.runtime['toMobileSessionTabsResult'](snapshot).tabs).toEqual([])
-    counts.push(count)
+    counts.push({
+      ids,
+      records: reads.mock.calls.length,
+      readability: readable.mock.calls.length
+    })
   }
-  expect(counts[1]).toBeLessThanOrEqual(12 * counts[0])
+  // The placement work itself: one readability check and one record read per chat row.
+  expect(counts.map(({ records, readability }) => [records, readability])).toEqual([
+    [20, 20],
+    [200, 200]
+  ])
+  expect(counts[1]!.ids).toBeLessThanOrEqual(12 * counts[0]!.ids)
 })
 
 it('an already-current reveal reads no unrelated saved workspace at any population', async () => {

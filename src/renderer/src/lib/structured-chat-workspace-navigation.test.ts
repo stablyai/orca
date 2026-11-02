@@ -4,6 +4,7 @@ import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import * as sleepingResume from './resume-sleeping-agent-session'
+import * as pruneModule from './retire-moved-structured-session-placement'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import {
   makeCreatedAgentWorktree,
@@ -205,3 +206,139 @@ it('selects the chat host when another host shows the same workspace ID', async 
   expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe('runtime:env-1')
   expect(shownChat()).toBe(tab.id)
 })
+
+/** A copy of `row` whose own fields count each read. */
+function counted<T extends object>(row: T, reads: { count: number }): T {
+  const copy = { ...row }
+  for (const [key, value] of Object.entries(row)) {
+    Object.defineProperty(copy, key, {
+      enumerable: true,
+      get: () => {
+        reads.count++
+        return value
+      }
+    })
+  }
+  return copy
+}
+
+it.each([
+  { owner: 'stamped', executionHostId: 'local' as const },
+  { owner: 'legacy', executionHostId: undefined }
+])(
+  'a moved reveal over N and 10N unrelated workspaces prunes its one old tab in one write ($owner owner)',
+  async ({ executionHostId }) => {
+    const retired = `retired-project::${destination.path}`
+    const tally: Record<string, number[]> = {}
+    for (const n of [20, 200]) {
+      const catalogReads = { count: 0 }
+      const unrelatedReads = { count: 0 }
+      const unrelated = Array.from({ length: n }, (_, i) =>
+        counted(
+          { ...other, id: `repo-1::/workspace/u${i}`, path: `/workspace/u${i}` },
+          catalogReads
+        )
+      )
+      seedEmptyActivatableWorktree(destination, { extraWorktrees: [other, ...unrelated] })
+      const moved = { ...chat(retired), executionHostId }
+      // The old workspace keeps N other chats beside the moved one, in its group and tab bar.
+      const kept = Array.from({ length: n }, (_, i) => ({
+        ...chat(retired),
+        id: `kept-${i}`,
+        entityId: `kept-chat-${i}`
+      }))
+      const unrelatedTabs = Object.fromEntries(
+        unrelated.map((row) => [row.id, [counted(chat(row.id), unrelatedReads)]])
+      )
+      useAppStore.setState({
+        activeWorktreeId: retired,
+        sleepingAgentSessionsByPaneKey: {},
+        unifiedTabsByWorktree: { ...unrelatedTabs, [retired]: [moved, ...kept] },
+        groupsByWorktree: {
+          [retired]: [
+            {
+              id: 'group',
+              worktreeId: retired,
+              tabOrder: [moved.id, ...kept.map((tab) => tab.id)],
+              activeTabId: moved.id
+            }
+          ]
+        },
+        tabBarOrderByWorktree: { [retired]: [moved.id, ...kept.map((tab) => tab.id)] }
+      })
+      mocks.call.mockImplementation(async (_host, method: string) => {
+        if (method === 'orchestration.partyLocation') {
+          return { location: { kind: 'chat', sessionId: 'chat-a', worktreeId: retired } }
+        }
+        if (method === 'agentSession.reveal') {
+          const tab = chat(destination.id)
+          useAppStore.setState((state) => ({
+            unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [destination.id]: [tab] },
+            groupsByWorktree: {
+              ...state.groupsByWorktree,
+              [destination.id]: [
+                { id: 'group', worktreeId: destination.id, tabOrder: [tab.id], activeTabId: null }
+              ]
+            }
+          }))
+          return { ok: true, sessionId: 'chat-a', workspaceId: destination.id, agent: 'codex' }
+        }
+        return { ok: true }
+      })
+      const unrelatedEntry = useAppStore.getState().unifiedTabsByWorktree[unrelated[0]!.id]
+      let pruning = false
+      let pruneWrites = 0
+      const prune = pruneModule.retireMovedSessionPlacement
+      vi.spyOn(pruneModule, 'retireMovedSessionPlacement').mockImplementation((...args) => {
+        pruning = true
+        try {
+          prune(...args)
+        } finally {
+          pruning = false
+        }
+      })
+      const setState = useAppStore.setState
+      vi.spyOn(useAppStore, 'setState').mockImplementation((...args) => {
+        pruneWrites += pruning ? 1 : 0
+        return setState(...args)
+      })
+      resume.mockClear()
+      catalogReads.count = 0
+      unrelatedReads.count = 0
+
+      await expect(open(retired)).resolves.toBe(true)
+
+      const state = useAppStore.getState()
+      expect(state.activeWorktreeId).toBe(destination.id)
+      expect(shownChat()).toBe(chat(destination.id).id)
+      expect(state.unifiedTabsByWorktree[retired]?.map((tab) => tab.id)).toEqual(
+        kept.map((tab) => tab.id)
+      )
+      expect(state.groupsByWorktree[retired]?.[0]?.tabOrder).toEqual(kept.map((tab) => tab.id))
+      expect(state.tabBarOrderByWorktree[retired]).toEqual(kept.map((tab) => tab.id))
+      // An unrelated workspace's entry is the same object, so its selector does not change.
+      expect(state.unifiedTabsByWorktree[unrelated[0]!.id]).toBe(unrelatedEntry)
+      await vi.waitFor(() => expect(resume).toHaveBeenCalledOnce())
+      const writes = pruneWrites
+      // A repeat finds nothing to prune and writes nothing.
+      prune('chat-a', retired, destination.id, { kind: 'local' })
+      expect(useAppStore.getState().unifiedTabsByWorktree[retired]).toBe(
+        state.unifiedTabsByWorktree[retired]
+      )
+      for (const [key, value] of Object.entries({
+        pruneWrites: writes,
+        unrelatedTabReads: unrelatedReads.count,
+        catalogReads: catalogReads.count
+      })) {
+        ;(tally[key] ??= []).push(value)
+      }
+      vi.restoreAllMocks()
+      resume = vi.spyOn(sleepingResume, 'resumeSleepingAgentSessionsForWorktree').mockReturnValue(1)
+    }
+    console.log('S3_OPENER_COUNTS', JSON.stringify({ executionHostId, tally }))
+    // The opener prunes after the reveal and again at settlement; only the first finds the tab.
+    expect(tally.pruneWrites).toEqual([1, 1])
+    expect(tally.unrelatedTabReads).toEqual([0, 0])
+    expect(tally.catalogReads![1]).toBeLessThanOrEqual(12 * Math.max(tally.catalogReads![0]!, 1))
+  }
+)
