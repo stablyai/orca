@@ -253,7 +253,7 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
         className={cn(
           'size-3.5 shrink-0',
           CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
-          conclusion === 'pending' && 'animate-spin'
+          conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
         )}
       />
       <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
@@ -264,8 +264,10 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
     </>
   )
   const className = 'flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
+  const animationRef = conclusion === 'pending' ? observeOffscreenAnimation : undefined
   return check.url ? (
     <a
+      ref={animationRef}
       href={check.url}
       onClick={openAppHttpLinkFromAnchor}
       className={cn(className, 'transition-colors hover:bg-accent/40')}
@@ -273,6 +275,8 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
       {content}
     </a>
   ) : (
-    <div className={className}>{content}</div>
+    <div ref={animationRef} className={className}>
+      {content}
+    </div>
   )
 }
