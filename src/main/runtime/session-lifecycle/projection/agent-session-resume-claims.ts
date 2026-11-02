@@ -82,11 +82,6 @@ export class AgentSessionResumeClaims {
     return this.share(hold, request)
   }
 
-  /** The pane a resume of this session is starting in, until the hook store covers it. */
-  heldPane(session: ResumedAgentSession): string | undefined {
-    return this.find(session)?.paneKey
-  }
-
   private find(session: ResumedAgentSession): Hold | undefined {
     for (const hold of this.holds) {
       if (

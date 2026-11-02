@@ -10,6 +10,8 @@ import { userTabHoldingSession } from './worker-follow-up-choice'
 import { reopenWorkerTerminal } from './worker-follow-up-placement'
 
 const opening = new Map<string, Promise<OrchestrationPartyLocation | null>>()
+// A resume that failed may still have spawned; its retry keeps the request id so it reconciles that pane.
+const uncertain = new Map<string, string>()
 
 /** Null keeps the lookup's answer: the worker's terminal is still there, or its conversation cannot resume here. */
 export function openClosedWorkerTerminal(
@@ -38,17 +40,14 @@ export function openClosedWorkerTerminal(
     ) {
       return null
     }
-    // The terminal that holds this exact conversation, including one a resume is still starting.
     const held = await userTabHoldingSession(runtime, session)
     if (held) {
       return { kind: 'terminal', handle: held }
     }
-    const reopened = await reopenWorkerTerminal(
-      runtime,
-      resource.worktree_id,
-      session,
-      randomUUID()
-    )
+    const mutationId = uncertain.get(resource.id) ?? randomUUID()
+    uncertain.set(resource.id, mutationId)
+    const reopened = await reopenWorkerTerminal(runtime, resource.worktree_id, session, mutationId)
+    uncertain.delete(resource.id)
     return reopened ? { kind: 'terminal', handle: reopened.handle } : null
   })().finally(() => opening.delete(resource.id))
   opening.set(resource.id, open)

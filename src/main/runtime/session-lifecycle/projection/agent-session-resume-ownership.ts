@@ -149,11 +149,6 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
     return claimSleepRecordForPane((edit) => this.commitWorkspaceSessionEdit(hostId, edit), record)
   }
 
-  /** The pane a resume of this conversation is starting in, before its agent reports. */
-  getAgentSessionResumePane(session: ResumedAgentSession): string | undefined {
-    return this.agentSessionResumeClaims.heldPane(session)
-  }
-
   /** The hook store names the held session in its pane, from a row since the claim. */
   private hookStoreReportsResumeHold(hold: AgentSessionResumeHold): boolean {
     // Why since the claim: the pane's earlier agent may have named the same session.
