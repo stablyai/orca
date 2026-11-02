@@ -102,6 +102,7 @@ export class JournalQueuedMessages {
       floor: this.deps.reopenFloor(),
       get: (messageId) => this.get(messageId),
       editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
+      revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
       unavailable: this.mailUnavailable
     })
   }

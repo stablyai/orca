@@ -15,6 +15,9 @@ export function nextEligibleQueuedCard(input: {
   /** Current values: selection reads identity summaries. */
   get: (messageId: string) => QueuedMessageRow | null
   editHeld: (messageId: string) => boolean
+  /** What else the cards past the head depend on: the queue's revision (any card's edit included)
+   *  and its edit holds' version. */
+  revisions: readonly unknown[]
   unavailable: ((card: QueuedMessageRow) => boolean) | undefined
 }): QueuedMessageRow | null {
   const { state, floor, get } = input
@@ -31,14 +34,17 @@ export function nextEligibleQueuedCard(input: {
   if (!orchestrationMailNotice(head.body.from) || !input.unavailable?.(head)) {
     return head
   }
-  for (const candidate of order.cards.after(head)) {
-    const card = get(candidate.messageId) ?? candidate
-    if (!ready(card)) {
-      return null
+  // What lies past it changes only with a card, a pause or an edit hold: walked once per change.
+  return order.cards.candidates.pastHead(head, input.revisions, () => {
+    for (const candidate of order.cards.candidates.after(head)) {
+      const card = get(candidate.messageId) ?? candidate
+      if (!ready(card)) {
+        return null
+      }
+      if (!orchestrationMailNotice(card.body.from)) {
+        return card
+      }
     }
-    if (!orchestrationMailNotice(card.body.from)) {
-      return card
-    }
-  }
-  return null
+    return null
+  })
 }

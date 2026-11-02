@@ -1,5 +1,6 @@
 // Drafts owe no execution work; derive delivery gates under serialization before consuming one card per turn.
 
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -71,11 +72,16 @@ export function nextStructuredQueuedMessage(
   input: StructuredQueueGateInput & { journal: AgentSessionJournal }
 ): QueuedMessageRow | null {
   // Every gate before the queue is asked: choosing a card can read mail authority, and a session
-  // that is working, blocked or waiting on a prompt can send nothing anyway.
+  // that is working, blocked or waiting on a prompt can send nothing anyway. An empty queue has
+  // nothing to choose, so it never reads the prompt either.
+  const state = input.journal.queuedMessages.inputState()
+  const cards = journalInputOrder(state).cards
+  cards.ensure(state)
   if (
     structuredInputExecutionWorking(input.journal, input.work) ||
     !input.record ||
     structuredAgentSessionSendBlock(input.record) ||
+    !cards.head() ||
     input.work.hasActionablePrompt()
   ) {
     return null
@@ -144,7 +150,7 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (queuedBefore) {
     return { ok: true, value: queuedBefore }
   }
-  if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
+  if (ctx.journal.submission(clientMessageId)) {
     return null
   }
   if (

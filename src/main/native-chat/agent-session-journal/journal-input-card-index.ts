@@ -20,6 +20,7 @@ import {
   queryInputContext
 } from './journal-input-lineage'
 import { JournalInputDomainIndex } from './journal-input-domain-index'
+import { JournalInputCandidates } from './journal-input-candidates'
 
 export class JournalInputCardIndex {
   private index: JournalInputPlaceIndex | undefined
@@ -34,10 +35,7 @@ export class JournalInputCardIndex {
       source?: JournalInputCard
     }
   >()
-  /** The live cards that could lead the queue (waiting and not held, or returned), by position:
-   *  what a pass over held mail walks, never the epoch's dispatched or withdrawn history. */
-  private readonly candidates = new Map<string, QueuedMessageRow>()
-  private ordered: QueuedMessageRow[] | undefined
+  readonly candidates = new JournalInputCandidates()
   // Derived current membership only; the prepared transition owns introduction values.
   private readonly unintroduced = new Set<string>()
   private overlayRows: readonly QueuedMessageRow[] = []
@@ -87,25 +85,6 @@ export class JournalInputCardIndex {
   }
   head(): QueuedMessageRow | undefined {
     return this.index?.allPlaces().head
-  }
-  /** Candidates behind `card` in queue order, one at a time: a walk stops at the first it needs. */
-  *after(card: QueuedMessageRow): Generator<QueuedMessageRow> {
-    const ordered = (this.ordered ??= [...this.candidates.values()].sort(
-      (a, b) => a.position - b.position
-    ))
-    let low = 0
-    let high = ordered.length
-    while (low < high) {
-      const middle = (low + high) >> 1
-      if (ordered[middle]!.position <= card.position) {
-        low = middle + 1
-      } else {
-        high = middle
-      }
-    }
-    for (let next = low; next < ordered.length; next += 1) {
-      yield ordered[next]!
-    }
   }
   paused(card: QueuedMessageRow): boolean {
     return (
@@ -193,7 +172,6 @@ export class JournalInputCardIndex {
       this.domains = undefined
       this.indexed.clear()
       this.candidates.clear()
-      this.ordered = undefined
       this.pauses = [
         ...(pauseInputs[0] && marks.latestStop
           ? [
@@ -260,12 +238,10 @@ export class JournalInputCardIndex {
       introduced: this.lineage.at(state.lastSequence),
       baseline: { coordinate: card.queuedAt }
     }
-    this.ordered = undefined
-    if ((card.state === 'waiting' && card.holdReason === null) || card.state === 'returned') {
-      this.candidates.set(card.messageId, card)
-    } else {
-      this.candidates.delete(card.messageId)
-    }
+    this.candidates.set(
+      card,
+      (card.state === 'waiting' && card.holdReason === null) || card.state === 'returned'
+    )
     this.currentCoordinates!.set(card, actionable, handoff)
     this.index!.set(card, actionable, handoff, {
       epoch: 'introduction',

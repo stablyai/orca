@@ -8,11 +8,13 @@ import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
-import { journalInputOrder } from './journal-input-order'
 import { nextStructuredQueuedMessage } from '../agent-session-wire/structured-agent-session-queued-messages'
 import { structuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import type { QueuedMessageRow } from './queued-message-table'
+import { JournalInputCandidates } from './journal-input-candidates'
+import { readQueuePublication } from '../agent-session-wire/structured-agent-session-queued-publication'
+import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
 
 const personal = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
@@ -38,6 +40,7 @@ const roots: string[] = []
 const journals = createTrackedJournalOpener()
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await journals.closeAll()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -61,6 +64,23 @@ async function queue(unavailable: Set<string>): Promise<AgentSessionJournal> {
 }
 
 const next = (journal: AgentSessionJournal) => journal.queuedMessages.nextInputCard()?.messageId
+
+/** Cards the walk past undecidable head mail reads, counted from now. The prototype is spied: a
+ *  commit applies the queue's derived owners back onto themselves, dropping an instance's own spy. */
+function countWalk(): () => number {
+  const walk = JournalInputCandidates.prototype.after
+  let visits = 0
+  vi.spyOn(JournalInputCandidates.prototype, 'after').mockImplementation(function* (
+    this: JournalInputCandidates,
+    card: QueuedMessageRow
+  ) {
+    for (const candidate of walk.call(this, card)) {
+      visits += 1
+      yield candidate
+    }
+  })
+  return () => visits
+}
 
 function handOver(journal: AgentSessionJournal, messageId: string) {
   const card = journal.queuedMessages.get(messageId)!
@@ -150,30 +170,63 @@ describe("the queue's one rule for the next card", () => {
       for (let card = 0; card < behind; card += 1) {
         await journal.queuedMessages.insert({ messageId: `later-${card}`, body: personal('later') })
       }
-      expect(next(journal)).toBe('C')
-      // Reads of the queue's live order: a walk reads up to its stop, a filtered copy reads all.
-      const cards = journalInputOrder(journal.queuedMessages.inputState()).cards
-      const live = cards['ordered']
-      if (!live) {
-        throw new Error('the queue has not ordered its cards')
-      }
-      let reads = 0
-      const counted: QueuedMessageRow[] = []
-      live.forEach((card, index) => {
-        Object.defineProperty(counted, index, {
-          enumerable: true,
-          get: () => {
-            reads += 1
-            return card
-          }
-        })
-      })
-      cards['ordered'] = counted
-      for (let selection = 0; selection < 10; selection += 1) {
+      const visits = countWalk()
+      // Each new card changes what lies past the mail, so each insert is walked again: to C and no further.
+      for (let insert = 0; insert < 10; insert += 1) {
+        await journal.queuedMessages.insert({ messageId: `new-${insert}`, body: personal('new') })
+        expect(next(journal)).toBe('C')
         expect(next(journal)).toBe('C')
       }
-      // A binary search to the mail card, then one step: nothing proportional to the cards behind.
-      expect(reads).toBeLessThanOrEqual(10 * 12)
+      expect(visits()).toBe(10)
+    }
+  )
+
+  it.each([40, 400])(
+    'reads %i mail cards behind undecidable mail once, not on every publication',
+    async (count) => {
+      const journal = await queue(new Set(['A']))
+      await journal.queuedMessages.insert({ messageId: 'A', body: mail('run:r', 'm1') })
+      for (let card = 1; card < count; card += 1) {
+        await journal.queuedMessages.insert({
+          messageId: `m-${card}`,
+          body: mail('run:r', `m-${card}`)
+        })
+      }
+      const work = structuredAgentSessionCurrentWork(journal, { record: null })
+      const record = agentSessionRecordFixture({ sessionId: 'queue-mail' })
+      const gate = () => ({ record, work })
+      const emit = vi.fn()
+      const subscribers = new AgentSessionSubscribers({
+        readQueuePublication: () => readQueuePublication(journal, gate)
+      })
+      const stops = [
+        subscribers.open({ id: 'desktop', sessionId: 'queue-mail', journal, fence: 0, emit }),
+        subscribers.open({
+          id: 'phone',
+          sessionId: 'queue-mail',
+          journal,
+          fence: 0,
+          emit,
+          boundedFrames: true
+        }),
+        journal.observeCommits(() => subscribers.publish('queue-mail', journal))
+      ]
+      emit.mockClear()
+      const visits = countWalk()
+      const gets = vi.spyOn(journal.queuedMessages, 'get')
+      for (let write = 0; write < 10; write += 1) {
+        await journal.appendItem(
+          { provider: 'orca', clientMessageId: 'unrelated-status' },
+          { kind: 'status', text: `status-${write}` },
+          { fence: 0, turnScope: { kind: 'thread' } }
+        )
+      }
+      // Desktop and phone both hear ten writes that change nothing queued: no queue frame, no walk.
+      expect(emit.mock.calls.some(([event]) => event.queuedMessages !== undefined)).toBe(false)
+      expect(visits()).toBe(0)
+      // The head and its authority, per publication per consumer, whatever waits behind it.
+      expect(gets.mock.calls.length).toBe(20)
+      stops.forEach((stop) => stop())
     }
   )
 
@@ -192,8 +245,8 @@ describe("the queue's one rule for the next card", () => {
       for (let selection = 0; selection < 10; selection += 1) {
         expect(next(journal)).toBe('C')
       }
-      // The head and the one card behind it, per selection: nothing proportional to the old cards.
-      expect(reads).toHaveBeenCalledTimes(20)
+      // The head per selection, and the one card behind it once: nothing proportional to the old cards.
+      expect(reads).toHaveBeenCalledTimes(11)
       expect(lists).not.toHaveBeenCalled()
     }
   )
