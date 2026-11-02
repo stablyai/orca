@@ -2,6 +2,7 @@ import { open, type FileHandle } from 'node:fs/promises'
 import { createStatStyleNamer, parseFontVariationInstances } from './sfnt-variation-instances'
 
 const COLLECTION_TAG = 0x74746366 // 'ttcf'
+const SFNT_VERSIONS = new Set([0x00010000, 0x4f54544f /* 'OTTO' */, 0x74727565 /* 'true' */])
 const NAME_TABLE_TAG = 0x6e616d65 // 'name'
 const FONT_VARIATIONS_TABLE_TAG = 0x66766172 // 'fvar'
 const STYLE_ATTRIBUTES_TABLE_TAG = 0x53544154 // 'STAT'
@@ -9,11 +10,13 @@ const FAMILY_NAME_ID = 1
 const TYPOGRAPHIC_FAMILY_NAME_ID = 16
 // GDI keeps these styles inside the base family rather than naming a family after them.
 const RIBBI_STYLE_WORDS = new Set(['regular', 'bold', 'italic'])
+// "Semi Bold" names a weight of its own, so its "Bold" must survive.
+const STYLE_WORD_MODIFIERS = new Set(['semi', 'demi', 'extra', 'ultra'])
 const MAC_PLATFORM_ID = 1
 const WINDOWS_PLATFORM_ID = 3
 const MAC_ENGLISH_LANGUAGE_ID = 0
 const WINDOWS_ENGLISH_US_LANGUAGE_ID = 0x0409
-// Bounds past these are corrupt files; never allocate what a bad header claims.
+// Never allocate what a corrupt header claims.
 const MAX_COLLECTION_FONTS = 64
 const MAX_TABLE_COUNT = 1024
 const MAX_NAME_TABLE_BYTES = 1024 * 1024
@@ -82,9 +85,12 @@ function parseNameTable(table: Buffer, nameIds: ReadonlySet<number>): Map<number
 }
 
 function namedInstanceFamily(family: string, styleNames: string[]): string {
-  const styleWords = styleNames
-    .flatMap((styleName) => styleName.split(/\s+/))
-    .filter((word) => !RIBBI_STYLE_WORDS.has(word.toLowerCase()))
+  const words = styleNames.flatMap((styleName) => styleName.split(/\s+/))
+  const styleWords = words.filter(
+    (word, index) =>
+      !RIBBI_STYLE_WORDS.has(word.toLowerCase()) ||
+      STYLE_WORD_MODIFIERS.has(words[index - 1]?.toLowerCase() ?? '')
+  )
   return [family, ...styleWords].join(' ')
 }
 
@@ -100,9 +106,9 @@ function nameRecordRank(platformId: number, languageId: number): number | null {
 }
 
 async function readCollectionOffsets(file: FileHandle, header: Buffer): Promise<number[]> {
-  const fontCount = header.readUInt32BE(8)
-  if (fontCount === 0 || fontCount > MAX_COLLECTION_FONTS) {
-    throw new Error(`Invalid font collection size ${fontCount}`)
+  const fontCount = Math.min(header.readUInt32BE(8), MAX_COLLECTION_FONTS)
+  if (fontCount === 0) {
+    throw new Error('Empty font collection')
   }
   const offsets = await readBytes(file, 12, fontCount * 4)
   return Array.from({ length: fontCount }, (_, index) => offsets.readUInt32BE(index * 4))
@@ -157,6 +163,9 @@ async function readTableDirectory(
   fontOffset: number
 ): Promise<Map<number, SfntTable>> {
   const header = await readBytes(file, fontOffset, 12)
+  if (!SFNT_VERSIONS.has(header.readUInt32BE(0))) {
+    throw new Error('Not a TrueType or OpenType font')
+  }
   const tableCount = header.readUInt16BE(4)
   if (tableCount > MAX_TABLE_COUNT) {
     throw new Error(`Invalid font table count ${tableCount}`)

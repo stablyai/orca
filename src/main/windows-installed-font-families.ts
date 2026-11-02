@@ -12,16 +12,22 @@ const FONT_FILE_READ_CONCURRENCY = 16
 
 // Reads font files natively; PowerShell can be blocked by Group Policy or constrained language mode.
 export async function listWindowsInstalledFontFamilies(): Promise<string[]> {
-  const files = readRegistryFontFiles() ?? (await readFontDirectoryFiles())
+  const registryFiles = readRegistryFontFiles()
+  const files = registryFiles?.length ? registryFiles : await readFontDirectoryFiles()
   const results = await mapSettledWithConcurrency(
     files,
     FONT_FILE_READ_CONCURRENCY,
     readSfntFamilyNames
   )
-  return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+  const families = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+  const firstFailure = results.find((result) => result.status === 'rejected')
+  if (families.length === 0 && firstFailure) {
+    throw firstFailure.reason
+  }
+  return families
 }
 
-/** Null when the registry is unreadable, so callers fall back to scanning the font directories. */
+/** Null when the registry is unreadable. */
 function readRegistryFontFiles(): string[] | null {
   try {
     const registry = loadWindowsNativeRegistry()
@@ -36,13 +42,20 @@ function readRegistryFontFiles(): string[] | null {
     return uniqueFontFiles(
       keys.flatMap((values) =>
         Object.values(values ?? {}).map((entry) =>
-          typeof entry?.value === 'string' ? pathWin32.resolve(fontsDirectory, entry.value) : ''
+          typeof entry?.value === 'string'
+            ? pathWin32.resolve(fontsDirectory, expandEnvironmentVariables(entry.value))
+            : ''
         )
       )
     )
   } catch {
     return null
   }
+}
+
+// REG_EXPAND_SZ values arrive unexpanded from the addon.
+function expandEnvironmentVariables(value: string): string {
+  return value.replace(/%([^%]+)%/g, (match, name: string) => process.env[name] ?? match)
 }
 
 async function readFontDirectoryFiles(): Promise<string[]> {
