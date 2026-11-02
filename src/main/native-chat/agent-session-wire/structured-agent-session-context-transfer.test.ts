@@ -1,4 +1,9 @@
-import { readFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import {
+  agentSessionRecoveryExportRoot,
+  RECOVERY_EXPORT_SLOTS
+} from '../agent-session-context-recovery-exports'
 import * as storedAgentRecord from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import { persistRewindRecord } from './structured-rewind-recovery'
 import {
@@ -393,6 +398,27 @@ describe('native saved-context recovery delivery', () => {
     expect(preview).toMatchObject({ status: 'current', transcriptPath: expect.any(String) })
     expect(preview.status === 'current' && preview.transcriptPath).not.toBe(exported)
     expect(await readFile(exported!, 'utf8')).toBe(frozen)
+  })
+  it('delivers bounded saved history without a full-history path when no export slot is free', async () => {
+    const recovery = await fixture.recoverSavedChat(async () => ({ kind: 'unsupported' }))
+    const exports = agentSessionRecoveryExportRoot(fixture.root)
+    for (let slot = 0; slot < RECOVERY_EXPORT_SLOTS; slot++) {
+      await mkdir(join(exports, `slot-${slot}`), { recursive: true, mode: 0o700 })
+    }
+    const id = await fixture.accept('Use what you remember')
+    await eventually(async () =>
+      expect((await fixture.submission(id))?.dispatchState).toBe('accepted')
+    )
+    const sent = JSON.stringify(fixture.dispatch.mock.calls.at(-1)![0].body)
+    expect(sent).toContain('The saved answer is 42')
+    expect(sent).toMatch(/selected \d+ intact items; omitted \d+/)
+    expect(sent).not.toContain('Read omitted saved history at')
+    expect(sent).toContain('Use what you remember')
+    const delivery = recovery.journal.contextTransfers
+      .read()
+      .find((row) => row.kind === 'delivery' && row.mode === 'inline')
+    expect(delivery).toMatchObject({ outcome: { kind: 'inline-accepted', clientMessageId: id } })
+    expect(await readdir(exports)).toHaveLength(RECOVERY_EXPORT_SLOTS)
   })
   it('exports only an authentic frozen source and performs no transfer SQL for ordinary output', async () => {
     const db = openTestJournalHostDatabase(fixture.root).db

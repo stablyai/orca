@@ -1,5 +1,5 @@
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { writeAgentSessionContextSnapshot } from '../agent-session-context-snapshots'
+import { publishAgentSessionRecoveryExport } from '../agent-session-context-recovery-exports'
 import { captureRecoveryContext } from './context-transfer-capture'
 import type { ContextTransferHandoff } from './context-transfer-record'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -31,8 +31,7 @@ export async function exportContextTransfer(
   ) {
     return undefined
   }
-  // Keyed by the frozen source so the terminal hand-off's chat snapshot cannot replace it.
-  return writeAgentSessionContextSnapshot(
+  return publishAgentSessionRecoveryExport(
     database.stateDirectory,
     `${sessionId}/${handoff.id}`,
     source.text
