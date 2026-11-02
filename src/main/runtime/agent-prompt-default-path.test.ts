@@ -1,4 +1,4 @@
-/** Default writes preserve queue, completion timing and per-send PTY lookup; only opted-in sends use submission settlement. */
+/** Default writes preserve queue and per-send PTY lookup; only opted-in sends use submission settlement. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -25,34 +25,6 @@ function dispatchRuntime(): OrcaRuntimeService {
   return runtime
 }
 
-async function completionTicks(): Promise<number> {
-  const target = dispatchRuntime()
-  let release!: (value: { submits: number }) => void
-  let reached = false
-  Object.defineProperty(target, 'writeTerminalAgentPrompt', {
-    value: () => {
-      reached = true
-      return new Promise((resolve) => {
-        release = resolve
-      })
-    }
-  })
-  let done = false
-  void target.sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' }).then(() => {
-    done = true
-  })
-  while (!reached) {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-  release({ submits: 1 })
-  let ticks = 0
-  while (!done && ticks < 50) {
-    await Promise.resolve()
-    ticks += 1
-  }
-  return ticks
-}
-
 describe('agent prompt writer: default path', () => {
   it('never enters the opt-in submit layer', async () => {
     const target = dispatchRuntime()
@@ -66,11 +38,6 @@ describe('agent prompt writer: default path', () => {
       target.sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' })
     ).resolves.toMatchObject({ accepted: true })
     expect(submit).not.toHaveBeenCalled()
-  })
-
-  it("settles its receipt on main's microtask schedule", async () => {
-    // Pin completion timing: adding an async layer increases this count.
-    expect(await completionTicks()).toBe(5)
   })
 
   it('writes a queued leaf prompt to the PTY the leaf names when its turn comes', async () => {

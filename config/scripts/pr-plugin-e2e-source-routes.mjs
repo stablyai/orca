@@ -211,7 +211,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
   // `orca plugin open` / `shot`: renderer reveal, draw wait and main's capture of the panel rect.
   pluginRoute(
     'plugins.view-shot',
-    ['plugin-shot'],
+    ['plugin-shot', 'plugin-shot-editor'],
     [
       `${UI}view\\/`,
       `${STORE}view-capture`,
