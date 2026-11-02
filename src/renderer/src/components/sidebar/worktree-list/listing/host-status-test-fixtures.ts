@@ -113,6 +113,7 @@ export const visibilityArgs: Parameters<typeof useVisibleSidebarWorktrees>[0] = 
 export function sectionArgs(): Parameters<typeof useSidebarSectionRows>[0] {
   return {
     groupBy: 'repo',
+    sortBy: 'recent',
     projectOrderBy: 'manual',
     pinnedDisplayPolicy: 'single-location',
     defaultHostId: 'local',

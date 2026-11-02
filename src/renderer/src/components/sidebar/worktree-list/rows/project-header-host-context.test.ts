@@ -271,6 +271,7 @@ describe('project header host context', () => {
       ]
       const plan = planSidebarRows({
         groupBy: 'repo',
+        sortBy: 'smart',
         worktrees: items,
         repoMap: map,
         prGroupOf: () => 'in-progress',

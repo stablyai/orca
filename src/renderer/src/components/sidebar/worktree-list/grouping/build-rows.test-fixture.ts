@@ -55,6 +55,7 @@ export function buildSidebarRowPlan(
 ) {
   return planSidebarRows({
     groupBy,
+    sortBy: 'smart',
     worktrees,
     repoMap,
     prGroupOf: createSidebarPRGroupReader(repoMap, prCache),

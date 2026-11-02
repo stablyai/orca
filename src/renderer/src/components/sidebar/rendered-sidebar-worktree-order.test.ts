@@ -116,16 +116,30 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('hoists the repo main worktree first, matching the rendered sidebar', () => {
+  it('hoists the repo main worktree first for automatic sorting, matching the rendered sidebar', () => {
     // Arrange flat sort to disagree with grouping so the main-worktree hoist is observable.
-    const feature = makeWorktree('wt-feature', { sortOrder: 1 })
-    const main = makeMainWorktree('wt-main', { sortOrder: 0 })
-    seedStore([feature, main])
+    const feature = makeWorktree('wt-feature', { lastActivityAt: 1 })
+    const main = makeMainWorktree('wt-main', { lastActivityAt: 0 })
+    seedStore([feature, main], { sortBy: 'recent' })
 
     const order = getVisibleWorktreeIds()
 
     expect(order).toEqual(['wt-main', 'wt-feature'])
     expect(order).not.toEqual(['wt-feature', 'wt-main'])
+  })
+
+  it('keeps manual workspace ranks for shortcuts while the sidebar is closed', () => {
+    const feature = makeWorktree('wt-feature', { manualOrder: 20 })
+    const mainA = makeMainWorktree('wt-main-a', { manualOrder: 30 })
+    const mainB = makeMainWorktree('wt-main-b', { manualOrder: 10 })
+    seedStore([mainA, mainB, feature])
+
+    expect(getVisibleWorktreeIds()).toEqual(['wt-main-a', 'wt-feature', 'wt-main-b'])
+    expect(getVisibleWorktreeShortcutTargets().map((target) => target.id)).toEqual([
+      'wt-main-a',
+      'wt-feature',
+      'wt-main-b'
+    ])
   })
 
   it('ignores the agent-send collapse override, which only applies to a mounted list', () => {
@@ -191,7 +205,7 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
 
     seedStore([makeMainWorktree('wt-main'), makeWorktree('wt-created-while-closed')])
 
-    expect(getVisibleWorktreeIds()).toEqual(['wt-main', 'wt-created-while-closed'])
+    expect(getVisibleWorktreeIds()).toEqual(['wt-created-while-closed', 'wt-main'])
   })
 
   it('treats a published order as authoritative, including an explicitly empty one', () => {
@@ -204,7 +218,7 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     expect(getVisibleWorktreeIds()).toEqual([])
 
     setVisibleWorktreeIds(null)
-    expect(getVisibleWorktreeIds()).toEqual(['wt-main', 'wt-feature'])
+    expect(getVisibleWorktreeIds()).toEqual(['wt-feature', 'wt-main'])
   })
 
   it('honors an explicit host filter and keeps the all-hosts default unfiltered', () => {

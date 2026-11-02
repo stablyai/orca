@@ -549,6 +549,29 @@ describe('buildSections', () => {
     expect(sections[0]?.data.map((item) => item.row.worktreeId)).toEqual(['main', 'child'])
   })
 
+  it('keeps manual ranks interleaved with main workspaces in repo groups', () => {
+    const rows = [
+      worktree({ worktreeId: 'main-a', isMainWorktree: true, manualOrder: 30 }),
+      worktree({ worktreeId: 'feature', manualOrder: 20 }),
+      worktree({ worktreeId: 'main-b', isMainWorktree: true, manualOrder: 10 })
+    ]
+    const sections = buildSections(
+      rows,
+      'manual',
+      { ...NO_WORKSPACE_ROW_FILTERS },
+      '',
+      'repo',
+      new Set(),
+      catalogOf([['orca', 'repo-1']])
+    )
+
+    expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual([
+      'main-a',
+      'feature',
+      'main-b'
+    ])
+  })
+
   it('renders empty repo sections from repo placeholders in repo grouping', () => {
     const sections = buildSections(
       [worktree({ repoId: 'repo-1', repo: 'orca' })],

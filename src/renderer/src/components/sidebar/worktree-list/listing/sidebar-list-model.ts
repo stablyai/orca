@@ -52,6 +52,7 @@ export type SidebarListModel = {
 export type SectionRowsArgs = {
   agentSendTargetWorktreeId?: string | null
   groupBy: WorktreeGroupBy
+  sortBy: SortBy
   projectOrderBy: ProjectOrderBy
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
