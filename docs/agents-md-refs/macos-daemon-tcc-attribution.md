@@ -61,8 +61,10 @@ daemon's responsible process, and `/usr/bin/login` does not change that:
 | launchd terminal host            | the host's pid                                 | Lasts until the host exits |
 
 So a forked daemon adopted by a later app launch raises the prompt on every run, however often the
-user allows it. `getMacDaemonTccAttributionHealth` reports it as `severed`: with no live sessions
-it is replaced, and otherwise the notice offers a restart.
+user allows it. `getMacDaemonTccAttributionHealth` reports it as `severed` where a restart moves it
+onto the launchd host: with no live sessions it is replaced, and otherwise the notice offers a
+restart. Hosts that can only fork again (unpackaged builds, Macs below the floor, Node servers) stay
+`intact`, because a restart would not last.
 
 `responsibility_spawnattrs_setdisclaim` is not the fix. It makes every descendant its own
 responsible process, which starts a new session per process, and it makes Apple tools such as `ls`

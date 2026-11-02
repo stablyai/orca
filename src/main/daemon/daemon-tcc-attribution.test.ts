@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,6 +8,11 @@ import { getDaemonPidPath } from './daemon-spawner'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { getProcessStartedAtMs } from './daemon-process-start-time'
 import { MAC_TERMINAL_HOST_EXECUTABLE } from './macos-daemon-bundle'
+
+const appEnvironment = vi.hoisted(() => ({ packaged: true }))
+vi.mock('../../shared/app-environment', () => ({
+  getAppEnvironment: () => ({ isPackaged: () => appEnvironment.packaged })
+}))
 
 // Exercise real PID verification with a child whose argv matches the daemon.
 function spawnDaemonLikeProcess(socketPath: string, tokenPath: string) {
@@ -94,9 +99,23 @@ describe('macOS daemon TCC attribution health', () => {
   })
 
   describe('after the app that forked the daemon has exited', () => {
+    const originalGetSystemVersion = Object.getOwnPropertyDescriptor(process, 'getSystemVersion')
     let orphanPid: number | null = null
 
+    beforeEach(() => {
+      appEnvironment.packaged = true
+      Object.defineProperty(process, 'getSystemVersion', {
+        configurable: true,
+        value: () => '27.2.0'
+      })
+    })
+
     afterEach(() => {
+      if (originalGetSystemVersion) {
+        Object.defineProperty(process, 'getSystemVersion', originalGetSystemVersion)
+      } else {
+        Reflect.deleteProperty(process, 'getSystemVersion')
+      }
       if (orphanPid) {
         process.kill(orphanPid, 'SIGKILL')
         orphanPid = null
@@ -104,13 +123,17 @@ describe('macOS daemon TCC attribution health', () => {
     })
 
     // The intermediate shell exits at once, so launchd adopts the daemon-like process.
-    async function writeOrphanedDaemonPidFile(spawnerExecPath: string): Promise<void> {
+    async function writeOrphanedDaemonPidFile(
+      spawnerExecPath: string,
+      launchArgs = '--login-session-watch'
+    ): Promise<void> {
+      writeFileSync(spawnerExecPath, '', 'utf8')
       const pid = await new Promise<number>((resolve, reject) => {
         const shell = spawn(
           '/bin/sh',
           [
             '-c',
-            '"$0" -e "setTimeout(() => {}, 30000)" daemon-entry --socket "$1" --token "$2" >/dev/null 2>&1 & echo $!',
+            `"$0" -e "setTimeout(() => {}, 30000)" daemon-entry --socket "$1" --token "$2" ${launchArgs} >/dev/null 2>&1 & echo $!`,
             process.execPath,
             socketPath,
             tokenPath
@@ -133,9 +156,7 @@ describe('macOS daemon TCC attribution health', () => {
       if (process.platform !== 'darwin') {
         return
       }
-      const spawnerPath = join(dir, 'Orca')
-      writeFileSync(spawnerPath, '', 'utf8')
-      await writeOrphanedDaemonPidFile(spawnerPath)
+      await writeOrphanedDaemonPidFile(join(dir, 'Orca'))
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('severed')
     })
 
@@ -143,9 +164,24 @@ describe('macOS daemon TCC attribution health', () => {
       if (process.platform !== 'darwin') {
         return
       }
-      const hostPath = join(dir, MAC_TERMINAL_HOST_EXECUTABLE)
-      writeFileSync(hostPath, '', 'utf8')
-      await writeOrphanedDaemonPidFile(hostPath)
+      await writeOrphanedDaemonPidFile(join(dir, MAC_TERMINAL_HOST_EXECUTABLE))
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
+    })
+
+    it('stays intact where a restart would only fork again', async () => {
+      if (process.platform !== 'darwin') {
+        return
+      }
+      appEnvironment.packaged = false
+      await writeOrphanedDaemonPidFile(join(dir, 'Orca'))
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
+    })
+
+    it('stays intact for a headless host, which an exited parent may not have been responsible for', async () => {
+      if (process.platform !== 'darwin') {
+        return
+      }
+      await writeOrphanedDaemonPidFile(join(dir, 'Orca'), '')
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
     })
   })

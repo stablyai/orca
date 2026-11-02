@@ -1965,7 +1965,6 @@
       },
       "useMacTccAttributionSeveredNotice": {
         "title": "macOS 權限可能無法套用至 Orca 終端機",
-        "description": "正在執行的 Orca 終端機由先前安裝的 Orca 所啟動的常駐程式代管。macOS 可能不會對它們套用 Orca 的輔助使用、自動化或受保護檔案權限。從「管理工作階段」重新啟動常駐程式以恢復存取。這將關閉所有正在執行的 Orca 終端機。",
         "openManageSessions": "開啟管理工作階段",
         "dismiss": "關閉",
         "folderAccessTitle": "終端機無法讀取你的 {{folder}}",
@@ -12033,7 +12032,6 @@
           "permissionDenied": "麥克風存取遭到封鎖。請在系統設定中允許麥克風存取，然後重試。"
         },
         "TerminalTccAttributionNotice": {
-          "body": "終端機常駐行程是由已不存在的 Orca 安裝副本啟動的，因此 macOS 無法將其命令歸屬於 Orca —「輔助使用」和「自動化」的授權會被忽略，且不會顯示提示（osascript 執行失敗，錯誤碼為 -25211）。重新啟動常駐行程即可解決此問題；正在執行的終端機工作階段將會關閉。",
           "openManageSessions": "開啟管理工作階段",
           "title": "macOS 權限授權未套用至終端機"
         },

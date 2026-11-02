@@ -17,7 +17,9 @@ const { execFileMock, execFileSyncMock, psCommandLine, psError } = vi.hoisted(()
       _options: unknown,
       callback: (error: Error | null, stdout: string, stderr: string) => void
     ) => {
-      const stdout = args.includes('ppid=') ? '4242\n' : `${PS_START} ${psCommandLine.value}\n`
+      const stdout = args.includes('ppid=')
+        ? `4242 ${psCommandLine.value}\n`
+        : `${PS_START} ${psCommandLine.value}\n`
       callback(psError.value, psError.value ? '' : stdout, '')
     }
   ),

@@ -1790,7 +1790,6 @@
       },
       "useMacTccAttributionSeveredNotice": {
         "title": "Les autorisations macOS peuvent ne pas s'appliquer aux terminaux Orca",
-        "description": "Les terminaux Orca en cours d'exécution sont hébergés par un daemon démarré par une installation précédente d'Orca. macOS peut ne pas leur appliquer les autorisations Accessibilité, Automatisation ou fichiers protégés d'Orca. Redémarrez le daemon depuis Gérer les sessions pour restaurer l'accès. Cela fermera tous les terminaux Orca en cours d'exécution.",
         "openManageSessions": "Ouvrir Gérer les sessions",
         "dismiss": "Ignorer",
         "folderAccessTitle": "Les terminaux ne peuvent pas lire votre {{folder}}",
@@ -12134,7 +12133,6 @@
           "permissionDenied": "L'accès au microphone est bloqué. Accordez-le dans les paramètres de votre système, puis réessayez."
         },
         "TerminalTccAttributionNotice": {
-          "body": "Le daemon du terminal a été démarré par une installation d'Orca qui n'existe plus, donc macOS ne peut pas attribuer ses commandes à Orca — les autorisations Accessibilité et Automatisation sont ignorées silencieusement (osascript échoue avec l'erreur -25211). Redémarrer le daemon corrige le problème ; les sessions de terminal en cours seront fermées.",
           "openManageSessions": "Ouvrir Gérer les sessions",
           "title": "Les autorisations macOS n'arrivent pas aux terminaux"
         },

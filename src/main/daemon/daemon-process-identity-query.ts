@@ -59,18 +59,21 @@ export async function getPsProcessIdentityAsync(pid: number): Promise<ProcessIde
   }
 }
 
-export async function getPsParentPidAsync(pid: number): Promise<number | null> {
+/** Node's ppid is only the caller's, so another process's parent comes from ps. */
+export async function getPsParentProcessAsync(
+  pid: number
+): Promise<{ parentPid: number; commandLine: string } | null> {
   try {
     const stdout = await new Promise<string>((resolve, reject) => {
       execFile(
         'ps',
-        ['-p', String(pid), '-o', 'ppid='],
+        ['-p', String(pid), '-o', 'ppid=', '-o', 'command='],
         { encoding: 'utf8', env: psLocaleEnvironment(), timeout: PS_IDENTITY_TIMEOUT_MS },
         (error, output) => (error ? reject(error) : resolve(output))
       )
     })
-    const parentPid = Number(stdout.trim())
-    return stdout.trim() && Number.isSafeInteger(parentPid) ? parentPid : null
+    const match = /^\s*(\d+)\s+(.*)$/s.exec(stdout)
+    return match ? { parentPid: Number(match[1]), commandLine: match[2].trim() } : null
   } catch {
     return null
   }

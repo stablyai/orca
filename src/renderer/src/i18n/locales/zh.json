@@ -1560,7 +1560,6 @@
       },
       "useMacTccAttributionSeveredNotice": {
         "title": "macOS 权限可能无法到达 Orca 终端",
-        "description": "正在运行的 Orca 终端由先前 Orca 安装启动的守护程序托管。 macOS 可能不会对它们应用 Orca 的辅助功能、自动化或受保护文件权限。从“管理会话”重新启动守护程序以恢复访问。这将关闭所有正在运行的 Orca 终端。",
         "openManageSessions": "打开管理会话",
         "dismiss": "关闭",
         "folderAccessTitle": "终端无法读取您的 {{folder}}",
@@ -11662,7 +11661,6 @@
           "manualInstallHint": "{{value0}} 版本在 Windows 上未签名，应用内更新程序无法将其安装到已签名的版本之上。请先运行一次下载的安装程序，Windows 会提示发布者未知。安装后即可在此切换版本，包括切回稳定版。"
         },
         "TerminalTccAttributionNotice": {
-          "body": "终端守护进程是由不再存在的 Orca 安装启动的，因此 macOS 无法将其命令归因于 Orca — 可访问性和自动化授权将被静默忽略（osascript 失败并出现错误 -25211）。重新启动守护进程可以解决此问题；正在运行的终端会话将关闭。",
           "openManageSessions": "打开管理会话",
           "title": "macOS 权限授予未到达终端"
         },

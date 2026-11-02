@@ -2015,7 +2015,6 @@
       },
       "useMacTccAttributionSeveredNotice": {
         "title": "macOS-Berechtigungen gelten möglicherweise nicht für Orca-Terminals",
-        "description": "Die laufenden Orca-Terminals werden von einem Daemon bereitgestellt, der von einer früheren Orca-Installation gestartet wurde. macOS wendet Orcas Berechtigungen für Accessibility, Automation oder geschützte Dateien möglicherweise nicht auf diese Terminals an. Den Daemon unter „Sitzungen verwalten“ neu starten, um den Zugriff wiederherzustellen. Dadurch werden alle laufenden Orca-Terminals geschlossen.",
         "openManageSessions": "„Sitzungen verwalten“ öffnen",
         "dismiss": "Ausblenden",
         "folderAccessTitle": "Terminals können {{folder}} nicht lesen",
@@ -12210,7 +12209,6 @@
           "permissionDenied": "Der Mikrofonzugriff ist blockiert. In den Systemeinstellungen gewähren und erneut versuchen."
         },
         "TerminalTccAttributionNotice": {
-          "body": "Der Terminal-Daemon wurde von einer nicht mehr vorhandenen Orca-Installation gestartet. Deshalb kann macOS seine Befehle nicht Orca zuordnen – Berechtigungen für Accessibility und Automation werden ohne Meldung ignoriert (osascript schlägt mit Fehler -25211 fehl). Ein Neustart des Daemons behebt das Problem; laufende Terminal-Sitzungen werden geschlossen.",
           "openManageSessions": "„Sitzungen verwalten“ öffnen",
           "title": "macOS-Berechtigungen erreichen die Terminals nicht"
         },

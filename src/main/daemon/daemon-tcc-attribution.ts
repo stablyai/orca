@@ -3,8 +3,9 @@ import { basename } from 'node:path'
 import { getDaemonPidPath } from './daemon-spawner'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { readVerifiedDaemonPid } from './daemon-pid-identity'
-import { getPsParentPidAsync } from './daemon-process-identity-query'
+import { getPsParentProcessAsync } from './daemon-process-identity-query'
 import { MAC_TERMINAL_HOST_EXECUTABLE } from './macos-daemon-bundle'
+import { canLaunchMacDaemonFromStableBundle } from './macos-daemon-launchd'
 import { PROTOCOL_VERSION } from './types'
 
 const LAUNCHD_PID = 1
@@ -76,12 +77,16 @@ export async function getMacDaemonTccAttributionHealth(
     if (basename(parsedPid.spawnerExecPath) === MAC_TERMINAL_HOST_EXECUTABLE) {
       return 'intact'
     }
-    // Once the forking app exits, tccd sees each new child as its own session, so session-scoped grants never stick (#12971).
-    const parentPid = await getPsParentPidAsync(parsedPid.pid)
-    if (parentPid === null) {
+    const parent = await getPsParentProcessAsync(parsedPid.pid)
+    if (!parent) {
       return 'unknown'
     }
-    return parentPid === LAUNCHD_PID ? 'severed' : 'intact'
+    // Once the forking app exits, tccd sees each new child as its own session, so session-scoped grants never stick (#12971).
+    // Only hosts that a restart moves onto the launchd helper report it; forking again would sever again.
+    return parent.parentPid === LAUNCHD_PID &&
+      canLaunchMacDaemonFromStableBundle(parent.commandLine.includes('--login-session-watch'))
+      ? 'severed'
+      : 'intact'
   })()
   if (cacheKey) {
     cachedMacDaemonTccAttributionHealth = { key: cacheKey, pending }

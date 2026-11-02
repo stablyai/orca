@@ -59,8 +59,8 @@ export function TerminalTccAttributionNotice(props: {
           </p>
           <p className="text-xs leading-snug">
             {translate(
-              'auto.components.settings.TerminalTccAttributionNotice.body',
-              'The terminal daemon was started by an Orca process that has since exited, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211), and prompts to access data from other apps come back on every command. Restarting the daemon fixes this; running terminal sessions will close.'
+              'auto.components.settings.TerminalTccAttributionNotice.appExitedBody',
+              'The terminal daemon outlived the Orca process that started it, so macOS may ignore Accessibility and Automation grants for its terminals (osascript fails with error -25211) and ask for access to data from other apps on every command. Restarting the daemon fixes this; running terminal sessions will close.'
             )}
           </p>
         </div>
