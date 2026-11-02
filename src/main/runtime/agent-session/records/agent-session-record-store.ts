@@ -27,6 +27,7 @@ import {
 } from '../ownership/agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import {
+  agentSessionExecutionLocationsEqual,
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
   type AgentSessionRecord
@@ -302,6 +303,39 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
+
+  async rebindWorkspace(
+    sessionId: string,
+    original: AgentSessionExecutionLocation,
+    location: AgentSessionExecutionLocation,
+    check: (record: AgentSessionRecord) => void
+  ): Promise<void> {
+    let changed = false
+    const receipt = this.transactions.receipt((draft) => {
+      const record = requireWritableAgentSessionRecord(draft, sessionId)
+      if (agentSessionExecutionLocationsEqual(record.location, location)) {
+        return
+      }
+      check(record)
+      if (!agentSessionExecutionLocationsEqual(record.location, original)) {
+        throw new Error('Chat workspace changed during recovery')
+      }
+      draft.records.set(sessionId, { ...record, location })
+      changed = true
+    })
+    await this.transactions.commitReceipt({
+      write: (db) => {
+        receipt.write(db)
+        if (changed) {
+          db.prepare('UPDATE journal_sessions SET workspace_id = ? WHERE session_id = ?').run(
+            location.workspaceId,
+            sessionId
+          )
+        }
+      },
+      committed: () => receipt.committed()
+    })
+  }
 
   /** Evaluate options against the record held by this ordered write. */
   reviseSessionOptions = <A extends { sessionId: string }>(

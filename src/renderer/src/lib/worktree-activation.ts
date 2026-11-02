@@ -6,9 +6,6 @@ import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { activateWebRuntimeSessionWorktree } from '@/runtime/web-runtime-worktree-activation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-registration'
-import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
-import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
@@ -35,8 +32,8 @@ import {
   type WorktreeActivationOptions,
   type WorktreeActivationSurfaceSelection
 } from './worktree-activation-surface-selection'
-import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
 import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
+import { wakeWorkspaceAgents } from './worktree-activation-agent-wake'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from './pending-worktree-creation'
@@ -54,10 +51,48 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
-const canInspectAgentActivationInventory = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof window.api?.runtime?.call === 'function' &&
-  typeof window.api?.pty?.listSessions === 'function'
+/** The host's folder when its path can open; a blocked path answers 'blocked', with a toast unless `quiet`. */
+export function openableFolderWorkspace(
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId,
+  runtime?: { runtimeEnvironmentId: string | null },
+  quiet = false
+) {
+  const state = useAppStore.getState()
+  const folderWorkspaceOwner = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+  const folderWorkspace = selectFolderWorkspaces(state).find(
+    (workspace) => workspace === folderWorkspaceOwner
+  )
+  if (!folderWorkspace) {
+    return null
+  }
+  const runtimeEnvironmentId = runtime
+    ? runtime.runtimeEnvironmentId
+    : getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId, executionHostId)
+  const pathStatus = state.getFreshFolderWorkspacePathStatus(
+    {
+      scope: 'folder-workspace',
+      folderWorkspaceId
+    },
+    { runtimeEnvironmentId }
+  )
+  if (folderWorkspaceActivationBlocked(pathStatus) && quiet) {
+    return 'blocked' as const
+  }
+  if (folderWorkspaceActivationBlocked(pathStatus)) {
+    const title =
+      getFolderWorkspacePathStatusTitle(pathStatus) ??
+      translate(
+        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
+        'Cannot open folder workspace'
+      )
+    toast.error(title, {
+      description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
+    })
+    return 'blocked' as const
+  }
+  return { folderWorkspace, runtimeEnvironmentId }
+}
 
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
@@ -70,42 +105,18 @@ export function activateAndRevealFolderWorkspace(
     executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
-  const state = useAppStore.getState()
-  const folderWorkspaceOwner = findFolderWorkspaceOwner(
-    state,
+  const openable = openableFolderWorkspace(
     folderWorkspaceId,
-    opts?.executionHostId
-  )
-  const folderWorkspace = selectFolderWorkspaces(state).find(
-    (workspace) => workspace === folderWorkspaceOwner
-  )
-  if (!folderWorkspace) {
-    return false
-  }
-  const runtimeEnvironmentId =
+    opts?.executionHostId,
     opts && 'runtimeEnvironmentId' in opts
-      ? (opts.runtimeEnvironmentId ?? null)
-      : getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId, opts?.executionHostId)
-  const pathStatus = state.getFreshFolderWorkspacePathStatus(
-    {
-      scope: 'folder-workspace',
-      folderWorkspaceId
-    },
-    { runtimeEnvironmentId }
+      ? { runtimeEnvironmentId: opts.runtimeEnvironmentId ?? null }
+      : undefined
   )
-  if (folderWorkspaceActivationBlocked(pathStatus)) {
-    const title =
-      getFolderWorkspacePathStatusTitle(pathStatus) ??
-      translate(
-        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
-        'Cannot open folder workspace'
-      )
-    toast.error(title, {
-      description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
-    })
+  if (!openable || openable === 'blocked') {
     return false
   }
-
+  const { folderWorkspace, runtimeEnvironmentId } = openable
+  const state = useAppStore.getState()
   if (state.activeView !== 'terminal') {
     state.setActiveView('terminal')
   }
@@ -120,24 +131,12 @@ export function activateAndRevealFolderWorkspace(
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
-  // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
-  const shouldGateAgentActivation =
-    !opts?.startup &&
-    (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
-      (canInspectAgentActivationInventory() &&
-        shouldAutoCreateInitialTerminal(
-          state.reconcileWorktreeTabModel(workspaceKey).renderableTabCount
-        )))
-  if (!shouldGateAgentActivation) {
-    resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  }
-  if (shouldGateAgentActivation) {
-    gateAndReseedEmptyWorkspace(workspaceKey, {
-      callerProvidesSurface: opts?.providesInitialSurface === true,
-      seedUserDefaultSurface,
-      ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
-    })
-  }
+  const shouldGateAgentActivation = wakeWorkspaceAgents(workspaceKey, {
+    hasActivationWork: !!opts?.startup,
+    callerProvidesSurface: opts?.providesInitialSurface === true,
+    seedUserDefaultSurface,
+    ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
+  })
   const primaryTabId = shouldGateAgentActivation
     ? null
     : ensureFolderWorkspaceInitialTerminal(
@@ -232,25 +231,12 @@ export function activateAndRevealWorktree(
     })
   }
 
-  // Decide gate before resuming: resume consumes sleeping evidence, and late structured inventory can otherwise authorize a shell beside a pending chat (STA-1111).
-  const shouldGateAgentActivation =
-    !hasActivationWork &&
-    (workspaceHasSleepingAgentSessions(postActivationState, worktreeId) ||
-      (canInspectAgentActivationInventory() &&
-        shouldAutoCreateInitialTerminal(
-          postActivationState.reconcileWorktreeTabModel(worktreeId).renderableTabCount
-        )))
-  if (!shouldGateAgentActivation) {
-    // Resume preserved provider sessions before shell seeding; synchronous tab creation prevents an extra bare shell.
-    resumeSleepingAgentSessionsForWorktree(worktreeId)
-  }
-  if (shouldGateAgentActivation) {
-    gateAndReseedEmptyWorkspace(worktreeId, {
-      callerProvidesSurface: opts?.providesInitialSurface === true,
-      seedUserDefaultSurface,
-      ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
-    })
-  }
+  const shouldGateAgentActivation = wakeWorkspaceAgents(worktreeId, {
+    hasActivationWork,
+    callerProvidesSurface: opts?.providesInitialSurface === true,
+    seedUserDefaultSurface,
+    ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
+  })
 
   const primaryTabId =
     shouldGateAgentActivation || (providesInitialSurface && !hasActivationWork)

@@ -23,6 +23,7 @@ export function installAutomationRunInteractionCases<T>({
     activateTab: Mock
     rpc: Mock
     activate: Mock
+    navigate: Mock
     ownerActivate: Mock
     toastMessage: Mock
     toastError: Mock
@@ -150,7 +151,7 @@ export function installAutomationRunInteractionCases<T>({
         return { ok: true }
       })
       const late: string[] = []
-      mocks.activate.mockImplementation((workspace?: string) => {
+      const show = (workspace?: string) => {
         mocks.state.activeWorktreeId = workspace
         if (workspace === actualWorkspace) {
           late.push('sync')
@@ -161,7 +162,9 @@ export function installAutomationRunInteractionCases<T>({
           })
         }
         return true
-      })
+      }
+      mocks.activate.mockImplementation(show)
+      mocks.navigate.mockImplementation(show)
       const history = () =>
         activateAiVaultStructuredSession({ structuredSession: pointer }, undefined, target)
       let handled: Promise<boolean>
@@ -189,7 +192,7 @@ export function installAutomationRunInteractionCases<T>({
       expect(mocks.state.activeWorktreeId).toBe(actualWorkspace)
       expect(mocks.activate.mock.calls).toEqual(
         historyFirst
-          ? [[actualWorkspace]]
+          ? []
           : [
               [
                 WT,
@@ -208,6 +211,10 @@ export function installAutomationRunInteractionCases<T>({
                 }
               ]
             ]
+      )
+      // A History-first open shows the chat's workspace through the chat navigation instead.
+      expect(mocks.navigate.mock.calls.map(([id, host]) => [id, host])).toEqual(
+        historyFirst ? [[actualWorkspace, `runtime:${ENV}`]] : []
       )
       expect(mocks.activateTab).toHaveBeenCalledExactlyOnceWith('actual-issued', {
         worktreeId: actualWorkspace

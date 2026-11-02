@@ -1,3 +1,7 @@
+import { RpcDispatcher } from './rpc/dispatcher'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
+import { readPersistedTestAgentSessionStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
@@ -252,4 +256,40 @@ export async function physicalReload(rig: AuthorityRig) {
   await fresh.runtime.restoreStructuredAgentSessionTabs()
   await chatTabCommandsSettled()
   return fresh
+}
+
+export async function reveal(rig: Awaited<ReturnType<typeof openAuthorityRuntime>>, caller = true) {
+  return new RpcDispatcher({
+    runtime: rig.runtime,
+    methods: STRUCTURED_AGENT_SESSION_REVEAL_METHODS
+  }).dispatch(
+    {
+      id: 'retained-history',
+      authToken: 'token',
+      method: 'agentSession.reveal',
+      params: { sessionId: B, ...(caller ? { navigation: 'caller' } : {}) }
+    },
+    {
+      clientKind: 'mobile',
+      pairedDeviceId: 'phone',
+      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    }
+  )
+}
+
+export async function inWorkspace(
+  workspace: string,
+  kind: 'folder' | 'git-worktree' = 'git-worktree',
+  executionHostId: 'local' | 'ssh:offline' = 'local'
+) {
+  const input = await authorityProfile([], { records: [B], visible: [] })
+  const prior = await readPersistedTestAgentSessionStore(root)
+  await seedTestAgentSessionRecordStore(root, {
+    records: Object.values(prior.records).map((record) => ({
+      ...record,
+      location: { ...record.location, workspaceId: workspace, workspaceKind: kind, executionHostId }
+    })),
+    sessionTabs: []
+  })
+  return { ...input, workspace }
 }

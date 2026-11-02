@@ -10,6 +10,8 @@ import type {
 import { retireTerminalSurfacesFromSnapshot } from '../mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
+import { retireStructuredAgentSessionTabFrom } from '../agent-session/structured-agent-session-tab-retirement'
+import { structuredSessionPlacementAllowed } from './structured-session-placement'
 
 export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   abstract getTerminalWorktreeIdForPaneKey(
@@ -126,6 +128,14 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
   ): RuntimeMobileSessionTabsSnapshot {
     let next = snapshot
     for (const tab of snapshot.tabs) {
+      // A frame published before a chat moved must not put it back in its old workspace.
+      if (
+        tab.type === 'agent-session' &&
+        !structuredSessionPlacementAllowed(this.store, snapshot.worktree, tab.sessionId)
+      ) {
+        next = retireStructuredAgentSessionTabFrom(next, tab.sessionId, tab.id) ?? next
+        continue
+      }
       if (
         tab.type !== 'terminal' ||
         this.isMobileSessionSurfaceMembershipAllowed(

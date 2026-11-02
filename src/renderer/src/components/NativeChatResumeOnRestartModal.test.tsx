@@ -12,6 +12,7 @@ import type * as ActivationModule from '@/lib/activate-ai-vault-structured-sessi
 import { toast } from 'sonner'
 import { expect, it, vi, type Mock } from 'vitest'
 import { useAppStore } from '../store'
+import { makeWorktree } from '@/store/slices/store-test-helpers'
 import { getDefaultSettings } from '../../../shared/constants'
 import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
@@ -589,6 +590,9 @@ it('lists a chat the resume could not carry on when the dialog reopens, with wha
 
   activate.mockImplementationOnce(actual.activateAiVaultStructuredSession)
   useAppStore.setState({
+    // Only a registered workspace opens; this one is already showing.
+    worktreesByRepo: { repo: [makeWorktree({ id: 'workspace', repoId: 'repo' })] },
+    activeWorktreeId: 'workspace',
     unifiedTabsByWorktree: {
       workspace: [
         {

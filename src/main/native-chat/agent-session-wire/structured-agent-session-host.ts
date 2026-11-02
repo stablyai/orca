@@ -1,7 +1,7 @@
 import { createStructuredAgentSessionConversationReads } from './structured-agent-session-conversation-reads'
 import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from './structured-agent-start-journal'
-import { StructuredConversationCommandController } from './structured-conversation-command-controller'
+import { StructuredConversationCommandController as Commands } from './structured-conversation-command-controller'
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
 import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
@@ -26,14 +26,11 @@ import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-
 import * as conversation from './structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from './structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
-import { createStructuredAgentSessionWorkspaceSleeper } from './structured-agent-session-workspace-sleep'
+import { createStructuredSessionWorkspaceActions } from './structured-session-workspace-actions'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
-  private readonly conversationCommands = new StructuredConversationCommandController(
-    () => this.mutationContext(),
-    this
-  )
+  private readonly conversationCommands = new Commands(() => this.mutationContext(), this)
   private readonly sessions = createStructuredAgentSessionPublicationWiring({
     client: () => this.clientDelivery,
     delivery: () => this.conversationDelivery,
@@ -189,15 +186,16 @@ export class StructuredAgentSessionHost {
     this.lifetime.close(sessionId, cause, admit)
 
   /** Stop hidden children too, using one bounded host snapshot. */
-  sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => ({
-    deps: this.deps,
+  private workspaceActions = createStructuredSessionWorkspaceActions(() => ({
+    ...this.lifetimeContext(),
     tasks: this.tasks,
     lifetime: this.lifetime,
-    sessions: this.sessions,
-    conversationDelivery: this.conversationDelivery,
-    runtimeState: this.runtimeState,
-    clientDelivery: this.clientDelivery
+    commands: this.conversationCommands,
+    clientDelivery: this.clientDelivery,
+    conversationDelivery: this.conversationDelivery
   }))
+  sleepWorkspace = this.workspaceActions.sleepWorkspace
+  rebindWorkspace = this.workspaceActions.rebindWorkspace
 
   supportsCreate = this.reads.supportsCreate
   agentDefinitions = this.reads.agentDefinitions

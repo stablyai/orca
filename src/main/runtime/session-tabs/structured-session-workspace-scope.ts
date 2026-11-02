@@ -1,4 +1,9 @@
 import { prepareStructuredWorkspaceAuthority } from './structured-workspace-authority'
+import {
+  discoverStructuredSessionDestination,
+  isRetiredStructuredSessionSource
+} from './structured-session-destination-discovery'
+import type { Repo } from '../../../shared/repo-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { OrcaRuntimeWithStructuredSessionAccountHome } from './structured-session-account-home'
 import {
@@ -44,10 +49,27 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     ...args: Parameters<RuntimeWorkspaceCatalog['listRepoWorktreesForResolution']>
   ): ReturnType<RuntimeWorkspaceCatalog['listRepoWorktreesForResolution']>
 
-  prepareStructuredAgentSessionRevealWorkspace(location: AgentSessionExecutionLocation) {
-    return prepareStructuredWorkspaceAuthority(this.requireStore(), location, (repo) =>
-      this.listRepoWorktreesForResolution(repo)
+  async prepareStructuredAgentSessionRevealWorkspace(location: AgentSessionExecutionLocation) {
+    const store = this.requireStore()
+    const scan = (
+      repo: Repo,
+      runtimes?: Parameters<RuntimeWorkspaceCatalog['listRepoWorktreesForResolution']>[1]
+    ) => this.listRepoWorktreesForResolution(repo, runtimes)
+    if (!isRetiredStructuredSessionSource(store, location)) {
+      const authority = await prepareStructuredWorkspaceAuthority(store, location, scan)
+      return { ...authority, location, admit: () => {} }
+    }
+    const { destination, scanned, admit } = await discoverStructuredSessionDestination(
+      {
+        store,
+        scan,
+        locate: (target) => this.structuredAgentSessionLocationForTarget(target),
+        folderTarget: (folder) => this.folderWorkspaceToResolvedWorktree(folder)
+      },
+      location
     )
+    const authority = await prepareStructuredWorkspaceAuthority(store, destination, scanned)
+    return { ...authority, location: destination, admit }
   }
 
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
@@ -55,11 +77,15 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     return this.structuredAgentSessionLocationForTarget(target)
   }
 
-  protected structuredAgentSessionLocationForTarget(
-    target: Awaited<
-      ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveRuntimeFileTarget']>
+  protected structuredAgentSessionLocationForTarget(target: {
+    worktree: Pick<
+      Awaited<
+        ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveRuntimeFileTarget']>
+      >['worktree'],
+      'id' | 'path' | 'repoId' | 'hostId'
     >
-  ) {
+    executionHostId: AgentSessionExecutionLocation['executionHostId']
+  }) {
     const routing = resolveWorktreeHostRouting(this.store?.getRepos() ?? [], target.worktree)
     if (routing.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')

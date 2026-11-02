@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     toastError: vi.fn(),
     toastMessage: vi.fn(),
     activate: vi.fn(() => true),
+    navigate: vi.fn(() => true),
     ownerActivate: vi.fn(async () => true)
   }
 })
@@ -69,7 +70,11 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: mocks.toastMessage } }))
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activate,
-  activateAndRevealFolderWorkspace: mocks.activate
+  activateAndRevealFolderWorkspace: mocks.activate,
+  activateAndRevealWorkspace: mocks.activate
+}))
+vi.mock('@/lib/structured-chat-workspace-navigation', () => ({
+  showStructuredChatWorkspace: mocks.navigate
 }))
 vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: mocks.ownerActivate
