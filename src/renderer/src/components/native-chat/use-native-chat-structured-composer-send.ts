@@ -114,7 +114,8 @@ export function useNativeChatStructuredComposerSend({
         text = serializeNativeChatAgentReferences(
           submittedText,
           submitted.document,
-          submitted.pastedTextFiles
+          submitted.pastedTextFiles,
+          hostCommand ? 'goal' : 'message'
         )
       }
       let completeAddition = false

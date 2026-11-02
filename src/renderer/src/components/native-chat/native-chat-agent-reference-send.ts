@@ -29,7 +29,9 @@ function framedLabel(label: string): string {
 export function serializeNativeChatAgentReferences(
   text: string,
   document?: JSONContent,
-  files: Readonly<Record<string, string>> = {}
+  files: Readonly<Record<string, string>> = {},
+  // A goal is one line, so a typed /goal still parses as one; a message puts each note on its own line.
+  layout: 'message' | 'goal' = 'message'
 ): string {
   // Only a panel Mention prints a reference; any other draft keeps the ordinary send text.
   if (!mayHoldAgentReferences(text)) {
@@ -143,7 +145,10 @@ export function serializeNativeChatAgentReferences(
   const body = projected
     .map((part) => (typeof part === 'string' ? part : `@${part.opaque.label}`))
     .join('')
-  return `${body}\n\n${[...selected.values()]
-    .map(({ reference, label }) => agentReferenceNote(label, reference.address))
-    .join('\n')}`
+  const notes = [...selected.values()].map(({ reference, label }) =>
+    agentReferenceNote(label, reference.address)
+  )
+  return layout === 'goal'
+    ? `${body.trimEnd()} ${notes.join(' ')}`
+    : `${body}\n\n${notes.join('\n')}`
 }

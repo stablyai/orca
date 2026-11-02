@@ -266,11 +266,15 @@ it('captures projected identity once for real typed-goal dispatch and Goal mode'
   const expected = serializeNativeChatAgentReferences(
     snapshot.text,
     snapshot.document,
-    snapshot.pastedTextFiles
+    snapshot.pastedTextFiles,
+    'goal'
   )
     .replace(/^\/goal\s+/, '')
     .trim()
   expect(expected).toContain('@Same name (2) @Same name (3)')
+  // One line, so main's one-line /goal parser still reads the typed goal, routing notes included.
+  expect(expected).not.toContain('\n')
+  expect(expected).toContain('message it with orca orchestration send --to')
   expect(expected.match(/@Same name \(2\)/g)).toHaveLength(1)
   const setObjective = vi.fn(async () => true)
   const structured = transport()

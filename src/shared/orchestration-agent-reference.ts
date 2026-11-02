@@ -34,14 +34,6 @@ export function agentReferenceNote(label: string, address: string): string {
   return `[Orca agent "${label}": ${address} — message it with orca orchestration send --to ${address}]`
 }
 
-const TRAILING_NOTES =
-  /\n\n(?:\[Orca agent "(?:[^"\\]|\\.)*": (\S+) — message it with orca orchestration send --to \1\](?:\n|$))+$/
-
-/** The routing lines (with their blank line) that end `text`; '' when it has none. */
-export function trailingAgentReferenceNotes(text: string): string {
-  return TRAILING_NOTES.exec(text)?.[0] ?? ''
-}
-
 export function terminalAgentReference(reference: OrchestrationAgentReference): string | null {
   return isPublicOrchestrationAddress(reference.address)
     ? `${printableAgentLabel(reference.label)}${AGENT_REFERENCE_MARK}${reference.address}) `

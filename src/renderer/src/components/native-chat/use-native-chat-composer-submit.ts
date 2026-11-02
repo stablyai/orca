@@ -92,7 +92,12 @@ export function useNativeChatComposerSubmit(args: {
       const submitted = readNativeChatComposerDraft(draftScopeKey)
       const objective = structuredAgentSessionGoalObjective(
         threadGoal
-          ? serializeNativeChatAgentReferences(draft, submitted.document, submitted.pastedTextFiles)
+          ? serializeNativeChatAgentReferences(
+              draft,
+              submitted.document,
+              submitted.pastedTextFiles,
+              'goal'
+            )
           : draft
       )
       if (!structuredTransport || objective === '') {
