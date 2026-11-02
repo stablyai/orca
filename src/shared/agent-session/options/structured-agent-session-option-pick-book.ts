@@ -1,3 +1,6 @@
+/** A pending Default reset holds the model slot without inventing a model id. */
+export const STRUCTURED_MODEL_DEFAULT_PICK = ''
+
 /** Picks still on their way to the host, by option. Each write bumps the generation, so an older reply or read never overwrites a newer pick. */
 export type StructuredOptionPickBook = {
   pending: Record<string, string>

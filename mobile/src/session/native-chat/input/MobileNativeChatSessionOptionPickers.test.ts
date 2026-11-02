@@ -111,6 +111,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   let renderer: ReactTestRenderer | null = null
   const setOption = vi.fn<MobileNativeChatSessionOptionsController['setOption']>()
   const invokeAction = vi.fn<MobileNativeChatSessionOptionsController['invokeAction']>()
+  const resetOption = vi.fn(async () => ({ snapshot: [] }))
 
   const mount = (
     snapshot: SessionOptionDescriptor[],
@@ -123,7 +124,14 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       pendingId: busy.pendingId ?? null,
       setOption,
       invokeAction,
-      recordCommand: vi.fn()
+      recordCommand: vi.fn(),
+      optionSurface: {
+        getSnapshot: () => snapshot,
+        setOption: async () => ({ snapshot }),
+        invokeAction: async () => ({ snapshot }),
+        subscribe: () => () => {},
+        resetOption
+      }
     }
     function Pickers({ working }: { working: boolean }) {
       const [presentation, setPresentation] = useState<MobileNativeChatPickerPresentation | null>(
@@ -173,6 +181,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   }
 
   beforeEach(() => {
+    resetOption.mockClear()
     Platform.OS = 'ios'
     vi.mocked(AccessibilityInfo.announceForAccessibilityWithOptions).mockClear()
     setOption.mockReset()
@@ -329,6 +338,36 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   it('renders nothing without a model descriptor', () => {
     mount([])
     expect(renderer!.toJSON()).toBeNull()
+  })
+
+  it('offers a separate Default action', async () => {
+    mount([{ ...MODEL_DESCRIPTOR, defaultChoice: { selected: false } }])
+    await act(async () => pill('Model').props.onPress())
+    await act(async () => rowByText('Default').props.onPress())
+    expect(resetOption).toHaveBeenCalledExactlyOnceWith('model')
+    expect(setOption).not.toHaveBeenCalled()
+  })
+
+  it('shows the proven Default model and description under its action', async () => {
+    mount([
+      {
+        ...MODEL_DESCRIPTOR,
+        defaultChoice: {
+          selected: false,
+          model: { value: 'opus', label: 'Opus 5.5', description: 'Most capable model' }
+        }
+      }
+    ])
+    await act(async () => pill('Model').props.onPress())
+    const row = rowByText('Default')
+    expect(rowByText('Opus 5.5\nMost capable model')).toBe(row)
+    expect(row.props.accessibilityState?.checked).toBe(false)
+  })
+
+  it('states when the host has not reported its Default model', async () => {
+    mount([{ ...MODEL_DESCRIPTOR, defaultChoice: { selected: false } }])
+    await act(async () => pill('Model').props.onPress())
+    expect(rowByText('Default model not reported')).toBe(rowByText('Default'))
   })
 
   it('shows the current model and effort in one pill', () => {

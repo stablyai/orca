@@ -450,3 +450,45 @@ it('keeps a readable retired conversation warm without listing or committing its
     service.stop()
   }
 })
+
+it('omits stale original-default proof on passive verified reads without starting a probe', async () => {
+  let now = 1_000
+  const store = new AgentModelCatalogStore({ now: () => now })
+  const pinned = {
+    ...agentSessionRecordFixture(),
+    provider: 'grok',
+    accountHome: { ...HOME, path: '/homes/session' }
+  }
+  store.recordSuccess(
+    agentModelCatalogFingerprintForRecord(pinned),
+    'grok',
+    listing('original-default'),
+    'discovery'
+  )
+  const probe = vi.fn(async () => listing('refreshed-default'))
+  const service = createAgentModelCatalogService({
+    store,
+    getConversation: () => agentSessionConversationView(pinned),
+    getRecord: () => pinned,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => HOME,
+    listingNamesConfiguredModel: new Set(['grok']),
+    agentReadsProjectModelConfig: () => false,
+    recordWorkspacePath: async () => '/workspace/project',
+    workspaceMayOverrideDefaultModel: async () => false,
+    probes: { grok: probe }
+  })
+  const read = () =>
+    service.read({
+      agent: 'grok',
+      sessionId: pinned.sessionId,
+      inSessionWorkspace: true,
+      savedOnly: true,
+      verifiedOnly: true,
+      requireConfiguredDefault: true
+    })
+  expect(await read()).toMatchObject({ origin: 'probe', listingNamesConfiguredModel: true })
+  now += AGENT_MODEL_CATALOG_FRESH_MS
+  expect(await read()).toEqual({ origin: 'unknown' })
+  expect(probe).not.toHaveBeenCalled()
+})
