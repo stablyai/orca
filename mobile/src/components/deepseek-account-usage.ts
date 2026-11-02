@@ -24,22 +24,23 @@ function readDeepSeekAuthConfigured(snapshot: AccountsSnapshot): boolean {
 
 // Why: isolate the optional provider slot so a malformed DeepSeek payload cannot
 // make the existing Claude/Codex account snapshot unreadable.
-function readDeepSeekLimits(
-  snapshot: AccountsSnapshot
-): z.infer<typeof DeepSeekProviderRateLimitsSchema> | null {
+function readDeepSeekLimits(snapshot: AccountsSnapshot): {
+  limits: z.infer<typeof DeepSeekProviderRateLimitsSchema> | null
+  invalid: boolean
+} {
   const raw = snapshot.rateLimits['deepseek']
   if (raw == null) {
-    return null
+    return { limits: null, invalid: false }
   }
   const parsed = DeepSeekProviderRateLimitsSchema.safeParse(raw)
   if (!parsed.success) {
-    return null
+    return { limits: null, invalid: true }
   }
-  return parsed.data
+  return { limits: parsed.data, invalid: false }
 }
 
 export function getDeepSeekAccountUsage(snapshot: AccountsSnapshot): DeepSeekAccountUsage | null {
-  const limits = readDeepSeekLimits(snapshot)
+  const { limits, invalid } = readDeepSeekLimits(snapshot)
   const monthly = limits?.monthly ?? null
   if (!readDeepSeekAuthConfigured(snapshot) && !monthly) {
     return null
@@ -47,8 +48,9 @@ export function getDeepSeekAccountUsage(snapshot: AccountsSnapshot): DeepSeekAcc
 
   const balanceLabel = monthly?.resetDescription?.trim() || null
   const isLoading = !limits || limits.status === 'idle' || limits.status === 'fetching'
-  const status: DeepSeekAccountUsageStatus =
-    limits?.status === 'error' && monthly
+  const status: DeepSeekAccountUsageStatus = invalid
+    ? 'unavailable'
+    : limits?.status === 'error' && monthly
       ? 'refresh-error'
       : monthly
         ? monthly.usedPercent >= 100
