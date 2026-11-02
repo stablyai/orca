@@ -69,6 +69,8 @@ function makeViewerState(): WebSessionTabsSyncState {
     editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
+    retainedAgentsByPaneKey: {},
+    retentionSuppressedPaneKeys: {},
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},

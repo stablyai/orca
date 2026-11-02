@@ -8,6 +8,11 @@ export type DaemonStreamDataBatcherOptions = {
   ) => void
   isSessionAttachedToClient?: (clientId: string, sessionId: string) => boolean
   isSessionDroppable?: (sessionId: string) => boolean
-  /** Preserve terminal queries in dropped output: the hidden program may be waiting for their replies. */
-  salvageDroppedData?: (dropped: string) => string
+  /** Carve reply-eliciting query bytes (DSR/DA/DECRQM/OSC probes) out of dropped data — the hidden program blocks on the reply, so they must still be delivered even when their flood is not. */
+  salvageDroppedData?: (
+    dropped: string,
+    maxChars: number,
+    end?: number,
+    accept?: (chars: number) => boolean
+  ) => string
 }

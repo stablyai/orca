@@ -19,7 +19,7 @@ import type {
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
-import { AgentHookServerState } from './server-state'
+import { AgentHookServerAuthorityProjection } from './server-authority-projection'
 import { serializeAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { PaneTimers } from './program-status/pane-timers'
@@ -28,7 +28,7 @@ import { ProgramStatusFacetStore } from './program-status/facet-store'
 // Unassigned rows sort after the listing counter, which starts at 1.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
-export abstract class AgentHookServerListeners extends AgentHookServerState {
+export abstract class AgentHookServerListeners extends AgentHookServerAuthorityProjection {
   protected statusChangeNotificationVersion = 0
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
 
@@ -49,8 +49,22 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     this.clearStartupPromptClaims = clear
   }
 
+  protected publishAuthorityCorrelation(paneKey: string): void {
+    for (const row of this.combinedStatusEntries()) {
+      if (row.paneKey === paneKey) {
+        this.onAgentStatus?.({ ...row, isReplay: true })
+      }
+    }
+    this.notifyStatusChangeListeners()
+  }
+
   protected emitEnrichedStatus(row: EnrichedAgentHookEventPayload): void {
-    const enriched = this.programStatusFacets.stitch(row)
+    const enriched = this.programStatusFacets.stitch(
+      this.projectLaunchAuthority(
+        row,
+        this.state.lastStatusByPaneKey.has(row.paneKey) ? row : this.authoritySubject(row.paneKey)
+      )
+    )
     this.onAgentStatus?.(enriched)
     for (const listener of this.enrichedStatusListeners) {
       try {
@@ -61,10 +75,6 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     }
   }
 
-  getCanonicalStatusSnapshot() {
-    return this.canonicalStatusStore.getSnapshot()
-  }
-
   _resetCanonicalStatusForTests(): void {
     this.resetCanonicalStatus()
   }
@@ -73,8 +83,10 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     const rows: { entry: EnrichedAgentHookEventPayload; order: number }[] = []
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       rows.push({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
-        entry: this.programStatusFacets.stitch(entry as EnrichedAgentHookEventPayload),
+        entry: this.programStatusFacets.stitch(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; shared listeners expose only the base event type.
+          this.projectLaunchAuthority(entry as EnrichedAgentHookEventPayload)
+        ),
         order: getLegacyStatusListingOrder(this.state, paneKey) ?? UNORDERED_STATUS_ROW
       })
     }
@@ -83,7 +95,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
         continue
       }
       rows.push({
-        entry: structuredStatusLegacyEvent(parent.status),
+        entry: this.projectLaunchAuthority(structuredStatusLegacyEvent(parent.status), parent),
         order:
           this.canonicalListingOrder.get(serializeAgentStatusSubject(parent.subject)) ??
           UNORDERED_STATUS_ROW
@@ -227,13 +239,15 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     if (legacy) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
       const row = legacy as EnrichedAgentHookEventPayload
-      return [toAgentStatusIpcPayload(this.programStatusFacets.stitch(row))]
+      return [
+        toAgentStatusIpcPayload(this.programStatusFacets.stitch(this.projectLaunchAuthority(row)))
+      ]
     }
     const rows: AgentStatusIpcPayload[] = []
     for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
-      const status = this.canonicalStatusStore.getParent(subject)?.status
-      if (status) {
-        rows.push(status)
+      const parent = this.canonicalStatusStore.getCanonicalParent(subject)
+      if (parent?.status) {
+        rows.push(this.projectLaunchAuthority(parent.status, parent))
       }
     }
     return rows
@@ -245,7 +259,9 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   getCurrentAuthorityObservations(): readonly AgentHookAuthorityEvidence[] {
     return Object.freeze(
-      Array.from(this.currentAuthorityObservations.values(), (entry) => Object.freeze({ ...entry }))
+      Array.from(this.currentAuthorityObservations.values(), (entry) =>
+        Object.freeze({ ...entry.evidence })
+      )
     )
   }
 

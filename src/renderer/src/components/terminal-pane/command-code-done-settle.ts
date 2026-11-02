@@ -22,14 +22,20 @@ export function setCommandCodeDoneSettleExecutor(
   }
 }
 
-export function openCommandCodeDoneSettle(paneKey: string, normalizedPrompt: string): void {
+export function openCommandCodeDoneSettle(
+  paneKey: string,
+  normalizedPrompt: string,
+  isCurrent = () => true
+): void {
   cancelCommandCodeDoneSettle(paneKey)
   timerByPaneKey.set(
     paneKey,
     setTimeout(() => {
       timerByPaneKey.delete(paneKey)
       // Why optional: a pane torn down with no successor has no row worth completing.
-      executorByPaneKey.get(paneKey)?.(normalizedPrompt)
+      if (isCurrent()) {
+        executorByPaneKey.get(paneKey)?.(normalizedPrompt)
+      }
     }, COMMAND_CODE_OUTPUT_DONE_SETTLE_MS)
   )
 }

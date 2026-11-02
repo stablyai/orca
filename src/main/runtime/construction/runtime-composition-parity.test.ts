@@ -65,16 +65,7 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     missingOn: 'orcad',
     reason: 'Side effects are delivered to a desktop window only.'
   },
-  {
-    wiring: 'ctor:attestAgentHookCompatibilityAuthority',
-    missingOn: 'orcad',
-    reason: 'Compatibility hook authority belongs to desktop-launched panes.'
-  },
-  {
-    wiring: 'ctor:retireAgentHookCompatibilityAuthority',
-    missingOn: 'orcad',
-    reason: 'Pairs with attestAgentHookCompatibilityAuthority.'
-  },
+
   {
     wiring: 'ctor:getPairedDeviceName',
     missingOn: 'orcad',

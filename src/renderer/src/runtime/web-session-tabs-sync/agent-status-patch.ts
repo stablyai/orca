@@ -23,6 +23,7 @@ import {
   isMirroredAgentPaneKeyForTabs,
   batchAgentPaneKeysForTabs,
   remapHostAgentStatus,
+  toMirroredPaneKey,
   updateBatchAgentPaneKey
 } from './agent-status-primitives'
 import {
@@ -31,6 +32,7 @@ import {
   isMirroredCommandCodeTurnBump,
   writableWebSessionTabsRecord
 } from './state-equality-core'
+import { buildMirroredAgentRetentionPatch } from './agent-status-retention-patch'
 
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
@@ -42,7 +44,12 @@ export function buildMirroredAgentStatusPatch(
   retractedTabIds: ReadonlySet<string>,
   now: number,
   batchContext?: WebSessionTabsBatchContext
-): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
+):
+  | (Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> &
+      Partial<
+        Pick<WebSessionTabsSyncState, 'retainedAgentsByPaneKey' | 'retentionSuppressedPaneKeys'>
+      >)
+  | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
@@ -70,10 +77,20 @@ export function buildMirroredAgentStatusPatch(
     }
   }
   const nextByPaneKey = new Map<string, AgentStatusEntry>()
+  const readySurfaces = new Map<string, TerminalSurface>()
   for (const surface of terminalSurfaceTabs) {
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
+    const paneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
+    if (
+      paneKey &&
+      surface.status === 'ready' &&
+      surface.terminal &&
+      !isMirroredAgentPaneKeyForTabs(paneKey, retractedTabIds)
+    ) {
+      readySurfaces.set(paneKey, surface)
+    }
     const hostEntry = remapHostAgentStatus(surface, retainedSurface)
     if (!hostEntry) {
       continue
@@ -126,10 +143,19 @@ export function buildMirroredAgentStatusPatch(
     const accepted =
       nextEntry === entry ? entry : withHostProgramStatus(nextEntry, entry.programStatus)
     const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
+    // Omission ended the prior display session; its pinned state clock cannot date a returning row.
+    const datedEntry =
+      !existing && !retained && state.retentionSuppressedPaneKeys?.[entry.paneKey]
+        ? {
+            ...accepted,
+            firstStateStartedAt:
+              accepted.firstStateStartedAt ?? accepted.evidenceObservedAt ?? accepted.updatedAt
+          }
+        : accepted
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,
       firstStateStartedAt: resolveAgentSessionStartedAt({
-        entry: accepted,
+        entry: datedEntry,
         previous: existing ?? retained?.entry,
         previousStartedAt: retained?.startedAt
       })
@@ -140,6 +166,19 @@ export function buildMirroredAgentStatusPatch(
   let changed = false
   let aggregateRelevantChange = false
   let sortRelevantChange = false
+  const retentionPatch = buildMirroredAgentRetentionPatch(
+    state,
+    readySurfaces,
+    nextByPaneKey,
+    environmentId,
+    worktreeId,
+    batchContext
+  )
+
+  if (retentionPatch.retainedAgentsByPaneKey) {
+    aggregateRelevantChange = true
+    sortRelevantChange = true
+  }
 
   for (const paneKey of batchAgentPaneKeysForTabs(state, mirroredTabIds, batchContext)) {
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
@@ -219,11 +258,12 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
-  if (!changed) {
+  if (!changed && Object.keys(retentionPatch).length === 0) {
     return null
   }
 
   return {
+    ...retentionPatch,
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
     sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch

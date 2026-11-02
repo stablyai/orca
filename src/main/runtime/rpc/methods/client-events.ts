@@ -1,3 +1,4 @@
+import { TERMINAL_SIDE_EFFECT_STATE_CAPABILITY } from '../../../../shared/terminal-transient-observation'
 import {
   getRegisteredSshState,
   listRegisteredSshTargets
@@ -13,18 +14,60 @@ export const CLIENT_EVENT_METHODS = [
     name: 'runtime.clientEvents.subscribe',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
+    handler: async (_params, { runtime, connectionId, clientKind, clientCapabilities }, emit) => {
+      const terminalState =
+        clientKind !== 'mobile' &&
+        clientCapabilities?.includes(TERMINAL_SIDE_EFFECT_STATE_CAPABILITY) === true
       await new Promise<void>((resolve) => {
         // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
-        const unsubscribe = runtime.onClientEvent(
-          (event) => {
-            emit(event)
-          },
-          { consumesTerminalSideEffects: clientKind !== 'mobile' }
-        )
-
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
+        const unsubscribe = runtime.onClientEvent(
+          (event) => {
+            if (
+              event.type === 'terminalSideEffects' &&
+              !terminalState &&
+              event.batch.terminalState
+            ) {
+              const { terminalState: _state, ...batch } = event.batch
+              if (batch.facts.length > 0) {
+                emit({ ...event, batch })
+              }
+            } else {
+              emit(event)
+            }
+          },
+          {
+            consumesTerminalSideEffects: clientKind !== 'mobile',
+            initialize: () => {
+              // Install the baseline before live callbacks and consumer-availability reentry.
+              for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
+                emit(event)
+              }
+              for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
+                []) {
+                emit(event)
+              }
+              const sshStates = listRegisteredSshTargets().flatMap((target) => {
+                const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
+                return state ? [{ targetId: target.id, state }] : []
+              })
+              // The synchronous baseline/live cut does not expose private target configuration.
+              emit({
+                type: 'ready',
+                subscriptionId,
+                snapshot: {
+                  sshStates,
+                  nativeChatQueueFollowUps: runtime.getClientSettings().nativeChatQueueFollowUps,
+                  ...(terminalState
+                    ? { terminalSideEffects: runtime.getTerminalSideEffectClientEventSnapshot() }
+                    : {})
+                }
+              })
+            }
+          }
+        )
+
         runtime.registerSubscriptionCleanup(
           subscriptionId,
           () => {
@@ -34,28 +77,6 @@ export const CLIENT_EVENT_METHODS = [
           },
           connectionId
         )
-
-        // Listen before snapshotting to close the subscribe race and replay sleep state missed during disconnect.
-        for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
-          emit(event)
-        }
-        for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
-          []) {
-          emit(event)
-        }
-        const sshStates = listRegisteredSshTargets().flatMap((target) => {
-          const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
-          return state ? [{ targetId: target.id, state }] : []
-        })
-        // Listen before snapshotting to close reload gaps without exposing HUB-private target configuration.
-        emit({
-          type: 'ready',
-          subscriptionId,
-          snapshot: {
-            sshStates,
-            nativeChatQueueFollowUps: runtime.getClientSettings().nativeChatQueueFollowUps
-          }
-        })
       })
     }
   }),

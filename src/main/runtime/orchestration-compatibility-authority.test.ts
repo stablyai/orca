@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server'
+import { installTestLaunchAuthority } from '../agent-hooks/server.test-fixtures'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const PANE_KEY = '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222'
@@ -251,6 +252,14 @@ describe('orchestration compatibility runtime authority', () => {
 
   it('attests current coordinators immediately without upgrading restored legacy callers', () => {
     const server = new AgentHookServer()
+    installTestLaunchAuthority(server, [
+      { paneKey: PANE_KEY, token: TOKEN, connectionId: 'saved-target' },
+      {
+        paneKey: '33333333-3333-4333-8333-333333333333:44444444-4444-4444-8444-444444444444',
+        token: TOKEN,
+        connectionId: 'saved-target'
+      }
+    ])
     server.ingestRemote(
       {
         paneKey: PANE_KEY,

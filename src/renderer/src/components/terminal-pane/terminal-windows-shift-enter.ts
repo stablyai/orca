@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
@@ -25,7 +26,8 @@ export function resolveWindowsShiftEnterEncoding(
   }
   // Retain allowlisted encoding during confirmation: CSI-u is inert in shells, while Esc+CR can submit in Pi.
   const agent =
-    signals.foreground?.routingTrusted === true ||
+    (signals.foreground?.routingTrusted === true &&
+      foregroundAgentForActions(signals.foreground) !== null) ||
     signals.foreground?.routingConfirmationPending === true
       ? signals.foreground.agent
       : null
@@ -48,7 +50,7 @@ export function resolveWindowsShiftEnterEncodingForPane(
   if (
     encoding === 'csi-u' ||
     !terminalTitle ||
-    foreground?.routingTrusted === true ||
+    (foreground?.routingTrusted === true && foregroundAgentForActions(foreground) !== null) ||
     foreground?.routingRevoked === true ||
     foreground?.shellForeground === true
   ) {

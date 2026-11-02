@@ -160,13 +160,11 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
           this.applyPtyProgramActivity(ptyId, activity)
         },
         onCommandStarted: () => {
-          this.openCodeRunLifetime.onCommandStarted(ptyId)
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-started' })
         },
         onCommandFinished: (exitCode: number | null) => {
-          void this.recheckHookAgentPresenceForPty(ptyId)
-          this.retirePtyAgentLaunchAuthority(ptyId)
+          this.retirePtyAgentLaunchAuthorityOnConfirmedExit(ptyId)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
-          this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
         },
         onBell: () => {
           this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
@@ -192,7 +190,6 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
       lastTitleFactAtMs: null,
       chunkTouchedSessionTabs: false,
       pendingFacts: [],
-      afterFacts: [],
       // Headless serve has no side-effect consumer, so skip Command Code scraping; otherwise arm from launch command or banner.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)

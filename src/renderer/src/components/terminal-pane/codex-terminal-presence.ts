@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
@@ -8,7 +9,9 @@ function hasCodexTerminal(state: AppState): boolean {
       tabs.some((tab) => tab.launchAgent === 'codex')
     ) ||
     Object.values(state.agentStatusByPaneKey).some((entry) => entry.agentType === 'codex') ||
-    Object.values(state.paneForegroundAgentByPaneKey).some((entry) => entry.agent === 'codex')
+    Object.values(state.paneForegroundAgentByPaneKey).some(
+      (entry) => foregroundAgentForActions(entry) === 'codex'
+    )
   )
 }
 

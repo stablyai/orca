@@ -232,3 +232,28 @@ describe('resolveDashboardCardTerminalInput', () => {
     expect(() => resolveDashboardCardTerminalInput(state, MAC_ARGS)).not.toThrow()
   })
 })
+
+it('keeps dashboard paste passive-neutral with identical independent row evidence', () => {
+  for (const row of [
+    undefined,
+    codexEntry({ restoredUnconfirmed: true }),
+    codexEntry({ state: 'done' })
+  ]) {
+    const state = stateWith({ agentStatusByPaneKey: row ? { [MAC_ARGS.paneKey]: row } : {} })
+    const absent = resolveDashboardCardTerminalInput(state, MAC_ARGS)
+    const passive = resolveDashboardCardTerminalInput(
+      {
+        ...state,
+        paneForegroundAgentByPaneKey: {
+          [MAC_ARGS.paneKey]: {
+            agent: 'codex',
+            agentEvidence: 'process-admitted',
+            shellForeground: false
+          }
+        }
+      },
+      MAC_ARGS
+    )
+    expect(passive).toEqual(absent)
+  }
+})

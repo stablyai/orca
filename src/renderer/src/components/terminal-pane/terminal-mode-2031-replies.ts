@@ -13,7 +13,8 @@ function sendMode2031Reply(
   return transport.sendInputImmediate(mode2031SequenceFor(mode))
 }
 
-// Appearance updates include non-color changes; report only color-mode flips while mode 2031 remains enabled.
+// Appearance updates include font and opacity changes, so only report actual
+// color-mode flips to programs that still have mode 2031 enabled.
 export function maybePushMode2031Flip(
   paneId: number,
   mode: TerminalColorSchemeMode,

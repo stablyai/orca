@@ -68,6 +68,12 @@ export type AgentCompletionCoordinatorOptions = {
 }
 
 export type AgentCompletionCoordinator = {
+  restoreCurrent: (current: {
+    title: string | null
+    working: boolean
+    status: AgentCompletionStatusSnapshot | null
+  }) => void
+  seedTitle: (title: string) => void
   observeTitle: (title: string) => void
   observeClassifiedTitleCompletion: (title: string) => void
   observeTitleWorking: () => void

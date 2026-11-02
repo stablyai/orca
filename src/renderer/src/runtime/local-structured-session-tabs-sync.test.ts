@@ -116,6 +116,8 @@ function createSnapshot(): WebSessionTabsSyncState {
     editorBuffers: {},
     ptyIdsByTabId: { [TERMINAL_ID]: ['pty-1'] },
     remoteBrowserPageHandlesByPageId: {},
+    retainedAgentsByPaneKey: {},
+    retentionSuppressedPaneKeys: {},
     tabBarOrderByWorktree: { [WORKTREE_ID]: [TERMINAL_ID, STRUCTURED_ID] },
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},

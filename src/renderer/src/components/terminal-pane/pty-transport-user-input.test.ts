@@ -86,6 +86,34 @@ describe('createIpcPtyTransport: input kind', () => {
       ['pty-1', 'startup', 'launch']
     ])
   })
+
+  it('R2-C4 does not fold another key while the failed write queue awaits recovery', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({})
+    const onWriteUnavailable = vi.fn()
+    await transport.connect({ url: '', callbacks: { onWriteUnavailable } })
+    vi.mocked(window.api.pty.write).mockImplementationOnce(() => {
+      throw new Error('write channel unavailable')
+    })
+    transport.sendInput('first', 'driving')
+    await flushAsyncTicks()
+    expect(onWriteUnavailable).toHaveBeenCalledOnce()
+    vi.mocked(window.api.pty.write).mockClear()
+    const onEligible = vi.fn()
+    const sent = transport.sendInput('x', 'driving', {
+      onEligible,
+      onDispatch: vi.fn()
+    })
+    expect(sent).toBe(false)
+    expect(window.api.pty.write).not.toHaveBeenCalled()
+    expect(transport.detach).toBeTypeOf('function')
+    if (!transport.detach) {
+      throw new Error('IPC transport must provide detach')
+    }
+    transport.detach()
+    expect(onEligible).not.toHaveBeenCalled()
+  })
+
   it('observes driving attempts synchronously before rejection/ACK without recounting seeds or flush', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } = await import('./pty-preconnect-input-buffer')

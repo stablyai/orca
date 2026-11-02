@@ -56,7 +56,8 @@ export function withHeldChildWaitMainAgent(
 
 export function shouldKeepClaudePermissionVisible(
   previous: EnrichedAgentHookEventPayload | undefined,
-  next: AgentHookEventPayload
+  next: AgentHookEventPayload,
+  launchToken = previous?.launchToken
 ): boolean {
   if (previous?.restoredUnconfirmed) {
     return false
@@ -76,7 +77,7 @@ export function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionOwningChildEnding(previous, next)) {
     return false
   }
-  if (isClaudePermissionSettledByReplay(previous, next)) {
+  if (isClaudePermissionSettledByReplay({ ...previous, launchToken }, next)) {
     return false
   }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {

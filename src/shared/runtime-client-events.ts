@@ -66,6 +66,7 @@ export type RuntimeClientEvent =
 export type RuntimeClientEventStreamMessage =
   | ({ type: 'ready'; subscriptionId: string } & {
       snapshot?: {
+        terminalSideEffects?: TerminalSideEffectBatch[]
         nativeChatQueueFollowUps?: boolean
         repos?: unknown[]
         sshStates?: { targetId: string; state: SshConnectionState }[]

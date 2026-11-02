@@ -114,3 +114,19 @@ export function resolveAgentStatusIdentity(args: {
     inheritedFromActivePane: false
   }
 }
+
+/** Runtime process admission is display-only after its current read loses authority. */
+export function foregroundAgentForActions<T>(
+  entry:
+    | {
+        agent: T | null
+        agentEvidence?: string
+        shellForeground?: boolean
+      }
+    | null
+    | undefined
+): T | null {
+  return entry?.agentEvidence === 'process-admitted' || entry?.shellForeground
+    ? null
+    : (entry?.agent ?? null)
+}

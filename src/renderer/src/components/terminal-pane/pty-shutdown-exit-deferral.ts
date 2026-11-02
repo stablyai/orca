@@ -1,10 +1,12 @@
+import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
+import { residentsByPtyId, retireCapturedResident } from './terminal-semantic-residents'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { unregisterPtyDataHandlers } from './pty-shutdown-data-suspension'
 import {
-  unregisterPtyDataHandlers,
-  type PtyDataHandlerShutdownSnapshot
-} from './pty-shutdown-data-suspension'
-import { shouldApplyHostSleepPhase } from './pty-shutdown-host-generation'
+  shouldApplyHostSleepPhase,
+  type HostPtySleepDisposition
+} from './pty-shutdown-host-generation'
 
 export type PtyShutdownSettlement = 'committed' | 'rolled-back'
 
@@ -14,17 +16,7 @@ const deferredExitCallbacksByPtyId = new Map<
 >()
 const committedExitExpiresAtByPtyId = new Map<string, number>()
 const committedPendingSettlements = new Set<string>()
-const hostSleepDispositionByPtyId = new Map<
-  string,
-  {
-    generation: number
-    phase: 'pending' | 'committed'
-    expiresAt: number
-    snapshot?: PtyDataHandlerShutdownSnapshot
-    expiryTimer?: ReturnType<typeof setTimeout>
-    ptyId: string
-  }
->()
+const hostSleepDispositionByPtyId = new Map<string, HostPtySleepDisposition>()
 // Why: RPC and transport streams can reorder a committed exit; 30 seconds covers delayed delivery while 512 bounds abandoned guards.
 const COMMITTED_EXIT_GRACE_MS = 30_000
 const COMMITTED_EXIT_MAX = 512
@@ -295,4 +287,31 @@ export function settleDeferredPtyShutdownExits(
       }
     }
   }
+}
+
+export function observeTerminalSemanticResidentExit(
+  ptyId: string,
+  code: number,
+  incarnationId?: string
+): void {
+  const resident = residentsByPtyId.get(ptyId)
+  if (
+    !resident ||
+    (incarnationId !== undefined && resident.identity.incarnationId !== incarnationId)
+  ) {
+    return
+  }
+  if (!isProvenProcessExit(code)) {
+    resident.policy.foreground.paneForegroundAgentTracker.suspend()
+    return
+  }
+  if (resident.policy.isPtyShutdownPending(ptyId)) {
+    deferPtyShutdownExit(ptyId, (settlement) => {
+      if (settlement === 'committed') {
+        retireCapturedResident(resident)
+      }
+    })
+    return
+  }
+  retireCapturedResident(resident)
 }

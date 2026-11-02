@@ -1,3 +1,4 @@
+// Command Code output/status fixtures are synthetic output, not a recorded CLI session.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 import { stripTerminalControl } from './terminal-control-stripping'

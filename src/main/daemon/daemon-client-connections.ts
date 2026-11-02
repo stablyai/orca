@@ -1,5 +1,6 @@
 import { daemonHelloResizeModel } from './daemon-history-replay-pty'
 import type { Socket } from 'node:net'
+import { TERMINAL_TRANSIENTS_CAPABILITY } from '../../shared/terminal-transient-observation'
 import { StringDecoder } from 'node:string_decoder'
 import { isDaemonRequestFrame, isHelloFrame } from './daemon-client-frame-guards'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -17,6 +18,7 @@ export type ConnectedDaemonClient = {
   streamSocket: Socket | null
   /** Set per stream socket by its hello; absent means NDJSON. */
   streamFraming?: DaemonStreamFraming
+  terminalState?: boolean
   authenticatedPairEstablished: boolean
 }
 
@@ -153,12 +155,19 @@ export class DaemonClientConnections {
       ...(hello.role === 'stream' ? { streamFraming } : {})
     })
     const identity = this.options.identity
+    const terminalState =
+      hello.role === 'stream' &&
+      Array.isArray(hello.capabilities) &&
+      hello.capabilities.includes(TERMINAL_TRANSIENTS_CAPABILITY)
+        ? true
+        : undefined
     socket.write(
       encodeNdjson({
         type: 'hello',
         ok: true,
         // Negotiate on the last NDJSON line before the client switches to binary frames.
         ...(streamFraming === BINARY_STREAM_FRAMING ? { streamFraming } : {}),
+        ...(terminalState ? { capabilities: [TERMINAL_TRANSIENTS_CAPABILITY] } : {}),
         ...daemonHelloResizeModel(),
         ...(identity.launchNonce && identity.startedAtMs
           ? {
@@ -186,6 +195,7 @@ export class DaemonClientConnections {
         return
       }
       this.installStreamSocket(socket, client, streamFraming)
+      client.terminalState = terminalState
       client.authenticatedPairEstablished = true
       this.options.onAuthenticatedPair()
       return

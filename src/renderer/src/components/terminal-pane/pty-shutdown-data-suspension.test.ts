@@ -50,6 +50,7 @@ it('replays rollback output in its original replay and live arrival order', () =
 
   expect(delivered).toEqual(['replay:old', 'data:new', 'sidecar:new'])
   expect(sidecar).toHaveBeenCalledOnce()
+  expect(sidecar).toHaveBeenCalledWith('new', meta)
   ptyDataHandlers.delete(ptyId)
   ptyDataSidecars.delete(ptyId)
   ptyReplayHandlers.delete(ptyId)
@@ -63,7 +64,8 @@ it('drains pre-handler data before ordered shutdown output', () => {
   const dataHandler = vi.fn((data: string) => delivered.push(`data:${data}`))
   ptyDataHandlers.set(ptyId, dataHandler)
   ptyReplayHandlers.set(ptyId, (data) => delivered.push(`replay:${data}`))
-  ptyDataSidecars.set(ptyId, new Set([(data) => delivered.push(`sidecar:${data}`)]))
+  const sidecar = vi.fn((data: string) => delivered.push(`sidecar:${data}`))
+  ptyDataSidecars.set(ptyId, new Set([sidecar]))
 
   const [snapshot] = unregisterPtyDataHandlers([ptyId])
   bufferPreHandlerPtyData(ptyId, 'pre', preHandlerMeta)
@@ -74,6 +76,8 @@ it('drains pre-handler data before ordered shutdown output', () => {
   expect(delivered).toEqual(['data:pre', 'sidecar:pre', 'replay:old', 'data:live', 'sidecar:live'])
   expect(dataHandler).toHaveBeenNthCalledWith(1, 'pre', preHandlerMeta)
   expect(dataHandler).toHaveBeenNthCalledWith(2, 'live', shutdownMeta)
+  expect(sidecar).toHaveBeenNthCalledWith(1, 'pre', preHandlerMeta)
+  expect(sidecar).toHaveBeenNthCalledWith(2, 'live', shutdownMeta)
   ptyDataHandlers.delete(ptyId)
   ptyDataSidecars.delete(ptyId)
   ptyReplayHandlers.delete(ptyId)

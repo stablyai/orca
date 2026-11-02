@@ -11,7 +11,11 @@ import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from './daemon-wsl-b
 import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-runtime-state'
-import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
+import {
+  supportsMode2031UnsubscribeFact,
+  supportsUnseenOsc133Zones,
+  type DaemonEvent
+} from './types'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { DeveloperPermissionStatus } from '../../shared/developer-permissions-types'
@@ -23,9 +27,8 @@ import {
 } from '../../shared/host-spawn-admission'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
-import type { DaemonAsyncIoHealth, DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
-import { observeDaemonAsyncIoHealth } from './daemon-async-io-telemetry-event'
-import { sameEndpointIdentity } from './daemon-endpoint-incarnation'
+import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
+import { readDaemonAsyncIoHealth } from './daemon-async-io-health-read'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
   constructor(opts: DaemonPtyAdapterOptions) {
@@ -75,37 +78,8 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
     }
   }
 
-  async getAsyncIoHealth(): Promise<DaemonAsyncIoStatus> {
-    if (!this.client.isConnected()) {
-      return { state: 'unverifiable' }
-    }
-    const identity = this.client.getDaemonIdentity()
-    try {
-      const health = await this.client.request<unknown>('asyncIoHealth', undefined, 7_000)
-      if (
-        health &&
-        typeof health === 'object' &&
-        'state' in health &&
-        (health.state === 'healthy' || health.state === 'stalled') &&
-        'pendingMs' in health &&
-        typeof health.pendingMs === 'number' &&
-        Number.isFinite(health.pendingMs) &&
-        health.pendingMs >= 0
-      ) {
-        const result: DaemonAsyncIoHealth = { state: health.state, pendingMs: health.pendingMs }
-        // A reply that crossed a reconnect cannot be attributed to either incarnation.
-        const current = this.client.getDaemonIdentity()
-        if (identity && current && sameEndpointIdentity(identity, current)) {
-          observeDaemonAsyncIoHealth(identity, this.protocolVersion, result)
-        }
-        return result
-      }
-    } catch (error) {
-      if (isUnknownRequestTypeError(error)) {
-        return { state: 'unsupported' }
-      }
-    }
-    return { state: 'unverifiable' }
+  getAsyncIoHealth(): Promise<DaemonAsyncIoStatus> {
+    return readDaemonAsyncIoHealth(() => this.client, this.protocolVersion)
   }
 
   async getFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {
@@ -136,17 +110,21 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
       return
     }
 
-    this.removeEventListener = this.client.onEvent((raw) => {
+    this.removeEventListener = this.client.onEvent((raw, source) => {
       const event = raw as DaemonEvent
       if (event.type !== 'event') {
         return
       }
 
+      const semanticSource = source
+        ? { provider: this, stream: source.owner, terminalState: source.terminalState }
+        : undefined
       if (event.event === 'data') {
         this.markSessionDirty(event.sessionId)
         emitPtyListeners(this.dataListeners, (listener) =>
           listener({
             id: event.sessionId,
+            ...(semanticSource ? { semanticSource } : {}),
             data: event.payload.data,
             ...((event.payload.rawLength ?? event.payload.sequenceChars) === undefined
               ? {}
@@ -155,10 +133,21 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             ...(event.payload.seq === undefined ? {} : { seq: event.payload.seq })
           })
         )
+      } else if (event.event === 'terminalObservation') {
+        if (event.sessionId) {
+          this.emitBackgroundStreamEvent({
+            id: event.sessionId,
+            kind: 'terminalObservation',
+            ...(semanticSource ? { semanticSource } : {}),
+            incarnationId: event.incarnationId,
+            observation: event.payload
+          })
+        }
       } else if (event.event === 'sessionBackgroundMarker') {
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
           kind: 'backgroundMarker',
+          ...(semanticSource ? { semanticSource } : {}),
           background: event.payload.background,
           ...(event.payload.scanSeedAnsi !== undefined
             ? { scanSeedAnsi: event.payload.scanSeedAnsi }
@@ -177,6 +166,13 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             : { sequenceChars: event.payload.sequenceChars })
         })
       } else if (event.event === 'transientFact') {
+        // Why: an older relay can still flush a queued OMP bubble close as a finished command.
+        if (
+          event.payload.kind === 'command-finished' &&
+          !supportsUnseenOsc133Zones(this.protocolVersion)
+        ) {
+          return
+        }
         // Why (#9993): a preserved pre-v29 daemon can retain a stale relay tracker. Its
         // unretractable subscribe is harmful; an unsubscribe is always safe to forward.
         if (

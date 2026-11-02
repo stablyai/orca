@@ -15,10 +15,12 @@ import {
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
+  createLiveReportStatusHandler,
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+import type { IpcPtyTransportOptions } from './pty-transport-types'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -28,14 +30,16 @@ import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 export function registerPtyConnectionTaskCompleteDispatchTests(): void {
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
-  let createdTransportOptions: Record<string, unknown>[] = []
+  let createdTransportOptions: (IpcPtyTransportOptions & {
+    productionOptions?: IpcPtyTransportOptions
+  })[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+  // A runtime-bound pane keeps live report notifications separate from host-owned status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
     mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }
@@ -72,7 +76,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('dispatches agent-task-complete for generic Codex spinner titles after process identity is confirmed', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -105,14 +109,15 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         source: 'agent-task-complete',
         terminalTitle: 'experimental-agent-observability',
         ptyId: 'tab-pty',
-        paneKey: makePaneKey('tab-1', LEAF_1)
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        workspaceOwner: { executionHostId: 'local', runtimeEnvironmentId: null }
       })
-      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
+      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('tab-pty')
     })
 
     it('does not dispatch generic spinner completions when process inspection finds no agent', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-shell')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -148,11 +153,11 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('dispatches agent-task-complete from recognized hook completion events', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-hook')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
-      mockStoreState.ptyIdsByTabId = { 'tab-1': ['pty-hook'] }
-      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'pty-hook' }
+      mockStoreState.ptyIdsByTabId = { 'tab-1': ['tab-pty'] }
+      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'tab-pty' }
 
       vi.useFakeTimers()
       const pane = createPane(1)
@@ -161,14 +166,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
       connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'done'
-            prompt: string
-            agentType: 'codex'
-            lastAssistantMessage: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       if (!statusHandler) {
         throw new Error('Expected onAgentStatus to be registered')
       }
@@ -192,7 +190,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('preserves synthetic Codex permission titles', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-hook')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
@@ -235,7 +233,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('normalizes Pi-compatible remote titles to authoritative OMP launch identity', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-omp')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
       mockStoreState.tabsByWorktree = {
@@ -276,18 +274,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         agentType: 'pi'
       })
 
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
-        makePaneKey('tab-1', LEAF_1),
-        {
-          state: 'working',
-          prompt: 'fix the remote title',
-          agentType: 'omp',
-          observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
-        },
-        '\u280b OMP',
-        undefined,
-        { connectionId: null }
-      )
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
 
       mockStoreState.tabsByWorktree = {
         'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
@@ -298,23 +285,12 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         agentType: 'pi'
       })
 
-      expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
-        makePaneKey('tab-1', LEAF_1),
-        {
-          state: 'working',
-          prompt: 'keep the remote title',
-          agentType: 'omp',
-          observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
-        },
-        '\u280b OMP',
-        undefined,
-        { connectionId: null }
-      )
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
     })
 
     it('keeps GPU rendering enabled for OMP titles whose cwd is Gemini', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-omp-gemini-cwd')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
       mockStoreState.tabsByWorktree = {
@@ -347,7 +323,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('leaves local IPC OSC 9999 status ownership in the main runtime', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-local')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       const pane = createPane(1)
@@ -356,12 +332,12 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
       connectPanePty(...mockPanePtyArgs(pane, manager, deps))
 
-      expect(createdTransportOptions[0]?.onAgentStatus).toBeUndefined()
+      expect(createdTransportOptions[0]?.productionOptions?.onAgentStatus).toBeUndefined()
     })
 
     it('queues the idle cursor reset behind hidden agent output', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -401,7 +377,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('./use-notification-dispatch')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -455,7 +431,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('./use-notification-dispatch')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -513,7 +489,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('./use-notification-dispatch')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -569,7 +545,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('./use-notification-dispatch')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       const dispatchNotification = useNotificationDispatch('wt-1')
@@ -617,7 +593,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
     // Why: agent-row removal belongs to process/PTY lifecycle, not title reversion, so interrupts can't disappear the activity row.
     it('clears the cache timer without removing agent status when the title tracker sees exit', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       const pane = createPane(1)

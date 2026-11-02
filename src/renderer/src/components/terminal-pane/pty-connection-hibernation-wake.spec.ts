@@ -503,7 +503,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         | undefined
       onPtyExit?.('tab-pty')
       await flushAsyncTicks()
-      const deferredSpawn = createDeferred<unknown>()
+      const deferredSpawn = createDeferred<Awaited<ReturnType<MockTransport['connect']>>>()
       transport.connect.mockImplementationOnce(() => deferredSpawn.promise)
 
       const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-inflight'
@@ -766,14 +766,20 @@ export function registerPtyConnectionHibernationWakeTests(): void {
       sendTerminalInputThroughPane(pane, '\x1b[O')
       expect(mockStoreState.recordTerminalInput).not.toHaveBeenCalled()
       // The reply still reaches the shell; only the activity recording is gated.
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
 
       // Real user input fires the core signal before onData, as xterm does; the key must reach the PTY before the store publishes activity.
       for (const listener of userInputListeners) {
         listener()
       }
       sendTerminalInputThroughPane(pane, 'x')
-      expect(transport.sendInput).toHaveBeenLastCalledWith('x', 'driving')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('x', 'driving', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       expect(mockStoreState.recordTerminalInput).not.toHaveBeenCalled()
       await Promise.resolve()
       expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)

@@ -188,7 +188,10 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       sendTerminalInputThroughPane(pane, '\x1b[1;1R')
       sendTerminalInputThroughPane(pane, 'do work\r')
       expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[1;1R')
-      expect(transport.sendInput).not.toHaveBeenCalledWith('do work\r', expect.anything())
+      expect(transport.sendInput).not.toHaveBeenCalledWith('do work\r', expect.anything(), {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       binding.dispose()
     })
 
@@ -213,8 +216,14 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       transport.sendInputImmediate.mockClear()
       sendTerminalInputThroughPane(pane, 'yes')
       sendTerminalInputThroughPane(pane, '\x1b[A')
-      expect(transport.sendInput).toHaveBeenCalledWith('yes', 'query-reply')
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('yes', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       expect(transport.sendInputImmediate).not.toHaveBeenCalled()
 
       // terminal-query-reply.test proves real xterm emits this as one framed onData reply; this pins it to the immediate path.
@@ -229,7 +238,10 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       const printableInputs = [']10;hello', '>|xterm.js(6.1.0-beta.287)', ']|literal-text']
       for (const data of printableInputs) {
         sendTerminalInputThroughPane(pane, data)
-        expect(transport.sendInput).toHaveBeenCalledWith(data, 'query-reply')
+        expect(transport.sendInput).toHaveBeenCalledWith(data, 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
       }
       expect(transport.sendInputImmediate).not.toHaveBeenCalled()
     })

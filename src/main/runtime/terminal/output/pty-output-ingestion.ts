@@ -1,10 +1,12 @@
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
+  RuntimePtyWorktreeUpdate,
+  RuntimeOsc7Metadata,
+  RuntimePaneKeySource,
   RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry
 } from '../../runtime-terminal-state-records'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
 import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-execution-context'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { appendNormalizedToTailBuffer } from '../../terminal-tail-buffer'
@@ -22,10 +24,7 @@ import {
 import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
-  protected abstract recordOsc7MetadataForPty(
-    ptyId: string,
-    data: string
-  ): { cwd: string | null; cwdChanged: boolean }
+  protected abstract recordOsc7MetadataForPty(ptyId: string, data: string): RuntimeOsc7Metadata
   protected abstract processAgentStatusOscForPty(
     ptyId: string,
     data: string
@@ -45,28 +44,9 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
   protected abstract recordPtyWorktree(
     ptyId: string,
     worktreeId: string,
-    state?: Partial<
-      Pick<
-        RuntimePtyWorktreeRecord,
-        | 'connected'
-        | 'lastOutputAt'
-        | 'preview'
-        | 'tabId'
-        | 'paneKey'
-        | 'surfaceRecordedAtGraphSequence'
-        | 'title'
-        | 'connectionId'
-        | 'runtimeSessionOwned'
-        | 'isWsl'
-        | 'wslDistro'
-        | 'incarnationId'
-        | 'agentSessionOwners'
-      >
-    >
+    state?: RuntimePtyWorktreeUpdate
   ): RuntimePtyWorktreeRecord
-  protected abstract makeRuntimePaneKey(
-    leaf: Pick<RuntimeSyncedLeaf, 'tabId' | 'leafId' | 'paneRuntimeId'>
-  ): string
+  protected abstract makeRuntimePaneKey(leaf: RuntimePaneKeySource): string
   protected abstract getOrCreatePtyTitleTrackerEntry(ptyId: string): RuntimePtyTitleTrackerEntry
   protected abstract emitTerminalAgentStatusEvents(
     ptyId: string,
@@ -104,9 +84,16 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
-    const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
+    const observer = this.ptyTitleTrackersByPtyId.get(ptyId)
+    const capable =
+      observer?.transientSource?.terminalState ?? observer?.transientIncarnationId !== undefined
+    const agentStatusChunk: ProcessedAgentStatusChunk = capable
+      ? { cleanData: data, payloads: [], lastPayloadCleanOffset: null }
+      : this.processAgentStatusOscForPty(ptyId, data)
     this.recordRecentPtyOutput(ptyId, data)
-    // Use advertised dev-server URLs for workspace ports instead of kernel bind addresses.
+    // Why: watch terminal output for advertised dev-server URLs (e.g. Vite's
+    // `Network: https://local.example.com:3001/`) so the workspace ports
+    // panel can surface them in place of the kernel bind address.
     advertisedUrlWatcher.ingest(ptyId, data, at)
     // Capture query ownership in the ingestion/drop tick; queued writes must not reinterpret later subscriber/settings changes.
     const forwardQueryReplies = this.shouldAnswerQueriesForLiveChunk(ptyId)
@@ -247,6 +234,9 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
 
     // Feed cleanData titles in byte order so coalesced transitions reach waits/delivery; pure OSC 9999 status chunks must not disturb stale-title probes.
     const titleTrackerEntry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
+    if (pty?.incarnationId) {
+      titleTrackerEntry.physicalIncarnationId = pty.incarnationId
+    }
     const previousTitleScanTail = this.oscTitleScanTailByPtyId.get(ptyId)
     const titleInput = previousTitleScanTail
       ? `${previousTitleScanTail}${agentStatusChunk.cleanData}`
@@ -279,12 +269,20 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
           }
         }
       }
-      titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
-        titleScanData: titleInput,
-        programActivity: agentStatusChunk.programActivity
-      })
-      // Keep Command Code facts in this chunk's batch; exclude OSC 9999 payloads from its bounded text window.
-      titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
+      if (!capable) {
+        titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
+          commandScanData: data,
+          titleScanData: titleInput,
+          programActivity: agentStatusChunk.programActivity
+        })
+      }
+      // Why: the Command Code scrape rides the same per-chunk batch (its facts
+      // trail the tracker's). cleanData keeps OSC 9999 payloads out of the
+      // detector's bounded recent-text window; the detector strips remaining
+      // control sequences itself, exactly like the renderer byte path.
+      if (!capable) {
+        titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
+      }
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
@@ -294,7 +292,9 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
           agentStatusChunk.lastPayloadCleanOffset === null
             ? null
             : (previousTitleScanTail?.length ?? 0) + agentStatusChunk.lastPayloadCleanOffset
-        this.restoreAgentPromptLifecycleByteOrder(ptyId, titleInput, lastPayloadTitleOffset)
+        if (!capable) {
+          this.restoreAgentPromptLifecycleByteOrder(ptyId, titleInput, lastPayloadTitleOffset)
+        }
       } finally {
         // Always flush, even after tracker exceptions, so facts cannot leak into the next chunk's seq.
         this.flushPendingTerminalSideEffectFacts(ptyId, titleTrackerEntry)

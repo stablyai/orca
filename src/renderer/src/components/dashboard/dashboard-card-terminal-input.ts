@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import type { AppState } from '@/store/types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -116,7 +117,7 @@ export function resolveDashboardCardTerminalInput(
   const protectedPaste = resolveProtectedMultilinePasteOptionsForAgentEvidence({
     isWindowsClient: args.clientPlatform === 'win32',
     hostPlatform,
-    foregroundAgent: state.paneForegroundAgentByPaneKey[args.paneKey]?.agent,
+    foregroundAgent: foregroundAgentForActions(state.paneForegroundAgentByPaneKey[args.paneKey]),
     entry: state.agentStatusByPaneKey[args.paneKey]
   })
   return {

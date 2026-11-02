@@ -130,7 +130,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
         trimmedConnectionId !== null &&
         previous.worktreeId === worktreeId &&
         previous.source === source &&
-        previous.launchToken === envelope.launchToken &&
+        this.generationClaim(previous) === envelope.launchToken &&
         this.getAgentStatusDisposition(paneKey) !== 'suppress'
       ) {
         this.clearPaneState(paneKey, { statusUnavailable: true })
@@ -263,7 +263,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
         ? { authorityRestartId: restartedAuthority.authorityRestartId }
         : {}),
       hostTurnRevision: normalizeHostTurnRevision(envelope.hostTurnRevision),
-      launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
+      launchToken: envelope.launchToken,
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,
@@ -296,7 +296,6 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       ),
       payload: normalizedPayload
     }
-    this.recordCurrentAuthorityObservation(event)
     this.applyNormalizedStatus(
       event,
       applyClaudeBackgroundWork

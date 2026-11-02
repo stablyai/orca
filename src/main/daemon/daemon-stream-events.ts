@@ -1,6 +1,15 @@
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalTransientObservation } from '../../shared/terminal-transient-observation'
+
+export type TerminalObservationEvent = {
+  type: 'event'
+  event: 'terminalObservation'
+  sessionId: string
+  incarnationId: string
+  payload: TerminalTransientObservation
+}
 
 export type DataEvent = {
   type: 'event'
@@ -77,6 +86,7 @@ export type InputClosedEvent = {
 }
 
 export type DaemonEvent =
+  | TerminalObservationEvent
   | DataEvent
   | ExitEvent
   | TerminalErrorEvent

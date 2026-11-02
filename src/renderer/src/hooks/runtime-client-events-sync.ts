@@ -1,4 +1,7 @@
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type {
+  RuntimeClientEventInstallation,
+  RuntimeClientEventReceiver
+} from '../runtime/runtime-client-events'
 
 export type RuntimeClientEventSubscriptionHandle = {
   unsubscribe: () => void
@@ -12,12 +15,16 @@ export type RuntimeClientEventsSyncDeps = {
   getSubscriptionKey?: (environmentId: string) => string
   subscribe: (
     environmentId: string,
-    onEvent: (event: RuntimeClientEvent) => void,
+    onEvent: RuntimeClientEventReceiver,
     onError: (error: unknown) => void,
     /** Use for subscription-side recovery that runs before event delivery. */
     isCurrent: () => boolean
   ) => Promise<RuntimeClientEventSubscriptionHandle>
-  onEvent: (environmentId: string, event: RuntimeClientEvent) => void
+  onEvent: (
+    environmentId: string,
+    event: Parameters<RuntimeClientEventReceiver>[0],
+    installation?: RuntimeClientEventInstallation
+  ) => void
   /** Base retry delay; doubles per consecutive failure up to retryMaxDelayMs. */
   retryDelayMs?: number
   retryMaxDelayMs?: number
@@ -163,10 +170,10 @@ export function createRuntimeClientEventsSync(
       void deps
         .subscribe(
           environmentId,
-          (event) => {
+          (event, installation) => {
             // Initial frames arrive before setup settles; only the owning attempt may deliver.
             if (isCurrent()) {
-              deps.onEvent(environmentId, event)
+              deps.onEvent(environmentId, event, installation)
             }
           },
           (error) => {

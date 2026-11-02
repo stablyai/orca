@@ -1,3 +1,4 @@
+import { admitTerminalCreate } from './terminal-create-admission'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import {
   recordTerminalLaunchMetadata,
@@ -26,13 +27,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
     // Internal creation evidence; RPC and preload callers never supply it.
     ...evidence: TerminalWorkspaceCreationEvidence
   ): Promise<dependencies.RuntimeTerminalCreate> {
-    if (opts.startupAgent && selector === undefined) {
-      throw new Error(`startupAgent ${opts.startupAgent} requires a workspace selector.`)
-    }
-    const launcherSpawnArgs = dependencies.admitPairedCreateColors(
-      opts.terminalColorQueryReplies,
-      opts.terminalViewAttributes
-    )
+    const launcherSpawnArgs = admitTerminalCreate(selector, opts)
     const presentation = dependencies.resolveTerminalPresentation(opts)
     // Why: this process starts every terminal it can place, so a slow window only delays showing
     // it; a window-made create that timed out here still ran later, and a retry duplicated it.
@@ -252,6 +247,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           recordPtySurface(this.terminalIdentity, pty, tabId, paneKey, standing)
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+        this.notifyAgentLaunchAuthority(pty?.paneKey)
         if (pty && !launch.adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
@@ -295,6 +291,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           title: pty?.title ?? launch.effectiveTitle ?? null,
           ...this.getPtyExecutionHostMetadata(result.id),
           surface,
+          ...dependencies.terminalSpawnResultFields(result, Boolean(launch.adoptedStablePane)),
           ...(result.startupCwdFallback ? { startupCwdFallback: result.startupCwdFallback } : {}),
           ...(warning ? { warning } : {})
         }

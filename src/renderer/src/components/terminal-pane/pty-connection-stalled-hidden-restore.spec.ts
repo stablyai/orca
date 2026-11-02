@@ -417,8 +417,35 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       expect(liveWrites).toHaveLength(1)
       expect(written.indexOf(combinedLive)).toBeGreaterThan(warningIndex)
 
+      const { getTerminalSemanticResident, retireCapturedResident } =
+        await import('./terminal-semantic-residents')
+      const resident = getTerminalSemanticResident('pty-id')
+      if (!resident || !capturedDataCallback.current) {
+        throw new Error('Expected actual admitted resident and transport callback')
+      }
+      expect(resident.isLive).toBe(true)
       disposable.dispose()
+      const writesAfterDetach = pane.terminal.write.mock.calls.length
+      expect(getTerminalSemanticResident('pty-id')).toBe(resident)
+      expect(resident.isLive).toBe(true)
+      const settledTimers = vi.getTimerCount()
+      const afterDetach = 'after-detach-must-not-render'
+      capturedDataCallback.current(afterDetach, {
+        seq: hidden.length + chunkCount + afterDetach.length,
+        rawLength: afterDetach.length
+      })
+      await flushAsyncTicks(20)
+      expect(pane.terminal.write).toHaveBeenCalledTimes(writesAfterDetach)
+      expect(vi.getTimerCount()).toBe(settledTimers)
+      expect(getTerminalSemanticResident('pty-id')).toBe(resident)
+      expect(resident.isLive).toBe(true)
+      retireCapturedResident(resident)
+      expect(resident.isLive).toBe(false)
+      expect(getTerminalSemanticResident('pty-id')).toBeUndefined()
       expect(vi.getTimerCount()).toBe(0)
+      await flushAsyncTicks(20)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(pane.terminal.write).toHaveBeenCalledTimes(writesAfterDetach)
     })
 
     it('keeps foreground output when hidden-backlog snapshot recovery is unavailable', async () => {

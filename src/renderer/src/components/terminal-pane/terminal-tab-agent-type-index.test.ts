@@ -98,3 +98,23 @@ describe('createTerminalTabAgentTypeSelector', () => {
     ).toEqual({})
   })
 })
+
+it('keeps passive foreground out of native eligibility while preserving independent rows', () => {
+  const select = createTerminalTabAgentTypeSelector()
+  const passive = {
+    'tab-1:leaf-a': {
+      agent: 'codex' as const,
+      agentEvidence: 'process-admitted' as const,
+      shellForeground: false
+    }
+  }
+  expect(select({}, 'tab-1', passive)).toEqual(select({}, 'tab-1', {}))
+  expect(select({ 'tab-1:leaf-a': entry('claude', 'done') }, 'tab-1', passive)).toEqual({
+    'leaf-a': 'claude'
+  })
+  expect(
+    select({}, 'tab-1', {
+      'tab-1:leaf-a': { ...passive['tab-1:leaf-a'], agentEvidence: 'process-read' }
+    })
+  ).toEqual({ 'leaf-a': 'codex' })
+})

@@ -54,3 +54,28 @@ describe('whenCodexTerminalAppears', () => {
     expect(onAppear).not.toHaveBeenCalled()
   })
 })
+
+it('does not announce passive Codex display; a later actual read still wakes once', () => {
+  noticeTestStore.setState(
+    {
+      tabsByWorktree: {},
+      agentStatusByPaneKey: {},
+      paneForegroundAgentByPaneKey: {
+        'tab-1:leaf': { agent: 'codex', agentEvidence: 'process-admitted' }
+      }
+    },
+    true
+  )
+  const appear = vi.fn()
+  const stop = whenCodexTerminalAppears(appear)
+  expect(appear).not.toHaveBeenCalled()
+  noticeTestStore.setState({ paneForegroundAgentByPaneKey: {} })
+  expect(appear).not.toHaveBeenCalled()
+  noticeTestStore.setState({
+    paneForegroundAgentByPaneKey: {
+      'tab-1:leaf': { agent: 'codex', agentEvidence: 'process-read' }
+    }
+  })
+  expect(appear).toHaveBeenCalledOnce()
+  stop()
+})

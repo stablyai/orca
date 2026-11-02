@@ -404,7 +404,10 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
       deps.replayingPanesRef.current.delete(pane.id)
       sendTerminalInputThroughPane(pane, 'echo hi\r')
-      expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('preserves classified user input during replay while suppressing synthetic replies', async () => {
@@ -447,7 +450,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       for (const forward of deferred.splice(0)) {
         forward()
       }
-      expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
+      expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith(
+        'input_under_flood\r',
+        'driving',
+        { onEligible: expect.any(Function), onDispatch: expect.any(Function) }
+      )
 
       // A wheel over a replayed alt-screen frame becomes cursor keys; the fresh shell must not recall history from them.
       pane.terminal.buffer.active.type = 'alternate'
@@ -458,7 +465,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       for (const forward of deferred.splice(0)) {
         forward()
       }
-      expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
+      expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith(
+        'input_under_flood\r',
+        'driving',
+        { onEligible: expect.any(Function), onDispatch: expect.any(Function) }
+      )
 
       // The same bytes on the normal buffer can only be a keyboard arrow, which survives replay.
       pane.terminal.buffer.active.type = 'normal'
@@ -470,7 +481,10 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
         forward()
       }
       expect(transport.sendInput).toHaveBeenCalledTimes(2)
-      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', 'driving')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', 'driving', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
 
       deps.replayingPanesRef.current.delete(pane.id)
       for (const listener of userInputListeners) {
@@ -480,7 +494,10 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       for (const forward of deferred.splice(0)) {
         forward()
       }
-      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M', 'driving')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M', 'driving', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('settles a queued startup only after the pane binds its spawned PTY', async () => {

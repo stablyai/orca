@@ -1,3 +1,4 @@
+import '@/store'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { getWorkspaceCleanupHostIdentity as identity } from '../../../../shared/workspace-cleanup-host-identity'
@@ -8,7 +9,19 @@ import {
   makeUnifiedTab
 } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup-candidate-enrichment'
-import { getWorkspaceCleanupAgentEvidence } from './workspace-cleanup-agent-evidence'
+import {
+  getWorkspaceCleanupAgentEvidence,
+  assertWorkspaceCleanupAgentStopApproved
+} from './workspace-cleanup-agent-evidence'
+import {
+  beginWorkspaceCleanupScan,
+  enrichWorkspaceCleanupCandidatesForScan,
+  finalizeWorkspaceCleanupScan
+} from './workspace-cleanup-scan-progress'
+import {
+  foregroundConsumerState,
+  FOREGROUND_TEST_WORKTREE
+} from '@/components/dashboard/foreground-consumer-test-fixture'
 import { WORKTREE_ID, makeCandidate, makeState } from './workspace-cleanup-slice-test-harness'
 
 function paneKey(tabId: string): string {
@@ -25,6 +38,62 @@ function structuredChatStatus(state: AgentStatusEntry['state']): AgentStatusEntr
 }
 
 describe('workspace cleanup live-agent finder', () => {
+  it('keeps passive/null evidence and preflight equal while scan-cache invalidation retains real current proof', async () => {
+    const base = foregroundConsumerState(null)
+    const state = makeState({
+      ...base,
+      tabsByWorktree: {
+        [FOREGROUND_TEST_WORKTREE]: base.tabsByWorktree[FOREGROUND_TEST_WORKTREE].filter(
+          (tab) => tab.id !== 'tab-title'
+        )
+      },
+      runtimePaneTitlesByTabId: {
+        ...base.runtimePaneTitlesByTabId,
+        'tab-neutral': { 0: '⠋ project' }
+      }
+    })
+    const candidate = makeCandidate({ worktreeId: FOREGROUND_TEST_WORKTREE })
+    const token = beginWorkspaceCleanupScan()
+    try {
+      const absent = await enrichWorkspaceCleanupCandidatesForScan([candidate], state, token)
+      for (const role of ['process-admitted', 'process-read', null] as const) {
+        const foreground = foregroundConsumerState(role).paneForegroundAgentByPaneKey
+        if (!foreground) {
+          throw new Error('Consumer fixture must initialize foreground records')
+        }
+        state.paneForegroundAgentByPaneKey = foreground
+        const evidence = [...getWorkspaceCleanupAgentEvidence(state, [candidate]).values()]
+        const [result] = await enrichWorkspaceCleanupCandidatesForScan([candidate], state, token)
+        if (role === 'process-read') {
+          expect(evidence).toEqual(['live'])
+          expect(result.blockers).toContain('live-agent')
+          expect(() =>
+            assertWorkspaceCleanupAgentStopApproved(state, candidate, undefined)
+          ).toThrow()
+          expect(() =>
+            assertWorkspaceCleanupAgentStopApproved(state, candidate, result)
+          ).not.toThrow()
+          state.unifiedTabsByWorktree = {}
+          expect([...getWorkspaceCleanupAgentEvidence(state, [candidate]).values()]).toEqual([
+            'unknown'
+          ])
+          expect(() => assertWorkspaceCleanupAgentStopApproved(state, candidate, result)).toThrow(
+            /host/
+          )
+          state.unifiedTabsByWorktree = base.unifiedTabsByWorktree ?? {}
+        } else {
+          expect(evidence).toEqual([])
+          expect(result).toEqual(absent[0])
+          expect(() =>
+            assertWorkspaceCleanupAgentStopApproved(state, candidate, undefined)
+          ).not.toThrow()
+        }
+      }
+    } finally {
+      finalizeWorkspaceCleanupScan(token)
+    }
+  })
+
   it.each([
     ['working', true],
     ['done', false]

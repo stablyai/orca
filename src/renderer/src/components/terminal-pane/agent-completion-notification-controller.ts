@@ -209,10 +209,11 @@ export function createAgentCompletionNotificationController({
       })
     } else if (
       optionsOverride.agentStatus &&
-      (optionsOverride.notifyWithoutLifecycle === true ||
+      (options.statusLane === 'pty' ||
+        optionsOverride.notifyWithoutLifecycle === true ||
         options.usesHookTurnEnds?.(optionsOverride.agentStatus) === true)
     ) {
-      // Why: carry the hook's own snapshot; the stored row may be a newer state (a pinned `working`) or too old to lend content.
+      // Pane reports cannot publish a row to reread; carry their own evidence through final admission.
       options.dispatchCompletion(title, {
         source,
         quietedHookDone: false,

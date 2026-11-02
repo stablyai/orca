@@ -64,7 +64,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
   return {
     getOwnerContext: () => session.ownerContext,
     syncProcessTracking() {
-      session.agentCompletionCoordinator.startProcessTracking()
+      session.agentCompletionCoordinator?.startProcessTracking()
       // Why: the hidden-delivery gate must follow every pane visibility flip.
       session.syncHiddenRendererPtyDelivery()
       if (!session.deps.isVisibleRef.current) {
@@ -81,8 +81,8 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       consumeRestartReplacement(session)
       session.resumeDeferredSpawnOnReveal()
       session.mainPaneStartOnReveal?.()
-      session.requestKnownWindowsShiftEnterReconfirmation()
-      session.sampleVisiblePaneForegroundAgent()
+      session.requestKnownWindowsShiftEnterReconfirmation?.()
+      session.sampleVisiblePaneForegroundAgent?.()
     },
     reassertPtySizeAfterWindowWake() {
       session.foregroundGridDriftProbeSettled = false
@@ -128,8 +128,8 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       return null
     },
     sampleForegroundAgentOnFocus() {
-      session.requestKnownWindowsShiftEnterReconfirmation()
-      session.sampleVisiblePaneForegroundAgent()
+      session.requestKnownWindowsShiftEnterReconfirmation?.()
+      session.sampleVisiblePaneForegroundAgent?.()
     },
     requestWindowsShiftEnterReconfirmation() {
       if (session.shiftEnterReconfirmTimer !== null) {
@@ -138,8 +138,8 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       // Why: confirm the composer only after the Shift+Enter burst goes idle, preserving rapid multiline input.
       session.shiftEnterReconfirmTimer = setTimeout(() => {
         session.shiftEnterReconfirmTimer = null
-        session.requestKnownWindowsShiftEnterReconfirmation()
-        session.sampleVisiblePaneForegroundAgent()
+        session.requestKnownWindowsShiftEnterReconfirmation?.()
+        session.sampleVisiblePaneForegroundAgent?.()
       }, SHIFT_ENTER_RECONFIRM_IDLE_MS)
     },
     markShortcutTerminalInputSent() {
@@ -166,8 +166,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       if (!currentPaneTransport || currentPaneTransport === session.transport) {
         session.deps.onPtyErrorClearedRef?.current?.(session.pane.id)
       }
-      // Detached observers cede byte-derived agent-status authority to the host’s next mirror snapshot.
-      session.releaseRendererOwnedAgentStatusPane?.()
       // Why: a stalled xterm replay may never reach its finally; release live-frame credit when this renderer no longer owns the stream.
       const queue = session.deferredReattachLiveData
       session.deferredReattachLiveData = null
@@ -204,12 +202,9 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
           capture: true
         })
       }
+      session.detachSemanticPresentation?.()
       session.clearPendingTerminalInputIntent()
-      session.pendingTerminalInputWrite = null
-      session.interruptInference.dispose()
-      session.clearTitleOnlyInterruptTimer()
-      // Release without cancelling the turn’s settle deadline so the parked watcher inherits it.
-      session.releaseCommandCodeDoneSettleExecutor()
+      session.releaseTerminalInputWriter?.()
       if (session.shiftEnterReconfirmTimer !== null) {
         clearTimeout(session.shiftEnterReconfirmTimer)
         session.shiftEnterReconfirmTimer = null
@@ -225,11 +220,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       }
       session.cleanupStartupDraftPasteTimers()
       session.releaseUnattemptedStartupDraftPasteDelivery()
-      session.unregisterAgentHookTerminalLifecycle()
-      session.clearSuppressedTitleSideEffects()
-      session.clearPendingAgentTaskCompleteNotification()
-      session.pendingTerminalBellNotification = false
-      session.clearTerminalBellNotificationTimer()
       session.clearReattachIdleAgentCursorResetTimer()
       session.cleanupHiddenOutputRestoreDeferredRetry()
       session.cleanupHiddenOutputRestoreForegroundDeadline()
@@ -245,10 +235,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.clearPanePtyFitBinding()
       discardTerminalOutput(session.pane.terminal)
       session.unregisterE2ePtyDataInjection()
-      if (session.agentTaskCompleteSettingsUnsubscribe !== null) {
-        session.agentTaskCompleteSettingsUnsubscribe()
-        session.agentTaskCompleteSettingsUnsubscribe = null
-      }
       if (session.unsubscribeWindowsDoneTerminalModeReset !== null) {
         session.unsubscribeWindowsDoneTerminalModeReset()
         session.unsubscribeWindowsDoneTerminalModeReset = null
@@ -275,12 +261,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         cancelAnimationFrame(session.pendingGeometryReportRaf)
         session.pendingGeometryReportRaf = null
       }
-      session.commandLifecycle.dispose()
-      session.deferredCommandFinishedStatusDrop = null
-      session.visibleForegroundSamplePending = false
-      session.visibleForegroundSampleSettled = false
-      session.paneForegroundAgentTracker.dispose()
-      session.agentCompletionCoordinator.dispose()
     }
   }
 }

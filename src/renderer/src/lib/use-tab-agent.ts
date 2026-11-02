@@ -62,6 +62,9 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
   const processAgent = useAppStore((s) =>
     focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null) : null
   )
+  const processAgentEvidence = useAppStore((s) =>
+    focusedPaneKey ? s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agentEvidence : undefined
+  )
   const processShellForeground = useAppStore((s) =>
     focusedPaneKey
       ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)
@@ -122,7 +125,8 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
         hookAgent: focusedHookAgent,
         siblingHookAgent,
         hasCompletedHook: completedHookEvidence,
-        processAgent
+        processAgent,
+        processAgentEvidence
       })
     ) {
       hasObservedAgentSignalRef.current = true
@@ -134,6 +138,7 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
     focusedHookAgent,
     completedHookEvidence,
     processAgent,
+    processAgentEvidence,
     siblingHookAgent,
     tab.launchAgent,
     tab.title
@@ -153,6 +158,7 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
       siblingHookAgent,
       hasCompletedHook: completedHookEvidence,
       processAgent,
+      processAgentEvidence,
       processShellForeground
     })
     if (launchedAgentExited) {
@@ -166,6 +172,7 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
     hasObservedAgentSignal,
     isRemoteLike,
     processAgent,
+    processAgentEvidence,
     processShellForeground,
     tab.defaultTitle,
     tab.id,
@@ -183,6 +190,7 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
     focusedCompletedHookAgent,
     siblingCompletedHookAgent,
     processAgent,
+    processAgentEvidence,
     processShellForeground,
     sleepingSessionAgent,
     launchAgent: tab.launchAgent

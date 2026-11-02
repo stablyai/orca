@@ -1,5 +1,7 @@
+import { createMockSubprocess } from './session-test-subprocess'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session } from './session'
+import { TerminalSnapshotConsumption } from '../../shared/terminal-snapshot-consumption'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
@@ -7,6 +9,11 @@ import {
 } from './session-termination-controller'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type {
+  TerminalTransientObservation,
+  TerminalTransientFact,
+  TerminalTransientSink
+} from '../../shared/terminal-transient-observation'
 import {
   _resetPtyOwnerHostColorsForTest,
   setPtyOwnerHostColors
@@ -16,80 +23,6 @@ const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
-
-function createMockSubprocess() {
-  const written: string[] = []
-  const signals: string[] = []
-  let onData: ((data: string) => void) | null = null
-  let onExit: ((code: number) => void) | null = null
-  let killed = false
-  let clearCalls = 0
-  let pid = 12345
-  let pauseCalls = 0
-  let resumeCalls = 0
-
-  return {
-    written,
-    signals,
-    get killed() {
-      return killed
-    },
-    get pid() {
-      return pid
-    },
-    get pauseCalls() {
-      return pauseCalls
-    },
-    get resumeCalls() {
-      return resumeCalls
-    },
-    foregroundProcess: null as string | null,
-    getForegroundProcess(): string | null {
-      return this.foregroundProcess
-    },
-    confirmShellForeground: vi.fn(async () => true),
-    write(data: string) {
-      written.push(data)
-    },
-    resize(_cols: number, _rows: number) {},
-    pause() {
-      pauseCalls++
-    },
-    resume() {
-      resumeCalls++
-    },
-    get clearCalls() {
-      return clearCalls
-    },
-    clear() {
-      clearCalls++
-    },
-    kill() {
-      killed = true
-      setTimeout(() => onExit?.(0), 5)
-    },
-    terminateOwnedTree: () => 'terminated' as const,
-    forceKill() {
-      killed = true
-    },
-    signal(sig: string) {
-      signals.push(sig)
-    },
-    onData(cb: (data: string) => void) {
-      onData = cb
-    },
-    onExit(cb: (code: number) => void) {
-      onExit = cb
-    },
-    dispose() {},
-    simulateData(data: string) {
-      onData?.(data)
-    },
-    simulateExit(code: number) {
-      onExit?.(code)
-    }
-  }
-}
 
 type MockSubprocess = ReturnType<typeof createMockSubprocess>
 
@@ -170,6 +103,85 @@ describe('Session', () => {
   })
 
   describe('data flow', () => {
+    it('keeps physical interpretation through detach and installs current evidence without replaying attention', () => {
+      createSession()
+      const marker = (value: string): string => `\x1b]133;${value}\x07`
+      const staged: TerminalTransientObservation[] = []
+      const delivered: TerminalTransientObservation[] = []
+      const liveFacts: TerminalTransientFact[] = []
+      const order: string[] = []
+      const installs: TerminalTransientObservation[] = []
+      const readers: (() => TerminalTransientObservation)[] = []
+      const consumption = new TerminalSnapshotConsumption()
+      const transients: TerminalTransientSink = {
+        install: (current, incarnation, readCurrent) => {
+          expect(incarnation).toBe(session.incarnationId)
+          expect(readCurrent()).toEqual(current)
+          readers.push(readCurrent)
+          installs.push(current)
+          expect(consumption.install(current).effects).toEqual([])
+        },
+        stage: (observation) => staged.push(observation),
+        commit: () => {
+          order.push('effects')
+          for (const snapshot of staged.splice(0)) {
+            delivered.push(snapshot)
+            liveFacts.push(
+              ...(consumption.consume(snapshot)?.effects.map((effect) => effect.fact) ?? [])
+            )
+          }
+        }
+      }
+      subprocess.simulateData(marker('B') + marker('C'))
+      const attach = (): symbol =>
+        session.attachClient({
+          transients,
+          onExit: () => {},
+          onData: () => order.push('display')
+        })
+      const first = attach()
+      subprocess.simulateData('\x1b]133;D;')
+      session.detachClient(first)
+      subprocess.simulateData('0\x07OMP reply\x07')
+      const second = attach()
+      expect(delivered).toEqual([])
+      expect(installs).toHaveLength(2)
+      subprocess.simulateData(`${marker('C')}sleep 60`)
+      subprocess.simulateData(`${marker('D;0')}${marker('A')}\x07`)
+      expect(liveFacts).toEqual([
+        { kind: 'command-started' },
+        { kind: 'command-finished', exitCode: 0 },
+        { kind: 'bell' }
+      ])
+      expect(installs[0]?.current).toMatchObject({ command: 'running', commandOrdinal: 1 })
+      expect(installs[1]?.current).toMatchObject({ command: 'running', commandOrdinal: 1 })
+      expect(installs[1]?.effects['command-finished']).toBeUndefined()
+      expect(delivered.at(-1)?.effects['command-finished']?.count).toBe(1)
+      for (const kind of ['command-started', 'bell'] as const) {
+        expect(installs[1]?.effects[kind]?.count).toBe(1)
+        expect(delivered.at(-1)?.effects[kind]?.count).toBe(2)
+      }
+      expect(delivered).toHaveLength(2)
+      expect(delivered[0]?.current).toMatchObject({ command: 'running', commandOrdinal: 2 })
+      expect(delivered[0]?.effects['command-finished']).toBeUndefined()
+      expect(delivered[0]?.effects.bell?.count).toBe(1)
+      expect(delivered[1]?.current).toMatchObject({ command: 'prompt', commandOrdinal: 2 })
+      expect(readers[0]?.()).toEqual(delivered.at(-1))
+      expect(readers[1]?.()).toEqual(delivered.at(-1))
+      expect(order).toEqual(['display', 'effects', 'display', 'effects', 'display', 'effects'])
+      session.detachClient(second)
+      attach()
+      expect(installs).toHaveLength(3)
+      expect(installs.at(-1)).toEqual(delivered.at(-1))
+      expect(installs.at(-1)?.current.command).toBe('prompt')
+      expect(liveFacts.map((fact) => fact.kind)).toEqual([
+        'command-started',
+        'command-finished',
+        'bell'
+      ])
+      expect(delivered).toHaveLength(2)
+    })
+
     it('does not confirm shell ownership from historical replay bytes', () => {
       createSession({
         historySeedChunks: ['\x1b[?1049hOLD-TUI\x1b]133;D;137\x07old-shell-marker']

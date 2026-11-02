@@ -145,7 +145,11 @@ describe('remote runtime request connection integration', () => {
           return repo
         },
         getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
-        onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+        onClientEvent: (
+          listener: (event: RuntimeClientEvent) => void,
+          options?: { initialize?: () => void }
+        ) => {
+          options?.initialize?.()
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
@@ -308,7 +312,11 @@ describe('remote runtime request connection integration', () => {
         },
         onClientDisconnected: () => {},
         getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
-        onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+        onClientEvent: (
+          listener: (event: RuntimeClientEvent) => void,
+          options?: { initialize?: () => void }
+        ) => {
+          options?.initialize?.()
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
@@ -556,7 +564,11 @@ describe('remote runtime request connection integration', () => {
         },
         onClientDisconnected: () => {},
         getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
-        onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+        onClientEvent: (
+          listener: (event: RuntimeClientEvent) => void,
+          options?: { initialize?: () => void }
+        ) => {
+          options?.initialize?.()
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },

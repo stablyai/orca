@@ -11,6 +11,7 @@ import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../pty-preconnect-input-buf
 import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { paneHasStartupWork } from './pane-transport-options'
+import { resolvePaneLaunchTuiAgent } from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 const BACKSPACE = '\x7f'
@@ -66,7 +67,13 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
         !session.transportOptions?.bufferInputUntilConnect &&
         paneHasStartupWork(session)
           ? ((session.paneStartup
-              ? (session.startupDraftAgent ?? session.resolveExpectedLaunchTuiAgent())
+              ? (session.startupDraftAgent ??
+                resolvePaneLaunchTuiAgent(state, {
+                  worktreeId: session.deps.worktreeId,
+                  tabId: session.deps.tabId,
+                  paneKey: session.cacheKey,
+                  startup: session.paneStartup
+                }))
               : null) ??
             findColdRestoreResumeSource(session, state)?.agent ??
             null)

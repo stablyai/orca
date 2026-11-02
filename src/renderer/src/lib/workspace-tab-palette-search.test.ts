@@ -133,6 +133,38 @@ function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorksp
 }
 
 describe('workspace-tab-palette-search', () => {
+  it('transports passive display without inventing session activity or overriding an independent hook', () => {
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `terminal-1:${leaf}`
+    for (const agentEvidence of ['process-admitted', 'process-read', null] as const) {
+      const options: Partial<Parameters<typeof buildSearchableWorkspaceTabs>[0]> = {
+        terminalLayoutsByTabId: {
+          'terminal-1': {
+            root: { type: 'leaf' as const, leafId: leaf },
+            activeLeafId: leaf,
+            expandedLeafId: null
+          }
+        },
+        paneForegroundAgentByPaneKey: agentEvidence
+          ? { [paneKey]: { agent: 'codex' as const, agentEvidence, shellForeground: false } }
+          : {}
+      }
+      const [entry] = buildEntries(options)
+      expect(entry.occupantAgent).toBe(agentEvidence ? 'codex' : null)
+      expect(entry.agentMetadata).toEqual([])
+      const [result] = searchWorkspaceTabs([entry], '')
+      expect(result.occupantAgent).toBe(entry.occupantAgent)
+      expect(
+        buildEntries({
+          ...options,
+          agentStatusByPaneKey: {
+            [paneKey]: makeAgentEntry({ paneKey, agentType: 'claude', state: 'working' })
+          }
+        })[0].occupantAgent
+      ).toBe('claude')
+    }
+  })
+
   it('stamps the row execution host so activation never resolves by id alone', () => {
     // Host-blind activation opens the wrong same-ID workspace behind another host’s row label.
     const worktree = makeWorktree({ hostId: 'ssh:box' })

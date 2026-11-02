@@ -570,3 +570,37 @@ describe('CodexSharedServerBanner', () => {
     })
   })
 })
+
+it('keeps passive display equivalent to absent foreground and retains the independent hook path', async () => {
+  setState({})
+  useAppStore.setState({
+    paneForegroundAgentByPaneKey: {
+      [PANE_KEY]: { agent: 'codex', agentEvidence: 'process-admitted', shellForeground: false }
+    }
+  })
+  await renderBanner()
+  await advance(15000)
+  expect(isCodexOnSharedServer).not.toHaveBeenCalled()
+  await act(async () => {
+    useAppStore.setState({ paneForegroundAgentByPaneKey: {} })
+  })
+  await advance(15000)
+  expect(isCodexOnSharedServer).not.toHaveBeenCalled()
+  await act(async () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          agentType: 'codex',
+          state: 'working',
+          prompt: '',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          stateHistory: []
+        }
+      }
+    })
+  })
+  await advance(15000)
+  expect(isCodexOnSharedServer).toHaveBeenCalled()
+})

@@ -1,3 +1,4 @@
+// Command Code output/status fixtures are synthetic output, not a recorded CLI session.
 import { describe, expect, it } from 'vitest'
 import { isCommandCodeNewTurnWhileWorking } from './command-code-turn-boundary'
 

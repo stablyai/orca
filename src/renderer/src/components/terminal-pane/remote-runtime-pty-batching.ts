@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/terminal-input'
 
 export type RemoteRuntimePtyBatcher = {
-  push: (data: string) => boolean
+  push: (data: string, onValidated?: () => boolean | void) => boolean
   hasPendingValidation: () => boolean
   /** Input accepted but not yet flushed or still validating. */
   hasPendingInput: () => boolean
@@ -98,7 +98,11 @@ export function createRemoteRuntimePtyTextBatcher(
     }
   }
 
-  const enqueueValidatedInput = (data: string, tooLarge: false | Promise<boolean>): void => {
+  const enqueueValidatedInput = (
+    data: string,
+    tooLarge: false | Promise<boolean>,
+    onValidated?: () => boolean | void
+  ): void => {
     const queuedVersion = validationVersion
     const previousTail = validationTail ?? Promise.resolve()
     const guardedTail = previousTail.then(async () => {
@@ -108,7 +112,7 @@ export function createRemoteRuntimePtyTextBatcher(
       if (tooLarge !== false && (await tooLarge.catch(() => true))) {
         return
       }
-      if (validationVersion === queuedVersion) {
+      if (validationVersion === queuedVersion && onValidated?.() !== false) {
         pushValidatedInput(data)
       }
     })
@@ -148,7 +152,7 @@ export function createRemoteRuntimePtyTextBatcher(
   }
 
   return {
-    push(data: string): boolean {
+    push(data: string, onValidated?: () => boolean | void): boolean {
       if (!data) {
         return true
       }
@@ -159,11 +163,13 @@ export function createRemoteRuntimePtyTextBatcher(
       }
 
       if (tooLarge === false && validationTail === null) {
-        pushValidatedInput(data)
+        if (onValidated?.() !== false) {
+          pushValidatedInput(data)
+        }
         return true
       }
 
-      enqueueValidatedInput(data, tooLarge)
+      enqueueValidatedInput(data, tooLarge, onValidated)
       return true
     },
     // Async size validation may precede pending entries; immediate replies must wait for it to preserve byte order.

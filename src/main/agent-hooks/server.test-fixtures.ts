@@ -1,5 +1,33 @@
 import { makePaneKey } from '../../shared/stable-pane-id'
 import type { AgentHookServer } from './server'
+import { createHash } from 'node:crypto'
+
+/** These credentials come from the fixture's execution host, independently of hook inputs. */
+export function installTestLaunchAuthority(
+  server: AgentHookServer,
+  subjects: readonly {
+    paneKey: string
+    token: string
+    connectionId: string | null
+    worktreeId?: string
+  }[]
+): void {
+  const admitted = subjects.map(({ token, ...subject }) => ({
+    ...subject,
+    hash: createHash('sha256').update(token).digest('hex')
+  }))
+  server.setLaunchAuthorityVerifier(
+    (candidate) =>
+      admitted.some(
+        (subject) =>
+          subject.paneKey === candidate.paneKey &&
+          subject.connectionId === candidate.connectionId &&
+          subject.hash === candidate.launchTokenHash &&
+          (!subject.worktreeId || subject.worktreeId === candidate.worktreeId)
+      ),
+    () => () => {}
+  )
+}
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 export const LEAF_2 = '22222222-2222-4222-8222-222222222222'

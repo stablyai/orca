@@ -75,6 +75,37 @@ function extractReplyWrites(writes: WriteRecord[]): string[] {
 }
 
 describe('pty input write queue', () => {
+  it('advances original eligibility in order across real yielding paste validation and rejection', async () => {
+    for (const rejected of [false, true]) {
+      const effects: string[] = []
+      const writes: string[] = []
+      const queue = createPtyInputWriteQueue({
+        isWritable: () => true,
+        write: (_id, data) => {
+          writes.push(data)
+        },
+        yieldBetweenWrites: async () => {}
+      })
+      const paste = rejected
+        ? '\u20ac'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 3) + 1)
+        : 'A'.repeat(262145)
+      const call = (name: string) => ({
+        onEligible: () => {
+          effects.push(name)
+        },
+        onDispatch: () => {
+          expect(effects).toEqual(rejected ? ['B'] : ['A', 'B'])
+        }
+      })
+      expect(queue.enqueue('physical', paste, 'driving', call('A'))).toBe(true)
+      expect(queue.enqueue('physical', 'B', 'driving', call('B'))).toBe(true)
+      expect(effects).toEqual([])
+      await queue.waitForDrain()
+      expect(effects).toEqual(rejected ? ['B'] : ['A', 'B'])
+      expect(writes.join('')).toBe(rejected ? 'B' : `${paste}B`)
+    }
+  })
+
   it('coalesces a dense burst of wheel reports instead of one write per macrotask turn', async () => {
     const { writes, queue } = createRecordingQueue()
 

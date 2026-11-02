@@ -47,7 +47,8 @@ export class TmuxAgentHookOwner {
         event: AgentHookEventPayload,
         observedAt: number,
         subject: AgentStatusPtySubject,
-        stateStartedAt: number
+        stateStartedAt: number,
+        isCurrent: () => boolean
       ) => void
       unavailable: (
         paneKey: string,
@@ -60,9 +61,7 @@ export class TmuxAgentHookOwner {
     }
   ) {}
 
-  private now(): number {
-    return this.options.now?.() ?? Date.now()
-  }
+  private now = (): number => this.options.now?.() ?? Date.now()
 
   async ingest(source: AgentHookSource, body: unknown, env: string): Promise<boolean> {
     if (source !== 'opencode' && source !== 'opencode2') {
@@ -276,9 +275,12 @@ export class TmuxAgentHookOwner {
       { ...tmuxCanonicalStatusEvent(status), paneKey: outer.paneKey },
       status.evidenceObservedAt ?? status.receivedAt,
       { ...outer.root.scope, kind: 'pty', paneKey: outer.paneKey },
-      status.stateStartedAt
+      status.stateStartedAt,
+      () => this.outers.get(outer.paneKey) === outer
     )
   }
+
+  rootIdentity = (paneKey: string): TmuxManagedPty | undefined => this.outers.get(paneKey)?.root
 
   clearPane(paneKey: string): void {
     const outer = this.outers.get(paneKey)

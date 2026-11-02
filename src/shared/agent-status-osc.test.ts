@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createAgentStatusOscProcessor } from './agent-status-osc'
+import { couldBecomeAgentStatusFrame, createAgentStatusOscProcessor } from './agent-status-osc'
 
 describe('createAgentStatusOscProcessor', () => {
   it('keeps ordinary chunks on the clean-data identity path', () => {
@@ -186,5 +186,16 @@ describe('createAgentStatusOscProcessor', () => {
       lastPayloadCleanOffset: 0,
       payloadCleanOffsets: [0]
     })
+  })
+})
+
+describe('couldBecomeAgentStatusFrame', () => {
+  it('waits for either terminator but never retains a complete ST frame', () => {
+    const frame = '\x1b]9999;{"state":"done","prompt":"finished"}'
+    expect(couldBecomeAgentStatusFrame(frame)).toBe(true)
+    expect(couldBecomeAgentStatusFrame(`${frame}\x1b`)).toBe(true)
+    expect(couldBecomeAgentStatusFrame(`${frame}\x1b\\`)).toBe(false)
+    expect(couldBecomeAgentStatusFrame(`${frame}\x07`)).toBe(false)
+    expect(couldBecomeAgentStatusFrame(`${frame}\x1b\\suffix`)).toBe(false)
   })
 })

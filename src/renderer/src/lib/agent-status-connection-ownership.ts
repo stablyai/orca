@@ -11,7 +11,7 @@ type AgentStatusRoutingState = {
   terminalLayoutsByTabId:
     | Record<string, { ptyIdsByLeafId?: Record<string, string | undefined> } | undefined>
     | undefined
-  ptyIdsByTabId: Record<string, string[] | undefined> | undefined
+  ptyIdsByTabId: Record<string, readonly (string | null | undefined)[] | undefined> | undefined
   sshConnectionStates: ReadonlyMap<string, { status: string }>
   transientClearedAgentStatusConnectionIds: Record<string, true>
 }
@@ -68,7 +68,7 @@ export function resolveAgentStatusConnectionRouting(args: {
 export function resolveLiveAgentStatusConnectionRouting(args: {
   state: AgentStatusRoutingState
   paneKey: string
-  ptyId: string
+  ptyId: string | null | undefined
   expectedConnectionId?: string | null
   runtimeEnvironmentId?: string | null
 }): AgentStatusConnectionRouting | undefined {

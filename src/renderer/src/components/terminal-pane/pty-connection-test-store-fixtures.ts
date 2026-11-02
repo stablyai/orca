@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import { LEAF_1 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
@@ -48,6 +49,21 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     consumePendingColdRestore: vi.fn(() => null),
     consumePendingSnapshot: vi.fn(() => null),
     runtimePaneTitlesByTabId: {},
+    setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
+      const state = getState()
+      state.runtimePaneTitlesByTabId[tabId] = {
+        ...state.runtimePaneTitlesByTabId[tabId],
+        [paneId]: title
+      }
+    }),
+    updateTabTitle: vi.fn((tabId: string, title: string) => {
+      for (const tabs of Object.values(getState().tabsByWorktree)) {
+        const tab = tabs.find((entry) => entry.id === tabId)
+        if (tab) {
+          tab.title = title
+        }
+      }
+    }),
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
     paneForegroundAgentByPaneKey: {},
@@ -110,7 +126,7 @@ export function buildReattachPaneTitleState(current: StoreState, title: string):
   }
 }
 
-// Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+// Exercise the remote-runtime route whose reported status is projected by the host.
 export function buildActiveRuntimeEnvironmentState(
   current: StoreState,
   environmentId: string
@@ -126,5 +142,23 @@ export function buildActiveRuntimeEnvironmentState(
       ...current.settings,
       activeRuntimeEnvironmentId: environmentId
     }
+  }
+}
+
+export function foregroundSemantics(entry: PaneForegroundAgentEntry | undefined) {
+  if (!entry) {
+    return entry
+  }
+  const { context: _context, observationGeneration: _observation, ...value } = entry
+  return value
+}
+
+export function createLiveReportStatusHandler(options: Record<string, unknown> | undefined) {
+  return (payload: ParsedAgentStatusPayload): void => {
+    const handler = options?.onAgentStatus
+    if (typeof handler !== 'function') {
+      throw new Error('Expected the admitted live report callback')
+    }
+    handler(payload)
   }
 }

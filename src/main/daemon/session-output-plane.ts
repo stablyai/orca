@@ -8,17 +8,22 @@ import type { PendingOutputRecord, TakePendingOutputResult, TerminalSnapshot } f
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
+import { SessionTransientObservations } from './session-transient-observations'
+import type { TerminalTransientSink } from '../../shared/terminal-transient-observation'
 
 // Count UTF-16 units; even JSON escape expansion stays below the NDJSON line cap.
 const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
 
 export type AttachedClient = {
   token: symbol
+  transients?: TerminalTransientSink
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
   onExit: (code: number, incarnationId: string, cause?: TerminalExitCause) => void
 }
 
 export type SessionOutputPlaneOptions = {
+  subprocess?: SubprocessHandle
+  startupCommand?: string
   cols: number
   rows: number
   scrollback?: number | undefined
@@ -27,6 +32,7 @@ export type SessionOutputPlaneOptions = {
   windowsPty?: XtermConptyOptions | undefined
   /** Read ownership after the barrier scans bytes, keeping snapshot metadata aligned with the emulator. */
   getTerminalOwner?: (() => TerminalOwner | undefined) | undefined
+  incarnationId?: string
 }
 
 export class SessionOutputPlane {
@@ -41,8 +47,24 @@ export class SessionOutputPlane {
   private _outputSequence = 0
   private deviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
   private disposed = false
+  private readonly incarnationId: string
+  private emitting = false
+  private readonly transients: SessionTransientObservations
 
   constructor(opts: SessionOutputPlaneOptions) {
+    this.incarnationId = opts.incarnationId ?? ''
+    this.transients = new SessionTransientObservations(
+      (observation) => {
+        for (const client of this.attachedClients) {
+          client.transients?.stage(observation)
+          if (!this.emitting) {
+            client.transients?.commit()
+          }
+        }
+      },
+      opts.historySeedChunks !== undefined,
+      opts.startupCommand
+    )
     const size = normalizePtySize(opts.cols, opts.rows)
     this.emulator = new HeadlessEmulator({
       cols: size.cols,
@@ -70,6 +92,9 @@ export class SessionOutputPlane {
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
     const token = Symbol('attach')
+    client.transients?.install(this.transients.snapshot(), this.incarnationId, () =>
+      this.transients.snapshot()
+    )
     this.attachedClients.push({ token, ...client })
     return token
   }
@@ -77,12 +102,16 @@ export class SessionOutputPlane {
   detachClient(token: symbol): void {
     const idx = this.attachedClients.findIndex((c) => c.token === token)
     if (idx !== -1) {
+      this.attachedClients[idx].transients?.dispose?.()
       this.attachedClients.splice(idx, 1)
     }
   }
 
   /** The caller must release producer flow control separately. */
   clearClients(): void {
+    for (const client of this.attachedClients) {
+      client.transients?.dispose?.()
+    }
     this.attachedClients = []
   }
 
@@ -187,31 +216,44 @@ export class SessionOutputPlane {
       return
     }
     this.record({ kind: 'output', data: pending })
+    this.emitting = true
+    this.transients.observe(pending, this._outputSequence)
     for (const client of this.attachedClients) {
       client.onData(pending, 0, true, this._outputSequence)
+      client.transients?.commit()
     }
+    this.emitting = false
   }
 
-  emit(emission: PtyIngressEmission): void {
+  emit(emission: PtyIngressEmission, genuinePrefixLength = emission.data.length): void {
     let { data } = emission
+    let genuine = data.slice(0, genuinePrefixLength)
     const rawLength = emission.rawEndSeq - emission.rawStartSeq
     // Count raw input even when thinning drops bytes so snapshots and renderer tail deduplication align.
     this._outputSequence += rawLength
     if (data.length > 0) {
       this.emulator.write(data)
-      data = this.deviceAttributesQueryFilter?.accept(data) ?? data
+      genuine = this.deviceAttributesQueryFilter?.accept(genuine) ?? genuine
+      // A grounded D ends its escape, flushing genuine DA carry before the synthetic suffix.
+      const synthetic = data.slice(genuinePrefixLength)
+      data = genuine + (this.deviceAttributesQueryFilter?.accept(synthetic) ?? synthetic)
     }
     if (data.length > 0) {
       this.record({ kind: 'output', data })
     }
 
+    this.emitting = true
+    this.transients.observe(genuine, this._outputSequence)
+    // Broadcast to attached clients
     for (const client of this.attachedClients) {
       if (emission.transformed || rawLength !== data.length) {
         client.onData(data, rawLength, true, this._outputSequence)
       } else {
         client.onData(data)
       }
+      client.transients?.commit()
     }
+    this.emitting = false
   }
 
   record(record: PendingOutputRecord): void {
@@ -266,6 +308,10 @@ export class SessionOutputPlane {
   /** Invalidate the read surface without freeing the emulator yet. */
   markDisposed(): void {
     this.disposed = true
+    this.transients.dispose()
+    for (const client of this.attachedClients) {
+      client.transients?.dispose?.()
+    }
   }
 
   disposeEmulator(): void {

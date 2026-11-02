@@ -64,6 +64,9 @@ export function resolveOpenTabOccupantAgent({
     focusedCompletedHookAgent,
     siblingCompletedHookAgent,
     processAgent,
+    processAgentEvidence: focusedPaneKey
+      ? paneForegroundAgentByPaneKey?.[focusedPaneKey]?.agentEvidence
+      : undefined,
     sleepingSessionAgent,
     launchAgent
   })

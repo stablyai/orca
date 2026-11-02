@@ -1,14 +1,27 @@
 /** Host tab retraction must sweep renderer status and plant close markers like local close (STA-4593). Client-owned rows bypass normal mirror deletion and lose their only reachable pane keys at retraction; done rows otherwise become retained ghosts. Exercise real mirror, retention and sidebar logic with fake clocks. */
+import { useAppStore } from '../store'
+import { TerminalResidentRegistry } from '../components/terminal-pane/terminal-resident-registry'
+import { createTerminalResidentPolicy } from '../components/terminal-pane/terminal-resident-policy'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from '../components/terminal-pane/pty-connection-test-environment'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
+import { registerHostStatusRetirementTests } from './web-session-tabs-sync-agent-status-retirement.spec'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
-import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
+import {
+  createTestStore,
+  makeWorktree,
+  seedStore,
+  TEST_REPO
+} from '../store/slices/store-test-helpers'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
@@ -23,6 +36,10 @@ import {
   buildRetainedAgentsSyncSnapshot,
   collectRetainedAgentsOnDisappear
 } from '../components/dashboard/useRetainedAgents'
+import { resolveTerminalTabActivityStatus } from '../components/tab-bar/terminal-tab-activity-status'
+import { selectWorktreeAgentActivitySummary } from '../components/sidebar/worktree-agent-activity-summary'
+import { resolveWorktreeStatus } from '../lib/worktree-status'
+import { buildDashboardSnapshot } from '../components/dashboard/build-dashboard-snapshot'
 import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
@@ -72,7 +89,12 @@ function makeHostSnapshot(args: {
   hostNow: number
   hostAgentStatusTabIds?: readonly string[]
   hostAgentStatusState?: 'working' | 'done'
-}): RuntimeMobileSessionTabsResult {
+}): Omit<RuntimeMobileSessionTabsResult, 'tabs'> & {
+  tabs: Extract<
+    RuntimeMobileSessionTabsResult['tabs'][number],
+    { type: 'terminal'; status: 'ready' }
+  >[]
+} {
   const leafByTab: Record<string, string> = {
     [KEEP_TAB]: KEEP_LEAF,
     [RETRACTED_TAB]: RETRACTED_LEAF
@@ -111,6 +133,11 @@ function makeHostSnapshot(args: {
         : {})
     }))
   }
+}
+
+function makeShellSnapshot(args: Parameters<typeof makeHostSnapshot>[0]) {
+  const snapshot = makeHostSnapshot(args)
+  return { ...snapshot, tabs: snapshot.tabs.map((tab) => ({ ...tab, title: 'zsh' })) }
 }
 
 /** Inventory omission empties the whole worktree mirror, including live sibling environments. Host removal tombstones differ only in epoch shape; neither proves every host tab closed. */
@@ -207,10 +234,11 @@ function replayRetainedAgentsSync(
 function seedPairedClientStore(): TestStore {
   const store = createTestStore()
   seedStore(store, {
+    repos: [TEST_REPO],
     settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  } satisfies Partial<AppState>)
   return store
 }
 
@@ -242,6 +270,45 @@ function observeSidebar(store: TestStore, now: number): SidebarObservation {
   }
 }
 
+/** Read the same live/retained maps as tabs, sidebar counts, workspace activity and dashboard/popout. */
+function observeCurrentDisplay(store: TestStore, now: number) {
+  const state = store.getState()
+  const tabs = state.tabsByWorktree[WT] ?? []
+  const summary = selectWorktreeAgentActivitySummary(state, WT)
+  return {
+    tabs: tabs.map((tab) => resolveTerminalTabActivityStatus({ tab, ...state })),
+    sidebar: observeSidebar(store, now).rowPaneKeys,
+    workspace: resolveWorktreeStatus({
+      tabs,
+      browserTabs: [],
+      ...summary,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId
+    }),
+    dashboard: buildDashboardSnapshot({ ...state, chatNames: new Map() }, now, {
+      includeCardDetails: false,
+      includeFilterOptions: false
+    }).cards.map((card) => card.paneKey)
+  }
+}
+
+export type HostStatusRetirementHarness = {
+  seedPairedClientStore: typeof seedPairedClientStore
+  makeHostSnapshot: typeof makeHostSnapshot
+  makeShellSnapshot: typeof makeShellSnapshot
+  applyHostSnapshot: typeof applyHostSnapshot
+  replayRetainedAgentsSync: typeof replayRetainedAgentsSync
+  observeCurrentDisplay: typeof observeCurrentDisplay
+  mirrorPaneKey: typeof mirrorPaneKey
+  KEEP_TAB: typeof KEEP_TAB
+  KEEP_LEAF: typeof KEEP_LEAF
+  RETRACTED_TAB: typeof RETRACTED_TAB
+  RETRACTED_LEAF: typeof RETRACTED_LEAF
+  ENV: typeof ENV
+  T0: typeof T0
+}
+
 describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -253,6 +320,113 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
   afterEach(() => {
     vi.useRealTimers()
     resetRendererOwnedAgentStatusPanesForTests()
+  })
+
+  registerHostStatusRetirementTests({
+    seedPairedClientStore,
+    makeHostSnapshot,
+    makeShellSnapshot,
+    applyHostSnapshot,
+    replayRetainedAgentsSync,
+    observeCurrentDisplay,
+    mirrorPaneKey,
+    KEEP_TAB,
+    KEEP_LEAF,
+    RETRACTED_TAB,
+    RETRACTED_LEAF,
+    ENV,
+    T0
+  })
+
+  it('retracts only the removed owned leaf of a retained tab through the real final patch and rejects its later publication', async () => {
+    const store = seedPairedClientStore()
+    const before = vi.mocked(useAppStore.getState).getMockImplementation()
+    vi.mocked(useAppStore.getState).mockImplementation(store.getState)
+    await installTerminalTestGlobals()
+    const registry = new TerminalResidentRegistry<ReturnType<typeof createTerminalResidentPolicy>>()
+    try {
+      const snapshot = makeHostSnapshot({ snapshotVersion: 1, hostTabIds: [KEEP_TAB], hostNow: T0 })
+      const first = snapshot.tabs[0]!
+      const foreignLeaf = '33333333-3333-4333-8333-333333333333'
+      const withLeaves: RuntimeMobileSessionTabsResult = {
+        ...snapshot,
+        tabs: [
+          ...snapshot.tabs,
+          {
+            ...first,
+            id: `${KEEP_TAB}::${RETRACTED_LEAF}`,
+            leafId: RETRACTED_LEAF,
+            terminal: 'terminal-leaf-2',
+            isActive: false
+          },
+          {
+            ...first,
+            id: `${KEEP_TAB}::${foreignLeaf}`,
+            leafId: foreignLeaf,
+            terminal: 'terminal-foreign',
+            isActive: false
+          }
+        ]
+      }
+      applyHostSnapshot(store, withLeaves, T0)
+      const key = mirrorPaneKey(KEEP_TAB, RETRACTED_LEAF)
+      const ptyId =
+        store.getState().terminalLayoutsByTabId[mirrorTabId(KEEP_TAB)]!.ptyIdsByLeafId![
+          RETRACTED_LEAF
+        ]!
+      const owner = registry.admit(
+        {
+          endpoint: ENV,
+          executionHost: `runtime:${ENV}`,
+          ptyId,
+          incarnationId: 'inc-1',
+          runtimeId: null
+        },
+        (captured) =>
+          createTerminalResidentPolicy(
+            {
+              paneKey: key,
+              tabId: mirrorTabId(KEEP_TAB),
+              worktreeId: WT,
+              runtimeEnvironmentId: ENV,
+              cwd: '/path/wt1'
+            },
+            captured.identity,
+            () => captured.isLive,
+            {
+              setCacheTimerStartedAt: vi.fn(),
+              markTerminalBell: vi.fn(),
+              dispatchNotification: vi.fn()
+            }
+          )
+      )
+      const publication = owner.policy.foreground.publication
+      publication.publish({ agent: 'pi', agentEvidence: 'process-read', shellForeground: false })
+      expect(store.getState().paneForegroundAgentByPaneKey[key]?.context).toBeDefined()
+      const current = publication.captureRead()
+      const siblingKey = mirrorPaneKey(KEEP_TAB, KEEP_LEAF)
+      const foreignKey = mirrorPaneKey(KEEP_TAB, foreignLeaf)
+      const entry = store.getState().paneForegroundAgentByPaneKey[key]!
+      const sibling = { agent: 'codex' as const, shellForeground: false }
+      const foreign = { ...entry, context: { ...entry.context!, environmentId: 'other-host' } }
+      store.getState().setPaneForegroundAgent(siblingKey, sibling)
+      store.getState().setPaneForegroundAgent(foreignKey, foreign)
+      applyHostSnapshot(store, { ...snapshot, snapshotVersion: 2 }, T0 + 1)
+      expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([
+        mirrorTabId(KEEP_TAB)
+      ])
+      expect(store.getState().paneForegroundAgentByPaneKey[key]).toBeUndefined()
+      expect(store.getState().paneForegroundAgentByPaneKey[siblingKey]).toBe(sibling)
+      expect(store.getState().paneForegroundAgentByPaneKey[foreignKey]).toBe(foreign)
+      expect(owner.isLive).toBe(true)
+      expect(current()).toBe(false)
+      publication.publish({ agent: 'pi', agentEvidence: 'process-read', shellForeground: false })
+      expect(store.getState().paneForegroundAgentByPaneKey[key]).toBeUndefined()
+    } finally {
+      registry.dispose()
+      await restoreTerminalTestGlobals()
+      vi.mocked(useAppStore.getState).mockImplementation(before!)
+    }
   })
 
   it('control: retraction sweeps a host-authoritative pane the client never owned', () => {

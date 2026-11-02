@@ -156,35 +156,33 @@ describe('Claude completion banners through the real pane and hook lanes', () =>
     const { dispatchTerminalNotification } = await import('./use-notification-dispatch')
     const { observeAgentHookCompletionForNotification } =
       await import('@/hooks/agent-hook-completion-notifications')
-    const transport = createMockTransport('tab-pty')
+    const ptyId = servedBy ? `remote:${servedBy}@@pty-1` : 'tab-pty'
+    if (servedBy) {
+      mockStoreState.runtimeStatusByEnvironmentId.set(servedBy, {
+        checkedAt: Date.now(),
+        status: { capabilities: [] }
+      })
+    }
+    const transport = createMockTransport(ptyId)
     transport.connect.mockImplementation(async () => null)
     transportQueue.push(transport)
     const deps = buildPaneConnectionDeps(() => mockStoreState, {
       restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' },
+      restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
       dispatchNotification: (event: Parameters<typeof dispatchTerminalNotification>[1]) =>
         dispatchTerminalNotification('wt-1', event)
     })
     await connectMockPanePty(createPane(1), createManager(1), deps)
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks(20)
-    if (servedBy) {
-      // A pane of a paired server that predates the turn-end stamp (it advertises no capability).
-      const ptyId = `remote:${servedBy}@@pty-1`
-      const layout = mockStoreState.terminalLayoutsByTabId?.['tab-1']
-      if (!layout) {
-        throw new Error('Expected the pane layout')
-      }
-      vi.mocked(transport.getPtyId).mockReturnValue(ptyId)
-      mockStoreState.ptyIdsByTabId = { 'tab-1': [ptyId] }
-      mockStoreState.terminalLayoutsByTabId = {
-        'tab-1': { ...layout, ptyIdsByLeafId: { [LEAF_1]: ptyId } }
-      }
-      mockStoreState.runtimeStatusByEnvironmentId.set(servedBy, {
-        checkedAt: Date.now(),
-        status: { capabilities: [] }
-      })
+    const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+    const resident = getTerminalSemanticResident(ptyId)
+    if (!resident) {
+      throw new Error('Expected the actual restored source to admit E')
     }
+    expect(resident.isLive).toBe(true)
+    expect(resident.identity.endpoint).toBe(servedBy ?? 'local')
+    expect(resident.identity.ptyId).toBe(ptyId)
 
     // Stand in for the transport's title tracker: every title, plus its working/idle edge.
     const transportHandler = (name: string) => {

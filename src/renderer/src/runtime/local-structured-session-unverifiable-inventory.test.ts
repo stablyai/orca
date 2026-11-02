@@ -103,6 +103,8 @@ function hydratedState(): WebSessionTabsSyncState {
     editorBuffers: {},
     ptyIdsByTabId: { [TERMINAL_ID]: ['pty-1'] },
     remoteBrowserPageHandlesByPageId: {},
+    retainedAgentsByPaneKey: {},
+    retentionSuppressedPaneKeys: {},
     tabBarOrderByWorktree: { [WORKTREE_ID]: [TERMINAL_ID, CLAUDE_TAB, CODEX_TAB] },
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},

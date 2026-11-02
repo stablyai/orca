@@ -1,3 +1,4 @@
+import { parseDaemonProtocolFacts } from './daemon-protocol-facts.mjs'
 // Reproduce #8048 on Windows daemon: send overlapping graceful/immediate kill pair to victim sessions while witness PowerShell and daemon survive every iteration.
 import { fork } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -20,11 +21,7 @@ function readProtocolVersion() {
     join(projectDir, 'src/main/daemon/daemon-protocol-version.ts'),
     'utf8'
   )
-  const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
-  if (!match) {
-    throw new Error('Could not read the daemon protocol version')
-  }
-  return Number(match[1])
+  return parseDaemonProtocolFacts(source).protocolVersion
 }
 
 function createStreamSocket(socketPath, token, protocolVersion, clientId, onFailure) {

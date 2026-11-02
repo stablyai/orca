@@ -1,9 +1,9 @@
 import { createSessionInitialOutput } from './session-initial-output'
+import { createSessionOutput } from './session-output-pipeline-options'
 import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
-import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
-import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
+import { createSessionShellReady } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import { SessionProcessInspection } from './session-process-inspection'
@@ -11,7 +11,7 @@ import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
-import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import { createSessionIngress, drainSessionStartup } from './session-startup-output'
 
 import type {
   SessionState,
@@ -37,9 +37,9 @@ export class Session extends SessionProcessInspection {
   private readonly onSessionExit?: (code: number) => void
   private readonly output: SessionOutputPlane
   private readonly producerPause: SessionProducerPause
-  private readonly shellReady: SessionShellReadyBarrier
+  private readonly shellReady: ReturnType<typeof createSessionShellReady>
   private readonly termination: SessionTerminationController
-  readonly startupIngress: PtyStartupIngress
+  readonly startupIngress: ReturnType<typeof createSessionIngress>
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
@@ -52,8 +52,12 @@ export class Session extends SessionProcessInspection {
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.shellIsRootChild = opts.subprocess.shellIsRootChild === true
     this.onSessionExit = opts.onExit
-    const isAlive = () => !this._disposed && this._state !== 'exited'
-    const pipeline = createSessionOutputPipeline(opts, isAlive)
+    const pipeline = createSessionOutput(
+      opts,
+      this.incarnationId,
+      this.subprocess,
+      () => !this._disposed && this._state !== 'exited'
+    )
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
     this.producerPause = new SessionProducerPause(this.subprocess)
@@ -64,16 +68,15 @@ export class Session extends SessionProcessInspection {
       releaseProducerPause: (pauseOpts) => this.producerPause.release(pauseOpts)
     })
 
-    this.shellReady = createSessionShellReady(opts, this.output, (data) =>
-      this.startupIngress.accept(data)
+    this.shellReady = createSessionShellReady(
+      opts,
+      this.sessionId,
+      this.subprocess,
+      this.output,
+      (data) => this.startupIngress.accept(data)
     )
 
-    this.startupIngress = new PtyStartupIngress({
-      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
-      ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
-      write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.recoveryBarrier.accept(emission)
-    })
+    this.startupIngress = createSessionIngress(opts, this.subprocess, this.recoveryBarrier)
     try {
       this.subprocess.onData((data) => {
         if (!this._disposed) {
@@ -314,11 +317,7 @@ export class Session extends SessionProcessInspection {
   }
 
   private drainStartupOutput(): void {
-    this.shellReady.releaseDeviceAttributes()
-    this.shellReady.releaseHeldBytes()
-    this.startupIngress.drainAndClose()
-    // Drain before notifying exits or disposing the attached output plane.
-    this.recoveryBarrier.flushPending()
+    drainSessionStartup(this.shellReady, this.startupIngress, this.recoveryBarrier)
   }
 
   private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {

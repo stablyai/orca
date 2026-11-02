@@ -34,6 +34,15 @@ describe('parseDaemonProtocolFacts', () => {
     )
   })
 
+  it('ignores prefixed capability versions before the canonical declaration', () => {
+    const text = [
+      'export const TERMINAL_SIDE_EFFECT_STATE_PROTOCOL_VERSION = 51',
+      'export const OTHER_PROTOCOL_VERSION = 52',
+      source(54, '53, 52, 51')
+    ].join('\n')
+    expect(parseDaemonProtocolFacts(text)).toEqual(facts(54, [53, 52, 51]))
+  })
+
   it('parses multi-line lists and type annotations', () => {
     const text = [
       '// PROTOCOL_VERSION = 99 in a comment is ignored',

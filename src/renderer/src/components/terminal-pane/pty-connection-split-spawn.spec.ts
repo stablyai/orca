@@ -525,7 +525,10 @@ export function registerPtyConnectionSplitSpawnTests(): void {
         writes.join('').indexOf('NEWER-LIVE-OUTPUT')
       )
       expect(transport.sendInput).not.toHaveBeenCalledWith('codex resume provider-session\r')
-      expect(transport.sendInput).toHaveBeenCalledWith('AFTER_ADOPTION_REPLAY\r', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('AFTER_ADOPTION_REPLAY\r', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, stablePtyId)
     })
 
@@ -565,7 +568,10 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       setFitOverride('pty-live', 'remote-desktop-fit', 80, 24)
       transport.claimViewport.mockClear()
       ;(onDataHandler as (data: string) => void)('a')
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       expect(transport.claimViewport).toHaveBeenCalledTimes(1)
       ;(onDataHandler as (data: string) => void)('b')
       // The renderer stays parked until runtime convergence is acknowledged, so a second keystroke can retry a transient failed resize.
@@ -601,7 +607,10 @@ export function registerPtyConnectionSplitSpawnTests(): void {
 
       for (const passive of ['\x1b[I', '\x1b[O', '\x1b[<35;10;5M', '\x1b[MC*%']) {
         send(passive)
-        expect(transport.sendInput).toHaveBeenCalledWith(passive, 'query-reply')
+        expect(transport.sendInput).toHaveBeenCalledWith(passive, 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
       }
       expect(transport.claimViewport).not.toHaveBeenCalled()
 
@@ -610,7 +619,9 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       send('\x1b[I')
       expect(transport.claimViewport).not.toHaveBeenCalled()
       send('\x03')
-      expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
+      expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply', {
+        call: { onEligible: expect.any(Function), onDispatch: expect.any(Function) }
+      })
       expect(transport.sendInputAccepted).not.toHaveBeenCalledWith('\x1b[I', 'query-reply')
       expect(transport.claimViewport).toHaveBeenCalledTimes(1)
 

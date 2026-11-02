@@ -13,6 +13,7 @@ import {
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
+  createLiveReportStatusHandler,
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
@@ -33,7 +34,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+  // A runtime-bound pane keeps live report notifications separate from host-owned status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
     mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }
@@ -96,14 +97,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
       connectPanePty(pane as never, manager as never, deps as never)
 
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'working' | 'done'
-            prompt: string
-            agentType: 'codex'
-            lastAssistantMessage?: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!statusHandler || !bellHandler) {
         throw new Error('Expected hook status and bell handlers to be registered')
@@ -167,14 +161,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
       connectPanePty(pane as never, manager as never, deps as never)
 
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'working' | 'done'
-            prompt: string
-            agentType: 'codex'
-            lastAssistantMessage?: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!statusHandler || !bellHandler) {
         throw new Error('Expected hook status and bell handlers to be registered')
@@ -227,14 +214,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
       connectPanePty(pane as never, manager as never, deps as never)
 
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'working' | 'done'
-            prompt: string
-            agentType: 'codex'
-            lastAssistantMessage?: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
         | (() => void)
@@ -274,7 +254,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('restores a suppressed terminal bell when the pending agent completion is canceled', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -310,7 +290,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('cancels a title task-complete notification when the agent resumes before quiet', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -348,6 +328,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       expect(deps.dispatchNotification).toHaveBeenCalledWith({
         source: 'agent-task-complete',
         terminalTitle: '* Codex done',
+        workspaceOwner: { executionHostId: 'local', runtimeEnvironmentId: null },
         paneKey: makePaneKey('tab-1', LEAF_1),
         ptyId: 'tab-pty'
       })
@@ -355,7 +336,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('forwards raw onData after a bell as a query reply', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       const pane = createPane(1)
@@ -384,7 +365,14 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
         paneKey: makePaneKey('tab-1', LEAF_1)
       })
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith(
+        'a',
+        'query-reply',
+        expect.objectContaining({
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
+      )
     })
 
     // Why: on a stale-codex pane (pending account-switch restart), production blocks sendInput.

@@ -1,3 +1,4 @@
+import { parseDaemonProtocolFacts } from './daemon-protocol-facts.mjs'
 // Race real daemons over a dead endpoint: loser cleanup must leave winner reachable at the canonical socket with its own token.
 // Unix only: Windows named pipes are not directory entries. Run: node config/scripts/daemon-endpoint-handover-smoke.mjs
 import { fork } from 'node:child_process'
@@ -24,11 +25,7 @@ const log = (msg) => console.log(`[endpoint-handover-smoke] ${msg}`)
 
 function readProtocolVersion() {
   const source = readFileSync(join(repoRoot, 'src/main/daemon/daemon-protocol-version.ts'), 'utf8')
-  const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
-  if (!match) {
-    throw new Error('could not read daemon protocol version')
-  }
-  return Number(match[1])
+  return parseDaemonProtocolFacts(source).protocolVersion
 }
 
 function bootDaemon(tag, dir, socketPath) {

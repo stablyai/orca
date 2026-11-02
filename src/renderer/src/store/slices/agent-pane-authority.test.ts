@@ -1,3 +1,4 @@
+import '@/store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -41,6 +42,47 @@ afterEach(() => {
 })
 
 describe('agent pane authority', () => {
+  it('preserves full-sample equality, demotes moved proof and removes only the retired association', () => {
+    const store = createTestStore()
+    const context = {
+      execution: {},
+      endpoint: 'local',
+      executionHost: 'local',
+      ptyId: 'pty-1',
+      incarnationId: 'inc',
+      worktreeId: 'wt-1',
+      environmentId: null
+    }
+    const entry = {
+      agent: 'codex' as const,
+      agentEvidence: 'process-read' as const,
+      observationGeneration: 1,
+      context,
+      routingTrusted: true,
+      shellForeground: false
+    }
+    store.getState().setPaneForegroundAgent(SOURCE, entry)
+    store.getState().setPaneForegroundAgent(SIBLING, entry)
+    const before = store.getState().paneForegroundAgentByPaneKey
+    store.getState().setPaneForegroundAgent(SOURCE, { ...entry, context: { ...context } })
+    expect(store.getState().paneForegroundAgentByPaneKey).toBe(before)
+    store.getState().setPaneForegroundAgent(SOURCE, { ...entry, observationGeneration: 2 })
+    expect(store.getState().paneForegroundAgentByPaneKey[SOURCE].observationGeneration).toBe(2)
+    store
+      .getState()
+      .transferAgentPaneAuthority({ fromPaneKey: SOURCE, toPaneKey: TARGET, ptyId: 'pty-1' })
+    expect(store.getState().paneForegroundAgentByPaneKey[SOURCE]).toBeUndefined()
+    expect(store.getState().paneForegroundAgentByPaneKey[TARGET]).toMatchObject({
+      agentEvidence: 'process-admitted',
+      routingTrusted: false,
+      observationGeneration: 2
+    })
+    expect(store.getState().paneForegroundAgentByPaneKey[TARGET].context).toBe(context)
+    store.getState().retireAgentPaneAuthority(TARGET)
+    expect(store.getState().paneForegroundAgentByPaneKey[TARGET]).toBeUndefined()
+    expect(store.getState().paneForegroundAgentByPaneKey[SIBLING]).toBe(entry)
+  })
+
   it('retires one pane, clears resume authority, and rejects late status without harming siblings', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })

@@ -193,6 +193,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'claude',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -217,53 +218,55 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).not.toHaveBeenCalledWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
 
-  it('uses typed-agent text only to await process confirmation', async () => {
+  it('uses an identity-free accepted boundary to await actual process confirmation', async () => {
     readForegroundProcess.mockResolvedValueOnce('powershell.exe').mockResolvedValueOnce('droid')
     const tracker = makeTracker()
 
-    tracker.onCommandStarted('droid')
-    expect(publish).toHaveBeenCalledExactlyOnceWith({ agent: null, shellForeground: false })
+    tracker.onAcceptedInputBoundary()
+    expect(publish).not.toHaveBeenCalled()
 
     await flushSettleRead(COMMAND_SETTLE_MS)
-    expect(publish).toHaveBeenCalledTimes(1)
+    expect(publish).not.toHaveBeenCalled()
     await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
   })
 
-  it('never publishes typed Droid when command-start reads stay unavailable', async () => {
+  it('never invents identity when accepted-boundary reads stay unavailable', async () => {
     readForegroundProcess.mockResolvedValue(null)
     const tracker = makeTracker()
 
-    tracker.onCommandStarted('droid')
+    tracker.onAcceptedInputBoundary()
     await flushSettleRead(COMMAND_SETTLE_MS)
-    expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
+    expect(publish).not.toHaveBeenCalled()
 
     await flushSettleRead(WRAPPER_RESOLVE_RETRY_MS)
-    expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
+    expect(publish).not.toHaveBeenCalled()
 
     await flushSettleRead(SECOND_WRAPPER_RETRY_MS - 1)
-    expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
+    expect(publish).not.toHaveBeenCalled()
     await flushSettleRead(1)
 
     expect(readForegroundProcess).toHaveBeenCalledTimes(3)
     expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
   })
 
-  it('does not replace known foreground identity with typed command inference', () => {
+  it('does not replace known foreground identity at an accepted input boundary', () => {
     const tracker = makeTracker(() => true)
 
-    tracker.onCommandStarted('droid')
+    tracker.onAcceptedInputBoundary()
 
-    expect(publish).toHaveBeenCalledExactlyOnceWith({ agent: null, shellForeground: false })
+    expect(publish).not.toHaveBeenCalled()
   })
 
   it('revokes stale routing immediately while a known pane confirms a new command', () => {
@@ -289,6 +292,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -318,6 +322,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -336,6 +341,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -354,6 +360,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -379,6 +386,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'claude',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -422,6 +430,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'gemini',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })
@@ -497,6 +506,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
 
@@ -511,6 +521,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -594,6 +605,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -646,6 +658,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -665,6 +678,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -705,6 +719,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenCalledExactlyOnceWith({
       agent: 'droid',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       routingTrusted: true,
       shellForeground: false
     })
@@ -784,11 +799,13 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({
       agent: 'codex',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
     expect(publish).not.toHaveBeenCalledWith({
       agent: 'claude',
       agentEvidence: 'process-read',
+      observationGeneration: expect.any(Number),
       shellForeground: false
     })
   })

@@ -71,6 +71,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         })
         const pane = createPane(2)
         const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        await flushAsyncTicks(20)
         return { binding, transport, deps, pane }
       }
 

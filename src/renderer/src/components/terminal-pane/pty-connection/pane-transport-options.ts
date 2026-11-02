@@ -1,4 +1,10 @@
 import { useAppStore } from '@/store'
+import {
+  admitLegacyTerminalSemanticResident,
+  admitRemoteTerminalSemanticResident
+} from '../terminal-side-effect-facts-handler'
+import { attachTerminalResidentPresentation } from './terminal-resident-presentation'
+import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { notifyTerminalTypingDiscardedBeforeBind } from '../terminal-input-not-sent-notice'
 import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
@@ -79,7 +85,39 @@ function terminalShowsOutput(terminal: ConnectPanePtySession['pane']['terminal']
 
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
   const holdsInput = holdsInputUntilConnect(session)
+  const binding = {
+    paneKey: session.cacheKey,
+    tabId: session.deps.tabId,
+    worktreeId: session.deps.worktreeId,
+    cwd: session.deps.cwd,
+    startup: session.paneStartup,
+    initialTitle: session.getCurrentTerminalTitle() ?? undefined,
+    launchToken: session.launchToken,
+    runtimeEnvironmentId: session.runtimeEnvironmentId
+  }
   return {
+    onSourceAdmitted: (ptyId, incarnationId) => {
+      const resident = admitLegacyTerminalSemanticResident({
+        ptyId,
+        incarnationId,
+        binding: {
+          ...binding,
+          workspaceOwner: captureNotificationTransportOwner(session.transport)
+        },
+        byteSource: !session.mainSideEffectAuthority,
+        services: {
+          setCacheTimerStartedAt: session.deps.setCacheTimerStartedAt,
+          markTerminalBell: session.deps.markTerminalBell,
+          dispatchNotification: session.deps.dispatchNotification
+        }
+      })
+      if (session.runtimeEnvironmentId) {
+        admitRemoteTerminalSemanticResident({ ptyId, incarnationId, binding, byteSource: true })
+      }
+      if (!session.disposed) {
+        attachTerminalResidentPresentation(session, resident)
+      }
+    },
     onDrivingInputAttempt: (ptyId) => session.noteTerminalInputForPty(ptyId),
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
@@ -177,19 +215,6 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
         session.deps.tabId,
         session.pane.leafId,
         session.executionHostId
-      ),
-    ...(session.mainSideEffectAuthority
-      ? {}
-      : {
-          onTitleChange: session.onTitleChange,
-          onBell: session.onBell,
-          onAgentBecameIdle: session.onAgentBecameIdle,
-          onAgentBecameWorking: session.onAgentBecameWorking,
-          onAgentExited: session.onAgentExited
-        }),
-    // Local main owns OSC 9999 and forwards hook identity; remote-runtime streams bypass main and retain renderer ownership.
-    ...(session.shouldOwnAgentStatusInRenderer
-      ? { onAgentStatus: session.handleRendererOwnedAgentStatus }
-      : {})
+      )
   }
 }

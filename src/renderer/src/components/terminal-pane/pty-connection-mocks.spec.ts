@@ -1,3 +1,5 @@
+import type { createIpcPtyTransport } from './pty-transport'
+import type { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import type * as React from 'react'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
@@ -8,6 +10,8 @@ type StoreSubscriber = (state: StoreState) => void
 
 type PtyConnectionTestBindings = {
   getState: () => StoreState
+  getRemoteTransportFactory?: () => typeof createRemoteRuntimePtyTransport | undefined
+  getIpcTransportFactory?: () => typeof createIpcPtyTransport | undefined
   getTransportQueue: () => MockTransport[]
   getTransportOptions: () => Record<string, unknown>[]
   getStoreSubscribers: () => StoreSubscriber[]
@@ -55,6 +59,7 @@ export function bindPtyConnectionTestMocks(bindings: PtyConnectionTestBindings):
 function takeMockTransport(options: Record<string, unknown>): MockTransport {
   const bindings = fixture.current()
   bindings.getTransportOptions().push(options)
+  options.productionOptions = { ...options }
   const transport = bindings.getTransportQueue().shift()
   if (!transport) {
     throw new Error('No mock transport queued')
@@ -119,15 +124,147 @@ vi.mock('react', async (importOriginal) => {
   }
 })
 
-vi.mock('./pty-transport', () => ({
-  createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => takeMockTransport(options))
-}))
+async function transportMockFactory() {
+  return (options: Record<string, unknown>): MockTransport => {
+    const transport = takeMockTransport(options)
+    let boundPtyId: string | null = transport.getPtyId()
+    const getPolicy = () => {
+      const ptyId = boundPtyId ?? transport.getPtyId()
+      return ptyId
+        ? globalThis.terminalConnectionTestDelivery?.getResident(ptyId)?.policy
+        : undefined
+    }
+    let admitted: string | undefined
+    const admit = (ptyId: string | null, incarnationId?: string) => {
+      if (ptyId && typeof options.onSourceAdmitted === 'function' && admitted !== ptyId) {
+        admitted = ptyId
+        options.onSourceAdmitted(ptyId, incarnationId)
+      }
+    }
+    // Parsed callback injections represent the physical source in these pane suites.
+    const forward = <Args extends unknown[]>(
+      name: string,
+      select: (policy: NonNullable<ReturnType<typeof getPolicy>>) => (...args: Args) => unknown
+    ) => {
+      const original = options[name]
+      options[name] = (...args: Args) => {
+        admit(boundPtyId ?? transport.getPtyId())
+        const policy = getPolicy()
+        if (policy) {
+          return select(policy)(...args)
+        }
+        if (typeof original === 'function') {
+          return original(...args)
+        }
+        throw new Error(`Physical source not admitted for test injection ${name}`)
+      }
+    }
+    forward('onTitleChange', (policy) => policy.callbacks.onTitleChange)
+    forward('onBell', (policy) => policy.callbacks.onBell)
+    forward('onAgentBecameIdle', (policy) => policy.callbacks.onAgentBecameIdle)
+    forward('onAgentBecameWorking', (policy) => policy.callbacks.onAgentBecameWorking)
+    forward('onAgentExited', (policy) => policy.callbacks.onAgentExited)
+    forward('onAgentStatus', (policy) => policy.callbacks.onAgentStatus)
+    const onSpawn = options.onPtySpawn
+    if (typeof onSpawn === 'function') {
+      options.onPtySpawn = (ptyId: string) => {
+        boundPtyId = ptyId
+        admit(ptyId)
+        return onSpawn(ptyId)
+      }
+    }
+    const sendInput = transport.sendInput.getMockImplementation()
+    if (!sendInput) {
+      throw new Error('Expected the transport input implementation before resident wrapping')
+    }
+    transport.sendInput.mockImplementation((data, kind, call) => {
+      const id = boundPtyId ?? transport.getPtyId()
+      if (id) {
+        admit(id)
+        call?.onEligible(id)
+        call?.onDispatch(id)
+      }
+      return sendInput(data, kind, call)
+    })
+    const acceptedInput = transport.sendInputAccepted
+    if (acceptedInput) {
+      const accepted = acceptedInput.getMockImplementation()
+      if (!accepted) {
+        throw new Error('Expected the accepted-input implementation before resident wrapping')
+      }
+      acceptedInput.mockImplementation((data, kind, acceptedOptions) => {
+        const id = boundPtyId ?? transport.getPtyId()
+        if (id) {
+          admit(id)
+          acceptedOptions?.call?.onDispatch(id)
+        }
+        return accepted(data, kind, acceptedOptions)
+      })
+    }
+    const attach = transport.attach.getMockImplementation()
+    transport.attach.mockImplementation((opts) => {
+      const result = attach?.(opts)
+      boundPtyId = transport.getPtyId()
+      // This fixture's successful attach stands for the positive inventory result.
+      admit(boundPtyId)
+      return result
+    })
+    const connect = transport.connect.getMockImplementation()
+    let rawEndSeq = 0
+    transport.connect.mockImplementation(async (opts) => {
+      const callbacks = opts.callbacks
+      const onData = callbacks?.onData
+      if (callbacks && onData) {
+        callbacks.onData = (data, meta) => {
+          admit(boundPtyId ?? transport.getPtyId())
+          rawEndSeq = meta?.seq ?? rawEndSeq + data.length
+          meta ??= { seq: rawEndSeq, rawLength: data.length }
+          if (typeof options.onRawData === 'function') {
+            options.onRawData(data, meta)
+          }
+          onData(data, meta)
+          const ptyId = boundPtyId ?? transport.getPtyId()
+          if (ptyId) {
+            for (const sidecar of globalThis.terminalConnectionTestDelivery?.sidecars.get(ptyId) ??
+              []) {
+              sidecar(data, meta)
+            }
+          }
+        }
+      }
+      const result = await connect?.(opts)
+      boundPtyId = typeof result === 'string' ? result : (result?.id ?? transport.getPtyId())
+      admit(
+        boundPtyId,
+        typeof result === 'object' && result !== null ? result.incarnationId : undefined
+      )
+      return result
+    })
+    return transport
+  }
+}
 
-vi.mock('./remote-runtime-pty-transport', () => ({
-  createRemoteRuntimePtyTransport: vi.fn(
-    (_environmentId: string, options: Record<string, unknown>) => takeMockTransport(options)
-  )
-}))
+vi.mock('./pty-transport', async () => {
+  const create = await transportMockFactory()
+  return {
+    createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
+      const real = fixture.current().getIpcTransportFactory?.()
+      return real ? real(options) : create(options)
+    })
+  }
+})
+
+vi.mock('./remote-runtime-pty-transport', async () => {
+  const create = await transportMockFactory()
+  return {
+    createRemoteRuntimePtyTransport: vi.fn(
+      (environmentId: string, options: Record<string, unknown>) => {
+        const real = fixture.current().getRemoteTransportFactory?.()
+        return real ? real(environmentId, options) : create(options)
+      }
+    )
+  }
+})
 
 // Only the eager-buffer read is replaced; the remaining dispatcher stays real.
 vi.mock('./pty-dispatcher', async (importOriginal) => {

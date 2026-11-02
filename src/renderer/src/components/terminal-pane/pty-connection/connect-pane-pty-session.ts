@@ -1,5 +1,7 @@
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectionDeps } from '../pty-connection-types'
+import type { TerminalSemanticResident } from '../terminal-side-effect-facts-handler'
+import type { createTerminalResidentPolicy } from '../terminal-resident-policy'
 import type { PtyTransport } from '../pty-transport-types'
 import type { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 import type { TerminalResumeEscapeGap } from '../terminal-resume-escape-gap'
@@ -11,6 +13,9 @@ export type ConnectPanePtySession = {
   deps: PtyConnectionDeps
   // Why typed: every PTY write must name its input kind, and the bag's `any` would hide a missing one.
   transport: PtyTransport
+  semanticResident?: TerminalSemanticResident
+  semanticPolicy?: ReturnType<typeof createTerminalResidentPolicy>
+  detachSemanticPresentation?: () => void
   hiddenOutputRestoreUnhideSeq: number | null
   idleCursorReset: TerminalIdleCursorReset
   resumeEscapeGap: TerminalResumeEscapeGap

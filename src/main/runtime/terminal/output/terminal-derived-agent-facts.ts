@@ -117,7 +117,8 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
       | { origin: 'process'; yieldsToHookSince: number }
       | { renewsProgramStatusLease: true },
     /** False for rows projected from the screen: they are not the agent's own prompt state. */
-    recordsPromptLifecycle = true
+    recordsPromptLifecycle = true,
+    observedAt?: number
   ): void {
     const facet = chunk.programStatusFacet
     if (chunk.payloads.length === 0 && facet === undefined) {
@@ -168,6 +169,7 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
             ...target,
             payload,
             ...provenance,
+            ...(observedAt === undefined ? {} : { observedAt }),
             ...(chunk.programStatusPayloads?.has(payload) ? { fromProgramStatus: true } : {}),
             ...(chunk.programStatusRowRemovals?.has(payload)
               ? { removesProgramStatusRow: true }

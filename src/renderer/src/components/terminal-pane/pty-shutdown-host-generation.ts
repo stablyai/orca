@@ -1,9 +1,17 @@
+import type { PtyDataHandlerShutdownSnapshot } from './pty-shutdown-data-suspension'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 
 type HostSleepPhase = Extract<RuntimeClientEvent, { type: 'worktreeTerminalSleepState' }>['phase']
 type ActiveHostSleepDisposition = {
   generation: number
   phase: 'pending' | 'committed'
+}
+
+export type HostPtySleepDisposition = ActiveHostSleepDisposition & {
+  expiresAt: number
+  snapshot?: PtyDataHandlerShutdownSnapshot
+  expiryTimer?: ReturnType<typeof setTimeout>
+  ptyId: string
 }
 
 const hostSleepPhaseByPtyId = new Map<

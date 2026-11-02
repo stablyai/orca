@@ -30,6 +30,7 @@ export type PtyOutputProcessorOptions = Pick<
   | 'onAgentBecameWorking'
   | 'onAgentExited'
   | 'onAgentStatus'
+  | 'onRawData'
 > & {
   initialAgentTitle?: string
 }
@@ -57,6 +58,7 @@ export function createPtyOutputProcessor({
   onAgentBecameWorking,
   onAgentExited,
   onAgentStatus,
+  onRawData,
   initialAgentTitle
 }: PtyOutputProcessorOptions) {
   const bellDetector = createBellDetector()
@@ -182,6 +184,9 @@ export function createPtyOutputProcessor({
   ): void {
     const rawLength = meta?.rawLength ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
+    if (!options.replayingBufferedData && !suppressAttentionEvents) {
+      onRawData?.(data, meta)
+    }
     partialEscapeTail = advancePartialEscapeTail(partialEscapeTail, data)
     if (options.pendingEscapeTailAnsi) {
       partialEscapeTail = options.pendingEscapeTailAnsi
@@ -221,7 +226,9 @@ export function createPtyOutputProcessor({
       callbacks.onData?.(data)
     }
     // Why only activity: the execution host owns OSC 7501 rows, their lifetime and hook precedence.
-    enqueueSideEffects(data, processed.payloads, suppressAttentionEvents, programStatus.activity)
+    if (!onRawData) {
+      enqueueSideEffects(data, processed.payloads, suppressAttentionEvents, programStatus.activity)
+    }
   }
 
   return {

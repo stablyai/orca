@@ -2,7 +2,7 @@ import {
   discardStagedStartupCommand,
   type StartupCommandStaging
 } from '../../shared/startup-command-staging'
-import type { TerminalHostSessionCreateDependencies } from './terminal-host-session-create'
+import type { TerminalHostSessionCreateDependencies } from './terminal-host-session-create-contract'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { TerminalSpawnGate } from './terminal-spawn-gate'

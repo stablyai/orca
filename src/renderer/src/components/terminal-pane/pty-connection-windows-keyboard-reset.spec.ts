@@ -4,6 +4,7 @@ import {
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
+import { flushAsyncTicks } from './pty-connection-test-async'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   temporarilySetNavigatorUserAgent,
@@ -157,13 +158,14 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
         const { connectPanePty } = await import('./pty-connection')
-        const transport = createMockTransport()
+        const transport = createMockTransport('pty-remote-safe')
         transportFactoryQueue.push(transport)
 
         try {
           configure()
           const pane = createPane(1)
           connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+          await flushAsyncTicks(20)
 
           const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
             | ((title: string) => void)
@@ -179,7 +181,10 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           )
           transport.sendInput.mockClear()
           sendTerminalInputThroughPane(pane, '\x1b[I')
-          expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
+          expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply', {
+            onEligible: expect.any(Function),
+            onDispatch: expect.any(Function)
+          })
         } finally {
           restoreUserAgent()
         }
@@ -439,7 +444,10 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         notifyStoreSubscribers()
 
         sendTerminalInputThroughPane(pane, '\x1b[I')
-        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
+        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
       } finally {
         restoreUserAgent()
       }
@@ -492,8 +500,14 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           sendTerminalInputThroughPane(pane, '\x1b[O')
           sendTerminalInputThroughPane(pane, '\x1b[I')
 
-          expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O', 'query-reply')
-          expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I', 'query-reply')
+          expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O', 'query-reply', {
+            onEligible: expect.any(Function),
+            onDispatch: expect.any(Function)
+          })
+          expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I', 'query-reply', {
+            onEligible: expect.any(Function),
+            onDispatch: expect.any(Function)
+          })
         } finally {
           restoreUserAgent()
         }
@@ -538,8 +552,14 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
 
         sendTerminalInputThroughPane(pane, '\x7f')
         sendTerminalInputThroughPane(pane, 'x')
-        expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x7f', 'query-reply')
-        expect(transport.sendInput).toHaveBeenNthCalledWith(2, 'x', 'query-reply')
+        expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x7f', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
+        expect(transport.sendInput).toHaveBeenNthCalledWith(2, 'x', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
         expect(pane.terminal.modes.sendFocusMode).toBe(true)
 
         mockStoreState.agentStatusByPaneKey[paneKey] = {
@@ -550,7 +570,10 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         transport.sendInput.mockClear()
 
         sendTerminalInputThroughPane(pane, '\x1b[I')
-        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
+        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
         expect(pane.terminal.modes.sendFocusMode).toBe(true)
 
         mockStoreState.agentStatusByPaneKey[paneKey] = {
@@ -560,7 +583,10 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         notifyStoreSubscribers()
         transport.sendInput.mockClear()
         sendTerminalInputThroughPane(pane, '\x1b[O')
-        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply')
+        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
       } finally {
         restoreUserAgent()
       }
@@ -596,8 +622,14 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         sendTerminalInputThroughPane(pane, '\x1b[O')
         sendTerminalInputThroughPane(pane, '\x1b[I')
 
-        expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O', 'query-reply')
-        expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I', 'query-reply')
+        expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
+        expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
         expect(pane.terminal.modes.sendFocusMode).toBe(true)
       } finally {
         restoreUserAgent()

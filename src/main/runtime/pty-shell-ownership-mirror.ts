@@ -6,7 +6,8 @@ const SETTLE_DEADLINE_MS = 750
 
 /** Observe emulator bytes without pausing or injecting; daemon hosts confirm stream ownership, direct local PTYs use fresh process inspection. */
 export class PtyShellOwnershipMirror {
-  private readonly scanner = new TerminalShellLifecycleScanner()
+  // Why mid-stream: main adopts this view from snapshots, gaps and reattach; harmless at PTY birth.
+  private readonly scanner = new TerminalShellLifecycleScanner({ joinsMidStream: true })
   private confirmInFlight = false
   private confirmAttempt = 0
   private latestCandidateGeneration: number | undefined

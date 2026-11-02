@@ -774,6 +774,9 @@ describe('TerminalHost', () => {
         streamClient: { onData, onExit: vi.fn() }
       })
 
+      if (result.attachToken === null) {
+        throw new Error('Expected real attachment')
+      }
       host.detach('session-1', result.attachToken)
 
       lastSubprocess._onDataCb?.('after detach')

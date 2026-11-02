@@ -71,7 +71,10 @@ describe('pre-handler PTY buffer', () => {
     replayPreHandlerPtyData(RESCAN_PTY_ID, observer)
     drainPreHandlerPtyData(RESCAN_PTY_ID, primary)
 
-    expect(observer.mock.calls).toEqual([['composer frame'], ['\x1b[?2004h']])
+    expect(observer.mock.calls).toEqual([
+      ['composer frame', undefined, undefined],
+      ['\x1b[?2004h', undefined, undefined]
+    ])
     expect(primary.mock.calls).toEqual([
       ['composer frame', undefined],
       ['\x1b[?2004h', undefined]

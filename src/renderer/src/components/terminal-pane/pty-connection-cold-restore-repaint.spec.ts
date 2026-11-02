@@ -111,7 +111,7 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
           return {
             id: sessionId,
             replay: 'replay-payload',
-            coldRestore: { scrollback: 'cold-payload' }
+            coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
           }
         }
         return null

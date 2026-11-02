@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -103,6 +104,11 @@ describe('last-status persist throttle', () => {
 
   it('writes an authority change immediately instead of waiting for the window', async () => {
     const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
+    const launchTokenHash = createHash('sha256').update('launch-token-new').digest('hex')
+    server.setLaunchAuthorityVerifier(
+      (candidate) => candidate.paneKey === PANE && candidate.launchTokenHash === launchTokenHash,
+      () => () => {}
+    )
     await prompt('first')
     await vi.advanceTimersByTimeAsync(1)
     expect(write).toHaveBeenCalledTimes(1)
@@ -115,9 +121,10 @@ describe('last-status persist throttle', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(write).toHaveBeenCalledTimes(2)
     await write.mock.results[1]?.value
-    expect(JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]).toMatchObject({
-      launchTokenHash: expect.any(String)
-    })
+    const saved = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    expect(saved.authorityCommitments[PANE]).toMatchObject({ launchTokenHash })
+    expect(saved.entries[PANE].launchToken).toBeUndefined()
+    expect(saved.entries[PANE].launchTokenHash).toBeUndefined()
   })
 
   it('does not replace the file when the serialized state is identical', async () => {

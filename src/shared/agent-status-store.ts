@@ -44,6 +44,8 @@ export type AgentStatusStoreMode = 'authority' | 'replica'
 
 export type AgentStatusStore = {
   getParent(subject: AgentStatusSubject): AgentStatusParentRecord | null
+  /** Current authority object for identity-correlated readers; callers must not mutate it. */
+  getCanonicalParent(subject: AgentStatusSubject): AgentStatusParentRecord | null
   /** Every parent in insertion order, without materializing the child records a snapshot holds. */
   getParents(): AgentStatusParentRecord[]
   getRevision(): { epoch: string; revision: number }
@@ -82,12 +84,15 @@ export function createAgentStatusStore(options: CreateAgentStatusStoreOptions): 
       return resolveAgentStatusChildBindings(state, indexes, aliases)
     },
     getParent(subject) {
+      const record = store.getCanonicalParent(subject)
+      return record ? deepFreezeAgentStatusStoreValue(parseAgentStatusParentRecord(record)) : null
+    },
+    getCanonicalParent(subject) {
       const parsed = parseAgentStatusSubject(subject)
       if (!parsed) {
         return null
       }
-      const record = state.parents.get(serializeAgentStatusSubject(parsed))
-      return record ? deepFreezeAgentStatusStoreValue(parseAgentStatusParentRecord(record)) : null
+      return state.parents.get(serializeAgentStatusSubject(parsed)) ?? null
     },
     getParents() {
       return [...state.parents.values()]

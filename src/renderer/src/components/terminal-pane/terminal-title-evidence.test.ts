@@ -1,25 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createTerminalTitleTracker,
-  STALE_WORKING_TITLE_TIMEOUT_MS,
-  type TerminalTitleFactMeta
+  STALE_WORKING_TITLE_TIMEOUT_MS
 } from '../../../../shared/terminal-output-side-effects'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
-import { installTitleSpawnBell } from './pty-connection/title-spawn-bell'
-import { clearStaleAgentTabTitleOnConfirmedShell } from './pty-connection/confirmed-shell-agent-title'
 
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
 import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-title-status'
 
+import { TerminalResidentRegistry } from './terminal-resident-registry'
+import { createTerminalResidentPolicy } from './terminal-resident-policy'
+import { createInitialStoreState } from './pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection-test-store-state'
+import { LEAF_1 } from './pty-connection-test-pane-fixtures'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from './pty-connection-test-environment'
+
+let mockStoreState: StoreState
 vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      settings: { terminalGpuAcceleration: 'auto' },
-      agentStatusByPaneKey: {},
-      runtimePaneTitlesByTabId: { tab: { 1: 'fix the gemini launcher' } },
-      tabsByWorktree: {}
-    })
-  }
+  useAppStore: { getState: () => mockStoreState, subscribe: () => () => {} }
 }))
 vi.mock('./pty-connection/pane-pty-visibility-bind', () => ({
   installPanePtyVisibilityBind: vi.fn()
@@ -120,35 +122,67 @@ describe('resolvePaneTitleDecision', () => {
   it('keeps current timer facts cleared with equal raw/display input and existing provenance', async () => {
     vi.useFakeTimers()
     const facts: [string, string, unknown][] = []
-    const startup = vi.fn()
-    const completion = vi.fn()
-    const session = {
-      cacheKey: 'tab:leaf',
-      pane: { id: 1 },
-      deps: {
-        tabId: 'tab',
-        worktreeId: 'wt',
-        setRuntimePaneTitle: vi.fn(),
-        updateTabTitle: vi.fn()
-      },
-      manager: { getActivePane: () => ({ id: 1 }), setPaneGpuRendering: vi.fn() },
-      getAuthoritativePaneAgent: () => 'claude',
-      getPaneScopedRendererOwner: () => 'claude',
-      syncAgentTaskCompleteTrackingEnabled: () => true,
-      shouldSuppressTitleCompletionForFreshHook: () => false,
-      paneForegroundAgentTracker: { onAgentStartupObserved: startup },
-      agentCompletionCoordinator: { observeTitle: completion },
-      hasConsideredInitialCacheTimerSeed: true,
-      neutralTerminalTitle: () => 'Terminal 1',
-      releaseCommandCodeDoneSettleExecutor: () => {},
-      onTitleChange: (_title: string, _raw: string, _meta?: TerminalTitleFactMeta) => {}
+    mockStoreState = createInitialStoreState(() => mockStoreState)
+    mockStoreState.tabsByWorktree['wt-1'] = [
+      { id: 'tab-1', ptyId: 'tab-pty', defaultTitle: 'Terminal 1' }
+    ]
+    mockStoreState.runtimePaneTitlesByTabId = { 'tab-1': { 1: 'fix the gemini launcher' } }
+    mockStoreState.agentLaunchConfigByPaneKey[makePaneKey('tab-1', LEAF_1)] = {
+      launchConfig: { agentArgs: '', agentEnv: {} },
+      identity: { agentType: 'claude' }
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the installed title callback runs; its session dependencies are supplied above.
-    installTitleSpawnBell(session as never)
+    await installTerminalTestGlobals()
+    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('zsh')
+    const registry = new TerminalResidentRegistry<ReturnType<typeof createTerminalResidentPolicy>>()
+    const resident = registry.admit(
+      {
+        endpoint: 'local',
+        executionHost: 'local',
+        ptyId: 'tab-pty',
+        incarnationId: 'title-facts',
+        runtimeId: null
+      },
+      (captured) =>
+        createTerminalResidentPolicy(
+          {
+            paneKey: makePaneKey('tab-1', LEAF_1),
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            cwd: '/tmp/wt-1'
+          },
+          captured.identity,
+          () => captured.isLive,
+          {
+            setCacheTimerStartedAt: vi.fn(),
+            markTerminalBell: vi.fn(),
+            dispatchNotification: vi.fn()
+          }
+        )
+    )
+    const startup = vi.spyOn(
+      resident.policy.foreground.paneForegroundAgentTracker,
+      'onAgentStartupObserved'
+    )
+    const completion = vi.spyOn(resident.policy.completion, 'observeTitle')
+    const detach = resident.policy.attachPresentation({
+      paneId: 1,
+      isVisible: () => false,
+      showTitle: (title) => {
+        mockStoreState.setRuntimePaneTitle('tab-1', 1, title)
+        mockStoreState.updateTabTitle('tab-1', title)
+      },
+      resetInputModes: vi.fn(),
+      setFocusReportSuppression: vi.fn(),
+      clearFocusReportSuppression: vi.fn(),
+      markBracketedPasteInterrupted: vi.fn(),
+      onAgentExited: vi.fn(),
+      setMode2031: vi.fn()
+    })
+    expect(resident.isLive).toBe(true)
     const tracker = createTerminalTitleTracker({
       onTitle: (title, raw, meta) => {
         facts.push([title, raw, meta])
-        session.onTitleChange(title, raw, meta)
+        resident.policy.callbacks.onTitleChange(title, raw, meta)
       }
     })
     try {
@@ -161,7 +195,10 @@ describe('resolvePaneTitleDecision', () => {
       ])
       expect(startup).not.toHaveBeenCalled()
       expect(completion).toHaveBeenCalledExactlyOnceWith('⠋ fix the gemini launcher')
-      expect(session.deps.updateTabTitle).toHaveBeenLastCalledWith('tab', 'fix the gemini launcher')
+      expect(mockStoreState.updateTabTitle).toHaveBeenLastCalledWith(
+        'tab-1',
+        'fix the gemini launcher'
+      )
       const [normalizedTitle, rawTitle] = facts[1]
       expect(
         resolvePaneTitleDecision({
@@ -172,13 +209,16 @@ describe('resolvePaneTitleDecision', () => {
           userGpuMode: 'auto'
         }).displayTitle
       ).toBe('fix the gemini launcher')
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reset reads only pane/deps/manager/default-title fields supplied above.
-      clearStaleAgentTabTitleOnConfirmedShell(session as never)
-      expect(session.deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab', 1, 'Terminal 1')
-      expect(session.deps.updateTabTitle).toHaveBeenLastCalledWith('tab', 'Terminal 1')
+      resident.policy.foreground.handleCommandFinished(0)
+      await vi.advanceTimersByTimeAsync(350)
+      expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith('tab-pty')
+      expect(mockStoreState.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'Terminal 1')
+      expect(mockStoreState.updateTabTitle).toHaveBeenLastCalledWith('tab-1', 'Terminal 1')
     } finally {
       tracker.dispose()
-      session.releaseCommandCodeDoneSettleExecutor()
+      detach()
+      registry.retire(resident)
+      await restoreTerminalTestGlobals()
       vi.useRealTimers()
     }
   })

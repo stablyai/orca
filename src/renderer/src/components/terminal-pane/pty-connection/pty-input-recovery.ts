@@ -71,6 +71,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
               )
             )
           : createIpcPtyTransport(session.transportOptions)
+  session.semanticPolicy?.attachTransport(session.transport)
   session.canSendDesktopQueryReply = (): boolean => {
     const ptyId = session.transport.getPtyId()
     return !ptyId || !isPtyLocked(ptyId)

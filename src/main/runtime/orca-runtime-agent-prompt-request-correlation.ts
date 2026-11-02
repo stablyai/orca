@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithSerializeAgentPromptSubmission } from './terminal/input/terminal-agent-status-and-submission'
+import { OrcaRuntimeWithRetirePtyAgentLaunchAuthorityOnConfirmedExit } from './terminal/lifecycle/pty-agent-launch-exit-retirement'
 import type { RuntimeTerminalPromptDelivery } from '../../shared/runtime-types'
 import type {
   AgentPromptTurnStartEvidence,
@@ -7,7 +7,7 @@ import type {
 import { verifyAgentPromptSubmission } from './agent-prompt-submission-verification'
 import { AgentPromptRequestCorrelation } from './agent-prompt-request-correlation'
 
-export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithSerializeAgentPromptSubmission {
+export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithRetirePtyAgentLaunchAuthorityOnConfirmedExit {
   private readonly agentPromptCorrelation = new AgentPromptRequestCorrelation()
 
   getTerminalPromptRequestBinding(handle: string): {

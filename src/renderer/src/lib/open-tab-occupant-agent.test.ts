@@ -212,3 +212,20 @@ describe('resolveOpenTabOccupantAgent', () => {
     ).toBeNull()
   })
 })
+
+it('keeps passive identity visible through the actual open-tab source transport', () => {
+  expect(
+    resolve({
+      title: 'Terminal',
+      launchAgent: 'codex',
+      layout: layout(LEAF_A),
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(TAB_ID, LEAF_A)]: {
+          agent: 'pi',
+          agentEvidence: 'process-admitted',
+          shellForeground: false
+        }
+      }
+    })
+  ).toBe('pi')
+})

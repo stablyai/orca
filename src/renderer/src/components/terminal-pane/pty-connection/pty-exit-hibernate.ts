@@ -171,7 +171,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     const processExitState =
       session.processExitStateByPtyId.get(ptyId) ?? session.currentProcessExitState
     session.processExitStateByPtyId.delete(ptyId)
-    session.agentCompletionCoordinator.dispose()
+    session.detachSemanticPresentation?.()
     session.dropSideEffectFactConsumer()
     // Clear the local mark too so a rebound PTY cannot skip hidden gating.
     session.releaseHiddenRendererPtyDelivery()
@@ -192,7 +192,11 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     // Abrupt exits may omit title reset; always clear the cache countdown.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     useAppStore.getState().removeAgentStatus(session.cacheKey)
-    useAppStore.getState().clearPaneForegroundAgent(session.cacheKey)
+    if (isUnverifiedExit && !replacedByRestart) {
+      session.semanticPolicy?.foreground.paneForegroundAgentTracker.suspend()
+    } else if (!useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey]?.context) {
+      useAppStore.getState().clearPaneForegroundAgent(session.cacheKey)
+    }
     // Republish PTY loss to the runtime graph immediately; CLI bindings cannot wait for an unrelated layout change.
     scheduleRuntimeGraphSync()
     if (isUnverifiedExit && !isSuppressedExit) {

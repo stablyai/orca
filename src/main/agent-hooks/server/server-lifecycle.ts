@@ -168,7 +168,6 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             statusDisposition === 'restart'
               ? {
                   ...normalized.event,
-                  launchToken: undefined,
                   ...(restartedAuthority
                     ? {
                         ...restartedAuthority,
@@ -181,7 +180,6 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             // A new session must not inherit the retired one's observation order.
             this.observations.rebind(event.paneKey)
           }
-          this.recordCurrentAuthorityObservation(event)
           toolCallOwner = event
           const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
           if (enriched) {
@@ -289,6 +287,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.persistedAuthorityCommitmentsByPaneKey.clear()
     this.revokedHydratedAuthorityCommitments = new WeakSet()
     this.currentAuthorityObservations.clear()
+    this.clearLaunchAuthority()
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()

@@ -10,12 +10,86 @@ import type {
 } from '../../runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import { wslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+
+/** Fresh authority is the independently registered pane, incarnation and launch secret together. */
+function matchesCurrentLaunch(
+  terminal: OrchestrationCompatibilityTerminalAuthority,
+  paneKey: string,
+  launchTokenHash: string
+): boolean {
+  return Boolean(
+    terminal.processIncarnation &&
+    terminal.paneKey === paneKey &&
+    terminal.launchTokenHash &&
+    terminal.launchTokenHash === launchTokenHash
+  )
+}
 
 export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaRuntimeWithSerializeHeadlessTerminalBuffer {
   abstract getOrchestrationDispatchAuthority(
     handle: string
   ): OrchestrationCompatibilityTerminalAuthority | null
+
+  abstract getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined
+  private launchAuthorityListener: ((paneKey: string) => void) | null = null
+
+  subscribeAgentLaunchAuthority(listener: (paneKey: string) => void): () => void {
+    this.launchAuthorityListener = listener
+    return () => {
+      if (this.launchAuthorityListener === listener) {
+        this.launchAuthorityListener = null
+      }
+    }
+  }
+
+  protected notifyAgentLaunchAuthority(paneKey: string | null | undefined): void {
+    if (paneKey) {
+      this.launchAuthorityListener?.(paneKey)
+    }
+  }
+
+  verifyAgentHookLaunchAuthority(
+    candidate: {
+      paneKey: string
+      launchTokenHash: string
+      connectionId: string | null
+      worktreeId?: string
+    },
+    claimedHandle?: string
+  ): false | (() => boolean) {
+    const handle = this.getAgentStatusTerminalHandleForPaneKey(candidate.paneKey)
+    if (!handle || (claimedHandle && claimedHandle !== handle)) {
+      return false
+    }
+    const terminal = this.getOrchestrationDispatchAuthority(handle)
+    if (
+      !(
+        terminal &&
+        matchesCurrentLaunch(terminal, candidate.paneKey, candidate.launchTokenHash) &&
+        (terminal.hostScope.kind === 'ssh'
+          ? terminal.hostScope.targetId === candidate.connectionId
+          : terminal.hostScope.kind === 'wsl'
+            ? candidate.connectionId === null ||
+              candidate.connectionId === wslHookRelayConnectionId(terminal.hostScope.distro)
+            : candidate.connectionId === null) &&
+        (!candidate.worktreeId || candidate.worktreeId === terminal.worktreeId)
+      )
+    ) {
+      return false
+    }
+    const incarnation = terminal.processIncarnation
+    return () => {
+      const current = this.getOrchestrationDispatchAuthority(handle)
+      return Boolean(
+        current &&
+        current.processIncarnation === incarnation &&
+        matchesCurrentLaunch(current, candidate.paneKey, candidate.launchTokenHash) &&
+        this.getAgentStatusTerminalHandleForPaneKey(candidate.paneKey) === handle
+      )
+    }
+  }
 
   verifyOrchestrationCompatibilityCaller(
     evidence: OrchestrationCompatibilityEvidence | null | undefined,
@@ -79,7 +153,7 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
     if (
       options?.currentRuntimeLaunchSufficient &&
       terminalProvenance === 'current_runtime' &&
-      claimedPaneKey === terminal.paneKey
+      matchesCurrentLaunch(terminal, claimedPaneKey, launchTokenHash)
     ) {
       // Only an exact live-pane match may skip hook attestation after PTY, host and launch-secret checks.
       return this.freezeOrchestrationCompatibilityCallerAuthority(

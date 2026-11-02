@@ -19,6 +19,7 @@ import {
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
+  createLiveReportStatusHandler,
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
@@ -39,7 +40,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
     return buildPaneConnectionDeps(() => mockStoreState, overrides)
   }
 
-  // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
+  // A runtime-bound pane keeps live report notifications separate from host-owned status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
     mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
   }
@@ -76,7 +77,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('preserves permission-title cursor and cache side effects through authoritative hook done', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-hook')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -97,14 +98,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
         | undefined
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'done'
-            prompt: string
-            agentType: 'claude'
-            lastAssistantMessage: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       if (!idleHandler || !statusHandler) {
         throw new Error('Expected idle and hook status handlers to be registered')
       }
@@ -130,7 +124,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('preserves a genuine hook completion after suppressing an earlier idle title', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-hook')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
       vi.useFakeTimers()
@@ -157,14 +151,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
         | undefined
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'done'
-            prompt: string
-            agentType: 'claude'
-            lastAssistantMessage: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       if (!titleHandler || !idleHandler || !statusHandler) {
         throw new Error('Expected title, idle, and hook status handlers to be registered')
       }
@@ -207,11 +194,11 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('preserves accepted hook effects and shared completion with desktop banners and attention disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-hook')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
-      mockStoreState.ptyIdsByTabId = { 'tab-1': ['pty-hook'] }
-      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'pty-hook' }
+      mockStoreState.ptyIdsByTabId = { 'tab-1': ['tab-pty'] }
+      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: 'tab-pty' }
       vi.useFakeTimers()
       mockStoreState.settings = {
         ...mockStoreState.settings,
@@ -225,6 +212,16 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         }
       }
       const paneKey = makePaneKey('tab-1', LEAF_1)
+      // The host owns the active row that defers title effects; live reports only notify.
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        paneKey,
+        state: 'working',
+        prompt: 'finish the implementation',
+        agentType: 'claude',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        stateHistory: []
+      }
       const pane = createPane(1)
       const manager = createManager(1)
       const deps = createDeps()
@@ -234,14 +231,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
         | undefined
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus as
-        | ((payload: {
-            state: 'working' | 'done'
-            prompt: string
-            agentType: 'claude'
-            lastAssistantMessage?: string
-          }) => void)
-        | undefined
+      const statusHandler = createLiveReportStatusHandler(createdTransportOptions[0])
       if (!idleHandler || !statusHandler) {
         throw new Error('Expected idle and hook status handlers to be registered')
       }
@@ -313,7 +303,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-crashed-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
       // Pin process cadence so confirmed exit precedes the hook refresh.
@@ -376,7 +366,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
           terminalTitle: 'codex',
           paneKey,
           ptyId: 'tab-pty',
-          agentCompletionSource: 'process-exit'
+          agentCompletionSource: 'process-exit',
+          workspaceOwner: { executionHostId: 'local', runtimeEnvironmentId: null }
         }
         if (hookUpdateBeforeDispatch === 'new-turn') {
           expect(deps.dispatchNotification).not.toHaveBeenCalledWith(expectedNotification)
@@ -391,8 +382,17 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         sendTerminalInputThroughPane(pane, '\x1b[I')
         sendTerminalInputThroughPane(pane, '\x7f')
         expect(transport.sendInput).toHaveBeenCalledTimes(2)
-        expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[I', 'query-reply')
-        expect(transport.sendInput).toHaveBeenLastCalledWith('\x7f', 'query-reply')
+        expect(transport.sendInput).toHaveBeenNthCalledWith(
+          1,
+          '\x1b[I',
+          'query-reply',
+          expect.any(Object)
+        )
+        expect(transport.sendInput).toHaveBeenLastCalledWith(
+          '\x7f',
+          'query-reply',
+          expect.any(Object)
+        )
       } finally {
         randomSpy.mockRestore()
         restoreUserAgent()
@@ -401,7 +401,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('drops an exited agent completion when a replacement agent hook row is active', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-replaced-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
       const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
@@ -466,7 +466,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('drops confirmed idle exit when a different hook owner appears between null samples', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-replaced-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
       // Why: pin poll jitter so follow-up null samples cannot overtake replacement ownership.
@@ -551,7 +551,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
     it('preserves replacement-agent title side effects through the process replacement veto', async () => {
       const { dispatchAgentHookTerminalLifecycle } = await import('./agent-hook-terminal-lifecycle')
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-replaced-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
       const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)

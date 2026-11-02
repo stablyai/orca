@@ -200,7 +200,10 @@ describe('fresh spawn leaves a local pane unbound', () => {
         expect(transport.connect).toHaveBeenCalled()
         const input = pane.terminal.onData.mock.calls.at(-1)?.[0]
         input('continue\r')
-        expect(transport.sendInput).toHaveBeenCalledWith('continue\r', expect.anything())
+        expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('continue\r', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
         expect(mockStoreState.activeWorktreeId).toBe('unrelated')
         binding.dispose()
       }
@@ -246,7 +249,10 @@ describe('fresh spawn leaves a local pane unbound', () => {
           expect(transport.attach).toHaveBeenCalled()
         }
         pane.terminal.onData.mock.calls.at(-1)?.[0]('continue\r')
-        expect(transport.sendInput).toHaveBeenCalledWith('continue\r', expect.anything())
+        expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('continue\r', 'query-reply', {
+          onEligible: expect.any(Function),
+          onDispatch: expect.any(Function)
+        })
         expect(createdTransportOptions.at(-1)?.env).not.toHaveProperty('ORCA_WORKSPACE_ROOT')
         binding.dispose()
       }

@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import type { IDisposable } from '@xterm/xterm'
 import { TERMINAL_KITTY_SHIFT_ENTER_INPUT } from '../../../../shared/terminal-modified-enter-encoding'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -206,7 +207,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     const state = useAppStore.getState()
     const paneKey = makePaneKey(tabId, pane.leafId)
     const foreground = state.paneForegroundAgentByPaneKey[paneKey]
-    if (foreground?.agent && !foreground.shellForeground) {
+    if (foregroundAgentForActions(foreground)) {
       return false
     }
     const hookRow = state.agentStatusByPaneKey[paneKey]

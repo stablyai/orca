@@ -20,8 +20,9 @@ export class RuntimeClientEventBus {
 
   on(
     listener: (event: RuntimeClientEvent) => void,
-    options?: { consumesTerminalSideEffects?: boolean }
+    options?: { consumesTerminalSideEffects?: boolean; initialize?: () => void }
   ): () => void {
+    options?.initialize?.()
     this.listeners.add(listener)
     if (options?.consumesTerminalSideEffects === false) {
       this.excludedTerminalSideEffectListeners.add(listener)
@@ -83,7 +84,7 @@ export class RuntimeClientEventBus {
       titleGateKeys.set(event.batch.ptyId, gateKey)
       return true
     })
-    if (facts.length === 0) {
+    if (facts.length === 0 && !event.batch.terminalState) {
       return null
     }
     return facts.length === event.batch.facts.length

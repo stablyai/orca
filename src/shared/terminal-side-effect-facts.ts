@@ -1,5 +1,6 @@
 /** Main parses local/SSH PTY facts once on pty:sideEffect; renderer store policy decides notifications/unread state. */
 
+import type { TerminalTransientObservation } from './terminal-transient-observation'
 import type { AgentIdleStatus } from './agent-title-status'
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
@@ -17,6 +18,7 @@ export type TerminalSideEffectFact =
       status?: AgentIdleStatus
     }
   | { kind: 'agent-exited' }
+  | { kind: 'command-started' }
   /** OSC 133;D — foreground shell command exited (exit code best-effort). */
   | { kind: 'command-finished'; exitCode: number | null }
   /** Carry the parsed URL to avoid renderer parse drift breaking per-PTY dedupe. */
@@ -30,6 +32,11 @@ export type TerminalSideEffectFact =
   | { kind: '2031-unsubscribe' }
 
 export type TerminalSideEffectBatch = {
+  terminalState?: {
+    runtimeId: string
+    incarnationId: string
+    snapshot: TerminalTransientObservation
+  }
   ptyId: string
   /** Replay title sequence permits dropping state older than the latest applied live title. */
   seq: number

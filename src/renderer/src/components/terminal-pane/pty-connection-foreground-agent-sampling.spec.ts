@@ -1,3 +1,6 @@
+import { registerPtyConnectionForegroundHostRoutingTests } from './pty-connection-foreground-host-routing.spec'
+import type * as IpcPtyTransportModule from './pty-transport'
+import { foregroundSemantics, createInitialStoreState } from './pty-connection-test-store-fixtures'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -22,13 +25,13 @@ import {
   type StoreState
 } from './pty-connection-test-store-state'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionForegroundAgentSamplingTests(): void {
+  let realIpcTransportFactory: typeof IpcPtyTransportModule.createIpcPtyTransport | undefined
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
@@ -42,12 +45,14 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
     beforeEach(async () => {
       vi.resetModules()
       vi.clearAllMocks()
+      realIpcTransportFactory = undefined
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
       mockStoreState = createInitialStoreState(() => mockStoreState)
       bindPtyConnectionTestMocks({
         getState: () => mockStoreState,
+        getIpcTransportFactory: () => realIpcTransportFactory,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -78,6 +83,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         } = {}
       ): Promise<{
         binding: {
+          dispose: () => void
           noteVisibilityResume: () => void
           sampleForegroundAgentOnFocus: () => void
           requestWindowsShiftEnterReconfirmation: () => void
@@ -111,15 +117,11 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
           ...(args.isVisibleRef ? { isVisibleRef: args.isVisibleRef } : {})
         })
-        const binding = connectPanePty(
+        const binding: ReturnType<typeof connectPanePty> = connectPanePty(
           createPane(1) as never,
           createManager(1) as never,
           deps as never
-        ) as unknown as {
-          noteVisibilityResume: () => void
-          sampleForegroundAgentOnFocus: () => void
-          requestWindowsShiftEnterReconfirmation: () => void
-        }
+        )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks(20)
         return { binding, deps, transport, cacheKey: makePaneKey(tabId, LEAF_1) }
@@ -135,6 +137,16 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           .mocked(window.api.pty.getForegroundProcess)
           .mock.calls.filter(([calledPtyId]) => calledPtyId === ptyId)
       }
+
+      registerPtyConnectionForegroundHostRoutingTests({
+        getState: () => mockStoreState,
+        createDeps,
+        useIpcTransport: (factory) => {
+          realIpcTransportFactory = factory
+        },
+        advanceVisibleForegroundRead,
+        foregroundReadCallsFor
+      })
 
       it('does not inspect foreground process for a fresh visible spawn', async () => {
         vi.useFakeTimers()
@@ -181,11 +193,14 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         await advanceVisibleForegroundRead()
 
         expect(foregroundReadCallsFor(ptyId)).toEqual([[ptyId]])
-        expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(cacheKey, {
-          agent: 'codex',
-          agentEvidence: 'process-read',
-          shellForeground: false
-        })
+        expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(
+          cacheKey,
+          expect.objectContaining({
+            agent: 'codex',
+            agentEvidence: 'process-read',
+            shellForeground: false
+          })
+        )
       })
 
       it('does not sample hidden restored PTYs', async () => {
@@ -230,7 +245,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
           // Scope to this pane's pty id: a delayed confirm for another test's pane can fire during this advance.
           expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
-          expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          expect(
+            foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])
+          ).toEqual({
             agent: 'droid',
             routingRevoked: true,
             shellForeground: false
@@ -273,7 +290,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           await vi.advanceTimersByTimeAsync(10_000)
 
           expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
-          expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          expect(
+            foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])
+          ).toEqual({
             agent: 'droid',
             routingRevoked: true,
             shellForeground: false
@@ -310,14 +329,14 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         binding.requestWindowsShiftEnterReconfirmation()
         await vi.advanceTimersByTimeAsync(349)
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'droid',
           routingTrusted: true,
           shellForeground: false
         })
 
         await vi.advanceTimersByTimeAsync(1)
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'droid',
           routingRevoked: true,
           routingConfirmationPending: true,
@@ -328,7 +347,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         await vi.advanceTimersByTimeAsync(350)
         await flushAsyncTicks()
         expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'droid',
           agentEvidence: 'process-read',
           routingTrusted: true,
@@ -338,7 +357,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         binding.requestWindowsShiftEnterReconfirmation()
         await vi.advanceTimersByTimeAsync(700)
         await flushAsyncTicks()
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'droid',
           agentEvidence: 'process-read',
           routingTrusted: true,
@@ -367,7 +386,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
         binding.sampleForegroundAgentOnFocus()
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'pi',
           routingRevoked: true,
           routingConfirmationPending: true,
@@ -379,7 +398,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
         )
         await flushAsyncTicks()
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: null,
           shellForeground: true
         })
@@ -415,7 +434,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           launchAgent: 'droid'
         })
         expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'droid',
           agentEvidence: 'launch-record',
           shellForeground: false
@@ -423,7 +442,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
 
         binding.sampleForegroundAgentOnFocus()
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'droid',
           agentEvidence: 'launch-record',
           shellForeground: false
@@ -432,7 +451,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
         await advanceVisibleForegroundRead()
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'droid',
           agentEvidence: 'process-read',
           routingTrusted: true,
@@ -447,12 +466,12 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         const tabId = `tab-${ptyId}`
         const cacheKey = makePaneKey(tabId, LEAF_1)
         mockStoreState.tabsByWorktree = { 'wt-1': [{ id: tabId, ptyId }] }
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
-          agent: 'codex',
-          agentEvidence: 'process-read',
-          routingTrusted: true,
-          shellForeground: false
-        }
+        vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
+        const first = await connectRestoredPaneForForegroundSampling({ ptyId, tabId })
+        await advanceVisibleForegroundRead()
+        const observed = mockStoreState.paneForegroundAgentByPaneKey[cacheKey]
+        expect(observed?.agentEvidence).toBe('process-read')
+        first.binding.dispose()
 
         await connectRestoredPaneForForegroundSampling({
           ptyId,
@@ -461,7 +480,8 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           launchAgent: 'codex'
         })
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toBe(observed)
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'codex',
           agentEvidence: 'process-read',
           shellForeground: false
@@ -487,7 +507,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           launchAgent: 'codex'
         })
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: 'codex',
           agentEvidence: 'launch-record',
           shellForeground: false
@@ -517,7 +537,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         expect(
           vi.mocked(window.api.pty.confirmForegroundProcess).mock.calls.length
         ).toBeGreaterThanOrEqual(3)
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: null,
           shellForeground: true
         })
@@ -535,7 +555,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           isVisibleRef: { current: false }
         })
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toBeUndefined()
+        expect(
+          foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])
+        ).toBeUndefined()
         expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
       })
 
@@ -605,7 +627,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         await vi.advanceTimersByTimeAsync(SECOND_WRAPPER_RETRY_MS)
 
         expect(foregroundReadCallsFor(ptyId).length).toBeGreaterThanOrEqual(3)
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(foregroundSemantics(mockStoreState.paneForegroundAgentByPaneKey[cacheKey])).toEqual({
           agent: null,
           shellForeground: true
         })
@@ -735,14 +757,17 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         await flushAsyncTicks(20)
 
         const cacheKey = makePaneKey(tabId, LEAF_1)
-        dataCallbackRef.current?.('\x1b]133;D;0\x07')
+        dataCallbackRef.current?.('\x1b]133;D;0\x07\x1b]133;A\x07')
 
         await advanceVisibleForegroundRead()
 
-        expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(cacheKey, {
-          agent: null,
-          shellForeground: true
-        })
+        expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(
+          cacheKey,
+          expect.objectContaining({
+            agent: null,
+            shellForeground: true
+          })
+        )
         expect(foregroundReadCallsFor(ptyId)).toHaveLength(0)
       })
 
@@ -790,16 +815,22 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         await advanceVisibleForegroundRead()
 
         expect(foregroundReadCallsFor(ptyId)).toEqual([[ptyId]])
-        expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalledWith(cacheKey, {
-          agent: null,
-          shellForeground: true
-        })
-        expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(cacheKey, {
-          agent: 'droid',
-          agentEvidence: 'process-read',
-          routingTrusted: true,
-          shellForeground: false
-        })
+        expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalledWith(
+          cacheKey,
+          expect.objectContaining({
+            agent: null,
+            shellForeground: true
+          })
+        )
+        expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(
+          cacheKey,
+          expect.objectContaining({
+            agent: 'droid',
+            agentEvidence: 'process-read',
+            routingTrusted: true,
+            shellForeground: false
+          })
+        )
       })
 
       it('never probes the foreground for a visible remote/SSH restored pane', async () => {

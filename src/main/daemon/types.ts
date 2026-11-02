@@ -47,7 +47,8 @@ export {
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
   MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
-  supportsPtyStartupIngress
+  supportsPtyStartupIngress,
+  supportsUnseenOsc133Zones
 } from './daemon-protocol-version'
 
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -62,6 +63,7 @@ export type CreateOrAttachRequest = {
   id: string
   type: 'createOrAttach'
   payload: HistorySeedProtocol.CreateOrAttachHistorySeedPayload & {
+    terminalState?: true
     sessionId: string
     cols: number
     rows: number

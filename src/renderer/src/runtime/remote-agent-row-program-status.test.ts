@@ -1,8 +1,6 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import {
@@ -10,8 +8,25 @@ import {
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
 } from '../components/terminal-pane/renderer-owned-agent-status-registry'
+import {
+  installTerminalTestGlobals,
+  restoreTerminalTestGlobals
+} from '../components/terminal-pane/pty-connection-test-environment'
+import { useAppStore } from '../store'
+import { createTerminalResidentPolicy } from '../components/terminal-pane/terminal-resident-policy'
+import { TerminalSnapshotState } from '../../../shared/terminal-snapshot-state'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+
+import {
+  WT,
+  ENV,
+  T0,
+  MIRROR_TAB_ID,
+  PANE_KEY,
+  FACET,
+  hostSnapshot
+} from './remote-agent-row-program-status.test-fixture'
 
 vi.mock('../store', () => ({
   useAppStore: {
@@ -21,55 +36,7 @@ vi.mock('../store', () => ({
   }
 }))
 
-const WT = 'repo1::/path/wt1'
-const ENV = 'remote-env-1'
-const T0 = 1_700_000_000_000
-const HOST_TAB_ID = 'host-tab-1'
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const MIRROR_TAB_ID = toWebTerminalSurfaceTabId(HOST_TAB_ID)
-const PANE_KEY = makePaneKey(MIRROR_TAB_ID, LEAF_ID)
-const FACET: ProgramStatusFacet = { state: 'working', progress: 40, observedAt: T0 }
-
 type TestStore = ReturnType<typeof createTestStore>
-
-function hostSnapshot(
-  snapshotVersion: number,
-  programStatus?: ProgramStatusFacet
-): RuntimeMobileSessionTabsResult {
-  return {
-    worktree: WT,
-    publicationEpoch: 'host-epoch-1',
-    snapshotVersion,
-    activeGroupId: 'host-group-1',
-    activeTabId: `${HOST_TAB_ID}::${LEAF_ID}`,
-    activeTabType: 'terminal',
-    tabs: [
-      {
-        type: 'terminal',
-        id: `${HOST_TAB_ID}::${LEAF_ID}`,
-        title: 'Claude Code',
-        parentTabId: HOST_TAB_ID,
-        leafId: LEAF_ID,
-        isActive: true,
-        launchAgent: 'claude',
-        status: 'ready',
-        terminal: 'terminal-1',
-        agentStatus: {
-          state: 'working',
-          prompt: '',
-          updatedAt: T0 - 1_000,
-          stateStartedAt: T0 - 2_000,
-          agentType: 'claude',
-          paneKey: makePaneKey(HOST_TAB_ID, LEAF_ID),
-          tabId: HOST_TAB_ID,
-          worktreeId: WT,
-          stateHistory: [],
-          ...(programStatus ? { programStatus } : {})
-        }
-      }
-    ]
-  }
-}
 
 function applyHostSnapshot(store: TestStore, snapshot: RuntimeMobileSessionTabsResult): void {
   const state = store.getState()
@@ -111,7 +78,8 @@ describe('mirrored program-status facet on a client-owned pane', () => {
     resetRendererOwnedAgentStatusPanesForTests()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await restoreTerminalTestGlobals()
     vi.useRealTimers()
     resetRendererOwnedAgentStatusPanesForTests()
   })
@@ -137,4 +105,115 @@ describe('mirrored program-status facet on a client-owned pane', () => {
 
     expect(store.getState().agentStatusByPaneKey[PANE_KEY]).not.toHaveProperty('programStatus')
   })
+})
+
+describe('execution-host reported status ownership', () => {
+  beforeEach(async () => {
+    await installTerminalTestGlobals()
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetRendererOwnedAgentStatusPanesForTests()
+  })
+  afterEach(async () => {
+    await restoreTerminalTestGlobals()
+    vi.useRealTimers()
+    resetRendererOwnedAgentStatusPanesForTests()
+  })
+
+  it.each(['raw', 'facts', 'current'] as const)(
+    'keeps host Interrupted/background Working and retirement authoritative over %s reports',
+    (ingress) => {
+      const store = createTestStore()
+      seedStore(store, {
+        settings: getDefaultSettings('/tmp'),
+        worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
+        activeWorktreeId: WT
+      })
+      store.setState({ refreshGitHubForWorktreeIfStale: async () => {} })
+      vi.mocked(useAppStore.getState).mockImplementation(() => store.getState())
+      applyHostSnapshot(store, hostSnapshot(1, FACET))
+      const dispatch = vi.fn()
+      const policy = createTerminalResidentPolicy(
+        { paneKey: PANE_KEY, tabId: MIRROR_TAB_ID, worktreeId: WT, runtimeEnvironmentId: ENV },
+        {
+          endpoint: ENV,
+          executionHost: `runtime:${ENV}`,
+          runtimeId: null,
+          ptyId: `remote:${ENV}@@terminal-1`,
+          incarnationId: 'physical'
+        },
+        () => true,
+        {
+          setCacheTimerStartedAt: vi.fn(),
+          markTerminalBell: vi.fn(),
+          dispatchNotification: dispatch
+        }
+      )
+      const report = { state: 'done' as const, prompt: '', agentType: 'claude' as const }
+      const replayReport = () => {
+        if (ingress === 'raw') {
+          policy.observeLegacyData(`\x1b]9999;${JSON.stringify(report)}\x07`)
+          policy.observeLegacyData('\x1b]7501;state=idle:app=claude\x1b\\')
+        } else if (ingress === 'facts') {
+          policy.legacySource.observeFacts({
+            ptyId: `remote:${ENV}@@terminal-1`,
+            seq: 1,
+            facts: [{ kind: 'agent-status', payload: report }]
+          })
+        } else {
+          const snapshot = new TerminalSnapshotState()
+          snapshot.record({ kind: 'agent-status', payload: report })
+          snapshot.record({ kind: 'agent-status', payload: report, fromProgramStatus: true })
+          snapshot.record({
+            kind: 'program-facet',
+            facet: { state: 'idle', observedAt: T0 },
+            activity: 'idle'
+          })
+          policy.restoreCurrent(snapshot.snapshot().current, true)
+        }
+      }
+      try {
+        replayReport()
+        vi.advanceTimersByTime(3_500)
+        expect(store.getState().agentStatusByPaneKey[PANE_KEY]).toMatchObject({
+          state: 'working',
+          programStatus: FACET
+        })
+        const interrupted = hostSnapshot(2, FACET)
+        Object.assign(interrupted.tabs[0].agentStatus!, {
+          state: 'done',
+          interrupted: true,
+          completionKind: 'cancellation'
+        })
+        applyHostSnapshot(store, interrupted)
+        replayReport()
+        vi.advanceTimersByTime(3_500)
+        expect(store.getState().agentStatusByPaneKey[PANE_KEY]).toMatchObject({
+          state: 'done',
+          interrupted: true
+        })
+        applyHostSnapshot(store, hostSnapshot(3, FACET))
+        replayReport()
+        vi.advanceTimersByTime(3_500)
+        expect(store.getState().agentStatusByPaneKey[PANE_KEY]).toMatchObject({
+          state: 'working',
+          programStatus: FACET
+        })
+        const retired = hostSnapshot(4)
+        delete retired.tabs[0].agentStatus
+        applyHostSnapshot(store, retired)
+        replayReport()
+        vi.advanceTimersByTime(3_500)
+        expect(store.getState().agentStatusByPaneKey[PANE_KEY]).toBeUndefined()
+        if (ingress === 'current') {
+          expect(dispatch).not.toHaveBeenCalled()
+        } else {
+          expect(dispatch).toHaveBeenCalled()
+        }
+      } finally {
+        policy.dispose()
+      }
+    }
+  )
 })

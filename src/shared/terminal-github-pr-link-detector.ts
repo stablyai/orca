@@ -22,7 +22,7 @@ function trimTerminalUrl(candidate: string): string {
   return candidate.replace(TRAILING_TERMINAL_PUNCTUATION_RE, '')
 }
 
-function parseTerminalGitHubPRUrl(candidate: string): TerminalGitHubPRLink | null {
+export function parseTerminalGitHubPRUrl(candidate: string): TerminalGitHubPRLink | null {
   if (candidate.includes('\x1b') || candidate.includes(TERMINAL_CONTROL_GUARD)) {
     return null
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server'
+import { installTestLaunchAuthority } from '../agent-hooks/server.test-fixtures'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../../shared/agent-hook-interrupt-reconciliation'
 import { bindRemoteClaudeInterruptReconciliation } from './ssh-agent-hook-interrupt-reconciliation'
@@ -11,6 +12,9 @@ const REVISION = '11111111-1111-4111-8111-111111111112'
 
 function host(revision: string | undefined) {
   const server = new AgentHookServer()
+  installTestLaunchAuthority(server, [
+    { paneKey: PANE, token: 'launch-a', connectionId: 'ssh-owner' }
+  ])
   server.ingestRemote(
     {
       paneKey: PANE,

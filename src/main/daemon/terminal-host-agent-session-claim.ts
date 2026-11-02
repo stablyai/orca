@@ -82,9 +82,9 @@ export async function createOrAttachClaimedAgentSession(args: {
   if (ensured.disposition === 'created' && created) {
     return { ...(created as CreateOrAttachResult), agentSessionEnsure: ensured }
   }
+  args.options.sessionId = ensured.owner.ptyId
   const adopted = await args.createOrAttach({
     ...args.options,
-    sessionId: ensured.owner.ptyId,
     command: undefined,
     agentSessionEnsure: undefined,
     attachOnly: true

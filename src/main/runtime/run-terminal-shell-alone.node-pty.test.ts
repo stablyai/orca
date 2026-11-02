@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPtySubprocess } from '../daemon/pty-subprocess'
 import { Session } from '../daemon/session'
-import { confirmRootShellAloneFromProcessTable } from './run-terminal-shell-alone'
+import {
+  confirmRootShellAloneFromProcessTable,
+  confirmRootShellHasNoChildrenFromProcessTable
+} from './run-terminal-shell-alone'
 
 // A real daemon session on a real PTY: the process table, not a fake, decides.
 const SHELL = process.platform === 'win32' ? null : (['/bin/bash'].find(existsSync) ?? null)
@@ -76,5 +79,25 @@ describe.skipIf(!SHELL)('run terminal shell-alone proof on a real daemon session
   it('never proves it while an agent still runs in the shell', async () => {
     const shell = await shellThatRan("sh -c 'printf AGENT_%s UP; sleep 30'", 'AGENT_UP')
     expect(await confirmRootShellAloneFromProcessTable(shell.pid)).toBe(false)
+  })
+
+  it('never proves no children while an agent runs in the background of a foreground shell', async () => {
+    const shell = await shellThatRan(
+      "sh -c 'sleep 30' & echo AGENT_BACKGROUNDED",
+      'AGENT_BACKGROUNDED'
+    )
+    await vi.waitFor(
+      async () => expect(await confirmRootShellAloneFromProcessTable(shell.pid)).toBe(true),
+      { timeout: 5000 }
+    )
+    expect(await confirmRootShellHasNoChildrenFromProcessTable(shell.pid)).toBe(false)
+  })
+
+  it('proves no children once the agent exited', async () => {
+    const shell = await shellThatRan("sh -c 'printf AGENT_%s DONE'", 'AGENT_DONE')
+    await vi.waitFor(
+      async () => expect(await confirmRootShellHasNoChildrenFromProcessTable(shell.pid)).toBe(true),
+      { timeout: 5000 }
+    )
   })
 })

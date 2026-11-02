@@ -8,7 +8,62 @@ import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncSta
 import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
 import { buildRetiredTerminalTabStateSweepPatch } from '../../store/slices/retired-terminal-tab-state-sweep'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
-import { isAgentStatusFresh } from './state-equality-core'
+import { isAgentStatusFresh, writableWebSessionTabsRecord } from './state-equality-core'
+
+export function recordPaneKeysForTabs(
+  record: Readonly<Record<string, unknown>> | undefined,
+  tabIds: ReadonlySet<string>,
+  batchContext?: WebSessionTabsBatchContext,
+  paneKeyInValue = false
+): string[] {
+  if (!record || tabIds.size === 0) {
+    return []
+  }
+  const indexes = batchContext
+    ? (batchContext.retractionPaneKeysByRecord ??= new WeakMap())
+    : undefined
+  let index = indexes?.get(record)
+  if (!index) {
+    index = new Map<string, Set<string>>()
+    for (const key of Object.keys(record)) {
+      const value = paneKeyInValue ? record[key] : undefined
+      const paneKey = paneKeyInValue
+        ? typeof value === 'object' &&
+          value !== null &&
+          'paneKey' in value &&
+          typeof value.paneKey === 'string'
+          ? value.paneKey
+          : undefined
+        : key
+      const tabId = paneKey ? parsePaneKey(paneKey)?.tabId : undefined
+      if (!paneKey || !tabId) {
+        continue
+      }
+      const keys = index.get(tabId) ?? new Set<string>()
+      keys.add(paneKey)
+      index.set(tabId, keys)
+    }
+    indexes?.set(record, index)
+  }
+  return [...tabIds].flatMap((tabId) => [...(index.get(tabId) ?? [])])
+}
+
+export function forgetRetractionPaneKey(
+  record: NonNullable<WebSessionTabsSyncState['paneForegroundAgentByPaneKey']>,
+  paneKey: string,
+  batchContext?: WebSessionTabsBatchContext
+): void {
+  const tabId = parsePaneKey(paneKey)?.tabId
+  const index = batchContext?.retractionPaneKeysByRecord?.get(record)
+  if (!tabId || !index) {
+    return
+  }
+  const keys = index.get(tabId)
+  keys?.delete(paneKey)
+  if (keys?.size === 0) {
+    index.delete(tabId)
+  }
+}
 
 export function isMirroredAgentStatusOwnedBy(
   entry: AgentStatusEntry,
@@ -207,12 +262,38 @@ export function buildRetractedMirroredTabSweepPatch(
   // Retraction may rekey live panes; retain activity cutoffs so republication cannot replay user-cleared activity (ssh-execution-boundary).
   const previousAgentStatuses = sweepState.agentStatusByPaneKey
   let sweep: Partial<RetiredTerminalTabSweepState> | null = null
+  const foregroundState = batchContext ? state : { ...state }
+  const foregroundBatch: WebSessionTabsBatchContext = batchContext ?? {
+    agentPaneKeysByTabId: null,
+    changedRecords: new Set(),
+    openFilesIndex: null
+  }
   for (const tabId of retractedTabIds) {
     const paneKeys = scopedPaneKeysByTabId.get(tabId)
     const patch = buildRetiredTerminalTabStateSweepPatch(sweepState, [tabId], undefined, {
       preserveActivityClearedState: true,
       changedAgentPaneKeys: batchContext?.changedAgentPaneKeys,
-      ...(paneKeys ? { paneKeys } : {})
+      ...(paneKeys ? { paneKeys } : {}),
+      foregroundPatch: (entries, removedTabId, scope) => {
+        let next: typeof entries | undefined
+        for (const key of recordPaneKeysForTabs(
+          entries,
+          new Set([removedTabId]),
+          foregroundBatch
+        )) {
+          if (!(key in entries) || (scope && !scope.has(key))) {
+            continue
+          }
+          next ??= writableWebSessionTabsRecord(
+            foregroundState,
+            'paneForegroundAgentByPaneKey',
+            foregroundBatch
+          )
+          delete next[key]
+          forgetRetractionPaneKey(next, key, foregroundBatch)
+        }
+        return next ? { paneForegroundAgentByPaneKey: next } : null
+      }
     })
     if (patch) {
       sweep ??= {}

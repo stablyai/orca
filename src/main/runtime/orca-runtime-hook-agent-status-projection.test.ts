@@ -9,54 +9,24 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
+import {
+  LEAF_ID,
+  UNKNOWN_LEAF_ID,
+  TAB_ID,
+  WORKTREE_ID,
+  PANE_KEY,
+  PTY_ID,
+  ASK_PROMPT,
+  PROVIDER_SESSION,
+  hookRow
+} from './hook-agent-status-projection-rows.test-fixture'
+
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
   webContents: { fromId: vi.fn(() => null) },
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   app: { getPath: vi.fn(() => '/tmp') }
 }))
-
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-// Pane lookup can remint tab ids by leaf; only an unknown leaf is unresolvable.
-const UNKNOWN_LEAF_ID = '22222222-2222-4222-8222-222222222222'
-const TAB_ID = 'ask-tab'
-const WORKTREE_ID = 'wt-1'
-const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
-const PTY_ID = 'pty-ask'
-const ASK_PROMPT = JSON.stringify({
-  questions: [
-    {
-      question: 'Tabs or spaces?',
-      header: 'Style',
-      multiSelect: false,
-      options: [{ label: 'Tabs' }, { label: 'Spaces' }]
-    }
-  ]
-})
-const PROVIDER_SESSION = {
-  key: 'session_id' as const,
-  id: 'ac1f6b90-2f77-4f0e-9c5e-1d2f6a4b8c31',
-  transcriptPath: '/transcripts/ac1f6b90.jsonl'
-}
-
-function hookRow(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPayload {
-  const now = Date.now()
-  return {
-    paneKey: PANE_KEY,
-    state: 'waiting',
-    prompt: 'Tabs or spaces?',
-    agentType: 'claude',
-    toolName: 'AskUserQuestion',
-    interactivePrompt: ASK_PROMPT,
-    connectionId: null,
-    receivedAt: now,
-    stateStartedAt: now,
-    tabId: TAB_ID,
-    worktreeId: WORKTREE_ID,
-    providerSession: PROVIDER_SESSION,
-    ...overrides
-  }
-}
 
 async function createRuntimeWithHookRows(
   rows: AgentStatusIpcPayload[],
@@ -895,3 +865,35 @@ it('keeps a real idle transition and later done hook authoritative after a worki
     vi.useRealTimers()
   }
 })
+
+it.each(['9999', '7501'] as const)(
+  'delivers host-owned OSC %s through production ingestion, tabs and confirmed retirement',
+  async (protocol) => {
+    const wiring = makeAgentStatusStoreWiring()
+    const runtime = await createRuntimeWithHookRows([], wiring)
+    const frame = (state: 'working' | 'done') =>
+      protocol === '9999'
+        ? `\x1b]9999;${JSON.stringify({ state, prompt: '', agentType: 'claude' })}\x07`
+        : `\x1b]7501;state=${state === 'done' ? 'idle' : state}:app=claude\x1b\\`
+    try {
+      runtime.onPtyData(PTY_ID, frame('working'), 1)
+      const working = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      expect(working.tabs[0]?.type === 'terminal' && working.tabs[0].agentStatus).toMatchObject({
+        state: 'working',
+        agentType: 'claude'
+      })
+      runtime.onPtyData(PTY_ID, frame('done'), 2)
+      const complete = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      expect(complete.tabs[0]?.type === 'terminal' && complete.tabs[0].agentStatus).toMatchObject({
+        state: 'done',
+        agentType: 'claude'
+      })
+      runtime.onPtyExit(PTY_ID, 0)
+      expect(wiring.statusStore.getStatusSnapshot()).toEqual([])
+      const retired = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      expect(retired.tabs.some((tab) => tab.type === 'terminal' && tab.agentStatus)).toBe(false)
+    } finally {
+      wiring.statusStore.stop()
+    }
+  }
+)
