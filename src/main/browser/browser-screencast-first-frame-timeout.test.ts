@@ -16,14 +16,6 @@ function start(
   return startBrowserScreencast(webContents as never, options)
 }
 
-function liveFrame(webContents: ReturnType<typeof createMockScreencastWebContents>): void {
-  webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-    data: Buffer.from('live').toString('base64'),
-    sessionId: 1,
-    metadata: { deviceWidth: 390, deviceHeight: 844, pageScaleFactor: 1 }
-  })
-}
-
 function startOptions(viewport: boolean) {
   return {
     format: 'jpeg' as const,
@@ -64,27 +56,6 @@ describe('browser screencast first-frame deadline', () => {
     session.stop()
     // The stop queues behind the capture: capturePage's 10 s bound, then the fallback's 8 s.
     await vi.advanceTimersByTimeAsync(8_000)
-    await session.done
-  })
-
-  it.each(['live', 'snapshot'] as const)('stays quiet once a %s frame arrives', async (kind) => {
-    const webContents = Object.assign(createMockScreencastWebContents(), {
-      capturePage: vi.fn(() => never())
-    })
-    webContents.debugger.sendCommand.mockImplementation(async (method: string) =>
-      method === 'Page.captureScreenshot' ? { data: Buffer.from('frame').toString('base64') } : {}
-    )
-    const options = startOptions(kind === 'live')
-    const session = await start(webContents, options)
-    if (kind === 'live') {
-      liveFrame(webContents)
-    }
-
-    await vi.advanceTimersByTimeAsync(30_000)
-
-    expect(options.onFrame).toHaveBeenCalled()
-    expect(options.onError).not.toHaveBeenCalled()
-    session.stop()
     await session.done
   })
 

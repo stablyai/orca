@@ -1,9 +1,9 @@
 import { agentChoiceSettingsOccurrences } from './agent-choice-settings'
 import type { AgentType } from './agent-status-types'
-import type { CatalogOptionApply } from './agent-session-option-catalog-types'
+import type { CatalogOptionApply } from './agent-session/options/agent-session-option-catalog-types'
 import type { AgentDedicatedChoices } from './agent-launch-choices'
 import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
-import { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
 

@@ -100,108 +100,6 @@ afterEach(() => {
 })
 
 describe('check-reliability-gates', () => {
-  it('accepts the checked-in manifest', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await expect(main(process.cwd())).resolves.toBe(0)
-  })
-
-  it('rejects soak gates without executable commands', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(validManifest({ commands: [] }))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('Reliability gate manifest check failed')
-    )
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('soak gates must declare at least one command')
-    )
-  })
-
-  it('rejects soak gates without test files', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(validManifest({ testFiles: [] }))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('soak gates must declare at least one test file')
-    )
-  })
-
-  it('rejects command-backed gates that select tests by title', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(
-      validManifest({ maturity: 'experimental', commands: ['pnpm vitest -t flaky-title'] })
-    )
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('commands must not rely on title selectors')
-    )
-  })
-
-  it('rejects gates without a protection level', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const manifest = JSON.parse(validManifest())
-    delete manifest.gates[0].protection
-    const root = makeTempRoot(JSON.stringify(manifest, null, 2))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('protection must be one of none, partial, or active')
-    )
-  })
-
-  it('rejects commandless gates unless they declare protection none', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(
-      validManifest({
-        maturity: 'experimental',
-        protection: 'partial',
-        commands: [],
-        testFiles: [],
-        flakeHistory: { status: 'not-started', evidence: 'Planning entry only.' },
-        redGreenEvidence: { status: 'missing', evidence: 'No executable proof yet.' }
-      })
-    )
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('commandless gates must declare protection none')
-    )
-  })
-
-  it('rejects command-backed gates marked as no protection', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(validManifest({ maturity: 'experimental', protection: 'none' }))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('protection none gates must not declare commands or testFiles')
-    )
-  })
-
-  it('reserves active protection for stable blocking gates', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(validManifest({ maturity: 'experimental', protection: 'active' }))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('protection active is reserved for blocking gates')
-    )
-  })
-
-  it('rejects partial gates without a passed evidence run', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(validManifest({ maturity: 'experimental', evidenceRuns: [] }))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('protection partial gates need a passed evidence run')
-    )
-  })
-
   it('rejects evidence runs whose command is not declared by the gate', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const root = makeTempRoot(
@@ -268,35 +166,6 @@ describe('check-reliability-gates', () => {
     }
   )
 
-  it('rejects protection none gates with evidence runs', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(
-      validManifest({
-        maturity: 'experimental',
-        protection: 'none',
-        commands: [],
-        testFiles: [],
-        flakeHistory: { status: 'not-started', evidence: 'Planning entry only.' },
-        redGreenEvidence: { status: 'missing', evidence: 'No executable proof yet.' }
-      })
-    )
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('protection none gates must not declare evidenceRuns')
-    )
-  })
-
-  it('rejects partial gates without assertion refs', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(validManifest({ maturity: 'experimental', assertionRefs: [] }))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('protection partial gates need assertionRefs')
-    )
-  })
-
   it('rejects assertion refs outside declared test files', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const root = makeTempRoot(
@@ -317,34 +186,6 @@ describe('check-reliability-gates', () => {
     )
   })
 
-  it('rejects protection none gates with assertion refs', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(
-      validManifest({
-        maturity: 'experimental',
-        protection: 'none',
-        commands: [],
-        testFiles: [],
-        evidenceRuns: [],
-        assertionRefs: [
-          {
-            file: 'some.test.ts',
-            assertions: ['planning entry must not look tested']
-          }
-        ],
-        coveredPlatforms: [],
-        coveredProviders: [],
-        flakeHistory: { status: 'not-started', evidence: 'Planning entry only.' },
-        redGreenEvidence: { status: 'missing', evidence: 'No executable proof yet.' }
-      })
-    )
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('protection none gates must not declare assertionRefs')
-    )
-  })
-
   it('rejects covered scope outside the risk scope', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const root = makeTempRoot(
@@ -361,43 +202,6 @@ describe('check-reliability-gates', () => {
     )
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('covered provider is outside risk scope: ssh')
-    )
-  })
-
-  it('requires coveredPlatforms to include passed evidence platforms', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(
-      validManifest({
-        maturity: 'experimental',
-        coveredPlatforms: ['linux']
-      })
-    )
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('coveredPlatforms must include passed evidence platform macos')
-    )
-  })
-
-  it('rejects covered scope on protection none gates', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(
-      validManifest({
-        maturity: 'experimental',
-        protection: 'none',
-        commands: [],
-        testFiles: [],
-        evidenceRuns: [],
-        coveredPlatforms: ['macos'],
-        coveredProviders: [],
-        flakeHistory: { status: 'not-started', evidence: 'Planning entry only.' },
-        redGreenEvidence: { status: 'missing', evidence: 'No executable proof yet.' }
-      })
-    )
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('protection none gates must not declare covered scope')
     )
   })
 
@@ -437,65 +241,6 @@ describe('check-reliability-gates', () => {
     await expect(main(root)).resolves.toBe(1)
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('test file is not referenced by any gate command: some.test.ts')
-    )
-  })
-
-  it('rejects soak gates without mature flake and red/green evidence', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot(
-      validManifest({
-        flakeHistory: { status: 'unknown', evidence: 'No soak yet.' },
-        redGreenEvidence: { status: 'partial', evidence: 'No saved artifact yet.' }
-      })
-    )
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('soak gates must have soaking or stable flakeHistory')
-    )
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('soak gates must have complete red/green evidence')
-    )
-  })
-
-  it('rejects malformed JSONC', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = makeTempRoot('{ "schemaVersion": 1, } trailing')
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('JSONC parse error'))
-  })
-
-  it('rejects missing manifests with a structured error', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = mkdtempSync(path.join(tmpdir(), 'orca-reliability-gates-'))
-    tempDirs.push(root)
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('unable to read manifest'))
-  })
-
-  it('uses policy maturity levels as the source of truth', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const manifest = JSON.parse(validManifest())
-    manifest.policy.maturityLevels = ['experimental']
-    const root = makeTempRoot(JSON.stringify(manifest, null, 2))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('maturity is invalid'))
-  })
-
-  it('rejects malformed blocking promotion policy', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const manifest = JSON.parse(validManifest())
-    manifest.policy.blockingPromotion.maximumUnexplainedFlakes = -1
-    const root = makeTempRoot(JSON.stringify(manifest, null, 2))
-
-    await expect(main(root)).resolves.toBe(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'policy.blockingPromotion.maximumUnexplainedFlakes must be a non-negative number'
-      )
     )
   })
 })

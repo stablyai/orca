@@ -4,8 +4,8 @@ import {
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 
 const THREAD = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'
 const TURN_A = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'

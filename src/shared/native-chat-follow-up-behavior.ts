@@ -17,3 +17,10 @@ export function nativeChatSendFollowUp(
   const queues = sendQueues()
   return { action: queues ? 'queue' : 'steer', offersChoice: queues !== sendQueues(true) }
 }
+
+/** An answer to the agent's mid-turn question steers into that turn even when follow-ups queue. */
+export function nativeChatAnswerSendIntent(
+  followUp: NativeChatSendFollowUp | null | undefined
+): { alternate: true } | undefined {
+  return followUp?.action === 'queue' && followUp.offersChoice ? { alternate: true } : undefined
+}

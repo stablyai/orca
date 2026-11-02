@@ -10,7 +10,7 @@ import * as registry from '../native-chat/agent-session-wire/structured-agent-se
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const catalog = vi.hoisted((): { service: AgentModelCatalogService | null } => ({ service: null }))

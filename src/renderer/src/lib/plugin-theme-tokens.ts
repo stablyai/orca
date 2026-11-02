@@ -131,7 +131,7 @@ export function contrastRatio(a: Rgba, b: Rgba): number {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
 }
 
-function over([r, g, b, a]: Rgba, [br, bg, bb]: Rgba): Rgba {
+export function over([r, g, b, a]: Rgba, [br, bg, bb]: Rgba): Rgba {
   return [r * a + br * (1 - a), g * a + bg * (1 - a), b * a + bb * (1 - a), 1]
 }
 

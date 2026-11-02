@@ -23,7 +23,7 @@ import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
 import { planAgentSessionLaunch } from './agent-session-launch-plan'
-import { openDeclinedTerminal } from './structured-agent-session-action-launch'
+import { openDeclinedTerminal } from './agent-session/launch/structured-agent-session-action-launch'
 import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
 
 afterEach(() => vi.restoreAllMocks())

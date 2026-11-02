@@ -2,7 +2,7 @@
 // are import-scoped because rollout IDs lack stable structured turn/ordinal identity.
 
 import type { AgentType } from '../../../shared/agent-status-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { NativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 
 export type LegacyIdentityTracker = {

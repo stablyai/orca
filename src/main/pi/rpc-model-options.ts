@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { PI_THINKING_LEVELS } from '../../shared/structured-agent-session-effective-effort'
-import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import { piRpcModelSchema } from './rpc-model-schema'
 
 export type PiRpcRequester = {

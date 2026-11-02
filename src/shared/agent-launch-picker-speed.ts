@@ -1,7 +1,7 @@
 import { analyzeAgentChoiceArgs } from './agent-choice-args'
 import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
-import { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { agentPermissionArgs } from './tui-agent-permission-choice'
 import { agentPickerEntryOptions } from './agent-launch-picker-catalog'
 import { agentPickerArgumentPermission } from './agent-launch-picker-permission'

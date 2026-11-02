@@ -5,7 +5,7 @@ import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
 } from '@/store/workspace-record-selectors'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store'
@@ -17,15 +17,18 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/host-structured-agents'
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
+  createAgentPickerInventorySource,
+  useAgentPickerInventoryEntries,
   currentAgentPickerAcquisition,
-  observeAgentPickerAcquisition
+  observeAgentPickerAcquisition,
+  type AgentPickerInventorySource
 } from './agent-launch-picker-acquisition'
-import { isAgentPermissionChoice } from '../../../../shared/tui-agent-permission-choice'
+import { usableAgentPickerDefaultSettings as usable } from '../../../../shared/agent-launch-picker-defaults'
 import { isAgentChatPermissionChoice } from '../../../../shared/agent-chat-permission-mode'
 import {
   agentPickerEntriesFromRows,
@@ -34,12 +37,30 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 
+export {
+  useAgentPickerInventoryEntries,
+  type AgentPickerInventorySource
+} from './agent-launch-picker-acquisition'
+
+/** Forms consume entries; menu owners can retain the source without subscribing. */
 export function useAgentLaunchPickerInventory(
   worktreeId: string | undefined,
   model: NewTabAgentMenuModel,
   open: boolean,
   selected?: AgentPickerEntry['agent']
 ): AgentPickerEntry[] {
+  return useAgentPickerInventoryEntries(
+    useAgentLaunchPickerInventorySource(worktreeId, model, open, selected)
+  )
+}
+
+/** Owns acquisition for the menu without subscribing its caller to the entries it publishes. */
+export function useAgentLaunchPickerInventorySource(
+  worktreeId: string | undefined,
+  model: NewTabAgentMenuModel,
+  open: boolean,
+  selected?: AgentPickerEntry['agent']
+): AgentPickerInventorySource {
   const selectedRef = useRef(selected)
   useLayoutEffect(() => {
     selectedRef.current = selected
@@ -132,11 +153,6 @@ export function useAgentLaunchPickerInventory(
       ]),
     [context, worktreeId, selector, executionHostId, model, settings]
   )
-  const generation = useMemo(() => ({ key, open }), [key, open])
-  const [snapshot, setSnapshot] = useState<{
-    generation: object
-    entries: AgentPickerEntry[]
-  } | null>(null)
   const build = (defaults: AgentPickerDefaultSettings | null | undefined) =>
     model.state === 'settled'
       ? agentPickerEntriesFromRows(
@@ -173,29 +189,19 @@ export function useAgentLaunchPickerInventory(
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- The semantic key covers rows, detection, target and defaults without restarting for object identity.
     [key]
   )
+  // A new generation starts from the shared acquisition (or the fallback) until it publishes.
+  const source = useMemo(
+    () =>
+      createAgentPickerInventorySource(
+        (open ? currentAgentPickerAcquisition(key) : undefined) ?? fallback
+      ),
+    [key, open, fallback]
+  )
   useEffect(() => {
     if (!open || !target || model.state !== 'settled') {
       return
     }
     const controller = new AbortController()
-    const record = (value: unknown): value is Record<string, unknown> =>
-      value !== null && typeof value === 'object' && !Array.isArray(value)
-    const argsRecord = (value: unknown) =>
-      value === undefined ||
-      (record(value) && Object.values(value).every((v) => typeof v === 'string'))
-    const permissionsRecord = (value: unknown) =>
-      value === undefined || (record(value) && Object.values(value).every(isAgentPermissionChoice))
-    const usable = (value: unknown): value is AgentPickerDefaultSettings =>
-      record(value) &&
-      argsRecord(value.agentDefaultArgs) &&
-      permissionsRecord(value.agentPermissionOverrides) &&
-      (value.agentPermissionDefault === undefined ||
-        isAgentPermissionChoice(value.agentPermissionDefault)) &&
-      (value.agentPermission === undefined ||
-        (record(value.agentPermission) &&
-          isAgentPermissionChoice(value.agentPermission.default) &&
-          argsRecord(value.agentPermission.userArgs) &&
-          permissionsRecord(value.agentPermission.overrides)))
     return observeAgentPickerAcquisition(
       key,
       fallback,
@@ -292,12 +298,10 @@ export function useAgentLaunchPickerInventory(
       },
       {
         selected: () => selectedRef.current,
-        publish: (entries) => setSnapshot({ generation, entries: [...entries] })
+        publish: source.publish
       }
     )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only semantic inputs and visibility own observation; selected priority publishes independently after commit.
-  }, [key, open])
-  return snapshot?.generation === generation
-    ? snapshot.entries
-    : ((open ? currentAgentPickerAcquisition(key) : undefined) ?? fallback)
+  }, [key, open, source])
+  return source
 }

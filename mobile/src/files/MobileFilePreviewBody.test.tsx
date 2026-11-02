@@ -11,7 +11,11 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('../components/MobileSvgPreview', () => ({ MobileSvgPreview: 'SvgPreview' }))
 vi.mock('../components/MobilePanZoomImage', () => ({ MobilePanZoomImage: 'PanZoomImage' }))
-vi.mock('../components/MobileLoadErrorState', () => ({ MobileLoadErrorState: 'LoadError' }))
+vi.mock('../components/MobileStateView', () => ({
+  MobileLoadErrorState: 'LoadError',
+  MobileOfflineState: 'Offline',
+  MobileStateView: 'StateView'
+}))
 vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: 'Media' }))
 vi.mock('./MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: 'Markdown' }))
 vi.mock('./MobileFilePreviewEditableSource', () => ({

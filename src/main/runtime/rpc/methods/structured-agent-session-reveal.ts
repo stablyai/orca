@@ -7,7 +7,7 @@ import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError,
   isAgentSessionWireRefusalCode
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { StructuredAgentSessionReveal } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import { refuseAgentSessionMutation } from '../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { defineMethod } from '../core'

@@ -12,9 +12,9 @@ import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualifie
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../shared/orca-session-address'
-import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
+import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import type { OrchestrationDb } from './orchestration/db'
 import { structuredSessionMailReach } from './orchestration/structured-session-mail-address'
 import {

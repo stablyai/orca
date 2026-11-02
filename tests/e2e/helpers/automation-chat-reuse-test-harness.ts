@@ -15,8 +15,8 @@ import { createRuntimeAutomationService } from '../../../src/main/automations/ru
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
 import type { AutomationChatLaunchRequest } from '../../../src/main/automations/automation-chat-agent-launch'
 import { automationRunOperationId } from '../../../src/main/automations/automation-run-operation'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_NOW,
   HOST_TEST_THREAD,

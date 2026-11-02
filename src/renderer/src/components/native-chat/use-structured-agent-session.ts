@@ -10,15 +10,15 @@ import {
   nativeChatQueueFollowUps,
   nativeChatSendFollowUp
 } from '../../../../shared/native-chat-follow-up-behavior'
-import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
-import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import { useStructuredLegacyLaunchStop } from '@/lib/agent-session/launch/structured-agent-session-legacy-launch-stop'
 import {
   useStructuredAgentSessionHostQueuesCommands,
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../shared/structured-agent-session-stop-control'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
   cancelStructuredAgentSessionPrompt
@@ -26,7 +26,7 @@ import {
 import {
   pendingStructuredSessionPrompts,
   type StructuredPromptItem
-} from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
 import { useStructuredAgentSessionStop } from './use-structured-agent-session-stop'
@@ -38,12 +38,10 @@ import { useStructuredAgentSessionRailOutline } from './use-structured-agent-ses
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './structured-conversation-command-send'
 import { pendingSendsOutsideQueuedCards } from './structured-agent-session-sending-queued-cards'
-import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
+import { hostStatesTurnScopes } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
-
-export type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
 
 export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) {
   const {

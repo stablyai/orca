@@ -2,16 +2,14 @@
 // Failed writes retry on the next change; reopen settles any stale working rows as unverifiable.
 // Use the reporting child’s sink so resumed work belongs to its new execution owner.
 
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import type { AgentChildWorkInput } from '../../../shared/agent-status-child-work'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type {
   NativeChatSubagentBlock,
   NativeChatSubagentState
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {

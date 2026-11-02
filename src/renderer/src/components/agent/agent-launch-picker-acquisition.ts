@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react'
+import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
@@ -102,7 +104,7 @@ class AgentPickerAcquisition {
     return defaults.map((entry, i) => {
       const read = this.supports.get(i)
       const current = read && !(reopen && read.state === 'settled')
-      return {
+      const next = {
         ...entry,
         catalog: this.entries[i].catalog,
         catalogRead: this.entries[i].catalogRead,
@@ -116,6 +118,7 @@ class AgentPickerAcquisition {
             }
           : {})
       }
+      return shallow(this.entries[i], next) ? this.entries[i] : next
     })
   }
 
@@ -246,4 +249,48 @@ export function currentAgentPickerAcquisition(key: string) {
 
 export function agentPickerAcquisitionDiagnostics() {
   return [...pending.values()].map((resource) => ({ key: resource.key, ...resource.diagnostics() }))
+}
+
+/**
+ * Live picker entries for one (inventory key, open) generation. Catalog and seed reads land one
+ * at a time for several seconds after the menu opens; holding them here instead of in the
+ * owner's React state lets only the components that render entries re-render as they land.
+ */
+export type AgentPickerInventorySource = {
+  getSnapshot: () => AgentPickerEntry[]
+  subscribe: (listener: () => void) => () => void
+}
+
+type WritableAgentPickerInventorySource = AgentPickerInventorySource & {
+  publish: (entries: readonly AgentPickerEntry[]) => void
+}
+
+export function createAgentPickerInventorySource(
+  initial: AgentPickerEntry[]
+): WritableAgentPickerInventorySource {
+  let entries = initial
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => entries,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    publish: (next) => {
+      // Why: a read that changed nothing (e.g. an unavailable catalog) must not re-render the menu.
+      if (next.length === entries.length && next.every((entry, i) => entry === entries[i])) {
+        return
+      }
+      entries = [...next]
+      for (const listener of listeners) {
+        listener()
+      }
+    }
+  }
+}
+
+export function useAgentPickerInventoryEntries(
+  source: AgentPickerInventorySource
+): AgentPickerEntry[] {
+  return useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
 }

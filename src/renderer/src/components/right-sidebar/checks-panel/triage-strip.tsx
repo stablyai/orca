@@ -13,6 +13,8 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { ConflictReview } from './conflict-summary'
 import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import { CHECK_COLOR } from './check-presentation'
 
 export function PRTriageStrip({
   review,
@@ -103,7 +105,12 @@ export function PRTriageStrip({
     return (
       <div className="border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-amber-500" />
+          <LoaderCircle
+            className={cn(
+              'size-3.5 shrink-0 animate-spin motion-reduce:animate-none',
+              CHECK_COLOR.pending
+            )}
+          />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-medium text-foreground">
               {translate(

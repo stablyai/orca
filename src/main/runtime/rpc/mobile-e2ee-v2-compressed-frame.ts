@@ -26,7 +26,8 @@ export function compressMobileE2EEV2Item(
     return item
   }
   const payload = item.kind === 'text' ? Buffer.from(item.plaintext, 'utf8') : item.plaintext
-  const gzipped = gzipSync(payload)
+  // Why: terminal binary streams continuously on the main thread; level 1 keeps ~95% of the saving at 2-4x less CPU.
+  const gzipped = gzipSync(payload, item.kind === 'binary' ? { level: 1 } : undefined)
   // Why: already-dense payloads can grow under gzip; the plain frame then costs less.
   if (gzipped.byteLength >= payload.byteLength) {
     return item

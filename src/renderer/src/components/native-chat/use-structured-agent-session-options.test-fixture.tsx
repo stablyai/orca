@@ -3,7 +3,7 @@
 import { renderHook } from '@testing-library/react'
 import { vi, type Mock } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type * as LaunchOptions from '@/lib/structured-agent-session-launch-options'
+import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
 import type { SelectionOutcome } from '../../../../shared/structured-agent-session-selection-operations'
 
@@ -84,11 +84,11 @@ vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: mocks.enqueue
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-options', async () => {
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', async () => {
   const { structuredSessionSelectionController } =
     await import('@/lib/structured-agent-session-selection-controller')
   const actual = await vi.importActual<typeof LaunchOptions>(
-    '@/lib/structured-agent-session-launch-options'
+    '@/lib/agent-session/launch/structured-agent-session-launch-options'
   )
   return {
     ...actual,

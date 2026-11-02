@@ -30,6 +30,8 @@ A handoff is done when the new worktree id and agent handle have been reported a
 
 Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with terminal commands for an agent that is already running.
 
+For local work in the caller’s project, omit `--repo` and `--project`. Pass one to target another project or when Orca asks you to disambiguate; do not pick a repo from a list for unambiguous same-project work. The project comes from the caller’s directory, not the project visible in the app. Paired-server calls require an explicit server-side target.
+
 Independent new-worktree handoff:
 
 ```text
@@ -70,7 +72,26 @@ An Orca worktree is Orca's tracked view of a repo checkout, its metadata, termin
 
 Its id is a two-part address, `<repoId>::<worktreePath>`, such as `repo-123::/Users/me/orca/fix-login`. Copy the whole `id` field from `ORCA worktree create --json` or `ORCA worktree list --json`. `repo-123` alone names only the repo.
 
-Common commands:
+For local creation, omit `--repo` and `--project` to stay in the caller's project. Use `--parent-worktree active` for a child of the current workspace. Project selection and parent selection are separate: a native folder parent supplies lineage, not a Git destination, so pass an explicit Git target when creating from a folder outside any managed checkout. Otherwise, pass `--repo` or `--project` only when deliberately creating in another project, or when Orca asks you to disambiguate. Outside any Orca-managed project, pass an explicit target. With a paired server, discover and use that server's exact target instead of the local cwd.
+
+If several Orca workspaces share the checkout and no caller identity selects one, workspace-specific commands ask you to choose an exact selector. Inspect a listed workspace with `ORCA worktree show --worktree <exact-selector> --json`, then use the command’s workspace target flag. For an implicit-create refusal, use `ORCA worktree list --limit 10000 --json` with the same server and host selection; match path and host, increasing --limit if truncated. Pass `--parent-worktree <exact-selector>` or deliberately use `--no-parent` on a fresh request without --retry-launch. Retrying the refused ID returns its original explanation. Pass each exact selector as one argument quoted for your shell. Native folder choices are shown in the local error; exact show inspection is supported, while native folders are not enumerated by worktree list. Implicit creation checks this only when the host actually uses the directory’s parent context; older hosts retain their existing implicit-parent behavior.
+
+Same-project creation:
+
+```text
+ORCA worktree create --name related-task --parent-worktree active --json
+ORCA worktree create --name child-task --parent-worktree active --agent codex --prompt "hi" --json
+ORCA worktree create --name independent-task --no-parent --json
+ORCA worktree create --name review-task --parent-worktree active --pr 123 --json
+```
+
+A native folder parent with an explicit Git destination:
+
+```text
+ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
+```
+
+Other common commands:
 
 ```text
 ORCA repo list --json
@@ -84,18 +105,12 @@ ORCA worktree ps --json
 ORCA worktree ps --agent-wait --json
 ORCA worktree current --json
 ORCA worktree show --worktree <selector> --json
-ORCA worktree create --repo id:<repoId> --name related-task --json
-ORCA worktree create --repo id:<repoId> --name related-task --parent-worktree active --json
-ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
-ORCA worktree create --name child-task --agent codex --prompt "hi" --json
-ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree id:<parentRepoId>::<parentPath> --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --no-parent --json
-ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
@@ -123,15 +138,14 @@ Lineage rules:
 - A parent can be in a different project from its child, such as `worktree create --repo id:<otherRepoId> --name related-task --parent-worktree id:<parentRepoId>::<parentPath>`. A worktree parent and child must use the same execution host (local machine, SSH target, or paired server).
 - To move an existing worktree under a different parent, or make it top-level, use `worktree set` with `--parent-worktree <selector>` or `--no-parent`.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
-- If `--repo` is omitted, Orca infers the repo from the current Orca worktree when possible.
 
 Agent/setup flags:
 
 ```text
-ORCA worktree create --name task --agent codex --prompt "hi" --json
-ORCA worktree create --name task --agent claude --setup run --json
-ORCA worktree create --name task --setup skip --json
-ORCA worktree create --name task --run-hooks --json
+ORCA worktree create --name task --parent-worktree active --agent codex --prompt "hi" --json
+ORCA worktree create --name task --parent-worktree active --agent claude --setup run --json
+ORCA worktree create --name task --parent-worktree active --setup skip --json
+ORCA worktree create --name task --parent-worktree active --run-hooks --json
 ```
 
 - `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat | CLI choice for that agent (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
@@ -151,7 +165,7 @@ ORCA reference add https://github.com/acme/api/pull/5123 https://linear.app/acme
 ORCA reference add ENG-123 --reference-site <jira-site-id> --worktree name:api --json
 ORCA reference remove https://github.com/acme/api/pull/5123 --worktree name:api --json
 ORCA reference remove --key <key-from-list> --worktree name:api --json
-ORCA worktree create --name fix --reference https://github.com/acme/api/pull/5123 --reference https://linear.app/acme/issue/STA-1234 --json
+ORCA worktree create --name fix --parent-worktree active --reference https://github.com/acme/api/pull/5123 --reference https://linear.app/acme/issue/STA-1234 --json
 ORCA reference find STA-1234 --json
 ```
 
@@ -291,7 +305,8 @@ The commands, snapshot and ref rules, page affinity, and `browser_*` recoveries 
 Make, validate, load and manage Orca plugins with `ORCA plugin ...`. Themes, icons, syntaxes and
 translations load without approval; anything that runs code returns `approval_required` with
 exactly what it would get and an `--approve <fingerprint>` re-run command. Load
-`references/plugins.md` before creating, loading, enabling or publishing a plugin.
+`references/plugins.md` before creating, loading, enabling or publishing a plugin. To design,
+write and debug a plugin end to end, invoke the `orca-plugin-authoring` skill.
 
 ## Agent Session Search
 

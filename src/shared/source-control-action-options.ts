@@ -1,13 +1,13 @@
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgent } from './tui-agent-config'
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from './agent-session/lifecycle/agent-session-provider-handle'
 import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat/input/native-chat-session-option-defaults'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog,
-  getAgentSessionOptionCatalog,
-  type CatalogOption
-} from './agent-session-option-catalog'
+  getAgentSessionOptionCatalog
+} from './agent-session/options/agent-session-option-catalog'
+import type { CatalogOption } from './agent-session/options/agent-session-option-catalog-types'
 import {
   agentPermissionHasTerminalChoice,
   type AgentPermissionChoice

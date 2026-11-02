@@ -1,12 +1,12 @@
-import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { SendParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import {
   agentSessionMessagePayload,
   agentSessionSendBodyFingerprint
-} from '../../../shared/structured-agent-session-send-mutation'
+} from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   createQueuedMessageTestRig,
   eventually,

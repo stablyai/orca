@@ -17,7 +17,7 @@ import {
   resolveTuiAgentLaunchRawArgs,
   type AgentLaunchProfileSettings
 } from './tui-agent-launch-defaults'
-import { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import {
   renderSourceControlActionCommandTemplate,
   type SourceControlActionRecipe

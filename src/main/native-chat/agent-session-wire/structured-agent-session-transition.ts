@@ -1,10 +1,8 @@
 // Admit each event’s writes whole so producer state cannot advance after partial admission.
 // Execute against the latest fold in one queue turn; failure retains the written prefix and skips later steps.
 
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalStep } from '../agent-session-journal/journal-step-writer'
@@ -47,10 +45,8 @@ export type StructuredAgentSessionTransitionStep =
 
 export type StructuredAgentSessionTransition = {
   steps: readonly StructuredAgentSessionTransitionStep[]
-  /** Charge the lifecycle budget for ending/settling work. */
+  /** Ending or settling work. */
   lifecycle: boolean
-  /** Internal admission for bounded provider tails after finalization. */
-  finalTail?: true
   publish: boolean
   /** Run after writes and parent publication, in queue order. */
   onPublished?: () => void
@@ -80,8 +76,6 @@ function transitionAppend(
       bytes:
         transition.steps.reduce((total, step) => total + step.reservedBytes, 0) +
         (transition.publish ? 1 : 0),
-      lifecycle: transition.lifecycle,
-      finalTail: transition.finalTail,
       run: async (bound) => {
         const { journal, fence } = bound
         const wrote = await journal.appendSteps(

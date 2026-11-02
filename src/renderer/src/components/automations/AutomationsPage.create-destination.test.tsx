@@ -34,7 +34,7 @@ import {
   save
 } from './automations-page-actions-test-harness'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import {
   addSshHost,

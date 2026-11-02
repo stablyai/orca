@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii } from '../theme/mobile-theme'
+import { colors, radii, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -91,7 +91,11 @@ export function TerminalWebViewEngineErrorOverlay({
       <Text style={styles.errorDetail} numberOfLines={4}>
         {message}
       </Text>
-      <Pressable accessibilityRole="button" style={styles.reloadButton} onPress={onReload}>
+      <Pressable
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.reloadButton, pressed && pressedStyle]}
+        onPress={onReload}
+      >
         <RefreshCw size={16} color={colors.bgBase} />
         <Text style={styles.reloadButtonText}>
           {t('terminal.webviewEngineErrorState.reload', 'Reload')}

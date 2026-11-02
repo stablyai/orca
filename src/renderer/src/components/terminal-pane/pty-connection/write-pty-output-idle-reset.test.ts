@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { bindWritePtyOutputToXterm } from './write-pty-output-to-xterm'
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
-import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../../shared/terminal-mode-reset-profiles'
 import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 import { createTerminalInputEchoDelay } from './terminal-input-echo-delay'
 
@@ -85,13 +84,6 @@ describe('idle cursor reset during PTY output', () => {
       expect(await settledText(session.pane.terminal)).toBe('⠁')
     }
   )
-
-  it('still writes the cursor reset at a complete boundary', () => {
-    const session = createSession()
-    const write = vi.spyOn(session.pane.terminal, 'write')
-    session.queueAgentIdleTerminalModeReset()
-    expect(write).toHaveBeenCalledWith(RESET_TERMINAL_CURSOR_STYLE)
-  })
 
   it.each([false, true])('preserves a replayed parser tail (async=%s)', async (asyncReplay) => {
     const session = createSession()

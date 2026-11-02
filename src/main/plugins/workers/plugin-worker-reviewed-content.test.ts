@@ -18,6 +18,8 @@ function worker(): PluginWorkerHandle & { exit: (code: number) => void } {
     commands: [],
     invokeCommand: vi.fn(async () => null),
     deliverEvent: vi.fn(),
+    requestFromPanel: vi.fn(),
+    notifyDataChanged: vi.fn(),
     // ast-grep-ignore: test-no-wall-clock -- idle checks compare against the real clock, so "now" keeps the worker active
     lastActivityAt: () => Date.now(),
     inFlightCount: () => 0,

@@ -12,7 +12,7 @@ import {
   importFreshLocalPtyShellReady,
   restoreUserDataPathAfterEach,
   setTestUserDataPath
-} from './providers/local-pty-shell-ready-test-harness'
+} from './providers/local-pty/local-pty-shell-ready-test-harness'
 
 restoreUserDataPathAfterEach()
 

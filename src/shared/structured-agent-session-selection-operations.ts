@@ -2,9 +2,9 @@ import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
 } from './native-chat/input/native-chat-session-option-defaults'
-import { decodeStructuredAgentSessionOptionValue } from './structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from './agent-session/options/structured-agent-session-option-codec'
 import type { NativeChatSessionOptionSettingsMutation } from './native-chat/input/native-chat-session-options'
-import type { AgentSessionWriteFailure } from './agent-session-write-failure'
+import type { AgentSessionWriteFailure } from './agent-session/failures/agent-session-write-failure'
 
 export type SelectionOutcome =
   | { kind: 'accepted'; options: Readonly<Record<string, string>> }

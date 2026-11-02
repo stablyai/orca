@@ -41,6 +41,16 @@ const GUIDE_REFERENCES = {
     'provider-vercel.md',
     'ssh-host.md',
     'windows-scripts.md'
+  ],
+  'orca-plugin-authoring': [
+    'cli.md',
+    'components.md',
+    'events.md',
+    'host-api.md',
+    'manifest.md',
+    'recipes.md',
+    'testing.md',
+    'workflow.md'
   ]
 }
 const GUIDE_REFERENCE_PATHS = Object.entries(GUIDE_REFERENCES).flatMap(([guide, references]) =>

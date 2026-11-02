@@ -12,7 +12,7 @@ import {
 import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
 import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
 import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import type { AgentJournalSnapshot } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'

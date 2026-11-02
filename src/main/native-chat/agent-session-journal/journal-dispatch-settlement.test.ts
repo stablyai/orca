@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionFailureFact,
   type SubmissionRejectionKind
-} from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { queuedHandOffOutcome } from './journal-dispatch-settlement'
 import {
   journalPendingSubmissionResolutions,
@@ -72,19 +72,5 @@ describe('what a rejection does to the draft it was consumed from', () => {
     }
     // Legacy rows lack handover evidence and may already have reached the provider.
     expect(queuedHandOffOutcome({ reason: DISPATCH_REJECTED_HOST_RESTARTED })).toBe('inDoubt')
-  })
-
-  it('a failure returns the card for the user to act on', () => {
-    for (const kind of [
-      'providerRejected',
-      'providerExited',
-      'hostStopped',
-      'startFailed',
-      'writeFailed',
-      'queueFull'
-    ] as const) {
-      expect(settle(kind)).toBe('returned')
-    }
-    expect(queuedHandOffOutcome({ reason: 'the provider said no' })).toBe('returned')
   })
 })

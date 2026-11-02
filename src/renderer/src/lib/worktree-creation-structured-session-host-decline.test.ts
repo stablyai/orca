@@ -283,17 +283,21 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
       const answer = Promise.withResolvers<{ supported: boolean }>()
       mocks.createSupport.mockReturnValue(answer.promise)
       const id = kind === 'git' ? LOCAL_CREATED.id : folderWorkspaceKey('folder-workspace-1')
-      await (kind === 'git'
-        ? launchStructuredWorktreeSession({
-            creationId: 'creation-1',
-            request: { ...REQUEST, agent: 'codex', quickPrompt: '', launchInputs: projection },
-            agentLaunchRoute: 'structured-native-chat',
-            worktreeId: id,
-            shouldActivateOnCompletion: true,
-            activation: { primaryTabId: null },
-            primaryTabId: null
-          })
-        : submitFolderWorkspaceCreate({
+      const completion =
+        kind === 'git'
+          ? launchStructuredWorktreeSession({
+              creationId: 'creation-1',
+              request: { ...REQUEST, agent: 'codex', quickPrompt: '', launchInputs: projection },
+              agentLaunchRoute: 'structured-native-chat',
+              worktreeId: id,
+              shouldActivateOnCompletion: true,
+              activation: { primaryTabId: null },
+              primaryTabId: null
+            })
+          : undefined
+      // Main awaits the published tab, so release the held answer while admission is still pending.
+      await (kind === 'folder'
+        ? submitFolderWorkspaceCreate({
             projectGroup: makeProjectGroup(),
             name: 'created',
             lastAutoName: '',
@@ -314,7 +318,8 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
               return workspace
             },
             onOpenChange: vi.fn()
-          }))
+          })
+        : vi.waitFor(() => expect(mocks.createSupport).toHaveBeenCalled()))
 
       expect(mocks.createSupport).toHaveBeenCalledOnce()
       projection.agentArgs = '--model later-form'
@@ -323,6 +328,7 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
         projection.chatSessionOptions.model = 'later-form'
       }
       answer.resolve({ supported: false })
+      await completion
       await vi.waitFor(() => expect(useAppStore.getState().tabsByWorktree[id]).toHaveLength(1))
       const tab = useAppStore.getState().tabsByWorktree[id]![0]!
       const actualArgs = agentArgs ?? '--search'

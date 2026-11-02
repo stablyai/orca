@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import { NativeChatToolRun } from './NativeChatToolRun'
 

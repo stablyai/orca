@@ -10,14 +10,14 @@ import { toast } from 'sonner'
 import type * as SonnerModule from 'sonner'
 import type * as StructuredSessionClient from '@/runtime/structured-agent-session-client'
 import type * as RendererI18n from '@/i18n/i18n'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
-} from '../../../../shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
 import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'

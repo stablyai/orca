@@ -28,7 +28,7 @@ import {
   openTestAgentSessionRecordStore,
   editPersistedTestAgentSessionStore,
   readPersistedTestAgentSessionStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { OrchestrationDb } from './orchestration/db'
 import { structuredSessionMailReach } from './orchestration/structured-session-mail-address'
 import { resolveOrcaSessionParty } from './orchestration/orchestration-party'
@@ -42,13 +42,13 @@ import {
 import {
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore
-} from './agent-session-record-store-slot'
+} from './agent-session/records/agent-session-record-store-slot'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
-import { requireUnownedStructuredAgentSessionAdoption } from './structured-agent-session-create-adoption'
+import { requireUnownedStructuredAgentSessionAdoption } from './agent-session/structured-agent-session-create-adoption'
 import { listStructuredSessionsForWorktree } from './structured-session-worktree-teardown'
-import * as membership from './agent-session-store-state'
+import * as membership from './agent-session/records/agent-session-store-state'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'

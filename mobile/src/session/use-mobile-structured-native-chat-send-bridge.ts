@@ -1,14 +1,14 @@
 import { useCallback } from 'react'
-import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
-import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
+import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
+import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/agent-session/view/structured-agent-session-composer'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
 } from './native-chat/mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   readMobileNativeChatPickedSkills,
   restoreMobileNativeChatPickedSkills

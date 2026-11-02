@@ -2,7 +2,7 @@ import { resolveAgentChoiceLayers } from '../../../../shared/agent-choice-layers
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
-} from '../../../../shared/agent-session-option-catalog'
+} from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { sourceControlActionOptions } from '../../../../shared/source-control-action-launch-preferences'
 import { agentModelChoiceChips } from './agent-model-choice-chips'
 import type {

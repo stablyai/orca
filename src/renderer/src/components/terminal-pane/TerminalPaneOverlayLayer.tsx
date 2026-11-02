@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
+import { useThemeBackgroundStore } from '@/store/theme-background'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
@@ -75,6 +76,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     [worktreeId]
   )
 
+  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   const focusOwningGroup = useCallback(
     (groupId: string) => focusGroup(worktreeId, groupId),
     [focusGroup, worktreeId]
@@ -171,7 +173,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
             isVisible={isVisible}
             isActive={isActive}
             hiddenPrewarm={assignment?.isActiveInGroup === true ? hiddenTerminalPrewarm : null}
-            dimmed={groups.length > 1 && isVisible && !isActive}
+            // Why not over a theme image: a chat there is translucent, so a dim would bleed the image in.
+            dimmed={groups.length > 1 && isVisible && !isActive && !themeBackgroundActive}
             activityTerminalPortal={activityTerminalPortal}
             onFocusOwningGroup={focusOwningGroup}
             consumeSuppressedPtyExit={consumeSuppressedPtyExit}

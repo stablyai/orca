@@ -25,7 +25,7 @@ import {
   type KnownExecutionHostPlatform
 } from '@/lib/execution-host-facts'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/structured-agent-session-launch-admission'
+import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import {
   ensureDetectedAgentsForNewWorktree,
   type RepoHostFields

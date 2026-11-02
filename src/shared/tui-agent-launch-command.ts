@@ -2,7 +2,7 @@ import { analyzeAgentChoiceArgs } from './agent-choice-args'
 import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch
-} from './agent-session-option-launch'
+} from './agent-session/options/agent-session-option-launch'
 import { resolveAgentChoiceLayers, yieldAgentChoicesToArgs } from './agent-choice-layers'
 import { resolveTuiAgentLaunchRawArgs } from './tui-agent-launch-defaults'
 import {
@@ -13,7 +13,7 @@ import {
 import type { AgentLaunchProfileSettings } from './tui-agent-launch-defaults'
 import { readLaunchPermissionChoice } from './tui-agent-permission-choice'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
-import { agentArgTerminatorIndex } from './agent-session-option-agent-args'
+import { agentArgTerminatorIndex } from './agent-session/options/agent-session-option-agent-args'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   quoteStartupArg,

@@ -172,7 +172,7 @@ it.each([
       'source'
     )
     expect(state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'b')?.activeTabId).toBe(
-      'terminal-b'
+      navigation === 'unchanged' ? outcome.result.unifiedTabId : 'terminal-b'
     )
     if (navigation === 'unchanged') {
       expect(state.activeView).toBe('terminal')
@@ -349,7 +349,8 @@ it('keeps the main view and workspace selected when revealing a floating HTTP li
   expect(await opening.mock.results[0]!.value).toMatchObject({ status: 'opened' })
   expect(useAppStore.getState().activeView).toBe('activity')
   expect(useAppStore.getState().activeWorktreeId).toBe(WORKSPACE)
-  expect(['a', 'b', 'c']).not.toContain(useAppStore.getState().activeGroupIdByWorktree[floating])
+  expect(useAppStore.getState().activeGroupIdByWorktree[floating]).toBe('b')
+  expect(useAppStore.getState().groupsByWorktree[floating]).toHaveLength(3)
 })
 
 it('reuses an exact page for an HTTP link without source context', async () => {

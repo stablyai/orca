@@ -1,27 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../../agent-session-failure'
-import { agentSessionFailureWords } from '../../agent-session-failure-words'
+import { agentSessionFailureFact } from '../../agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../agent-session/failures/agent-session-failure-words'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../agent-session-journal-item-key'
+} from '../../agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalSubmission,
   AgentJournalRenderItem
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import { withNativeChatCutTurnNotices } from './native-chat-cut-turn-notice'
-import { hostStatesTurnScopes, nativeChatTurnMembership } from '../../native-chat-turn-membership'
-import { projectStructuredAgentSessionMessages } from '../../structured-agent-session-message-projection'
+import { hostStatesTurnScopes, nativeChatTurnMembership } from './native-chat-turn-membership'
+import { projectStructuredAgentSessionMessages } from '../../agent-session/view/structured-agent-session-message-projection'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
-} from '../../agent-session-restart-continuation'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../structured-agent-session-start-failure-row-key'
+} from '../../agent-session/lifecycle/agent-session-restart-continuation'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../agent-session/failures/structured-agent-session-start-failure-row-key'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
 const NOTICE =

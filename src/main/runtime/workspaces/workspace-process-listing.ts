@@ -1,4 +1,3 @@
-import { structuredNativeWorkReaders } from '../structured-native-work-readers'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
@@ -24,17 +23,17 @@ import { attachRuntimeWorktreeAgentRowWaits } from '../runtime-worktree-agent-ro
 import { compareWorktreePs } from '../runtime-worktree-status-projection'
 import type { Repo } from '../../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
-import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../structured-agent-session-runtime'
+import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
-} from '../structured-agent-session-mobile-attention'
+} from '../agent-session/structured-agent-session-mobile-attention'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
 } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { openAgentSessionRecordStoreOnce } from '../agent-session-record-store-slot'
-import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import { openAgentSessionRecordStoreOnce } from '../agent-session/records/agent-session-record-store-slot'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../native-chat/structured-chat-naming'
@@ -43,7 +42,10 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { chatWorkerTurnStopReporter } from '../orchestration/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../worktree-listing-host-scope'
-import { structuredWorkerOpenTaskTitle } from '../structured-worker-custody'
+import {
+  structuredWorkerOpenTaskTitle,
+  structuredWorkerOwesWork
+} from '../structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { claudeCliFlagSupport } from '../../claude/claude-cli-flag-support'
@@ -194,13 +196,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
 
   isWorkspaceNotificationMuted(workspaceId: string): boolean {
     const store = this.store
-    return (
-      !!store &&
-      isWorkspaceNotificationMuted(
-        { store, resolvedWorktrees: this.resolvedWorktrees.peek()?.worktrees ?? null },
-        workspaceId
-      )
-    )
+    const resolvedWorktrees = this.resolvedWorktrees.peek()?.worktrees ?? null
+    return !!store && isWorkspaceNotificationMuted({ store, resolvedWorktrees }, workspaceId)
   }
 
   /** Admission needs only the ledger; a later chat host must reuse this store. */
@@ -256,6 +253,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
+        this.crewChanges.notify(new Set(['status', 'names']))
         this.onStructuredSessionStatusForMail(summary)
         this.workerAutoReleaseActivity.observeChat(summary)
         nameChat(summary, options)
@@ -274,15 +272,17 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         readWorkspaceLabels: (scope) =>
           readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
         isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
+        // The same contexts the session's chat row carries.
+        readOrchestration: (paneKey) =>
+          this.agentOrchestrationProjection.buildByPaneKey()?.[paneKey],
         dispatch: (event) => this.mobileNotifications.dispatch(event),
         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
         now: () => Date.now()
       }),
       onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
-      ...structuredNativeWorkReaders(
-        () => this.getOrchestrationDbIfAvailable?.() ?? null,
-        () => this.getExistingOrchestrationDb()
-      )
+      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
+      hasOpenDispatch: (record) =>
+        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
   }
 }

@@ -12,8 +12,8 @@ import { cn } from '@/lib/utils'
 import {
   AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
   type AgentSessionHostStatusPresentation
-} from '../../../../shared/agent-session-host-status-rows'
-import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+} from '../../../../shared/agent-session/view/agent-session-host-status-rows'
+import type { NativeChatTextBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook
@@ -32,11 +32,11 @@ import {
 import {
   agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
-import { formatUsageLimitResetClock } from '../../../../shared/agent-session-usage-limit'
+import { formatUsageLimitResetClock } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
