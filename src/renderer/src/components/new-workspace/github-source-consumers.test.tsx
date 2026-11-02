@@ -5,6 +5,7 @@ import { useStore } from 'zustand'
 import { createTestStore, resetRemoteRuntimeMocks } from '@/store/slices/github-slice-test-harness'
 import { useSmartWorkspaceGithubSearch } from './use-smart-workspace-github-search'
 import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
+import * as githubLinks from '../../../../shared/github/links'
 import type { AppState } from '@/store/types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -49,9 +50,36 @@ it('offers duplicates only from the issue repository when fork buckets coexist',
   const { result } = renderHook(() => useGitHubDuplicateIssueCandidates(item('fork', 10), true))
   expect(result.current.map((row) => row.url)).toEqual([item('fork', 14).url, item('fork', 12).url])
 })
-it('settles an obsolete smart-search result without clearing its owned warm rows', async () => {
+it('offers same-host duplicates to the unstamped issue New Issue opens', () => {
+  holder.store!.setState({
+    workItemsCache: { list: { data: [{ ...item('fork', 12), repoHostId: 'local' }], fetchedAt: 1 } }
+  })
+  const { result } = renderHook(() => useGitHubDuplicateIssueCandidates(item('fork', 13), true))
+  expect(result.current.map((row) => row.number)).toEqual([12])
+})
+it('parses no other repository URL, and nothing on a write that leaves the cache alone', () => {
+  const parse = vi.spyOn(githubLinks, 'parseGitHubIssueOrPRLink')
+  const others = Array.from({ length: 100 }, (_, n) => ({ ...item('o', n + 20), repoId: 'other' }))
+  holder.store!.setState({
+    workItemsCache: {
+      others: { data: others, fetchedAt: 1 },
+      fork: { data: [item('fork', 12)], fetchedAt: 1 }
+    }
+  })
+  const { result } = renderHook(() => useGitHubDuplicateIssueCandidates(item('fork', 10), true))
+  expect(result.current.map((row) => row.number)).toEqual([12])
+  // The picked issue and its one same-repository candidate.
+  expect(parse).toHaveBeenCalledTimes(2)
+  parse.mockClear()
+  act(() => holder.store!.setState({ workItemsInvalidationNonce: 1 }))
+  expect(parse).not.toHaveBeenCalled()
+  parse.mockRestore()
+})
+it('re-reads an obsolete smart-search result instead of publishing or dropping it', async () => {
   const pending = Promise.withResolvers<readonly GitHubWorkItem[] | undefined>()
-  const warm = [item('fork', 12)]
+  const warm = [item('fork', 12)],
+    current = [item('fork', 14)]
+  const fetchWorkItems = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValueOnce(current)
   const setGithubItems = vi.fn(),
     setGithubLoading = vi.fn()
   const foundation = {
@@ -65,8 +93,7 @@ it('settles an obsolete smart-search result without clearing its owned warm rows
     githubSourceContext: null,
     repos: [repo],
     getCachedWorkItems: () => warm,
-    // SAFETY: the regression deliberately feeds the internal obsolete result before its contract is widened.
-    fetchWorkItems: (() => pending.promise) as AppState['fetchWorkItems'],
+    fetchWorkItems,
     fetchWorkItemsAcrossRepos: holder.store!.getState().fetchWorkItemsAcrossRepos,
     setGithubItems,
     setGithubLoading,
@@ -83,8 +110,11 @@ it('settles an obsolete smart-search result without clearing its owned warm rows
   expect(setGithubItems).toHaveBeenLastCalledWith(warm)
   await act(async () => {
     pending.resolve(undefined)
-    await pending.promise
+    for (let i = 0; i < 10; i++) {
+      await Promise.resolve()
+    }
   })
-  expect(setGithubItems).toHaveBeenCalledTimes(1)
+  expect(fetchWorkItems).toHaveBeenCalledTimes(2)
+  expect(setGithubItems).toHaveBeenLastCalledWith(current)
   expect(setGithubLoading).toHaveBeenLastCalledWith(false)
 })

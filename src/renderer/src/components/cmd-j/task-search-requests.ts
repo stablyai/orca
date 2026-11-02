@@ -81,15 +81,18 @@ export function createCmdJTaskSearchRequests(args: {
             return []
           }
           if (provider === 'github') {
-            const items = await state.fetchWorkItems(
-              repo.id,
-              repo.path,
-              RESULT_LIMIT,
-              `is:issue is:open ${query}`,
-              { sourceContext: source, requireComplete: true }
+            // Why: a search held by a pending source save is obsolete, not empty; re-read once it settles.
+            const items = await state.githubSourceCollections.readCurrent([repo], () =>
+              state.fetchWorkItems(repo.id, repo.path, RESULT_LIMIT, `is:issue is:open ${query}`, {
+                sourceContext: source,
+                requireComplete: true
+              })
             )
+            if (!items) {
+              throw new Error('GitHub search did not settle.')
+            }
             // Open-only is applied to what Cmd-J shows, after pending edits (a reopen) are added.
-            return (items ?? [])
+            return items
               .filter((issue) => issue.type === 'issue')
               .map((issue) =>
                 makeCmdJTaskSearchResult({ provider, issue }, source, repo.id, hostLabel)

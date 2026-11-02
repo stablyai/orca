@@ -1,6 +1,7 @@
 import type { TaskPageGitHubListStateModel } from './use-task-page-github-list-state'
 import { useAppStore } from '@/store/index'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import { useState, useMemo, useLayoutEffect, useCallback, useEffect } from 'react'
 import type { ItemDialogTab } from '@/components/github/github-work-item-identity'
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
@@ -85,9 +86,11 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
       appliedWorkItemsCacheQuery
     )
 
+  const drawerRepo = dialogWorkItemKey ? getWorkItemRepo(repos, dialogWorkItemKey) : undefined
+  const dialogBinding = drawerRepo && githubTaskBinding(drawerRepo)
   // Keep cache patches in the clicked conversation when origin and upstream share an issue number.
   const cachedDialogWorkItem = useAppStore((s) =>
-    findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
+    findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey, dialogBinding)
   )
   const dialogWorkItem = dialogWorkItemKey
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)

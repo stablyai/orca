@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, type SetStateAction } from 'react'
+import { useState, useCallback, useMemo, useSyncExternalStore, type SetStateAction } from 'react'
 import type { TaskPageProviderStateModel } from '../use-task-page-provider-state'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { sortWorkItemsByNumber } from '../../../../../shared/work-items'
@@ -82,7 +82,10 @@ export function useTaskPageGitHubCollectionState(input: CollectionInput) {
     githubPerRepoPageLimit
   )
   const speculativeKey = JSON.stringify([countKey, selectedReposKey])
-  const knownCount = collections.count(countKey)?.totalPages ?? null
+  const knownCount = useSyncExternalStore(
+    collections.subscribe,
+    () => collections.count(countKey)?.totalPages ?? null
+  )
   const [countState, setCountState] = useState<{ key: string; value: number | null }>({
     key: speculativeKey,
     value: null

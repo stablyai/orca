@@ -113,7 +113,6 @@ export const createWorkItemFetchActions = (
       return cached.data ?? []
     }
 
-    const requestInvalidationNonce = requestState.workItemsInvalidationNonce
     const requestContext = getGitHubWorkItemRequestContext(
       requestState,
       getGitHubSourceTarget(requestState, repo, options?.sourceContext),
@@ -162,10 +161,6 @@ export const createWorkItemFetchActions = (
         const currentHostId = getGitHubWorkItemSourceHostId(currentRepo, options?.sourceContext)
         // Why: repo ownership changed, so this response belongs to an older execution-host bucket (host focus changes alone are fine).
         if ((currentHostId ?? null) !== (ownerHostId ?? null)) {
-          return undefined
-        }
-        // Why: the old promise can still settle after the in-flight clear; don't let pre-flip source data repopulate the cache once the invalidation nonce changed.
-        if (get().workItemsInvalidationNonce !== requestInvalidationNonce) {
           return undefined
         }
         // Only current key owner writes: force-only still permits gh cache, so late weaker results would bury fresher rows under new fetchedAt for a full TTL.

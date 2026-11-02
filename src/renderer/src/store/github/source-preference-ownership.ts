@@ -22,18 +22,23 @@ type SourceWrite = {
   settled: Promise<boolean>
   finish: (saved: boolean) => void
   owner: CollectionOwner | undefined
+  /** The owner's readback count when this write failed; the host may still have saved it until a newer row says. */
+  failed?: number
 }
 export type CollectionOwner = {
   repo: Repo
   binding: TaskBinding | undefined
   id: number
   order: number
+  /** Catalog rows read back after every source transition they could have missed. */
+  readbacks: number
   candidates?: CacheEntry<readonly GitHubWorkItem[]>
 }
 export type Attempt = {
   owner: CollectionOwner | undefined
+  /** The owner's lifetime id at capture; retirement replaces it, so only that owner's deliveries go obsolete. */
+  context: number | undefined
   order: number
-  nonce: number
   repo: Repo | undefined
   binding: TaskBinding | undefined
   write: SourceWrite | undefined
@@ -46,6 +51,7 @@ export type Attempt = {
 export abstract class GitHubSourceOwnership {
   protected writes = new Map<string, SourceWrite>()
   protected owners = new Map<string, CollectionOwner>()
+  private recoveries = new WeakMap<object, Promise<void>>()
   constructor(protected store: StoreApi<AppState>) {}
   protected abstract reuse(repo: Repo, preference: Repo['issueSourcePreference']): void
   protected abstract retireOwner(owner: CollectionOwner): void
@@ -70,6 +76,16 @@ export abstract class GitHubSourceOwnership {
     const key = bindingKey(repo)
     const owner = this.owners.get(key)
     const before = started?.get(key)
+    const write = this.writes.get(key)
+    // Why: a row read after every transition it could have missed is the host's authoritative source.
+    if (
+      owner &&
+      before?.owner === owner &&
+      before.write === write &&
+      before.pending === (write?.pending ?? false)
+    ) {
+      owner.readbacks++
+    }
     if (
       started &&
       owner &&
@@ -78,7 +94,6 @@ export abstract class GitHubSourceOwnership {
     ) {
       return { ...repo, issueSourcePreference: owner.repo.issueSourcePreference }
     }
-    const write = this.writes.get(key)
     if (!write || githubCandidateOwner(repo) !== githubCandidateOwner(write.repo)) {
       return repo
     }
@@ -120,6 +135,10 @@ export abstract class GitHubSourceOwnership {
           workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1
         }
       })
+      if (!saved) {
+        write.failed = this.owners.get(bindingKey(write.repo))?.readbacks ?? 0
+        void this.recover(write.repo, write)
+      }
     }
     write.finish(saved && current === write)
   }
@@ -133,6 +152,13 @@ export abstract class GitHubSourceOwnership {
     const write = this.writes.get(key)
     if (write?.pending && !(await write.settled)) {
       return undefined
+    }
+    // Why: a failed write may still have reached the host; only its readback says which source create will use.
+    if (write?.failed !== undefined) {
+      await this.recover(target, write)
+      if ((this.owners.get(key)?.readbacks ?? 0) <= write.failed) {
+        return undefined
+      }
     }
     const binding = this.store.getState().githubTaskCache.capture(target)
     return () => {
@@ -148,16 +174,45 @@ export abstract class GitHubSourceOwnership {
     }
   }
 
+  /** One catalog readback per episode at a time; re-armed only when no row came back, so Refresh can retry. */
+  recover(repo: Repo, episode: object) {
+    let running = this.recoveries.get(episode)
+    if (!running) {
+      const owner = this.owners.get(bindingKey(repo))
+      const before = owner?.readbacks
+      running = Promise.resolve(this.store.getState().fetchReposForAllHosts?.())
+        .catch(() => undefined)
+        .then(() => {
+          if (owner?.readbacks === before) {
+            this.recoveries.delete(episode)
+          }
+        })
+      this.recoveries.set(episode, running)
+    }
+    return running
+  }
+  /** Re-reads an obsolete collection once the repos' source writes settle; bounded so callers never wait forever. */
+  async readCurrent<T>(repos: readonly (Repo | undefined)[], read: () => Promise<T | undefined>) {
+    for (let tries = 1; ; tries++) {
+      const value = await read()
+      if (value !== undefined || tries === 3) {
+        return value
+      }
+      await Promise.all(repos.map((repo) => repo && this.writes.get(bindingKey(repo))?.settled))
+    }
+  }
+
   context(repo: Repo) {
     return this.owners.get(bindingKey(repo))?.id ?? 0
   }
   capture(repo: Repo | undefined, source?: TaskSourceContext | null): Attempt {
     const write = repo && this.writes.get(bindingKey(repo))
+    const owner = repo ? this.owners.get(bindingKey(repo)) : undefined
     return {
       repo,
-      owner: repo ? this.owners.get(bindingKey(repo)) : undefined,
+      owner,
+      context: owner?.id,
       order: nextProviderRequestId(),
-      nonce: this.store.getState().workItemsInvalidationNonce,
       source,
       binding: this.store.getState().githubTaskCache.capture(repo, source),
       write,
@@ -178,7 +233,8 @@ export abstract class GitHubSourceOwnership {
       (!attempt.binding || this.store.getState().githubTaskCache.current(attempt.binding)) &&
       (!attempt.repo ||
         (this.writes.get(bindingKey(attempt.repo)) === attempt.write &&
-          this.owners.get(bindingKey(attempt.repo)) === attempt.owner))
+          this.owners.get(bindingKey(attempt.repo)) === attempt.owner &&
+          attempt.owner?.id === attempt.context))
     )
   }
   sync(repos: readonly Repo[]) {
@@ -212,7 +268,7 @@ export abstract class GitHubSourceOwnership {
         previous.repo = repo
         previous.binding = binding
       } else {
-        this.owners.set(key, { repo, binding, id: nextProviderRequestId(), order: 0 })
+        this.owners.set(key, { repo, binding, id: nextProviderRequestId(), order: 0, readbacks: 0 })
       }
     }
   }

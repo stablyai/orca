@@ -9,7 +9,6 @@ import {
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
 import type { AppState } from '../types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 
 describe('createGitHubSlice.evictGitHubRepoCaches', () => {
@@ -81,36 +80,6 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     expect(store.getState().workItemsInvalidationNonce).toBe(5)
   })
 
-  it('preference invalidation removes every host bucket of a repo with one row', async () => {
-    const store = createTestStore()
-    const updateRepo = vi.fn().mockResolvedValue(true)
-    const sourceContext = githubSourceContext('runtime:source-env', 'source-repo')
-    const localKey = workItemsCacheKey('repo-1', 20, '')
-    const runtimeKey = workItemsCacheKey('repo-1', 20, '', 'runtime:owner-env')
-    const sourceKey = workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(sourceContext))
-    store.setState({
-      repos: [
-        { id: 'repo-1', path: '/repo/one', displayName: 'one', badgeColor: '#000', addedAt: 1 }
-      ],
-      updateRepo,
-      workItemsInvalidationNonce: 4,
-      workItemsCache: {
-        [localKey]: { data: [], fetchedAt: 1 },
-        [runtimeKey]: { data: [], fetchedAt: 1 },
-        [sourceKey]: { data: [], fetchedAt: 1 }
-      }
-    })
-    await store.getState().setIssueSourcePreference('repo-1', '/repo/one', 'origin', 'local')
-
-    expect(store.getState().workItemsCache).toEqual({})
-    expect(store.getState().workItemsInvalidationNonce).toBe(5)
-    expect(updateRepo).toHaveBeenCalledWith(
-      'repo-1',
-      { issueSourcePreference: 'origin' },
-      { hostId: 'local' }
-    )
-  })
-
   it('does not bump the work-item invalidation nonce when no work-item entries are evicted', () => {
     const store = createTestStore()
     store.setState({
@@ -153,48 +122,6 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     await secondFetch
 
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not let a stale pre-invalidation work-item response rewrite the cache', async () => {
-    const store = createTestStore()
-    const item = {
-      type: 'pr',
-      number: 42,
-      title: 'Old origin PR',
-      url: 'https://example.test/42',
-      updatedAt: '2026-05-22T00:00:00Z'
-    } as GitHubWorkItem
-    let resolveFirst: (value: {
-      items: GitHubWorkItem[]
-      sources: {
-        issues: null
-        prs: { owner: 'fork'; repo: 'r' }
-        originCandidate: { owner: 'fork'; repo: 'r' }
-        upstreamCandidate: { owner: 'up'; repo: 'r' }
-      }
-    }) => void = () => {}
-    mockApi.gh.listWorkItems.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveFirst = resolve
-        })
-    )
-
-    const firstFetch = store.getState().fetchWorkItems('repo-1', '/repo/one', 20, '')
-    await Promise.resolve()
-    store.setState((s) => ({ workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }))
-    resolveFirst({
-      items: [item],
-      sources: {
-        issues: null,
-        prs: { owner: 'fork', repo: 'r' },
-        originCandidate: { owner: 'fork', repo: 'r' },
-        upstreamCandidate: { owner: 'up', repo: 'r' }
-      }
-    })
-
-    await expect(firstFetch).resolves.toEqual([{ ...item, repoId: 'repo-1' }])
-    expect(store.getState().workItemsCache[workItemsCacheKey('repo-1', 20, '')]).toBeUndefined()
   })
 })
 

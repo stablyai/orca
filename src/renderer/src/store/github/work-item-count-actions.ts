@@ -79,11 +79,7 @@ export const createWorkItemCountActions = (
         }
         await discovery()?.catch(() => undefined)
         const evidence = owner.verified(attempt, query)
-        if (
-          !owner.current(attempt) ||
-          (attempt.binding && !evidence) ||
-          get().workItemsInvalidationNonce !== attempt.nonce
-        ) {
+        if (!owner.current(attempt) || (attempt.binding && !evidence)) {
           return undefined
         }
         if (evidence?.empty && count !== 0) {

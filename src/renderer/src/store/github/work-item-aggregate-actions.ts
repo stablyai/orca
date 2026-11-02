@@ -140,9 +140,6 @@ export const createWorkItemAggregateActions = (
             ...(options?.noCache ? { noCache: true } : {}),
             ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
           })
-          if (get().workItemsInvalidationNonce !== attempt.nonce) {
-            return undefined
-          }
           if (!get().githubSourceCollections.accept(attempt, envelope, query, false)) {
             return undefined
           }

@@ -94,9 +94,6 @@ export const createWorkItemMutationActions = (
         translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),
         { duration: ERROR_TOAST_DURATION }
       )
-      void get()
-        .fetchReposForAllHosts()
-        .catch(() => undefined)
     }
   },
 

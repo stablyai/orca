@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store/index'
 import {
   getTaskPageRepoCacheRows,
@@ -15,7 +16,18 @@ export function useTaskPageWorkItemsCacheSelection(
   appliedWorkItemsCacheQuery: string
 ) {
   const collections = useAppStore((s) => s.githubSourceCollections)
-  const revision = useSyncExternalStore(collections.subscribe, collections.snapshot)
+  // Why: only the selected owners' candidate references; another owner's publication keeps this snapshot.
+  const selectCandidates = useMemo(() => {
+    let last: ReturnType<typeof collections.candidate>[] = []
+    return () => {
+      const next = selectedRepos.map((repo) => collections.candidate(repo))
+      if (!shallow(next, last)) {
+        last = next
+      }
+      return last
+    }
+  }, [collections, selectedRepos])
+  const candidateEntries = useSyncExternalStore(collections.subscribe, selectCandidates)
   const workItemsCacheRows = useMemo(
     () =>
       getTaskPageRepoCacheRows(
@@ -28,15 +40,8 @@ export function useTaskPageWorkItemsCacheSelection(
   // Why a ref, not state: each row's last committed current cache key; the entry is always read live.
   const sourceDisplayCacheKeysRef = useRef(new Map<string, string>())
   const candidates = useMemo(
-    () =>
-      new Map(
-        workItemsCacheRows.map((row, index) => [
-          row.sourceKey,
-          collections.candidate(selectedRepos[index])
-        ])
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the external collection snapshot invalidates this derived projection.
-    [collections, selectedRepos, workItemsCacheRows, revision]
+    () => new Map(workItemsCacheRows.map((row, index) => [row.sourceKey, candidateEntries[index]])),
+    [candidateEntries, workItemsCacheRows]
   )
   const selectWorkItemsCacheEntries = useMemo(
     () =>

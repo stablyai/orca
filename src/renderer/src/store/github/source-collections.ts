@@ -26,33 +26,27 @@ type Evidence = {
   fetchedAt: number
 }
 type CountAnswer = { totalCount: number; totalPages: number }
+type CountRecord = {
+  answer: CountAnswer
+  scopes: string[]
+  query: string
+  limit: number
+  fetchedAt: number
+  owners: CollectionOwner[]
+}
 
 /** Collection membership and discovery reuse task bindings; accepted records own only task facts. */
 export class GitHubSourceCollections extends GitHubSourceOwnership {
   private evidence: Record<string, Evidence> = {}
-  private counts = new Map<
-    string,
-    {
-      answer: CountAnswer
-      scopes: string[]
-      query: string
-      limit: number
-      fetchedAt: number
-      owners: CollectionOwner[]
-    }
-  >()
-  private resyncs = new WeakSet<object>()
+  private counts = new Map<string, CountRecord>()
   private listeners = new Set<() => void>()
-  private revision = 0
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
     }
   }
-  snapshot = () => this.revision
   private notify() {
-    this.revision++
     for (const listener of this.listeners) {
       listener()
     }
@@ -77,7 +71,7 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
       )
     }
     this.store.setState((state) => {
-      let cache = state.workItemsCache
+      const additions: typeof state.workItemsCache = {}
       for (const entry of Object.values(state.workItemsCache)) {
         const context = entry.collection
         if (
@@ -97,30 +91,42 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
           context.cacheScope,
           nextBinding
         )
-        cache = withBoundedCacheEntry(cache, key, { ...entry, sourceBinding: nextBinding })
+        additions[key] = { ...entry, sourceBinding: nextBinding }
       }
-      return cache === state.workItemsCache ? state : { workItemsCache: cache }
+      return Object.keys(additions).length
+        ? { workItemsCache: evictStaleEntries({ ...state.workItemsCache, ...additions }) }
+        : state
     })
+    const scopes = new Map<string, string>()
     for (const evidence of Object.values(this.evidence)) {
       if (
-        !evidence.attempt.repo ||
-        evidence.attempt.owner !== this.owners.get(bindingKey(repo)) ||
-        !matches(evidence.sources)
+        evidence.attempt.repo &&
+        evidence.attempt.owner === this.owners.get(bindingKey(repo)) &&
+        !scopes.has(evidence.attempt.scope) &&
+        matches(evidence.sources)
       ) {
-        continue
+        scopes.set(
+          evidence.attempt.scope,
+          githubCollectionScope(
+            { ...repo, issueSourcePreference: preference },
+            evidence.attempt.source
+          )
+        )
       }
-      const oldScope = evidence.attempt.scope
-      const nextScope = githubCollectionScope(
-        { ...repo, issueSourcePreference: preference },
-        evidence.attempt.source
-      )
-      for (const value of this.counts.values()) {
-        if (!value.scopes.includes(oldScope)) {
-          continue
-        }
-        const scopes = value.scopes.map((scope) => (scope === oldScope ? nextScope : scope))
-        this.counts.set(this.countKey(scopes, value.query, value.limit), { ...value, scopes })
+    }
+    if (scopes.size === 0) {
+      return
+    }
+    // Collected first so the one pass never visits the aliases it adds.
+    const aliases = new Map<string, CountRecord>()
+    for (const value of this.counts.values()) {
+      if (value.scopes.some((scope) => scopes.has(scope))) {
+        const next = value.scopes.map((scope) => scopes.get(scope) ?? scope)
+        aliases.set(this.countKey(next, value.query, value.limit), { ...value, scopes: next })
       }
+    }
+    for (const [key, value] of aliases) {
+      this.counts.set(key, value)
     }
     this.boundCounts()
   }
@@ -190,12 +196,8 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
       delete this.evidence[this.evidenceKey(attempt, query)]
       this.retire(attempt.scope)
       const episode = attempt.write ?? attempt.binding?.incarnation
-      if (episode && !this.resyncs.has(episode)) {
-        this.resyncs.add(episode)
-        void this.store
-          .getState()
-          .fetchReposForAllHosts?.()
-          .catch(() => undefined)
+      if (repo && episode) {
+        void this.recover(repo, episode)
       }
       return false
     }

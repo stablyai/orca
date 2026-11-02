@@ -775,7 +775,8 @@ describe('repo slice runtime routing', () => {
       workItemsCacheKey('other-repo', 20, '')
     ])
     expect(Object.keys(store.getState().prCache)).toEqual(['other-repo::branch'])
-    expect(store.getState().workItemsInvalidationNonce).toBe(3)
+    // A refetch signal only: eviction and the retired source owner may each bump it.
+    expect(store.getState().workItemsInvalidationNonce).toBeGreaterThan(2)
   })
 
   it('stops remote runtime terminals instead of killing remote ids through local pty IPC', async () => {

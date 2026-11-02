@@ -25,13 +25,13 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     githubMode
   } = model
   const collections = useAppStore((s) => s.githubSourceCollections)
-  useSyncExternalStore(collections.subscribe, collections.snapshot)
+  // Why a string snapshot: only the selected owners' lifetimes re-render this view, not other owners' publications.
+  const ownerContexts = useSyncExternalStore(collections.subscribe, () =>
+    JSON.stringify(selectedRepos.map((repo) => collections.context(repo)))
+  )
   const selectedReposKey =
     taskSource === 'github'
-      ? JSON.stringify([
-          repoSelectionKey,
-          selectedRepos.map((repo) => [githubTaskBinding(repo), collections.context(repo)])
-        ])
+      ? JSON.stringify([repoSelectionKey, selectedRepos.map(githubTaskBinding), ownerContexts])
       : repoSelectionKey
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)

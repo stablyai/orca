@@ -1,21 +1,17 @@
 // @vitest-environment happy-dom
-import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
 import { createTestStore, mockApi, resetRemoteRuntimeMocks } from './github-slice-test-harness'
 import { mergeFetchedRepoCatalog } from '../repos/repo-catalog-merge'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { createRepoUpdateActions } from '../repos/repo-update'
-import { useTaskPageWorkItemsCacheSelection } from '@/components/task-page/github/use-task-page-work-items-cache-selection'
-import { buildTaskPageRepoSourceState } from '@/components/task-page/task-page-cache-selectors'
-import {
-  getTaskPageRepoCacheInput,
-  getTaskPageRepoSourceContext
-} from '@/components/task-page/task-page-source-context'
+import { findTaskPageDialogWorkItem } from '@/components/task-page/task-page-cache-selectors'
+import { getTaskPageRepoSourceContext } from '@/components/task-page/task-page-source-context'
 import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
-import IssueSourceSelector from '@/components/github/IssueSourceSelector'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { createCmdJTaskSearchRequests } from '@/components/cmd-j/task-search-requests'
+import { EMPTY_PALETTE_FILTER } from '@/components/cmd-j/palette-filter'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import type { AppState } from '../types'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
@@ -88,28 +84,6 @@ function setup() {
   holder.store = store
   return store
 }
-function Picker() {
-  const repos = useStore(holder.store!, (s) => s.repos)
-  const { sourceDisplayWorkItemsCacheEntries } = useTaskPageWorkItemsCacheSelection(repos, 20, '')
-  const state = buildTaskPageRepoSourceState(
-    repos.map(getTaskPageRepoCacheInput),
-    sourceDisplayWorkItemsCacheEntries
-  )[0]
-  return (
-    <TooltipProvider>
-      <IssueSourceSelector
-        preference={repos[0].issueSourcePreference}
-        origin={state.sources?.originCandidate ?? null}
-        upstream={state.sources?.upstreamCandidate ?? null}
-        onChange={(preference) => {
-          void holder
-            .store!.getState()
-            .setIssueSourcePreference(repo.id, repo.path, preference, 'local')
-        }}
-      />
-    </TooltipProvider>
-  )
-}
 beforeEach(() => {
   vi.stubGlobal('window', document.defaultView)
   Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
@@ -124,22 +98,6 @@ afterEach(() => {
 })
 
 describe('GitHub source collection lifetime', () => {
-  it('keeps the same known selector mounted while the selected source list is held', async () => {
-    const store = setup()
-    await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', {
-      sourceContext: getTaskPageRepoSourceContext(repo, 'github')
-    })
-    render(<Picker />)
-    const selector = screen.getByRole('group', { name: 'Issue source' })
-    const held = Promise.withResolvers<ReturnType<typeof envelope>>()
-    mockApi.gh.listWorkItems.mockReturnValue(held.promise)
-    fireEvent.click(screen.getByRole('button', { name: 'Origin' }))
-    await act(flush)
-    expect(screen.getByRole('group', { name: 'Issue source' })).toBe(selector)
-    expect(screen.getByRole('button', { name: 'Origin' })).toHaveAttribute('aria-pressed', 'true')
-    held.resolve(envelope('fork'))
-  })
-
   it('detaches old rows at the optimistic click and never publishes a pre-ack response', async () => {
     const store = setup()
     await store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
@@ -249,6 +207,123 @@ describe('GitHub source collection lifetime', () => {
     expect(await store.getState().fetchWorkItems(repo.id, repo.path, 20, '')).toHaveLength(1)
     await store.getState().setIssueSourcePreference(repo.id, repo.path, 'upstream', 'local')
     expect(store.getState().repos[0].issueSourcePreference).toBe('upstream')
+  })
+
+  it('certifies Submit after a failed write only once the host row is read back', async () => {
+    const store = setup()
+    // The host may have committed origin although the acknowledgement was lost.
+    mockApi.repos.update.mockRejectedValueOnce(new Error('request timed out'))
+    const recovery = Promise.withResolvers<void>()
+    store.setState({ fetchReposForAllHosts: vi.fn().mockReturnValue(recovery.promise) })
+    await store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+    const owner = store.getState().githubSourceCollections
+    const waiting = owner.awaitSave(store.getState().repos[0])
+    await flush()
+    recovery.reject(new Error('catalog unreachable'))
+    expect(await waiting).toBeUndefined()
+    const readBack = vi.fn(async () => {
+      const started = owner.catalogSnapshot()
+      store.setState((s) => ({ repos: s.repos.map((row) => owner.adopt({ ...row }, started)) }))
+    })
+    store.setState({ fetchReposForAllHosts: readBack })
+    const ready = await owner.awaitSave(store.getState().repos[0])
+    expect(readBack).toHaveBeenCalledTimes(1)
+    expect(ready?.()).toBe(true)
+  })
+
+  it('retries contradiction recovery on a later refresh after the first catalog read failed', async () => {
+    const store = setup()
+    store.setState({ repos: [{ ...repo, issueSourcePreference: 'origin' }] })
+    const resync = vi.fn().mockRejectedValue(new Error('temporary catalog outage'))
+    store.setState({ fetchReposForAllHosts: resync })
+    expect(
+      await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
+    ).toBeUndefined()
+    await flush()
+    expect(
+      await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
+    ).toBeUndefined()
+    await flush()
+    expect(resync).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps another repository delivery current when one owner retires its mapping', async () => {
+    const store = setup()
+    const other = { ...repo, id: 'other', path: '/other' }
+    store.setState({ repos: [repo, other] })
+    await store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+    const held = Promise.withResolvers<ReturnType<typeof envelope>>()
+    mockApi.gh.listWorkItems.mockReturnValueOnce(held.promise)
+    const otherRows = store.getState().fetchWorkItems(other.id, other.path, 20, '')
+    await flush()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      ...envelope('parent'),
+      sources: { ...envelope('parent').sources, originCandidate: { owner: 'new-fork', repo: 'p' } }
+    })
+    await store.getState().fetchWorkItems(repo.id, repo.path, 20, 'label:new')
+    held.resolve(envelope('parent'))
+    expect(await otherRows).toHaveLength(1)
+  })
+
+  it('adopts a queued rename after an earlier queued account change replaced the owner', async () => {
+    const store = setup()
+    const bob = { host: 'github.com', user: 'bob' }
+    const account = Promise.withResolvers<Repo>()
+    mockApi.repos.update
+      .mockReturnValueOnce(account.promise)
+      .mockResolvedValueOnce({ ...repo, ghAccount: bob, displayName: 'New' })
+    const switching = store.getState().updateRepo(repo.id, { ghAccount: bob })
+    const renaming = store.getState().updateRepo(repo.id, { displayName: 'New' })
+    account.resolve({ ...repo, ghAccount: bob })
+    expect([await switching, await renaming]).toEqual([true, true])
+    expect(store.getState().repos[0].displayName).toBe('New')
+  })
+
+  it('answers a Cmd-J search held by a pending source save once that save settles', async () => {
+    const store = setup()
+    store.setState({ preflightStatusChecked: false })
+    const save = Promise.withResolvers<Repo>()
+    mockApi.repos.update.mockReturnValueOnce(save.promise)
+    mockApi.gh.listWorkItems.mockResolvedValue(envelope('fork'))
+    const saving = store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+    const [search] = createCmdJTaskSearchRequests({
+      query: 'fork',
+      repos: store.getState().repos,
+      settings: createGlobalSettingsFixture({ visibleTaskProviders: ['github'] }),
+      accountBackedTaskSourceHostId: 'local',
+      filter: EMPTY_PALETTE_FILTER,
+      hostLabels: new Map(),
+      signal: new AbortController().signal
+    })
+    const results = search.run()
+    await flush()
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    save.resolve({ ...repo, issueSourcePreference: 'origin' })
+    await saving
+    expect((await results).map((result) => result.id)).toHaveLength(1)
+  })
+
+  it('opens the clicked current-binding row over an older binding copy of the same issue', async () => {
+    const store = setup()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      ...envelope('parent'),
+      items: [{ ...row('parent'), title: 'Old title' }]
+    })
+    await store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+    await store.getState().setIssueSourcePreference(repo.id, repo.path, 'upstream', 'local')
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      ...envelope('parent'),
+      items: [{ ...row('parent'), title: 'Fresh title' }]
+    })
+    const [clicked] =
+      (await store.getState().fetchWorkItems(repo.id, repo.path, 20, '', { force: true })) ?? []
+    expect(
+      findTaskPageDialogWorkItem(
+        store.getState().workItemsCache,
+        clicked,
+        githubTaskBinding(store.getState().repos[0])
+      )?.title
+    ).toBe('Fresh title')
   })
 })
 

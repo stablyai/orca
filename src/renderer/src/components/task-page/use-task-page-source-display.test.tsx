@@ -173,7 +173,9 @@ function useMountedSourceDisplay(runRequests = false) {
   return useTaskPageSourceDisplay(sourceDisplayInput)
 }
 let view: ReturnType<typeof useMountedSourceDisplay>
+let harnessRenders = 0
 function Harness({ runRequests = false }: { runRequests?: boolean }) {
+  harnessRenders += 1
   view = useMountedSourceDisplay(runRequests)
   const filtersFields = {
     ...view,
@@ -596,6 +598,45 @@ describe('Tasks source display scaling', () => {
       // Same rows, a tenth of the cache: identical work.
       expect(smallCache[update]).toEqual(small[update])
     }
+  })
+})
+
+describe('Tasks source collection subscriptions', () => {
+  it('renders for the selected owner candidate and count publications only', async () => {
+    const neighbour: Repo = { ...repo, id: 'neighbour', path: '/neighbour' }
+    const other: Repo = { ...sshTwin, id: 'other', path: '/other' }
+    mount([repo])
+    act(() => useAppStore.setState((s) => ({ repos: [...s.repos, neighbour, other] })))
+    await act(async () => {})
+    const owner = useAppStore.getState().githubSourceCollections
+    const capture = (row: Repo) => owner.capture(row, getTaskPageRepoSourceContext(row, 'github'))
+    const envelope = { items: [], sources: sources(fork) }
+    const publish = (row: Repo, totalPages: number, query = '') =>
+      owner.answer(
+        owner.countKey([capture(row).scope], query, view.githubPerRepoPageLimit),
+        [capture(row)],
+        { totalCount: totalPages, totalPages },
+        query,
+        view.githubPerRepoPageLimit
+      )
+    const rendersFor = async (update: () => unknown) => {
+      harnessRenders = 0
+      await act(async () => {
+        update()
+      })
+      return harnessRenders
+    }
+    for (const row of [neighbour, other]) {
+      expect(await rendersFor(() => owner.accept(capture(row), envelope, Q1, true))).toBe(0)
+      expect(await rendersFor(() => publish(row, 3, Q1))).toBe(0)
+    }
+    expect(sourceRowCount()).toBe(0)
+    expect(await rendersFor(() => owner.accept(capture(repo), envelope, Q1, true))).toBeGreaterThan(
+      0
+    )
+    expect(sourceRowCount()).toBe(1)
+    expect(await rendersFor(() => publish(repo, 3, Q1))).toBeGreaterThan(0)
+    expect(screen.getByTestId('mounted-count')).toHaveTextContent('3')
   })
 })
 
