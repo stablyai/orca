@@ -21,6 +21,8 @@ import {
 
 registerStartupAttemptHostTests()
 
+const STARTED_AT = 1_800_000_000_000
+
 it('ends a resumed start that exits during transcript catch-up without awaiting a cursor write', async () => {
   const claude = fakeClaude()
   const catchUp = Promise.withResolvers<StructuredAgentSessionSinkBarrier>()
@@ -65,7 +67,7 @@ it('ends a resumed start that exits during transcript catch-up without awaiting 
   providerOpen.mockImplementation(adapter.open)
   closeSession.mockImplementation(adapter.closeSession)
   host.deps.adapter.releaseAcquisition = adapter.releaseAcquisition
-  const startedAt = Date.now()
+  vi.setSystemTime(STARTED_AT)
   const id = await accept('resume queued message')
   // Initialize has answered; the open still waits on the journal before catch-up.
   await eventually(() => expect(catchingUp).toBe(true))
@@ -84,7 +86,7 @@ it('ends a resumed start that exits during transcript catch-up without awaiting 
   await adapter.drainObservedExits()
   await flight.outcome
   await eventually(async () => expect((await submission(id))?.dispatchState).not.toBe('pending'))
-  expect(Date.now() - startedAt).toBeLessThan(STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS)
+  expect(Date.now() - STARTED_AT).toBeLessThan(STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS)
   claude.dispose()
   await adapter.closeAll()
 })
