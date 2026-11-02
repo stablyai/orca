@@ -12,6 +12,7 @@ import {
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
 import { captureStructuredChatRename } from '@/runtime/structured-chat-rename-action'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { syncLocalClaudeSessionName } from '@/runtime/claude-session-name-sync'
 
 type RoutedActions = Pick<
   TerminalSlice,
@@ -66,7 +67,13 @@ export function routeTerminalTabChangesThroughLayoutOwner(
           tabId,
           (id) => ({ type: 'renameTab', tabId: id, kind: 'custom', title }),
           () => actions.setTabCustomTitle(tabId, title, opts),
-          opts?.recordInteraction === false ? undefined : recordTabsInteraction
+          () => {
+            if (opts?.recordInteraction !== false) {
+              recordTabsInteraction()
+            }
+            // Main applied the rename itself, bypassing the window action that tells Claude.
+            syncLocalClaudeSessionName(tabId, title)
+          }
         )
       // A chat's name lives on its host, not in the layout; only a host too old to save it keeps
       // the name on the tab.

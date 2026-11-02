@@ -13,17 +13,16 @@ export function claudeRenameCommand(name: string): string {
   return `/rename ${name}`
 }
 
+/** The name a Claude window title shows, without its one-glyph status prefix (spinner frames share it). */
+export function claudeTitleName(title: string): string {
+  const shown = title.trim()
+  const match = /^(\S{1,2}) +(.+)$/u.exec(shown)
+  return match && !/[\p{L}\p{N}]/u.test(match[1]) ? match[2] : shown
+}
+
 /** Claude's window title is the session name, optionally behind a one-glyph status prefix. */
 export function claudeTitleShowsName(title: string, name: string): boolean {
-  const shown = title.trim()
-  if (shown === name) {
-    return true
-  }
-  if (!shown.endsWith(` ${name}`)) {
-    return false
-  }
-  const prefix = shown.slice(0, shown.length - name.length - 1)
-  return prefix.length > 0 && prefix.length <= 2 && !/[\p{L}\p{N}]/u.test(prefix)
+  return title.trim() === name || claudeTitleName(title) === name
 }
 
 /** The session's newest `/rename`, read from the transcript tail; null when it has none yet. */

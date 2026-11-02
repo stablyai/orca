@@ -116,6 +116,7 @@ process.stdin.on('data', (data) => {
   await expect(orcaPage.getByText('typed in claude', { exact: true }).first()).toBeVisible()
   await orcaPage.screenshot({ path: testInfo.outputPath('claude-session-name-sync.png') })
   // Give an echo time to arrive before proving there was none.
+  // ast-grep-ignore: test-no-real-time-wait -- proving no echo arrives needs a real window; there is no signal for an absent rename
   await orcaPage.waitForTimeout(2_000)
   expect(readLines(submitted)).toEqual(['/rename orca named', '/rename typed in claude'])
 })

@@ -133,6 +133,59 @@ describe('ClaudeTerminalSessionNameSync', () => {
     expect(renamed).toEqual(['from claude'])
     expect(sendCommand).not.toHaveBeenCalled()
   })
+
+  it('reads the transcript once per shown name, not per spinner frame', async () => {
+    const readCustomTitle = vi.fn(async () => 'spun')
+    const { sync, renamed } = harness({ readCustomTitle })
+    for (const frame of ['⠂ spun', '⠐ spun', '✳ spun']) {
+      sync.observeTitle(PANE, frame)
+    }
+    await settle()
+    expect(readCustomTitle).toHaveBeenCalledTimes(1)
+    expect(renamed).toEqual(['spun'])
+  })
+
+  it('retries a name whose /rename was not delivered', async () => {
+    const sendCommand = vi
+      .fn<ClaudeTerminalSessionNameSyncDeps['sendCommand']>()
+      .mockRejectedValueOnce(new Error('agent_not_in_foreground'))
+      .mockResolvedValue(undefined)
+    const { sync } = harness({ sendCommand })
+    sync.tabRenamed('tab-1', 'again')
+    await settle()
+    sync.tabRenamed('tab-1', 'again')
+    await settle()
+    expect(sendCommand).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not name a tab with several Claude panes from one of them', async () => {
+    const { claudeRenames, renamed } = harness({
+      listRows: () => [
+        { paneKey: PANE, agentType: 'claude' },
+        { paneKey: `tab-1:${OTHER_LEAF}`, agentType: 'claude' }
+      ]
+    })
+    claudeRenames('one of two')
+    await settle()
+    expect(renamed).toEqual([])
+  })
+
+  it('withdraws a rename still waiting for the composer when the tab title is cleared', async () => {
+    const sendCommand = vi.fn(async () => {})
+    let release: (() => void) | undefined
+    const { sync } = harness({
+      sendCommand,
+      waitForEmptyComposer: (_handle, signal) =>
+        new Promise((resolve) => {
+          release = () => resolve(!signal.aborted)
+        })
+    })
+    sync.tabRenamed('tab-1', 'never mind')
+    sync.tabRenamed('tab-1', null)
+    release?.()
+    await settle()
+    expect(sendCommand).not.toHaveBeenCalled()
+  })
 })
 
 describe('Claude transcript names', () => {

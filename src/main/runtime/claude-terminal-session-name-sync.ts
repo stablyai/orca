@@ -2,6 +2,7 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payloa
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import {
   claudeRenameCommand,
+  claudeTitleName,
   claudeTitleShowsName,
   normalizeClaudeSessionName
 } from '../claude/claude-terminal-session-name'
@@ -36,33 +37,40 @@ export class ClaudeTerminalSessionNameSync {
   private readonly pendingRenames = new Map<string, PendingRename>()
   // A title Claude showed before its transcript recorded it; rechecked at the pane's next turn change.
   private readonly unconfirmedTitles = new Map<string, string>()
-  private readonly lastTitles = new Map<string, string>()
+  // The name each pane's title last showed; spinner frames of one name share it.
+  private readonly lastTitleNames = new Map<string, string>()
 
   constructor(private readonly deps: ClaudeTerminalSessionNameSyncDeps) {}
 
   /** Orca → Claude: the tab was given `title` by the user, a phone or the CLI. */
   tabRenamed(tabId: string, title: string | null): void {
     const name = normalizeClaudeSessionName(title)
-    if (!name || !this.deps.isEnabled()) {
+    if (!name) {
+      // A cleared title withdraws a rename still waiting for the composer.
+      for (const [paneKey, pending] of this.pendingRenames) {
+        if (parsePaneKey(paneKey)?.tabId === tabId) {
+          pending.abort.abort()
+          this.pendingRenames.delete(paneKey)
+        }
+      }
       return
     }
-    const panes = this.deps
-      .listRows()
-      .filter((row) => isTerminalClaudeRow(row) && parsePaneKey(row.paneKey)?.tabId === tabId)
-    const paneKeys = [...new Set(panes.map((row) => row.paneKey))]
-    // Several Claude panes in one tab: the tab's name belongs to none of them in particular.
-    if (paneKeys.length !== 1) {
+    if (!this.deps.isEnabled()) {
       return
     }
-    this.renameSession(paneKeys[0], name)
+    const paneKey = this.soleClaudePane(tabId)
+    if (paneKey) {
+      this.renameSession(paneKey, name)
+    }
   }
 
   /** Claude → Orca: Claude retitled its window; a matching transcript `/rename` names the tab. */
   observeTitle(paneKey: string, title: string): void {
-    if (this.lastTitles.get(paneKey) === title) {
+    const shown = claudeTitleName(title)
+    if (this.lastTitleNames.get(paneKey) === shown) {
       return
     }
-    this.lastTitles.set(paneKey, title)
+    this.lastTitleNames.set(paneKey, shown)
     if (this.deps.isEnabled()) {
       void this.confirmTitle(paneKey, title)
     }
@@ -74,6 +82,17 @@ export class ClaudeTerminalSessionNameSync {
     if (title !== undefined && this.deps.isEnabled()) {
       void this.confirmTitle(paneKey, title)
     }
+  }
+
+  /** Several Claude panes in one tab: the tab's name belongs to none of them in particular. */
+  private soleClaudePane(tabId: string): string | null {
+    const paneKeys = new Set(
+      this.deps
+        .listRows()
+        .filter((row) => isTerminalClaudeRow(row) && parsePaneKey(row.paneKey)?.tabId === tabId)
+        .map((row) => row.paneKey)
+    )
+    return paneKeys.size === 1 ? [...paneKeys][0] : null
   }
 
   private renameSession(paneKey: string, name: string): void {
@@ -112,7 +131,14 @@ export class ClaudeTerminalSessionNameSync {
       }
       await this.deps.sendCommand(handle, claudeRenameCommand(rename.name), rename.abort.signal)
     } catch (error) {
-      if (!rename.abort.signal.aborted && !EXPECTED_REFUSALS.has(describe(error))) {
+      if (rename.abort.signal.aborted) {
+        return
+      }
+      // Undelivered: the same name must stay retryable.
+      if (this.agreed.get(paneKey) === rename.name) {
+        this.agreed.delete(paneKey)
+      }
+      if (!EXPECTED_REFUSALS.has(describe(error))) {
         console.warn('[claude-session-name] /rename was not delivered:', describe(error))
       }
     }
@@ -129,7 +155,7 @@ export class ClaudeTerminalSessionNameSync {
     } catch {
       name = null
     }
-    if (this.lastTitles.get(paneKey) !== title) {
+    if (this.lastTitleNames.get(paneKey) !== claudeTitleName(title)) {
       return
     }
     if (!name) {
@@ -140,6 +166,10 @@ export class ClaudeTerminalSessionNameSync {
     this.unconfirmedTitles.delete(paneKey)
     // Claude also titles its window from auto-generated topics; only a recorded /rename names the tab.
     if (!claudeTitleShowsName(title, name)) {
+      return
+    }
+    const tabId = parsePaneKey(paneKey)?.tabId
+    if (!tabId || this.soleClaudePane(tabId) !== paneKey) {
       return
     }
     const pending = this.pendingRenames.get(paneKey)
