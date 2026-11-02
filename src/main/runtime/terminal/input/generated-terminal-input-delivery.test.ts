@@ -95,6 +95,77 @@ describe('one host transaction for generated input', () => {
     expect(writes.some((data) => data.includes('second'))).toBe(false)
   })
 
+  // H4: a direct caller of sendTerminalAgentPrompt (CLI, dispatch) is retired at its own deadline
+  // or abort while queued, and its turn never writes later.
+  it.each(['deadline', 'abort'] as const)(
+    'retires a direct queued caller at its %s while the head holds the queue',
+    async (ending) => {
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => {},
+        'claude'
+      )
+      runtime.onPtyData('pty-prompt', DIALOG, 0)
+      const head = deliverGeneratedTerminalInput(runtime, handle, {
+        text: 'first',
+        submit: true,
+        agent: 'claude',
+        timeoutMs: 1_000
+      })
+      const aborter = new AbortController()
+      const started = Date.now()
+      const direct = runtime.sendTerminalAgentPrompt(handle, 'second', {
+        inputKind: 'driving',
+        acceptQueued: true,
+        requestId: 'direct',
+        observationTimeoutMs: 0,
+        ...(ending === 'deadline' ? { inputDeadline: Date.now() + 50 } : { signal: aborter.signal })
+      })
+      if (ending === 'abort') {
+        setTimeout(() => aborter.abort(), 50)
+      }
+      await expect(direct).rejects.toThrow(
+        ending === 'deadline' ? /could not take/ : 'request_aborted'
+      )
+      expect(Date.now() - started).toBeLessThan(500)
+      runtime.onPtyData('pty-prompt', `\x1b[2J\x1b[H${READY}`, 0)
+      await expect(head).resolves.toBe('delivered')
+      expect(writes.some((data) => data.includes('second'))).toBe(false)
+    }
+  )
+
+  // H4: a retry's screen read near expiry does not hold the result past the deadline.
+  it('settles a submitted prompt on time when its retry read is still pending at the deadline', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {}, 'dsh')
+    runtime.onPtyData('pty-prompt', READY, 0)
+    const host = runtime as unknown as {
+      readCurrentTerminalWaitScreen: (ptyId: string) => Promise<unknown>
+    }
+    const real = host.readCurrentTerminalWaitScreen.bind(runtime)
+    let stalledReads = 0
+    vi.spyOn(host, 'readCurrentTerminalWaitScreen').mockImplementation(async (ptyId) => {
+      if (!writes.includes('\r')) {
+        return await real(ptyId)
+      }
+      stalledReads += 1
+      return await new Promise(() => {})
+    })
+    const started = Date.now()
+    const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
+      text: 'held draft',
+      submit: true,
+      agent: 'dsh',
+      composerReady: true,
+      timeoutMs: 1_500
+    })
+    expect(outcome).toBe('delivered')
+    expect(Date.now() - started).toBeLessThan(1_700)
+    expect(stalledReads).toBeGreaterThan(0)
+    const settledWrites = writes.length
+    // ast-grep-ignore: test-no-real-time-wait -- the operation's own real timers must run out to show no later write.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(writes).toHaveLength(settledWrites)
+  })
+
   it.each(['never answers', 'answers after the deadline'])(
     'writes nothing when the final foreground read %s',
     async (variant) => {
