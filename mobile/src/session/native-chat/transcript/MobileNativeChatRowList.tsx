@@ -191,9 +191,12 @@ function MobileNativeChatNativeRowList({
       })
     const handle: MobileNativeChatListHandle = {
       scrollToEnd: (params) => {
+        // A later layout of the old row must not pull the reader back.
+        jump.retry = null
         flatRef.current?.scrollToEnd(params)
       },
       scrollToOffset: (params) => {
+        jump.retry = null
         flatRef.current?.scrollToOffset(params)
       },
       hasPreviousMessage: (keys) => previousMessageTarget(measure(keys)) !== null,
@@ -240,6 +243,7 @@ function MobileNativeChatNativeRowList({
     attach(handle)
     return () => {
       attach(null)
+      jump.retry = null
       if (jump.refreshFrame !== 0) {
         cancelAnimationFrame(jump.refreshFrame)
         jump.refreshFrame = 0
@@ -278,6 +282,9 @@ function MobileNativeChatNativeRowList({
             })
           }
           requestAnimationFrame(() => {
+            if (jump.retry !== pending) {
+              return
+            }
             flatRef.current?.scrollToIndex({
               index: info.index,
               viewPosition: 0,
@@ -285,7 +292,10 @@ function MobileNativeChatNativeRowList({
             })
           })
         }}
-        onScrollBeginDrag={tail.beginUserScroll}
+        onScrollBeginDrag={() => {
+          jump.retry = null
+          tail.beginUserScroll()
+        }}
         onScrollEndDrag={tail.endUserDrag}
         onMomentumScrollBegin={tail.beginMomentum}
         onMomentumScrollEnd={tail.endMomentum}
