@@ -1,14 +1,15 @@
+import { createClaudeCatalogOptions } from './agent-session/options/agent-session-option-catalog-claude-codex'
 import {
-  createClaudeCatalogOptions,
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
-  mergeDiscoveredAuthoritativeModels,
-  type AgentSessionOptionCatalog,
-  type CatalogModel
-} from './agent-session-option-catalog'
+  mergeDiscoveredAuthoritativeModels
+} from './agent-session/options/agent-session-option-catalog'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogModel
+} from './agent-session/options/agent-session-option-catalog-types'
 import type { AgentType } from './agent-status-types'
 import type { CommitMessageModelCapability } from './commit-message-agent-spec'
-import type { NativeChatSessionOptionSettingsMutation } from './native-chat/input/native-chat-session-options'
 
 export type NativeChatModelDiscoveryResult =
   | {
@@ -27,7 +28,7 @@ export function catalogModelsFromModelDiscovery(
   if (
     !result.success ||
     result.models.length === 0 ||
-    // Static fallback lists cannot prove retirements for authoritative catalogs.
+    // Static fallback lists cannot stand in for the host's authoritative inventory.
     ((agent === 'claude' ||
       getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) &&
       result.catalogOrigin !== 'probe')
@@ -62,23 +63,4 @@ export function mergeDiscoveredCatalogModels(
   return catalog.discoveredModelsAreAuthoritative
     ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
     : mergeCatalogModels(catalog.models, discovered)
-}
-
-/** Retire a persisted default the listing no longer offers: launch sites without a picker still turn it into -m. */
-export function retireMissingModelMutation(
-  agent: AgentType,
-  models: readonly CatalogModel[]
-): NativeChatSessionOptionSettingsMutation | null {
-  // An empty list means the probe failed, not that the account has no models.
-  if (
-    !getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative ||
-    models.length === 0
-  ) {
-    return null
-  }
-  return {
-    type: 'clear-model-if-missing',
-    agent,
-    availableModelIds: models.map((model) => model.id)
-  }
 }

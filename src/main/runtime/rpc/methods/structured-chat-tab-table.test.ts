@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session-record-store-test-harness'
+import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
 import { DeviceRegistry } from '../../device-registry'
 import WebSocket from 'ws'
@@ -108,6 +108,77 @@ describe('a chat tab across /clear', () => {
     expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([
       `agent-session:${HOST_TEST_SESSION}`
     ])
+  })
+
+  it('caller reveal restores publication and only its visibility without moving any selection', async () => {
+    await createChat(HOST_TEST_SESSION)
+    await createChat('session-other')
+    const before = await snapshot()
+    const callerId = 'phone-a',
+      bystanderId = 'phone-b'
+    const target = before.tabs.find(
+      (tab) => tab.type === 'agent-session' && tab.sessionId === HOST_TEST_SESSION
+    )!
+    const other = before.tabs.find((tab) => tab.id !== target.id)!
+    runtime.selectCreatedMobileSessionTabForClient(
+      before.worktree,
+      { sessionId: 'session-other' },
+      callerId
+    )
+    runtime.selectCreatedMobileSessionTabForClient(
+      before.worktree,
+      { sessionId: 'session-other' },
+      bystanderId
+    )
+    runtime['clientSessionTabSelections'].forgetTabs(before.worktree, [target.id])
+    expect(
+      (await runtime.listMobileSessionTabs(WORKTREE, callerId)).tabs.some(
+        (tab) => tab.id === target.id
+      )
+    ).toBe(false)
+    const publications: unknown[] = []
+    runtime.onMobileSessionTabsChanged((value) => publications.push(value), callerId)
+    const response = await dispatcher.dispatch(
+      {
+        id: 'caller-reveal',
+        authToken: 'token',
+        method: 'agentSession.reveal',
+        params: { sessionId: HOST_TEST_SESSION, navigation: 'caller' }
+      },
+      {
+        pairedDeviceId: callerId,
+        clientKind: 'mobile',
+        clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+      }
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: true, sessionId: HOST_TEST_SESSION } })
+    const projected = await runtime.listMobileSessionTabs(WORKTREE, callerId)
+    expect(projected.tabs.some((tab) => tab.id === target.id)).toBe(true)
+    expect(projected.activeTabId).toBe(other.id)
+    expect(publications.at(-1)).toMatchObject({ activeTabId: other.id })
+    expect(publications.at(-1)).not.toHaveProperty('navigationIntent')
+    const bystander = await runtime.listMobileSessionTabs(WORKTREE, bystanderId)
+    expect(bystander.activeTabId).toBe(other.id)
+    expect(bystander.tabs.some((tab) => tab.id === target.id)).toBe(false)
+    expect((await snapshot()).activeTabId).toBe(before.activeTabId)
+    // A globally closed record is also republished passively, using the same actual host handler.
+    await call('agentSession.close', { sessionId: HOST_TEST_SESSION })
+    expect(
+      await dispatcher.dispatch(
+        {
+          id: 'closed',
+          authToken: 'token',
+          method: 'agentSession.reveal',
+          params: { sessionId: HOST_TEST_SESSION, navigation: 'caller' }
+        },
+        {
+          pairedDeviceId: callerId,
+          clientKind: 'mobile',
+          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+        }
+      )
+    ).toMatchObject({ ok: true, result: { ok: true } })
+    expect((await runtime.listMobileSessionTabs(WORKTREE, callerId)).activeTabId).toBe(other.id)
   })
 
   it('closes the same cleared chat as settled before its next provider start', async () => {

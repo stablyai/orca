@@ -1,3 +1,4 @@
+import { getIntlLocale } from '@/i18n/i18n'
 /** A catalog release date ("2026-10-20" or a date-time) as a short local date; null if unreadable. */
 export function formatPluginReleaseDate(value: string | undefined): string | null {
   if (!value) {
@@ -8,7 +9,7 @@ export function formatPluginReleaseDate(value: string | undefined): string | nul
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

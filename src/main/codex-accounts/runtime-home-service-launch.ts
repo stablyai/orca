@@ -2,7 +2,6 @@ import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
 import { startCodexAccountSessionBridgeInBackground } from '../codex/codex-account-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
-import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
@@ -21,6 +20,8 @@ import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfil
 import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
+import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
+import { getWslHomeAsync } from '../wsl'
 
 export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   protected initializeLastSyncedState(): void {
@@ -70,7 +71,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     // Keep large history scans off the launch path.
-    if (isCodexHistorySharedAcrossAccounts(this.store.getSettings())) {
+    if (
+      isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
+      !this.isHostHistorySourceInWsl()
+    ) {
       void startSystemCodexSessionBridgeInBackground(
         {},
         resolveHostCodexSessionSourceHome(this.store.getSettings())
@@ -88,8 +92,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     if (
       sourceCodexHomePaths.length === 0 ||
       !isCodexHistorySharedAcrossAccounts(settings) ||
-      // A history source inside a distro would boot it over 9P; the WSL lane owns those homes.
-      parseWslUncPath(targetCodexHomePath)
+      this.isHostHistorySourceInWsl()
     ) {
       return
     }
@@ -133,6 +136,16 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)
+    // A passive restore reaches this before its hold (#35813); the probe, drain, sync and bridge
+    // below would each start a stopped distro (E9). A user act passes and does them all.
+    if (await blockedWslDistroForExec(wslTarget.wslDistro)) {
+      return this.getWslCodexHomePathForSelection(wslTarget, { probeHome: false })
+    }
+    const distro = wslTarget.wslDistro?.trim()
+    if (distro && process.platform === 'win32') {
+      // Warm the guest-home cache off the main thread, so the sync reads below skip a 5 s wsl.exe.
+      await getWslHomeAsync(distro)
+    }
     const homePath = this.getWslCodexHomePathForSelection(wslTarget)
     // Drain potentially fresher retired-home credentials before the first direct-home spawn.
     await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
@@ -144,8 +157,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     codexHomePath: string | null,
     options: { reattached?: boolean; launchEnv?: NodeJS.ProcessEnv } = {}
   ): boolean | null {
+    // A WSL source still reaches invalidation, which records the full scan its launch will owe.
     if (
-      !this.isHostSystemDefaultSessionMigrationEligible() ||
+      !this.isHostSystemDefaultSessionMigrationRouteSelected() ||
       (!codexHomePath && !options.reattached) ||
       (codexHomePath &&
         normalizeRuntimePathForComparison(codexHomePath) !==
@@ -161,6 +175,12 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
 
   isHostSystemDefaultSessionMigrationEligible(): boolean {
     return (
+      this.isHostSystemDefaultSessionMigrationRouteSelected() && !this.isHostHistorySourceInWsl()
+    )
+  }
+
+  private isHostSystemDefaultSessionMigrationRouteSelected(): boolean {
+    return (
       normalizeCodexRuntimeSelection(this.store.getSettings()).host === null &&
       !hasCustomCodexHomeOverrideForLaunch()
     )
@@ -169,6 +189,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   prepareHostSystemDefaultSessionMigrationPass(
     scanDates: readonly CodexSessionBackfillDate[] = []
   ): boolean {
+    if (this.isHostHistorySourceInWsl()) {
+      return false
+    }
     const paths = resolveCodexSessionBackfillPaths(
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )

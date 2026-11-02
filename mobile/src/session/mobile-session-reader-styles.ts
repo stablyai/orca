@@ -37,20 +37,6 @@ export const mobileSessionReaderStyles = themedStyleSheet(() => ({
     minHeight: 0,
     backgroundColor: colors.editorSurface
   },
-  imagePreviewScroll: {
-    flex: 1
-  },
-  imagePreviewContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-    minHeight: 200
-  },
   diffNotesToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -86,7 +72,7 @@ export const mobileSessionReaderStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.sm,
     backgroundColor: colors.bgRaised
   },

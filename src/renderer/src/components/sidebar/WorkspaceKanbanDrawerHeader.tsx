@@ -65,17 +65,11 @@ export default function WorkspaceKanbanDrawerHeader({
             </span>
             {selectedCount > 1 ? (
               <span className="rounded-full bg-worktree-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {selectedCount === 1
-                  ? translate(
-                      'auto.components.sidebar.WorkspaceKanbanDrawerHeader.selectedCount_one',
-                      '{{count}} selected',
-                      { count: selectedCount }
-                    )
-                  : translate(
-                      'auto.components.sidebar.WorkspaceKanbanDrawerHeader.selectedCount_other',
-                      '{{count}} selected',
-                      { count: selectedCount }
-                    )}
+                {translate(
+                  'auto.components.sidebar.WorkspaceKanbanDrawerHeader.selectedCount',
+                  '{{count}} selected',
+                  { count: selectedCount, defaultValue_one: '{{count}} selected' }
+                )}
               </span>
             ) : null}
           </SheetTitle>

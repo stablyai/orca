@@ -1,5 +1,6 @@
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
 import { getCheckConclusion } from '../../../../../shared/pr-check-status-label'
+import { getIntlLocale } from '@/i18n/i18n'
 
 export type CheckDetailsLoadState = {
   requestId?: number
@@ -50,7 +51,7 @@ export function formatCheckTimestamp(input: string | null | undefined): string |
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

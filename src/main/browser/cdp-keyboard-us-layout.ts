@@ -237,3 +237,44 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
 
   return { keyCode, key, code, modifiers, location, selfModifier, text }
 }
+
+/** The key a person presses to type one character, or null when no key types it. */
+function typedCharacterKeyEvent(char: string): CdpKeyEvent | null {
+  if (char === '\n') {
+    return parseCdpKeyEvent('Enter')
+  }
+  if (char === '\t') {
+    return parseCdpKeyEvent('Tab')
+  }
+  return parseCdpKeyEvent(char) ?? imeFallbackKeyEvent(char)
+}
+
+const MAX_UNTYPABLE_RUN_LENGTH = 512
+
+/** A key to press, or a run of text that no key types. */
+export type TypedInputStep = CdpKeyEvent | string
+
+/** The keys that type `input`, yielded lazily so long text is never held as events. */
+export function* typedInputSteps(input: string): Generator<TypedInputStep> {
+  let untypable = ''
+  for (const char of input.replace(/\r\n?/g, '\n')) {
+    const key = typedCharacterKeyEvent(char)
+    if (!key) {
+      untypable += char
+      // Bounded like key runs, since a widget page receives this text one event per character.
+      if (untypable.length >= MAX_UNTYPABLE_RUN_LENGTH) {
+        yield untypable
+        untypable = ''
+      }
+      continue
+    }
+    if (untypable) {
+      yield untypable
+      untypable = ''
+    }
+    yield key
+  }
+  if (untypable) {
+    yield untypable
+  }
+}

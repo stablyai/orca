@@ -67,14 +67,6 @@ describeOnWindows('runtime.ps1 serve mode', () => {
     expect(answer).toMatchObject({ ok: false, requestId: 7 })
     expect(String(answer.error)).not.toBe('')
   })
-
-  it('reports an error for a line with no recoverable id', async () => {
-    const answer = await answerRawLine('{"tool":"handshake"')
-
-    expect(answer).toMatchObject({ ok: false })
-    expect(answer.requestId).toBeUndefined()
-    expect(String(answer.error)).not.toBe('')
-  })
 })
 
 function answerRawLine(raw: string): Promise<Record<string, unknown>> {

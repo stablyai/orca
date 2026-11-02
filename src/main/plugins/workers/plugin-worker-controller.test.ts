@@ -2,7 +2,6 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createPluginExtensionRegistry } from '../../../shared/plugins/contributions/plugin-extension-registry'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
 import { PluginContentVerifier } from '../plugin-content-integrity'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
@@ -53,6 +52,9 @@ function worker(commands: string[]): PluginWorkerHandle & { dispose: ReturnType<
     commands,
     invokeCommand: vi.fn(async () => null),
     deliverEvent: vi.fn(),
+    requestFromPanel: vi.fn(),
+    runHook: vi.fn(),
+    notifyDataChanged: vi.fn(),
     lastActivityAt: () => Date.now(),
     inFlightCount: () => 0,
     dispose: vi.fn(async () => undefined),
@@ -74,12 +76,10 @@ function controller(options: {
   return new PluginWorkerController({
     entryPath: '/host-entry.js',
     workerFactory: options.factory,
-    registry: createPluginExtensionRegistry(),
     contentVerifier,
     capabilities: () => (options.isApproved() ? [] : null),
     isCurrentApproved: () => options.isApproved(),
     isApprovalKept: options.isApprovalKept,
-    invokeCommand: vi.fn(async () => null),
     executeHostCall: vi.fn(async () => ({ ok: true as const, value: null })),
     log: (key) => options.logs?.capture(key) ?? vi.fn(),
     onStateChanged: vi.fn()

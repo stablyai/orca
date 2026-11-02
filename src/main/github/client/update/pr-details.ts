@@ -11,6 +11,7 @@ import {
   type GitHubApiRepository,
   type GitHubRepoExecOptions
 } from '../../github-api-repository'
+import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
 
 async function patchPullRequest(
   repository: GitHubApiRepository,
@@ -75,14 +76,14 @@ export async function updatePRDetails(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   const fields: string[] = []
   if (updates.title !== undefined) {
     const title = updates.title.trim()
     if (!title) {
-      return { ok: false, error: 'Title is required' }
+      return codeHostFailure('titleRequired')
     }
     fields.push(`title=${title}`)
   }
@@ -101,7 +102,7 @@ export async function updatePRDetails(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
-    return { ok: false, error: classifyPullRequestUpdateError(message).message }
+    return classifiedFailure(classifyPullRequestUpdateError(message))
   } finally {
     release()
   }

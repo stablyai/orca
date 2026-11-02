@@ -33,7 +33,7 @@ import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import type { RpcCallerScope } from './rpc-caller-scope'
 import { runWithActiveRpcCaller } from './rpc-active-caller'
 import { admitRpcRequest } from './rpc-request-admission-prologue'
-import { rpcMethodFeatureWait } from './orcad-feature-readiness'
+import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './orcad-feature-readiness'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -84,10 +84,14 @@ export class RpcDispatcher {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
     try {
-      const featureWait = rpcMethodFeatureWait(admission.method.requires)
+      const featureWait = rpcMethodFeatureWait(
+        resolveOrcadFeatureRequirement(admission.method.requires, admission.params),
+        [options?.signal, options?.connectionSignal]
+      )
       if (featureWait) {
         await featureWait
       }
+      options?.beforeInvoke?.()
       return successResponse(request.id, meta, await this.invokeUnary(admission, options))
     } catch (error) {
       if (probeEmulator) {
@@ -118,7 +122,10 @@ export class RpcDispatcher {
       return
     }
     const { method, request, params, caller } = admission
-    const featureWait = rpcMethodFeatureWait(method.requires)
+    const featureWait = rpcMethodFeatureWait(
+      resolveOrcadFeatureRequirement(method.requires, params),
+      [options?.signal, options?.connectionSignal]
+    )
     if (featureWait) {
       try {
         await featureWait
@@ -147,7 +154,7 @@ export class RpcDispatcher {
     try {
       const result = await method.handler(
         params,
-        rpcContextFromTransport(this.runtime, request, options, caller),
+        rpcContextFromTransport(this.runtime, request, options, caller, params),
         emit
       )
       recordRuntimeFeatureInteraction(
@@ -186,7 +193,7 @@ export class RpcDispatcher {
     options: RpcDispatchStreamingOptions | undefined
   ): Promise<unknown> {
     const { runtime, orchestrationMutations, legacyOrchestration } = this
-    const context = rpcContextFromTransport(runtime, request, options, caller)
+    const context = rpcContextFromTransport(runtime, request, options, caller, params)
     // Runtime test fakes may omit client-hosted browser routing.
     const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
       request.method,

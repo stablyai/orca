@@ -5,13 +5,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vite
 import type { ReactNode } from 'react'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { Tab } from '../../../../shared/tab-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-attention-capabilities'
 import {
-  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'

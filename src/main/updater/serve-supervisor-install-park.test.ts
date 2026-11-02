@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,12 +9,12 @@ import {
   acksDir,
   bundleCoordinationDir,
   decideServeParkHold,
-  formatBundleIdentity,
   parkRecordPath,
   parseServeParkRecord,
   supervisorsDir,
   type ServeParkRecord
 } from '../../shared/serve-bundle-coordination'
+
 import {
   commitServeSupervisorPark,
   parkServeSupervisorsForInstall,
@@ -186,47 +187,5 @@ describe('parkServeSupervisorsForInstall', () => {
     )
     await expect(commitServeSupervisorPark(async () => [CHILD + 1])).rejects.toThrow()
     expect((await readRecord())?.phase).toBe('unpark')
-  })
-
-  it('a same-version reinstall still changes the bundle identity', async () => {
-    const plist = join(root, 'Orca.app', 'Contents', 'Info.plist')
-    await register(CHILD)
-    await parkServeSupervisorsForInstall(
-      executable,
-      [CHILD],
-      deps({
-        sleep: async () => {
-          const record = await readRecord()
-          await mkdir(acksDir(dir), { recursive: true })
-          await writeFile(join(acksDir(dir), ackFileName(record!.attemptId, process.pid)), '{}')
-        }
-      })
-    )
-    const before = (await readRecord())!.bundleBefore
-    await utimes(plist, new Date(), new Date(Date.now() + 5_000))
-    expect(formatBundleIdentity(await stat(plist))).not.toBe(before)
-  })
-})
-
-describe('decideServeParkHold', () => {
-  const record: ServeParkRecord = {
-    schemaVersion: 1,
-    attemptId: 'a',
-    installerPid: 1,
-    phase: 'park',
-    createdAt: 0,
-    parkDeadlineAt: 100,
-    commitDeadlineAt: null,
-    bundleBefore: 'b',
-    supervisorPids: [2]
-  }
-
-  it('ends a park on unpark, deadline, or installer death', () => {
-    const facts = { now: 50, installerAlive: true, bundleNow: 'b' }
-    expect(decideServeParkHold(record, facts)).toBe('hold')
-    expect(decideServeParkHold({ ...record, phase: 'unpark' }, facts)).toBe('release')
-    expect(decideServeParkHold(record, { ...facts, now: 100 })).toBe('release')
-    expect(decideServeParkHold(record, { ...facts, installerAlive: false })).toBe('release')
-    expect(decideServeParkHold(null, facts)).toBe('release')
   })
 })

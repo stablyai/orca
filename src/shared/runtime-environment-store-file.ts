@@ -18,6 +18,7 @@ import {
   MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
   readEnvironmentStoreRecords,
   backUpBlankEnvironmentStore,
+  remoteServerPairingStoreError,
   RuntimeEnvironmentStoreError,
   type EnvironmentStoreRecordsReadOptions,
   warnUnreadableEnvironmentState
@@ -53,7 +54,11 @@ export function readPersistedEnvironmentStore(
   }
 }
 
-/** Unreadable WSL state fails closed only while WSL hosts are served; otherwise it cannot hide SSH/paired servers. */
+/**
+ * Unreadable WSL state never hides SSH or paired servers. While WSL hosts are served, an unreadable
+ * file hides only the servers that could be WSL hosts (it may pin their keys); writes still refuse
+ * it, so a newer build's file is kept as it is. With hosts off it hides nothing.
+ */
 function readWslHostDeploymentsForRegistry(
   userDataPath: string
 ): ReturnType<typeof readWslHostDeployments> {
@@ -62,11 +67,11 @@ function readWslHostDeploymentsForRegistry(
     const read = readWslHostDeployments(userDataPath)
     return gateOpen ? read : { deployments: read.deployments, unreadableEnvironmentIds: new Set() }
   } catch (error) {
-    if (!(error instanceof WslHostDeploymentStoreInvalidError) || gateOpen) {
+    if (!(error instanceof WslHostDeploymentStoreInvalidError)) {
       throw error
     }
     warnUnreadableEnvironmentState(error.message)
-    return { deployments: [], unreadableEnvironmentIds: new Set() }
+    return { deployments: [], unreadableEnvironmentIds: new Set(), fileUnreadable: gateOpen }
   }
 }
 
@@ -124,10 +129,7 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   const unreadableIds = new Set(onDisk.unreadable.map((record) => record.id))
   // A new readable record must not shadow one a newer build owns under the same id.
   if (environments.some(({ id }) => unreadableIds.has(id) && !readableIds.has(id))) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'A server with this id already exists in a format that needs a newer version of Orca.'
-    )
+    throw remoteServerPairingStoreError('idNeedsNewerOrca')
   }
   let serialized: string
   try {

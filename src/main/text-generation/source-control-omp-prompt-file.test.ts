@@ -67,7 +67,6 @@ it.each(['success', 'failure', 'cancel', 'timeout', 'spawn failure'] as const)(
         cwd: '/omp-file-test',
         env: undefined,
         operation: 'conversation-name',
-        emptyResultName: 'chat name',
         spawnAgent: ({ args }) => {
           promptPath = args[planned.plan.promptFile?.argIndex ?? -1]?.slice(1) ?? ''
           expect(new TextDecoder().decode(readFileSync(promptPath))).toBe(prompt)
@@ -395,7 +394,6 @@ it.each(['success', 'spawn failure', 'permanent failure'] as const)(
         cwd: '/omp-cleanup',
         env: undefined,
         operation: 'conversation-name',
-        emptyResultName: 'chat name',
         spawnAgent: ({ args }) => {
           directory = dirname(args[planned.plan.promptFile?.argIndex ?? -1].slice(1))
           if (outcome === 'spawn failure') {

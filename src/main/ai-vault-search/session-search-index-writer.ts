@@ -209,7 +209,7 @@ export class SessionSearchIndexWriter {
           // Advance the cursor even without a decoded session to avoid rereading the same empty content.
           this.dropSession(session)
           session = null
-          this.records.upsertFile(candidate, outcome.byteOffset, null)
+          this.records.upsertFile(candidate, outcome.byteOffset, null, outcome.prefixHash)
         } else {
           if (replaced) {
             session ??= this.records.createSessionRow(candidate)
@@ -234,7 +234,8 @@ export class SessionSearchIndexWriter {
           this.records.upsertFile(
             candidate,
             outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR,
-            session
+            session,
+            outcome?.prefixHash
           )
         }
         db.exec('COMMIT')

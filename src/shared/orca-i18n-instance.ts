@@ -6,7 +6,6 @@ import i18next, {
   type ReadCallback,
   type TOptions
 } from 'i18next'
-import { resolvePluralFamilyKey } from './i18n-plural-family'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
 import { DEFAULT_UI_LOCALE } from './ui-locale'
 import type { PluginLanguagePackRegistration } from './plugins/artifacts/plugin-language-pack-artifact'
@@ -21,6 +20,8 @@ export type OrcaI18n = {
   /** Maps a resolved UI locale to its i18next resource language; an unknown pack falls back to English. */
   resolveResourceLanguage: (locale: string) => string
 }
+
+const ENGLISH_PLURAL_RULES = new Intl.PluralRules(DEFAULT_UI_LOCALE)
 
 /** Main and renderer share one setup; only how a built-in catalog loads differs. */
 export function createOrcaI18n(options: {
@@ -71,10 +72,17 @@ export function createOrcaI18n(options: {
   return {
     i18n,
     translate: (key, fallback, translateOptions) => {
-      const value = i18n.t(resolvePluralFamilyKey(key, translateOptions), {
-        defaultValue: fallback,
-        ...translateOptions
-      })
+      const { defaultValue_one: one, count, ...others } = translateOptions ?? {}
+      // A pass-through `count: undefined` must interpolate like an absent count.
+      const rest = count === undefined ? others : { ...others, count }
+      // i18next would pick the English default by the active language's rule (ru 21 -> _one); English text needs English's.
+      const defaultValue =
+        typeof one === 'string' &&
+        typeof count === 'number' &&
+        ENGLISH_PLURAL_RULES.select(count) === 'one'
+          ? one
+          : fallback
+      const value = i18n.t(key, { defaultValue, ...rest })
       return isPseudoLocalizationLocale(i18n.language) ? pseudoLocalizeString(value) : value
     },
     setPluginLanguagePacks: (packs) => {

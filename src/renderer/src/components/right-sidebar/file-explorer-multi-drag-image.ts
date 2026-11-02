@@ -36,21 +36,11 @@ export function createMultiSelectDragGhost(paths: string[], rowW: number): HTMLD
   if (paths.length > MAX_SHOWN) {
     ghost.appendChild(
       makeRow(
-        paths.length - MAX_SHOWN === 1
-          ? translate(
-              'auto.components.right.sidebar.fileExplorerMultiDrag.moreItems_one',
-              '+{{count}} more',
-              {
-                count: paths.length - MAX_SHOWN
-              }
-            )
-          : translate(
-              'auto.components.right.sidebar.fileExplorerMultiDrag.moreItems_other',
-              '+{{count}} more',
-              {
-                count: paths.length - MAX_SHOWN
-              }
-            ),
+        translate(
+          'auto.components.right.sidebar.fileExplorerMultiDrag.moreItems',
+          '+{{count}} more',
+          { count: paths.length - MAX_SHOWN, defaultValue_one: '+{{count}} more' }
+        ),
         true
       )
     )

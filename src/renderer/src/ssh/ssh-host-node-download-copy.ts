@@ -1,3 +1,4 @@
+// @protected-copy: Node download mirror trust copy.
 import type {
   SshManagedServerNodeDownloadBlocked,
   SshManagedServerStatus

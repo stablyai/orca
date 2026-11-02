@@ -13,8 +13,6 @@ import {
 
 const CUSTOM_EDITOR_TOGGLE_PREFIX = 'plugin-editor:'
 
-export { isCustomEditorToggleValue }
-
 export function customEditorToggleValue(
   editor: Pick<ActivePluginCustomEditor, 'key'>
 ): CustomEditorToggleValue {

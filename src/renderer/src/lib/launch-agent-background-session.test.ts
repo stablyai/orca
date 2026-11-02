@@ -138,7 +138,8 @@ describe('launchAgentBackgroundSession', () => {
         command: "claude '--dangerously-skip-permissions' 'run the automation'",
         env: expect.objectContaining({
           ORCA_TAB_ID: tabId,
-          ORCA_WORKTREE_ID: 'wt-1'
+          ORCA_WORKTREE_ID: 'wt-1',
+          DISABLE_AUTOUPDATER: '1'
         }),
         connectionId: null,
         worktreeId: 'wt-1',
@@ -572,7 +573,9 @@ describe('launchAgentBackgroundSession', () => {
     })
 
     expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({ command: "aider '--yes-always'" })
+      expect.objectContaining({
+        command: "aider '--yes-always' '--no-check-update' '--no-show-release-notes'"
+      })
     )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
       expect.objectContaining({

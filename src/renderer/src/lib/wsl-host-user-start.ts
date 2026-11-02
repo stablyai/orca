@@ -14,26 +14,29 @@ const starting = new Map<string, Promise<boolean>>()
 
 /**
  * Start is the user acting on the host, so it may boot the distro (E9); then the host reconnects.
- * Repeated clicks while it boots share one start.
+ * One explicit connect: main hands it to the WSL host, which refuses a host whose Remove is pending
+ * instead of keeping it (E11). Repeated clicks while it boots share one start.
  */
 export function startWslHostAndReloadProjects(environmentId: string): Promise<boolean> {
   const pending = starting.get(environmentId)
   if (pending) {
     return pending
   }
+  // Read now: a failed start can leave the host no longer "stopped". Main's own words can be a
+  // probe's command line, so the toast names the distro and where its reason shows instead.
+  const failure = translate(
+    'components.native-chat.hostOutage.startFailed',
+    'Couldn’t start {{distro}}. Check it in Settings → Remote Orca Servers.',
+    { distro: useAppStore.getState().wslHostStatuses[environmentId]?.distro ?? environmentId }
+  )
   const start = (async () => {
     try {
-      // A Start must not quietly cancel a Remove the user started; that refusal says so (E11).
-      await window.api.runtimeEnvironments.wslHosts?.connect({
-        environmentId,
-        withdrawPendingRemoval: false
-      })
       // Why lazy: terminal creation imports this module, and most never start a host.
       const { connectRuntimeHostAndReloadProjects } =
         await import('@/components/status-bar/runtime-environment-explicit-connect')
-      return await connectRuntimeHostAndReloadProjects(environmentId)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
+      return await connectRuntimeHostAndReloadProjects(environmentId, failure)
+    } catch {
+      toast.error(failure)
       return false
     }
   })().finally(() => starting.delete(environmentId))

@@ -38,14 +38,3 @@ export function prunePluginSyntaxFailures(current: readonly PluginSyntaxMetadata
     usePluginSyntaxFailureStore.setState({ failures: Object.fromEntries(kept) })
   }
 }
-
-export function hasPluginSyntaxFailure(
-  failures: Record<string, PluginGrammarFailure>,
-  syntaxes: readonly PluginSyntaxMetadata[],
-  pluginKey: string
-): boolean {
-  return syntaxes.some(
-    (syntax) =>
-      syntax.pluginKey === pluginKey && failures[pluginSyntaxRevisionKey(syntax)] !== undefined
-  )
-}

@@ -63,7 +63,6 @@ it.each([undefined, 'Wrong', 'Actual'])(
           env: { lower: 'base', LOWER: 'BASE' }
         },
         operation: 'conversation-name',
-        emptyResultName: 'name',
         spawnAgent: (input) => {
           expect(input.wslDistro).toBe('Actual')
           expect(input.env).toEqual({ lower: 'base', LOWER: 'BASE' })
@@ -97,7 +96,6 @@ it('preserves ordinary hinted WSL and unrelated provider no-hint native routing'
           ...(agentId === 'omp' ? { wslDistro: 'Hint' } : {})
         },
         operation: 'conversation-name',
-        emptyResultName: 'name',
         spawnAgent: (input) => {
           expect(input.wslDistro).toBe(agentId === 'omp' ? 'Hint' : undefined)
           expect(!!input.preparation).toBe(agentId === 'omp')

@@ -26,7 +26,7 @@ function contrastRatio(foreground: string, background: string): number {
 describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) => {
   const colors = paletteForScheme(scheme)
 
-  // Light bgRaised is desktop's own --secondary under --muted-foreground (4.36:1), so only page surfaces are held to 4.5.
+  // Dark textMuted is desktop's --chat-foreground-faint (4.33:1 on bgRaised), so only page surfaces are held to 4.5.
   it('keeps muted text readable on page and panel surfaces', () => {
     for (const surface of [colors.bgBase, colors.bgPanel]) {
       expect(contrastRatio(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5)
@@ -37,6 +37,22 @@ describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) 
     expect(contrastRatio(colors.textSecondary, colors.bgPanel)).toBeGreaterThanOrEqual(
       contrastRatio(colors.textMuted, colors.bgPanel)
     )
+  })
+
+  // WCAG 1.4.11: the edge is what marks a field, so it holds 3:1 on every surface fields sit on, and so does focus.
+  it('keeps a text field identifiable on the screen, a sheet and a sheet group', () => {
+    const surfaces = [
+      colors.bgBase,
+      colors.bgPanel,
+      colors.sheetSurface,
+      colors.sheetGroup,
+      colors.composerSurface
+    ]
+    for (const surface of surfaces) {
+      expect(contrastRatio(colors.inputBorder, surface)).toBeGreaterThanOrEqual(3)
+      expect(contrastRatio(colors.accentBlue, surface)).toBeGreaterThanOrEqual(3)
+    }
+    expect(contrastRatio(colors.textMuted, colors.composerSurface)).toBeGreaterThanOrEqual(4.5)
   })
 
   it('keeps your own message readable on its bubble', () => {

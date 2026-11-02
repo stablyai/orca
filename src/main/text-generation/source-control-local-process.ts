@@ -1,3 +1,4 @@
+import { textGenerationFailure } from '../../shared/text-generation-failure-copy'
 import { killSourceControlAgentProcess } from './source-control-agent-termination'
 import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { prepareWslPrompt, stageLocalPromptFiles } from './source-control-prompt-files'
@@ -53,7 +54,8 @@ export function runLocalSourceControlPlan(
       resolve()
     }
   })
-  const couldNotStart = `${plan.label} could not be started. Check the agent command in Settings and try again.`
+  const labelValue = { label: plan.label }
+  const couldNotStart = textGenerationFailure('agentCouldNotStart', labelValue)
   const result = new Promise<InternalTextGenerationResult>((resolve) => {
     let child: SpawnedSourceControlAgentProcess
     try {
@@ -66,7 +68,7 @@ export function runLocalSourceControlPlan(
       const budgetFailure = argumentBudgetFailure(plan)
       if (budgetFailure) {
         markProcessClosed()
-        resolve({ success: false, error: budgetFailure })
+        resolve({ success: false, ...budgetFailure })
         return
       }
       child = input.spawnAgent({
@@ -85,19 +87,16 @@ export function runLocalSourceControlPlan(
       if (error instanceof WindowsCommandLineBudgetError) {
         resolve({
           success: false,
-          error: `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
+          ...textGenerationFailure('promptTooLargeForWindows', labelValue)
         })
         return
       }
       if (error instanceof WindowsCmdLineBreakError) {
-        resolve({
-          success: false,
-          error: userFacingUnsafeWindowsBatchArgs(plan.label)
-        })
+        resolve({ success: false, ...userFacingUnsafeWindowsBatchArgs(plan.label) })
         return
       }
       console.error('[commit-message] Failed to spawn local generator:', error)
-      resolve({ success: false, error: couldNotStart })
+      resolve({ success: false, ...couldNotStart })
       return
     }
 
@@ -157,7 +156,9 @@ export function runLocalSourceControlPlan(
       startTermination()
       finalize({
         success: false,
-        error: `Generation timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
+        ...textGenerationFailure('timedOut', {
+          seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+        })
       })
     }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
 
@@ -191,15 +192,15 @@ export function runLocalSourceControlPlan(
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         finalize({
           success: false,
-          error: `${plan.binary} not found on PATH. Install ${plan.label} to use AI commit messages.`
+          ...textGenerationFailure('agentBinaryNotFound', {
+            binary: plan.binary,
+            label: plan.label
+          })
         })
         return
       }
       console.error('[commit-message] Local generator failed after spawn:', error)
-      finalize({
-        success: false,
-        error: `${plan.label} failed to start. Check the agent command in Settings and try again.`
-      })
+      finalize({ success: false, ...textGenerationFailure('agentFailedToStart', labelValue) })
     }
     const onClose = (code: number | null): void => {
       terminal = true
@@ -215,16 +216,13 @@ export function runLocalSourceControlPlan(
         return
       }
       if (outputLimitExceeded) {
-        finalize({
-          success: false,
-          error: `${plan.label} CLI command produced too much output. Check the agent CLI configuration and try again.`
-        })
+        finalize({ success: false, ...textGenerationFailure('outputTooLarge', labelValue) })
         return
       }
       const spawnFailure = supervisedProviderSpawnFailure(code, stderr)
       if (spawnFailure?.thrown) {
         console.error('[commit-message] Failed to spawn local generator:', spawnFailure.error)
-        finalize({ success: false, error: couldNotStart })
+        finalize({ success: false, ...couldNotStart })
         return
       }
       if (spawnFailure) {
@@ -238,7 +236,7 @@ export function runLocalSourceControlPlan(
           stderr,
           label: plan.label,
           outputFormat: plan.outputFormat,
-          emptyResultName: input.emptyResultName,
+          operation,
           includeStdoutDetail: operation !== 'branch-name' && operation !== 'conversation-name'
         })
       )

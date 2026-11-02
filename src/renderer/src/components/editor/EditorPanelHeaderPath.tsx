@@ -137,7 +137,7 @@ export function EditorPanelHeaderPath({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-56"
+          className="min-w-56"
           sideOffset={0}
           align="start"
           onCloseAutoFocus={(event) => {

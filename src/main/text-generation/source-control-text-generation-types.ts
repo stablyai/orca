@@ -1,4 +1,4 @@
-import type { AgentSessionUnavailable } from '../../shared/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
 import type { spawnProcess } from '@orca/process-host'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
 import type {
@@ -6,10 +6,11 @@ import type {
   CommitMessageModelCapability
 } from '../../shared/commit-message-agent-spec'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
 
 export type GenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
 
 export type DiscoverCommitMessageModelsResult =
   | {
@@ -28,7 +29,11 @@ export type GeneratePullRequestFieldsResult<TFields> =
       agentLabel?: string
       branchChangedByPreparation?: boolean
     }
-  | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
+  | ({
+      success: false
+      canceled?: boolean
+      branchChangedByPreparation?: boolean
+    } & TextGenerationFailureFields)
 
 export type RemoteCommitMessageExecResult = {
   stdout: string
@@ -62,12 +67,11 @@ export type CommitMessageGenerationTarget =
 
 export type InternalTextGenerationResult =
   | { success: true; rawOutput: string; agentLabel?: string }
-  | {
+  | ({
       success: false
-      error: string
       canceled?: boolean
       failureOutput?: AgentGenerationFailureOutput
-    }
+    } & TextGenerationFailureFields)
 
 export type GenerateBranchNameResult =
   | { success: true; slug: string; agentLabel?: string }
@@ -121,7 +125,6 @@ export type LocalSourceControlPlanInput = {
   plan: CommitMessagePlan
   cwd: string
   env: NodeJS.ProcessEnv | undefined
-  emptyResultName: string
   operation: TextGenerationOperation
   wslDistro?: string
   spawnAgent: SpawnSourceControlAgent

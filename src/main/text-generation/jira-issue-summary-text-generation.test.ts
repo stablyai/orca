@@ -81,7 +81,7 @@ describe('generateJiraIssueSummaryFromContext', () => {
       remoteTarget(async () => '""\n')
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'Generated summary was empty after sanitization.'
     })

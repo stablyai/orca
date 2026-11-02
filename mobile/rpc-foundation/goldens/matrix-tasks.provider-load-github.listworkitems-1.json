@@ -198,46 +198,6 @@
         }
       ]
     },
-    "49c5fd241816": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "failedCount": 0,
-        "items": [
-          {
-            "key": "github:repo-1:issue:9",
-            "provider": "github",
-            "source": {
-              "author": {
-                "$rpc": "null"
-              },
-              "id": "issue:9",
-              "labels": [],
-              "number": 9,
-              "repoId": "repo-1",
-              "repoName": "Repo",
-              "state": "open",
-              "title": "An issue",
-              "type": "issue",
-              "updatedAt": "2020-01-01T00:00:00.000Z",
-              "url": ""
-            },
-            "status": "Open",
-            "subtitle": "Repo #9",
-            "title": "An issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z"
-          }
-        ],
-        "sourceErrors": [],
-        "sourceFallbacks": [],
-        "sourcesByRepoId": {
-          "repo-1": {
-            "issues": "upstream"
-          }
-        }
-      }
-    },
     "5e1882223b41": {
       "name": "linear.listTeams#1",
       "ordinal": 7,
@@ -342,18 +302,6 @@
         }
       }
     },
-    "737f20de5cc0": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "failedCount": 1,
-        "items": [],
-        "sourceErrors": [],
-        "sourceFallbacks": [],
-        "sourcesByRepoId": {}
-      }
-    },
     "823a0f3cec86": {
       "name": "github.listWorkItems#1",
       "ordinal": 13,
@@ -368,6 +316,19 @@
       "name": "selectedLinearTeamIds",
       "ordinal": 9,
       "value": ["team-1"]
+    },
+    "925a40556fcf": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "errorTypes": [],
+        "failedCount": 1,
+        "items": [],
+        "sourceErrors": [],
+        "sourceFallbacks": [],
+        "sourcesByRepoId": {}
+      }
     },
     "93695401e4f8": {
       "name": "linear.listTeams#1",
@@ -449,6 +410,19 @@
           "id": "frame-4",
           "ok": false
         }
+      }
+    },
+    "a9e32280eff6": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "errorTypes": [],
+        "failedCount": 0,
+        "items": [],
+        "sourceErrors": [],
+        "sourceFallbacks": [],
+        "sourcesByRepoId": {}
       }
     },
     "adcbf91f89c3": {
@@ -566,6 +540,47 @@
         }
       }
     },
+    "d0a974f0c6a1": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "errorTypes": [],
+        "failedCount": 0,
+        "items": [
+          {
+            "key": "github:repo-1:issue:9",
+            "provider": "github",
+            "source": {
+              "author": {
+                "$rpc": "null"
+              },
+              "id": "issue:9",
+              "labels": [],
+              "number": 9,
+              "repoId": "repo-1",
+              "repoName": "Repo",
+              "state": "open",
+              "title": "An issue",
+              "type": "issue",
+              "updatedAt": "2020-01-01T00:00:00.000Z",
+              "url": ""
+            },
+            "status": "Open",
+            "subtitle": "Repo #9",
+            "title": "An issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z"
+          }
+        ],
+        "sourceErrors": [],
+        "sourceFallbacks": [],
+        "sourcesByRepoId": {
+          "repo-1": {
+            "issues": "upstream"
+          }
+        }
+      }
+    },
     "d34ffc174996": {
       "name": "github.listWorkItems#1",
       "ordinal": 12,
@@ -672,18 +687,6 @@
         }
       }
     },
-    "e4b031c4e9d5": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "failedCount": 0,
-        "items": [],
-        "sourceErrors": [],
-        "sourceFallbacks": [],
-        "sourcesByRepoId": {}
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -786,7 +789,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816"
+            "github-page-2": "d0a974f0c6a1"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -819,7 +822,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "49c5fd241816",
+            "github-page-2": "d0a974f0c6a1",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -841,7 +844,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0"
+            "github-page-2": "925a40556fcf"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -874,7 +877,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0",
+            "github-page-2": "925a40556fcf",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -896,7 +899,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0"
+            "github-page-2": "925a40556fcf"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -929,7 +932,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0",
+            "github-page-2": "925a40556fcf",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -951,7 +954,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0"
+            "github-page-2": "925a40556fcf"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -984,7 +987,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0",
+            "github-page-2": "925a40556fcf",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -1006,7 +1009,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0"
+            "github-page-2": "925a40556fcf"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -1039,7 +1042,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0",
+            "github-page-2": "925a40556fcf",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -1061,7 +1064,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0"
+            "github-page-2": "925a40556fcf"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -1094,7 +1097,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0",
+            "github-page-2": "925a40556fcf",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -1116,7 +1119,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0"
+            "github-page-2": "925a40556fcf"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -1149,7 +1152,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0",
+            "github-page-2": "925a40556fcf",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -1171,7 +1174,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "e4b031c4e9d5"
+            "github-page-2": "a9e32280eff6"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -1204,7 +1207,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "e4b031c4e9d5",
+            "github-page-2": "a9e32280eff6",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -1226,7 +1229,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0"
+            "github-page-2": "925a40556fcf"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -1259,7 +1262,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0",
+            "github-page-2": "925a40556fcf",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -1281,7 +1284,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0"
+            "github-page-2": "925a40556fcf"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -1314,7 +1317,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "737f20de5cc0",
+            "github-page-2": "925a40556fcf",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",
@@ -1336,7 +1339,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "e4b031c4e9d5"
+            "github-page-2": "a9e32280eff6"
           },
           "state": "67b5ebc67646",
           "effects": [
@@ -1369,7 +1372,7 @@
             "mount": "eb79a9b3682a",
             "linear-context-0": "eb79a9b3682a",
             "persist-teams-1": "eb79a9b3682a",
-            "github-page-2": "e4b031c4e9d5",
+            "github-page-2": "a9e32280eff6",
             "github-count-3": "adcbf91f89c3"
           },
           "state": "67b5ebc67646",

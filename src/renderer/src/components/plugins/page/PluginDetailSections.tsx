@@ -1,5 +1,5 @@
 import { AlertTriangle, Check, Loader2, ShieldCheck } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { PluginTrust } from '../presentation/plugin-access-profile'
 import { pluginTrustWarnings } from '../presentation/plugin-consent-copy'
 import { Button } from '../../ui/button'
@@ -132,7 +132,8 @@ export function PluginLogsSection({
   const lines = state?.lines ?? []
   const text = lines
     .map(
-      (entry) => `${new Date(entry.ts).toLocaleTimeString()} ${entry.level.padEnd(5)} ${entry.line}`
+      (entry) =>
+        `${new Date(entry.ts).toLocaleTimeString(getIntlLocale())} ${entry.level.padEnd(5)} ${entry.line}`
     )
     .join('\n')
   return (

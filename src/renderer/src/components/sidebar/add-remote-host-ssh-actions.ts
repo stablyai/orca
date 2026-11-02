@@ -184,17 +184,11 @@ export async function addAllSshConfigHostsToOrca({
       return { kind: 'already-synced' }
     }
     toast.success(
-      result.targets.length === 1
-        ? translate(
-            'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced_one',
-            'Added {{count}} host to Orca.',
-            { count: result.targets.length }
-          )
-        : translate(
-            'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced_other',
-            'Added {{count}} hosts to Orca.',
-            { count: result.targets.length }
-          )
+      translate(
+        'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced',
+        'Added {{count}} hosts to Orca.',
+        { count: result.targets.length, defaultValue_one: 'Added {{count}} host to Orca.' }
+      )
     )
     return { kind: 'added', count: result.targets.length }
   } catch (error) {

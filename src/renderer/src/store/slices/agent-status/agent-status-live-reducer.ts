@@ -1,3 +1,4 @@
+import { projectAgentPaneConversation } from '../agent-pane-conversation'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import {
@@ -8,7 +9,7 @@ import {
 } from './agent-status-capacity-eviction'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
-import { agentProviderSessionsEqual } from '../../../../../shared/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { liveResumeRecordChange } from '../../../../../shared/agent-resume-record-from-status'
 
 export type AgentStatusLiveUpdateReduction = {
@@ -20,7 +21,8 @@ export type AgentStatusLiveUpdateReduction = {
 export function reduceAgentStatusLiveUpdate(
   state: AppState,
   build: AgentStatusLiveEntryBuild,
-  updatedAt: number
+  updatedAt: number,
+  projectConversation = projectAgentPaneConversation
 ): AgentStatusLiveUpdateReduction {
   const {
     entry,
@@ -107,8 +109,12 @@ export function reduceAgentStatusLiveUpdate(
     nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evicted)
     nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evicted)
   }
+  const nextConversations = projectConversation(state, entry)
   const patch: Partial<AppState> = {
     agentStatusByPaneKey: nextLive,
+    ...(nextConversations !== state.agentConversationsByPaneKey
+      ? { agentConversationsByPaneKey: nextConversations }
+      : {}),
     retainedAgentsByPaneKey: nextRetainedAgents,
     sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
     agentLaunchConfigByPaneKey: nextLaunchConfigs,

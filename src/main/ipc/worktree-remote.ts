@@ -1,13 +1,13 @@
+import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../runtime/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
-import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
 import { worktreeCreateGit } from '../git/worktree-create-git-executor'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
 import type { LocalBaseRefDriftWarning } from '../../shared/worktree/base-ref-drift-types'
@@ -326,8 +326,11 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   setup: CreateWorktreeResult['setup']
   defaultTabs: CreateWorktreeResult['defaultTabs']
   createdWithAgent: CreateWorktreeArgs['createdWithAgent']
+  /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
+  automationCreate: boolean
 }): Promise<StagedStartupResult> {
   const { runtime, worktree, startup, defaultTabs, createdWithAgent } = args
+  const userAct = args.automationCreate ? {} : { wslUserAct: true as const }
   let { setup } = args
   if (!startup || defaultTabs?.tabs.length) {
     return { didSpawnSetup: false }
@@ -373,7 +376,8 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
         // Submitting renderer owns activation; background completion must not yank users who moved on (#9944).
-        surfaceOwner: false
+        surfaceOwner: false,
+        ...userAct
       },
       worktree
     )
@@ -383,7 +387,9 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       surface: terminal.surface
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = readableWslDistroHoldText(
+      error instanceof Error ? error.message : String(error)
+    )
     warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
     console.warn(`[worktree-create] ${warning}`)
     return { didSpawnSetup: false, warning }
@@ -409,13 +415,16 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           command: setupCommand,
           env: setup.envVars,
           activate: false,
-          surfaceOwner: false
+          surfaceOwner: false,
+          ...userAct
         },
         worktree
       )
       didSpawnSetup = true
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = readableWslDistroHoldText(
+        error instanceof Error ? error.message : String(error)
+      )
       const nextWarning = `failed to create the setup terminal for ${worktree.path}: ${message}`
       warning = appendWorktreeCreateWarning(warning, nextWarning)
       console.warn(`[worktree-create] ${warning}`)
@@ -972,7 +981,6 @@ async function performLocalWorktreeCreate(
       : {})
   })
 
-  const branchSeed = selectWorktreeCreateBranchSeed(args, settings.autoRenameBranchFromWork)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
@@ -1251,7 +1259,7 @@ async function performLocalWorktreeCreate(
         selectedExistingLocalBranchName
           ? selectedExistingLocalBranchName
           : getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
-        branchSeed ? getWorktreeCreateCandidate(branchSeed, suffix) : effectiveSanitizedName,
+        effectiveSanitizedName,
         settings,
         username,
         localWorktreeGitOptions
@@ -1707,7 +1715,7 @@ async function performLocalWorktreeCreate(
     if (setupScript && shouldLaunchSetup) {
       try {
         // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
-        setup = createSetupRunnerScript(
+        setup = await createSetupRunnerScript(
           repo,
           worktreePath,
           setupScript,
@@ -1730,7 +1738,8 @@ async function performLocalWorktreeCreate(
       startup: args.startup,
       setup,
       defaultTabs,
-      createdWithAgent: args.createdWithAgent
+      createdWithAgent: args.createdWithAgent,
+      automationCreate: Boolean(args.automationProvenance)
     })
   )
 

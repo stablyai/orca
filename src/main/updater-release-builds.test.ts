@@ -22,7 +22,7 @@ vi.mock('./git/gh-rate-limit-breaker', () => ({
   recordGhPrimaryRateLimit: (...args: unknown[]) => recordRateLimitMock(...args)
 }))
 
-const { describeRateLimitReset, listReleaseBuilds, rateLimitResetAtMs, resolveTargetBuild } =
+const { listReleaseBuilds, rateLimitResetAtMs, resolveTargetBuild } =
   await import('./updater-release-builds')
 
 function jsonResponse(
@@ -396,9 +396,13 @@ describe('listReleaseBuilds', () => {
       })
     )
 
-    await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(
+    const failure = listReleaseBuilds('hourly', 'darwin')
+    await expect(failure).rejects.toThrow(
       "GitHub rate limit reached. Try again in about 28 minutes, or run `gh auth login` so Orca can use your account's higher limit."
     )
+    await expect(failure).rejects.toMatchObject({
+      coded: { messageCode: 'rateLimitedInMinutesSignedOut', messageParams: { count: 28 } }
+    })
   })
 
   it('omits the sign-in hint when the rate-limited request was authenticated', async () => {
@@ -407,9 +411,9 @@ describe('listReleaseBuilds', () => {
       jsonResponse(null, { ok: false, status: 403, headers: { 'x-ratelimit-remaining': '0' } })
     )
 
-    const failure = listReleaseBuilds('hourly', 'darwin')
-    await expect(failure).rejects.toThrow(/rate limit reached/)
-    await expect(failure).rejects.not.toThrow(/gh auth login/)
+    await expect(listReleaseBuilds('hourly', 'darwin')).rejects.toThrow(
+      /^GitHub rate limit reached\. Try again in a few minutes\.$/
+    )
   })
 
   it('treats 429 as a rate limit', async () => {
@@ -461,22 +465,6 @@ describe('rateLimitResetAtMs', () => {
   it('reads retry-after as an HTTP date', () => {
     const headers = new Headers({ 'retry-after': new Date(nowMs + 5 * 60_000).toUTCString() })
     expect(rateLimitResetAtMs(headers, nowMs)).toBe(nowMs + 5 * 60_000)
-  })
-})
-
-describe('describeRateLimitReset', () => {
-  const nowMs = 1_800_000_000_000
-
-  it('falls back to a vague wait when the reset is unknown', () => {
-    expect(describeRateLimitReset(null, nowMs)).toBe('in a few minutes')
-  })
-
-  it('rounds a sub-minute reset up to a minute', () => {
-    expect(describeRateLimitReset(nowMs + 20_000, nowMs)).toBe('in about a minute')
-  })
-
-  it('rounds a partial minute up', () => {
-    expect(describeRateLimitReset(nowMs + 9 * 60_000 + 1, nowMs)).toBe('in about 10 minutes')
   })
 })
 

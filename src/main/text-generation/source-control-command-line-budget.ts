@@ -1,3 +1,7 @@
+import {
+  textGenerationFailure,
+  type TextGenerationFailureFields
+} from '../../shared/text-generation-failure-copy'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 
@@ -16,11 +20,12 @@ export function fitsLocalCommandLine(plan: CommitMessagePlan, reserve = 0): bool
   return true
 }
 
-export function argumentBudgetFailure(plan: CommitMessagePlan): string | null {
+export function argumentBudgetFailure(plan: CommitMessagePlan): TextGenerationFailureFields | null {
   if (fitsLocalCommandLine(plan)) {
     return null
   }
-  return process.platform === 'win32'
-    ? `${plan.label} prompt is too large for the Windows command line. Stage fewer changes and try again.`
-    : `${plan.label} prompt is too large to pass as a single command-line argument. Stage fewer changes and try again.`
+  return textGenerationFailure(
+    process.platform === 'win32' ? 'promptTooLargeForWindows' : 'promptTooLargeForArgument',
+    { label: plan.label }
+  )
 }

@@ -206,10 +206,11 @@ export const CandidateRow = React.memo(function CandidateRow({
             ) : null}
             <WorkspaceCleanupMetadataChip
               icon={Clock3}
-              label={`${translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
-                'Last active'
-              )} ${lastActivityLabel}`}
+              label={translate(
+                'components.workspace.cleanup.browse.lastActive',
+                'Last active {{value0}}',
+                { value0: lastActivityLabel }
+              )}
               value={formatCompactActivityLabel(lastActivityLabel)}
             />
             <WorkspaceCleanupMetadataChip

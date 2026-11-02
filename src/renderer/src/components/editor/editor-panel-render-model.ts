@@ -6,6 +6,7 @@ import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
   getEditorToggleModes,
+  getEditorViewLanguage,
   getMarkdownViewModes
 } from './markdown-preview-controls'
 import { getEditorHeaderOpenFileState } from './editor-header'
@@ -78,7 +79,9 @@ export function getEditorPanelRenderModel({
         )
   // Read-only artifact tabs require raw source viewers; retain real-language tokenization while suppressing rich/preview modes and their editing affordances.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
-  const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
+  const viewerLanguage = rawReadOnly
+    ? 'plaintext'
+    : getEditorViewLanguage(activeFile.filePath, resolvedLanguage)
   const worktreeEntries = gitStatusEntries ?? []
   const branchEntries = gitBranchEntries ?? []
   const matchingWorktreeEntry =
@@ -140,7 +143,7 @@ export function getEditorPanelRenderModel({
   // Read-only tabs keep raw source, as for every other rich view.
   const textEditorEligible =
     customEditorContentReady && !rawReadOnly && inlineFileContent?.isBinary !== true
-  // Bytes editors are read-only, so they also view read-only tabs; they need a pageable route.
+  // Bytes editors honor read-only themselves, so they open read-only tabs too; they need a pageable route.
   const bytesEditorEligible =
     customEditorContentReady && inlineFileContent?.byteSource !== undefined
   const eligibleCustomEditors = customEditors.filter((editor) =>
@@ -228,6 +231,7 @@ export function getEditorPanelRenderModel({
     openFileState,
     isMarkdown: viewerLanguage === 'markdown',
     isMermaid: viewerLanguage === 'mermaid',
+    isSvg: viewerLanguage === 'svg',
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
     // Preview reads disk; exclude deleted modified sides and historical commit snapshots that may not match it.

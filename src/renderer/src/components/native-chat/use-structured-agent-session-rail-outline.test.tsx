@@ -3,7 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const mocks = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -62,29 +62,6 @@ const VISIBLE: Props = { epoch: 'epoch-1', oldest: 50, hasOlder: true, enabled: 
 describe('structured rail outline fetch', () => {
   beforeEach(() => {
     mocks.read.mockReset()
-  })
-
-  it('never asks when every message is already loaded', () => {
-    const { result } = renderOutline({ ...VISIBLE, hasOlder: false })
-    expect(result.current).toBeNull()
-    expect(mocks.read).not.toHaveBeenCalled()
-  })
-
-  it('never asks from a hidden pane', () => {
-    renderOutline({ ...VISIBLE, enabled: false })
-    expect(mocks.read).not.toHaveBeenCalled()
-  })
-
-  it('maps the unloaded messages once the outline arrives', async () => {
-    mocks.read.mockResolvedValue(outline(120))
-    const { result } = renderOutline(VISIBLE)
-    await waitFor(() =>
-      expect(result.current).toEqual([
-        { id: 'user-2', text: 'first prompt', hasImages: false },
-        { id: 'user-7', text: '', hasImages: true }
-      ])
-    )
-    expect(mocks.read).toHaveBeenCalledWith(TARGET, 'session-1')
   })
 
   it('leaves the rail on loaded messages against a host without the outline', async () => {

@@ -106,7 +106,7 @@ function setLaunch(
     promise,
     visibilityUnknown: false,
     cancelled: false,
-    selection: { held: {} }
+    selection: {}
   } satisfies StructuredLaunchState)
 }
 
@@ -280,7 +280,7 @@ describe('structured launch cancellation retirement', () => {
         promise: Promise.resolve({ sessionId: SESSION_ID, fence: 1 }),
         visibilityUnknown: false,
         cancelled: false,
-        selection: { held: {} }
+        selection: {}
       } satisfies StructuredLaunchState)
       markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local', layoutOwner)
       await new Promise((resolve) => setTimeout(resolve, 0))

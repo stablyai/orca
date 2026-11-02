@@ -1,5 +1,6 @@
 // #33424: two desktops paired to each other. B's tab on a file in A's workspace must not reach A as B's
-// own tab, or A routes that file's reads and closes to B, which lacks the workspace.
+// own tab, or A routes that file's reads and closes to B, which lacks the workspace. #36386: the same for
+// A's browser tab, which B's copy would turn into a dead page on B.
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -85,6 +86,15 @@ function openFilesIn(page: Page, worktreeId: string) {
         })),
     worktreeId
   )
+}
+
+function browserPageHost(page: Page, pageId: string) {
+  return page.evaluate((id) => {
+    const state = window.__store!.getState()
+    const pages = Object.values(state.browserPagesByWorkspace).flat()
+    const found = pages.find((entry) => entry.id === id)
+    return found ? (found.browserRuntimeEnvironmentId ?? 'local') : null
+  }, pageId)
 }
 
 test('a desktop gets no tab back for its own workspace from a server it serves', async ({
@@ -176,6 +186,23 @@ test('a desktop gets no tab back for its own workspace from a server it serves',
         { timeout: 30_000, message: 'Desktop B never published its tab in A’s workspace' }
       )
       .toBe(true)
+    // #36386: B mirrors A's browser tab; its copy must not come back and take over A's page.
+    const { browserPageId, browserTabId } = await orcaPage.evaluate((id) => {
+      const store = window.__store!
+      const workspace = store
+        .getState()
+        .createBrowserTab(id, 'data:text/html,<title>A</title>', { activate: false })
+      const tab = store
+        .getState()
+        .unifiedTabsByWorktree[id]?.find((entry) => entry.entityId === workspace.id)
+      return { browserPageId: workspace.activePageId!, browserTabId: tab!.id }
+    }, worktreeId)
+    await expect
+      .poll(() => browserPageHost(hubB.page, browserPageId), {
+        timeout: 30_000,
+        message: 'Desktop B never mirrored desktop A’s browser tab'
+      })
+      .toBe(desktopAOnB)
     // A frame B publishes later reaches A after any echo on the same stream.
     await hubB.page.evaluate(
       ({ worktreeId, filePath }) => {
@@ -196,7 +223,8 @@ test('a desktop gets no tab back for its own workspace from a server it serves',
       })
       .toEqual([{ relativePath: 'note.md', env: desktopBOnA }])
     expect(await openFilesIn(orcaPage, worktreeId)).toEqual([])
-    expect(await tabIdsIn(orcaPage, worktreeId)).toEqual(desktopATabIds)
+    expect(await tabIdsIn(orcaPage, worktreeId)).toEqual([...desktopATabIds, browserTabId])
+    expect(await browserPageHost(orcaPage, browserPageId)).toBe('local')
     expect(await openFilesIn(hubB.page, worktreeId)).toEqual([
       { relativePath: 'README.md', env: desktopAOnB }
     ])

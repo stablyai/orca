@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 
 const mocks = vi.hoisted(() => ({
   install: vi.fn(),

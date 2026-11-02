@@ -47,7 +47,7 @@ function deferred<T>() {
   })
   return { promise, resolve }
 }
-function fixture(saved = true, paired = false) {
+function fixture(saved = true, paired = false, conflictingOwner = false) {
   setLocalRuntimeCapabilitiesForTests([])
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -60,7 +60,14 @@ function fixture(saved = true, paired = false) {
         resolveConflicts: { agentId: 'codex' }
       }
     : {}
-  const repo = { id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: 'blue', addedAt: 1 }
+  const repo = {
+    id: 'repo-1',
+    path: '/repo',
+    displayName: 'Repo',
+    badgeColor: 'blue',
+    addedAt: 1,
+    ...(paired && !conflictingOwner ? { executionHostId: 'runtime:alpha' as const } : {})
+  }
   const worktree = makeWorktree({ id: 'repo-1::wt-1', repoId: repo.id })
   if (paired) {
     Object.assign(worktree, { hostId: 'runtime:alpha' })
@@ -283,6 +290,15 @@ function fixture(saved = true, paired = false) {
   }
 }
 
+it('rejects conflicting review ownership before queuing an AI acknowledgement', async () => {
+  const f = fixture(true, true, true)
+  await act(async () => {})
+  act(() => f.result.current.handleResolveCommentsWithAI(f.groups))
+  expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('owning host'))
+  expect(launch).not.toHaveBeenCalled()
+  expect(f.pending.current).toBeNull()
+})
+
 it('owns detection single-flight, returns failed delivery to the editor, then consumes its exact review once', async () => {
   const delivery = deferred<{ delivered: boolean; failureNotified: boolean }>()
   launch.mockReturnValue({
@@ -370,7 +386,7 @@ it.each([false, true])(
     await act(async () => f.inventory.resolve(['claude']))
     await waitFor(() => expect(f.composer).toHaveBeenCalledOnce())
     expect(launch).not.toHaveBeenCalled()
-    expect(f.composer.mock.calls[0]?.[0]?.launchContext?.initialRecipe?.agentId).toBe(
+    expect(f.composer.mock.calls[0]?.[0]?.launchContext?.initialSelection?.current.agentId).toBe(
       saved ? 'codex' : undefined
     )
   }

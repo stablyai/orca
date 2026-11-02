@@ -19,14 +19,18 @@ import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import { CellAdmitEffectiveWriter } from './cell-admit-effective-writer.js'
-import { ReserveDeadMan, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
+import {
+  RESERVE_DEAD_MAN_BOOT_GRACE_MS,
+  ReserveDeadMan,
+  reserveDeadManWindowMs
+} from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
 import { classifyAssignmentLease } from './assignment/assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
 import { CellReserveBook } from './cell-reserve-book.js'
 import type { DemoteRequest, ReserveRequest } from './cell-reserve-contract.js'
 import { AssignmentLeaseShadow } from './assignment/assignment-lease-shadow.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
 import {
@@ -347,7 +351,13 @@ export function createRelayServer(
     readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
     readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
   const reserveDeadMan = reserveBook
-    ? new ReserveDeadMan(config.cellId, options.now, reserveDeadManWindowMs(config.cellId))
+    ? new ReserveDeadMan(
+        config.cellId,
+        options.now,
+        reserveDeadManWindowMs(config.cellId),
+        undefined,
+        RESERVE_DEAD_MAN_BOOT_GRACE_MS
+      )
     : null
   const effectiveAdmitMode = (): 'db' | 'reserve' => {
     const applied = options.cellFlags?.()

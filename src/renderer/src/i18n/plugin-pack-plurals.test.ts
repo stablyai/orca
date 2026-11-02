@@ -44,11 +44,9 @@ describe('plugin pack plurals', () => {
     expect(forms([1, 2, 5, 21])).toEqual(['one', 'other', 'other', 'one'])
   })
 
-  it('resolves literal _one/_other call sites through the pack locale plural rules', async () => {
+  it('resolves native plural calls through the pack locale plural rules', async () => {
     const label = (count: number): string =>
-      count === 1
-        ? translate('files_one', '{{count}} file', { count })
-        : translate('files_other', '{{count}} files', { count })
+      translate('files', '{{count}} files', { count, defaultValue_one: '{{count}} file' })
     await activatePack('ru-RU')
     expect([1, 2, 5, 21].map(label)).toEqual(['one', 'few', 'many', 'one'])
   })

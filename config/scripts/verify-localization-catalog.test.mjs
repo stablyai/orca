@@ -183,6 +183,31 @@ describe('verify-localization-catalog', () => {
     await expect(verifyLocalizationCatalog(root)).resolves.toBe(1)
   })
 
+  it('requires both English forms of a native plural call', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText:
+        "import { translate } from '@/i18n/i18n'\nexport const files = (count: number) => translate('auto.example.files', '{{count}} files', { count, defaultValue_one: 'One file' })\nexport const selected = (count: number) => translate('auto.example.selected', '{{count}} selected', { count })\n",
+      enCatalog: { auto: { example: { selected: '{{count}} selected' } } }
+    })
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+    } finally {
+      report.mockRestore()
+    }
+    await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(0)
+
+    expect(readJson(path.join(localesDir, 'en.json'))).toEqual({
+      auto: {
+        example: {
+          selected: '{{count}} selected',
+          files_one: 'One file',
+          files_other: '{{count}} files'
+        }
+      }
+    })
+  })
+
   it('commits CLDR plural forms a locale lacks beside its _other form', async () => {
     const { root, localesDir } = makeProject({
       sourceText: 'export {}\n',

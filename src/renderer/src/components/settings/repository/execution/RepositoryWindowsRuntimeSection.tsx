@@ -10,7 +10,8 @@ import { translate } from '@/i18n/i18n'
 import { useWslMoveTargetForRepo } from '../../../wsl-move/wsl-move-entry'
 import { WslMoveRuntimeRow } from '../../../wsl-move/WslMoveRuntimeRow'
 import { WslDriveProjectGitRow } from '../../../wsl-drive-project/WslDriveProjectGitRow'
-import { useWslHostsEnabled } from '../../../sidebar/use-wsl-hosts-enabled'
+import { WslDriveUncConversionRow } from '../../../wsl-drive-project/WslDriveUncConversionRow'
+import { useWslHostsAcceptNewWork } from '../../../sidebar/use-wsl-hosts-enabled'
 import { resolveProjectExecutionRuntime } from '../../../../../../shared/project-execution-runtime'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 
@@ -50,8 +51,9 @@ export function RepositoryWindowsRuntimeSection({
 }: RepositoryWindowsRuntimeSectionProps): React.JSX.Element | null {
   // Owner decision: for a WSL project with a host, the runtime toggle becomes "Move project".
   const wslMoveDistro = useWslMoveTargetForRepo(repo)
-  // Windows Git for WSL projects on a Windows drive ships with WSL hosts (D1c), not before.
-  const wslHostsEnabled = useWslHostsEnabled()
+  // D1c ships with WSL hosts; serve-only, a live block or the setting off hide its offers, as main
+  // refuses them. A project already on Git for Windows still shows that state.
+  const d1cAvailable = useWslHostsAcceptNewWork()
   if (!settings || !project || !updateProject || !isLocalWindowsProject) {
     return null
   }
@@ -90,10 +92,11 @@ export function RepositoryWindowsRuntimeSection({
           updateProject={updateProject}
         />
       )}
-      {wslHostsEnabled && repo && isGitRepoKind(repo) && !wslCapabilitiesLoading ? (
+      {repo && isGitRepoKind(repo) && !wslCapabilitiesLoading ? (
         <WslDriveProjectGitRow
           projectId={project.id}
           repoPath={repo.path}
+          acceptsNewWork={d1cAvailable}
           resolution={resolveProjectExecutionRuntime({
             appPlatform: 'win32',
             projectId: project.id,
@@ -105,6 +108,7 @@ export function RepositoryWindowsRuntimeSection({
           updateProject={updateProject}
         />
       ) : null}
+      {d1cAvailable && repo ? <WslDriveUncConversionRow repo={repo} /> : null}
     </SearchableSetting>
   )
 }

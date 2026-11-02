@@ -291,6 +291,7 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus('success')).toBe('success')
     expect(derivePipelineStatus('failed')).toBe('failure')
     expect(derivePipelineStatus('running')).toBe('pending')
+    expect(derivePipelineStatus('waiting_for_callback')).toBe('pending')
     // Pipeline manual means blocked on human action, not failed or complete.
     expect(derivePipelineStatus('manual')).toBe('pending')
     expect(derivePipelineStatus({ status: 'manual' })).toBe('pending')

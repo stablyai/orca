@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
 import {
   adapterFor,

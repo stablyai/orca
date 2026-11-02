@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageMoveResult
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { DragReorderMove } from '../components/drag-reorder-positions'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 

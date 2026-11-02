@@ -1,5 +1,6 @@
+import type * as PtySpawnValidationTypes from '../providers/working-directory-validation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as LocalPtyUtils from '../providers/local-pty/local-pty-executable-spawn'
 import type * as PosixPtyProcessTable from '../pty/posix-pty-process-table'
 
 const {
@@ -52,12 +53,19 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+vi.mock('../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
     getNodePtySpawnHelperCandidates: () => [import.meta.filename],
-    resolveUnixShellPath: resolveUnixShellPathMock,
+    resolveUnixShellPath: resolveUnixShellPathMock
+  }
+})
+
+vi.mock('../providers/working-directory-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidationTypes>()
+  return {
+    ...actual,
     validateWorkingDirectory: validateWorkingDirectoryMock,
     validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
@@ -80,6 +88,7 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 import { createPtySubprocess } from './pty-subprocess'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 import { __setConptyJobNativeForTests } from '../windows/windows-pty-job'
+import * as ptyJob from '../windows/windows-pty-job'
 
 describe('createPtySubprocess', () => {
   beforeEach(() => {
@@ -453,16 +462,20 @@ describe('createPtySubprocess', () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
         throw new Error('already gone')
       })
+      const terminateJob = vi.spyOn(ptyJob, 'terminatePtyJob').mockReturnValue('unavailable')
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.forceKill()
         handle.dispose()
-        expect(killSpy).toHaveBeenCalledWith(123456, 'SIGKILL')
+        // An unverified PID can be reused; the per-PTY job/native handle owns this process tree.
+        expect(killSpy).not.toHaveBeenCalled()
+        expect(terminateJob).toHaveBeenCalledExactlyOnceWith(proc)
         expect(proc.kill).toHaveBeenCalledOnce()
         expect(proc.destroy).not.toHaveBeenCalled()
       } finally {
+        terminateJob.mockRestore()
         killSpy.mockRestore()
         restorePlatform(origPlatform)
       }

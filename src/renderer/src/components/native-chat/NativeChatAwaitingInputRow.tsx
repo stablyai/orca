@@ -56,13 +56,10 @@ export function NativeChatAwaitingInputRow({
       ? null
       : subject.kind === 'question'
         ? subject.text
-        : subject.questions.length === 1
-          ? translate('components.native-chat.ask.questionCount_one', '{{count}} question', {
-              count: subject.questions.length
-            })
-          : translate('components.native-chat.ask.questionCount_other', '{{count}} questions', {
-              count: subject.questions.length
-            })
+        : translate('components.native-chat.ask.questionCount', '{{count}} questions', {
+            count: subject.questions.length,
+            defaultValue_one: '{{count}} question'
+          })
   const header = (
     <>
       <NativeChatToolRunIcon

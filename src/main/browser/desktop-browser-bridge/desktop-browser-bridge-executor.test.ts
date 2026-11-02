@@ -254,6 +254,22 @@ describe('executeDesktopBrowserBridgeRequest', () => {
     })
   })
 
+  it('refuses a split rather than opening a plain tab the host did not ask for', async () => {
+    const { value, dispatched } = deps()
+
+    const outcome = await executeDesktopBrowserBridgeRequest(
+      request({
+        method: 'browser.tabCreate',
+        workspaceId: HOST_WORKSPACE,
+        params: { url: 'https://example.com', worktree: `id:${HOST_WORKSPACE}`, split: 'right' }
+      }),
+      value
+    )
+
+    expect(outcome).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(dispatched).toEqual([])
+  })
+
   it('returns the desktop’s own error unchanged and audits the failure', async () => {
     const { value, audit } = deps({
       dispatch: async () => ({

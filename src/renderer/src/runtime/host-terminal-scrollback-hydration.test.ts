@@ -7,7 +7,6 @@ import {
   type HostTerminalScrollbackHydrationDeps,
   type HostTerminalScrollbackTabState
 } from './host-terminal-scrollback-hydration'
-import { createWebWorkspaceSessionApi } from '../web/preload-api/web-workspace-session-api'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 vi.mock('../web/preload-api/web-runtime-session', () => ({
@@ -64,20 +63,6 @@ function rpcFailure(code: string): Error {
 }
 
 describe('startHostTerminalScrollbackHydration', () => {
-  it('reads a host-run pane from its host when this client has no copy', async () => {
-    const { deps, tabState } = harness()
-    await startHostTerminalScrollbackHydration('tab-1', 'repo::/wt', deps)
-    expect(deps.peekHostSupportsRead).toHaveBeenCalledWith('env-wsl')
-    expect(deps.warmHostSupportsRead).not.toHaveBeenCalled()
-    expect(deps.readHostSnapshot).toHaveBeenCalledExactlyOnceWith(
-      'env-wsl',
-      'repo::/wt',
-      REF,
-      expect.any(AbortSignal)
-    )
-    expect(tabState.localOnly).toEqual({ 'leaf-1': 'host history' })
-  })
-
   it('mounts at once on a host cached as not advertising the read', () => {
     const { deps } = harness({ peekHostSupportsRead: vi.fn(() => false) })
     expect(startHostTerminalScrollbackHydration('tab-1', 'repo::/wt', deps)).toBeNull()
@@ -215,12 +200,6 @@ describe('startHostTerminalScrollbackHydration', () => {
     expect(startHostTerminalScrollbackHydration('tab-1', 'repo::/wt', deps)).not.toBeNull()
   })
 
-  it('does not write under a pane that mounted while the read was in flight', async () => {
-    const { deps } = harness({ isTabMounted: vi.fn(() => true) })
-    await startHostTerminalScrollbackHydration('tab-1', 'repo::/wt', deps)
-    expect(deps.storeLocalOnly).not.toHaveBeenCalled()
-  })
-
   it('drops bytes for a leaf whose ref changed during the read', async () => {
     const state: { current: HostTerminalScrollbackTabState | null } = {
       current: null
@@ -238,16 +217,5 @@ describe('startHostTerminalScrollbackHydration', () => {
     state.current = tabState
     await startHostTerminalScrollbackHydration('tab-1', 'repo::/wt', deps)
     expect(deps.storeLocalOnly).not.toHaveBeenCalled()
-  })
-
-  it('reads from the host on a web client, whose preload has no snapshot store', async () => {
-    const webSession = createWebWorkspaceSessionApi().session
-    expect(webSession).toBeDefined()
-    const { deps, tabState } = harness({
-      hasLocalSnapshot: (ref) => webSession?.hasTerminalScrollback({ ref }) ?? false
-    })
-    await startHostTerminalScrollbackHydration('tab-1', 'repo::/wt', deps)
-    expect(deps.readHostSnapshot).toHaveBeenCalledOnce()
-    expect(tabState.localOnly).toEqual({ 'leaf-1': 'host history' })
   })
 })

@@ -1,3 +1,7 @@
+import {
+  textGenerationFailure,
+  type TextGenerationFailureFields
+} from './text-generation-failure-copy'
 import { findOptionOccurrence } from './command-option-occurrence'
 import { planAgentBinary } from './agent-command-plan'
 export { planAgentBinary } from './agent-command-plan'
@@ -47,7 +51,7 @@ export type CommitMessagePlan = {
 
 export type CommitMessagePlanResult =
   | { ok: true; plan: CommitMessagePlan }
-  | { ok: false; error: string }
+  | ({ ok: false } & TextGenerationFailureFields)
 
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
 const ANTIGRAVITY_FORMAT_OPTIONS = [
@@ -169,10 +173,7 @@ export function planCommitMessageGeneration(
   if (isCustomAgentId(input.agentId)) {
     const command = input.customAgentCommand?.trim() ?? ''
     if (!command) {
-      return {
-        ok: false,
-        error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
-      }
+      return { ok: false, ...textGenerationFailure('planCustomCommandEmpty') }
     }
     const planned = planCustomCommand(command, prompt, input.backslash)
     if (!planned.ok) {
@@ -202,23 +203,29 @@ export function planCommitMessageGeneration(
 
   const spec = getCommitMessageAgentSpec(input.agentId)
   if (!spec) {
-    return { ok: false, error: `Agent "${input.agentId}" does not support AI commit messages.` }
+    return { ok: false, ...textGenerationFailure('planAgentUnsupported', { agent: input.agentId }) }
   }
   const model = getCommitMessageModel(input.agentId, input.model)
   if (!model) {
-    return { ok: false, error: `Model "${input.model}" is not available for ${spec.label}.` }
+    return {
+      ok: false,
+      ...textGenerationFailure('planModelUnavailable', { model: input.model, label: spec.label })
+    }
   }
   if (input.thinkingLevel) {
     if (!model.thinkingLevels && spec.modelSource !== 'dynamic') {
       return {
         ok: false,
-        error: `Model "${model.label}" does not support a thinking effort level.`
+        ...textGenerationFailure('planModelWithoutThinking', { model: model.label })
       }
     }
     if (model.thinkingLevels && !model.thinkingLevels.some((l) => l.id === input.thinkingLevel)) {
       return {
         ok: false,
-        error: `Thinking level "${input.thinkingLevel}" is not valid for ${model.label}.`
+        ...textGenerationFailure('planThinkingLevelInvalid', {
+          level: input.thinkingLevel,
+          model: model.label
+        })
       }
     }
   }

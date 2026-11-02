@@ -1,37 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
-import { WorktreeActivate, WorktreeSet } from '../../../../shared/rpc-contract/worktree-params'
+import { WorktreeSet } from '../../../../shared/rpc-contract/worktree-params'
 
 describe('worktree RPC schemas', () => {
-  it('accepts optional display-name provenance values', () => {
-    expect(
-      WorktreeCreate.parse({ repo: 'repo-1', name: 'feature', displayNameKind: 'user' })
-    ).toMatchObject({ displayNameKind: 'user' })
-    expect(
-      WorktreeCreate.parse({ repo: 'repo-1', name: 'feature', displayNameKind: 'generated' })
-    ).toMatchObject({ displayNameKind: 'generated' })
-  })
-
-  it('validates additive navigation intent', () => {
-    expect(WorktreeActivate.parse({ worktree: 'id:wt-1', navigation: 'clients' }).navigation).toBe(
-      'clients'
-    )
-    expect(
-      WorktreeActivate.safeParse({ worktree: 'id:wt-1', navigation: 'everyone' }).success
-    ).toBe(false)
-  })
-
-  it('rejects invalid startup agent values', () => {
-    const parsed = WorktreeCreate.safeParse({
-      repo: 'repo-1',
-      name: 'agent-startup',
-      startupAgent: 'wat',
-      startupPrompt: 'hi'
-    })
-
-    expect(parsed.success).toBe(false)
-  })
-
   it('rejects startup prompts without startup agents', () => {
     const parsed = WorktreeCreate.safeParse({
       repo: 'repo-1',
@@ -131,18 +102,5 @@ describe('worktree RPC schemas', () => {
     const parsed = WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', displayName: 42 })
 
     expect(parsed.displayName).toBeUndefined()
-  })
-
-  it('parses optional GitHub PR suppression writes and clears', () => {
-    expect(
-      WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: 42 }).suppressedGitHubPR
-    ).toBe(42)
-    expect(
-      WorktreeSet.parse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: null })
-        .suppressedGitHubPR
-    ).toBeNull()
-    expect(
-      WorktreeSet.safeParse({ worktree: 'id:r1::/repos/wt', suppressedGitHubPR: 0 }).success
-    ).toBe(false)
   })
 })

@@ -6,6 +6,10 @@ import {
   hasLocalSpeechRecognizer,
   LOCAL_SPEECH_UNAVAILABLE_ERROR
 } from '../speech/stt-worker-paths'
+import {
+  MobileDictationChunkOrder,
+  type MobileDictationChunk
+} from './mobile-dictation-chunk-order'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type MobileDictationSession = {
@@ -20,6 +24,7 @@ type MobileDictationSession = {
   textVersion: number
   reportedVersion: number
   reportedAt: number
+  chunkOrder: MobileDictationChunkOrder
   abandonTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -32,7 +37,7 @@ export class RuntimeMobileDictationController {
     dictationId: string
     modelId?: string
     clientId?: string
-  }): Promise<{ dictationId: string; modelId: string }> {
+  }): Promise<{ dictationId: string; modelId: string; dedupesResentChunks: true }> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     if (!voice.enabled) {
@@ -55,7 +60,7 @@ export class RuntimeMobileDictationController {
     }
     if (this.session?.clientId === params.clientId && this.session.state === 'active') {
       // A phone runs one dictation at a time, so its new start retires one it lost track of (app relaunch inside the grace).
-      await this.stopSession(this.session)
+      await this.stopSession(this.session, { discard: true })
     }
     if (this.session) {
       throw new Error('dictation_already_active')
@@ -72,7 +77,8 @@ export class RuntimeMobileDictationController {
       errors: [],
       textVersion: 0,
       reportedVersion: 0,
-      reportedAt: 0
+      reportedAt: 0,
+      chunkOrder: new MobileDictationChunkOrder()
     }
     try {
       await getSpeechSttService(store).startDictation(
@@ -88,7 +94,7 @@ export class RuntimeMobileDictationController {
       const session = this.session
       // Owned by the phone, not its socket; it streams continuously, so this long without a request means it is gone.
       session.abandonTimer = setTimeout(
-        () => void this.stopSession(session).catch(() => undefined),
+        () => void this.stopSession(session, { discard: true }).catch(() => undefined),
         MOBILE_DICTATION_RECONNECT_GRACE_MS
       )
     } catch (error) {
@@ -97,13 +103,15 @@ export class RuntimeMobileDictationController {
       }
       throw error
     }
-    return { dictationId: params.dictationId, modelId }
+    // Tells the phone it may resend chunks a drop left unanswered.
+    return { dictationId: params.dictationId, modelId, dedupesResentChunks: true }
   }
 
   feed(params: {
     dictationId: string
     audioBase64: string
     sampleRate: number
+    seq?: number
     clientId?: string
   }): { dictationId: string; text?: string } {
     const session = this.requireOwnedSession(params)
@@ -113,12 +121,12 @@ export class RuntimeMobileDictationController {
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
-    const pcm = Buffer.from(params.audioBase64, 'base64')
-    const samples = new Float32Array(Math.floor(pcm.length / 2))
-    for (let i = 0; i < samples.length; i += 1) {
-      samples[i] = pcm.readInt16LE(i * 2) / 32768
+    // Phones that send no seq never resend.
+    const ready =
+      params.seq === undefined ? [params] : session.chunkOrder.accept(params.seq, params)
+    for (const chunk of ready) {
+      this.feedChunk(session, chunk)
     }
-    getSpeechSttService(this.requireStore()).feedAudio(samples, params.sampleRate, session.owner)
     // The text so far lets the phone keep it if the connection never comes back; resent each second in case a reply was lost.
     const now = Date.now()
     if (session.reportedVersion === session.textVersion && now - session.reportedAt < 1000) {
@@ -134,7 +142,10 @@ export class RuntimeMobileDictationController {
     clientId?: string
   }): Promise<{ dictationId: string; text: string }> {
     const session = this.requireOwnedSession(params)
-    await this.stopSession(session)
+    for (const chunk of session.chunkOrder.drain()) {
+      this.feedChunk(session, chunk)
+    }
+    await this.stopSession(session, { discard: false })
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
@@ -147,9 +158,18 @@ export class RuntimeMobileDictationController {
   }): Promise<{ dictationId: string }> {
     const session = this.session
     if (session?.id === params.dictationId && session.clientId === params.clientId) {
-      await this.stopSession(session)
+      await this.stopSession(session, { discard: true })
     }
     return { dictationId: params.dictationId }
+  }
+
+  private feedChunk(session: MobileDictationSession, chunk: MobileDictationChunk): void {
+    const pcm = Buffer.from(chunk.audioBase64, 'base64')
+    const samples = new Float32Array(Math.floor(pcm.length / 2))
+    for (let i = 0; i < samples.length; i += 1) {
+      samples[i] = pcm.readInt16LE(i * 2) / 32768
+    }
+    getSpeechSttService(this.requireStore()).feedAudio(samples, chunk.sampleRate, session.owner)
   }
 
   private acceptEvent(
@@ -192,11 +212,15 @@ export class RuntimeMobileDictationController {
     return session
   }
 
-  private async stopSession(session: MobileDictationSession): Promise<void> {
+  // Only finish transcribes; text nobody will read must not hold the speech session.
+  private async stopSession(
+    session: MobileDictationSession,
+    options: { discard: boolean }
+  ): Promise<void> {
     clearTimeout(session.abandonTimer)
     session.state = 'closing'
     try {
-      await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
+      await getSpeechSttService(this.requireStore()).stopDictation(session.owner, options)
     } finally {
       if (this.session?.id === session.id) {
         this.session = null

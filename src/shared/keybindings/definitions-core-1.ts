@@ -181,6 +181,14 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'view.plugins',
+    title: 'Open Plugins',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'plugins', 'extensions', 'marketplace'],
+    defaultBindings: { darwin: ['Mod+Alt+X'], linux: ['Mod+Shift+Y'], win32: ['Mod+Shift+Y'] }
+  },
+  {
     id: 'sidebar.left.toggle',
     title: 'Toggle Sidebar',
     group: 'Global',

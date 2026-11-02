@@ -23,7 +23,6 @@ export function runLocalPlanForAgent(input: {
   agentId: string
   plan: CommitMessagePlan
   target: LocalGenerationTarget
-  emptyResultName: string
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
@@ -51,7 +50,6 @@ export function runLocalPlanForAgent(input: {
       plan: input.plan,
       cwd: input.target.cwd,
       env: wslDistro ? input.target.env : target.env,
-      emptyResultName: input.emptyResultName,
       operation: input.operation,
       wslDistro,
       spawnAgent: input.spawnAgent

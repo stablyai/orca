@@ -10,6 +10,7 @@ import {
   type WslHostsPolicy
 } from '../../shared/wsl-hosts-policy'
 import { getMainHttpClient } from '../network/http-client'
+import { noteWslHostsLivePolicyBlock } from './wsl-host-gate'
 import { writePluginFileAtomically } from '../plugins/installation/plugin-atomic-file-write'
 
 const REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000
@@ -84,6 +85,8 @@ export type WslHostsPolicyLiveUpdateDeps = {
   /** Unpackaged dev and test runs never download. */
   isPackaged: boolean
   fetch: (url: string, init?: RequestInit) => Promise<Response>
+  /** The newest known policy blocks; new work stops this run, the rest waits for the next launch. */
+  onBlock?: () => void
 }
 
 /**
@@ -134,13 +137,20 @@ export class WslHostsPolicyLiveUpdater {
     }
     const cached = readCachedWslHostsPolicy(this.deps.userDataPath, this.deps.appVersion)
     // A stale mirror or replayed file must never undo a newer switch.
-    if (cached && parsed.policy.revision <= cached.revision) {
+    const stale = cached !== null && parsed.policy.revision <= cached.revision
+    // Before the write, so a block applies this run even if caching it fails.
+    if ((stale ? cached : parsed.policy).wslHosts === 'block') {
+      this.deps.onBlock?.()
+    }
+    if (stale) {
       return
     }
     try {
+      // The validated text, not the parsed object: parsing strips fields this build doesn't know,
+      // and an equal revision never rewrites the cache, so a newer build would never see them.
       await writePluginFileAtomically(
         join(this.deps.userDataPath, wslHostsPolicyCacheFileName(channel)),
-        `${JSON.stringify(parsed.policy)}\n`
+        text
       )
     } catch (error) {
       warn(`downloaded policy not cached: ${describeError(error)}`)
@@ -178,7 +188,8 @@ export function startWslHostsPolicyLiveUpdates(): void {
     userDataPath: environment.getPath('userData'),
     appVersion: environment.getVersion(),
     isPackaged: environment.isPackaged(),
-    fetch: (url, init) => getMainHttpClient().fetch(url, init)
+    fetch: (url, init) => getMainHttpClient().fetch(url, init),
+    onBlock: noteWslHostsLivePolicyBlock
   })
   void updater.start()
   environment.onWillQuit(() => updater.stop())

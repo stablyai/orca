@@ -53,7 +53,6 @@ function start(child = createMockDiscoveryChild(), content?: string) {
       wslDistro: 'Wrong',
       env: undefined,
       operation: 'conversation-name',
-      emptyResultName: 'name',
       spawnAgent: (input) => {
         launch = input
         return child
@@ -184,7 +183,6 @@ it.each(['missing-proof', 'spawn', 'no-pid', 'missing-stdin'] as const)(
         cwd,
         env: undefined,
         operation: 'conversation-name',
-        emptyResultName: 'name',
         spawnAgent: () => {
           if (route === 'spawn') {
             throw new Error('spawn denied')
@@ -472,7 +470,6 @@ it.each(['success', 'nonzero', 'empty', 'storage', 'pipe-close'] as const)(
         cwd,
         env: undefined,
         operation: 'conversation-name',
-        emptyResultName: 'name',
         spawnAgent: (input) => {
           const preparation = input.preparation
           if (!preparation) {

@@ -1,20 +1,23 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { fillPluginPanelShell } from './plugin-panel-design-token-css'
+import {
+  PluginFrameView,
+  usablePluginFrameGuest,
+  type PluginFrameElement
+} from './plugin-frame-element'
+import { PluginDeclarativePanel } from './PluginDeclarativePanel'
 import { usePluginFrameHost } from './use-plugin-frame-host'
+import { usePluginFrameEntry } from './use-plugin-frame-entry'
+import { reportPluginPanelFailure, useReportFramePanelDraw } from './use-plugin-panel-draw-report'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 type PluginPanelProps = {
   tabKey: string
 }
-
-type PluginPanelEntryState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'unresponsive' }
-  | { status: 'ready'; shellHtml: string; documentRevision: number }
 
 function PluginPanelMessage({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -30,93 +33,43 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
     : null
-  const [entryState, setEntryState] = useState<PluginPanelEntryState>({ status: 'loading' })
-  const [sessionToken, setSessionToken] = useState<string | null>(null)
-  const iframeRef = useRef<HTMLIFrameElement | null>(null)
-
-  const pluginKey = panel?.pluginKey ?? null
-  const panelId = panel?.id ?? null
-  const panelShell = entryState.status === 'ready' ? entryState.shellHtml : null
+  const frameRef = useRef<PluginFrameElement | null>(null)
+  const { entry, markUnresponsive, remountGone } = usePluginFrameEntry(
+    'panel',
+    panel?.pluginKey ?? null,
+    panel?.id ?? null
+  )
+  const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
+  const declarative = entry.status === 'ready' && entry.ui === 'components'
+  const panelShell = entry.status === 'ready' && !guest && !declarative ? entry.html : null
   // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
   const panelDocument = useMemo(
     () => (panelShell ? fillPluginPanelShell(panelShell) : null),
     [panelShell]
   )
-  const panelFrameKey =
-    entryState.status === 'ready' ? `${tabKey}:${entryState.documentRevision}` : null
+  const panelFrameKey = entry.status === 'ready' ? `${tabKey}:${entry.revision}` : null
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'panel',
-    iframeRef,
-    frameKey: panelFrameKey,
-    sessionToken,
-    onUnresponsive: () => {
-      setPanelHealth(tabKey, 'error')
-      setEntryState({ status: 'unresponsive' })
-    }
+    frameRef,
+    // Why null: a declarative panel's own host wires its hidden guest instead.
+    frameKey: declarative ? null : panelFrameKey,
+    sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
+    onUnresponsive: markUnresponsive,
+    onGuestGone: remountGone
   })
 
   useEffect(() => {
-    if (!pluginKey || !panelId) {
-      return
-    }
-    let cancelled = false
-    let currentHtml: string | null = null
-    let documentRevision = 0
-    setEntryState({ status: 'loading' })
-    setSessionToken(null)
-    const pluginsApi = window.api?.plugins
-    if (!pluginsApi) {
+    if (entry.status === 'ready') {
+      setPanelHealth(tabKey, 'healthy')
+    } else if (entry.status !== 'loading') {
       setPanelHealth(tabKey, 'error')
-      setEntryState({ status: 'error' })
-      return
+      reportPluginPanelFailure(
+        tabKey,
+        `the panel ${entry.status === 'error' ? 'could not be loaded' : 'stopped responding'}`
+      )
     }
-    let loadGeneration = 0
-    const load = (): void => {
-      const generation = ++loadGeneration
-      pluginsApi
-        .readPanelEntry({ pluginKey, panelId })
-        .then((entry) => {
-          if (cancelled || generation !== loadGeneration) {
-            return
-          }
-          if (!entry) {
-            currentHtml = null
-            setSessionToken(null)
-            setPanelHealth(tabKey, 'error')
-            setEntryState({ status: 'error' })
-            return
-          }
-          // Rotate authority without replacing unchanged content or restarting its watchdog.
-          setSessionToken(entry.sessionToken)
-          setPanelHealth(tabKey, 'healthy')
-          if (entry.html !== currentHtml) {
-            currentHtml = entry.html
-            documentRevision += 1
-            setPanelHealth(tabKey, 'healthy')
-            setEntryState({
-              status: 'ready',
-              shellHtml: entry.html,
-              documentRevision
-            })
-          }
-        })
-        .catch(() => {
-          if (!cancelled && generation === loadGeneration) {
-            currentHtml = null
-            setSessionToken(null)
-            setPanelHealth(tabKey, 'error')
-            setEntryState({ status: 'error' })
-          }
-        })
-    }
-    load()
-    const unsubscribe = pluginsApi.onChanged ? pluginsApi.onChanged(load) : null
-    return () => {
-      cancelled = true
-      loadGeneration += 1
-      unsubscribe?.()
-    }
-  }, [panelId, pluginKey, setPanelHealth, tabKey])
+  }, [entry.status, setPanelHealth, tabKey])
+  useReportFramePanelDraw(tabKey, frameRef, guest && !declarative ? guest.url : null)
 
   // Persisted tabs can outlive an uninstalled or disabled plugin.
   if (!panel) {
@@ -130,7 +83,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'loading') {
+  if (entry.status === 'loading') {
     return (
       <PluginPanelMessage>
         {translate('auto.components.right.sidebar.PluginPanel.loading', 'Loading plugin panel...')}
@@ -138,7 +91,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'unresponsive') {
+  if (entry.status === 'unresponsive') {
     return (
       <PluginPanelMessage>
         {translate(
@@ -149,7 +102,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  if (entryState.status === 'error') {
+  if (entry.status === 'error') {
     return (
       <PluginPanelMessage>
         {translate(
@@ -160,19 +113,44 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
+  if (declarative) {
+    return guest && panelFrameKey ? (
+      <PluginDeclarativePanel
+        // A dev save keeps the panel (last good tree, memory atoms) and swaps only its guest.
+        key={guest.dev ? `${tabKey}:dev` : panelFrameKey}
+        tabKey={tabKey}
+        hotReload={guest.dev === true}
+        panelId={panel.id}
+        title={panel.title}
+        guest={guest}
+        frameKey={panelFrameKey}
+        sessionToken={entry.sessionToken}
+        onUnresponsive={markUnresponsive}
+      />
+    ) : (
+      <PluginPanelMessage>
+        {isWebClientLocation()
+          ? translate(
+              'auto.components.right.sidebar.PluginPanel.needsDesktop',
+              'This panel runs only in the Orca desktop app.'
+            )
+          : translate(
+              'auto.components.right.sidebar.PluginPanel.needsIsolatedFrames',
+              'This panel is not available: it needs isolated plugin frames, which are turned off.'
+            )}
+      </PluginPanelMessage>
+    )
+  }
+
   return (
-    <iframe
+    <PluginFrameView
       key={panelFrameKey}
-      ref={iframeRef}
-      // SECURITY: never add allow-same-origin — the srcdoc frame must stay an
-      // opaque origin so plugin UI cannot reach the app DOM, storage, or IPC.
-      // The srcdoc itself is the host CSP shell wrapped around plugin HTML.
-      sandbox="allow-scripts"
+      frameRef={frameRef}
+      guest={guest}
       name={`${PLUGIN_PANEL_FRAME_NAME_PREFIX}${tabKey}`}
       srcDoc={panelDocument ?? ''}
       onLoad={onFrameLoad}
       title={panel.title}
-      className="h-full w-full flex-1 border-0 bg-background"
     />
   )
 }

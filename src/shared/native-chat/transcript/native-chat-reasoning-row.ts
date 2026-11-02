@@ -1,12 +1,9 @@
 // Derive reasoning disclosure/headlines from host start/end facts so desktop/mobile show the same lifecycle.
 
-import { isRootAgentJournalItem } from '../../agent-session-journal-producer'
-import {
-  deriveNativeChatRowContent,
-  nativeChatRowRendersContent
-} from '../../native-chat-row-content'
-import { formatNativeChatDuration } from '../../native-chat-turn-status'
-import type { NativeChatMessage } from '../../native-chat-types'
+import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
+import { deriveNativeChatRowContent, nativeChatRowRendersContent } from './native-chat-row-content'
+import { formatNativeChatDuration } from './native-chat-turn-status'
+import type { NativeChatMessage } from '../native-chat-types'
 
 /** An open reasoning block and the text it has so far. */
 export type NativeChatLiveReasoning = { message: NativeChatMessage; markdown: string }

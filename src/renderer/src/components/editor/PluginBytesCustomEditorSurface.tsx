@@ -14,6 +14,7 @@ import PluginCustomEditorFrame from './PluginCustomEditorFrame'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 import {
   editorBytesDocument,
+  editorBytesEdits,
   hasEditorBytesDraft,
   loadEditorBytes,
   releaseEditorBytes,
@@ -99,6 +100,7 @@ export default function PluginBytesCustomEditorSurface({
       return
     }
     let cancelled = false
+    const editsAtRead = editorBytesEdits(fileId)
     readRuntimeFileBytes(source, CUSTOM_EDITOR_DOCUMENT_MAX_BYTES)
       .then(async (read) => {
         if (cancelled) {
@@ -107,7 +109,7 @@ export default function PluginBytesCustomEditorSurface({
         if (read.kind === 'ok') {
           const sha256 = await sha256Hex(read.bytes)
           if (!cancelled) {
-            loadEditorBytes(fileId, { bytes: read.bytes, fileType }, sha256)
+            loadEditorBytes(fileId, { bytes: read.bytes, fileType }, sha256, editsAtRead)
             setState({ status: 'ok' })
           }
         } else if (read.kind === 'too_large') {

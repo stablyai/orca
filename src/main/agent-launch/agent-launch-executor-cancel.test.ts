@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
@@ -64,7 +65,7 @@ function harness(options: {
   })
   const runtime: AgentLaunchExecution['runtime'] = {
     requireStore: () => ({
-      getSettings: () => (options.structured ? { experimentalNativeChat: true } : null)
+      getSettings: () => (options.structured ? { nativeChatProviders: EVERY_AGENT_CHAT } : null)
     }),
     getStructuredAgentSessionCreateSupport
   }

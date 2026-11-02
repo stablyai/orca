@@ -6,7 +6,6 @@ import type { ServeReadiness } from '../server/serve-readiness'
 import type { WslHostDeferredUpdate } from '../../shared/wsl-host-types'
 import { recoverInterruptedOrcadActivation } from '../managed-server/activation/orcad-activation-recovery'
 import { readOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record-store'
-import { readOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-store'
 import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../ssh/orcad-installed-activation'
@@ -14,9 +13,7 @@ import { orcadBoundPort } from '../managed-server/lifecycle/orcad-managed-bound-
 import {
   isForceableOrcadDeferral,
   managedOrcadDeployPolicy,
-  managedOrcadInstallDir,
-  managedOrcadSlot,
-  probeManagedOrcadReadiness
+  managedOrcadSlot
 } from '../managed-server/lifecycle/orcad-managed-runtime-context'
 import { isWaitingOrcadUpdateDeferral } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import { clearOrcadUpdateFailedThisLaunch } from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
@@ -24,15 +21,12 @@ import type { OrcadUpdateIntent } from '../managed-server/lifecycle/orcad-manage
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { errorMessage } from '../../shared/error-message'
 import { pruneWslOrcadVersionsUntilClean } from './wsl-orcad-version-gc-memo'
+import { pruneSupersededOrcadCandidates } from '../managed-server/lifecycle/orcad-managed-version-gc'
 import { wakeAlreadyActiveOrcad } from '../ssh/orcad-already-active-wake'
 import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
-import { deployOrcad } from '../ssh/orcad-remote-deploy'
+import { deployOrcad, type OrcadDeployOptions } from '../ssh/orcad-remote-deploy'
 import { isWslMoveUnderwayOnHost } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
-import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { execCommand } from '../ssh/remote-exec/remote-exec-command'
-import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { readLocalFullVersion } from '../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
@@ -40,16 +34,20 @@ import { readWslDistroRegistryIdShared } from './wsl-distro-registry-id'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { holdWslDistroWithContext } from './wsl-orcad-held-context'
+import { deployWslOrcadWithOneFence } from './wsl-orcad-one-fence-deploy'
+import { probeWslActiveOrcad, readWslOrcadPid } from './wsl-orcad-active-probe'
 import { wslOrcadConnectStateHints } from './wsl-orcad-connect-state-snapshot'
 import { readWslOrcadIncumbent, type WslOrcadIncumbent } from './wsl-orcad-incumbent'
 import { adoptUnrecordedWslOrcad } from './wsl-orcad-instance-adoption'
 import {
   admitWslOrcadLaunch,
+  readRestoredWslOrcadRecord,
   recordWslOrcadUpdateFailure,
   wslOrcadDeferralCode,
   wslOrcadDeferralFailure
 } from './wsl-orcad-update-admission'
 import { withOwnBuildLaunchEnv } from './wsl-orcad-own-build-launch-env'
+import { WSL_NODE_RUNTIME_DOWNLOAD_BUDGET } from './wsl-node-runtime-download-budget'
 
 /** An update this app carries that the host may not take yet; the incumbent keeps serving. */
 export type WslOrcadDeferredUpdate = WslHostDeferredUpdate
@@ -128,6 +126,8 @@ async function launchOverTransport(
 ): Promise<WslOrcadLaunch> {
   const { signal } = options
   let ownBuildVersion: string | null = null
+  // Set by the serving probe; readyLaunch reads the pid itself for any other version.
+  let probed: { fullVersion: string; pid: number | null } | null = null
   const conn = withOwnBuildLaunchEnv(transport, () => ownBuildVersion)
   // Acquire a holder before launch or WSL can idle-stop orcad's distro.
   const holder = options.holder ?? createWslDistroHolder({ userDataPath: userDataPath() })
@@ -194,36 +194,44 @@ async function launchOverTransport(
           paired: options.pairedOffer ?? null
         })
       : null
-  const deployed = await deployOrcad({
-    ...slot,
-    conn,
-    localOrcadDir,
-    target: context.serverTarget,
-    ...managedOrcadDeployPolicy(context, appVersion, intent),
-    ...(incumbent
-      ? {
-          census: incumbent.census,
-          recountCensus: incumbent.recount,
-          releaseIncumbentAdmission: incumbent.releaseAdmission
-        }
-      : {}),
-    force: intent === 'force',
-    appVersion,
-    recordedNodeRuntimeProbe: true,
-    ...hints.deployPreRead(context.activationRecord)
-  }).catch((error: unknown) => {
-    if (!signal?.aborted) {
-      recordWslOrcadUpdateFailure(failureHost, incumbentVersion, {
-        code: 'orcad_update_failed',
-        reason: errorMessage(error)
-      })
-    }
-    throw error
-  })
+  const deployOnce = (extra: Partial<OrcadDeployOptions>) =>
+    deployOrcad({
+      ...slot,
+      conn,
+      localOrcadDir,
+      target: context.serverTarget,
+      ...managedOrcadDeployPolicy(context, appVersion, intent),
+      ...(incumbent
+        ? {
+            census: incumbent.census,
+            recountCensus: incumbent.recount,
+            releaseIncumbentAdmission: incumbent.releaseAdmission
+          }
+        : {}),
+      force: intent === 'force',
+      appVersion,
+      recordedNodeRuntimeProbe: true,
+      nodeRuntimeDownload: WSL_NODE_RUNTIME_DOWNLOAD_BUDGET,
+      ...extra
+    }).catch((error: unknown) => {
+      if (!signal?.aborted) {
+        recordWslOrcadUpdateFailure(failureHost, incumbentVersion, {
+          code: 'orcad_update_failed',
+          reason: errorMessage(error)
+        })
+      }
+      throw error
+    })
+  const { deployed, woken } = await deployWslOrcadWithOneFence(
+    slot,
+    deployOnce,
+    hints.deployPreRead(context.activationRecord)
+  )
   if (deployed.outcome === 'installed-not-activated') {
     const failure = wslOrcadDeferralFailure(deployed)
     recordWslOrcadUpdateFailure(failureHost, incumbentVersion, failure)
-    const restored = incumbentVersion && failure ? await readRestoredRecord(incumbentVersion) : null
+    const restored =
+      incumbentVersion && failure ? await readRestoredWslOrcadRecord(slot, incumbentVersion) : null
     if (restored) {
       // After rollback proof, serve the restored incumbent on this connect too.
       const retried = await admit(restored, 'connect')
@@ -251,17 +259,21 @@ async function launchOverTransport(
         fullVersion: incumbentVersion,
         readiness: incumbent.readiness
       }
+      await pruneSupersededOrcadCandidates(slot, context.serverTarget, deployed.fullVersion)
       return { ...(await readyLaunch(serving)), deferredUpdate }
     }
     return { outcome: 'deferred', distro: name, ...deferredUpdate }
   }
   clearOrcadUpdateFailedThisLaunch(failureHost)
-  const probe = () =>
-    probeManagedOrcadReadiness(context, localOrcadDir, deployed.fullVersion, signal)
+  const probe = async () => {
+    const answer = await probeWslActiveOrcad(context, localOrcadDir, deployed.fullVersion, signal)
+    probed = { fullVersion: deployed.fullVersion, pid: answer.pid }
+    return answer.readiness
+  }
   let readiness: ServeReadiness
   if (deployed.outcome === 'already-active') {
-    // A stopped distro ended the active slot with it.
-    await wakeAlreadyActiveOrcad(slot)
+    // A stopped distro ended the active slot with it; the one-fence deploy already woke it.
+    await (woken ? null : wakeAlreadyActiveOrcad(slot))
     // Why once more: on a distro still booting, the orcad the wake saw serving can exit before
     // the probe; that is a stopped slot to start, not a failed connect.
     readiness = await probe().catch(async (error: unknown) => {
@@ -286,36 +298,22 @@ async function launchOverTransport(
   })
   return readyLaunch({ fullVersion: deployed.fullVersion, readiness })
 
-  /** The record only once the incumbent is back and no journal awaits recovery; else null. */
-  async function readRestoredRecord(incumbent: string): Promise<OrcadActivationRecord | null> {
-    // Unreadable transaction state proves no restoration; preserve the rejection.
-    if (await readOrcadActivationTransaction(slot).catch(() => true)) {
-      return null
-    }
-    const record = await readOrcadActivationRecord(slot).catch(() => null)
-    return record?.active === incumbent ? record : null
-  }
-
   async function readyLaunch(serving: {
     fullVersion: string
     readiness: ServeReadiness
   }): Promise<Extract<WslOrcadLaunch, { outcome: 'ready' }>> {
-    const pidFile = joinRemotePath(
-      context.host,
-      managedOrcadInstallDir(context, serving.fullVersion),
-      ORCAD_PID_FILENAME
-    )
-    const pid = Number.parseInt(
-      await execCommand(conn, `cat ${quotePosixShell(pidFile)} 2>/dev/null || true`, { signal }),
-      10
-    )
+    // The serving probe already read it; an admission that serves an incumbent did not.
+    const pid =
+      probed?.fullVersion === serving.fullVersion
+        ? probed.pid
+        : await readWslOrcadPid(context, serving.fullVersion, signal)
     return {
       outcome: 'ready',
       distro: name,
       distroId: await distroId,
       port: orcadBoundPort(serving.readiness) ?? ORCAD_MANAGED_REMOTE_PORT,
       fullVersion: serving.fullVersion,
-      pid: Number.isSafeInteger(pid) && pid > 0 ? pid : null,
+      pid,
       readiness: serving.readiness,
       holder: held.outcome,
       ...(adoption.outcome === 'adopted'

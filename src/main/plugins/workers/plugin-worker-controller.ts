@@ -1,9 +1,5 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugin-protocol'
-import {
-  PLUGIN_COMMAND_EXTENSION_POINT,
-  type PluginExtensionRegistry
-} from '../../../shared/plugins/contributions/plugin-extension-registry'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import { resolveContainedPluginArtifact } from '../plugin-artifact-validation'
 import type { PluginContentVerifier } from '../plugin-content-integrity'
@@ -15,24 +11,25 @@ import {
 import { buildPluginWorkerSpawnSpec, pluginWorkerSpawnSpecsEqual } from './plugin-worker-spawn-spec'
 import type { PluginWorkerHandle } from './plugin-host-process'
 import type { PluginRunState } from './plugin-supervisor'
+import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 export type PluginWorkerControllerOptions = {
   entryPath: string
   maxActive?: number
   idleReapMs?: number
   workerFactory?: PluginWorkerFactory
-  registry: PluginExtensionRegistry
   contentVerifier: PluginContentVerifier
   capabilities: (pluginKey: string) => readonly PluginCapabilityKind[] | null
   isCurrentApproved: (spec: PluginWorkerSpawnSpec) => boolean
   /** Gates crash restarts: a refresh's temporary pause is not revocation. */
   isApprovalKept?: (spec: PluginWorkerSpawnSpec) => boolean
-  invokeCommand: (pluginKey: string, commandId: string, args: unknown) => Promise<unknown>
   executeHostCall: (
     pluginKey: string,
     method: string,
-    params: unknown
+    params: unknown,
+    signal?: AbortSignal
   ) => Promise<PluginHostCallOutcome>
+  onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onStateChanged: (pluginKey: string) => void
 }
@@ -50,9 +47,14 @@ export class PluginWorkerController {
       idleReapMs: options.idleReapMs,
       workerFactory: options.workerFactory,
       executeHostCall: options.executeHostCall,
+      onPanelPost: options.onPanelPost,
       log: options.log,
       onWorkerStateChange: options.onStateChanged
     })
+  }
+
+  runningHandle(pluginKey: string): PluginWorkerHandle | null {
+    return this.manager.runningHandle(pluginKey)
   }
 
   state(pluginKey: string): { state: PluginRunState; restarts: number } {
@@ -111,7 +113,7 @@ export class PluginWorkerController {
         )
       }
       this.activationErrors.delete(plugin.pluginKey)
-      this.registerCommands(plugin, spec, handle.commands)
+      this.registeredSpecs.set(plugin.pluginKey, spec)
       return handle
     } catch (error) {
       this.activationErrors.set(
@@ -144,7 +146,6 @@ export class PluginWorkerController {
       if (next && pluginWorkerSpawnSpecsEqual(spec, next)) {
         continue
       }
-      this.options.registry.clearPlugin(pluginKey)
       this.registeredSpecs.delete(pluginKey)
       this.activationErrors.delete(pluginKey)
       await this.manager.deactivate(pluginKey)
@@ -161,7 +162,6 @@ export class PluginWorkerController {
   }
 
   async deactivate(pluginKey: string): Promise<void> {
-    this.options.registry.clearPlugin(pluginKey)
     this.registeredSpecs.delete(pluginKey)
     this.activationErrors.delete(pluginKey)
     await this.manager.deactivate(pluginKey)
@@ -174,25 +174,5 @@ export class PluginWorkerController {
   dispose(): Promise<void> {
     this.reconcileGeneration += 1
     return this.manager.disposeAll()
-  }
-
-  private registerCommands(
-    plugin: ValidDiscoveredPlugin,
-    spec: PluginWorkerSpawnSpec,
-    commands: readonly string[]
-  ): void {
-    this.options.registry.clearPlugin(plugin.pluginKey)
-    for (const commandId of commands) {
-      this.options.registry.register(
-        PLUGIN_COMMAND_EXTENSION_POINT,
-        plugin.pluginKey,
-        {
-          commandId,
-          invoke: (args) => this.options.invokeCommand(plugin.pluginKey, commandId, args)
-        },
-        commandId
-      )
-    }
-    this.registeredSpecs.set(plugin.pluginKey, spec)
   }
 }

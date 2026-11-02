@@ -1,7 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { PluginSyntaxMetadata } from '../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import {
-  hasPluginSyntaxFailure,
   pluginSyntaxRevisionKey,
   recordPluginSyntaxFailure,
   usePluginSyntaxFailureStore
@@ -31,11 +30,10 @@ it('shows no failure once revision B replaces a failed revision A', () => {
   usePluginSyntaxStore.setState({ entries: [a], loaded: true })
   recordPluginSyntaxFailure(pluginSyntaxRevisionKey(a), 'crashed')
   const { failures } = usePluginSyntaxFailureStore.getState()
-  expect(hasPluginSyntaxFailure(failures, [a], 'samples.demo')).toBe(true)
+  expect(failures[pluginSyntaxRevisionKey(a)]).toBe('crashed')
 
   usePluginSyntaxStore.setState({ entries: [b], loaded: true })
 
-  expect(hasPluginSyntaxFailure(failures, [b], 'samples.demo')).toBe(false)
   expect(usePluginSyntaxFailureStore.getState().failures).toEqual({})
 })
 

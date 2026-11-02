@@ -119,7 +119,9 @@ export async function sendGroupMessage(args: {
   } = args
   // Audience follows the sender's binding, never a caller-supplied message Run or payload.
   function resolveAudienceRunId(): string {
-    const coordinated = db.getCurrentRunForCoordinator(sender)
+    const coordinated =
+      (explicitRunId ? db.getCoordinatedRun(sender, explicitRunId) : undefined) ??
+      db.getCurrentRunForCoordinator(sender)
     const runId =
       coordinated?.id ??
       db.getActiveDispatchForIdentity(from, senderPaneKey)?.run_id ??

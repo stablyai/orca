@@ -1,7 +1,19 @@
+import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
+import { closeCliChatResumeTerminal } from './cli-chat-resume-close-terminal'
+import {
+  admitCliChatResumeClose,
+  showCliChatResumeLaunchHolder,
+  withoutJoiningLaunchHolder,
+  type LaunchHeld
+} from './cli-chat-resume-close-admission'
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import {
+  StructuredAgentSessionCreateSourceFailedError,
+  type StructuredAgentSessionCreateGate
+} from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { supportsStructuredAgentSessionCliSource } from '@/runtime/structured-agent-session-client'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
@@ -9,10 +21,15 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../../shared/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
-import { reportCliChatResumeFailure } from './cli-chat-resume-feedback'
+import {
+  cliChatResumeExitUnprovenText,
+  reportCliChatResumeFailure,
+  reportCliChatResumeFailureInChat,
+  reportCliChatResumeTerminalChanged
+} from './cli-chat-resume-feedback'
 import { adoptingAgentOnHost } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
 
-const pending = new Map<string, AbortController>()
+const pending = new Map<string, { controller: AbortController; source: CliChatResumeSource }>()
 const listeners = new Set<() => void>()
 const changed = () => listeners.forEach((listener) => listener())
 const keyFor = (source: CliChatResumeSource) =>
@@ -47,8 +64,32 @@ export async function runCliChatResume(
     return
   }
   const controller = new AbortController()
+  let closing = false
+  let closed = false
+  // The chat that replaces a closing terminal opens first; closing it before the terminal goes cancels.
+  let chatTabId: string | null = null
+  let finished = false
+  const dropChat = () => {
+    const tabId = chatTabId
+    // Cleared first: a chat this run closes is not the user cancelling.
+    chatTabId = null
+    if (tabId) {
+      useAppStore.getState().closeUnifiedTab(tabId)
+    }
+  }
+  const chatClosed = () =>
+    !!chatTabId &&
+    !(useAppStore.getState().unifiedTabsByWorktree[source.workspaceId] ?? []).some(
+      (tab) => tab.id === chatTabId
+    )
   const isCurrent = () => {
     if (controller.signal.aborted) {
+      return false
+    }
+    if (closing) {
+      return true
+    }
+    if (chatClosed()) {
       return false
     }
     const current = resolveCliChatResumeSource(useAppStore.getState(), {
@@ -66,13 +107,14 @@ export async function runCliChatResume(
   if (!isCurrent()) {
     return
   }
+  const surfaceAddress = captureStructuredLaunchSurfaceAddress(source.workspaceId)
   const release = () => {
-    if (pending.get(key) === controller) {
+    if (pending.get(key)?.controller === controller) {
       pending.delete(key)
       changed()
     }
   }
-  pending.set(key, controller)
+  pending.set(key, { controller, source })
   changed()
   const stopSource = useAppStore.subscribe(() => {
     if (!isCurrent()) {
@@ -84,6 +126,8 @@ export async function runCliChatResume(
     () => controller.abort(new Error('Conversation preparation timed out.')),
     30_000
   )
+  // The chat's create waits for the terminal's proven exit; false abandons it, a refusal fails it.
+  let releaseCreate: ((go: StructuredAgentSessionCreateGate) => void) | undefined
   let dispatched = false
   const handoff = () => {
     if (dispatched) {
@@ -112,7 +156,19 @@ export async function runCliChatResume(
     if (!isCurrent()) {
       return
     }
-    const plan = adoptAgentSessionLaunchVerdict({
+    const close = await admitCliChatResumeClose(
+      source,
+      agent,
+      target,
+      openOwner,
+      isCurrent,
+      controller.signal
+    )
+    if (close === null) {
+      return
+    }
+    const closes = close !== 'keep'
+    const verdict = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       requestId: newAgentLaunchRequestId(),
       agent,
@@ -121,7 +177,7 @@ export async function runCliChatResume(
       resumeFrom: {
         providerSessionId: source.providerSessionId,
         // The host matches its own pane keys, not this client's mirrored ones.
-        ...(cliSourceSupported
+        ...(!closes && cliSourceSupported
           ? {
               cliSource: {
                 workspaceId: source.workspaceId,
@@ -131,25 +187,120 @@ export async function runCliChatResume(
           : {})
       }
     })
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan,
-      hooks: { beforeCreate: handoff },
-      deferPublication: true
+    const held: LaunchHeld = {}
+    const plan = closes ? withoutJoiningLaunchHolder(verdict, source, agent, held) : verdict
+    let tabOpened: ((tabId: string | null) => void) | undefined
+    const chatOpened = new Promise<string | null>((resolve) => {
+      tabOpened = resolve
     })
+    const launch = beginStructuredAgentSessionProvisionalLaunch(
+      closes
+        ? {
+            plan,
+            hooks: {
+              beforeCreate: handoff,
+              createAfter: new Promise<StructuredAgentSessionCreateGate>((resolve) => {
+                releaseCreate = resolve
+              })
+            },
+            // The chat takes the terminal's place, shown before the terminal goes.
+            afterTabId: source.tabId,
+            onTabOpenSettled: (tabId) => {
+              if (finished && tabId && !closed) {
+                // Its create was abandoned when the run ended without closing the terminal.
+                useAppStore.getState().closeUnifiedTab(tabId)
+                return
+              }
+              tabOpened?.(tabId)
+            }
+          }
+        : {
+            plan,
+            hooks: { beforeCreate: handoff },
+            deferPublication: true,
+            // Captured at the click: the terminal stays, but its tab may move before the chat opens.
+            target: { surfaceAddress }
+          }
+    )
+    if (closes && launch) {
+      chatTabId = await waitForPromiseWithSignal(chatOpened, controller.signal)
+    }
+    if (held.holder) {
+      await showCliChatResumeLaunchHolder(held.holder, openOwner, target)
+      return
+    }
     if (!launch) {
       return
     }
+    if (chatTabId) {
+      if (!isCurrent()) {
+        return
+      }
+      closed = await closeCliChatResumeTerminal(
+        source,
+        isCurrent,
+        {
+          // The close's own confirmations and exit waits have their own bounds.
+          prepared: () => clearTimeout(timer),
+          closing: () => {
+            closing = true
+            stopSource()
+          },
+          refused: () => {
+            // A newer continuation of this terminal tab answers the merged confirmation itself.
+            const superseded =
+              controller.signal.aborted &&
+              [...pending.values()].some(
+                (other) =>
+                  other.controller !== controller &&
+                  other.source.tabId === source.tabId &&
+                  other.source.executionHostId === source.executionHostId
+              )
+            if (!superseded && !chatClosed()) {
+              reportCliChatResumeTerminalChanged(source)
+            }
+          }
+        },
+        controller.signal,
+        close === 'close'
+      )
+      if (!closed) {
+        return
+      }
+      releaseCreate?.(true)
+    }
+    // A chat that ended before its tab opened has no terminal to close; its failure is said here.
     const result = await waitForPromiseWithSignal(launch.settlement, controller.signal)
-    if (result.kind === 'failed' && !result.notified && pending.get(key) === controller) {
+    if (result.kind !== 'failed' || chatClosed()) {
+      return
+    }
+    if (closed) {
+      await reportCliChatResumeFailureInChat(result.error, openOwner, target, dropChat)
+      return
+    }
+    if (!result.notified && pending.get(key)?.controller === controller) {
       await reportCliChatResumeFailure(source, result.error, openOwner, target)
     }
   } catch (error) {
-    if (pending.get(key) === controller) {
-      await reportCliChatResumeFailure(source, error, false, target)
+    if (closing && chatTabId && !chatClosed()) {
+      // The terminal is gone, so the chat that took its place says why, without a toast on top.
+      releaseCreate?.(
+        new StructuredAgentSessionCreateSourceFailedError(cliChatResumeExitUnprovenText(source))
+      )
+    } else if (pending.get(key)?.controller === controller) {
+      await reportCliChatResumeFailure(source, error, false, target, closing)
     }
   } finally {
+    finished = true
     clearTimeout(timer)
     stopSource()
+    if (releaseCreate && !closed) {
+      // Before the close the terminal stayed, so its replacement goes with nothing created.
+      releaseCreate(false)
+      if (!closing && !chatClosed()) {
+        dropChat()
+      }
+    }
     release()
   }
 }

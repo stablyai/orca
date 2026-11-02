@@ -24,7 +24,12 @@ const dusk: Record<string, string> = {
 }
 
 function derive(tokens: Record<string, string>, base: 'light' | 'dark' = 'dark') {
-  return derivePluginMonacoTheme({ base, read: (token) => tokens[token] ?? '', probe })
+  return derivePluginMonacoTheme({
+    base,
+    read: (token) => tokens[token] ?? '',
+    painted: tokens,
+    probe
+  })
 }
 
 describe('derivePluginMonacoTheme', () => {
@@ -55,10 +60,30 @@ describe('derivePluginMonacoTheme', () => {
     expect(derive({ ...dusk, '--editor-surface': 'not-a-color', '--background': '' })).toBeNull()
   })
 
+  it('keeps stock diff and link colors unless the theme painted those tokens', () => {
+    const document = { ...dusk, '--diff-added': '#00ff00', '--text-link': '#58a6ff' }
+    const read = (token: string) => document[token] ?? ''
+    const stock = derivePluginMonacoTheme({ base: 'dark', read, painted: dusk, probe })
+    expect(
+      Object.keys(stock?.data.colors ?? {}).filter((key) => /diff|textLink/.test(key))
+    ).toEqual([])
+    const themed = derivePluginMonacoTheme({
+      base: 'dark',
+      read,
+      painted: { ...dusk, '--diff-added': '#00ff00' },
+      probe
+    })
+    expect(themed?.data.colors).toMatchObject({
+      'diffEditorOverview.insertedForeground': '#00ff00'
+    })
+    expect(themed?.data.colors).not.toHaveProperty('textLink.foreground')
+  })
+
   it("paints the theme's tokenColors, blending translucent ones and dropping unreadable ones", () => {
     const theme = derivePluginMonacoTheme({
       base: 'dark',
       read: (token) => dusk[token] ?? '',
+      painted: dusk,
       probe,
       tokenColors: [
         { scope: 'keyword', settings: { foreground: '#ff2bd6' } },

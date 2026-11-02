@@ -16,11 +16,12 @@ import {
   advanceTranslationResourceVersion,
   getTranslationResourceVersion
 } from './translation-resource-version'
-import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
+import { resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import type { UiLanguage } from '../../../shared/ui-language'
 import type { PluginLanguagePackRegistration } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { supportedIntlLocale } from './intl-locale-support'
 import { createOrcaI18n } from '../../../shared/orca-i18n-instance'
 
 // Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
@@ -136,18 +137,6 @@ export function getIntlLocale(): string {
   const active = i18n.language
   const pack = orcaI18n.getPluginLanguagePacks().find((entry) => entry.resourceLanguage === active)
   return supportedIntlLocale(pack?.locale ?? active, Intl.DateTimeFormat)
-}
-
-function supportedIntlLocale(
-  locale: string,
-  intl: { supportedLocalesOf(locale: string): string[] }
-): string {
-  try {
-    // An unsupported tag would silently use the runtime locale; explicitly fall back to the default.
-    return intl.supportedLocalesOf(locale)[0] ?? DEFAULT_LOCALE
-  } catch {
-    return DEFAULT_LOCALE
-  }
 }
 
 export function setRendererPluginLanguagePacks(

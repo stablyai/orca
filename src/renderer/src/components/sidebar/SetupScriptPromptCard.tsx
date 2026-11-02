@@ -270,17 +270,15 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
             description:
               skippedCount > 0
-                ? skippedCount === 1
-                  ? translate(
-                      'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields_one',
-                      '{{count}} unsupported field skipped. Saved the setup command.',
-                      { count: skippedCount }
-                    )
-                  : translate(
-                      'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields_other',
-                      '{{count}} unsupported fields skipped. Saved the setup command.',
-                      { count: skippedCount }
-                    )
+                ? translate(
+                    'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields',
+                    '{{count}} unsupported fields skipped. Saved the setup command.',
+                    {
+                      count: skippedCount,
+                      defaultValue_one:
+                        '{{count}} unsupported field skipped. Saved the setup command.'
+                    }
+                  )
                 : translate(
                     'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
                     'Saved the setup command.'

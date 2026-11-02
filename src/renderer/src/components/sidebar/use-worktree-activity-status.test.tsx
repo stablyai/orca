@@ -1,11 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -24,12 +26,16 @@ type MockState = {
   retainedAgentsByPaneKey: Record<string, unknown>
   unifiedTabsByWorktree: Record<string, Tab[]>
   structuredChatSleptAtByPaneKey: Record<string, number | null>
+  wslHostStatuses?: Record<string, { state: string; distro: string }>
 }
 
 let mockState: MockState
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
+}))
+vi.mock('../terminal-pane/remote-server-outage', () => ({
+  selectWorkspaceRuntimeEnvironmentId: () => 'wsl:ubuntu'
 }))
 
 function makeTab(id: string, worktreeId: string): TerminalTab {
@@ -104,6 +110,10 @@ function StatusProbe({ worktreeId }: { worktreeId: string }) {
   return <span>{useWorktreeActivityStatus(worktreeId)}</span>
 }
 
+function StatusesProbe({ worktreeId }: { worktreeId: string }) {
+  return <span>{useWorktreeActivityStatuses([worktreeId]).get(worktreeId)}</span>
+}
+
 describe('useWorktreeActivityStatus', () => {
   beforeEach(() => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
@@ -156,6 +166,46 @@ describe('useWorktreeActivityStatus', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  // verify-7: a terminal on a terminated distro kept the workspace's green dot.
+  it('shows a workspace on a stopped WSL host as inactive, though its panes keep their bindings', () => {
+    const worktreeId = 'repo1::/home/u/app'
+    mockState = {
+      ...mockState,
+      tabsByWorktree: { [worktreeId]: [makeTab('tab-1', worktreeId)] },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      wslHostStatuses: { 'wsl:debian': { state: 'distro-stopped', distro: 'Debian' } }
+    }
+    // Another distro's stop is not this workspace's.
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
+    expect(renderToStaticMarkup(<StatusesProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
+    mockState = {
+      ...mockState,
+      wslHostStatuses: { 'wsl:ubuntu': { state: 'distro-stopped', distro: 'Ubuntu' } }
+    }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>inactive</span>'
+    )
+    expect(renderToStaticMarkup(<StatusesProbe worktreeId={worktreeId} />)).toBe(
+      '<span>inactive</span>'
+    )
+
+    // e9-reviewer: a pane bound to another, running server is the card's exception too.
+    mockState = {
+      ...mockState,
+      ptyIdsByTabId: { 'tab-1': [toRemoteRuntimePtyId('h1', 'ssh:desk')] }
+    }
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
+    expect(renderToStaticMarkup(<StatusesProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
+    )
   })
 
   it('keeps a restored offscreen working agent yellow from the hook snapshot', () => {

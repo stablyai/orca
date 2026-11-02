@@ -33,6 +33,14 @@ const ADD_COPY: Record<WslHostAddRefusalCode, (values: Values) => string | null>
       ? null
       : translate('sidebar.wslHosts.addErrors.distroStopped', ADD.distroStopped, { distro })
   },
+  distroUnverifiable: ({ text }) => {
+    const distro = text('distro')
+    return distro === null
+      ? null
+      : translate('sidebar.wslHosts.addErrors.distroUnverifiable', ADD.distroUnverifiable, {
+          distro
+        })
+  },
   wsl1: ({ text }) => {
     const distro = text('distro')
     return distro === null
@@ -76,16 +84,11 @@ const DETAIL_COPY: Record<WslHostStatusDetailCode, (values: Values) => string | 
     if (distro === null || count === null) {
       return null
     }
-    return count === 1
-      ? translate('sidebar.wslHosts.statusDetails.restartGaveUp_one', DETAIL.restartGaveUp.one, {
-          distro,
-          count
-        })
-      : translate(
-          'sidebar.wslHosts.statusDetails.restartGaveUp_other',
-          DETAIL.restartGaveUp.other,
-          { distro, count }
-        )
+    return translate('sidebar.wslHosts.statusDetails.restartGaveUp', DETAIL.restartGaveUp.other, {
+      distro,
+      count,
+      defaultValue_one: DETAIL.restartGaveUp.one
+    })
   },
   serviceUnconfirmed: () =>
     translate('sidebar.wslHosts.statusDetails.serviceUnconfirmed', DETAIL.serviceUnconfirmed),

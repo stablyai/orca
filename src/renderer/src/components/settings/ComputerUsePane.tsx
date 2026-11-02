@@ -120,17 +120,16 @@ export function ComputerUsePane(): React.JSX.Element {
             'auto.components.settings.computerUseSummary.readyDescription',
             'Agents can inspect and operate app windows when you ask.'
           )
-        : missingCount === 1
-          ? translate(
-              'auto.components.settings.computerUseSummary.permissionsRequired_one',
-              '{{value0}} permission required before agents can operate app windows.',
-              { value0: missingCount, count: missingCount }
-            )
-          : translate(
-              'auto.components.settings.computerUseSummary.permissionsRequired_other',
-              '{{value0}} permissions required before agents can operate app windows.',
-              { value0: missingCount, count: missingCount }
-            )
+        : translate(
+            'auto.components.settings.computerUseSummary.permissionsRequired',
+            '{{value0}} permissions required before agents can operate app windows.',
+            {
+              value0: missingCount,
+              count: missingCount,
+              defaultValue_one:
+                '{{value0}} permission required before agents can operate app windows.'
+            }
+          )
 
   useEffect(() => {
     mountedRef.current = true
@@ -198,7 +197,14 @@ export function ComputerUsePane(): React.JSX.Element {
       if (!mountedRef.current) {
         return
       }
-      if (result.launchedHelper) {
+      if (result.launchQueued) {
+        toast.message(
+          translate(
+            'auto.components.settings.ComputerUsePane.794807aa21',
+            'Queued macOS Privacy & Security; a newer request or a reset may replace it'
+          )
+        )
+      } else if (result.launchedHelper) {
         toast.message(
           translate(
             'auto.components.settings.ComputerUsePane.697005758f',

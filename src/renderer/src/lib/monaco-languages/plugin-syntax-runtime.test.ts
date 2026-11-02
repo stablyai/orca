@@ -127,5 +127,4 @@ it('flags revision A when its grammar crashes and shows nothing once B tokenizes
   await expect(working).resolves.toMatchObject({ data: expect.anything() })
   const state = failures.usePluginSyntaxFailureStore.getState()
   expect(state.failures).toEqual({})
-  expect(failures.hasPluginSyntaxFailure(state.failures, [b], 'samples.demo')).toBe(false)
 })

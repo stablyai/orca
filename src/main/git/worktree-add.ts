@@ -1,9 +1,11 @@
+import { GitCommandTimeoutError } from '../../shared/git-command-timeout'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../shared/worktree/base-ref-drift-types'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
@@ -19,7 +21,11 @@ import type {
   AddWorktreeResult,
   GitWorktreeExecOptions
 } from './worktree-operation-options'
-import { gitExecOptions, resolveWorktreeAddTimeoutMs } from './worktree-operation-options'
+import {
+  gitExecOptions,
+  resolveWorktreeAddTimeoutMs,
+  worktreeAddTimeoutMessage
+} from './worktree-operation-options'
 import { bumpWorktreeScanGeneration } from './worktree-scan-cache'
 import { assertNoPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import { createWorktreeCheckoutProgressReader } from './worktree-checkout-progress'
@@ -228,6 +234,8 @@ async function performAddWorktree(
   if (options.trackRemoteBranch && !baseBranch) {
     throw new Error('Reuse branch requires a remote-tracking ref when the local branch is missing.')
   }
+  // Overlaps base resolution; never rejects.
+  const checkoutWorkersArgs = noCheckout ? [] : checkoutWorkersGitArgs(repoPath, options)
   if (noCheckout) {
     args.push('--no-checkout')
   }
@@ -261,7 +269,7 @@ async function performAddWorktree(
       ? createWorktreeCheckoutProgressReader(options.onCheckoutProgress)
       : null
   try {
-    await gitExecFileAsync(args, {
+    await gitExecFileAsync([...(await checkoutWorkersArgs), ...args], {
       ...gitExecOptions(repoPath, options),
       // Resolve per call so later environment overrides take effect.
       timeout: resolveWorktreeAddTimeoutMs(),
@@ -270,6 +278,9 @@ async function performAddWorktree(
   } catch (error) {
     // Settle the refresh before leaving the caller's maintenance pause on failure.
     await pendingLocalBaseRefRefresh
+    if (error instanceof GitCommandTimeoutError) {
+      error.message = worktreeAddTimeoutMessage(error.timeoutMs)
+    }
     throw error
   } finally {
     checkoutProgress?.close()
