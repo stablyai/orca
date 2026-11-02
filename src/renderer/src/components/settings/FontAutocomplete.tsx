@@ -353,7 +353,8 @@ export function FontAutocomplete({
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setHighlightedIndex(sourceIndex)}
                     onClick={() => commitValue(font)}
-                    className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors ${
+                    // Why content-visibility: each row loads its own font, so skip offscreen rows until scrolled to.
+                    className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors [contain-intrinsic-size:auto_36px] [content-visibility:auto] ${
                       sourceIndex === highlightedIndex
                         ? 'bg-accent text-accent-foreground'
                         : 'hover:bg-muted/60'
