@@ -21,10 +21,7 @@ export function extractWorktreePaletteCommentSnippet(
     snippetEnd++
   }
 
-  // Why: the offsets above count UTF-16 code units and the boundary loops test one unit at
-  // a time, so either edge can land between the halves of a surrogate pair \u2014 CJK text backs
-  // up the full 10 iterations without ever finding whitespace. Snap outward to keep the pair
-  // whole; matchRange derives from snippetStart, so widening by one keeps it correct.
+  // UTF-16 offsets/whitespace scans can split surrogate pairs, especially after 10 CJK steps. Snap outward; matchRange follows snippetStart and stays correct.
   if (snippetStart > 0 && (comment.charCodeAt(snippetStart) & 0xfc00) === 0xdc00) {
     snippetStart -= 1
   }

@@ -1,7 +1,7 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 
-// Why: these values predate buildDefaultSettings' current defaults; codex-account suites assert against them.
+// Preserve historical account-test defaults independently of current app defaults.
 export function createCodexAccountSettings(
   workspaceDir: string,
   overrides: Partial<GlobalSettings> = {}
@@ -18,7 +18,6 @@ export function createCodexAccountSettings(
     terminalDividerColorLight: '#ffffff',
     terminalPaneOpacityTransitionMs: 150,
     terminalDividerThicknessPx: 1,
-    setupScriptLaunchMode: 'split-vertical',
     localAccountRuntime: 'host',
     floatingTerminalEnabled: false,
     terminalMacOptionAsAlt: 'false',

@@ -15,7 +15,7 @@ import { requiresSystemSshForSecurityKey } from './ssh-transport-selection'
 
 const { findSystemSshMock } = vi.hoisted(() => ({ findSystemSshMock: vi.fn() }))
 
-vi.mock('./system-ssh-binary', () => ({ findSystemSsh: findSystemSshMock }))
+vi.mock('./system-transport/system-ssh-binary', () => ({ findSystemSsh: findSystemSshMock }))
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<{ homedir: () => string }>()

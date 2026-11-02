@@ -100,8 +100,7 @@ function appendMiddleDiff(
     appendExactLineDiff(original, modified, appendOperation)
     return
   }
-  // Why: the Tasks diff UI renders a capped preview. Stream fallback rows so a
-  // generated PR file does not allocate thousands of discarded row objects.
+  // Stream capped preview rows so large generated files cannot allocate discarded diff rows.
   for (const oldLine of original) {
     appendOperation({ kind: 'removed', oldLine })
   }

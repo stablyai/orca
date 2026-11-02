@@ -9,10 +9,7 @@ type Fetch = typeof fetch
 const lookupSchema = z.looseObject({ results: z.array(z.unknown()) })
 const listingSchema = z.looseObject({ version: z.string(), trackViewUrl: z.string() })
 
-/**
- * The store listing's version and page. TestFlight installs have no receipt signal without a new
- * dependency; they stay quiet because their build is at or ahead of the store's version.
- */
+// No TestFlight receipt dependency: builds at/ahead of App Store version remain quiet.
 export function parseAppStoreLookup(reply: unknown): { version: string; url: string } | null {
   const lookup = lookupSchema.safeParse(reply)
   const listing = listingSchema.safeParse(lookup.success ? lookup.data.results[0] : null)

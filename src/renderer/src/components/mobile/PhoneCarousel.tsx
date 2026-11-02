@@ -16,6 +16,7 @@ export function PhoneCarousel(): React.JSX.Element {
   const [tappingSlide, setTappingSlide] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- Cleanup clears all four timers the schedule chain re-arms.
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -36,7 +37,6 @@ export function PhoneCarousel(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        // Pulse the tap target on the current slide, then advance.
         if (idx < 2) {
           setTappingSlide(idx)
           tapTimer = setTimeout(() => {
@@ -54,7 +54,6 @@ export function PhoneCarousel(): React.JSX.Element {
             schedule(next)
           }, TAP_BEFORE_PUSH_MS)
         } else {
-          // Hard cut back to home — snap with no transition, then re-enable.
           setPhase('reset')
           setActiveIdx(0)
           resetTimer = setTimeout(() => {
@@ -68,7 +67,6 @@ export function PhoneCarousel(): React.JSX.Element {
       }, DWELL_MS)
     }
 
-    // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: the first tap pulse is intentionally delayed until after the initial dwell.
     schedule(0)
 
     return () => {
@@ -88,16 +86,12 @@ export function PhoneCarousel(): React.JSX.Element {
     }
   }, [])
 
-  // Why: while the slide reset is in progress we want all slides to snap
-  // back to their off-stage positions with no transition; the next render
-  // tick removes is-reset so the subsequent push animates again.
+  // Flush the no-transition reset before re-enabling transitions for the next slide.
   useEffect(() => {
     if (phase !== 'reset') {
       return
     }
     const id = requestAnimationFrame(() => {
-      // force layout so the no-transition state takes effect before
-      // transitions are re-enabled
       void containerRef.current?.offsetHeight
     })
     return () => cancelAnimationFrame(id)

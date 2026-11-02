@@ -82,18 +82,11 @@ type HiddenPressureAckGate = {
   heldAckChars: number
 }
 
-// Why: restore still has to finish promptly, but parallel Electron workers on
-// Linux CI can overshoot the 1s product target without a responsiveness regression.
-// 4s covers drain-plus-poll overhead on loaded OSS runners. The post-flood repaint path
-// spends ~2.75s of that (750ms deadline + 2s suppression), so the poll below reads the
-// viewport on a fixed interval rather than serializing scrollback on a backoff.
+// Allow loaded-CI restore overhead within 4s; poll at fixed intervals to avoid serializing whole buffers on backoff.
 const MAX_HIDDEN_RESTORE_LATENCY_MS = 4_000
-// Why: Phase-4 hidden-delivery gate contract — hidden PTY bytes are dropped in
-// main after model ingestion, so renderer-delivery pressure must stay FAR
-// below the old 2 MB ACK-backpressure target instead of reaching it.
+// Hidden bytes drop in main after ingestion, so delivery pressure must stay below the former ACK-backpressure target.
 const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
-// Why: in this hidden real-PTY pressure case, maxTimerDriftMs and worst-key
-// latency catch the same isolated CI starvation spike; median remains strict.
+// Worst-key latency and timer drift share CI starvation spikes; keep the median strict.
 const MAX_HIDDEN_PRESSURE_TIMER_DRIFT_MS = 3_000
 
 export async function runHiddenRealPtyPressureScenario<
@@ -165,10 +158,7 @@ export async function runHiddenRealPtyPressureScenario<
     await switchToTypingWorkspace(orcaPage, firstWorktreeId)
     const typingPtyId = await waitForActivePanePtyId(orcaPage)
 
-    // Why: under the Phase-4 hidden-delivery gate the hidden panes' bytes are
-    // dropped in main after model ingestion, so renderer-delivery pressure
-    // never builds. Wait for the gate to drop at least one pane's worth of
-    // output instead of the old 2 MB ACK-backpressure target.
+    // Wait for main to drop a pane’s output; hidden delivery no longer builds the old ACK-pressure backlog.
     await waitForMainHiddenDeliveryDrops(orcaPage, deps, pressureOutputChars)
     const measurement = await deps.measureTypingDuringLoad(
       orcaPage,
@@ -191,27 +181,18 @@ export async function runHiddenRealPtyPressureScenario<
       ackGate
     )
 
-    // Hidden-delivery contract (all pressure modes): bytes never reach the
-    // renderer — main's drop counter is the withheld-output signal (the
-    // renderer skip counters were deleted with the skip grammar) — and main's
-    // renderer-delivery pressure must stay clearly below the old 2 MB
-    // backpressure target.
+    // Assert main’s drop counter: hidden bytes never reach renderer delivery or its former skip counters.
     expect(mainPressure?.hiddenDeliveryDroppedChars ?? 0).toBeGreaterThanOrEqual(
       pressureOutputChars
     )
     expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeLessThan(
       MAIN_RENDERER_PRESSURE_TARGET_CHARS
     )
-    // Why: the renderer scheduler queue must stay ~empty (no hidden bytes to
-    // queue) and must never drop a backlog — strict, per the gate contract.
+    // Hidden delivery must leave the renderer queue nearly empty without backlog drops.
     expect(scheduler?.peakQueuedChars ?? 0).toBeLessThan(pressureOutputChars)
     expect(scheduler?.droppedBacklogCount ?? Number.POSITIVE_INFINITY).toBe(0)
     expect(measurement.medianLatencyMs).toBeLessThan(75)
-    // Why: worst *single-key echo* under 8MB synthetic backpressure lands behind
-    // whichever flush it collides with, so on a contended OSS shard it is
-    // environment-dominated (seen at ~2s). Keep it only as a catastrophic-hang
-    // detector — the original regression (input freezing for seconds) shows up in
-    // the median too. Aligns with ssh-docker-relay-perf's 2s worst-key tolerance.
+    // A single echo can collide with a loaded flush; use worst latency only for hangs while median detects sluggish typing.
     expect(measurement.worstLatencyMs).toBeLessThan(3_000)
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_HIDDEN_PRESSURE_TIMER_DRIFT_MS)
 
@@ -245,9 +226,7 @@ export async function runHiddenRealPtyPressureScenario<
   }
 }
 
-// Why: replaces the old waitForMainPtyPressureBacklog premise — the Phase-4
-// gate drops hidden bytes in main, so renderer-delivery pressure never builds;
-// readiness is the gate reporting one pane's worth of dropped output.
+// Readiness is a pane’s worth of hidden output dropped in main, not the former delivery backlog.
 async function waitForMainHiddenDeliveryDrops<TMainPressure extends HiddenPressureMainSnapshot>(
   orcaPage: Page,
   deps: { readMainPtyPressureDebug: (page: Page) => Promise<TMainPressure | null> },
@@ -268,8 +247,7 @@ async function measureHiddenOutputRestoreLatency(
 ): Promise<number> {
   const restoreStart = performance.now()
   await switchToWorktree(orcaPage, worktreeId)
-  // Why resolve rather than read activeTabId: after a worktree switch the active tab can
-  // still be the previous worktree's, or a non-terminal one; this picks the worktree's own.
+  // Resolve this worktree’s terminal; activeTabId may still name the previous worktree or another tab kind.
   const tabId = (await resolveActiveTabId(orcaPage)) ?? ''
   await expect
     .poll(async () => (await readActiveScreen(orcaPage, tabId))?.rows.join('\n') ?? '', {

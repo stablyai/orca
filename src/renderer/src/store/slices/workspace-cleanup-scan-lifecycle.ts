@@ -71,10 +71,7 @@ export async function scanWorkspaceCleanup(
     }
   }
 
-  // Why: a different scan key (git deferrals track live tab/agent state) must
-  // not leave the previous fleet scan running concurrently in main — cancel
-  // and supersede it instead of racing it. Legacy suggestion-only and
-  // full-workspace scans are separate modes and never supersede each other.
+  // Supersede changed fleet-scan keys instead of running concurrent scans; legacy suggestion and full-workspace modes remain independent.
   supersedeInFlightWorkspaceCleanupScans(
     window.api.workspaceCleanup.cancelScan,
     (key) => getWorkspaceCleanupScanKeyMode(key) === (scanArgs.includeAllWorkspaces === true)

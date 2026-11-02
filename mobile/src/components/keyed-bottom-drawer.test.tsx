@@ -2,9 +2,7 @@ import { createElement, Profiler, useLayoutEffect, useState, type ReactElement }
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
-// iOS cannot present a native Modal while another is still presented, even mid-close. Each mounted
-// MountedBottomDrawer is one native Modal; this mock records when each mounts and unmounts, in which
-// commit, and which sheets it ever showed, so the tests can check the drawer's lifecycle directly.
+// Record native Modal mount/unmount commits and sheets shown; iOS rejects second modal even while first closes, so lifecycle ordering matters.
 
 type Drawer = {
   id: number
@@ -202,8 +200,7 @@ describe('KeyedBottomDrawer', () => {
     expect(mounts()).toHaveLength(1)
   })
 
-  // The hide animation finishes, the sheet reopens before the scheduled JS callback runs, and then
-  // the callback lands: it must not unmount the shown sheet or swallow the next close.
+  // Invalidate queued hide when sheet reopens before callback or it unmounts live sheet and swallows next close.
   it('ignores a hide that lands after a reopen and still honours the next close', () => {
     request(A)
     const drawer = only()!

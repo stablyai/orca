@@ -1,16 +1,18 @@
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { pendingByPaneKey, rendererSerializerReadiness } from './serializer-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { buildFreshShellViewportBlankingSequence } from '../../../../shared/terminal-fresh-shell-viewport'
 
 export function seedHeadlessTerminalFromSpawnResult(
   runtime: OrcaRuntimeService | undefined,
   result: PtySpawnResult,
   paneKey: string | null
 ): void {
-  // A mounted renderer owns richer history than the provider snapshot.
+  // Renderer-owned layout prefers its richer history; main-owned layout must seed the host copy every view restores.
   if (
     !runtime ||
-    (paneKey && pendingByPaneKey.has(paneKey)) ||
+    (!ORCA_LAYOUT_OWNER_IS_MAIN && paneKey && pendingByPaneKey.has(paneKey)) ||
     (result.isReattach === true && rendererSerializerReadiness.has(result.id))
   ) {
     return
@@ -35,7 +37,12 @@ export function seedHeadlessTerminalFromSpawnResult(
       typeof result.coldRestore.cols === 'number' && typeof result.coldRestore.rows === 'number'
         ? { cols: result.coldRestore.cols, rows: result.coldRestore.rows }
         : undefined
-    runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, size, {
+    // A fresh shell follows the restored history: park the cursor below it, as the window does,
+    // or a view painted from this copy (a paired host's desktop, a phone) joins the new prompt.
+    const seed = `${result.coldRestore.scrollback}${buildFreshShellViewportBlankingSequence(
+      size?.rows ?? 24
+    )}`
+    runtime.seedHeadlessTerminal(result.id, seed, size, {
       cwd: result.coldRestore.cwd,
       oscLinks: result.coldRestore.oscLinks,
       preferProviderIfExisting: true

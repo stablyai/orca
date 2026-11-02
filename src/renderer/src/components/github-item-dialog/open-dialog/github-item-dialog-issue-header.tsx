@@ -23,9 +23,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function GitHubItemDialogIssueHeader({
   workItem,
@@ -119,7 +121,7 @@ export function GitHubItemDialogIssueHeader({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => window.api.shell.openUrl(workItem.url)}
+                  onClick={(event) => openAppHttpLink(workItem.url, { event })}
                   aria-label={translate(
                     'auto.components.GitHubItemDialog.3fdf777817',
                     'Open on GitHub'
@@ -143,7 +145,7 @@ export function GitHubItemDialogIssueHeader({
             <span className="ml-2 font-light text-muted-foreground">#{workItem.number}</span>
           </h1>
           <div className="flex shrink-0 items-center gap-2">
-            {/* Why: Orca's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
+            {/* Keep Orca’s primary workspace action prominent. */}
             {issueAttachedWorkspace ? (
               <DropdownMenu modal={false}>
                 <ButtonGroup>
@@ -181,7 +183,7 @@ export function GitHubItemDialogIssueHeader({
                       'Start new workspace'
                     )}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
+                  <DropdownMenuItem onSelect={() => openAppHttpLink(workItem.url)}>
                     <ExternalLink className="size-4" />
                     {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
                   </DropdownMenuItem>
@@ -224,16 +226,31 @@ export function GitHubItemDialogIssueHeader({
               : translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
           </span>
           <span className="flex flex-wrap items-center gap-1.5">
-            <span className="font-semibold text-foreground">
-              {workItem.author ??
-                translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
-            </span>
             <span>
-              {translate('auto.components.GitHubItemDialog.55962099bc', 'opened this issue')}
+              <Trans
+                i18n={i18n}
+                defaults={translate(
+                  'auto.components.GitHubItemDialog.authorOpenedThisIssue',
+                  '<author/> opened this issue'
+                )}
+                components={{
+                  author: (
+                    <span className="font-semibold text-foreground">
+                      {workItem.author ??
+                        translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                    </span>
+                  )
+                }}
+              />
             </span>
             <span className="text-muted-foreground/80">
-              {translate('auto.components.GitHubItemDialog.10ef1afb8e', '· updated')}{' '}
-              {formatRelativeTime(workItem.updatedAt)}
+              {translate(
+                'auto.components.GitHubItemDialog.middotUpdatedRelativeTime',
+                '· updated {{time}}',
+                {
+                  time: formatRelativeTime(workItem.updatedAt)
+                }
+              )}
             </span>
           </span>
           <WorkItemIssueSourceIndicator

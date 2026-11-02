@@ -1,16 +1,7 @@
-/**
- * Renderer-side predicate for main's Phase-4 hidden PTY delivery gate.
- *
- * The gate only operates when main holds side-effect authority for the PTY
- * (see isMainTerminalSideEffectAuthorityForPty) AND the gate-specific kill
- * switch is on. Callers decide once at pane/watcher creation — the decision
- * picks which observer records mode-2031 subscriptions (byte scan vs fact),
- * so it must never flip per chunk.
- */
+/** Select hidden-delivery authority once at pane/watcher creation; mode-2031 byte-scan versus fact observers cannot change per chunk. Requires main side-effect authority and the gate switch. */
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
-// Why: cached once per session — the blocking read should only ever run on
-// the pre-hydration startup path, never per pane bind.
+// Cache the blocking read once on pre-hydration startup, never per pane bind.
 let persistedGateFlagCache: boolean | null | undefined
 
 function readPersistedHiddenDeliveryGateFlagSync(): boolean | null {
@@ -32,9 +23,6 @@ export function isRendererHiddenPtyDeliveryGateEnabled(
   if (settings !== null) {
     return settings.terminalHiddenDeliveryGate !== false
   }
-  // Why: settings hydrate asynchronously; a pane/watcher bound before
-  // hydration must honor the persisted kill switch — the responder-mode
-  // decision made here is never revisited (same rationale as the
-  // side-effect-authority sync read).
+  // Pre-hydration bindings must honor the persisted kill switch; this observer decision is never revisited.
   return readPersistedHiddenDeliveryGateFlagSync() !== false
 }

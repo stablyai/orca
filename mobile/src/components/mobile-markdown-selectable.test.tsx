@@ -5,6 +5,7 @@ import { MobileMarkdown } from './MobileMarkdown'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: () => Promise.resolve() },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -13,6 +14,7 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
+vi.mock('./MobileSourceCopyButton', () => ({ MobileSourceCopyButton: 'MobileSourceCopyButton' }))
 
 type TestNode = {
   type: string
@@ -64,8 +66,7 @@ function selectableFor(tree: TestNode, needle: string): boolean {
 describe('MobileMarkdown selection', () => {
   afterEach(() => vi.clearAllMocks())
 
-  // Paragraphs are the default block for agent prose, and were the one block
-  // type left non-selectable when the others gained it.
+  // Regress paragraphs left non-selectable when other blocks gained iOS selection.
   it.each([
     ['paragraph', 'Paragraph prose here.'],
     ['heading', 'Heading prose'],

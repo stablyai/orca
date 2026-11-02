@@ -27,33 +27,23 @@ import {
 } from './config-plugin-registration-promotion'
 import { hasCodexRegistrationEntries } from './config-toml-plugin-registration-tables'
 
-// Why: the mirror reverts in-Codex config changes each launch; promotion salvages them by diffing the last baseline.
-
 export type CodexSettingsBaselineSnapshotOptions = {
   conflicts?: ReadonlyMap<string, CodexSettingsConflict>
-  /**
-   * Whether a mirror actually made the runtime's registration tables canonical.
-   * A bootstrap baseline must leave this false: claiming tables Orca never
-   * mirrored would read a source config that never had them as a removal.
-   */
+  /** False for bootstrap baselines, which cannot establish canonical registration ownership. */
   mirroredRegistrations?: boolean
   /** Names copied from the canonical source in this mirror pass. */
   mirroredMcpServers?: ReadonlySet<string>
   mirroredMcpServerRoot?: boolean
 }
 
-/**
- * Records the promotable settings the runtime config.toml holds after a mirror, so the next
- * promotion can tell "value Orca mirrored" from "value Codex wrote for the user".
- * Call after a successful mirror only — advancing past an unpromoted change strands it forever.
- */
+/** Snapshot only after a successful mirror so pending runtime changes remain promotable. */
 export function snapshotCodexRuntimeSettingsBaseline(
   runtimeHomePath = getOrcaManagedCodexHomePath(),
   options: CodexSettingsBaselineSnapshotOptions = {}
 ): void {
   try {
     const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
-    // Why: record an empty baseline even for a missing runtime config, so Codex's first write still diffs and promotes.
+    // An empty baseline lets the first Codex write be detected and promoted.
     const observation = observeAgentStateFile(runtimeTomlPath)
     if (observation.kind === 'indeterminate') {
       throw observation.error
@@ -65,7 +55,7 @@ export function snapshotCodexRuntimeSettingsBaseline(
     for (const key of PROMOTED_STRUCTURED_KEYS) {
       const value = runtimeValues.get(key)
       if (!conflicts.has(key) && !value?.multiline) {
-        // Why: explicit nulls distinguish a schema-aware absence from a key added by a later schema.
+        // Null distinguishes known absence from keys added by a later schema.
         settings.set(key, value?.raw ?? null)
       }
     }
@@ -105,18 +95,14 @@ function getHostPromotionHomes(): CodexSettingsPromotionHomes {
   }
 }
 
-/**
- * Promotes in-Codex setting changes from the runtime config.toml into ~/.codex/config.toml.
- * Runs before the config mirror so promoted values survive it instead of reverting.
- * WSL callers pass explicit per-distro homes; default is the host runtime home and ~/.codex.
- */
+/** Promote runtime edits before the mirror overwrites them; WSL callers supply per-distro homes. */
 export function promoteCodexRuntimeSettingsToSystem(
   homes?: CodexSettingsPromotionHomes
 ): CodexSettingsPromotionPlan | null {
   try {
     return promoteCodexRuntimeSettingsToSystemUnsafe(homes ?? getHostPromotionHomes())
   } catch (error) {
-    // Why: promotion is best-effort launch prep; a malformed file must not block Codex launch.
+    // Failed promotion must not block Codex launch.
     console.warn('[codex-settings-promotion] failed to promote runtime settings', error)
     return null
   }
@@ -136,17 +122,13 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     return emptyPromotionPlan()
   }
   if (runtimeTomlObservation.kind === 'indeterminate') {
-    // Why: the caller turns a throw into the existing "stall and retry" null. An
-    // empty plan here would instead let the mirror proceed against a runtime
-    // config nobody read.
+    // Throw to stall the mirror rather than overwrite unreadable runtime changes.
     throw runtimeTomlObservation.error
   }
-  // Why: without a baseline, a stale runtime scalar looks like a fresh in-Codex change; skip until the mirror writes one.
+  // Scalars need a baseline to distinguish stale copies from new Codex edits.
   const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
   if (baselineObservation.kind === 'indeterminate') {
-    // Why: an empty plan here lets the mirror proceed and write the system value
-    // back over an in-Codex edit this baseline would have identified. The caller
-    // turns a throw into the existing stall-and-retry null.
+    // An unreadable baseline cannot authorize mirroring over possible runtime edits.
     throw new Error('Codex settings baseline could not be read')
   }
   const baseline = baselineObservation.kind === 'present' ? baselineObservation.baseline : null
@@ -165,44 +147,28 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
       runtimeValuesToPreserve
     })
   }
-  // Why: registration tables reconcile against the mirrored-table baseline, which
-  // is legitimately empty before the first mirror — a table Orca never made
-  // canonical is an addition, never a removal it must honor. Scalars still need a
-  // real baseline, so they stay gated above.
+  // Registrations can promote before the first mirror because untracked tables are additions.
   if (updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)) {
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
-  // Why: a fresh host has no ~/.codex; create it owner-only (holds auth.json) or the atomic write ENOENTs and the mirror wipes it.
+  // A new home may later hold auth.json, so create it owner-only.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
-  // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
+  // Dangling dotfile links may target a parent directory that does not exist yet.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
-  // Why: this is the user's real ~/.codex/config.toml, and an indeterminate
-  // existence probe sent it down the reconstruct branch below, which replaces
-  // the canonical config with settings derived from Orca's runtime copy. One
-  // read replaces the old existsSync + read pair and its TOCTOU gap.
-  // With a baseline, this arm is a backstop — an unreadable system config
-  // already refused in readPromotedSettingValues, because `writeTarget.path`
-  // always resolves to the same file as `systemTomlPath` (its realpath, its
-  // dangling-link target, or itself). Registration reconciliation runs without
-  // a baseline and skips that read, so here it IS the live guard.
+  // Read the target before reconstructing it; registration promotion can run without a baseline.
   const writeTargetObservation = observeAgentStateFile(writeTarget.path)
   if (writeTargetObservation.kind === 'indeterminate') {
     throw writeTargetObservation.error
   }
   const targetExists = writeTargetObservation.kind === 'present'
-  // Why: seeding a brand-new ~/.codex/config.toml from the promoted keys alone
-  // would leave a skeleton the next mirror treats as authoritative, deleting
-  // every other runtime setting (mcp_servers, features). With no system config
-  // the runtime IS the user's config, so carry its ordinary settings across.
+  // Seed missing or blank sources with all ordinary runtime settings so the next mirror retains them.
   const systemContent =
-    writeTargetObservation.kind === 'present'
+    writeTargetObservation.kind === 'present' && writeTargetObservation.value.trim() !== ''
       ? writeTargetObservation.value
       : extractOrdinaryCodexSettings(runtimeTomlObservation.value)
   const withPromotedSettings = upsertPromotedSettingsInContent(systemContent, updates)
-  // Why: plan against the content actually being edited, not a second read of the
-  // source — when the system config is seeded from the runtime, its registration
-  // tables are already present and re-appending them would duplicate the table.
+  // Plan against the seeded content to avoid appending registration tables already copied from runtime.
   const nextContent = applyCodexRegistrationPromotions(
     withPromotedSettings,
     planCodexRegistrationPromotion(
@@ -215,7 +181,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
   if (targetExists && parseWslUncPath(writeTarget.path)) {
-    // Why: \\wsl$ 9P symlink metadata is unreliable; write through the existing file to preserve the WSL-side inode.
+    // WSL 9P symlink metadata is unreliable; write through to preserve the guest inode.
     writeFileSync(writeTarget.path, nextContent, 'utf-8')
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
@@ -248,7 +214,7 @@ function collectPromotionChanges(context: PromotionCollectionContext): void {
       if (resolution.action === 'promote-runtime') {
         context.updates.set(key, resolution.raw)
       } else if (resolution.action === 'preserve') {
-        // Why: a schema-new key has no three-way ancestor; preserve both values until content changes one side.
+        // Without an ancestor, preserve both values until a later edit resolves the conflict.
         context.conflicts.set(key, resolution.conflict)
         context.runtimeValuesToPreserve.set(key, runtimeRaw)
       }
@@ -258,7 +224,7 @@ function collectPromotionChanges(context: PromotionCollectionContext): void {
     if (runtimeRaw === null || runtimeRaw === context.baseline.settings.get(key)) {
       continue
     }
-    // Why: ~/.codex remains source of truth when both sides changed from a known baseline.
+    // Canonical edits win when both sides changed from the known baseline.
     if (systemRaw !== context.baseline.settings.get(key)) {
       continue
     }
@@ -281,5 +247,3 @@ function emptyPromotionPlan(): CodexSettingsPromotionPlan {
     mirroredMcpServerRoot: false
   }
 }
-
-// Why: follow an existing dotfile-manager symlink and carry its mode forward so an atomic write can't widen a 0600 config.

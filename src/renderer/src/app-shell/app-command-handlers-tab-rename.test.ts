@@ -49,12 +49,7 @@ function unifiedTab(overrides: Partial<Tab> & Pick<Tab, 'id' | 'entityId' | 'con
   }
 }
 
-/**
- * Builds the store the real app has when `activeGroupTabId` is focused: the raw group/tab state
- * plus the active-surface fields derived from it by the same code the store runs. That derivation
- * is what leaves `activeTabId` pointing at a background terminal while a structured tab is active,
- * so stubbing those fields instead would hide exactly the half under test.
- */
+/** Derive active surfaces as the real store does: structured-chat focus leaves activeTabId on the last terminal. Stubbing it would hide the rename defect. */
 function storeForActiveTab(activeGroupTabId: string): AppState {
   const groups: TabGroup[] = [
     {
@@ -128,7 +123,7 @@ describe('tab.rename shortcut', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('leaves activeTabId on a background terminal while a structured tab is active', () => {
-    // Guards the premise of the test below: without this the structured case proves nothing.
+    // Prove the stale-terminal premise before testing structured-tab rename.
     mocks.store = storeForActiveTab(CHAT_UNIFIED_ID)
     expect(mocks.store.activeTabType).toBe('agent-session')
     expect(mocks.store.activeTabId).toBe(TERMINAL_ENTITY_ID)

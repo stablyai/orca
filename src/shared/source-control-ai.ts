@@ -7,6 +7,11 @@ import {
   resolveCommitMessageAgentChoice
 } from './commit-message-agent-spec'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from './commit-message-host-key'
+import {
+  textGenerationFailure,
+  type TextGenerationFailureCode,
+  type TextGenerationFailureFields
+} from './text-generation-failure-copy'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 import type { TuiAgent } from './tui-agent'
@@ -38,10 +43,7 @@ import {
   sourceControlAiSettingsFromLegacy as settingsFromLegacy
 } from './source-control-ai-settings'
 import { hasActionAgentRecipe } from './source-control-ai-command-template'
-import type {
-  SourceControlAiOperation,
-  SourceControlAiPrCreationDefaults
-} from './source-control-ai-types'
+import type { AiTextOperation, SourceControlAiPrCreationDefaults } from './source-control-ai-types'
 
 export const DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS = DEFAULT_PR_CREATION_DEFAULTS
 
@@ -64,16 +66,23 @@ export type ResolvedSourceControlAiOperation = {
 
 export type ResolveSourceControlAiResult =
   | { ok: true; value: ResolvedSourceControlAiOperation }
-  | { ok: false; error: string }
+  | ({ ok: false } & TextGenerationFailureFields)
+
+export type SourceControlAiSettingsInput = Partial<
+  Pick<
+    GlobalSettings,
+    | 'defaultTuiAgent'
+    | 'agentCmdOverrides'
+    | 'commitMessageAi'
+    | 'sourceControlAi'
+    | 'disabledTuiAgents'
+  >
+>
 
 type ResolveSourceControlAiInput = {
-  settings: Pick<
-    GlobalSettings,
-    'defaultTuiAgent' | 'agentCmdOverrides' | 'commitMessageAi' | 'sourceControlAi'
-  > &
-    Partial<Pick<GlobalSettings, 'disabledTuiAgents'>>
+  settings: SourceControlAiSettingsInput
   repo?: Pick<Repo, 'sourceControlAi'> | null
-  operation: SourceControlAiOperation
+  operation: AiTextOperation
   discoveryHostKey?: string
   prCreationProductDefaults?: SourceControlAiPrCreationDefaults
 }
@@ -99,16 +108,30 @@ export const resolveSourceControlAiPrCreationDefaults = resolvePrDefaults
 export const resolveSourceControlAiEnabled = resolveEnabled
 export const resolveSourceControlActionRecipe = resolveActionRecipe
 
-const OPERATION_LABEL: Record<SourceControlAiOperation, string> = {
-  commitMessage: 'commit messages',
-  pullRequest: 'pull request details',
-  branchName: 'branch names'
+const COMMAND_TEMPLATE_EMPTY = {
+  commitMessage: 'commandTemplateEmptyCommitMessage',
+  pullRequest: 'commandTemplateEmptyPullRequest',
+  branchName: 'commandTemplateEmptyBranchName',
+  conversationName: 'commandTemplateEmptyChatName'
+} as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
+
+const AGENT_CANNOT_GENERATE = {
+  commitMessage: 'agentCannotGenerateCommitMessage',
+  pullRequest: 'agentCannotGeneratePullRequest',
+  branchName: 'agentCannotGenerateBranchName',
+  conversationName: 'agentCannotGenerateChatName'
+} as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
+
+function supportedAgentLabels(): string {
+  return listCommitMessageAgentCapabilities()
+    .map((capability) => capability.label)
+    .join(', ')
 }
 
-function supportedAgentSummary(): string {
-  return `Supported agents: ${listCommitMessageAgentCapabilities()
-    .map((capability) => capability.label)
-    .join(', ')}, or Custom command.`
+function resolveFailure(
+  failure: TextGenerationFailureFields
+): { ok: false } & TextGenerationFailureFields {
+  return { ok: false, ...failure }
 }
 
 export function resolveSourceControlAiForOperation(
@@ -116,7 +139,18 @@ export function resolveSourceControlAiForOperation(
 ): ResolveSourceControlAiResult {
   const legacy = input.settings.commitMessageAi
   const source = normalizeSettings(input.settings.sourceControlAi, legacy)
-  const repoOverrides = normalizeRepoOverrides(input.repo?.sourceControlAi)
+  const repoOverrides =
+    input.operation === 'conversationName'
+      ? null
+      : normalizeRepoOverrides(input.repo?.sourceControlAi)
+  const forChatNames = input.operation === 'conversationName'
+  const agentUnsupported = (): { ok: false } & TextGenerationFailureFields =>
+    resolveFailure(
+      textGenerationFailure(
+        forChatNames ? 'chatNameAgentUnsupported' : 'sourceControlAgentUnsupported',
+        { agents: supportedAgentLabels() }
+      )
+    )
   const prCreationDefaults = resolvePrCreationDefaults(
     source,
     repoOverrides,
@@ -124,10 +158,7 @@ export function resolveSourceControlAiForOperation(
   )
   const actionRecipe = resolveActionRecipeForTextOperation(source, repoOverrides, input.operation)
   if (!actionRecipe.commandInputTemplate.trim()) {
-    return {
-      ok: false,
-      error: `Command template is empty for ${OPERATION_LABEL[input.operation]}.`
-    }
+    return resolveFailure(textGenerationFailure(COMMAND_TEMPLATE_EMPTY[input.operation]))
   }
   const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
   const agentChoice = resolveCommitMessageAgentChoice(
@@ -136,10 +167,7 @@ export function resolveSourceControlAiForOperation(
     input.settings.disabledTuiAgents
   )
   if (!agentChoice) {
-    return {
-      ok: false,
-      error: `Choose a supported Source Control AI agent for this action in Settings -> Git -> Source Control AI. ${supportedAgentSummary()}`
-    }
+    return agentUnsupported()
   }
 
   const customAgentCommand =
@@ -156,10 +184,11 @@ export function resolveSourceControlAiForOperation(
   }
   if (isCustomAgentId(agentChoice)) {
     if (!customAgentCommand) {
-      return {
-        ok: false,
-        error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
-      }
+      return resolveFailure(
+        textGenerationFailure(
+          forChatNames ? 'chatNameCustomCommandEmpty' : 'sourceControlCustomCommandEmpty'
+        )
+      )
     }
     return {
       ok: true,
@@ -186,17 +215,16 @@ export function resolveSourceControlAiForOperation(
           input.settings.disabledTuiAgents
         )
   if (!resolvedAgent || isCustomAgentId(resolvedAgent)) {
-    return {
-      ok: false,
-      error: `Choose a supported Source Control AI agent for this action. ${supportedAgentSummary()}`
-    }
+    return agentUnsupported()
   }
   const spec = getCommitMessageAgentSpec(resolvedAgent)
   if (!spec) {
-    return {
-      ok: false,
-      error: `Agent "${resolvedAgent}" does not support Source Control AI ${OPERATION_LABEL[input.operation]}. ${supportedAgentSummary()}`
-    }
+    return resolveFailure(
+      textGenerationFailure(AGENT_CANNOT_GENERATE[input.operation], {
+        agent: resolvedAgent,
+        agents: supportedAgentLabels()
+      })
+    )
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
   const persistedModelId = selectPersistedModelId({
@@ -214,7 +242,7 @@ export function resolveSourceControlAiForOperation(
     discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
     getCommitMessageModel(resolvedAgent, spec.defaultModelId)
   if (!model) {
-    return { ok: false, error: `No model is available for ${spec.label}.` }
+    return resolveFailure(textGenerationFailure('noModelForAgent', { label: spec.label }))
   }
   const thinkingLevel = resolveThinkingLevel({
     model,

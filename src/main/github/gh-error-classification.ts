@@ -1,31 +1,24 @@
 import type { ClassifiedError } from '../../shared/classified-error'
+import { classifiedCodeHostError as classified } from '../../shared/code-host-failure-copy'
 
-// Why: gh CLI surfaces API errors as unstructured stderr. Map known
-// patterns to typed errors so callers can show user-friendly messages.
 export function classifyGhError(stderr: string): ClassifiedError {
   const s = stderr.toLowerCase()
-  // Why: primary rate-limit errors also carry "HTTP 403" — check rate limit
-  // first so they don't misclassify as a token-scope problem.
+  const trimmed = stderr.trim()
+  // Rate limits also carry HTTP 403; classify them before permission failures.
   if (s.includes('rate limit')) {
-    return {
-      type: 'rate_limited',
-      message: 'GitHub rate limit hit. Try again in a few minutes.'
-    }
+    return classified('rate_limited', 'github.rateLimited')
   }
   if (s.includes('http 403') || s.includes('resource not accessible')) {
-    return {
-      type: 'permission_denied',
-      message: "You don't have permission to edit this issue. Check your GitHub token scopes."
-    }
+    return classified('permission_denied', 'github.issuePermissionDenied')
   }
   if (s.includes('http 404') || s.includes('could not resolve to a repository')) {
-    return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
+    return classified('not_found', 'issueNotFound')
   }
   if (s.includes('has disabled issues')) {
-    return { type: 'issues_disabled', message: 'Issues are disabled on this repository.' }
+    return classified('issues_disabled', 'github.issuesDisabled')
   }
   if (s.includes('http 422') || s.includes('validation failed')) {
-    return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
+    return classified('validation_error', 'invalidUpdate', trimmed)
   }
   if (
     s.includes('timeout') ||
@@ -33,13 +26,12 @@ export function classifyGhError(stderr: string): ClassifiedError {
     s.includes('network') ||
     s.includes('could not resolve host')
   ) {
-    return { type: 'network_error', message: 'Network error — check your connection.' }
+    return classified('network_error', 'networkError')
   }
-  return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
+  return classified('unknown', 'issueUpdateFailed', trimmed)
 }
 
-// Why: classifyGhError's copy is phrased for edit/update operations, but
-// listIssues is a read op and renderer banners interpolate the message.
+// Shared classification uses mutation copy; list banners need read-specific wording.
 export function classifyListIssuesError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
@@ -56,46 +48,57 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
   return { type: c.type, message: readMessages[c.type] }
 }
 
-// Why: classifyGhError's copy names an "issue"; PR mutations reuse the same
-// classification but must not tell the user their pull request is an issue.
-export function classifyPullRequestUpdateError(stderr: string): ClassifiedError {
+export type PullRequestUpdateAction =
+  | 'github.pullRequestUpdateFailed'
+  | 'github.autoMergeEnableFailed'
+  | 'github.autoMergeDisableFailed'
+  | 'github.mergeQueueAddFailed'
+
+// Preserve classification while using PR-specific wording; `action` names the operation for unknown failures.
+export function classifyPullRequestUpdateError(
+  stderr: string,
+  action: PullRequestUpdateAction = 'github.pullRequestUpdateFailed'
+): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
-  const pullRequestMessages: Record<ClassifiedError['type'], string> = {
-    permission_denied:
-      "You don't have permission to edit this pull request. Check your GitHub token scopes.",
-    not_found: 'Pull request not found — it may have been deleted.',
-    issues_disabled: c.message,
-    validation_error: `Invalid update — ${trimmed}`,
-    rate_limited: c.message,
-    network_error: c.message,
-    unknown: `Failed to update pull request: ${trimmed}`
+  switch (c.type) {
+    case 'permission_denied':
+      return classified(c.type, 'github.pullRequestPermissionDenied')
+    case 'not_found':
+      return classified(c.type, 'github.pullRequestNotFound')
+    case 'validation_error':
+      return classified(c.type, 'invalidUpdate', trimmed)
+    case 'unknown':
+      return classified(c.type, action, trimmed)
+    case 'issues_disabled':
+    case 'rate_limited':
+    case 'network_error':
+      return c
   }
-  return { type: c.type, message: pullRequestMessages[c.type] }
 }
 
-// Why: PR-side list failures need the same read-op classification — pagination
-// decisions key on the type, and swallowing them made failures look like
-// end-of-data (#11485).
+// Pagination needs typed failures so an outage cannot masquerade as end-of-data.
 export function classifyListPrsError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   return { type: c.type, message: `Failed to load pull requests: ${stderr.trim()}` }
 }
 
-// Why: classifyGhError's copy names an "issue"; a failed check rerun must name
-// the operation the user actually triggered.
+// Preserve classification while naming the rerun operation.
 export function classifyRerunChecksError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
-  const rerunMessages: Record<ClassifiedError['type'], string> = {
-    permission_denied:
-      "You don't have permission to rerun checks on this repository. Check your GitHub token scopes.",
-    not_found: 'GitHub resource to rerun was not found — it may have expired or been deleted.',
-    issues_disabled: `Failed to rerun checks: ${trimmed}`,
-    validation_error: `Could not rerun checks — ${trimmed}`,
-    rate_limited: c.message,
-    network_error: c.message,
-    unknown: `Failed to rerun checks: ${trimmed}`
+  switch (c.type) {
+    case 'permission_denied':
+      return classified(c.type, 'github.rerunPermissionDenied')
+    case 'not_found':
+      return classified(c.type, 'github.rerunTargetNotFound')
+    case 'validation_error':
+      return classified(c.type, 'github.rerunRejected', trimmed)
+    case 'issues_disabled':
+    case 'unknown':
+      return classified(c.type, 'github.rerunFailed', trimmed)
+    case 'rate_limited':
+    case 'network_error':
+      return c
   }
-  return { type: c.type, message: rerunMessages[c.type] }
 }

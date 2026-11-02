@@ -179,8 +179,7 @@ describe('terminal-render-desync-sentinel', () => {
       sampleWith(divergenceOf(manyCells(0)), false, `m1:p${pane}`)
     }
 
-    // 4 capture recoveries + 1 budget-exhausted recovery; waiting on the reset
-    // count (not the write count) keeps this robust to persist microtask depth.
+    // Wait on recovery resets, not writes, so persistence microtask depth cannot race the assertion.
     await vi.waitFor(() => expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(5))
     expect(writeTerminalRenderDesyncEvidence).toHaveBeenCalledTimes(4)
     expect(getRenderDesyncEvidence()).toHaveLength(4)
@@ -273,7 +272,6 @@ describe('terminal-render-desync-sentinel', () => {
       'webgl-render-desync-manual-capture',
       expect.objectContaining({ paneKey: 'm1:p1' })
     )
-    // The captured state must stay on screen for further pokes: no recovery.
     expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
   })
 })
@@ -307,7 +305,6 @@ describe('sentinel arming surface', () => {
     expect(isTerminalRenderDesyncSentinelArmed()).toBe(false)
     setTerminalRenderDesyncSentinelArmed(true)
     expect(isTerminalRenderDesyncSentinelArmed()).toBe(true)
-    // Live arm: the mouseup listener is registered without a reload.
     expect(documentAddEventListener).toHaveBeenCalledWith('mouseup', expect.any(Function), true)
 
     setTerminalRenderDesyncSentinelArmed(false)

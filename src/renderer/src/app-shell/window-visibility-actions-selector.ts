@@ -9,10 +9,7 @@ export type WindowVisibilityActions = Pick<
 
 let cachedActions: WindowVisibilityActions | null = null
 
-/**
- * The App root stays mounted while terminal/status writes publish frequently. Keep the action
- * bundle stable when its function references are unchanged so those writes allocate nothing here.
- */
+/** Keep the App action bundle stable across frequent terminal/status writes when function references match. */
 export function selectWindowVisibilityActions(
   state: WindowVisibilityActions
 ): WindowVisibilityActions {

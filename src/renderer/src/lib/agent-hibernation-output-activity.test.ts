@@ -23,8 +23,7 @@ describe('agent hibernation output activity', () => {
 
     forgetAgentHibernationPaneOutput(paneKey)
 
-    // Why: a forgotten entry must read back as never-seen (epoch 0) — identical
-    // to a brand-new pane — so dropping it on close cannot change behavior.
+    // Purged panes must read as never-seen (epoch 0) so cleanup cannot change activity semantics.
     expect(getAgentHibernationPaneOutputEpoch(paneKey)).toBe(0)
   })
 
@@ -44,8 +43,7 @@ describe('agent hibernation output activity', () => {
   })
 
   it('does not match tab ids by mere prefix overlap', () => {
-    // Why: forgetting "tab-1" must not also evict "tab-10"; the separator guards
-    // against a substring false positive.
+    // The separator must prevent removing tab-10 when purging tab-1.
     const tab1Pane = `tab-1:${UUID_A}`
     const tab10Pane = `tab-10:${UUID_A}`
     recordAgentHibernationPaneOutput(tab1Pane)

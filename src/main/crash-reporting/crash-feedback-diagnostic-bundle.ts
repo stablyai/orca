@@ -28,7 +28,7 @@ function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
   }
 }
 
-function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachment {
+async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnosticBundleAttachment> {
   const status = getDiagnosticsStatus()
   if (!status.bundleEnabled) {
     return {
@@ -39,16 +39,15 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
     }
   }
 
-  let bundle: ReturnType<typeof collectDiagnosticBundle>
+  let bundle: Awaited<ReturnType<typeof collectDiagnosticBundle>>
   try {
-    bundle = collectDiagnosticBundle({
+    bundle = await collectDiagnosticBundle({
       appVersion: app.getVersion(),
       platform: os.platform(),
       arch: os.arch(),
       osRelease: os.release(),
       orcaChannel: resolveDiagnosticOrcaChannel(),
-      // Why: Help > Report Crash is often used after relaunch, long after the
-      // default 30 minute support bundle window would miss the failure context.
+      // Reports after relaunch need logs older than the default 30-minute support window.
       lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES
     })
   } catch (error) {
@@ -71,9 +70,9 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
   }
 }
 
-export function prepareCrashDiagnosticBundle(
+export async function prepareCrashDiagnosticBundle(
   includeDiagnosticLogs: boolean
-): CrashDiagnosticBundleAttachment {
+): Promise<CrashDiagnosticBundleAttachment> {
   return includeDiagnosticLogs
     ? collectCrashDiagnosticBundleAttachment()
     : skippedCrashDiagnosticBundle()

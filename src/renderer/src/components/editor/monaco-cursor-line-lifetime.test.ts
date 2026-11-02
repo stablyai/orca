@@ -41,6 +41,7 @@ function startTracking(
 describe('Monaco cursor-line ownership lifetime', () => {
   it('releases positions after 250 distinct owned editor tabs close', () => {
     const store = createEditorStore()
+    store.setState({ unifiedTabsByWorktree: {} })
     for (let index = 0; index < 250; index += 1) {
       const file = makeFile(`editor:wt-1:local:file-${index}`, `/repo/file-${index}.ts`)
       store.setState({ openFiles: [file] })
@@ -57,8 +58,11 @@ describe('Monaco cursor-line ownership lifetime', () => {
   it('isolates same-path positions and closes only the selected file identity', () => {
     const store = createEditorStore()
     const local = makeFile('editor:wt-1:local:file.ts', '/repo/file.ts')
-    const remote = makeFile('editor:wt-1:remote-a:file.ts', '/repo/file.ts')
-    store.setState({ openFiles: [local, remote] })
+    const remote = {
+      ...makeFile('editor:wt-1:remote-a:file.ts', '/repo/file.ts'),
+      runtimeEnvironmentId: 'remote-a'
+    }
+    store.setState({ openFiles: [local, remote], unifiedTabsByWorktree: {} })
     const localTracking = startTracking(store, local, 12)
     const remoteTracking = startTracking(store, remote, 35)
 

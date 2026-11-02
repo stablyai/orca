@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { x as extractTar } from 'tar'
 import { parseAllDocuments } from 'yaml'
-import { ORCAD_BUN_TARGETS } from '../../src/shared/orcad-bun-runtime.ts'
+import { SERVER_TARGETS } from '../../src/shared/node-runtime-pin.ts'
 
 const root = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
@@ -22,7 +22,7 @@ export function parseWatcherLockfile(contents) {
 }
 
 export function watcherPackageIdentity(target, version, lockfile) {
-  if (!ORCAD_BUN_TARGETS.includes(target)) {
+  if (!SERVER_TARGETS.includes(target)) {
     throw new Error(`Unsupported watcher target: ${target}`)
   }
   const name = `@parcel/watcher-${target}`

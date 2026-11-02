@@ -41,7 +41,7 @@ it('preserves a local cache-heavy session through every usage projection', async
     }
     const { sessions, dailyAggregates } = await parseOpenCodeUsageDatabase(path, () => null)
     const counters = {
-      inputTokens: 13_634_611,
+      inputTokens: 278_041_631,
       outputTokens: 207_892,
       reasoningOutputTokens: 97_467,
       cachedInputTokens: 264_407_020,

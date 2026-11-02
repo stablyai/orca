@@ -7,14 +7,21 @@ import {
   getCheckRunDetailsTabLabel,
   isSameGitHubRepository,
   isSameGitLabProjectRef,
-  type CheckRunDetailsTabPatch,
-  type OpenCheckRunDetailsState
+  type CheckRunDetailsTabPatch
 } from '@/components/editor/check-run-details-tab'
+import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
-import { findWorktreeById, getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import type { OpenFile } from '../types/open-file'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import { reconcileCheckDetailsReadingCache } from '@/components/editor/check-details-reading-cache'
+import {
+  findCheckRequestTabId,
+  findCheckRunDetailsOwner,
+  getCheckRunDetailsOwnerScope,
+  isSameCheckRunDetailsOwner,
+  resolveCheckRunDetailsOwnership
+} from './check-run-details-owner'
 
 export function createCheckRunDetailsActions(
   set: EditorSet,
@@ -23,9 +30,82 @@ export function createCheckRunDetailsActions(
   EditorSlice,
   'openCheckRunDetails' | 'patchOpenCheckRunDetails' | 'reloadOpenCheckRunDetailsTab'
 > {
+  // Restored numeric request IDs belong to a previous renderer lifetime.
+  const requests = new WeakSet<OpenCheckRunDetailsState>()
+  const patchCheckRunDetailsTab = (
+    id: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: CheckRunDetailsTabPatch
+  ): void => {
+    let accepted: { previous: OpenCheckRunDetailsState; next: OpenCheckRunDetailsState } | undefined
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing?.mode !== 'check-details' || !existing.checkRunDetails) {
+        return s
+      }
+      const current = existing.checkRunDetails
+      if (current.contextKey !== contextKey) {
+        return s
+      }
+      if (
+        state.requestId !== undefined &&
+        current.requestId !== undefined &&
+        state.requestId < current.requestId
+      ) {
+        return s
+      }
+      // Async sidebar project lookup must not clear a previously known MR ref.
+      const githubRepository = state.githubRepository ?? current.githubRepository ?? null
+      const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
+      const nextCheckRunDetails: OpenCheckRunDetailsState = {
+        contextKey,
+        check,
+        requestId: state.requestId ?? current.requestId,
+        details: state.details,
+        loading: state.loading,
+        error: state.error,
+        githubRepository,
+        gitlabProjectRef
+      }
+      if (
+        current.contextKey === nextCheckRunDetails.contextKey &&
+        current.requestId === nextCheckRunDetails.requestId &&
+        current.check.status === nextCheckRunDetails.check.status &&
+        current.check.conclusion === nextCheckRunDetails.check.conclusion &&
+        current.loading === nextCheckRunDetails.loading &&
+        current.error === nextCheckRunDetails.error &&
+        current.details === nextCheckRunDetails.details &&
+        isSameGitHubRepository(current.githubRepository ?? null, githubRepository) &&
+        isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
+      ) {
+        return s
+      }
+      accepted = { previous: current, next: nextCheckRunDetails }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
+        )
+      }
+    })
+    if (accepted) {
+      const { previous, next } = accepted
+      requests.add(next)
+      reconcileCheckDetailsReadingCache(id, previous, next, () => {
+        const live = get().openFiles.find((file) => file.id === id)
+        return live?.mode === 'check-details' && live.checkRunDetails === next
+      })
+    }
+  }
+
   return {
     openCheckRunDetails: (worktreeId, contextKey, check, state) => {
-      const id = buildCheckRunDetailsTabId(worktreeId, check)
+      const resolvedOwnership = resolveCheckRunDetailsOwnership(get(), worktreeId)
+      const id = buildCheckRunDetailsTabId(
+        worktreeId,
+        check,
+        getCheckRunDetailsOwnerScope(resolvedOwnership)
+      )
       const label = getCheckRunDetailsTabLabel(check)
       const checkRunDetails: OpenCheckRunDetailsState = {
         contextKey,
@@ -37,19 +117,41 @@ export function createCheckRunDetailsActions(
         githubRepository: state.githubRepository ?? null,
         gitlabProjectRef: state.gitlabProjectRef ?? null
       }
+      let accepted:
+        | {
+            previous: OpenCheckRunDetailsState | undefined
+            next: OpenCheckRunDetailsState
+          }
+        | undefined
       set((s) => {
         const existing = s.openFiles.find((f) => f.id === id)
+        // Why: an open whose owner cannot be resolved must not leave the tab reloading through its old owner.
+        const ownership =
+          existing && isSameCheckRunDetailsOwner(existing, resolvedOwnership)
+            ? {}
+            : (resolvedOwnership ?? {
+                runtimeEnvironmentId: undefined,
+                operationProvenance: undefined
+              })
         if (existing) {
           const existingDetails = existing.checkRunDetails
           const incomingIsStale =
+            existing.mode === 'check-details' &&
             existingDetails?.contextKey === contextKey &&
             existingDetails.requestId !== undefined &&
             (state.requestId === undefined || state.requestId < existingDetails.requestId)
+          if (!incomingIsStale) {
+            accepted = {
+              previous: existing.mode === 'check-details' ? existingDetails : undefined,
+              next: checkRunDetails
+            }
+          }
           return {
             openFiles: s.openFiles.map((f) =>
               f.id === id
                 ? {
                     ...f,
+                    ...ownership,
                     mode: 'check-details' as const,
                     relativePath: label,
                     language: 'plaintext',
@@ -59,16 +161,24 @@ export function createCheckRunDetailsActions(
             ),
             activeFileId: id,
             activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+            activeFileIdByWorktree: {
+              ...s.activeFileIdByWorktree,
+              [worktreeId]: id
+            },
+            activeTabTypeByWorktree: {
+              ...s.activeTabTypeByWorktree,
+              [worktreeId]: 'editor'
+            }
           }
         }
 
+        accepted = { previous: undefined, next: checkRunDetails }
         const newFile: OpenFile = {
           id,
           filePath: id,
           relativePath: label,
           worktreeId,
+          ...ownership,
           language: 'plaintext',
           isDirty: false,
           mode: 'check-details',
@@ -79,65 +189,39 @@ export function createCheckRunDetailsActions(
           openFiles: [...s.openFiles, newFile],
           activeFileId: id,
           activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          activeFileIdByWorktree: {
+            ...s.activeFileIdByWorktree,
+            [worktreeId]: id
+          },
+          activeTabTypeByWorktree: {
+            ...s.activeTabTypeByWorktree,
+            [worktreeId]: 'editor'
+          }
         }
       })
+      if (accepted) {
+        const { previous, next } = accepted
+        requests.add(next)
+        reconcileCheckDetailsReadingCache(id, previous, next, () => {
+          const live = get().openFiles.find((file) => file.id === id)
+          return live?.mode === 'check-details' && live.checkRunDetails === next
+        })
+      }
       void openWorkspaceEditorItem(get(), id, worktreeId, label, 'check-details')
     },
 
     // Why: sidebar detail fetches can finish after the full-details tab is open; update the snapshot without stealing focus.
     patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
-      const id = buildCheckRunDetailsTabId(worktreeId, check)
-      set((s) => {
-        const existing = s.openFiles.find((f) => f.id === id)
-        if (!existing?.checkRunDetails) {
-          return s
-        }
-        const current = existing.checkRunDetails
-        if (current.contextKey !== contextKey) {
-          return s
-        }
-        if (
-          state.requestId !== undefined &&
-          current.requestId !== undefined &&
-          state.requestId < current.requestId
-        ) {
-          return s
-        }
-        // Why: the sidebar resolves the MR's project asynchronously, so an early patch
-        // must not blank a ref we already know.
-        const githubRepository = state.githubRepository ?? current.githubRepository ?? null
-        const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
-        const nextCheckRunDetails: OpenCheckRunDetailsState = {
-          contextKey,
+      const live = get()
+      // Why: a request's completion belongs to the tab it started on, even after the user selects a twin host.
+      const id =
+        findCheckRequestTabId(live.openFiles, worktreeId, check, state.requestId, requests) ??
+        buildCheckRunDetailsTabId(
+          worktreeId,
           check,
-          requestId: state.requestId ?? current.requestId,
-          details: state.details,
-          loading: state.loading,
-          error: state.error,
-          githubRepository,
-          gitlabProjectRef
-        }
-        if (
-          current.contextKey === nextCheckRunDetails.contextKey &&
-          current.requestId === nextCheckRunDetails.requestId &&
-          current.check.status === nextCheckRunDetails.check.status &&
-          current.check.conclusion === nextCheckRunDetails.check.conclusion &&
-          current.loading === nextCheckRunDetails.loading &&
-          current.error === nextCheckRunDetails.error &&
-          current.details === nextCheckRunDetails.details &&
-          isSameGitHubRepository(current.githubRepository ?? null, githubRepository) &&
-          isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
-        ) {
-          return s
-        }
-        return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
-          )
-        }
-      })
+          getCheckRunDetailsOwnerScope(resolveCheckRunDetailsOwnership(live, worktreeId))
+        )
+      patchCheckRunDetailsTab(id, contextKey, check, state)
     },
 
     reloadOpenCheckRunDetailsTab: async (fileId) => {
@@ -150,11 +234,21 @@ export function createCheckRunDetailsActions(
       const { contextKey, check } = checkRunDetails
       const requestId = createCheckRunDetailsRequestId()
       const patch = (next: CheckRunDetailsTabPatch): void => {
-        get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, { ...next, requestId })
+        const current = get().openFiles.find(
+          (candidate) => candidate.id === fileId
+        )?.checkRunDetails
+        const details =
+          next.details ?? (current?.contextKey === contextKey ? current.details : null)
+        // Why: the active host can differ from the tab's owner, so patch this tab rather than re-deriving its id.
+        patchCheckRunDetailsTab(fileId, contextKey, check, {
+          ...next,
+          details,
+          requestId
+        })
       }
-      const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
-      const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
-      const repo = state.repos.find((candidate) => candidate.id === repoId)
+      const owner = findCheckRunDetailsOwner(state, file)
+      const worktree = owner?.worktree
+      const repo = owner?.repo
       if (!repo?.path) {
         patch({
           details: checkRunDetails.details,
@@ -166,15 +260,18 @@ export function createCheckRunDetailsActions(
         })
         return
       }
+      if (checkRunDetails.loading) {
+        return
+      }
       patch({ details: checkRunDetails.details, loading: true, error: null })
       try {
-        // Why: refreshing a GitLab job tab through the GitHub check-runs API returns
-        // null and would blank the tab the user just asked to reload.
+        const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, worktree)
+        // GitLab jobs require GitLab trace; GitHub check-runs returns null and blanks the refreshed tab.
         const details = check.gitlabJobId
           ? await loadGitLabJobLogDetails({
               repoPath: repo.path,
               repoId: repo.id,
-              settings: getSettingsForWorktreeRuntimeOwner(state, file.worktreeId),
+              repoOwnerExecutionHostId,
               check,
               // Why: a fork MR's job lives in the source project, not the repo's own.
               projectRef: checkRunDetails.gitlabProjectRef ?? null
@@ -188,7 +285,7 @@ export function createCheckRunDetailsActions(
                 url: check.url,
                 prRepo: checkRunDetails.githubRepository ?? null
               },
-              { repoId: repo.id }
+              { repoId: repo.id, repoOwnerExecutionHostId }
             )
         patch({
           details,
@@ -200,17 +297,14 @@ export function createCheckRunDetailsActions(
                 'No details are available for this check.'
               )
         })
-      } catch (error) {
+      } catch {
         patch({
           details: null,
           loading: false,
-          error:
-            error instanceof Error
-              ? error.message
-              : translate(
-                  'auto.store.slices.editor.checkRunDetailsLoadFailed',
-                  'Failed to load check details.'
-                )
+          error: translate(
+            'auto.store.slices.editor.checkRunDetailsLoadFailed',
+            'Failed to load check details.'
+          )
         })
       }
     }

@@ -2,9 +2,7 @@ import { slowTaskRequiredIdleMs, type SlowTaskBackoffOptions } from './coalesced
 
 export type GitStatusRefreshReason = 'activity' | 'safety'
 
-// Why: run pacing must be shareable across scheduler instances — a rebuild
-// (execution-host or push-target change) that resets it lets sustained change
-// signals run git at the bare debounce, bypassing the #7983 floor.
+// Share pacing across scheduler rebuilds so host/target changes cannot bypass the activity floor (#7983).
 export type GitStatusRefreshPacing = {
   lastRunEndedAt: number
   lastRunDurationMs: number
@@ -40,10 +38,7 @@ export function createGitStatusRefreshScheduler(
   options: {
     safetyIntervalMs: number
     activityDebounceMs: number
-    // Why: sustained signal streams (busy agent terminals, file churn) must
-    // never run status scans back-to-back (#7983). Activity runs keep this
-    // minimum idle gap since the previous run's end, scaled up by the slow
-    // task backoff when the previous scan itself was slow.
+    // Enforce idle gaps after runs, scaled for slow scans, so sustained signals cannot run Git continuously (#7983).
     activityMinGapMs: number
     slowTaskBackoff: SlowTaskBackoffOptions
     pacing?: GitStatusRefreshPacing
@@ -82,8 +77,7 @@ export function createGitStatusRefreshScheduler(
     )
 
   const scheduleSafetyRun = (): void => {
-    // Why: slow scans stretch the safety horizon (idle-lane backoff) so a
-    // tens-of-seconds status scan never approaches a continuous git duty cycle.
+    // Scale safety idle time after slow scans to prevent effectively continuous Git polling.
     const delay = Math.max(
       options.safetyIntervalMs,
       slowTaskRequiredIdleMs(
@@ -104,8 +98,7 @@ export function createGitStatusRefreshScheduler(
       return
     }
     if (inFlight) {
-      // Why: the trigger may describe a mutation after the running Git
-      // snapshot, so one trailing refresh is required for freshness.
+      // A mid-run trigger may postdate its snapshot; retain one trailing refresh.
       pendingActivity = true
       return
     }
@@ -117,8 +110,7 @@ export function createGitStatusRefreshScheduler(
     }
     const firesAt = now + delay
     if (activityTimer !== null) {
-      // Why: an earlier-eligible trigger may pull a pending run forward, but a
-      // later debounce window must never push an already-scheduled run back.
+      // Earlier triggers may advance a scheduled run; later debounce windows must never delay it.
       if (firesAt >= activityTimerFiresAt) {
         return
       }
@@ -157,10 +149,7 @@ export function createGitStatusRefreshScheduler(
         if (runId > pacing.latestFinishedRunId) {
           pacing.latestFinishedRunId = runId
           pacing.lastRunEndedAt = Date.now()
-          // Why: cancelled scans never delivered a useful result, so their wall
-          // time must not stretch the next activity/safety gap. Otherwise hide →
-          // reveal after a slow abort waits out the aborted scan's full duration
-          // before the catch-up refresh can start.
+          // Ignore aborted duration when pacing reveal catch-up; those scans never delivered useful results.
           pacing.lastRunDurationMs = controller.signal.aborted
             ? 0
             : Math.max(0, pacing.lastRunEndedAt - startedAt)
@@ -195,8 +184,7 @@ export function createGitStatusRefreshScheduler(
       }
       clearSafetyTimer()
       if (inFlight) {
-        // Why: a request aborted while hidden cannot serve as reveal catch-up;
-        // retain one fresh run and wait for the old transport to settle.
+        // Hidden aborted requests cannot serve reveal catch-up; queue fresh work after transport settles.
         pendingActivity ||= activeController?.signal.aborted === true
         return
       }

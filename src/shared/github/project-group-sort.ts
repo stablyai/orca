@@ -1,6 +1,4 @@
-// Why: grouping and sorting of Project rows is deterministic shared logic
-// driven by `selectedView` — it must not depend on fetch ordering. Keeping it
-// in a pure shared module lets desktop and mobile render Project views the same.
+// Pure selected-view grouping/sorting keeps desktop/mobile order independent of fetch order.
 import type {
   GitHubProjectField,
   GitHubProjectRow,
@@ -9,9 +7,7 @@ import type {
 } from './project-types'
 
 export type ProjectGroup = {
-  /** Stable key used for React reconciliation. */
   key: string
-  /** Human-readable label used in the group header. */
   label: string
   /** Iteration metadata for headers that render a date range + Current pill. */
   iteration: {
@@ -22,7 +18,7 @@ export type ProjectGroup = {
   rows: GitHubProjectRow[]
 }
 
-const EMPTY_GROUP_KEY = '__empty__'
+export const EMPTY_PROJECT_GROUP_KEY = '__empty__'
 
 type ProjectFieldValue = GitHubProjectRow['fieldValuesByFieldId'][string]
 
@@ -47,9 +43,7 @@ function hasNonEmptyFieldValue(value: ProjectFieldValue | undefined): boolean {
   }
 }
 
-// Why: use a finite sentinel instead of Infinity so subtractions in the sort
-// comparator stay finite. `Infinity - Infinity` is NaN, which makes
-// Array.sort's behavior implementation-defined and skips later tie-breaks.
+// Finite sentinels avoid Infinity - Infinity yielding NaN and skipping sort tie-breaks.
 const UNKNOWN_INDEX_SENTINEL = Number.MAX_SAFE_INTEGER
 
 function createFieldOrderIndex(field: GitHubProjectField): ReadonlyMap<string, number> {
@@ -78,7 +72,7 @@ function getFieldValueForGrouping(
   const value = row.fieldValuesByFieldId[field.id]
   if (!hasNonEmptyFieldValue(value)) {
     return {
-      key: EMPTY_GROUP_KEY,
+      key: EMPTY_PROJECT_GROUP_KEY,
       label: labelForEmpty(field),
       orderHint: UNKNOWN_INDEX_SENTINEL,
       iteration: null
@@ -107,7 +101,13 @@ function getFieldValueForGrouping(
     }
   }
   const label = deriveStringValue(value)
-  return { key: `raw:${label}`, label, orderHint: 0, iteration: null }
+  return {
+    key: `raw:${label}`,
+    label,
+    // Why: number labels sort as text (10 before 2, -10 between -1 and -2).
+    orderHint: value.kind === 'number' ? value.number : UNKNOWN_INDEX_SENTINEL - 1,
+    iteration: null
+  }
 }
 
 function labelForEmpty(field: GitHubProjectField): string {
@@ -141,6 +141,14 @@ export function groupRows(
   if (!groupField) {
     return [{ key: 'all', label: '', iteration: null, rows: rowsInOrder }]
   }
+  return groupRowsByField(groupField, rowsInOrder)
+}
+
+/** Share field grouping between table/board so labels and ordering agree. */
+export function groupRowsByField(
+  groupField: GitHubProjectField,
+  rowsInOrder: GitHubProjectRow[]
+): ProjectGroup[] {
   const groupOrderIndex = createFieldOrderIndex(groupField)
   const buckets = new Map<
     string,
@@ -165,16 +173,18 @@ export function groupRows(
     bucket.rows.push(row)
   }
   const entries = Array.from(buckets.entries())
-  // Ordering rules per design doc §Grouping.
   entries.sort((a, b) => {
-    if (a[0] === EMPTY_GROUP_KEY) {
+    if (a[0] === EMPTY_PROJECT_GROUP_KEY) {
       return 1
     }
-    if (b[0] === EMPTY_GROUP_KEY) {
+    if (b[0] === EMPTY_PROJECT_GROUP_KEY) {
       return -1
     }
     if (groupField.kind === 'iteration' || groupField.kind === 'single-select') {
       return a[1].orderHint - b[1].orderHint
+    }
+    if (groupField.dataType === 'NUMBER') {
+      return a[1].orderHint - b[1].orderHint || a[1].label.localeCompare(b[1].label)
     }
     return a[1].label.localeCompare(b[1].label)
   })
@@ -232,8 +242,7 @@ function compareSort(
   } else if (aValue.kind === 'labels' && bValue.kind === 'labels') {
     cmp = (aValue.labels[0]?.name ?? '').localeCompare(bValue.labels[0]?.name ?? '')
   } else {
-    // Why: unknown sort-field kind — ignore this sort field and fall through
-    // to tie-breaks (and eventually row.position).
+    // Ignore unknown sort kinds and continue tie-breaks, ending at row.position.
     return 0
   }
   return sort.direction === 'DESC' ? -cmp : cmp

@@ -1,10 +1,14 @@
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../shared/text-generation-failure-copy'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { getStagedCommitContext } from '../git/status'
-import { SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from '../providers/ssh-git-dispatch'
+import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import { loadPullRequestLinkedIssue } from '../source-control/pull-request-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../source-control/pull-request-template'
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
@@ -12,7 +16,6 @@ import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
   discoverCommitMessageModelsLocal,
-  discoverCommitMessageModelsRemote,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
@@ -49,7 +52,10 @@ export class RuntimeGitGenerationCommands {
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(route.kind === 'ssh' ? route.connectionId : null)
     const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
-      ? { ok: true as const, params: settingsOverride.sourceControlAiResolvedParams }
+      ? {
+          ok: true as const,
+          params: settingsOverride.sourceControlAiResolvedParams
+        }
       : resolveCommitMessageSettings(
           getRuntimeGitGenerationSettings(
             this.host.getRuntimeSettings(),
@@ -61,32 +67,15 @@ export class RuntimeGitGenerationCommands {
           target.repo ?? null
         )
     if (!resolvedSettings.ok) {
-      return { success: false, error: resolvedSettings.error }
+      return {
+        success: false,
+        error: resolvedSettings.error,
+        ...textGenerationFailureCodeFields(resolvedSettings)
+      }
     }
 
     if (route.kind === 'ssh') {
-      const provider = route.provider
-      if (!provider) {
-        return { success: false, error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE }
-      }
-      let context: CommitMessageDraftContext | null
-      try {
-        context = await provider.getStagedCommitContext(target.worktree.path)
-      } catch (error) {
-        console.error('[runtime-git] Failed to read remote staged commit context:', error)
-        return { success: false, error: 'Failed to read staged changes.' }
-      }
-      if (!context) {
-        return { success: false, error: 'No staged changes to summarize.' }
-      }
-      context = withLinkedIssueDraftContext(context, linkedIssueForTarget(this.host, target))
-      return generateCommitMessageFromContext(context, resolvedSettings.params, {
-        kind: 'remote',
-        cwd: target.worktree.path,
-        execute: (plan, cwd, timeoutMs, operation) =>
-          provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
-        missingBinaryLocation: 'remote PATH'
-      })
+      return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
     }
 
     let context: CommitMessageDraftContext | null
@@ -97,10 +86,13 @@ export class RuntimeGitGenerationCommands {
       })
     } catch (error) {
       console.error('[runtime-git] Failed to read staged commit context:', error)
-      return { success: false, error: 'Failed to read staged changes.' }
+      return {
+        success: false,
+        ...textGenerationFailure('stagedChangesReadFailed')
+      }
     }
     if (!context) {
-      return { success: false, error: 'No staged changes to summarize.' }
+      return { success: false, ...textGenerationFailure('noStagedChanges') }
     }
     context = withLinkedIssueDraftContext(context, linkedIssueForTarget(this.host, target))
     const localEnv = await prepareLocalCommitMessageAgentEnv(
@@ -121,10 +113,8 @@ export class RuntimeGitGenerationCommands {
   async cancelRuntimeGenerateCommitMessage(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const route = runtimeGitRouteForTarget(target)
+    // SSH cancel must not touch the path-keyed local registry and abort unrelated same-path generation.
     if (route.kind === 'ssh') {
-      // Cancelling an unreachable host is a no-op, not a local cancel: the local registry is keyed
-      // by path and would abort an unrelated generation running here for the same path.
-      await route.provider?.cancelGenerateCommitMessage(target.worktree.path, 'commit-message')
       return { ok: true }
     }
     cancelGenerateCommitMessageLocal(target.worktree.path)
@@ -149,7 +139,10 @@ export class RuntimeGitGenerationCommands {
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(route.kind === 'ssh' ? route.connectionId : null)
     const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
-      ? { ok: true as const, params: settingsOverride.sourceControlAiResolvedParams }
+      ? {
+          ok: true as const,
+          params: settingsOverride.sourceControlAiResolvedParams
+        }
       : resolveCommitMessageSettings(
           getRuntimeGitGenerationSettings(
             this.host.getRuntimeSettings(),
@@ -161,26 +154,25 @@ export class RuntimeGitGenerationCommands {
           target.repo ?? null
         )
     if (!resolvedSettings.ok) {
-      return { success: false, error: resolvedSettings.error }
+      return {
+        success: false,
+        error: resolvedSettings.error,
+        ...textGenerationFailureCodeFields(resolvedSettings)
+      }
     }
 
-    const provider = route.kind === 'ssh' ? route.provider : null
-    if (route.kind === 'ssh' && !provider) {
-      return { success: false, error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE }
+    if (route.kind === 'ssh') {
+      return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
     }
     const issueMeta = linkedIssueMetaForTarget(this.host, target)
     const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
       meta: issueMeta,
       provider: input.provider,
       repoPath: target.worktree.path,
-      connectionId: route.kind === 'ssh' ? route.connectionId : undefined,
-      localGitOptions:
-        route.kind === 'ssh'
-          ? {}
-          : {
-              ...localGitOptionsForTarget(target),
-              admissionTier: 'interactive'
-            }
+      localGitOptions: {
+        ...localGitOptionsForTarget(target),
+        admissionTier: 'interactive'
+      }
     })
     void linkedIssueDetailsPromise.catch(() => undefined)
     let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
@@ -188,11 +180,10 @@ export class RuntimeGitGenerationCommands {
       const currentBody = await resolveHostedReviewBodyForGeneration({
         body: input.body,
         repoPath: target.worktree.path,
-        connectionId: route.kind === 'ssh' ? route.connectionId : undefined,
         provider: input.provider,
         useTemplate: input.useTemplate
       })
-      context = await getPullRequestDraftContext(pullRequestDraftGitExec(target, route), {
+      context = await getPullRequestDraftContext(pullRequestDraftGitExec(target), {
         base: input.base,
         currentTitle: input.title,
         currentBody,
@@ -205,7 +196,7 @@ export class RuntimeGitGenerationCommands {
       }
     }
     if (!context) {
-      return { success: false, error: 'No branch changes to summarize.' }
+      return { success: false, ...textGenerationFailure('noBranchChanges') }
     }
     const linkedIssueDetails = await linkedIssueDetailsPromise
     context = {
@@ -214,15 +205,6 @@ export class RuntimeGitGenerationCommands {
       ...(linkedIssueDetails ? { linkedIssueDetails } : {})
     }
 
-    if (route.kind === 'ssh') {
-      return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
-        kind: 'remote',
-        cwd: target.worktree.path,
-        execute: (plan, cwd, timeoutMs, operation) =>
-          provider!.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
-        missingBinaryLocation: 'remote PATH'
-      })
-    }
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       resolvedSettings.params.agentId,
       this.host.getCommitMessageAgentEnvironment?.(),
@@ -242,7 +224,6 @@ export class RuntimeGitGenerationCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const route = runtimeGitRouteForTarget(target)
     if (route.kind === 'ssh') {
-      await route.provider?.cancelGenerateCommitMessage(target.worktree.path, 'pull-request-fields')
       return { ok: true }
     }
     cancelGeneratePullRequestFieldsLocal(target.worktree.path)
@@ -261,16 +242,10 @@ export class RuntimeGitGenerationCommands {
       this.host.getRuntimeSettings().agentCmdOverrides?.[typedAgentId]
     const route = runtimeGitRouteForTarget(target)
     if (route.kind === 'ssh') {
-      const provider = route.provider
-      if (!provider) {
-        return { success: false, error: `No git provider for connection "${route.connectionId}"` }
+      return {
+        success: false,
+        error: `No git provider for connection "${route.connectionId}"`
       }
-      return discoverCommitMessageModelsRemote(
-        typedAgentId,
-        target.worktree.path,
-        (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
-        agentCommandOverride
-      )
     }
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       typedAgentId,

@@ -47,8 +47,8 @@ describe('repository ref-search limits', () => {
   ])('rejects malformed request limit %s', (value) => {
     expect(isRepoSearchRefsRequestLimit(value)).toBe(false)
     expect(isRepoSearchRefsLimit(value)).toBe(false)
-    expect(() => getRepoSearchRefsProbeLimit(value as number)).toThrow('invalid_limit')
-    expect(() => clampRepoSearchRefsLimit(value as number)).toThrow('invalid_limit')
+    expect(() => getRepoSearchRefsProbeLimit(value)).toThrow('invalid_limit')
+    expect(() => clampRepoSearchRefsLimit(value)).toThrow('invalid_limit')
   })
 
   it('rejects a scan limit that would overflow the candidate multiplier', () => {

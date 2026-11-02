@@ -5,9 +5,11 @@ import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { codexSpawnEnoent } from '../codex-cli/windows-only-agent-cli'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { parseCodexLoginAuthUrl } from './codex-login-auth-url'
+import { DEVICE_AUTH_TIMEOUT_MS, parseCodexDeviceAuthPrompt } from './codex-device-auth-prompt'
 import { loginAuthChanged, readLoginAuthSnapshot } from './codex-login-auth-snapshot'
 import {
   buildWslCodexAvailabilityScript,
@@ -15,9 +17,7 @@ import {
   WSL_CODEX_AVAILABILITY_TIMEOUT_MS
 } from './wsl-codex-command'
 
-// Why: matches Claude's window. Signing in through a copied link — a second
-// browser, a password manager, an incognito window — routinely outlasts two
-// minutes, and the old 120s deadline failed those users mid-flow.
+// Allow copied-link sign-ins to finish across browsers and password managers.
 const LOGIN_TIMEOUT_MS = 180_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
 const WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS = 500
@@ -59,6 +59,10 @@ type CodexLoginSessionDependencies = {
   setCancel: (cancel: () => boolean) => void
   /** The browser link codex printed, published as soon as it is complete. */
   onAuthUrl: (url: string) => void
+  /** Opens a WSL login's link on this computer; absent where Orca cannot open one. */
+  openWslAuthUrl?: ((url: string) => void) | null
+  /** Runs `codex login --device-auth` on a Linux/macOS host for a person on another device. */
+  deviceAuth?: { onPrompt: (prompt: { url: string; userCode: string }) => void }
 }
 
 type LoginCancellation = {
@@ -73,14 +77,11 @@ export async function runCodexLoginSession(
   let cancelSpawnedLogin: (() => boolean) | null = null
   let cancelled = false
   dependencies.setCancel(() => {
-    // Why: only an accepted cancel latches. A spawned login that refuses —
-    // because it already authenticated — must stay cancellable, or the Cancel
-    // button and the next add both go dead for the rest of the deadline.
+    // Latch only accepted cancellation so a refused attempt cannot disable later cancellation.
     if (cancelled || cancelSpawnedLogin?.() === false) {
       return false
     }
-    // A cancel before the spawn has no tree to kill; the pre-spawn probe reads
-    // this flag instead of opening a browser nobody is waiting for.
+    // Remember pre-spawn cancellation so it prevents the browser from opening.
     cancelled = true
     return true
   })
@@ -98,14 +99,12 @@ async function runCodexLoginProcess(
   cancellation: LoginCancellation
 ): Promise<void> {
   const wslInfo = parseWslUncPath(managedHomePath)
+  const deviceAuth = dependencies.deviceAuth ?? null
+  const loginTimeoutMs = deviceAuth ? DEVICE_AUTH_TIMEOUT_MS : LOGIN_TIMEOUT_MS
   if (wslInfo) {
     await assertWslCodexCliAvailable(wslInfo)
   }
-  // Why: reauthentication starts with an existing auth.json. Only new auth
-  // bytes prove this login completed; existence alone would kill the
-  // Windows OAuth flow five seconds after it opened.
-  // WSL keeps its baseline unread — the UNC round trip belongs nowhere in the
-  // pre-spawn path — so there is nothing to compare a WSL home against.
+  // Reauthentication requires changed credential bytes; avoid pre-spawn UNC reads for WSL.
   const initialAuthSnapshot = wslInfo
     ? null
     : readLoginAuthSnapshot(join(managedHomePath, 'auth.json'))
@@ -114,16 +113,21 @@ async function runCodexLoginProcess(
     throw new Error(CODEX_LOGIN_CANCELLED_MESSAGE)
   }
 
+  // Stock WSL distros may lack a browser opener.
+  const openAuthUrl = wslInfo ? (dependencies.openWslAuthUrl ?? null) : null
+
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const spawnConfig = wslInfo
       ? {
           command: dependencies.wslCommand,
-          args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath),
+          args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath, {
+            orcaOpensSignInLink: openAuthUrl !== null
+          }),
           env: process.env,
           codexCommand: 'codex',
           interactiveLogin: null
         }
-      : createHostLoginSpawn(managedHomePath)
+      : createHostLoginSpawn(managedHomePath, deviceAuth !== null)
     const child = dependencies.spawn({
       command: spawnConfig.command,
       args: spawnConfig.args,
@@ -142,21 +146,33 @@ async function runCodexLoginProcess(
       }
     }
 
-    // Why its own buffer: a stderr chunk interleaved between two halves of the
-    // link would end the match early, and the published link never changes.
-    let stdoutText = ''
+    // Browser link is on stderr, device-auth on stdout; per-stream buffers stop interleaving splits.
     let publishedAuthUrl = false
-    const publishAuthUrl = (chunk: Buffer): void => {
-      if (publishedAuthUrl) {
-        return
-      }
-      stdoutText = `${stdoutText}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
-      const authUrl = parseCodexLoginAuthUrl(stdoutText)
-      if (authUrl) {
-        publishedAuthUrl = true
-        dependencies.onAuthUrl(authUrl)
+    const readLoginStream = (): ((chunk: Buffer) => void) => {
+      let text = ''
+      return (chunk) => {
+        appendOutput(chunk)
+        if (publishedAuthUrl) {
+          return
+        }
+        text = `${text}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
+        if (deviceAuth) {
+          const prompt = parseCodexDeviceAuthPrompt(text)
+          if (prompt) {
+            publishedAuthUrl = true
+            deviceAuth.onPrompt(prompt)
+          }
+          return
+        }
+        const authUrl = parseCodexLoginAuthUrl(text)
+        if (authUrl) {
+          publishedAuthUrl = true
+          dependencies.onAuthUrl(authUrl)
+          openAuthUrl?.(authUrl)
+        }
       }
     }
+    const [readStdout, readStderr] = [readLoginStream(), readLoginStream()]
 
     let timeout: ReturnType<typeof setTimeout> | null = null
     let authWatchInterval: ReturnType<typeof setInterval> | null = null
@@ -176,9 +192,8 @@ async function runCodexLoginProcess(
         clearTimeout(postAuthExitTimeout)
         postAuthExitTimeout = null
       }
-      child.stdout?.off('data', appendOutput)
-      child.stdout?.off('data', publishAuthUrl)
-      child.stderr?.off('data', appendOutput)
+      child.stdout?.off('data', readStdout)
+      child.stderr?.off('data', readStderr)
       child.off('error', onError)
       child.off('close', onClose)
       spawnConfig.interactiveLogin?.cleanup?.()
@@ -194,11 +209,8 @@ async function runCodexLoginProcess(
     }
 
     cancellation.setSpawnedCancel(() => {
-      // Why: once codex has written new credential bytes the sign-in already
-      // succeeded, and rejecting here would send the caller's rollback at the
-      // home it just authenticated. Nothing left to cancel — let it settle.
-      // Without a baseline (WSL) an existing auth.json says nothing about this
-      // login, so refusing on it would make a WSL reauth uncancellable.
+      // Rejecting after credential changes would roll back an authenticated home.
+      // Without a baseline, an existing WSL credential cannot justify refusing cancellation.
       const alreadyAuthenticated =
         hasAuthBaseline &&
         loginAuthChanged(initialAuthSnapshot, readLoginAuthSnapshot(authJsonPath))
@@ -214,12 +226,9 @@ async function runCodexLoginProcess(
     timeout = setTimeout(() => {
       dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
       settle(() => rejectPromise(timeoutError))
-    }, LOGIN_TIMEOUT_MS)
+    }, loginTimeoutMs)
 
-    // Why: on Windows the codex login CLI can linger after writing auth.json,
-    // and its open handles on the managed home (log/codex-login.log) make the
-    // post-login file operations fail with ENOTEMPTY. Once auth.json exists,
-    // give the tree a short grace period to exit, then force it down.
+    // After credentials change, stop lingering Windows login processes that hold home files open.
     if (process.platform === 'win32' && !wslInfo) {
       authWatchInterval = setInterval(() => {
         if (!loginAuthChanged(initialAuthSnapshot, readLoginAuthSnapshot(authJsonPath))) {
@@ -239,12 +248,9 @@ async function runCodexLoginProcess(
     const onError = (error: Error): void => {
       settle(() => {
         const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
-        // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
-        const isBareCommand = spawnConfig.codexCommand === 'codex'
+        // ENOENT can mean the CLI or its Node interpreter is missing.
         const message = isEnoent
-          ? isBareCommand
-            ? 'Codex CLI not found.'
-            : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
+          ? codexSpawnEnoent(spawnConfig.codexCommand).message
           : error.message
         rejectPromise(new Error(message))
       })
@@ -252,13 +258,8 @@ async function runCodexLoginProcess(
 
     const onClose = (code: number | null): void => {
       settle(() => {
-        // Why: the post-auth tree kill is a success path — auth.json already
-        // exists and codex only failed to exit on its own, so the forced
-        // non-zero exit must not surface as a login failure.
-        // Why: the kill only arms after the watcher observed new credential
-        // bytes, so an unreadable auth.json here is a lock, not a failed login.
-        // Only a definitive absence may revoke that verdict — reading a lock as
-        // failure sends the caller's rollback at a home that just authenticated.
+        // A forced post-auth exit remains successful unless credentials are definitively absent.
+        // An unreadable snapshot cannot revoke success and trigger destructive rollback.
         if (
           code === 0 ||
           (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null)
@@ -277,15 +278,17 @@ async function runCodexLoginProcess(
       })
     }
 
-    child.stdout?.on('data', appendOutput)
-    child.stdout?.on('data', publishAuthUrl)
-    child.stderr?.on('data', appendOutput)
+    child.stdout?.on('data', readStdout)
+    child.stderr?.on('data', readStderr)
     child.on('error', onError)
     child.on('close', onClose)
   })
 }
 
-function createHostLoginSpawn(managedHomePath: string): {
+function createHostLoginSpawn(
+  managedHomePath: string,
+  deviceAuth: boolean
+): {
   command: string
   args: string[]
   env: NodeJS.ProcessEnv
@@ -293,15 +296,15 @@ function createHostLoginSpawn(managedHomePath: string): {
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null
 } {
   const codexCommand = resolveCodexCommand()
-  // Why: Windows host login needs a real console; otherwise inherit/hide
-  // leaves the child unable to read a paste-code / device-auth prompt.
+  const loginArgs = deviceAuth ? ['login', '--device-auth'] : ['login']
+  // Windows login needs a console to read paste-code and device-auth prompts.
   const interactiveLogin =
     process.platform === 'win32'
-      ? buildWindowsHostInteractiveLoginSpawn(codexCommand, ['login'])
+      ? buildWindowsHostInteractiveLoginSpawn(codexCommand, loginArgs)
       : null
   const { spawnCmd, spawnArgs } = interactiveLogin
     ? { spawnCmd: interactiveLogin.command, spawnArgs: interactiveLogin.args }
-    : getSpawnArgsForWindows(codexCommand, ['login'])
+    : getSpawnArgsForWindows(codexCommand, loginArgs)
   return {
     command: spawnCmd,
     args: spawnArgs,
@@ -315,8 +318,7 @@ async function assertWslCodexCliAvailable(wslInfo: {
   distro: string
   linuxPath: string
 }): Promise<void> {
-  // This is a PATH lookup, so it needs the login PATH: an nvm-installed codex
-  // lives nowhere else. Marking it 'none' reports a working install as absent.
+  // Include the login PATH so nvm-installed CLIs can be found.
   const result = await runWslProcess({
     distro: wslInfo.distro,
     loginPath: 'preferred',
@@ -326,8 +328,7 @@ async function assertWslCodexCliAvailable(wslInfo: {
     timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
   })
   if (result.code !== 0 && !result.environmentResolved) {
-    // A miss without the login PATH is "we could not check", not "not
-    // installed" -- claiming absence here is #9725.
+    // An unresolved login environment cannot prove the CLI is absent (#9725).
     throw new Error('Could not check the Codex CLI in WSL. Try again.')
   }
   if (result.code !== 0 || result.timedOut) {

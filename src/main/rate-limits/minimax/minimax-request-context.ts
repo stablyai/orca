@@ -1,5 +1,6 @@
-import { net, session, type Session } from 'electron'
+import type { Session } from 'electron'
 import type { MiniMaxEndpoint } from '../../../shared/global-settings-types'
+import { getMainHttpClient, requirePartitionSession } from '../../network/http-client'
 
 const MINIMAX_USAGE_PATH = '/v1/api/openplatform/coding_plan/remains'
 const MINIMAX_OVERSEAS_BASE = 'https://platform.minimax.io'
@@ -19,11 +20,7 @@ export function getMiniMaxEndpointUrl(endpoint: MiniMaxEndpoint): string {
  */
 export const MINIMAX_USAGE_ENDPOINT = getMiniMaxEndpointUrl('overseas')
 
-// Why: each endpoint has its own origin and console URL. The cookie jar
-// keys cookies by origin, so a CN request must store cookies under
-// https://www.minimaxi.com — otherwise Electron's session won't send them
-// to the CN host. Computing these from the endpoint URL keeps auth, jar,
-// and Referer in lockstep.
+// Keep cookie jar origin and Referer aligned with the chosen host, including CN.
 function getMiniMaxOrigin(endpoint: MiniMaxEndpoint): string {
   return endpoint === 'cn' ? MINIMAX_CN_BASE : MINIMAX_OVERSEAS_BASE
 }
@@ -56,8 +53,7 @@ export type MiniMaxFetchResponse = {
   transport: MiniMaxFetchTransport
 }
 
-// Why: MiniMax's usage endpoint rejects non-browser clients, so we send a real
-// per-platform Firefox UA instead of a custom agent string. Don't "clean up".
+// MiniMax cookie usage rejects non-browser clients; retain a platform-appropriate browser UA.
 function getMiniMaxBrowserUserAgent(): string {
   if (process.platform === 'win32') {
     return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0'
@@ -84,8 +80,7 @@ function parseCookiePairs(cookie: string): { name: string; value: string }[] {
       }
     })
     .filter((pair): pair is { name: string; value: string } => Boolean(pair?.name && pair.value))
-  // Why: Chromium cookie storage exports are often copied as `name:"value"`,
-  // not as an HTTP `Cookie` header. Accept both formats to avoid credential UX traps.
+  // Accept Chromium storage-export name:"value" pairs as well as HTTP Cookie syntax.
   const quotedCookiePairPattern = /(?:^|[;\s])([A-Za-z0-9_.-]+)\s*:\s*["']([^"']+)["']/g
   const quotedPairs = [...cookie.matchAll(quotedCookiePairPattern)]
     .map((match) => {
@@ -145,10 +140,11 @@ async function clearMiniMaxSessionCookieJarForSession(
 }
 
 export async function clearMiniMaxSessionCookieJar(): Promise<void> {
-  // Why: clear cookies under both origins so a user who switches endpoint
-  // (overseas -> CN or vice versa) does not leave stale cookies that the
-  // next request might pick up against the wrong host.
-  const miniMaxSession = session.fromPartition(MINIMAX_SESSION_PARTITION)
+  // Clear both hosts so endpoint switches cannot reuse stale cookies.
+  const miniMaxSession = getMainHttpClient().partitionSession?.(MINIMAX_SESSION_PARTITION)
+  if (!miniMaxSession) {
+    return
+  }
   await Promise.all([
     clearMiniMaxSessionCookieJarForSession(miniMaxSession, getMiniMaxOrigin('overseas')),
     clearMiniMaxSessionCookieJarForSession(miniMaxSession, getMiniMaxOrigin('cn'))
@@ -162,7 +158,7 @@ export async function fetchMiniMaxWithSessionCookieJar(args: {
   endpointMode: MiniMaxEndpoint
   signal: AbortSignal
 }): Promise<MiniMaxFetchResponse> {
-  const miniMaxSession = session.fromPartition(MINIMAX_SESSION_PARTITION)
+  const miniMaxSession = requirePartitionSession(MINIMAX_SESSION_PARTITION, 'MiniMax')
   const cookiePairs = parseCookiePairs(args.cookie)
   const origin = getMiniMaxOrigin(args.endpointMode)
   try {
@@ -203,7 +199,7 @@ export async function fetchMiniMaxWithManualCookieHeader(args: {
   endpointMode: MiniMaxEndpoint
   signal: AbortSignal
 }): Promise<MiniMaxFetchResponse> {
-  const miniMaxSession = session.fromPartition(MINIMAX_SESSION_PARTITION)
+  const miniMaxSession = requirePartitionSession(MINIMAX_SESSION_PARTITION, 'MiniMax')
   const origin = getMiniMaxOrigin(args.endpointMode)
   try {
     await clearMiniMaxSessionCookieJarForSession(miniMaxSession, origin)
@@ -233,13 +229,12 @@ export async function fetchMiniMaxWithApiKey(args: {
   endpoint: string
   signal: AbortSignal
 }): Promise<MiniMaxFetchResponse> {
-  // Why: net.fetch routes through Electron's URL stack, matching the cookie
-  // transport's surface area and avoiding Node's TLS quirks for CN routing.
+  // Use Electron's URL stack for bearer and cookie requests; Node TLS differs on CN routes.
   const headers: Record<string, string> = {
     Authorization: `Bearer ${args.apiKey}`,
     Accept: 'application/json'
   }
-  const response = await net.fetch(args.endpoint, {
+  const response = await getMainHttpClient().fetch(args.endpoint, {
     method: 'GET',
     headers,
     signal: args.signal

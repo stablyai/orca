@@ -9,7 +9,6 @@ vi.mock('electron', () => ({ app: { getPath: vi.fn(() => tmpdir()) } }))
 import { parseMuseUsageLine, type MuseUsageParseContext } from './muse-usage-record-parser'
 import { scanMuseUsageFiles } from './scanner'
 
-// Shapes mirror real Muse 1.3 session.jsonl records; ids and paths are placeholders.
 const MICROS = 1_790_052_419_142_353
 
 function envelope(
@@ -192,7 +191,6 @@ describe('scanMuseUsageFiles', () => {
       metadata('/elsewhere/project'),
       modelCompleted(MICROS, { input_tokens: 7, output_tokens: 3 }, 'muse-spark-1.3-contributor')
     ])
-    // A shard dir that never received a log (`--no-session-log`).
     mkdirSync(join(sessionsDir, '2026', '09', '22', 'session-empty'), { recursive: true })
     mkdirSync(join(sessionsDir, '.msp-view-v1', 'ignored'), { recursive: true })
 
@@ -229,8 +227,7 @@ describe('scanMuseUsageFiles', () => {
     ])
     const first = await scanMuseUsageFiles(worktrees(), [], undefined, sessionsDir)
 
-    // Same-size rewrite with the cache pinned to the new stat: a reused entry keeps the
-    // old totals, proving the unchanged-stat file was not reread.
+    // Equal-size rewrites with matching stat data prove unchanged files reuse cached totals.
     const altered = toJsonl([
       metadata(worktreePath),
       modelCompleted(MICROS, { input_tokens: 900, output_tokens: 90 }, 'm')
@@ -267,7 +264,6 @@ describe('scanMuseUsageFiles', () => {
     expect(first.sessions.reduce((sum, session) => sum + session.totalTokens, 0)).toBe(120)
     expect(first.processedFiles.find((file) => file.path === fork)?.hasDeferredClaims).toBe(true)
 
-    // Deleting the owner lets the deferring file reclaim the shared record.
     rmSync(join(sessionsDir, '2026', '09', '22', 'a-parent'), { recursive: true })
     const second = await scanMuseUsageFiles(
       worktrees(),
@@ -293,7 +289,6 @@ describe('scanMuseUsageFiles', () => {
     expect(byId.get('a-parent')).toMatchObject({ eventCount: 2, totalTokens: 220 })
     expect(byId.has('b-fork')).toBe(false)
 
-    // Unchanged rescan reuses retained claims; an append reparses without recounting.
     const second = await scanMuseUsageFiles(
       worktrees(),
       first.processedFiles,
@@ -316,7 +311,7 @@ describe('scanMuseUsageFiles', () => {
       metadata(worktreePath),
       modelCompleted(MICROS, { input_tokens: 100, output_tokens: 10 }, 'm')
     ])
-    // Real subagent logs carry model metadata but no workspace_root.
+    // Subagent metadata omits workspace_root and must inherit parent attribution.
     const childMetadata = envelope('runtime.session.metadata', {
       kind: 'metadata',
       record: { provider_id: 'meta', model_id: 'muse-spark-1.3' }

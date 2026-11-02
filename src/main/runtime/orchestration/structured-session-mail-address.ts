@@ -1,5 +1,5 @@
 /**
- * A structured agent session as a mail address: `session:<id>`, the Orca-minted id every agent is
+ * A structured agent session as a mail address: `orca_session_id:<id>`, the Orca-minted id every agent is
  * told is its public address. Recipient routing and pointer delivery both read these rules off the
  * durable session record, so the two can never disagree about which sessions mail can reach.
  *
@@ -10,17 +10,20 @@
  * points its mail starts it again. For mail, a conversation has ended only when its chat was closed.
  */
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { OrchestrationDb } from './db'
 import { OrchestrationError } from './orchestration-error'
 import { resolveOrcaSessionParty, type OrchestrationSessionParty } from './orchestration-party'
-import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
+import {
+  resolveLineageRunningSession,
+  type LineageRunningSession,
+  type AgentSessionRecordReader
+} from './structured-session-lineage'
 
 export type OrcaAgentSessionLookup =
-  | { kind: 'found'; record: AgentSessionRecord }
+  | { kind: 'found'; record: AgentSessionConversationView }
   /** The id is a provider's own session id, which rotates on `/clear`; this names the Orca id. */
   | { kind: 'provider-id'; orcaSessionId: string }
   | { kind: 'unknown' }
@@ -35,55 +38,70 @@ export function lookupOrcaAgentSession(
   }
   const owner = store
     .listRecords()
-    .find((candidate) =>
-      candidate.providerHandleChain.some(({ handle }) =>
-        handle.provider === 'claude' ? handle.sessionId === id : handle.threadId === id
-      )
-    )
+    .find((candidate) => candidate.providerHandleChain.some(({ handle }) => handle.nativeId === id))
   return owner ? { kind: 'provider-id', orcaSessionId: owner.sessionId } : { kind: 'unknown' }
 }
 
 export type StructuredSessionMailReach =
   /** `session` is the conversation's live session, the one its mail reaches now. */
-  | { kind: 'reachable'; session: AgentSessionRecord }
+  | { kind: 'reachable'; session: AgentSessionConversationView }
   | { kind: 'other-host' }
-  | { kind: 'ended'; reason: 'closed' | 'worker-identity-lost' | 'continuation-missing' }
+  /** The lineage names a session with no record, or loops: not being able to look, not an end. */
+  | { kind: 'unverifiable'; reason: string }
+  | { kind: 'ended'; reason: 'closed' | 'worker-identity-lost' }
 
 /** Whether mail to `record`'s conversation can reach the session that runs it now. */
 export function structuredSessionMailReach(
   store: AgentSessionRecordReader,
-  record: AgentSessionRecord,
-  db: OrchestrationDb | null | undefined
+  record: AgentSessionConversationView,
+  db: OrchestrationDb | null | undefined,
+  canonicalStore?: Pick<AgentSessionRecordReader, 'listRecords'> | null
 ): StructuredSessionMailReach {
-  const live = lineageLiveSession(store, record.sessionId)
-  if (!live) {
-    return { kind: 'ended', reason: 'continuation-missing' }
+  return deriveStructuredSessionMailReach(
+    resolveLineageRunningSession(store, record.sessionId),
+    (id) => Boolean(addressableSessionParty(id, db, canonicalStore)),
+    () => {
+      const visible = store.getVisibleSessionTabIndex?.()
+      return visible
+        ? { present: visible.present, isListed: (id: string) => visible.sessionIds.includes(id) }
+        : undefined
+    }
+  )
+}
+
+/** Read-only target admission, shared with consumers holding committed source facts. */
+export function deriveStructuredSessionMailReach(
+  running: LineageRunningSession,
+  addressable: (id: OrcaSessionId) => boolean,
+  visibility: () => { present: boolean; isListed: (id: string) => boolean } | undefined
+): StructuredSessionMailReach {
+  if (running.kind === 'unverifiable') {
+    return { kind: 'unverifiable', reason: running.reason }
   }
-  if (!structuredWorkerHostScope(live.location)) {
+  if (running.kind === 'other-host') {
     return { kind: 'other-host' }
   }
-  if (isOrcaSessionId(live.sessionId) && !addressableSessionParty(live.sessionId, db)) {
-    // Why: it can no longer act (the caller resolver refuses it), so mail to it could never be read.
+  const live = running.record
+  if (isOrcaSessionId(live.sessionId) && !addressable(live.sessionId)) {
+    // Lost worker identity cannot act through the caller resolver and therefore cannot read mail.
     return { kind: 'ended', reason: 'worker-identity-lost' }
   }
-  const visible = store.getVisibleSessionTabIndex?.()
-  if (visible?.present && !visible.sessionIds.includes(live.sessionId)) {
-    // Why: reviving a chat the user closed would run turns nobody can see; its mail waits instead.
+  const visible = visibility()
+  if (visible?.present && !visible.isListed(live.sessionId)) {
+    // Do not revive closed chats into invisible turns; their mail waits.
     return { kind: 'ended', reason: 'closed' }
   }
   return { kind: 'reachable', session: live }
 }
 
-/**
- * The party a session resolves to, or null for a worker whose identity this host lost: the party
- * resolver refuses it in every role, so it can never read mail and none is owed to it.
- */
+/** Exclude only proven lost worker identity, which the party resolver refuses in every role. */
 export function addressableSessionParty(
   sessionId: OrcaSessionId,
-  db: OrchestrationDb | null | undefined
+  db: OrchestrationDb | null | undefined,
+  store?: Pick<AgentSessionRecordReader, 'listRecords'> | null
 ): OrchestrationSessionParty | null {
   try {
-    return resolveOrcaSessionParty(sessionId, db)
+    return resolveOrcaSessionParty(sessionId, db, store)
   } catch (error) {
     if (error instanceof OrchestrationError && error.code === CODES.notLive) {
       return null

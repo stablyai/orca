@@ -1,3 +1,5 @@
+import { CrewChanges } from './crew/crew-changes'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,11 +10,14 @@ import {
   setAppEnvironment,
   type AppEnvironment
 } from '../../../shared/app-environment'
-import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionLease,
+  AgentSessionRecord
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { formatOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
@@ -22,8 +27,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-const { OrcaRuntimeWithGetPtyRecordForPaneKey } =
-  await import('../orca-runtime-get-pty-record-for-pane-key')
+const { OrcaRuntimeWithGetPtyRecordForPaneKey } = await import('./terminal-pane-mail-routing')
 const { OrchestrationDb } = await import('./db')
 const { resolveOrcaSessionParty } = await import('./orchestration-party')
 const {
@@ -37,7 +41,7 @@ const CHAT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const CHAT_ADDRESS = formatOrcaSessionAddress(CHAT)
 
 /** The real methods through the real prototype chain; a re-declared copy would pin nothing. */
-class MailTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey {
+abstract class MailTargetProbe extends OrcaRuntimeWithGetPtyRecordForPaneKey {
   target(mailboxHandle: string): unknown {
     return this.resolveStructuredMailboxTarget(mailboxHandle)
   }
@@ -68,8 +72,11 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) => store.records.get(sessionId) ?? null,
-        listRecords: () => [...store.records.values()],
+        getConversation: (sessionId: string) => {
+          const record = store.records.get(sessionId)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => [...store.records.values()].map(agentSessionConversationView),
         getVisibleSessionTabIndex: () => store.visible
       }
     }
@@ -80,12 +87,12 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
 let db: InstanceType<typeof OrchestrationDb>
 
 function probe(extra: Record<string, unknown> = {}): MailTargetProbe {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a prototype-only probe; every field the methods read is assigned below.
   return Object.assign(Object.create(MailTargetProbe.prototype), {
     _orchestrationDb: db,
+    crewChanges: new CrewChanges(),
     ptysById: new Map(),
     ...extra
-  }) as MailTargetProbe
+  })
 }
 
 function chatCoordinatedRun(): string {
@@ -108,8 +115,7 @@ afterEach(() => {
 
 describe('a Run whose coordinator is a chat (an Orca session id, no handle)', () => {
   it('delivers its mailbox to that session', () => {
-    // The defect this pins: the resolver read only `coordinator_handle`, which a chat never has, so
-    // neither lane claimed the Run mailbox and a worker's result never reached the chat.
+    // Chat coordinators lack handles; both delivery lanes must claim their Run through session identity.
     installStore(chatRecord())
     const runId = chatCoordinatedRun()
     expect(probe().target(`run:${runId}`)).toEqual({ sessionId: CHAT, dispatchId: null })
@@ -171,14 +177,14 @@ describe('a Run whose coordinator is a chat (an Orca session id, no handle)', ()
 })
 
 describe('a session addressed directly', () => {
-  it('owns its `session:<id>` mailbox', () => {
+  it('owns its `orca_session_id:<id>` mailbox', () => {
     installStore(chatRecord())
     expect(probe().target(CHAT_ADDRESS)).toEqual({ sessionId: CHAT, dispatchId: null })
   })
 
   it('claims nothing for a malformed session address', () => {
     installStore(chatRecord())
-    expect(probe().target('session:term_abc')).toBeNull()
+    expect(probe().target('orca_session_id:term_abc')).toBeNull()
   })
 })
 
@@ -249,14 +255,14 @@ describe('the idle edge after a restart, before any orchestration call', () => {
       _orchestrationDb: null,
       ensureOrchestrationFederationRelay: vi.fn(),
       scheduleRestoredMessageRepoints: vi.fn(),
+      continueRestoredWorkerMail: vi.fn(),
       deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
       notifyStructuredSessionJournalActivity: vi.fn()
     })
   }
 
   it('opens an existing orchestration database itself, so mail stored before the restart is redriven', () => {
-    // The strand this pins: the edge read the raw database field, null until the first
-    // orchestration RPC opened it, so a restarted chat's idle edges silently redrove nothing.
+    // An idle edge after restart must open the orchestration DB rather than silently read its null field.
     installStore(chatRecord())
     const stored = new OrchestrationDb(join(userData, 'orchestration.db'))
     const runId = stored.createRun({
@@ -378,8 +384,7 @@ describe('a coordinator chat continued by /clear', () => {
   })
 
   it("never unbinds the successor's own Run", () => {
-    // The strand this pins: the successor's own run-create, then its idle edge rebinding the
-    // predecessor's Run through an exclusive bind, which unbound the Run the successor created.
+    // Adopting a predecessor Run must not exclusively rebind and unbind the successor's own Run.
     installLineage(SUCCESSOR)
     chatCoordinatedRun()
     const ownRun = runCreatedBy(SUCCESSOR)
@@ -415,7 +420,7 @@ describe('a coordinator chat continued by /clear', () => {
   })
 
   it('keeps the Run a middle session created bound after the next clear', () => {
-    // The chain strand: adopting each predecessor's Run in turn unbound all but the last adopted.
+    // Adopting a chain must preserve every predecessor Run, not just the last.
     installLineage(MIDDLE)
     runCreatedBy(CHAT)
     const middleRun = runCreatedBy(MIDDLE)
@@ -438,7 +443,7 @@ describe('a coordinator chat continued by /clear', () => {
         orcaSessionId: CHAT,
         address: CHAT_ADDRESS
       })
-      expect(probe().target(`session:${member}`)).toEqual({
+      expect(probe().target(`orca_session_id:${member}`)).toEqual({
         sessionId: SUCCESSOR,
         dispatchId: null
       })
@@ -498,8 +503,7 @@ describe('a structured worker continued by /clear', () => {
   }
 
   it("delivers mail at the worker's handle to the live successor, as a terminal keeps its handle", () => {
-    // The strand this pins: the handle resolved to the session minted for it, which `/clear`
-    // replaced, so the worker's own mail was pointed at a session that no longer runs its turns.
+    // A cleared worker's mail must target its running successor rather than the retired initial session.
     const { handle } = clearedWorker()
     expect(probe().target(handle)).toEqual({ sessionId: WORKER_SUCCESSOR, dispatchId: null })
   })

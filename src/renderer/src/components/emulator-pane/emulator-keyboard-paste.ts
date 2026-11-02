@@ -178,13 +178,32 @@ export async function pasteTextIntoEmulatorKeyboard({
   return { byteLength: validation.byteLength, chunkCount, status: 'sent' }
 }
 
+// Android has no HID socket: main injects the whole text over the scrcpy control socket.
+export async function pasteTextIntoAndroidEmulator({
+  maxBytes,
+  sendText,
+  text
+}: {
+  maxBytes?: number
+  sendText: (text: string) => Promise<boolean>
+  text: string
+}): Promise<EmulatorKeyboardPasteResult> {
+  const validation = validateEmulatorKeyboardPasteText(text, maxBytes)
+  if (validation.status === 'rejected') {
+    return validation
+  }
+  if (!(await sendText(text.replaceAll('\r', '')))) {
+    return { byteLength: validation.byteLength, reason: 'target-unavailable', status: 'rejected' }
+  }
+  return { byteLength: validation.byteLength, chunkCount: 1, status: 'sent' }
+}
+
 function getPositiveIntegerLimit(value: number | undefined, fallback: number): number {
   return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value ?? fallback) : fallback
 }
 
 function waitForEmulatorKeyboardChunk(frameCount: number, frameDelayMs: number): Promise<void> {
-  // Why: serve-sim's sender spaces frames with timers, so later chunks must wait
-  // for the previous chunk's scheduled HID events instead of overlapping them.
+  // Wait for scheduled HID frames before the next chunk so serve-sim’s timer-spaced events cannot overlap.
   const delayMs = Math.max(frameDelayMs, frameCount * frameDelayMs)
   return new Promise((resolve) => window.setTimeout(resolve, delayMs))
 }

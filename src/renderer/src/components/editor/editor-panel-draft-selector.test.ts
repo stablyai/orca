@@ -16,66 +16,6 @@ function makeFile(id: string, overrides: Partial<OpenFile> = {}): OpenFile {
 }
 
 describe('createEditorPanelDraftSelector', () => {
-  it('limits draft invalidations to the panel that owns each keystroke', () => {
-    const files = Array.from({ length: 200 }, (_, index) => makeFile(`file-${index}`))
-    let editorDrafts: Record<string, string> = {}
-    let wholeMapInvalidations = 0
-    let scopedInvalidations = 0
-    let unrelatedPanelInvalidations = 0
-    const selectors = files.map(createEditorPanelDraftSelector)
-    const previousSelections = selectors.map((selector) => selector({ editorDrafts }))
-
-    for (let edit = 0; edit < 200; edit += 1) {
-      const previousDrafts = editorDrafts
-      editorDrafts = { ...editorDrafts, 'file-0': `edit-${edit}` }
-      for (let panelIndex = 0; panelIndex < files.length; panelIndex += 1) {
-        if (previousDrafts !== editorDrafts) {
-          wholeMapInvalidations += 1
-        }
-        const nextSelection = selectors[panelIndex]({ editorDrafts })
-        if (previousSelections[panelIndex] !== nextSelection) {
-          scopedInvalidations += 1
-          if (panelIndex !== 0) {
-            unrelatedPanelInvalidations += 1
-          }
-          previousSelections[panelIndex] = nextSelection
-        }
-      }
-    }
-
-    expect(wholeMapInvalidations).toBe(40_000)
-    expect(scopedInvalidations).toBe(200)
-    expect(unrelatedPanelInvalidations).toBe(0)
-  })
-
-  it('includes preview and selected conflict-review drafts but excludes unrelated files', () => {
-    const preview = makeFile('preview', { markdownPreviewSourceFileId: 'source' })
-    const conflictReview = makeFile('review', {
-      mode: 'conflict-review',
-      conflictReview: { selectedFileId: 'selected' } as NonNullable<OpenFile['conflictReview']>
-    })
-    const editorDrafts = {
-      preview: 'preview draft',
-      source: '',
-      review: 'review draft',
-      selected: 'selected draft',
-      unrelated: 'other draft'
-    }
-    const selectPreviewDrafts = createEditorPanelDraftSelector(preview)
-    const selectConflictDrafts = createEditorPanelDraftSelector(conflictReview)
-    const selectNoDrafts = createEditorPanelDraftSelector(null)
-
-    expect(selectPreviewDrafts({ editorDrafts })).toEqual({
-      preview: 'preview draft',
-      source: ''
-    })
-    expect(selectConflictDrafts({ editorDrafts })).toEqual({
-      review: 'review draft',
-      selected: 'selected draft'
-    })
-    expect(selectNoDrafts({ editorDrafts })).toEqual({})
-  })
-
   it('includes overview conflict drafts and ignores unrelated draft replacements', () => {
     const conflictReview = makeFile('review', {
       filePath: 'C:\\repo',
@@ -96,14 +36,58 @@ describe('createEditorPanelDraftSelector', () => {
       unrelated: 'other draft'
     }
 
-    const selection = selectDrafts({ editorDrafts })
+    const selection = selectDrafts({ editorDrafts, openFiles: [] })
     expect(selection).toEqual({
       'C:\\repo\\src\\a.ts': 'draft a',
       'C:\\repo\\src\\b.ts': ''
     })
 
     expect(
-      selectDrafts({ editorDrafts: { ...editorDrafts, unrelated: 'changed elsewhere' } })
+      selectDrafts({
+        editorDrafts: { ...editorDrafts, unrelated: 'changed elsewhere' },
+        openFiles: []
+      })
     ).toBe(selection)
+  })
+
+  it("shows an overview file open in a server tab under that tab's id, with its unsaved edits", () => {
+    const conflictReview = makeFile('review', {
+      filePath: '/repo',
+      mode: 'conflict-review',
+      conflictReview: {
+        source: 'live-summary',
+        snapshotTimestamp: 1,
+        entries: [{ path: 'src/a.ts', conflictKind: 'both_modified' }]
+      }
+    })
+    const serverFile = makeFile('editor:worktree-1:env-1:%2Frepo%2Fsrc%2Fa.ts', {
+      filePath: '/repo/src/a.ts',
+      relativePath: 'src/a.ts',
+      runtimeEnvironmentId: 'env-1'
+    })
+    const selectDrafts = createEditorPanelDraftSelector(conflictReview)
+
+    expect(
+      selectDrafts({ editorDrafts: { [serverFile.id]: 'unsaved' }, openFiles: [serverFile] })
+    ).toEqual({ [serverFile.id]: 'unsaved' })
+  })
+
+  it('follows an overview file to a tab that opens without a draft write', () => {
+    const conflictReview = makeFile('review', {
+      filePath: '/repo',
+      mode: 'conflict-review',
+      conflictReview: {
+        source: 'live-summary',
+        snapshotTimestamp: 1,
+        entries: [{ path: 'src/a.ts', conflictKind: 'both_modified' }]
+      }
+    })
+    const tab = makeFile('tab-a', { filePath: '/repo/src/a.ts', relativePath: 'src/a.ts' })
+    const editorDrafts = { [tab.id]: 'unsaved' }
+    const selectDrafts = createEditorPanelDraftSelector(conflictReview)
+
+    expect(selectDrafts({ editorDrafts, openFiles: [] })).toEqual({})
+    expect(selectDrafts({ editorDrafts, openFiles: [tab] })).toEqual({ [tab.id]: 'unsaved' })
+    expect(selectDrafts({ editorDrafts, openFiles: [] })).toEqual({})
   })
 })

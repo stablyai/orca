@@ -40,11 +40,16 @@ describe('opencode session registry', () => {
   it('rebinds a session to a new owner and refreshes eviction order', () => {
     const state = createHookListenerState()
     bindOpenCodeSession(state, 'ses_1', { paneKey: PANE_A, boundAt: 1, basis: 'argv' })
+    bindOpenCodeSession(state, 'ses_2', { paneKey: PANE_A, boundAt: 2, basis: 'argv' })
     bindOpenCodeSession(state, 'ses_1', {
       paneKey: PANE_B,
-      boundAt: 2,
+      boundAt: 3,
       basis: 'creation-correlation'
     })
+    for (let i = 0; i < OPENCODE_SESSION_BINDINGS_MAX - 1; i += 1) {
+      bindOpenCodeSession(state, `new_${i}`, { paneKey: PANE_A, boundAt: i + 4, basis: 'argv' })
+    }
+    expect(lookupOpenCodeSessionPane(state, 'ses_2')).toBeUndefined()
     expect(lookupOpenCodeSessionPane(state, 'ses_1')?.paneKey).toBe(PANE_B)
     expect(lookupOpenCodeSessionPane(state, 'ses_1')?.basis).toBe('creation-correlation')
   })
@@ -68,6 +73,7 @@ describe('opencode session registry', () => {
     bindOpenCodeSession(state, 'ses_3', { paneKey: PANE_B, boundAt: 3, basis: 'argv' })
     expect(unbindOpenCodeSessionsOfPane(state, PANE_A)).toBe(2)
     expect(lookupOpenCodeSessionPane(state, 'ses_1')).toBeUndefined()
+    expect(lookupOpenCodeSessionPane(state, 'ses_2')).toBeUndefined()
     expect(lookupOpenCodeSessionPane(state, 'ses_3')?.paneKey).toBe(PANE_B)
   })
 

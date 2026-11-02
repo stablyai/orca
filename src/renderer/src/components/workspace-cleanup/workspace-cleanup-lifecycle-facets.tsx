@@ -25,7 +25,6 @@ import {
   type WorkspaceCleanupFacetGroupProps
 } from './workspace-cleanup-facet-panel-model'
 
-/** Activity, size, workspace status, agent state, and local context. */
 export function WorkspaceCleanupLifecycleFacets({
   filters,
   counts,

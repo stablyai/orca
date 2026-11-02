@@ -9,45 +9,31 @@ import {
 } from './config-toml-line-scan'
 import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-path'
 
-const TUI_STRUCTURED_PREFIX = 'tui.'
-
-// Why: promoted [tui] settings are keyed by structured path (tui.<key>) so their
-// baseline/update entries can never collide with a top-level key of the same name.
-export function tuiStructuredKey(key: string): string {
-  return `${TUI_STRUCTURED_PREFIX}${key}`
+// Qualify table keys so baseline/update entries cannot collide with top-level settings.
+export function tableStructuredKey(table: string, key: string): string {
+  return `${table}.${key}`
 }
 
-export function isTuiStructuredKey(structuredKey: string): boolean {
-  return structuredKey.startsWith(TUI_STRUCTURED_PREFIX)
-}
-
-export function tuiKeyFromStructuredKey(structuredKey: string): string {
-  return structuredKey.slice(TUI_STRUCTURED_PREFIX.length)
-}
-
-// Why: promoted updates arrive keyed by structured path; the preamble and [tui]
-// regions are disjoint, so a mixed batch (e.g. /model + a status-line change)
-// composes in one rewrite — top-level keys land in the preamble, tui.<key>
-// entries wherever the [tui] placement rule puts them.
 export function upsertPromotedSettingsInContent(
   content: string,
   updates: Map<string, string>
 ): string {
   const topLevelUpdates = new Map<string, string>()
-  const tuiUpdates = new Map<string, string>()
-  for (const [key, raw] of updates) {
-    if (isTuiStructuredKey(key)) {
-      tuiUpdates.set(tuiKeyFromStructuredKey(key), raw)
-    } else {
-      topLevelUpdates.set(key, raw)
+  const tableUpdates = new Map<string, Map<string, string>>()
+  for (const [structuredKey, raw] of updates) {
+    const dot = structuredKey.indexOf('.')
+    if (dot === -1) {
+      topLevelUpdates.set(structuredKey, raw)
+      continue
     }
+    const table = structuredKey.slice(0, dot)
+    const keys = tableUpdates.get(table) ?? new Map<string, string>()
+    tableUpdates.set(table, keys.set(structuredKey.slice(dot + 1), raw))
   }
-  let result = content
-  if (topLevelUpdates.size > 0) {
-    result = upsertTopLevelSettingsInContent(result, topLevelUpdates)
-  }
-  if (tuiUpdates.size > 0) {
-    result = upsertTuiSettingsInContent(result, tuiUpdates)
+  let result =
+    topLevelUpdates.size > 0 ? upsertTopLevelSettingsInContent(content, topLevelUpdates) : content
+  for (const [table, keys] of tableUpdates) {
+    result = upsertTableSettingsInContent(result, table, keys)
   }
   return result
 }
@@ -76,8 +62,7 @@ export function upsertTopLevelSettingsInContent(
     state = updateTomlLineScanState(state, line)
   }
 
-  // Why: CRLF configs keep a trailing \r after the split; new lines must use
-  // the file's existing endings or a Windows-owned config becomes mixed-EOL.
+  // Preserve CRLF on inserted lines to avoid mixed endings in Windows configs.
   const usesCrlf = content.includes('\r\n')
   const insertions: string[] = []
   for (const [key, raw] of updates) {
@@ -113,20 +98,7 @@ type TablePlacementScan = {
   lastDottedKeyIndex: number
 }
 
-/**
- * Upserts promoted `[tui]` keys (keyed by bare name) into the system config,
- * placing each per the design's total placement rule: replace an existing key
- * in place keeping its form; else insert bare into the first `[tui]` body; else
- * dotted in the preamble beside existing dotted `tui.*` keys; else create one
- * `[tui]` table at EOF for every key that reaches that branch. Rendering follows
- * the destination — bare inside a table, dotted in the preamble — so no `tui`
- * table is ever defined twice.
- */
-export function upsertTuiSettingsInContent(content: string, updates: Map<string, string>): string {
-  return upsertTableSettingsInContent(content, 'tui', updates)
-}
-
-/** Same placement rule as `upsertTuiSettingsInContent`, for any single-segment table. */
+/** Preserve existing key form; otherwise use the bare table, dotted preamble, then a new EOF table. */
 export function upsertTableSettingsInContent(
   content: string,
   table: string,
@@ -150,7 +122,7 @@ export function upsertTableSettingsInContent(
       lines[bareIndex] = withTrailingCr(lines[bareIndex]!, `${key} = ${raw}`)
       continue
     }
-    // Why: adding a scalar beside an existing <table>.<key> descendant would turn valid TOML invalid.
+    // A scalar cannot replace a key already defined as a table by its descendants.
     if (scan.blockedAbsentKeys.has(key)) {
       continue
     }
@@ -159,15 +131,12 @@ export function upsertTableSettingsInContent(
     } else if (scan.hasDottedKey) {
       dottedPreambleInserts.push(`${table}.${key} = ${raw}`)
     } else if (!scan.blocksNewTable) {
-      // Why: inline/array table definitions block this branch because adding a
-      // plain [<table>] beside either would make the config invalid.
+      // Inline/array definitions cannot coexist with a new plain table.
       newTableKeys.push(`${key} = ${raw}`)
     }
   }
 
-  // Why: the config shape routes every absent key to the same branch, so at most
-  // one insert group is non-empty; still apply EOF→body→preamble so a splice
-  // never shifts a lower index a later splice depends on.
+  // Apply splices from EOF backward so earlier indices remain valid.
   if (newTableKeys.length > 0) {
     appendNewTable(lines, table, newTableKeys, usesCrlf)
   }
@@ -227,8 +196,7 @@ function scanTablePlacement(
           tableBodyActive = true
           tableBodyHeaderIndex = index
         }
-        // Why: a root [[<table>]] is already an array, so appending [<table>] would
-        // redefine it and make an otherwise valid config unparseable.
+        // A plain table would redefine the existing array table.
         if (table?.isArray && table.segments.length === 1 && table.segments[0] === tableName) {
           blocksNewTable = true
         }
@@ -242,8 +210,7 @@ function scanTablePlacement(
         continue
       }
       if (inPreamble) {
-        // Why: any dotted `<table>.*` key (allowlisted or not) already defines the
-        // implicit table, so a new `[<table>]` table at EOF would duplicate it.
+        // Any dotted key implicitly defines its table, including keys outside the promotion allowlist.
         const parsed = parseTomlKeyPath(line)
         const isAssignment = parsed && line[parsed.end] === '='
         if (isAssignment && parsed.segments[0] === tableName && parsed.segments.length > 1) {
@@ -294,9 +261,7 @@ function scanTablePlacement(
   }
 }
 
-// Why: TOML forbids adding bare keys to `[<table>]` after a `[<table>.*]` subtable opens,
-// so absent keys land at the body's end — before trailing blanks and before the
-// next header — which is the only valid spot.
+// Insert before the next header: bare keys after a subtable header would belong to that subtable.
 function computeBareBodyInsertIndex(
   lines: string[],
   headerIndex: number,
@@ -322,8 +287,6 @@ function appendNewTable(
   while (appendAt > 0 && (lines[appendAt - 1] ?? '').trim() === '') {
     appendAt -= 1
   }
-  // Why: separate the new table from prior content with a blank line, unless the
-  // file was empty/blank, where a leading blank would be spurious.
   const block = appendAt > 0 ? ['', `[${table}]`, ...keyRenders] : [`[${table}]`, ...keyRenders]
   lines.splice(appendAt, 0, ...block.map((line) => withCrLine(line, usesCrlf)))
 }

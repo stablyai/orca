@@ -17,8 +17,11 @@ export type ConfirmShellForegroundRequest = Omit<GetForegroundProcessRequest, 't
 export type InspectProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & {
   type: 'inspectProcess'
   payload: GetForegroundProcessRequest['payload'] & {
+    foregroundOnly?: boolean
     expectedIncarnationId?: string
-    /** Optional; a daemon that predates it answers with the full capture as it always did. */
+    /** Older daemons ignore this and return a full capture. */
     steadyState?: boolean
+    /** Older daemons still count detached daemons as children. */
+    ignoreDetached?: boolean
   }
 }

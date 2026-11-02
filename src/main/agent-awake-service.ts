@@ -61,8 +61,7 @@ export class AgentAwakeService {
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
     this.statusLease = new AgentAwakeStatusLease(this.now, () => this.refresh('stale-expiry'))
-    // Windows lid close is intentionally not modeled as an assertion here:
-    // keeping it awake requires mutating the user's global power plan.
+    // Preventing Windows lid sleep requires changing the user’s global power plan.
     this.linuxAssertion =
       options.linuxAssertion ??
       new LinuxLidSleepAssertion({

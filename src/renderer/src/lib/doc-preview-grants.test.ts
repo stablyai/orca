@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   connectionId: null as string | null | undefined,
   environmentId: null as string | null,
+  ambiguous: false,
   mintGrant: vi.fn(),
   revokeGrant: vi.fn()
 }))
@@ -11,7 +12,7 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionId
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => (mocks.ambiguous ? null : mocks.environmentId)
 }))
 
 import {
@@ -19,68 +20,16 @@ import {
   ensureDocPreviewGrant,
   releaseDocPreviewGrant
 } from './doc-preview-grants'
-
-const state = { getKnownWorktreeById: () => ({ id: 'wt-1', path: '/srv/repo' }) } as never
+import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.connectionId = null
   mocks.environmentId = null
+  mocks.ambiguous = false
   mocks.mintGrant.mockResolvedValue({ grantId: 'grant-1', url: 'orca-preview://grant-1/a.html' })
   vi.stubGlobal('window', {
     api: { docPreview: { mintGrant: mocks.mintGrant, revokeGrant: mocks.revokeGrant } }
-  })
-})
-
-describe('buildDocPreviewGrantRequest', () => {
-  // A document outside every workspace resolves and authorizes from its own directory.
-  it('roots an SSH grant outside the workspace at the document directory', () => {
-    mocks.connectionId = 'ssh-1'
-
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/home/alice/docs/report.html')).toEqual({
-      owner: { kind: 'ssh', connectionId: 'ssh-1' },
-      requestBase: '/home/alice/docs',
-      root: '/home/alice/docs',
-      entryRelativePath: 'report.html'
-    })
-  })
-
-  it('resolves from the workspace but authorizes only the document directory', () => {
-    mocks.connectionId = 'ssh-1'
-
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/report.html')).toEqual({
-      owner: { kind: 'ssh', connectionId: 'ssh-1' },
-      requestBase: '/srv/repo',
-      root: '/srv/repo/docs',
-      entryRelativePath: 'docs/report.html'
-    })
-  })
-
-  it('carries the worktree selector and root for a paired runtime grant', () => {
-    mocks.environmentId = 'env-1'
-
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/report.html')).toEqual({
-      owner: {
-        kind: 'runtime',
-        environmentId: 'env-1',
-        worktreeSelector: 'id:wt-1',
-        worktreeRoot: '/srv/repo'
-      },
-      requestBase: '/srv/repo',
-      root: '/srv/repo/docs',
-      entryRelativePath: 'docs/report.html'
-    })
-  })
-
-  // Why: files.read is worktree-scoped, so a paired document outside it has no readable root.
-  it('refuses a paired document outside the workspace', () => {
-    mocks.environmentId = 'env-1'
-
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/var/tmp/report.html')).toBeNull()
-  })
-
-  it('refuses a local workspace, which has no remote channel to read over', () => {
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/tmp/report.html')).toBeNull()
   })
 })
 
@@ -98,11 +47,42 @@ describe('doc preview grant lifetime', () => {
       ensureDocPreviewGrant('preview-1', request)
     ])
 
-    // Why: React StrictMode double-invokes mount effects in dev; a second mint would
-    // strand the first grant and a mount-scoped revoke would kill the live webview.
+    // StrictMode effect replay must neither mint twice nor revoke the surviving webview’s grant.
     expect(mocks.mintGrant).toHaveBeenCalledOnce()
     expect(first).toBe(second)
     expect(mocks.revokeGrant).not.toHaveBeenCalled()
+  })
+
+  // Why: Share reads and keys from the handle's location, so a later host change must not move it.
+  it('keeps the minted location on the handle until the grant is released', async () => {
+    const minted = {
+      owner: {
+        kind: 'runtime' as const,
+        environmentId: 'server-1',
+        worktreeSelector: 'id:wt-1',
+        worktreeRoot: '/srv/repo'
+      },
+      requestBase: '/srv/repo',
+      root: '/srv/repo/docs',
+      entryRelativePath: 'docs/a.html'
+    }
+    const movedHost = { ...minted, owner: { ...minted.owner, environmentId: 'server-2' } }
+
+    await expect(ensureDocPreviewGrant('preview-5', minted)).resolves.toMatchObject({
+      location: minted
+    })
+    await expect(ensureDocPreviewGrant('preview-5', movedHost)).resolves.toMatchObject({
+      location: minted
+    })
+    expect(mocks.mintGrant).toHaveBeenCalledExactlyOnceWith({
+      ...minted,
+      browserPageId: 'preview-5'
+    })
+
+    releaseDocPreviewGrant('preview-5')
+    await expect(ensureDocPreviewGrant('preview-5', movedHost)).resolves.toMatchObject({
+      location: movedHost
+    })
   })
 
   it('revokes on release and mints fresh afterwards', async () => {
@@ -121,14 +101,7 @@ describe('doc preview grant lifetime', () => {
     expect(mocks.mintGrant).toHaveBeenCalledTimes(2)
   })
 
-  it('ignores a release for a tab that never minted a grant', () => {
-    releaseDocPreviewGrant('never-opened')
-
-    expect(mocks.revokeGrant).not.toHaveBeenCalled()
-  })
-
-  // Why: a mint that rejects after the tab was released and reopened must not evict the entry the
-  // reopen created, or that grant can never be revoked from the tab that owns it.
+  // Late rejection from a released tab must not evict its reopened tab’s new, otherwise unrevokable grant.
   it('leaves the entry of a later mint alone when an earlier one rejects', async () => {
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
@@ -171,4 +144,31 @@ describe('doc preview grant lifetime', () => {
       grantId: 'grant-1'
     })
   })
+})
+
+describe('outside-workspace document grants', () => {
+  it.each([
+    ['/srv/repo', '/tmp/reports/proposal.html', '/tmp/reports'],
+    ['C:/repo', 'C:/reports/proposal.html', 'C:/reports']
+  ])(
+    'keeps %s as the source workspace while granting only the opened document',
+    (workspaceRoot, filePath, root) => {
+      mocks.environmentId = 'env-1'
+      const state = createTestStore().getState()
+      state.getKnownWorktreeById = () =>
+        makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: workspaceRoot })
+      expect(buildDocPreviewGrantRequest(state, 'wt-1', filePath)).toEqual({
+        owner: {
+          kind: 'runtime',
+          environmentId: 'env-1',
+          worktreeSelector: 'id:wt-1',
+          worktreeRoot: workspaceRoot,
+          fileAccess: 'terminal-artifact'
+        },
+        requestBase: root,
+        root,
+        entryRelativePath: 'proposal.html'
+      })
+    }
+  )
 })

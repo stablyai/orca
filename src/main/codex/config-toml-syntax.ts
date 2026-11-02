@@ -17,6 +17,9 @@ export function escapeTomlBasicString(value: string): string {
     .replaceAll('\t', '\\t')
 }
 
+// Accept Codex hook keys with any event label, including labels unknown to this client.
+export const CODEX_HOOK_TRUST_KEY = /^(.+):[a-z_]+:(?:0|[1-9]\d*):(?:0|[1-9]\d*)$/
+
 export function parseHookStateTomlHeaderKey(line: string): string | null {
   return parseTomlTableHeaderLeafKey(line, ['hooks', 'state'])
 }
@@ -25,7 +28,7 @@ export function parseProjectTomlHeaderPath(line: string): string | null {
   return parseTomlTableHeaderLeafKey(line, ['projects'])
 }
 
-// Why (#22592): Codex writes `["projects"."/p"]`; every spelling of the key path must match.
+// Decode quoted segments so equivalent TOML header spellings match.
 function parseTomlTableHeaderLeafKey(line: string, parent: readonly string[]): string | null {
   const header = getTomlTableHeader(line.replace(/\r$/, ''))
   const table = header === null ? null : parseTomlTableHeaderPath(header)

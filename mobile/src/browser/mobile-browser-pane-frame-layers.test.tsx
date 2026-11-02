@@ -1,7 +1,4 @@
-/**
- * The pane's two frame layers as native shows them: a source or opacity is whatever was written
- * last, whether by a render or by `setNativeProps`, so a render that re-sends a stale prop is seen.
- */
+// Model native last-write source/opacity from renders and setNativeProps so stale rerender props are observable.
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,9 +6,9 @@ import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
 } from '../transport/browser-screencast-protocol'
-import type { RpcClient } from '../transport/rpc-client'
 import { MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS } from './browser-screencast-request'
 import { MobileBrowserPane, type MobileBrowserTab } from './MobileBrowserPane'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 vi.mock('./use-browser-binary-screencast-grant', () => ({
   useBrowserBinaryScreencastGrant: vi.fn(() => true)
@@ -21,6 +18,8 @@ const appState = vi.hoisted(() => {
   const holder: { listener: ((state: string) => void) | null } = { listener: null }
   return holder
 })
+
+vi.mock('./MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () => null }))
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -54,14 +53,8 @@ vi.mock('lucide-react-native', () => ({
   Smartphone: 'Smartphone'
 }))
 
-/**
- * One layer's native state, and the last value a render sent for each prop it models. A source
- * write that changes nothing loads nothing, as on Android and iOS; one that changes it owes one
- * answer, which reports the layer's current source, as Android's does.
- *
- * Keyed by the layer's `onLoad`, which is stable per layer: react-test-renderer builds a fresh mock
- * on every ref read, so the mock itself cannot hold state.
- */
+// Changed source owes one load/error answer; unchanged source loads nothing. Answer with current source like Android.
+// Key by stable onLoad: test renderer creates fresh ref mocks, so mock instance cannot own native state.
 type NativeLayer = {
   source: string | undefined
   loading: boolean
@@ -193,8 +186,7 @@ let pageCounter = 0
 async function renderPane() {
   pageCounter += 1
   const frames: { push: ((frame: BrowserScreencastFrame) => void) | null } = { push: null }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane only subscribes here; no request is sent in these cases.
-  const client = {
+  const client = stubRpcClient({
     subscribe: (
       _method: string,
       _params: unknown,
@@ -203,9 +195,8 @@ async function renderPane() {
     ) => {
       frames.push = options?.onBinaryFrame ?? null
       return () => {}
-    },
-    request: vi.fn()
-  } as unknown as RpcClient
+    }
+  })
   const tab: MobileBrowserTab = {
     type: 'browser',
     id: `tab-${pageCounter}`,

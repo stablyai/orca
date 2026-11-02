@@ -8,8 +8,9 @@
  * `[main-thread] {json}` stderr line every 5s containing:
  *   - worst event-loop stall in the window (maxGapMs) and stall counts
  *   - subprocess spawns since the last report, keyed by command
- *     ("git status", "gh api", …) with the synchronous spawn-initiation cost
- *     that held the main thread (blockMsTotal/blockMsMax)
+ *     ("git status", "gh api", …) with how long each launch held the main
+ *     thread (blockMsTotal/blockMsMax): spawn initiation for async launches,
+ *     the whole run for synchronous ones
  * On macOS the bench also tails the unified log for the exact
  * "Performance Diagnostics" warnings from the issue and records which process
  * emitted them, so spawn churn and OS warnings can be correlated by timestamp.

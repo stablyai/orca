@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 
 export async function shutdownDegradedFallbackSessions<T extends IPtyProvider>(
   sessionProviders: Map<string, T>,
@@ -13,7 +13,7 @@ export async function shutdownDegradedFallbackSessions<T extends IPtyProvider>(
       sessionProviders.delete(id)
     })
   )
-  // Why: fallback cleanup must not abort the user's daemon-restart recovery path.
+  // Failed local cleanup must not abort daemon-restart recovery.
   const failed = results.filter((result) => result.status === 'rejected')
   if (failed.length > 0) {
     console.warn(

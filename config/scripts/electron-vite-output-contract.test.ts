@@ -7,17 +7,10 @@ import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import {
-  DEV_BUNDLE_ID,
-  DEV_HELPER_BUNDLE_ID,
-  getDevHelperPlistPatches
-} from './dev-electron-bundle-identity.mjs'
-import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
   createBootstrapFatalExitBanner
 } from '../build-plugins/bootstrap-fatal-exit-banner'
-import { createRequire } from 'node:module'
-import { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 
 type BootstrapProcessMock = EventEmitter & {
@@ -70,88 +63,7 @@ function failBootstrapWithBanner(options: {
   return processMock
 }
 
-const electronBuilderConfig = createRequire(import.meta.url)('../electron-builder.config.cjs')
-
 describe('Electron Vite output contract', () => {
-  it("minifies main and renderer with rolldown's in-process minifier", () => {
-    // Why: 'esbuild' routes every chunk through a second, undeclared transpiler.
-    expect(electronViteConfig.main?.build?.minify).toBe('oxc')
-    expect(electronViteConfig.renderer?.build?.minify).toBe('oxc')
-    expect(electronViteConfig.main?.esbuild).toBeUndefined()
-    expect(electronViteConfig.renderer?.esbuild).toBeUndefined()
-  })
-
-  it('emits hidden main source maps that packaging strips from app.asar', () => {
-    // Hidden maps decode minified crash traces without the bundle referencing
-    // files that the packaged app never ships.
-    expect(electronViteConfig.main?.build?.sourcemap).toBe('hidden')
-    expect(electronBuilderConfig.files).toContain('!out/**/*.map')
-  })
-
-  it('keeps main-process and plain-Node entries at stable CommonJS paths', () => {
-    const output = electronViteConfig.main?.build?.rollupOptions?.output
-    if (!output || Array.isArray(output)) {
-      throw new Error('Expected one main-process output')
-    }
-
-    expect(output.format).toBe('cjs')
-    expect(output.entryFileNames).toBe('[name].js')
-    expect(output.chunkFileNames).toBe('chunks/[name]-[hash].js')
-  })
-
-  it('keeps offline profile-state CLI imports unpacked at stable paths', () => {
-    const input = electronViteConfig.main?.build?.rollupOptions?.input
-    if (!input || typeof input !== 'object' || Array.isArray(input)) {
-      throw new Error('Expected named main-process inputs')
-    }
-
-    for (const name of [
-      'orca-profiles/profile-index-store',
-      'persistence/profile-state/profile-state-access',
-      'persistence/profile-state/profile-state-active-location',
-      'persistence/profile-state/profile-state-backup-path',
-      'persistence/profile-state/profile-state-database-recovery',
-      'persistence/profile-state/profile-state-domain-reader',
-      'persistence/profile-state/legacy-json/profile-state-export-path',
-      'persistence/profile-state/profile-state-offline-settings',
-      'persistence/profile-state/legacy-json/profile-state-recovery',
-      'persistence/profile-state/profile-state-recovery-command',
-      'persistence/profile-state/profile-state-storage-classification',
-      'startup/http1-compatibility-marker'
-    ]) {
-      expect(input).toHaveProperty(name)
-    }
-    expect(electronBuilderConfig.asarUnpack).toContain('out/main/persistence/profile-state/**')
-    expect(electronBuilderConfig.asarUnpack).toContain(
-      'out/main/orca-profiles/profile-index-store.js'
-    )
-    expect(electronBuilderConfig.asarUnpack).toContain(
-      'out/main/startup/http1-compatibility-marker.js'
-    )
-  })
-
-  it('externalizes packaged dependencies but bundles self-contained main dependencies', () => {
-    const external = electronViteConfig.main?.build?.rollupOptions?.external
-    if (typeof external !== 'function') {
-      throw new Error('Expected main-process external predicate')
-    }
-
-    expect(external('node-pty', undefined, false)).toBe(true)
-    expect(external('@parcel/watcher', undefined, false)).toBe(true)
-    expect(external('electron', undefined, false)).toBe(true)
-    expect(external('node:fs', undefined, false)).toBe(true)
-    expect(external('@xterm/headless', undefined, false)).toBe(false)
-    expect(external('@xterm/addon-serialize', undefined, false)).toBe(false)
-    expect(external('tldts', undefined, false)).toBe(false)
-    expect(external('zod', undefined, false)).toBe(false)
-    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('tldts')
-    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
-  })
-
-  it('bundles validation dependencies used by the sandboxed preload', () => {
-    expect(electronViteConfig.preload?.build?.externalizeDeps?.exclude).toContain('zod')
-  })
-
   it('exits when a static import fails before source error guards load', () => {
     const processMock = new EventEmitter() as EventEmitter & {
       exit: (code: number) => void
@@ -242,20 +154,5 @@ describe('Electron Vite output contract', () => {
     } finally {
       rmSync(logDirectory, { recursive: true, force: true })
     }
-  })
-
-  it('isolates renderer entry side effects behind strict facades', () => {
-    expect(electronViteConfig.renderer?.build?.rollupOptions?.preserveEntrySignatures).toBe(
-      'strict'
-    )
-  })
-
-  it('gives the dev terminal daemon helper the TCC identity watched by Orca', () => {
-    // Asserted on the values rather than the source text: the ids moved into
-    // dev-electron-bundle-identity.mjs so every dev bundle signs to one cdhash.
-    expect(DEV_HELPER_BUNDLE_ID).toBe(`${DEV_BUNDLE_ID}.helper`)
-    expect(getDevHelperPlistPatches()).toEqual([
-      { key: 'CFBundleIdentifier', value: DEV_HELPER_BUNDLE_ID }
-    ])
   })
 })

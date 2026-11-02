@@ -48,7 +48,7 @@ export function getEffectiveHooksFromConfig(
     return null
   }
 
-  // Why: committed `orca.yaml` and local Settings can coexist; the source policy decides which is authoritative.
+  // The source policy arbitrates between committed orca.yaml and local Settings.
   return {
     scripts: {
       ...(setup ? { setup } : {}),
@@ -77,20 +77,6 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
-export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): string {
-  const commands = (hooks?.defaultTabs ?? [])
-    .map((tab, index) => {
-      const command = tab.command?.trim()
-      if (!command) {
-        return null
-      }
-      const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${command}`
-    })
-    .filter((entry): entry is string => entry !== null)
-  return [hooks?.scripts.setup?.trim(), ...commands].filter(Boolean).join('\n\n')
-}
-
 export function getDefaultTabsLaunch(
   hooks: OrcaHooks | null,
   repo: Repo,
@@ -107,7 +93,7 @@ export function getDefaultTabsLaunch(
       hasLocalScript: Boolean(repo.hookSettings?.scripts.setup?.trim())
     }
   )
-  // Why: local-only repos may use shared tab titles/colors but must not run the committed orca.yaml commands.
+  // Local-only repos may inherit tab styling, but must not run shared commands.
   const canRunSharedCommands = sharedCommandPolicy !== 'local-only'
   const runCommands =
     hasCommands && canRunSharedCommands ? shouldRunSetupForCreate(repo, decision) : false

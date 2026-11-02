@@ -1,12 +1,13 @@
+import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-interrupt-reconciliation'
 import {
-  markClaudeLeadTurnInterrupted,
+  markClaudeLeadTurnDone,
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
   requiresDoubleEscapeInterrupt,
+  shouldIgnoreInterruptIntent,
   type AgentInterruptInferenceRequest
 } from '../../../shared/agent-interrupt-intent'
 import {
@@ -18,9 +19,65 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
 import { AgentHookServerRowOwnership } from './server-row-ownership'
 import { foldMainAgentWithRowChildWork } from './server-row-child-work-fold'
+import {
+  ClaudeTerminalInterruptTracker,
+  type ClaudeTerminalEvidence
+} from '../../../shared/claude-terminal-interrupt'
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
+  private remoteInterruptListeners = new Set<(command: RemoteAgentInterruptDispatch) => void>()
+
+  subscribeRemoteInterruptRequests(
+    listener: (command: RemoteAgentInterruptDispatch) => void
+  ): () => void {
+    this.remoteInterruptListeners.add(listener)
+    return () => this.remoteInterruptListeners.delete(listener)
+  }
+
+  private readonly claudeTerminalInterrupts = new ClaudeTerminalInterruptTracker(
+    (paneKey) => {
+      const row = this.state.lastStatusByPaneKey.get(paneKey)
+      // Remote evidence is adjudicated by the relay that owns its input and live output.
+      return row?.connectionId ? undefined : row
+    },
+    (row) => {
+      if (
+        !('receivedAt' in row) ||
+        typeof row.receivedAt !== 'number' ||
+        !('stateStartedAt' in row) ||
+        typeof row.stateStartedAt !== 'number'
+      ) {
+        return
+      }
+      this.applyInterruptInference(
+        {
+          paneKey: row.paneKey,
+          intent: 'plain-escape',
+          baselineUpdatedAt: row.receivedAt,
+          baselineStateStartedAt: row.stateStartedAt,
+          baselinePrompt: row.payload.prompt,
+          baselineAgentType: 'claude'
+        },
+        true
+      )
+    }
+  )
+
+  observeClaudeTerminalEvidence(paneKey: string, evidence: ClaudeTerminalEvidence): void {
+    if (evidence.kind === 'input') {
+      this.programStatusFacets.noteInput(paneKey)
+    }
+    this.claudeTerminalInterrupts.observe(paneKey, evidence)
+  }
+
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
+    return this.applyInterruptInference(request, false)
+  }
+
+  private applyInterruptInference(
+    request: AgentInterruptInferenceRequest,
+    claudeNativeTitleConfirmed: boolean
+  ): boolean {
     if (!isValidPaneKey(request.paneKey)) {
       return false
     }
@@ -36,17 +93,16 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (existing.providerSessionOnly) {
       return false
     }
-    // Why: inference must not fabricate a `done` onto a row whose `working` was never confirmed this runtime.
+    // Restored work needs live confirmation before inference can settle it.
     if (existing.restoredUnconfirmed) {
       return false
     }
     const payload = existing.payload
     const agentType: AgentType | undefined = payload.agentType
-    // Why: Droid's Ctrl+C exits the CLI (handled by PTY lifecycle) rather than interrupting the current turn.
-    if (agentType === 'droid' && request.intent === 'ctrl-c') {
+    if (shouldIgnoreInterruptIntent(agentType, request.intent)) {
       return false
     }
-    // Why: these agents use the first Escape as a TUI cancel that can leave the turn running; only a double Escape infers an interrupt.
+    // These TUIs use one Escape for navigation; only a double Escape proves cancel intent.
     if (requiresDoubleEscapeInterrupt(agentType, request.intent) && request.inputCount !== 2) {
       return false
     }
@@ -58,7 +114,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (dismissesClaudeQuestion) {
       return this.inferQuestionAnswered(request)
     }
-    // Why: inference is a fallback for a missing final hook; a strict baseline match keeps a delayed timer from clobbering any newer hook.
+    // Match the baseline so delayed inference cannot overwrite a newer hook.
     if (
       payload.state !== 'working' ||
       !equivalentInterruptAgentType(agentType, request.baselineAgentType) ||
@@ -69,9 +125,11 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     ) {
       return false
     }
-    // Why: re-checked here, not only in the renderer, so a stale or direct inference request
-    // cannot route around the renderer's skip and synthesize a false stopped row.
-    if (isNavigationEscapeIntent(agentType, request.intent)) {
+    // Enforce navigation exclusions here too; direct requests can bypass the renderer.
+    if (
+      isNavigationEscapeIntent(agentType, request.intent) &&
+      !(agentType === 'claude' && claudeNativeTitleConfirmed)
+    ) {
       return false
     }
     const childWorkEvidenced =
@@ -79,64 +137,38 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       (agentType === 'claude' &&
         (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
           this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey)))
-    // Why: a 'working' pane can be child-driven, and Ctrl+C at the idle prompt of a main agent that
-    // child work holds open cancels nothing, so the main agent fact decides. A row from a host too
-    // old to publish `mainAgent` keeps the evidence guard, and so does Codex: its synthesized row is
-    // a plain done, which would retire the live children its combine keeps working.
-    if (
-      payload.mainAgent
-        ? payload.mainAgent.state !== 'working' || (agentType === 'codex' && childWorkEvidenced)
-        : childWorkEvidenced
-    ) {
+    // Ctrl+C at an idle main prompt cannot cancel child work; older peers use the child-evidence guard.
+    if (payload.mainAgent ? payload.mainAgent.state !== 'working' : childWorkEvidenced) {
       return false
     }
-    // Why: whoever owns the provider records folds the cancel with the child work the turn left
-    // running. A local pane's listener record must learn it too, or a later child event re-emits the
-    // stale 'working' state; a relayed pane's records live on the relay, so only its row is evidence.
-    const local =
-      agentType === 'claude' && !existing.connectionId
-        ? markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
-        : undefined
-    const relayed =
-      agentType === 'claude' && existing.connectionId
-        ? foldMainAgentWithRowChildWork('done', existing)
-        : undefined
-    if (agentType === 'codex') {
-      markCodexLeadTurnInterrupted(this.state, existing.paneKey)
-    }
-    const state = local?.state ?? relayed?.stateName ?? 'done'
-    const workingMode = local?.workingMode ?? relayed?.workingMode
-    const inferred = this.applyNormalizedStatus({
-      paneKey: existing.paneKey,
-      tabId: existing.tabId,
-      worktreeId: existing.worktreeId,
-      connectionId: existing.connectionId,
-      providerSession: existing.providerSession,
-      // Why: a cancel leaves the shell fact as it was; dropping it would stop restart from seeding
-      // the cancelled main agent, so a child's later drain could never settle the row.
-      ...(existing.claudeRunningNonAgentTask !== undefined
-        ? { claudeRunningNonAgentTask: existing.claudeRunningNonAgentTask }
-        : {}),
-      payload: {
-        state,
-        ...(workingMode ? { workingMode } : {}),
-        prompt: payload.prompt,
-        agentType,
-        ...(payload.model ? { model: payload.model } : {}),
-        // Why: `interrupted` is the settled row's restatement of the verdict for readers that
-        // predate `mainAgent`; a row the cancel left monitoring carries it on `mainAgent.outcome` only.
-        ...(state === 'done' ? { interrupted: true } : {}),
-        // Why: idle children are display state; dropping them on an inferred interrupt blanks rows a later hook would restore.
-        ...(payload.subagents ? { subagents: payload.subagents } : {}),
-        mainAgent: local?.mainAgent ?? {
-          state: 'done',
-          outcome: 'cancellation',
-          stateStartedAt: Date.now()
-        }
-      }
-    })
+    const inferred = this.settleTurnWithoutStop(existing, 'cancellation')
     if (!inferred) {
       return false
+    }
+    if (
+      agentType === 'claude' &&
+      request.intent === 'ctrl-c' &&
+      existing.connectionId &&
+      existing.hostTurnRevision &&
+      existing.providerSession
+    ) {
+      const command: RemoteAgentInterruptDispatch = {
+        connectionId: existing.connectionId,
+        request: {
+          paneKey: existing.paneKey,
+          hostTurnRevision: existing.hostTurnRevision,
+          launchToken: existing.launchToken,
+          providerSession: existing.providerSession,
+          intent: 'ctrl-c'
+        }
+      }
+      for (const listener of this.remoteInterruptListeners) {
+        try {
+          listener(command)
+        } catch (error) {
+          console.warn('[agent-hooks] remote interrupt dispatch failed', error)
+        }
+      }
     }
     console.debug('[agent-hooks] inferred interrupted agent status', {
       paneKey: inferred.paneKey,
@@ -146,7 +178,79 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     return true
   }
 
-  /** Guarded fallback for the hook Claude omits after answering or dismissing AskUserQuestion. */
+  /** A prompt hook blocked Claude's prompt (its claimed run rested with no result), so no Stop follows. */
+  protected settleClaudePromptBlocked(row: EnrichedAgentHookEventPayload): void {
+    if (
+      this.programStatusFacets.claimedRunRestedWithoutResult(row.paneKey, 'claude') &&
+      // Relayed interrupts are adjudicated on the relay, which sees the input this host does not.
+      !row.connectionId &&
+      this.state.lastStatusByPaneKey.get(row.paneKey) === row &&
+      row.payload.agentType === 'claude' &&
+      row.payload.mainAgent?.state === 'working' &&
+      !row.restoredUnconfirmed &&
+      !row.providerSessionOnly
+    ) {
+      this.settleTurnWithoutStop(row)
+    }
+  }
+
+  /** End a working main-agent turn whose Stop hook never comes; cancellation marks an interrupt. */
+  private settleTurnWithoutStop(
+    existing: EnrichedAgentHookEventPayload,
+    outcome?: 'cancellation'
+  ): EnrichedAgentHookEventPayload | undefined {
+    const { payload } = existing
+    const agentType = payload.agentType
+    // Update local producer records too, or later child hooks revive stale work; remote records belong to the relay.
+    const local =
+      agentType === 'claude' && !existing.connectionId
+        ? markClaudeLeadTurnDone(this.state, existing.paneKey, outcome)
+        : undefined
+    const relayed =
+      agentType === 'claude' && existing.connectionId
+        ? foldMainAgentWithRowChildWork('done', existing)
+        : undefined
+    const state = local?.state ?? relayed?.stateName ?? 'done'
+    const workingMode = local?.workingMode ?? relayed?.workingMode
+    return this.applyNormalizedStatus({
+      paneKey: existing.paneKey,
+      tabId: existing.tabId,
+      worktreeId: existing.worktreeId,
+      connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
+      launchToken: existing.launchToken,
+      hostTurnRevision: existing.hostTurnRevision,
+      source: existing.source,
+      // Retain shell evidence so restart can seed the cancelled main agent and later settle drained children.
+      ...(existing.claudeRunningNonAgentTask !== undefined
+        ? { claudeRunningNonAgentTask: existing.claudeRunningNonAgentTask }
+        : {}),
+      payload: {
+        state,
+        claudeTaskWakeupPending:
+          state !== 'done'
+            ? local
+              ? local.claudeTaskWakeupPending
+              : payload.claudeTaskWakeupPending
+            : undefined,
+        ...(workingMode ? { workingMode } : {}),
+        prompt: payload.prompt,
+        agentType,
+        ...(payload.model ? { model: payload.model } : {}),
+        // Older readers use interrupted on done rows; monitoring rows keep cancellation on mainAgent.outcome.
+        ...(state === 'done' && outcome ? { interrupted: true } : {}),
+        // Idle children remain display state across inferred cancellation.
+        ...(payload.subagents ? { subagents: payload.subagents } : {}),
+        mainAgent: local?.mainAgent ?? {
+          state: 'done',
+          ...(outcome ? { outcome } : {}),
+          stateStartedAt: Date.now()
+        }
+      }
+    })
+  }
+
+  /** Claude can omit the final hook after AskUserQuestion is answered or dismissed. */
   inferQuestionAnswered(request: AgentQuestionAnsweredInferenceRequest): boolean {
     if (!isValidPaneKey(request.paneKey)) {
       return false
@@ -157,12 +261,12 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (!existing) {
       return false
     }
-    // Why: inference must not fabricate a transition onto a row whose state was never confirmed this runtime.
+    // Restored waits need live confirmation before inference can clear them.
     if (existing.restoredUnconfirmed) {
       return false
     }
     const payload = existing.payload
-    // Why: only Claude's interactive question clears on typed input — tool name (not hook event) discriminates; real permission waits stay sticky.
+    // AskUserQuestion clears on input; actual permission waits remain sticky.
     if (
       payload.agentType !== 'claude' ||
       payload.state !== 'waiting' ||
@@ -179,7 +283,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     ) {
       return false
     }
-    // Why: sync the listener's lead-turn record too, or a later child event re-emits the stale waiting state and resurrects the card.
+    // Update the producer too so later child hooks cannot resurrect the answered question.
     const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
     const inferred = this.applyNormalizedStatus({
       paneKey: existing.paneKey,
@@ -187,8 +291,17 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
+      launchToken: existing.launchToken,
+      hostTurnRevision: existing.hostTurnRevision,
+      source: existing.source,
       payload: {
         state: restored.state,
+        claudeTaskWakeupPending:
+          restored.state !== 'done'
+            ? existing.connectionId
+              ? payload.claudeTaskWakeupPending
+              : restored.claudeTaskWakeupPending
+            : undefined,
         ...(restored.workingMode ? { workingMode: restored.workingMode } : {}),
         prompt: payload.prompt,
         agentType: payload.agentType,

@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useActivityTerminalPortalStatus } from './ActivityPrototypePage'
+import { useActivityTerminalPortalStatus } from './activity-terminal-portal-status'
 import {
   ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS,
   ACTIVITY_PORTAL_READINESS_MAX_FLIPS

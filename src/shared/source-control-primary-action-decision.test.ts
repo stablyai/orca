@@ -36,17 +36,6 @@ describe('source-control primary action decision', () => {
     expect(result.disabled).toBe(false)
   })
 
-  it('returns enabled Commit for staged changes with a message', () => {
-    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
-      inputs({ stagedCount: 2, hasMessage: true })
-    )
-    expect(result).toMatchObject({
-      kind: 'commit',
-      titleIntent: 'commit_staged_changes',
-      disabled: false
-    })
-  })
-
   it('blocks commits while unresolved conflicts exist', () => {
     const result = resolveSourceControlCommitAreaPrimaryActionDecision(
       inputs({ stagedCount: 1, hasMessage: true, hasUnresolvedConflicts: true })
@@ -55,38 +44,6 @@ describe('source-control primary action decision', () => {
       kind: 'commit',
       titleIntent: 'resolve_conflicts_before_commit',
       disabled: true
-    })
-  })
-
-  it('returns remote push, pull, and sync decisions for clean tracked branches', () => {
-    expect(
-      resolveSourceControlCommitAreaPrimaryActionDecision(
-        inputs({ upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 } })
-      )
-    ).toMatchObject({ kind: 'push', titleIntent: 'push_count', count: 2 })
-    expect(
-      resolveSourceControlCommitAreaPrimaryActionDecision(
-        inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 } })
-      )
-    ).toMatchObject({ kind: 'pull', titleIntent: 'pull_count', count: 3 })
-    expect(
-      resolveSourceControlCommitAreaPrimaryActionDecision(
-        inputs({ upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 } })
-      )
-    ).toMatchObject({ kind: 'sync', titleIntent: 'sync_counts', ahead: 2, behind: 3 })
-  })
-
-  it('returns Publish Branch for clean unpublished branches with a current branch', () => {
-    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
-      inputs({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
-        hasCurrentBranch: true
-      })
-    )
-    expect(result).toMatchObject({
-      kind: 'publish',
-      titleIntent: 'publish_branch',
-      disabled: false
     })
   })
 

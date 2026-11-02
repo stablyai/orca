@@ -22,10 +22,8 @@ vi.mock('child_process', () => ({
     execMock(cmd, opts, cb)
 }))
 
-// Why mock the chokepoint for the Windows sweep: maxBuffer, timeout and the
-// hidden console are its contract now, so the assertions below are about which
-// query runs, not how a process is started.
-vi.mock('../../shared/child-process/run-process', () => ({
+// Mock the process wrapper; this suite verifies queries, while wrapper tests cover launch policy.
+vi.mock('@orca/process-host', () => ({
   runProcess: (spec: { program: string; args?: string[] }) => runProcessMock(spec)
 }))
 
@@ -500,7 +498,6 @@ describe('collectMemorySnapshot on Windows', () => {
 
   it('sums committed private bytes across the whole PTY subtree on Windows', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
-    // Working set stays small while commit is 10-40x larger — the reported shape.
     const rows = [
       '10\t1\t52428800\t0\t0\t638830000000000000\t1048576',
       '11\t10\t104857600\t0\t0\t638830000000000000\t2097152',
@@ -536,7 +533,6 @@ describe('collectMemorySnapshot on Windows', () => {
     expect(snapshot.app.privateMemory).toBe(262144 * 1024)
     expect(snapshot.totalPrivateMemory).toBe((committedKb + 262144) * 1024)
     expect(snapshot.processCommitMetric).toBe('private-bytes')
-    // The resident figure keeps its old meaning rather than being redefined.
     expect(snapshot.processMemoryMetric).toBe('working-set')
     expect(snapshot.worktrees[0].memory).toBe(52428800 + 104857600 + 52428800)
   })
@@ -563,8 +559,7 @@ describe('collectMemorySnapshot on Windows', () => {
 
     const snapshot = await collectMemorySnapshot(emptyStore)
 
-    // Why not zero: a host that cannot measure commit must be distinguishable
-    // from agents that hold none.
+    // Missing commit measurements must remain distinguishable from measured zero.
     expect(snapshot.processCommitMetric).toBeUndefined()
     expect(snapshot.totalPrivateMemory).toBeUndefined()
     expect(snapshot.worktrees[0].privateMemory).toBeUndefined()
@@ -573,27 +568,30 @@ describe('collectMemorySnapshot on Windows', () => {
     expect(snapshot.totalMemory).toBe(52428800)
   })
 
-  it('carries no commit metric on Unix, where ps has no committed-bytes column', async () => {
-    vi.spyOn(os, 'platform').mockReturnValue('darwin')
-    mockPsResponse('10 1 0 1024')
-    listRegisteredPtysMock.mockReturnValue([
-      {
-        ptyId: 'pty-1',
-        worktreeId: 'repo-1::/repo',
-        sessionId: 'session-1',
-        paneKey: 'pane-1',
-        pid: 10
-      }
-    ])
-    const { collectMemorySnapshot } = await loadCollector()
+  it.each(['darwin', 'linux'] as const)(
+    'reports RSS without commit values on %s',
+    async (platform) => {
+      vi.spyOn(os, 'platform').mockReturnValue(platform)
+      mockPsResponse('10 1 0 1024')
+      listRegisteredPtysMock.mockReturnValue([
+        {
+          ptyId: 'pty-1',
+          worktreeId: 'repo-1::/repo',
+          sessionId: 'session-1',
+          paneKey: 'pane-1',
+          pid: 10
+        }
+      ])
+      const { collectMemorySnapshot } = await loadCollector()
 
-    const snapshot = await collectMemorySnapshot(emptyStore)
+      const snapshot = await collectMemorySnapshot(emptyStore)
 
-    expect(snapshot.processMemoryMetric).toBe('rss')
-    expect(snapshot.processCommitMetric).toBeUndefined()
-    expect(snapshot.totalPrivateMemory).toBeUndefined()
-    expect(snapshot.worktrees[0].sessions[0].privateMemory).toBeUndefined()
-  })
+      expect(snapshot.processMemoryMetric).toBe('rss')
+      expect(snapshot.processCommitMetric).toBeUndefined()
+      expect(snapshot.totalPrivateMemory).toBeUndefined()
+      expect(snapshot.worktrees[0].sessions[0].privateMemory).toBeUndefined()
+    }
+  )
 
   it("attributes a shared ancestor's commit to one PTY only", async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')

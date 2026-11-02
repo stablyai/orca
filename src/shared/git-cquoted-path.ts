@@ -61,8 +61,7 @@ export function decodeGitCQuotedPath(value: string): string {
             }
             octalStart = index + 2
           }
-          // Why: Git C-quotes non-ASCII text as adjacent UTF-8 octal bytes;
-          // decoding each byte as a character corrupts localized lock reasons.
+          // Git octal-escapes adjacent UTF-8 bytes; per-byte character decoding corrupts localized lock reasons.
           decoded += new TextDecoder('utf-8', { ignoreBOM: true }).decode(Uint8Array.from(bytes))
         } else {
           decoded += escaped

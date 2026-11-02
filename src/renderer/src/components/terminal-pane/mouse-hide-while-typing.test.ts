@@ -71,8 +71,9 @@ describe('installMouseHideWhileTyping', () => {
     const disposable = installMouseHideWhileTyping(terminal, container as unknown as HTMLElement)
     disposable.dispose()
 
+    expect(terminal.onData.mock.results[0]?.value.dispose).toHaveBeenCalledTimes(1)
+
     expect(container.style.cursor).toBe('')
-    // After dispose, mousemove should not crash and cursor stays restored.
     container.dispatchEvent(new Event('mousemove'))
     expect(container.style.cursor).toBe('')
     expect(container.removeEventListener).toHaveBeenCalledWith('mousemove', expect.any(Function))

@@ -16,9 +16,7 @@ describe('isHandledWireDiscriminant', () => {
     expect(isHandledWireDiscriminant('permission-denied', HANDLED)).toBe(false)
   })
 
-  // Why: Object.hasOwn coerces its key, so a guard typed (x: string) admits ['missing'] — whose
-  // toString matches a handled key — and the value then falls straight back out of the switch.
-  // This is the P1 found in review on #15002; it is the reason the parameter is `unknown`.
+  // Object.hasOwn coerces arrays such as [missing] to handled keys; require unknown input and reject non-strings before the switch (#15002).
   it('rejects a non-string the wire can carry', () => {
     for (const value of [['missing'], null, undefined, 0, true, { missing: true }, Symbol('x')]) {
       expect(isHandledWireDiscriminant(value, HANDLED), String(value)).toBe(false)

@@ -1,21 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const asyncStorage = vi.hoisted(() => ({
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn()
-}))
+const uuid = vi.hoisted(() => ({ next: vi.fn<() => string>() }))
+vi.mock('../platform/random-v4-uuid', () => ({ randomV4Uuid: uuid.next }))
 
-vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
-
-import { resetCodexResetAttemptJournalForTests } from '../storage/codex-reset-attempt-journal'
 import type { AccountsSnapshot, ProviderRateLimits } from './accounts-snapshot'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditOutcomeCopy,
   getCodexResetCreditScope,
   getCodexResetCreditSummary,
-  resetCodexResetCreditRequestsForTests,
   requestCodexResetCredit
 } from './codex-reset-credit'
 
@@ -173,370 +166,163 @@ describe('getCodexResetCreditOutcomeCopy', () => {
 })
 
 describe('requestCodexResetCredit', () => {
-  let values: Map<string, string>
-
   beforeEach(() => {
-    vi.clearAllMocks()
-    resetCodexResetAttemptJournalForTests()
-    resetCodexResetCreditRequestsForTests()
-    values = new Map()
-    asyncStorage.getItem.mockImplementation(async (key: string) => values.get(key) ?? null)
-    asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
-      values.set(key, value)
-    })
-    asyncStorage.removeItem.mockImplementation(async (key: string) => {
-      values.delete(key)
-    })
+    uuid.next
+      .mockReset()
+      .mockReturnValueOnce(UUID)
+      .mockReturnValueOnce('22222222-2222-4222-8222-222222222222')
   })
 
-  it('persists before RPC, sends the exact scope with a 90s timeout, then clears', async () => {
-    const snapshot = makeSnapshot()
-    const expectedScope = getCodexResetCreditScope(snapshot)!
-    const sendRequest = vi.fn().mockResolvedValue({
+  function reply(result: unknown) {
+    return vi.fn().mockResolvedValue({
       id: 'request-1',
       ok: true,
-      result: { outcome: 'reset', scope: expectedScope, snapshot },
+      result,
       _meta: { runtimeId: 'runtime-1' }
     })
+  }
 
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
-      )
-    ).resolves.toEqual({
+  it('sends a fresh key and the exact scope with a 90s timeout, and keeps nothing on the phone', async () => {
+    const snapshot = makeSnapshot()
+    const expectedScope = getCodexResetCreditScope(snapshot)!
+    const sendRequest = reply({ outcome: 'reset', scope: expectedScope, snapshot })
+
+    await expect(requestCodexResetCredit({ sendRequest }, expectedScope)).resolves.toEqual({
       outcome: 'reset',
       scope: expectedScope,
-      snapshot,
-      attemptJournalRetained: false
+      snapshot
     })
-    expect(asyncStorage.setItem.mock.invocationCallOrder[0]).toBeLessThan(
-      sendRequest.mock.invocationCallOrder[0]!
-    )
     expect(sendRequest).toHaveBeenCalledWith(
       'accounts.consumeCodexResetCredit',
       { idempotencyKey: UUID, expectedScope },
       { timeoutMs: 90_000 }
     )
-    expect(values.size).toBe(0)
   })
 
-  it('replays the original scope and UUID after an ambiguous response and offer refresh', async () => {
+  it('mints a new key per attempt, as the desktop does, leaving retries to the host ledger', async () => {
     const snapshot = makeSnapshot()
     const expectedScope = getCodexResetCreditScope(snapshot)!
-    const firstRequest = vi.fn().mockRejectedValue(new Error('connection lost'))
-
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest: firstRequest },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
-      )
-    ).rejects.toThrow('connection lost')
-    expect(values.size).toBe(1)
-
-    resetCodexResetAttemptJournalForTests()
-    const refreshedSnapshot = makeSnapshot()
-    refreshedSnapshot.rateLimits.codex!.updatedAt = 101
-    const refreshedScope = getCodexResetCreditScope(refreshedSnapshot)!
-    expect(refreshedScope.offerRevision).not.toBe(expectedScope.offerRevision)
-    const createRetryKey = vi.fn(() => '22222222-2222-4222-8222-222222222222')
-    const retry = vi.fn().mockResolvedValue({
-      id: 'request-2',
-      ok: true,
-      result: { outcome: 'alreadyRedeemed', scope: expectedScope, snapshot: refreshedSnapshot },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-    const result = await requestCodexResetCredit(
-      { sendRequest: retry },
-      { hostId: 'host-a', expectedScope: refreshedScope, createIdempotencyKey: createRetryKey }
+    const lost = vi.fn().mockRejectedValue(new Error('connection lost'))
+    await expect(requestCodexResetCredit({ sendRequest: lost }, expectedScope)).rejects.toThrow(
+      'connection lost'
     )
 
-    expect(result.scope).toEqual(expectedScope)
-    expect(createRetryKey).not.toHaveBeenCalled()
+    // The host answers a same-offer retry under a new key with the attempt it already recorded.
+    const retryKey = '22222222-2222-4222-8222-222222222222'
+    const retry = reply({ outcome: 'alreadyRedeemed', scope: expectedScope, snapshot })
+    await expect(
+      requestCodexResetCredit({ sendRequest: retry }, expectedScope)
+    ).resolves.toMatchObject({ outcome: 'alreadyRedeemed', scope: expectedScope })
     expect(retry).toHaveBeenCalledWith(
       'accounts.consumeCodexResetCredit',
-      { idempotencyKey: UUID, expectedScope },
+      { idempotencyKey: retryKey, expectedScope },
       { timeoutMs: 90_000 }
     )
   })
 
-  it('discards a definite stale-offer attempt and creates a new key only after another confirmation', async () => {
+  it('accepts the account unresolved attempt the host resumes when the retry names a newer offer', async () => {
+    const snapshot = makeSnapshot()
+    const originalScope = getCodexResetCreditScope(snapshot)!
+    await expect(
+      requestCodexResetCredit(
+        { sendRequest: vi.fn().mockRejectedValue(new Error('lost')) },
+        originalScope
+      )
+    ).rejects.toThrow('lost')
+
+    // The refresh after the unknown outcome moved the offer, so the next confirm names a new one.
+    const refreshed = makeSnapshot()
+    refreshed.rateLimits.codex!.updatedAt = 101
+    const refreshedScope = getCodexResetCreditScope(refreshed)!
+    expect(refreshedScope.offerRevision).not.toBe(originalScope.offerRevision)
+    const resumed = reply({ outcome: 'reset', scope: originalScope, snapshot: refreshed })
+    await expect(
+      requestCodexResetCredit({ sendRequest: resumed }, refreshedScope)
+    ).resolves.toMatchObject({ outcome: 'reset', scope: originalScope })
+  })
+
+  it('returns a definite stale-offer rejection for the screen to re-confirm', async () => {
     const originalSnapshot = makeSnapshot()
     const originalScope = getCodexResetCreditScope(originalSnapshot)!
     const refreshedSnapshot = makeSnapshot()
     refreshedSnapshot.rateLimits.codex!.updatedAt = 101
-    const refreshedScope = getCodexResetCreditScope(refreshedSnapshot)!
-    const staleResponse = vi.fn().mockResolvedValue({
-      id: 'request-stale',
-      ok: true,
-      result: {
-        status: 'rejectedBeforeProvider',
-        retryDisposition: 'discardAttempt',
-        reason: 'offerChanged',
-        scope: originalScope,
-        snapshot: refreshedSnapshot
-      },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest: staleResponse },
-        { hostId: 'host-a', expectedScope: originalScope, createIdempotencyKey: () => UUID }
-      )
-    ).resolves.toMatchObject({
+    const staleResponse = reply({
       status: 'rejectedBeforeProvider',
       retryDisposition: 'discardAttempt',
       reason: 'offerChanged',
       scope: originalScope,
-      snapshot: refreshedSnapshot,
-      attemptJournalRetained: false
+      snapshot: refreshedSnapshot
     })
-    expect(values.size).toBe(0)
 
-    const nextKey = '22222222-2222-4222-8222-222222222222'
-    const createNextKey = vi.fn(() => nextKey)
-    const acceptedResponse = vi.fn().mockResolvedValue({
-      id: 'request-next',
-      ok: true,
-      result: { outcome: 'reset', scope: refreshedScope, snapshot: refreshedSnapshot },
-      _meta: { runtimeId: 'runtime-1' }
+    await expect(
+      requestCodexResetCredit({ sendRequest: staleResponse }, originalScope)
+    ).resolves.toEqual({
+      status: 'rejectedBeforeProvider',
+      retryDisposition: 'discardAttempt',
+      reason: 'offerChanged',
+      scope: originalScope,
+      snapshot: refreshedSnapshot
     })
-    await requestCodexResetCredit(
-      { sendRequest: acceptedResponse },
-      { hostId: 'host-a', expectedScope: refreshedScope, createIdempotencyKey: createNextKey }
-    )
-
-    expect(createNextKey).toHaveBeenCalledOnce()
-    expect(acceptedResponse).toHaveBeenCalledWith(
-      'accounts.consumeCodexResetCredit',
-      { idempotencyKey: nextKey, expectedScope: refreshedScope },
-      { timeoutMs: 90_000 }
-    )
   })
 
-  it('singleflights concurrent requests across offer refreshes in the same account scope', async () => {
+  it('rejects a mismatched scope or a malformed nested snapshot', async () => {
     const snapshot = makeSnapshot()
     const expectedScope = getCodexResetCreditScope(snapshot)!
-    const refreshedSnapshot = makeSnapshot()
-    refreshedSnapshot.rateLimits.codex!.updatedAt = 101
-    const refreshedScope = getCodexResetCreditScope(refreshedSnapshot)!
-    let releaseRequest!: () => void
-    const requestGate = new Promise<void>((resolve) => {
-      releaseRequest = resolve
-    })
-    const sendRequest = vi.fn().mockImplementation(async () => {
-      await requestGate
-      return {
-        id: 'request-1',
-        ok: true,
-        result: { outcome: 'reset', scope: expectedScope, snapshot },
-        _meta: { runtimeId: 'runtime-1' }
-      }
-    })
-    const createSecondKey = vi.fn(() => '22222222-2222-4222-8222-222222222222')
-
-    const first = requestCodexResetCredit(
-      { sendRequest },
-      { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
-    )
-    await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(1))
-    const second = requestCodexResetCredit(
-      { sendRequest },
-      { hostId: 'host-a', expectedScope: refreshedScope, createIdempotencyKey: createSecondKey }
-    )
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-    expect(createSecondKey).not.toHaveBeenCalled()
-
-    releaseRequest()
-    const [firstResult, secondResult] = await Promise.all([first, second])
-    expect(secondResult).toEqual(firstResult)
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-  })
-
-  it('rejects a mismatched scope or malformed nested snapshot without clearing', async () => {
-    const snapshot = makeSnapshot()
-    const expectedScope = getCodexResetCreditScope(snapshot)!
-    const mismatchedScope = { ...expectedScope, accountId: 'other-account' }
-    const mismatch = vi.fn().mockResolvedValue({
-      id: 'request-1',
-      ok: true,
-      result: { outcome: 'reset', scope: mismatchedScope, snapshot },
-      _meta: { runtimeId: 'runtime-1' }
-    })
     await expect(
       requestCodexResetCredit(
-        { sendRequest: mismatch },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
+        {
+          sendRequest: reply({
+            outcome: 'reset',
+            scope: { ...expectedScope, accountId: 'other-account' },
+            snapshot
+          })
+        },
+        expectedScope
       )
     ).rejects.toThrow('Invalid reset response from host')
-    expect(values.size).toBe(1)
-
-    const malformed = vi.fn().mockResolvedValue({
-      id: 'request-2',
-      ok: true,
-      result: {
-        outcome: 'reset',
-        scope: expectedScope,
-        snapshot: { ...snapshot, codex: { ...snapshot.codex, accounts: {} } }
-      },
-      _meta: { runtimeId: 'runtime-1' }
-    })
     await expect(
       requestCodexResetCredit(
-        { sendRequest: malformed },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
+        {
+          sendRequest: reply({
+            status: 'rejectedBeforeProvider',
+            retryDisposition: 'discardAttempt',
+            reason: 'offerChanged',
+            scope: { ...expectedScope, accountRevision: expectedScope.accountRevision + 1 },
+            snapshot
+          })
+        },
+        expectedScope
+      )
+    ).rejects.toThrow('Invalid reset response from host')
+    await expect(
+      requestCodexResetCredit(
+        {
+          sendRequest: reply({
+            outcome: 'reset',
+            scope: expectedScope,
+            snapshot: { ...snapshot, codex: { ...snapshot.codex, accounts: {} } }
+          })
+        },
+        expectedScope
       )
     ).rejects.toThrow('Invalid accounts snapshot from host')
-    expect(values.size).toBe(1)
-  })
-
-  it('does not clear the journal for a mismatched definite-rejection response', async () => {
-    const snapshot = makeSnapshot()
-    const expectedScope = getCodexResetCreditScope(snapshot)!
-    const mismatch = vi.fn().mockResolvedValue({
-      id: 'request-mismatch',
-      ok: true,
-      result: {
-        status: 'rejectedBeforeProvider',
-        retryDisposition: 'discardAttempt',
-        reason: 'offerChanged',
-        scope: { ...expectedScope, offerRevision: 'v1:wrong' },
-        snapshot
-      },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest: mismatch },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
-      )
-    ).rejects.toThrow('Invalid reset response from host')
-    expect(values.size).toBe(1)
-    expect(asyncStorage.removeItem).not.toHaveBeenCalled()
   })
 
   it('rejects a valid snapshot that does not describe the returned redeemed scope', async () => {
     const snapshot = makeSnapshot()
     const expectedScope = getCodexResetCreditScope(snapshot)!
     const wrongAccountSnapshot = makeSnapshot({ activeHostId: null })
-    const sendRequest = vi.fn().mockResolvedValue({
-      id: 'request-1',
-      ok: true,
-      result: { outcome: 'reset', scope: expectedScope, snapshot: wrongAccountSnapshot },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
     await expect(
       requestCodexResetCredit(
-        { sendRequest },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
+        {
+          sendRequest: reply({
+            outcome: 'reset',
+            scope: expectedScope,
+            snapshot: wrongAccountSnapshot
+          })
+        },
+        expectedScope
       )
     ).rejects.toThrow('Invalid reset response from host')
-    expect(values.size).toBe(1)
-  })
-
-  it('returns an authoritative result while reporting a failed journal cleanup', async () => {
-    const snapshot = makeSnapshot()
-    const expectedScope = getCodexResetCreditScope(snapshot)!
-    const sendRequest = vi.fn().mockResolvedValue({
-      id: 'request-1',
-      ok: true,
-      result: { outcome: 'reset', scope: expectedScope, snapshot },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-    asyncStorage.removeItem.mockRejectedValueOnce(new Error('storage unavailable'))
-
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
-      )
-    ).resolves.toMatchObject({ outcome: 'reset', attemptJournalRetained: true })
-    expect(values.size).toBe(1)
-  })
-
-  it('retains and safely replays a definite rejection when journal cleanup fails', async () => {
-    const originalSnapshot = makeSnapshot()
-    const originalScope = getCodexResetCreditScope(originalSnapshot)!
-    const refreshedSnapshot = makeSnapshot()
-    refreshedSnapshot.rateLimits.codex!.updatedAt = 101
-    const refreshedScope = getCodexResetCreditScope(refreshedSnapshot)!
-    const rejectionResult = {
-      status: 'rejectedBeforeProvider',
-      retryDisposition: 'discardAttempt',
-      reason: 'offerChanged',
-      scope: originalScope,
-      snapshot: refreshedSnapshot
-    }
-    const firstResponse = vi.fn().mockResolvedValue({
-      id: 'request-1',
-      ok: true,
-      result: rejectionResult,
-      _meta: { runtimeId: 'runtime-1' }
-    })
-    asyncStorage.removeItem.mockRejectedValueOnce(new Error('storage unavailable'))
-
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest: firstResponse },
-        { hostId: 'host-a', expectedScope: originalScope, createIdempotencyKey: () => UUID }
-      )
-    ).resolves.toMatchObject({
-      status: 'rejectedBeforeProvider',
-      attemptJournalRetained: true
-    })
-    expect(values.size).toBe(1)
-
-    const createRetryKey = vi.fn(() => '22222222-2222-4222-8222-222222222222')
-    const retryResponse = vi.fn().mockResolvedValue({
-      id: 'request-2',
-      ok: true,
-      result: rejectionResult,
-      _meta: { runtimeId: 'runtime-1' }
-    })
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest: retryResponse },
-        {
-          hostId: 'host-a',
-          expectedScope: refreshedScope,
-          createIdempotencyKey: createRetryKey
-        }
-      )
-    ).resolves.toMatchObject({
-      status: 'rejectedBeforeProvider',
-      attemptJournalRetained: false
-    })
-    expect(createRetryKey).not.toHaveBeenCalled()
-    expect(retryResponse).toHaveBeenCalledWith(
-      'accounts.consumeCodexResetCredit',
-      { idempotencyKey: UUID, expectedScope: originalScope },
-      { timeoutMs: 90_000 }
-    )
-    expect(values.size).toBe(0)
-  })
-
-  it('fails closed before RPC when the journal cannot be read or written', async () => {
-    const snapshot = makeSnapshot()
-    const expectedScope = getCodexResetCreditScope(snapshot)!
-    const sendRequest = vi.fn()
-    asyncStorage.getItem.mockRejectedValueOnce(new Error('storage unavailable'))
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
-      )
-    ).rejects.toThrow('storage unavailable')
-
-    asyncStorage.setItem.mockRejectedValueOnce(new Error('disk full'))
-    await expect(
-      requestCodexResetCredit(
-        { sendRequest },
-        { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
-      )
-    ).rejects.toThrow('disk full')
-    expect(sendRequest).not.toHaveBeenCalled()
   })
 })

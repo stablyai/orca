@@ -1,8 +1,7 @@
 import type { CommitMessageModel } from './commit-message-agent-spec'
 import { labelFromModelId } from './model-id-label'
 
-// Why: `omp models --json` is the one machine-readable listing OMP offers; the
-// default table output groups rows per provider and would need a brittle parser.
+// Use OMP’s only machine-readable listing; provider-grouped tables require brittle parsing.
 export const OMP_MODEL_LIST_ARGS = ['models', '--json']
 
 /** The outermost JSON value on stdout, or null when none parses. */
@@ -11,8 +10,7 @@ function parseJsonObject(stdout: string): unknown {
   try {
     return JSON.parse(trimmed)
   } catch {
-    // Why: an update notice or extension warning can precede the JSON on stdout;
-    // the listing itself is the outermost object.
+    // Update/extension notices can precede the outermost JSON object on stdout.
     const start = trimmed.indexOf('{')
     const end = trimmed.lastIndexOf('}')
     if (start === -1 || end <= start) {
@@ -26,9 +24,15 @@ function parseJsonObject(stdout: string): unknown {
   }
 }
 
-/** Parses `omp models --json`. Ids are OMP's `provider/model` selector — the form
- *  `--model` and `/model` resolve exactly, unlike a bare model id that several
- *  providers can share. */
+/** OMP's `provider/model` selector, the id its listing and `--model` share. */
+export function ompModelSelector(
+  provider: string | undefined,
+  model: string | undefined
+): string | null {
+  return provider && model ? `${provider}/${model}` : null
+}
+
+/** Parse provider/model selectors accepted by --model and /model; bare ids collide across providers. */
 export function parseOmpModelList(stdout: string): CommitMessageModel[] {
   const parsed = parseJsonObject(stdout)
   if (!parsed || typeof parsed !== 'object' || !('models' in parsed)) {
@@ -49,17 +53,23 @@ export function parseOmpModelList(stdout: string): CommitMessageModel[] {
     const bareId = 'id' in value && typeof value.id === 'string' ? value.id.trim() : ''
     const selector =
       'selector' in value && typeof value.selector === 'string' ? value.selector.trim() : ''
-    const id = selector || (provider && bareId ? `${provider}/${bareId}` : '')
+    const id = selector || ompModelSelector(provider, bareId)
     if (!id || byId.has(id)) {
       continue
     }
     const name = 'name' in value && typeof value.name === 'string' ? value.name.trim() : ''
+    const contextWindow =
+      'contextWindow' in value && typeof value.contextWindow === 'number'
+        ? value.contextWindow
+        : null
     byId.set(id, {
       id,
       label: name || labelFromModelId(id),
-      // Why: the same model name ships under several providers; the provider is
-      // what tells two "DeepSeek V4 Pro" rows apart in the picker.
-      ...(provider ? { description: provider } : {})
+      // Provider distinguishes identical model labels across accounts/providers.
+      ...(provider ? { description: provider } : {}),
+      ...(contextWindow !== null && Number.isFinite(contextWindow) && contextWindow > 0
+        ? { contextWindowTokens: contextWindow }
+        : {})
     })
   }
   return [...byId.values()]

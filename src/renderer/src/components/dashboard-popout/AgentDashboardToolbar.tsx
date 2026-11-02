@@ -40,8 +40,7 @@ type AgentDashboardToolbarProps = {
   filters: DashboardFilters
   onFiltersChange: (filters: DashboardFilters) => void
   searchInputRef: React.RefObject<HTMLInputElement | null>
-  /** Replaces the built-in dropdown. The map needs a popover: its panel holds
-   *  range sliders, and a Radix menu swallows the arrow keys those need. */
+  /** Use a popover for range sliders; Radix menus consume their arrow keys. */
   filterControl?: React.ReactNode
 }
 

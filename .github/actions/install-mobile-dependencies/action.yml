@@ -4,12 +4,7 @@ description: Frozen pnpm install for the mobile/ project, whose node_modules the
 runs:
   using: composite
   steps:
-    # Why a separate install: mobile is its own pnpm project, so the root install leaves
-    # mobile/node_modules empty and every mobile import resolves to nothing.
-    # Why no --ignore-scripts, unlike the root install: mobile's postinstall generates the
-    # gitignored terminal/mermaid webview engine modules that tracked source imports.
-    # The drift guard mirrors the root install so a stale mobile lockfile fails by name --
-    # mobile's lockfile carries patchedDependencies that a silent rewrite would drop.
+    # Install the separate mobile project: root install leaves its imports unresolved. Keep lifecycle scripts for generated terminal/mermaid engines; reject lockfile drift that could drop patchedDependencies.
     - name: Install mobile dependencies
       shell: bash
       working-directory: mobile

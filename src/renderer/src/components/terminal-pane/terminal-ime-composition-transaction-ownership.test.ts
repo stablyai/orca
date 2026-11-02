@@ -28,7 +28,7 @@ function wonKeydown(): {
   }
 }
 
-function dispatchInsertText(target: HTMLElement, data: '`' | '₩' = '`'): void {
+function dispatchInsertText(target: HTMLElement, data = '`'): void {
   target.dispatchEvent(new InputEvent('input', { data, inputType: 'insertText', bubbles: true }))
 }
 
@@ -78,6 +78,27 @@ describe('xterm composition transaction ownership', () => {
 
     expect(sendInput).toHaveBeenCalledExactlyOnceWith('`')
     expect(textarea.value).toBe('')
+  })
+
+  // Unclaimed Linux Process commits stay with xterm’s own dedup; stopping them here loses text (#28213).
+  it('leaves unclaimed input with xterm while a transaction settles', () => {
+    const sendInput = vi.fn()
+    const downstream = vi.fn()
+    installTerminalImeNativeTextForwarder({
+      terminalElement: element,
+      isComposing: () => false,
+      sendInput
+    })
+    element.addEventListener('input', downstream, true)
+
+    textarea.dispatchEvent(
+      new CustomEvent(XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT, { bubbles: true })
+    )
+    textarea.value = '，'
+    dispatchInsertText(textarea, '，')
+
+    expect(sendInput).not.toHaveBeenCalled()
+    expect(downstream).toHaveBeenCalledOnce()
   })
 
   it('does not let repeated rejected composition ends steal an immediate remap', () => {

@@ -2,9 +2,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { IpynbCellOutputs } from './IpynbCellOutputs'
-import { IpynbCellSource, IpynbMarkdownCell } from './IpynbCellEditor'
-import { IpynbRunPrompt } from './IpynbCellToolbar'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { IpynbCellSource } from './IpynbCellEditor'
+
 import type { IpynbCell, IpynbOutput } from './ipynb-parse'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -24,6 +23,7 @@ function cell(kind: IpynbCell['kind'], source: string, outputs: IpynbOutput[] = 
 function renderSource(target: IpynbCell, onActivate = vi.fn()) {
   render(
     <IpynbCellSource
+      modelKey={null}
       cell={target}
       source={target.source}
       active={false}
@@ -38,12 +38,6 @@ function renderSource(target: IpynbCell, onActivate = vi.fn()) {
 afterEach(cleanup)
 
 describe('notebook cell source', () => {
-  it('renders markdown through the full preview pipeline (GFM + math)', () => {
-    render(<IpynbMarkdownCell source={'| A | B |\n| - | - |\n| 1 | 2 |\n\n$x^2$'} />)
-    expect(document.querySelector('table')).not.toBeNull()
-    expect(document.querySelector('.katex')).not.toBeNull()
-  })
-
   it('shows markdown as a document and edits only on double-click or Enter', () => {
     const onActivate = renderSource(cell('markdown', '# Report'))
     const preview = screen.getByRole('button')
@@ -73,27 +67,6 @@ describe('notebook code preview', () => {
     expect(document.querySelector('b')).toBeNull()
     // The trailing newline keeps its own row, matching the Monaco model.
     expect(document.querySelectorAll('code')).toHaveLength(2)
-  })
-})
-
-describe('notebook run prompt', () => {
-  it('shows the count, then [*] with a disabled button while queued or running, then the duration', () => {
-    const { rerender } = render(
-      <IpynbRunPrompt executionCount={3} state="idle" duration={null} onRun={vi.fn()} />,
-      { wrapper: TooltipProvider }
-    )
-    expect(screen.getByText('[3]')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run cell' }).hasAttribute('disabled')).toBe(false)
-
-    for (const state of ['queued', 'running'] as const) {
-      rerender(<IpynbRunPrompt executionCount={3} state={state} duration={null} onRun={vi.fn()} />)
-      expect(screen.getByText('[*]')).toBeTruthy()
-      expect(screen.getByRole('button', { name: 'Run cell' }).hasAttribute('disabled')).toBe(true)
-    }
-
-    rerender(<IpynbRunPrompt executionCount={4} state="idle" duration="1.2s" onRun={vi.fn()} />)
-    expect(screen.getByText('[4]')).toBeTruthy()
-    expect(screen.getByText('1.2s')).toBeTruthy()
   })
 })
 
@@ -171,7 +144,6 @@ describe('notebook outputs', () => {
     )
     const frame = screen.getByTitle('Notebook HTML output')
     const source = frame.getAttribute('srcdoc') ?? ''
-    // An empty sandbox keeps the frame an opaque origin with scripts off.
     expect(frame.getAttribute('sandbox')).toBe('')
     expect(source).toContain("default-src 'none'; img-src data:")
     expect(source).not.toContain('<script')

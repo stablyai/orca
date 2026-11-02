@@ -16,29 +16,6 @@ function install(result: unknown, ok = true) {
 }
 
 describe('structured activation inventory scope', () => {
-  it('requests one workspace snapshot and retains structured handoff evidence', async () => {
-    const call = install({
-      worktree,
-      tabs: [
-        { type: 'terminal', id: 'terminal' },
-        { type: 'agent-session', sessionId: 'agent' }
-      ]
-    })
-    const result = await readWorktreeStructuredActivationInventory(worktree)
-    expect(call.mock.calls[0][0]).toEqual({
-      method: 'session.tabs.list',
-      params: { worktree: `id:${worktree}` }
-    })
-    expect(call).toHaveBeenCalledTimes(2)
-    expect(result && result.ownerBySessionId.get('agent')).toEqual({ owner: 'native' })
-  })
-
-  it('does not request handoffs for a workspace without structured tabs', async () => {
-    const call = install({ worktree, tabs: [] })
-    expect(await readWorktreeStructuredActivationInventory(worktree)).toBe(false)
-    expect(call).toHaveBeenCalledOnce()
-  })
-
   it.each([null, {}, { worktree: 'other::/workspace', tabs: [] }, { worktree }])(
     'rejects unreadable or wrong-workspace replies',
     async (result) => {

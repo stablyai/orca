@@ -1,14 +1,12 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
-import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
 import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
-import { useAppStore } from '@/store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
@@ -18,7 +16,7 @@ import {
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
-import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
+import { buildInlineReviewComments } from '@/components/pull-request-page/files/inline-comments'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 import { PRFilesCombinedDiffBody } from './pr-files-combined-diff-body'
 import { getPRFilesCombinedDiffSignature } from './pr-files-combined-diff-signature'
@@ -29,6 +27,7 @@ import {
   setAllPRFilesCombinedDiffSectionsCollapsed,
   togglePRFilesCombinedDiffSection
 } from './pr-files-combined-diff-load'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type PRFilesCombinedDiffSectionsProps = PRFilesCombinedDiffViewerProps & {
   signature: string
@@ -57,8 +56,7 @@ export function PRFilesCombinedDiffViewer(
   // Why: view preferences outlive a diff-set swap, so they live above the keyed subtree.
   const [sideBySide, setSideBySide] = useState(false)
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
-  // Why: remounting on the signature retires the previous diff set's sections, loaded
-  // indices, and in-flight results in one step, so nothing can leak across the swap.
+  // Remount on signature changes to retire sections, loaded indices and in-flight results together.
   return (
     <PRFilesCombinedDiffSections
       key={signature}
@@ -92,10 +90,8 @@ function PRFilesCombinedDiffSections({
   fileTreeCollapsed,
   setFileTreeCollapsed
 }: PRFilesCombinedDiffSectionsProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
   const isDark = useDocumentDarkTheme()
-  // Why: this subtree is keyed by the diff signature, so its file set is fixed for the
-  // mount. Freezing it in state keeps a stable identity without caching through a ref.
+  // The keyed mount fixes this file set; state preserves its identity without a render-time ref cache.
   const [entries] = useState<GitBranchChangeEntry[]>(() =>
     getCombinedDiffBranchEntriesInTreeOrder('commit', files.map(gitHubPRFileToBranchEntry))
   )
@@ -124,34 +120,8 @@ function PRFilesCombinedDiffSections({
       fileByPath.get(section.path)?.reviewCommentLineNumbers,
     [fileByPath]
   )
-  const inlineReviewComments = useMemo<DecoratedDiffComment[]>(
-    () =>
-      comments.flatMap((comment): DecoratedDiffComment[] => {
-        // Why: outdated threads' line number can attach the comment to unrelated current code, so skip them inline.
-        if (comment.isOutdated || !comment.path || typeof comment.line !== 'number') {
-          return []
-        }
-        const createdAtMs = new Date(comment.createdAt).getTime()
-        return [
-          {
-            id: `github-pr-comment:${comment.id}`,
-            worktreeId: `github-pr:${repoId}:${prNumber}`,
-            filePath: comment.path,
-            source: 'diff',
-            startLine: comment.startLine,
-            lineNumber: comment.line,
-            body: comment.body,
-            createdAt: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
-            side: 'modified',
-            author: comment.author,
-            authorAvatarUrl: comment.authorAvatarUrl,
-            createdAtLabel: formatRelativeTime(comment.createdAt),
-            url: comment.url,
-            canDelete: false,
-            canEdit: false
-          }
-        ]
-      }),
+  const inlineReviewComments = useMemo(
+    () => buildInlineReviewComments(comments, repoId, prNumber),
     [comments, prNumber, repoId]
   )
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
@@ -163,9 +133,7 @@ function PRFilesCombinedDiffSections({
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
 
-  // Why: commit-phase write (a render React abandons would leak one), and it must be a layout
-  // effect — collapsing rekeys a section's virtual item, so the remounted DiffSectionItem's
-  // passive effect calls loadSection before any passive effect here could sync this ref.
+  // Sync after commit but before passive effects: collapsed sections remount and read this ref during their passive load.
   useLayoutEffect(() => {
     sectionsRef.current = sections
   }, [sections])
@@ -275,7 +243,7 @@ function PRFilesCombinedDiffSections({
   )
 
   const openFilesOnGitHub = useCallback(() => {
-    void window.api.shell.openUrl(`${prUrl.replace(/\/$/, '')}/files`)
+    openAppHttpLink(`${prUrl.replace(/\/$/, '')}/files`)
   }, [prUrl])
 
   const handleAddLineComment = useCallback(
@@ -352,7 +320,6 @@ function PRFilesCombinedDiffSections({
       virtualizer={virtualizer}
       sections={sections}
       isDark={isDark}
-      settings={settings}
       sectionHeights={sectionHeights}
       inlineReviewComments={inlineReviewComments}
       loadSection={loadSection}

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { RelayAgentHookServer } from '../../relay/agent-hook-server'
+import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener/providers/claude-roster-state'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
@@ -29,12 +29,14 @@ function claudeHook(hookEventName: string, promptId: string, extra: Record<strin
   }
 }
 
-function postHook(port: number, token: string, payload: Record<string, unknown>) {
-  return fetch(`http://127.0.0.1:${port}/hook/claude`, {
+async function postHook(port: number, token: string, payload: Record<string, unknown>) {
+  const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': token },
     body: JSON.stringify({ paneKey: PANE_KEY, payload })
   })
+  expect(response.status).toBe(204)
+  return response
 }
 
 function turnEnvelope(): AgentHookRelayEnvelope {
@@ -50,8 +52,7 @@ function turnEnvelope(): AgentHookRelayEnvelope {
   } as AgentHookRelayEnvelope
 }
 
-/** What a relay predating this change forwards: it ran its own shipped normalizer, so a manual
- *  compact arrives as a PLAIN `done` (no session boundary) and an auto compact as `working`. */
+/** Legacy relays normalize manual compacts to plain done and auto compacts to working. */
 function legacyRelayCompactEnvelope(
   state: 'done' | 'working',
   overrides: Partial<AgentHookRelayEnvelope> = {}
@@ -69,9 +70,7 @@ function legacyRelayCompactEnvelope(
   } as AgentHookRelayEnvelope
 }
 
-/** What AgentHookServer.hydrate() rebuilds for a pane that was stuck `working` across a restart:
- *  the previous session's connectionId, the unconfirmed flag, an older receivedAt, and the child
- *  the turn had spawned — restored from disk, so proof of nothing. */
+/** Seed restored state without live process or turn ownership evidence. */
 function seedHydratedStuckPane(server: AgentHookServer, receivedAt: number) {
   const state = server._getStateForTests()
   const subagents: AgentSubagentSnapshot[] = [
@@ -118,8 +117,7 @@ describe('manual Claude compact hook stream', () => {
     })
 
     await postHook(port, token, claudeHook('UserPromptSubmit', TURN_PROMPT_ID, { prompt: 'work' }))
-    // Measured stream for a successful manual /compact. PreCompact is not registered in production
-    // and is rejected here too; the summarizer's start-less SubagentStop only republishes state.
+    // Production rejects PreCompact; a start-less summarizer stop only republishes state.
     await postHook(port, token, claudeHook('PreCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
     await postHook(
       port,
@@ -185,7 +183,7 @@ describe('manual Claude compact hook stream', () => {
     const port = Number(env.ORCA_AGENT_HOOK_PORT)
     const token = env.ORCA_AGENT_HOOK_TOKEN!
     seedHydratedStuckPane(server, Date.now() - 60_000)
-    // A child THIS runtime observed: real agent work in flight, which a compact may not retire.
+    // A child observed by this runtime represents live work a compact must not retire.
     await postHook(
       port,
       token,
@@ -200,8 +198,7 @@ describe('manual Claude compact hook stream', () => {
     })
     await postHook(port, token, claudeHook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
 
-    // Why: restating the row here is the regression, not the fix — it would refresh receivedAt and
-    // hand the stale sweep a brand-new clock for work the compact never observed.
+    // Republishing would refresh receivedAt and defer stale cleanup for work the compact never observed.
     expect(emitted).toEqual([])
     expect(server.getStatusSnapshot()[0]).toEqual(before)
     unsubscribe()
@@ -240,9 +237,7 @@ describe('manual Claude compact hook stream', () => {
     expect(emitted.at(-1)).toBe('PostCompact:done')
     expect(main.getStatusSnapshot()[0]).toMatchObject({ state: 'done', sessionBoundary: true })
 
-    // Why: a client that was offline during the compact receives the row as a reconnect replay of
-    // this cache. Retaining the compact identity lets the client re-run ownership instead of
-    // treating an unowned completion as an ordinary status row.
+    // Reconnect replay must preserve compact identity so clients can recheck ownership.
     const replayed = relay.replayCachedPayloadsForPanes()
     expect(replayed).toBeGreaterThan(0)
     expect(forwarded.at(-1)).toMatchObject({ isReplay: true, payload: { state: 'done' } })
@@ -258,9 +253,7 @@ describe('manual Claude compact hook stream', () => {
     const forwarded: AgentHookRelayEnvelope[] = []
     const endpointDir = mkdtempSync(join(tmpdir(), 'orca-compact-cold-'))
     temporaryPaths.push(endpointDir)
-    // A relay that restarted while the agent session kept running: hooks resolve the endpoint file
-    // per invocation, so they reconnect — but the relay's per-process cache is empty, and the
-    // compact completion may be the first event it ever sees for this pane.
+    // A restarted relay may see compact completion first because its cache is empty.
     const relay = new RelayAgentHookServer({
       endpointDir,
       token: 'cold-cache-token',
@@ -275,14 +268,12 @@ describe('manual Claude compact hook stream', () => {
 
     await postHook(port, token, claudeHook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
 
-    // Why: the relay is a forwarder, not the authority on pane identity. Dropping the event here
-    // is how the one signal that can clear a remote pane goes missing after a restart.
+    // Forward without pane authority; only the client can decide compact ownership.
     expect(forwarded.map((envelope) => envelope.hookEventName)).toEqual(['PostCompact'])
     expect(forwarded[0]).toMatchObject({
       compactTrigger: 'manual',
       providerPromptId: COMPACT_PROMPT_ID
     })
-    // ...and the client, which DOES own pane identity, still refuses to mint a row it never had.
     expect(main.getStatusSnapshot()).toEqual([])
   })
 
@@ -314,8 +305,7 @@ describe('manual Claude compact hook stream', () => {
 
     server.ingestRemote(legacyRelayCompactEnvelope('done'), 'conn-a')
 
-    // Why: the old relay built this payload before the flag existed, so it arrives as a plain
-    // `done` that every completion-reactive consumer would read as a finished turn.
+    // Old relays omit sessionBoundary; recover it before completion consumers read done.
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', sessionBoundary: true })
   })
 
@@ -353,8 +343,7 @@ describe('manual Claude compact hook stream', () => {
 
     server.ingestRemote(legacyRelayCompactEnvelope('done'), 'conn-a')
 
-    // Why: the deleted ownership cache used to reject a repeat; a same-owner guard alone would
-    // accept it and keep refreshing the row, so suppression is keyed on the consumed compact id.
+    // Suppress by consumed compact ID so same-owner repeats cannot refresh the row.
     expect(emitted).toEqual(['UserPromptSubmit:working', 'PostCompact:done'])
     expect(server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)).toBe(applied)
     unsubscribe()
@@ -371,9 +360,7 @@ describe('manual Claude compact hook stream', () => {
     )
     expect(done.getStatusSnapshot()[0]).toMatchObject({ state: 'done', sessionBoundary: true })
 
-    // Why: assert this arm from a pane that already FINISHED. Asserting `working` on a pane that
-    // was already `working` cannot fail — it holds whether the replay was dropped or applied, which
-    // is exactly how a trigger-stripped auto compact could start re-arming the stuck row again.
+    // Seed done so an incorrectly applied working replay cannot pass unnoticed.
     const working = new AgentHookServer()
     servers.push(working)
     working.ingestRemote(turnEnvelope(), 'conn-a')
@@ -408,9 +395,7 @@ describe('manual Claude compact hook stream', () => {
   })
 
   it('keeps the summarized turn as the label, with or without a trigger on the envelope', () => {
-    // The compact's own event carries no prompt of its own, so the row's label can only come from
-    // the turn it summarized. The trigger-stripped replay is the one shape that arrives with no
-    // trigger at all, so the carry-forward must not be keyed on the trigger being present.
+    // Carry the summarized turn's label even when legacy replay lacks a trigger.
     const blank = { state: 'done' as const, prompt: '', agentType: 'claude' }
 
     const tagged = new AgentHookServer()

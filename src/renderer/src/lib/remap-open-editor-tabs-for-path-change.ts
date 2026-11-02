@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename } from '@/lib/path'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isOpenFileOnMoveOwner, type EditorMoveOwner } from '@/lib/open-editor-move-owner'
 import {
   buildDiffEditorFileId,
   buildOwnedEditorFileId,
@@ -17,9 +17,7 @@ import {
 } from '../../../shared/cross-platform-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
-// Re-export the shared, flavor-aware containment check: move selection must fold
-// case + separators (Windows/UNC/WSL) so a same-file tab differing only in case
-// isn't missed and left stranded on the vanished source path after the rename.
+// Share flavor-aware containment so Windows/UNC/WSL case/separator variants retarget instead of stranding tabs on renamed paths.
 export { isPathInsideOrEqual }
 
 function isAbsolutePathLike(path: string): boolean {
@@ -30,15 +28,13 @@ function stripTrailingSeparators(path: string): string {
   if (path === '/' || /^[A-Za-z]:[\\/]?$/.test(path)) {
     return normalizeRuntimePathSeparators(path)
   }
-  // Only fold backslashes to `/` for Windows/UNC paths; on POSIX a backslash is
-  // legal filename data and must not be treated as a separator.
+  // Fold separators only on Windows/UNC; POSIX backslashes are filename data.
   return isWindowsAbsolutePathLike(path)
     ? normalizeRuntimePathSeparators(path).replace(/\/+$/, '')
     : path.replace(/\/+$/, '')
 }
 
-// Fold `\`→`/` only when the associated absolute path (flavorSource) is Windows
-// drive/UNC syntax; on POSIX a backslash is legal filename data, not a separator.
+// Use absolute-path syntax to choose flavor; POSIX backslashes must remain filename data.
 function foldSeparatorsForFlavor(fragment: string, flavorSource: string): string {
   return isWindowsAbsolutePathLike(flavorSource)
     ? normalizeRuntimePathSeparators(fragment)
@@ -77,8 +73,7 @@ function splitAbsolutePath(path: string): { prefix: string; segments: string[] }
   if (normalized.startsWith('//')) {
     const segments = normalized.slice(2).split('/').filter(Boolean)
     const server = (segments[0] ?? '').toLowerCase()
-    // Canonicalize the two WSL UNC aliases to one identity (matches the shared
-    // normalizer) so `\\wsl$\Distro` and `\\wsl.localhost\Distro` compare equal.
+    // Match shared normalization: wsl$ and wsl.localhost aliases identify the same distro.
     const prefix =
       server === 'wsl.localhost' || server === 'wsl$'
         ? `//wsl/${(segments[1] ?? '').toLowerCase()}`
@@ -91,10 +86,7 @@ function splitAbsolutePath(path: string): { prefix: string; segments: string[] }
   return { prefix: '', segments: normalized.split('/').filter(Boolean) }
 }
 
-// Rebuild via suffix, not `slice(fromPath.length)`: containment matches paths of
-// differing raw length (wsl$ vs wsl.localhost, duplicate separators), so a raw
-// splice would fabricate a path. relativePathInsideRoot gives the original-case
-// `/`-separated suffix (POSIX backslashes preserved) to re-emit in dest flavor.
+// Reconstruct the original-case relative suffix: equivalent UNC aliases/duplicate separators have different raw lengths, so slicing fromPath.length fabricates paths. Preserve POSIX backslashes and emit destination flavor.
 function computeMovedPath(fromPath: string, toPath: string, filePath: string): string {
   const suffix = relativePathInsideRoot(fromPath, filePath)
   if (suffix === null) {
@@ -104,9 +96,7 @@ function computeMovedPath(fromPath: string, toPath: string, filePath: string): s
   if (suffix === '') {
     return toPath
   }
-  // Flavor by SYNTAX (drive/UNC), never by "contains a backslash": a POSIX/SSH
-  // path may hold a legal backslash, so it must keep `/`, never gain one, and
-  // never have a trailing backslash stripped as if it were a separator.
+  // Choose flavor by drive/UNC syntax; POSIX/SSH backslashes are legal data, never separators to insert or strip.
   if (isWindowsAbsolutePathLike(toPath)) {
     const separator = toPath.includes('\\') ? '\\' : '/'
     return `${toPath.replace(/[\\/]+$/, '')}${separator}${suffix.split('/').join(separator)}`
@@ -126,9 +116,7 @@ function getRelativePathFromRoot(rootPath: string, candidatePath: string): strin
     return foldSeparatorsForFlavor(candidatePath, candidatePath)
   }
 
-  // Windows drive/UNC segments are case-insensitive, so a case-only difference
-  // is the SAME directory and must not emit a spurious `..`. The WSL Linux suffix
-  // (canonical prefix //wsl/<distro>) stays case-sensitive, as do POSIX roots.
+  // Windows/UNC case-only segments are one directory, never a .. step; WSL Linux suffixes and POSIX remain case-sensitive.
   const foldCase =
     /^[a-z]:$/i.test(root.prefix) ||
     (root.prefix.startsWith('//') && !root.prefix.startsWith('//wsl/'))
@@ -165,10 +153,12 @@ function getUpdatedRelativePath({
   initiatingWorktreeId: string | undefined
   initiatingWorktreePath: string
 }): string {
+  // Why: a tab stored by its full path is user-named (editorTabFileAccess); keep it that way.
+  if (relativePath === filePath) {
+    return updatedPath
+  }
   const worktreeRelative = relativePathInsideRoot(initiatingWorktreePath, filePath)
-  // Both sides fold on the same flavor (the file's own absolute path) so the
-  // comparison stays consistent and a legal POSIX backslash isn't mistaken for a
-  // separator.
+  // Compare both paths in the file’s absolute flavor so POSIX backslashes stay data.
   const normalizedRelativePath = foldSeparatorsForFlavor(relativePath, filePath).replace(/^\/+/, '')
   const usesInitiatingWorktreeRoot =
     initiatingWorktreeId !== undefined
@@ -188,33 +178,30 @@ export function remapOpenEditorTabsForPathChange({
   toPath,
   worktreePath,
   worktreeId,
+  owner,
   moveOperationId
 }: {
   fromPath: string
   toPath: string
   worktreePath: string
   worktreeId?: string
+  /** The host the rename ran on; only tabs whose own owner it is are retargeted. */
+  owner: EditorMoveOwner
   /** Passed by the move coordinator so dirty destinations get a content-verify
    * gate + provenance installed atomically with the re-home. */
   moveOperationId?: string
 }): RekeyOpenFilesResult {
   const state = useAppStore.getState()
-  // The rename only touched the initiating execution host. The same absolute
-  // path can be open on a DIFFERENT host (a second SSH connection, or local vs
-  // runtime) as a distinct physical file — never retarget those tabs.
-  const initiatingHostId = getExecutionHostIdForWorktree(state, worktreeId)
+  // Rename affects its own host only; same-path tabs on SSH/runtime/local twins are distinct files.
   const filesToMove = state.openFiles.filter(
     (file) =>
-      isPathInsideOrEqual(fromPath, file.filePath) &&
-      getExecutionHostIdForWorktree(state, file.worktreeId) === initiatingHostId
+      isPathInsideOrEqual(fromPath, file.filePath) && isOpenFileOnMoveOwner(state, file, owner)
   )
   if (filesToMove.length === 0) {
     return { ok: true }
   }
 
-  // Retarget the live edit session in place (atomic store rekey) instead of
-  // close+reopen: preserves the full OpenFile + all id-keyed state and closes
-  // the watcher-race window that close/reopen opened.
+  // Atomically rekey the edit session to preserve OpenFile/id-keyed state and close the close/reopen watcher race.
   const updatedPathOf = (file: { filePath: string }): string =>
     computeMovedPath(fromPath, toPath, file.filePath)
   const relativeOf = (file: {
@@ -231,11 +218,7 @@ export function remapOpenEditorTabsForPathChange({
       initiatingWorktreePath: worktreePath
     })
 
-  // First owner to claim a destination gets the plain-path id; other owners of
-  // the same path get an owner-qualified id (as sequential openFile did). An
-  // unaffected tab already at the destination is honoured via
-  // resolveEditorFileIdForOwner; a same-owner conflict is a real collision the
-  // rekey action rejects.
+  // First owner gets the plain-path ID; others use owner-qualified IDs, honoring existing destinations. Same-owner collisions are rejected by rekey.
   const ownerKeyOf = (file: { worktreeId: string; runtimeEnvironmentId?: string | null }): string =>
     `${file.worktreeId}::${file.runtimeEnvironmentId?.trim() || ''}`
   const plainPathOwner = new Map<string, string>()
@@ -282,8 +265,7 @@ export function remapOpenEditorTabsForPathChange({
       newFilePath: updatedPathOf(file),
       newRelativePath: relativeOf(file),
       newLanguage: detectLanguage(basename(updatedPathOf(file))),
-      // Only an explicit rename of the file itself consumes untitled status; a
-      // containing-directory move keeps it.
+      // Only direct file renames consume untitled status; parent-directory moves preserve it.
       consumeUntitled: file.isUntitled === true && file.filePath === fromPath
     })
   }
@@ -304,10 +286,7 @@ export function remapOpenEditorTabsForPathChange({
       newMarkdownPreviewSourceFileId: newSourceFileId
     })
   }
-  // Only single-file staged/unstaged diff ids are purely path-derived, so only
-  // they can be retargeted from path. Branch/commit diffs carry extra compare
-  // metadata and "Changes" is worktree-rooted — rebuilding those from path alone
-  // would produce the wrong id.
+  // Only single-file staged/unstaged diffs have path-only IDs; branch/commit metadata and worktree-rooted Changes cannot be reconstructed from path.
   for (const file of filesToMove) {
     if (file.mode !== 'diff' || (file.diffSource !== 'staged' && file.diffSource !== 'unstaged')) {
       continue

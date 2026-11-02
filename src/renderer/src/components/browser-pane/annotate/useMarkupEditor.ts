@@ -1,42 +1,56 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { blitMarkupScene, renderCommittedLayer } from './markup-canvas-render'
 import { useMarkupKeyboardShortcuts, type PendingText } from './useMarkupKeyboardShortcuts'
 import { useMarkupPointerHandlers } from './useMarkupPointerHandlers'
 import {
+  applyDocumentCommand,
+  canUndoMarkup,
+  redoMarkup,
+  undoMarkup,
+  type MarkupEditorState
+} from './markup-gesture'
+import type { TextInkBoxMeasurer } from './markup-shape-hit-test'
+import { textInkBox } from './markup-shape-render'
+import {
   canRedo,
-  canUndo,
   clearShapes,
   commitShape,
   createMarkupDocument,
   DEFAULT_MARKUP_COLOR,
   DEFAULT_MARKUP_FONT_SIZE,
   DEFAULT_MARKUP_WIDTH,
-  redoShape,
-  undoShape,
-  type MarkupDocument,
-  type MarkupShape,
   type MarkupTool
 } from './markup-drawing-model'
 
 type Size = { width: number; height: number; dpr: number }
 
-// Owns the markup surface: document, active tool/style, the pending text box, and
-// the canvas paint effect. Draw-only — committed shapes are not re-editable.
+// Own document, tool, pending text and paint state; committed shapes support erasure without re-editing.
 export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const textInputRef = useRef<HTMLInputElement | null>(null)
-  // Why: committed shapes are rasterized once into this offscreen layer; the live
-  // paint blits it instead of re-stroking every committed shape each pointermove.
+  // Cache committed raster ink so pointer moves do not re-stroke the document.
   const committedLayerRef = useRef<HTMLCanvasElement | null>(null)
   if (committedLayerRef.current === null) {
     committedLayerRef.current = document.createElement('canvas')
   }
 
   const [size, setSize] = useState<Size>({ width: 0, height: 0, dpr: 1 })
-  const [doc, setDoc] = useState<MarkupDocument>(() => createMarkupDocument())
-  const [inProgress, setInProgress] = useState<MarkupShape | null>(null)
+  const [{ doc, gesture }, setState] = useState<MarkupEditorState>(() => ({
+    doc: createMarkupDocument(),
+    gesture: null
+  }))
+  const drawing = gesture?.kind === 'draw' ? gesture.shape : null
+  const erasedIds = gesture?.kind === 'erase' ? gesture.erasedIds : null
+  // Share visible ink with export so in-flight erasures cannot reappear in the copied PNG.
+  const shapes = useMemo(
+    () =>
+      erasedIds && erasedIds.size > 0
+        ? doc.shapes.filter((shape) => !erasedIds.has(shape.id))
+        : doc.shapes,
+    [doc.shapes, erasedIds]
+  )
   const [tool, setTool] = useState<MarkupTool>('pen')
   const [color, setColor] = useState<string>(DEFAULT_MARKUP_COLOR)
   const [width, setWidth] = useState<number>(DEFAULT_MARKUP_WIDTH)
@@ -52,8 +66,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     const measure = () => {
       const rect = root.getBoundingClientRect()
       const dpr = window.devicePixelRatio || 1
-      // Why: bail on an unchanged measurement so an identical ResizeObserver/resize
-      // tick can't schedule a redundant repaint.
+      // Ignore identical measurements to avoid redundant paints.
       setSize((prev) =>
         prev.width === rect.width && prev.height === rect.height && prev.dpr === dpr
           ? prev
@@ -63,9 +76,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(root)
-    // Why: a monitor move changes devicePixelRatio without changing the element's
-    // CSS box, so ResizeObserver won't fire — window resize (which Chromium emits
-    // on dpr changes) re-measures the dpr so the canvas repaints at the new scale.
+    // Monitor DPR changes need window resize measurement; ResizeObserver sees only CSS size changes.
     window.addEventListener('resize', measure)
     return () => {
       observer.disconnect()
@@ -73,18 +84,16 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     }
   }, [])
 
-  // Rasterize committed shapes into the offscreen layer only when they (or the
-  // size) change — not on every in-progress pointermove.
+  // Re-rasterize only for ink/size changes, independent of in-progress pointer moves.
   useEffect(() => {
     const layer = committedLayerRef.current
     if (!layer) {
       return
     }
-    renderCommittedLayer(layer, doc.shapes, size.width, size.height, size.dpr)
-  }, [doc.shapes, size])
+    renderCommittedLayer(layer, shapes, size.width, size.height, size.dpr)
+  }, [shapes, size])
 
-  // Blit the cached layer + the in-progress shape, coalesced to one paint per
-  // frame so a burst of pointermove events can't queue redundant full repaints.
+  // Coalesce pointermove bursts into one cached blit per frame.
   useEffect(() => {
     const canvas = canvasRef.current
     const layer = committedLayerRef.current
@@ -92,10 +101,10 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
       return undefined
     }
     const handle = requestAnimationFrame(() => {
-      blitMarkupScene(canvas, layer, inProgress, size.width, size.height, size.dpr)
+      blitMarkupScene(canvas, layer, drawing, size.width, size.height, size.dpr)
     })
     return () => cancelAnimationFrame(handle)
-  }, [doc.shapes, inProgress, size])
+  }, [shapes, drawing, size])
 
   // Why: focus the text input on mount — a placement click can beat autoFocus.
   useEffect(() => {
@@ -106,14 +115,17 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     return () => cancelAnimationFrame(handle)
   }, [pendingText])
 
-  const undo = useCallback(() => setDoc((current) => undoShape(current)), [])
-  const redo = useCallback(() => setDoc((current) => redoShape(current)), [])
+  const undo = useCallback(() => setState(undoMarkup), [])
+  const redo = useCallback(() => setState(redoMarkup), [])
   const clear = useCallback(() => {
-    // Why: also drop any open text input / in-progress stroke so a clear leaves a
-    // truly clean slate — otherwise a pending input blur can re-add text.
+    // Drop pending text too; a later input blur must not restore it after Clear.
     setPendingText(null)
-    setInProgress(null)
-    setDoc((current) => clearShapes(current))
+    setState((state) => applyDocumentCommand(state, clearShapes))
+  }, [])
+
+  const measureTextInkBox = useCallback<TextInkBoxMeasurer>((shape) => {
+    const ctx = committedLayerRef.current?.getContext('2d')
+    return ctx ? textInkBox(ctx, shape) : null
   }, [])
 
   useMarkupKeyboardShortcuts({ pendingText, setPendingText, undo, redo, onCancel })
@@ -124,11 +136,10 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     color,
     width,
     pendingText,
-    inProgress,
     canvasRef,
-    setInProgress,
+    measureTextInkBox,
     setPendingText,
-    setDoc
+    setState
   })
 
   const commitPendingText = useCallback(
@@ -139,8 +150,9 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
       if (!at || trimmed.length === 0) {
         return
       }
-      setDoc((document) =>
-        commitShape(document, {
+      setState((state) => ({
+        ...state,
+        doc: commitShape(state.doc, {
           id: createBrowserUuid(),
           kind: 'text',
           color,
@@ -148,7 +160,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
           text: trimmed,
           fontSize
         })
-      )
+      }))
     },
     [color, fontSize, pendingText]
   )
@@ -164,8 +176,8 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     width,
     fontSize,
     pendingText,
-    shapes: doc.shapes,
-    canUndo: canUndo(doc),
+    shapes,
+    canUndo: canUndoMarkup({ doc, gesture }),
     canRedo: canRedo(doc),
     setTool,
     setColor,

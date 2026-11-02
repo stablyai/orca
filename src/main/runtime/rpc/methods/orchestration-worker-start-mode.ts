@@ -1,19 +1,10 @@
-/**
- * `orchestration.workerStart`'s view of the shared launch-mode decision.
- *
- * The decision itself lives in `main/agent-launch/agent-launch-mode`, which every launch surface
- * shares — a worker is not a special kind of launch, it is the same launch with a dispatch
- * attached. All this module contributes is the noun orchestration puts in its receipts ("worker")
- * and the `--terminal` wording, so a dispatch receipt reads the way it always has.
- */
+/** Reuse shared agent-launch-mode; orchestration contributes only worker/--terminal vocabulary for its established receipts. */
 
 import {
   decideAgentLaunchMode,
   downgradeAgentLaunchModeForHost,
   readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
-  type AgentLaunchMode,
-  type AgentLaunchModeReason,
   type AgentLaunchModeReceipt,
   type AgentLaunchModeSettings,
   type AgentLaunchModeVocabulary
@@ -21,12 +12,9 @@ import {
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
-export type WorkerStartMode = AgentLaunchMode
-export type WorkerStartModeReason = AgentLaunchModeReason
 export type WorkerStartModeReceipt = AgentLaunchModeReceipt
 
-/** Orchestration's receipts are read next to dispatch records, so they name the worker and the
- *  flag that reused a terminal. Pinned here because the exact strings are asserted. */
+/** Keep orchestration's exact worker/reused-terminal wording; receipts are read beside dispatch records. */
 export const WORKER_START_VOCABULARY: AgentLaunchModeVocabulary = {
   structured: 'a structured chat session worker',
   terminal: 'a terminal agent worker',
@@ -36,9 +24,7 @@ export const WORKER_START_VOCABULARY: AgentLaunchModeVocabulary = {
   }
 }
 
-/** The placement options that exist only on `worker-start`. `worktree`, `model` and `effort` are
- *  listed but no longer read: a structured worker honours all three, and naming them here keeps
- *  the set of options this decision has considered visible. */
+/** Keep worktree/model/effort visible as considered inputs even though they no longer force terminal mode. */
 type WorkerStartModePlacement = {
   agent?: string
   on?: string
@@ -76,7 +62,7 @@ export function downgradeWorkerStartModeForHost(
 }
 
 export function readWorkerStartModeSettings(
-  runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
+  runtime: Parameters<typeof readAgentLaunchModeSettings>[0]
 ): AgentLaunchModeSettings | null {
   return readAgentLaunchModeSettings(runtime)
 }

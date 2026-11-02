@@ -1,8 +1,14 @@
+import {
+  LINEAR_AUTHENTICATION_ERROR,
+  isIntegrationCredentialDecryptionError
+} from '../../shared/integration-credential-errors'
 import type { LinearIssue } from '../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
+import { getRequiredEntry } from './issue-context/client'
+import { getDescriptionImageUrls } from './linear-description-images'
 import {
   ATTACHMENT_BY_UUID_QUERY,
   COMMENT_BY_UUID_QUERY,
@@ -30,28 +36,56 @@ import {
   type LinearIssueWriteRecord
 } from './linear-issue-write-support'
 
+const ISSUE_DETAIL_TIMEOUT_MS = 30_000
+
 export async function getIssue(
   id: string,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue | null> {
-  const entries = getClients(workspaceId)
+  const controller = new AbortController()
+  const timer = setTimeout(
+    () => controller.abort(new Error('Linear issue detail lookup timed out')),
+    ISSUE_DETAIL_TIMEOUT_MS
+  )
+  try {
+    return await readIssueWithSignal(id, workspaceId, controller.signal)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function readIssueWithSignal(
+  id: string,
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  signal: AbortSignal
+): Promise<LinearIssue | null> {
+  const entries = getClients(workspaceId, signal)
   if (entries.length === 0) {
     return null
   }
 
   for (const entry of entries) {
-    await acquire()
+    await acquire(signal)
     try {
       const issue = await entry.client.issue(id)
-      return await mapIssueForWorkspace(entry, issue, {
+      const mapped = await mapIssueForWorkspace(entry, issue, {
         includeChildren: true,
         includeProject: true
       })
+      const descriptionImageUrls = await getDescriptionImageUrls(
+        entry,
+        mapped.id,
+        mapped.description,
+        signal
+      )
+      signal.throwIfAborted()
+      return { ...mapped, ...(descriptionImageUrls ? { descriptionImageUrls } : {}) }
     } catch (error) {
+      signal.throwIfAborted()
       if (isAuthError(error)) {
         clearToken(entry.workspace.id)
         if (shouldThrowAuthError(workspaceId)) {
-          throw error
+          throw new Error(LINEAR_AUTHENTICATION_ERROR)
         }
       } else {
         console.warn('[linear] getIssue failed:', error)
@@ -65,67 +99,84 @@ export async function getIssue(
 
 export async function getIssueByUuidForAgent(
   id: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearIssueWriteRecord | null> {
-  const entry = getClients(workspaceId)[0]
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     return null
   }
 
-  return runLinearLookup(entry, async () => {
-    const result = await entry.client.client.rawRequest<
-      LinearIssueByUuidResponse,
-      LinearRawVariables
-    >(ISSUE_BY_UUID_QUERY, { id })
-    const issue = result.data?.issue ?? null
-    return issue ? mapRawIssueWriteRecord(issue) : null
-  })
+  return runLinearLookup(
+    entry,
+    async () => {
+      const result = await entry.client.client.rawRequest<
+        LinearIssueByUuidResponse,
+        LinearRawVariables
+      >(ISSUE_BY_UUID_QUERY, { id })
+      const issue = result.data?.issue ?? null
+      return issue ? mapRawIssueWriteRecord(issue) : null
+    },
+    signal
+  )
 }
 
 export async function getCommentByUuidForAgent(
   id: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearCommentWriteRecord | null> {
-  const entry = getClients(workspaceId)[0]
+  const entry =
+    signal && workspaceId ? getRequiredEntry(workspaceId, signal) : getClients(workspaceId)[0]
   if (!entry) {
     return null
   }
 
-  return runLinearLookup(entry, async () => {
-    const result = await entry.client.client.rawRequest<
-      LinearCommentByUuidResponse,
-      LinearRawVariables
-    >(COMMENT_BY_UUID_QUERY, { id })
-    const comment = result.data?.comment
-    return comment ? mapRawCommentWriteRecord(comment) : null
-  })
+  return runLinearLookup(
+    entry,
+    async () => {
+      const result = await entry.client.client.rawRequest<
+        LinearCommentByUuidResponse,
+        LinearRawVariables
+      >(COMMENT_BY_UUID_QUERY, { id })
+      const comment = result.data?.comment
+      return comment ? mapRawCommentWriteRecord(comment) : null
+    },
+    signal
+  )
 }
 
 export async function getAttachmentByUuidForAgent(
   id: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<LinearAttachmentWriteRecord | null> {
-  const entry = getClients(workspaceId)[0]
+  const entry = getClients(workspaceId, signal)[0]
   if (!entry) {
     return null
   }
 
-  return runLinearLookup(entry, async () => {
-    const result = await entry.client.client.rawRequest<
-      LinearAttachmentByUuidResponse,
-      LinearRawVariables
-    >(ATTACHMENT_BY_UUID_QUERY, { id })
-    const attachment = result.data?.attachment
-    return attachment ? mapRawAttachmentWriteRecord(attachment) : null
-  })
+  return runLinearLookup(
+    entry,
+    async () => {
+      const result = await entry.client.client.rawRequest<
+        LinearAttachmentByUuidResponse,
+        LinearRawVariables
+      >(ATTACHMENT_BY_UUID_QUERY, { id })
+      const attachment = result.data?.attachment
+      return attachment ? mapRawAttachmentWriteRecord(attachment) : null
+    },
+    signal
+  )
 }
 
 export async function getIssueCommentThreadRoot(
   issueId: string,
   commentId: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  signal?: AbortSignal
 ): Promise<{ id: string; parentId: string | null } | null> {
-  const comment = await getCommentByUuidForAgent(commentId, workspaceId)
+  const comment = await getCommentByUuidForAgent(commentId, workspaceId, signal)
   if (!comment || comment.issue.id !== issueId) {
     return null
   }
@@ -142,7 +193,7 @@ export async function searchIssues(
     return []
   }
 
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     entries.map(async (entry) => {
       await acquire()
       try {
@@ -155,23 +206,31 @@ export async function searchIssues(
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
-          if (shouldThrowAuthError(workspaceId)) {
-            throw error
-          }
         } else {
           console.warn('[linear] searchIssues failed:', error)
         }
-        return []
+        throw error
       } finally {
         release()
       }
     })
   )
-  // Why: searchIssues returns Linear's relevance ranking. Re-sorting by
-  // updatedAt would discard relevance order for single-workspace results,
-  // diverging from Linear's web UI and pre-PR behavior.
-  if (entries.length === 1) {
-    return results.flat().slice(0, limit)
+  const successful = results.flatMap((result) =>
+    result.status === 'fulfilled' ? result.value : []
+  )
+  const failure = results.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected' && results.every((result) => result.status === 'rejected')) {
+    if (isIntegrationCredentialDecryptionError(failure.reason)) {
+      throw failure.reason
+    }
+    if (results.some((result) => result.status === 'rejected' && isAuthError(result.reason))) {
+      throw new Error(LINEAR_AUTHENTICATION_ERROR)
+    }
+    throw new Error('Unable to load Linear issues. Try again.')
   }
-  return sortAndLimitIssues(results.flat(), limit)
+  // Single-workspace results must retain Linear relevance ranking instead of updatedAt order.
+  if (entries.length === 1) {
+    return successful.slice(0, limit)
+  }
+  return sortAndLimitIssues(successful, limit)
 }

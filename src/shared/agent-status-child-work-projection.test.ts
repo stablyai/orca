@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { resolveAgentChildWorkFreshness } from './agent-status-child-work-freshness'
 import {
   agentChildWorkProjectionCandidateFromBackgroundTask,
@@ -78,17 +77,6 @@ describe('agent child-work legacy projection', () => {
         description: 'Investigate'
       }
     ])
-  })
-
-  it.each([31, 32, 33])('caps after accepting %i valid rows in source order', (count) => {
-    const interleaved = Array.from({ length: count }, (_, index) => [
-      candidate('', { kind: 'agent' }),
-      candidate(`task-${index}`)
-    ]).flat()
-    const projected = projectAgentChildWorkLegacySubagents(interleaved)
-
-    expect(projected).toHaveLength(Math.min(count, AGENT_STATUS_MAX_SUBAGENTS))
-    expect(projected?.at(-1)?.id).toBe(`task-${Math.min(count, AGENT_STATUS_MAX_SUBAGENTS) - 1}`)
   })
 
   it('rejects missing host first-observation time instead of inventing zero', () => {

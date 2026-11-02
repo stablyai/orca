@@ -16,13 +16,11 @@ export function normalizeInitialData(data: unknown) {
     return data
   }
   const on = data.lastIndexOf(ESC + '[?1049h')
-  // Why: SerializeAddon can include normal-buffer scrollback before the
-  // active alternate-screen snapshot. Replaying both into a fresh mobile
-  // xterm duplicates TUI frames and can flatten SGR attributes.
+  // Drop normal-buffer scrollback before alternate snapshots; replaying both duplicates TUI frames and can flatten SGR.
   return on > 0 ? data.slice(on) : data
 }
 
-export function updateMouseModeFromData(scope: TerminalDocumentScope, data: unknown) {
+export function updateMouseModeFromData(scope: TerminalDocumentScope, data: unknown, live = false) {
   if (typeof data !== 'string' || data.length === 0) {
     return
   }
@@ -35,6 +33,7 @@ export function updateMouseModeFromData(scope: TerminalDocumentScope, data: unkn
   let match: RegExpExecArray | null
   while ((match = re.exec(input)) !== null) {
     if (match[0] === ESC + 'c') {
+      scope.mouseEncodingKnown = true
       scope.trackedMouseTrackingMode = 'none'
       scope.sgrMouseMode = false
       scope.sgrMousePixelsMode = false
@@ -50,6 +49,10 @@ export function updateMouseModeFromData(scope: TerminalDocumentScope, data: unkn
       if (!Number.isInteger(param)) {
         continue
       }
+      // Live tracking enable proves its burst’s encoding or default; replay alone cannot prove either.
+      if (live && enabled && (param === 9 || param === 1000 || param === 1002 || param === 1003)) {
+        scope.mouseEncodingKnown = true
+      }
       if (param === 9) {
         scope.trackedMouseTrackingMode = enabled ? 'x10' : 'none'
       }
@@ -63,10 +66,12 @@ export function updateMouseModeFromData(scope: TerminalDocumentScope, data: unkn
         scope.trackedMouseTrackingMode = enabled ? 'any' : 'none'
       }
       if (param === 1006) {
+        scope.mouseEncodingKnown = true
         scope.sgrMouseMode = enabled
         scope.sgrMousePixelsMode = false
       }
       if (param === 1016) {
+        scope.mouseEncodingKnown = true
         scope.sgrMouseMode = false
         scope.sgrMousePixelsMode = enabled
       }

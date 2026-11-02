@@ -88,10 +88,7 @@ export function useSidebarResize<T extends HTMLElement>({
         return
       }
 
-      // Why: sidebar containers intentionally keep live drag width out of
-      // React props. Any unrelated rerender during a drag would otherwise
-      // snap the DOM width back to the last persisted store value and make the
-      // handle feel like it is lagging behind the pointer.
+      // Keep live drag width out of React props so unrelated renders cannot reset it to the persisted width.
       container.style.width = getRenderedSidebarWidthCssValue(isOpen, nextWidth, renderedExtraWidth)
     },
     [isOpen, renderedExtraWidth]
@@ -194,12 +191,7 @@ export function useSidebarResize<T extends HTMLElement>({
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
 
-      // Why: native plugins like Chromium's PDF <embed> capture pointer events
-      // internally, so dragging across them swallows the `mouseup` on the
-      // window and the resize never stops — the sidebar ends up following the
-      // cursor indefinitely. A full-viewport transparent overlay above all
-      // content keeps mouse events flowing to the window listeners for the
-      // duration of the drag.
+      // A viewport overlay captures mouseup over native plugins such as PDF embeds, preventing a stuck resize.
       if (!overlayRef.current) {
         const overlay = document.createElement('div')
         overlay.style.position = 'fixed'

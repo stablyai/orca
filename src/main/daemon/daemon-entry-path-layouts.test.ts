@@ -1,11 +1,4 @@
-/**
- * Which daemon-entry.js the launcher forks, per deployment layout.
- *
- * The layout that matters here is orcad's: a packaged host with NO asar, whose bundle root
- * holds `orcad.js` and `daemon-entry.js` side by side (config/scripts/build-orcad.mjs emits
- * exactly that). Resolving against `out/main` there would fork a path that does not exist,
- * and the failure would surface as "terminals do not persist" rather than as a missing file.
- */
+// orcad packages daemon-entry.js beside orcad.js without an asar archive.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { FAKE_APP_PATH, FAKE_DAEMON_ENTRY_PATH } from './daemon-init-test-harness'
@@ -40,7 +33,8 @@ vi.mock('./client', () => moduleFactories.client())
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
-vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('../ipc/pty/provider/registry', () => moduleFactories.ptyProviderRegistry())
+vi.mock('../ipc/pty/provider/listener-lifecycle', () => moduleFactories.ptyListenerLifecycle())
 
 const ASAR_APP_PATH = join('/packaged', 'resources', 'app.asar')
 const ASAR_UNPACKED_ENTRY = join(
@@ -54,13 +48,12 @@ const ASAR_UNPACKED_ENTRY = join(
 const ORCAD_ROOT = join('/opt', 'orcad')
 const ORCAD_ADJACENT_ENTRY = join(ORCAD_ROOT, 'daemon-entry.js')
 
-/** Drive one launch under the given layout and return the entry path that was forked. */
 async function forkedDaemonEntryPath(layout: {
   appPath: string
   isPackaged: boolean
   existingEntry?: string
 }): Promise<string> {
-  // Why after importFresh: it resets these mocks to their defaults on every fresh import.
+  // importFresh resets the layout mocks; override them afterwards.
   const mod = await importFresh()
   getAppPathMock.mockReturnValue(layout.appPath)
   isPackagedMock.mockReturnValue(layout.isPackaged)
@@ -102,8 +95,6 @@ describe('daemon entry path per deployment layout', () => {
   })
 
   it('forks the entry beside orcad.js on a packaged host with no asar', async () => {
-    // orcad answers isPackaged() true; the question the resolver must ask is whether the app
-    // root is an asar archive, not whether the build is packaged.
     expect(
       await forkedDaemonEntryPath({
         appPath: ORCAD_ROOT,

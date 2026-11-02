@@ -107,11 +107,7 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
     ).toBe(false)
   })
 
-  // #14460: with a non-Latin input source the OS reports the layout's own glyph for `key`
-  // (Hangul jamo on Korean 2-Set, Cyrillic es on Russian), while `code` stays KeyC. A
-  // non-Latin script cannot express a control chord in `key`, so `code` is the only signal
-  // that survives — and without this, Ctrl+C misses the ETX path and gets CSI-u encoded
-  // instead, leaving a TUI running.
+  // Non-Latin key glyphs cannot express Ctrl+C; physical KeyC must still reach ETX (#14460).
   it.each([
     ['Korean 2-Set', 'ㅊ'],
     ['Russian', 'с'],
@@ -134,8 +130,7 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
     ).toBe(true)
   })
 
-  // The paired negative, and the reason this cannot simply prefer `code`: a Latin layout that
-  // moves letters around (Dvorak) reports a real ASCII letter, and that letter is authoritative.
+  // Latin remaps such as Dvorak keep their reported letter authoritative.
   it('still ignores a Latin layout that maps KeyC to a different ASCII letter', () => {
     expect(
       shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'j', code: 'KeyC', ctrlKey: true }), {
@@ -145,7 +140,6 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
     ).toBe(false)
   })
 
-  // And a non-Latin key on some other physical key must not become an interrupt.
   it('does not handle a non-Latin logical key on a physical key other than KeyC', () => {
     expect(
       shouldHandleTerminalInterruptKeyboardEvent(
@@ -158,8 +152,7 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
     ).toBe(false)
   })
 
-  // An IME sits on top of a Latin layout, so the layout map still answers for the physical key.
-  // Consulting it is what keeps the non-Latin path precise rather than merely positional.
+  // An IME’s Latin base layout map distinguishes the actual C from a positional guess.
   it('uses the layout map when an IME is layered over a Latin layout', () => {
     _setLayoutMapForTests(new Map([['KeyC', 'c']]))
     expect(
@@ -173,8 +166,7 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
     ).toBe(true)
   })
 
-  // The case positional matching alone would get wrong: Korean layered over Dvorak, where the
-  // physical KeyC is not the user's C. The layout map says so, and the interrupt declines.
+  // Korean over Dvorak must honor the base map: physical KeyC is not logical C.
   it('declines when the layout map shows the physical key is not C', () => {
     _setLayoutMapForTests(new Map([['KeyC', 'j']]))
     expect(
@@ -188,8 +180,7 @@ describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
     ).toBe(false)
   })
 
-  // A true non-Latin *layout* (not an IME) has a non-Latin map too, so it cannot answer either.
-  // Fall back to physical position, which is how terminals resolve control chords.
+  // True non-Latin layout maps cannot name C either; fall back to terminal physical-position semantics.
   it('falls back to the physical key when the layout map is itself non-Latin', () => {
     _setLayoutMapForTests(new Map([['KeyC', 'с']]))
     expect(

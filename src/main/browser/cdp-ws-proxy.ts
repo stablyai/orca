@@ -7,8 +7,17 @@ import { CdpTargetDiscovery } from './cdp-target-discovery'
 import { CdpDebuggerChannel } from './cdp-debugger-channel'
 import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
 import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
+import { CdpElementCapture } from './cdp-element-capture'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
+import type { AgentInputFocusGuard } from './agent-input-focus-guard'
+import { CdpPageInputCommands, type ShowAgentPointer } from './cdp-page-input-commands'
+import { isTrustedCdpLoopbackRequest } from './cdp-loopback-request-guard'
+import { parseCdpClientCommand } from './cdp-client-command'
+import {
+  assertRemoteCliPageAccess,
+  runUnderRemoteCliPageAdmission
+} from './remote-cli-page-admission'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -16,6 +25,7 @@ export class CdpWsProxy {
   private client: WebSocket | null = null
   private detachClientListeners: (() => void) | null = null
   private port = 0
+  private stopped = false
   private readonly responder = new CdpClientResponseWriter(() => this.client)
   private readonly sessions = new CdpSyntheticSessionRegistry()
   private readonly discovery: CdpTargetDiscovery
@@ -23,10 +33,15 @@ export class CdpWsProxy {
   private readonly navigation: CdpPageNavigationCommands
   private readonly domFocusReplay: CdpDomFocusReplay
   private readonly pageCapture: CdpPageCaptureCommands
+  private readonly input: CdpPageInputCommands
+  private pointAtNextResolvedNode = false
+  readonly elementCapture = new CdpElementCapture()
 
   constructor(
     private readonly webContents: WebContents,
-    holdPaint: CapturePaintHold
+    holdPaint: CapturePaintHold,
+    guardFocus: AgentInputFocusGuard = async () => () => {},
+    showAgentPointer: ShowAgentPointer = async () => {}
   ) {
     this.discovery = new CdpTargetDiscovery(
       webContents,
@@ -49,21 +64,51 @@ export class CdpWsProxy {
     )
     this.domFocusReplay = new CdpDomFocusReplay(webContents, this.responder, this.debuggerChannel)
     this.pageCapture = new CdpPageCaptureCommands(webContents, this.responder, holdPaint)
+    this.input = new CdpPageInputCommands(
+      webContents,
+      this.responder,
+      this.debuggerChannel,
+      this.domFocusReplay,
+      guardFocus,
+      showAgentPointer,
+      holdPaint
+    )
+  }
+
+  /** Shows the agent cursor on the next node the helper resolves: its fill/check/select target. */
+  pointAtNextNode(enabled: boolean): void {
+    this.pointAtNextResolvedNode = enabled
   }
 
   async start(): Promise<string> {
+    if (this.stopped) {
+      throw new Error('CDP proxy has been stopped')
+    }
     await this.debuggerChannel.attachDebugger()
+    if (this.stopped || this.webContents.isDestroyed()) {
+      await this.stop()
+      throw new Error('CDP proxy has been stopped')
+    }
     return new Promise<string>((resolve, reject) => {
-      this.httpServer = createServer((req, res) => this.discovery.handleHttpRequest(req, res))
-      this.wss = new WebSocketServer({ server: this.httpServer })
+      this.httpServer = createServer((req, res) => {
+        if (!isTrustedCdpLoopbackRequest(req, this.port)) {
+          res.writeHead(403)
+          res.end()
+          return
+        }
+        this.discovery.handleHttpRequest(req, res)
+      })
+      this.wss = new WebSocketServer({
+        server: this.httpServer,
+        verifyClient: ({ req }, done) => done(isTrustedCdpLoopbackRequest(req, this.port), 403)
+      })
       const failStart = (error: Error): void => {
         this.httpServer?.removeListener('error', onListenError)
         this.wss?.close()
         this.wss = null
         this.httpServer?.close()
         this.httpServer = null
-        // Why: a bind failure happens after debugger attach; release it here
-        // because callers cannot safely call stop() on a failed start.
+        // Failed startup has no caller-owned cleanup, so release the attached debugger here.
         this.debuggerChannel.detachDebugger()
         reject(error)
       }
@@ -73,8 +118,12 @@ export class CdpWsProxy {
       this.wss.on('connection', (ws) => {
         this.closeClient()
         this.client = ws
+        // Keep errors contained even after a replaced client's message listeners are detached.
+        ws.on('error', () => ws.terminate())
         const onMessage = (data: WebSocket.RawData): void => {
-          this.handleClientMessage(ws, data.toString())
+          runUnderRemoteCliPageAdmission(this.webContents.id, () =>
+            this.handleClientMessage(ws, data.toString())
+          )
         }
         const onClose = (): void => {
           detach()
@@ -109,15 +158,19 @@ export class CdpWsProxy {
   }
 
   async stop(): Promise<void> {
-    this.debuggerChannel.detachDebugger()
-    this.closeClient()
-    if (this.wss) {
-      this.wss.close()
-      this.wss = null
-    }
-    if (this.httpServer) {
-      this.httpServer.close()
-      this.httpServer = null
+    this.stopped = true
+    try {
+      this.debuggerChannel.detachDebugger()
+    } finally {
+      this.closeClient()
+      if (this.wss) {
+        this.wss.close()
+        this.wss = null
+      }
+      if (this.httpServer) {
+        this.httpServer.close()
+        this.httpServer = null
+      }
     }
   }
 
@@ -138,48 +191,76 @@ export class CdpWsProxy {
   }
 
   private clearClientState(): void {
-    // Why: session and focus state belongs to one websocket and must not cross client replacement.
+    // Never carry session, focus, or capture state across client replacement.
     this.domFocusReplay.clear()
     this.pageCapture.clear()
     this.sessions.clear()
   }
 
   private handleClientMessage(client: WebSocket, raw: string): void {
-    let msg: { id?: number; method?: string; params?: Record<string, unknown>; sessionId?: string }
+    let parsed: unknown
     try {
-      msg = JSON.parse(raw)
+      parsed = JSON.parse(raw)
     } catch {
       return
     }
-    if (msg.id == null || !msg.method) {
+    const envelope = parseCdpClientCommand(parsed)
+    if (!envelope.command) {
+      if (envelope.invalidId !== null) {
+        this.responder.sendError(envelope.invalidId, 'Invalid CDP request', client)
+      }
       return
     }
+    const msg = envelope.command
     const clientId = msg.id
     this.responder.recordRequestSessionId(client, clientId, msg)
+    // Refuse every step of a revoked helper, including reads.
+    try {
+      assertRemoteCliPageAccess(this.webContents.id)
+    } catch (error) {
+      this.responder.sendError(
+        clientId,
+        error instanceof Error ? error.message : String(error),
+        client
+      )
+      return
+    }
 
     if (this.discovery.handleCommand(client, clientId, msg)) {
       return
     }
     const effectiveSessionId = this.sessions.resolveDebuggerSessionId(msg.sessionId)
     this.domFocusReplay.invalidateForMethod(msg.method, effectiveSessionId)
-    if (msg.method === 'Page.bringToFront') {
-      if (!this.webContents.isDestroyed()) {
-        this.webContents.focus()
-      }
+    // Acknowledge activation without taking the user's keyboard focus (#20595).
+    if (msg.method === 'Page.bringToFront' || msg.method === 'Target.activateTarget') {
       this.responder.sendResult(clientId, {}, client)
       return
     }
+    if (
+      msg.method === 'DOM.resolveNode' &&
+      this.pointAtNextResolvedNode &&
+      effectiveSessionId === undefined
+    ) {
+      this.pointAtNextResolvedNode = false
+      const { method, params = {}, sessionId } = msg
+      void this.input
+        .pointAtNode(params.backendNodeId)
+        .then(() =>
+          this.debuggerChannel.forwardCommand(client, clientId, method, params, sessionId)
+        )
+      return
+    }
+    this.elementCapture.observe(msg.method, msg.params, effectiveSessionId)
     if (msg.method === 'DOM.focus') {
       this.domFocusReplay.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
       return
     }
-    // Why: Page.captureScreenshot via debugger.sendCommand hangs on Electron webview guests.
+    // Electron guest screenshots need a specialized path because raw CDP capture can hang.
     if (msg.method === 'Page.captureScreenshot') {
       void this.pageCapture.handleScreenshot(client, clientId, msg.params)
       return
     }
-    // Why: CDP Page.printToPDF is not available for Electron webview guests.
-    // Electron's native printToPDF path is the reliable equivalent.
+    // Native printToPDF replaces unsupported guest CDP printing.
     if (msg.method === 'Page.printToPDF') {
       void this.pageCapture.handlePrintToPdf(client, clientId, msg.params ?? {})
       return
@@ -202,32 +283,27 @@ export class CdpWsProxy {
       this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
-    // Why: Input.insertText can still require native focus in Electron webviews.
-    // Do not auto-focus generic Runtime.evaluate/callFunctionOn traffic: wait
-    // polling and read-only JS probes use those methods heavily, and focusing on
-    // every eval steals the user's foreground window while background automation
-    // is running.
-    if (msg.method === 'Input.insertText' && !this.webContents.isDestroyed()) {
-      this.webContents.focus()
-      void this.domFocusReplay.forwardInsertText(
-        client,
-        clientId,
-        msg.params ?? {},
-        effectiveSessionId
-      )
+    // Root-session input needs guest routing; frame sessions already target their frame.
+    if (
+      msg.method.startsWith('Input.') &&
+      this.input.handle(client, clientId, msg.method, msg.params ?? {}, effectiveSessionId)
+    ) {
       return
     }
-    // Why: agent-browser waits for network idle to detect navigation completion.
-    // Electron webview CDP subscriptions silently lapse after cross-process swaps.
-    // Page.reload needs the same priming: forwarding it unprimed closed the tab (#7031).
+    // Process swaps lose lifecycle subscriptions that agent-browser needs for network idle.
     if (msg.method === 'Page.navigate' && !this.webContents.isDestroyed()) {
       void this.navigation.navigateWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return
     }
-    // Why: CDP Page.reload can destroy Electron webview targets during process swaps.
-    // Use the same direct webContents reload path as Orca's own browser.reload.
+    // Reload natively because CDP reload can destroy guest targets during process swaps.
     if (msg.method === 'Page.reload' && !this.webContents.isDestroyed()) {
       void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
+      return
+    }
+    // The guest debugger outlives this client, so nothing would resume workers or frames left waiting.
+    if (msg.method === 'Target.setAutoAttach') {
+      const params = { ...msg.params, waitForDebuggerOnStart: false }
+      this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
     this.debuggerChannel.forwardCommand(

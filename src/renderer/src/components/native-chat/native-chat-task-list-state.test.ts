@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatMessage
+} from '../../../../shared/native-chat/native-chat-types'
+import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatTaskListState } from './native-chat-task-list-state'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
@@ -10,22 +14,6 @@ function call(content: string, status = 'pending'): NativeChatBlock {
 }
 
 describe('nativeChatTaskListState', () => {
-  it('projects one latest snapshot, preserves prose and leaves source messages unchanged', () => {
-    const first = message('first', [call('Read')])
-    const last = message('last', [
-      { type: 'text', text: 'Here is the result' },
-      call('Read', 'completed'),
-      { type: 'tool-result', output: 'Updated todos' }
-    ])
-    const result = nativeChatTaskListState([first, last])
-    expect(result.list?.tasks).toEqual([{ content: 'Read', status: 'completed' }])
-    expect(result.messages[0]).toBe(first)
-    expect(result.messages[1]).toBe(last)
-    expect(first.blocks).toHaveLength(1)
-    expect(last.blocks).toHaveLength(3)
-    expect(nativeChatTaskListState([first, last]).messages[1]).toBe(result.messages[1])
-  })
-
   it('preserves latest state across user follow-ups and clears it on an explicit empty list', () => {
     const first = message('first', [call('Read')])
     const user = { ...message('user', [{ type: 'text', text: 'Continue' }]), role: 'user' as const }
@@ -53,21 +41,25 @@ describe('nativeChatTaskListState', () => {
     expect(result.messages.slice(1)).toEqual([malformed, failed, failedCall])
   })
 
-  it('retains task history and unrelated errors while selecting the paired snapshot', () => {
-    const tasks: NativeChatBlock = call('Read')
-    const shell: NativeChatBlock = {
-      type: 'tool-call',
-      name: 'shell',
-      input: {}
+  it('preserves accepted tasks when named orphan failures remain visibly separate', () => {
+    const tasks = { ...call('Accepted'), callId: 'accepted' }
+    const rejected = { ...call('Rejected', 'completed'), callId: 'rejected' }
+    const source = message('calls', [tasks, rejected])
+    const outputs = {
+      ...message('outputs', [
+        { type: 'tool-result', callId: 'unknown', output: 'Unowned failure', isError: true },
+        { type: 'tool-result', callId: 'rejected', output: 'Rejected update', isError: true },
+        { type: 'tool-result', callId: 'accepted', output: 'Accepted update' }
+      ]),
+      role: 'tool' as const
     }
-    const error: NativeChatBlock = {
-      type: 'tool-result',
-      output: 'Failed',
-      isError: true
-    }
-    const success: NativeChatBlock = { type: 'tool-result', output: 'Updated' }
-    const result = nativeChatTaskListState([message('mixed', [tasks, success, shell, error])])
-    expect(result.list?.tasks[0].content).toBe('Read')
-    expect(result.messages[0].blocks).toEqual([tasks, success, shell, error])
+    const folded = foldToolMessages([source, outputs])
+    expect(nativeChatTaskListState(folded).list?.tasks).toEqual([
+      { content: 'Accepted', status: 'pending' }
+    ])
+    expect(folded[1]).toMatchObject({ id: 'outputs', role: 'tool', blocks: [outputs.blocks[0]] })
+    expect(nativeChatTaskListState(foldToolMessages(folded)).list?.tasks).toEqual([
+      { content: 'Accepted', status: 'pending' }
+    ])
   })
 })

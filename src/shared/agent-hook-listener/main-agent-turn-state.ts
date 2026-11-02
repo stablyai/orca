@@ -1,35 +1,44 @@
 import type { AgentStatusState } from '../agent-status-types'
-import type { AgentJournalTurnOutcome } from '../agent-turn-outcome'
+import type { AgentTurnOutcome } from '../agent-turn-outcome'
 
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
 export type ClaudeLeadTurnState = {
   state: AgentStatusState
-  /** The recorded verdict on the turn this record closed (the provider's, or a `cancellation`
-   *  Orca inferred from the interrupt keystroke); only meaningful while `state` is done.
-   *  `cancellation` is what the fold reads as an interrupt. */
-  outcome?: AgentJournalTurnOutcome
+  /** A known background task opened this foreground finishing turn. */
+  taskWakeupTurn?: true
+  /** Done-turn verdict from provider, inferred cancellation or persisted seed; the fold reads cancellation as interrupted. */
+  outcome?: AgentTurnOutcome
   /** When `state` first appeared; the main agent's own clock, distinct from the gated row's. */
   stateStartedAt: number
-  /** Subagent that induced the wait; only its next tool activity may clear it, so other children's churn can't dismiss a pending human-input card. */
+  /** Only the waiting child's next activity may clear its card; sibling churn cannot. */
   waitingAgentId?: string
   /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
   waitingToolUseId?: string
-  /** End time of the main agent turn closed while background inventory kept the pane `working`. Repeated on the later all-clear `done`. */
+  /** End time retained while background work holds working, then repeated on all-clear done. */
   turnCompletedAt?: number
-  /** Main agent state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
+  /** Restore the lead state displaced by a child wait; inventing working cannot later fold back to done. */
   stateBeforeWait?: Pick<
     ClaudeLeadTurnState,
-    'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt'
+    'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt' | 'taskWakeupTurn'
   >
 }
 
-/** The Codex root's own record, folded with its roster into the combined `state`. A child's wait
- *  lives on the roster entry, never here, so this record is always the root's own truth. */
+/** When the main agent's own turn last ended, while it has not started another. */
+export function mainAgentIdleSince(
+  record: Pick<ClaudeLeadTurnState, 'state' | 'stateStartedAt'> | undefined
+): number | undefined {
+  return record?.state === 'done' ? record.stateStartedAt : undefined
+}
+
+/** Root-only Codex state; child waits live on roster entries and affect only the combined fold. */
 export type CodexLeadTurnState = {
   state: 'working' | 'waiting' | 'done'
-  /** The turn verdict the server inferred; Codex's own Stop hook carries none. */
-  outcome?: AgentJournalTurnOutcome
+  /** Inferred/persisted verdict; Codex Stop carries none. */
+  outcome?: AgentTurnOutcome
   /** When `state` first appeared; the root's own clock, published as `mainAgent.stateStartedAt`. */
   stateStartedAt: number
   model?: string
+  /** Execution-host-only identity of the root session and turn whose rollout end can be replayed as Stop. */
+  sessionId?: string
+  turnId?: string
 }

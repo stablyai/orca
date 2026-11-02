@@ -45,15 +45,7 @@ function unreadableRootPaths(discovery: SkillDiscoveryResult, wslDistro?: string
   )
 }
 
-/**
- * Whether a root that actually answered reached this skill.
- *
- * Why verification cannot reuse discovery's leniency: a root that did not answer
- * is served from the host's last completed scan, which is the state *before* this
- * install wrote. Counting that as proof would report a reinstall as verified
- * without reading a byte of what it just wrote. A co-owning root that did answer
- * is still proof, so a symlinked placement verifies as before.
- */
+/** Verify only roots that answered after install; retained pre-install scans prove no new bytes. Any answered co-owning root still suffices. */
 function isAnsweredSkill(
   skill: DiscoveredSkill,
   unreadableRoots: ReadonlySet<string>,
@@ -96,6 +88,7 @@ function placementIsDiscovered(
 }
 
 async function discoverInstalledSkill(input: {
+  name: string
   scope: 'global' | 'workspace'
   homeDirectory: string
   workspaceDirectory?: string
@@ -116,6 +109,8 @@ async function discoverInstalledSkill(input: {
       distro: wslDistro,
       homeDir: toWslDiscoveryPath(input.homeDirectory, wslDistro),
       cwd: toWslDiscoveryPath(input.workspaceDirectory ?? input.homeDirectory, wslDistro),
+      names: [input.name],
+      sourceKinds: ['home', 'repo'],
       ...(providerRootOverrides ? { providerRootOverrides } : {})
     })
   }
@@ -139,7 +134,9 @@ export async function verifySkillInstallDiscovery(input: {
   providerRootOverrides?: SkillProviderRootOverrides
   discover?: () => Promise<SkillDiscoveryResult>
 }): Promise<SkillInstallResult> {
-  const discovery = await (input.discover?.() ?? discoverInstalledSkill(input)).catch(() => null)
+  const discovery = await (
+    input.discover?.() ?? discoverInstalledSkill({ ...input, name: input.result.name })
+  ).catch(() => null)
   if (!discovery) {
     return {
       ...input.result,

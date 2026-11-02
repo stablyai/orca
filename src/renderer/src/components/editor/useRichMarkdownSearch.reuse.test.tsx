@@ -40,16 +40,17 @@ function createDoc(atomLabel = 'locked') {
 function mountSearch() {
   let state = EditorState.create({ doc: createDoc() })
   const listeners = new Set<() => void>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these editor members.
   const editor = {
     get state() {
       return state
     },
-    commands: { focus: vi.fn() },
     on: (_event: string, listener: () => void) => listeners.add(listener),
     off: (_event: string, listener: () => void) => listeners.delete(listener),
     registerPlugin: vi.fn(),
     unregisterPlugin: vi.fn(),
     view: {
+      focus: vi.fn(),
       dispatch: (tr: EditorState['tr']) => {
         state = state.apply(tr)
         if (tr.docChanged) {
@@ -86,9 +87,10 @@ describe('live rich markdown search reuse', () => {
     const { hook } = mountSearch()
     act(() => hook.result.current.openSearch())
     act(() => hook.result.current.searchActions.setSearchQuery('beta'))
-    expect(walk).toHaveBeenCalledTimes(1)
+    expect(walk).not.toHaveBeenCalled()
     act(() => vi.advanceTimersByTime(150))
     expect(hook.result.current.searchState.matchCount).toBe(2)
+    expect(walk).toHaveBeenCalledTimes(1)
     for (let index = 0; index < 20; index++) {
       act(() => hook.result.current.searchActions.setReplaceQuery(`replacement ${index}`))
       act(() => hook.result.current.searchActions.moveToMatch(1))
@@ -97,6 +99,8 @@ describe('live rich markdown search reuse', () => {
     act(() => hook.result.current.searchActions.closeSearch())
     act(() => hook.result.current.openSearch())
     act(() => hook.result.current.searchActions.setSearchQuery('beta'))
+    expect(walk).toHaveBeenCalledTimes(1)
+    act(() => vi.advanceTimersByTime(150))
     expect(walk).toHaveBeenCalledTimes(2)
     hook.unmount()
   })
@@ -109,6 +113,7 @@ describe('live rich markdown search reuse', () => {
     act(() => vi.advanceTimersByTime(150))
     act(() => hook.result.current.searchActions.setSearchQuery('locked'))
     expect(hook.result.current.searchState.matchCount).toBe(2)
+    act(() => hook.result.current.searchActions.toggleReplaceMode())
     expect(hook.result.current.searchState.replaceDisabled).toBe(true)
     const doc = editor.state.doc
     act(() => hook.result.current.searchActions.replaceAllMatches())

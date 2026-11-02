@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst, registerBoundPty } from '../bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -45,7 +47,7 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.browserSnapshot({ page: 'page-1' })
 
       expect(result.browserPageId).toBe('page-1')
-      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1')
+      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1', { page: 'page-1' })
       expect(listWorktrees).not.toHaveBeenCalled()
     })
 
@@ -71,7 +73,10 @@ describe('OrcaRuntimeService', () => {
         page: 'page-1'
       })
 
-      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1')
+      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1', {
+        worktree: 'branch:feature/foo',
+        page: 'page-1'
+      })
     })
 
     it('routes tab switch and capture start by explicit page id', async () => {
@@ -129,7 +134,6 @@ describe('OrcaRuntimeService', () => {
         switched: 0,
         browserPageId: 'page-1'
       })
-      // Bridge is unchanged — focus is delivered to the renderer via IPC, not threaded through bridge state.
       expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')
     })
 
@@ -267,7 +271,6 @@ describe('OrcaRuntimeService', () => {
     }
 
     it('RPC-initiated delete awaits matching PTYs before git', async () => {
-      // Seed the runtime with a live leaf whose worktreeId matches the target.
       const callOrder: string[] = []
       const stopAndWait = vi.fn(async (id: string) => {
         callOrder.push(`stop-and-wait:${id}`)
@@ -303,8 +306,7 @@ describe('OrcaRuntimeService', () => {
         'pty-1',
         expect.objectContaining({ deadlineMs: expect.any(Number) })
       )
-      // The provider-prefix sweep and the git removal must happen AFTER the
-      // runtime-graph physical stop. Git removal must NOT start before it.
+      // Physically stop the runtime graph before sweeping providers or removing Git worktrees.
       const preflightIdx = callOrder.indexOf('preflight')
       const stopIdx = callOrder.indexOf('stop-and-wait:pty-1')
       const gitIdx = callOrder.indexOf('git-removeWorktree')
@@ -315,8 +317,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     it('does not start Git removal when physical PTY stop cannot be proven', async () => {
-      // A failed stop only rejects when a fresh inventory still shows the PTY
-      // live; keep pty-1 present so the exit cannot be proven.
+      // Retain the live PTY in fresh inventory so failed stop cannot be mistaken for proven exit.
       const localProvider = createProviderStub(async () => [
         { id: 'pty-1', cwd: '/tmp', title: 'shell' }
       ])
@@ -339,7 +340,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     it('thunk resolves the installed provider lazily, not at construction time', async () => {
-      // Simulates the daemon adapter being installed AFTER construction; a capture-at-construction refactor would break this.
+      // Resolve the provider at removal time; daemon initialization can replace it after construction.
       const preDaemonProvider = createProviderStub(async () => [
         { id: '1', cwd: '/tmp', title: 'shell' },
         { id: '2', cwd: '/tmp', title: 'shell' }
@@ -356,19 +357,15 @@ describe('OrcaRuntimeService', () => {
       })
       vi.mocked(removeWorktree).mockResolvedValue({})
 
-      // Simulate daemon-init swapping the provider after construction.
       currentProvider = postDaemonProvider
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
-      // The post-daemon provider's prefix-matching session must have been
-      // shut down, proving the thunk resolved lazily at call time.
       expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(
         `${TEST_WORKTREE_ID}@@aaaaaaaa`,
         expect.objectContaining({ immediate: true })
       )
       expect(onPtyStopped).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`)
-      // The pre-daemon provider must not have been consulted for the kill.
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
     })
   })
@@ -417,7 +414,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
 
-    // Why: client-created terminals (terminal.create) hold LEAF handles that can diverge from the pane's current PTY across reconnects.
+    // Client LEAF handles can outlive the PTY they originally named.
     function issueLeafHandle(runtime: OrcaRuntimeService, ptyId: string): string {
       const internals = runtime as unknown as {
         leaves: Map<string, { ptyId: string | null }>
@@ -438,7 +435,6 @@ describe('OrcaRuntimeService', () => {
       syncSingleTerminalGraph(runtime, 'pty-a')
       const handle = issueLeafHandle(runtime, 'pty-a')
 
-      // Simulate the pane's PTY being replaced while the remote client still holds the old handle.
       const internals = runtime as unknown as {
         leaves: Map<string, { ptyId: string | null }>
       }
@@ -448,9 +444,7 @@ describe('OrcaRuntimeService', () => {
         }
       }
 
-      // The unguarded resolver silently adopts the new PTY — the misroute.
       expect(runtime.resolveLeafForHandle(handle)).toEqual({ ptyId: 'pty-b' })
-      // The guarded resolver surfaces the staleness so clients can re-derive.
       expect(() => runtime.resolveLiveLeafForHandle(handle)).toThrow('terminal_handle_stale')
       expect(runtime.getLiveTerminalPaneKey(handle)).toBeNull()
     })
@@ -461,7 +455,7 @@ describe('OrcaRuntimeService', () => {
       syncSingleTerminalGraph(runtime, 'pty-a')
       const handle = issueLeafHandle(runtime, 'pty-a')
 
-      // Simulate the mobile pre-spawn flow: the handle record predates the PTY (ptyId null); its first PTY must still resolve.
+      // A pre-spawn handle has no PTY yet; its first binding must still resolve.
       const internals = runtime as unknown as {
         handles: Map<string, { ptyId: string | null }>
       }
@@ -526,7 +520,7 @@ describe('OrcaRuntimeService', () => {
         )
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-        // Client socket dies mid-wait: create must settle right away (not the 10s timeout) and must NOT close the tab (real terminal exists).
+        // Disconnect must settle promptly without closing the real terminal.
         abort.abort()
         await vi.advanceTimersByTimeAsync(0)
         const outcome = await settled
@@ -572,7 +566,24 @@ describe('OrcaRuntimeService', () => {
         )
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-        // A live shell backs the tab but its leaf id isn't a terminal UUID, so no pane key registers (stalled renderer publication).
+        // Main-owned layouts require the spawn's binding; a renderer leaf cannot vouch for a live PTY.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          registerBoundPty(runtime, 'pty-stall', TEST_WORKTREE_ID, null, {
+            tabId: 'tab-stall',
+            leafId: '88888888-8888-4888-8888-888888888888'
+          })
+          await vi.advanceTimersByTimeAsync(50)
+          expect(await settled).toEqual({ ok: true })
+          expect(closeTerminal).not.toHaveBeenCalled()
+          return
+        }
+        // A live shell exists, but stalled renderer publication never registered its pane key.
+        bindPaneFirst(runtime, {
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-stall',
+          leafId: 'pane:1',
+          ptyId: 'pty-stall'
+        })
         runtime.syncWindowGraph(1, {
           tabs: [],
           leaves: [
@@ -590,7 +601,6 @@ describe('OrcaRuntimeService', () => {
         await vi.advanceTimersByTimeAsync(11_000)
         const outcome = await settled
 
-        // The create fails, but the timeout must not kill the live terminal (the "tab dies after ~10s" symptom).
         expect(outcome.ok).toBe(false)
         if (outcome.ok === false) {
           expect(outcome.error.message).toContain('Timed out')

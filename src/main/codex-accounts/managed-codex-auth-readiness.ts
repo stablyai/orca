@@ -92,23 +92,21 @@ export type StoredCodexCredentialState =
   | 'unreadable'
   | 'no-credential'
 
-// Why: callers deciding whether to deselect an account must tell a settled
-// logout ('no-credential') apart from a rotation in progress ('unreadable') or
-// an absent file ('missing') — collapsing them to false logs users out on races.
+// Preserve missing/unreadable states so transient rotation cannot be mistaken for settled logout.
 export function readStoredCodexCredentialState(authPath: string): StoredCodexCredentialState {
   let raw: string
   try {
     raw = readFileSync(authPath, 'utf8')
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
-    // Why: Windows auth.json rotation can surface transient EPERM/EBUSY reads.
+    // Windows rotation can temporarily fail reads with EPERM/EBUSY.
     return code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'unreadable'
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
-    // Torn JSON means a write is in flight, not that the credential is gone.
+    // Malformed JSON may be a partial write and cannot prove the credential is gone.
     return 'unreadable'
   }
   if (!isRecord(parsed) || Object.keys(parsed).length === 0) {

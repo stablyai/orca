@@ -1,8 +1,8 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { ORCHESTRATION_TARGET_PARAM } from '../orchestration/orchestration-party'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -21,6 +21,7 @@ import {
   sessionRecord,
   WORKER_HANDLE,
   WORKER_PANE,
+  WORKSPACE_X,
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 
@@ -99,17 +100,6 @@ function assignTerminal(runId: string): void {
 }
 
 describe('every target param resolves both spellings of a party to one canonical address', () => {
-  it('covers exactly the target params the contract lists', () => {
-    expect(Object.keys(ORCHESTRATION_TARGET_PARAM).sort()).toEqual(
-      [
-        'orchestration.send',
-        'orchestration.ask',
-        'orchestration.dispatch',
-        'orchestration.inbox'
-      ].sort()
-    )
-  })
-
   it.each(WORKER_SPELLINGS)('send: a worker at %s gets its Dispatch mailbox', async (_l, to) => {
     const dispatchId = assignWorker(await chatRun())
     const { message } = await as(undefined, 'orchestration.send', {
@@ -173,9 +163,30 @@ describe('every target param resolves both spellings of a party to one canonical
     }
   )
 
-  it('dispatch: refuses a chat assignee with no row written', async () => {
+  it('dispatch: a chat named by its session address is the assignee, by its Orca session ID', async () => {
     const runId = await chatRun()
     const task = h.db.createTask({ runId, spec: 'work' })
+
+    const { dispatch } = await as(SESSION_X, 'orchestration.dispatch', {
+      task: task.id,
+      to: ADDRESS_Z
+    })
+
+    expect(dispatch).toMatchObject({
+      assignee_handle: ADDRESS_Z,
+      assignee_orca_session_id: SESSION_Z,
+      assignee_pane_key: null,
+      process_incarnation: null
+    })
+    expect(await as(SESSION_Z, 'orchestration.check', { peek: true })).toMatchObject({
+      dispatchId: idOf(dispatch)
+    })
+  })
+
+  it('dispatch: refuses a chat on another host with no row written', async () => {
+    const runId = await chatRun()
+    const task = h.db.createTask({ runId, spec: 'work' })
+    h.records.set(SESSION_Z, sessionRecord(SESSION_Z, { location: { executionHostId: 'ssh:box' } }))
 
     const response = await call(SESSION_X, 'orchestration.dispatch', {
       task: task.id,
@@ -184,11 +195,7 @@ describe('every target param resolves both spellings of a party to one canonical
 
     expect(response).toMatchObject({
       ok: false,
-      error: {
-        code: CODES.chatNotDispatchable,
-        message: `Agent session ${SESSION_Z} is a chat, and a chat can't receive a dispatch yet. Start a worker with worker-start instead. No effects were applied.`,
-        data: { effectsApplied: false }
-      }
+      error: { code: CODES.hostBoundary, data: { effectsApplied: false } }
     })
     expect(h.db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get()).toEqual({ n: 0 })
     expect(h.db.getTask(task.id)?.status).toBe('ready')
@@ -207,6 +214,110 @@ describe('every target param resolves both spellings of a party to one canonical
     await as(undefined, 'orchestration.send', { from: WORKER_HANDLE, to: ADDRESS_Z, subject: 'z' })
     const { messages } = await as(undefined, 'orchestration.inbox', { terminal: ADDRESS_Z })
     expect(messages).toEqual([expect.objectContaining({ subject: 'z' })])
+  })
+
+  it('sessionAddress: any session, a worker too, is its Orca session ID', async () => {
+    expect(await as(undefined, 'orchestration.sessionAddress', { sessionId: SESSION_Z })).toEqual({
+      orcaSessionId: ADDRESS_Z
+    })
+    expect(await as(undefined, 'orchestration.sessionAddress', { sessionId: SESSION_Y })).toEqual({
+      orcaSessionId: ADDRESS_Y
+    })
+  })
+
+  it.each(WORKER_SPELLINGS)(
+    'partyLocation: a worker at %s opens as its chat',
+    async (_l, address) => {
+      expect(await as(undefined, 'orchestration.partyLocation', { address })).toEqual({
+        location: { kind: 'chat', sessionId: SESSION_Y, worktreeId: WORKSPACE_X }
+      })
+    }
+  )
+
+  it('partyLocation: a dispatch opens as its assignee, a terminal as itself, a lost one as nothing', async () => {
+    const dispatchId = assignWorker(await chatRun())
+    expect(
+      await as(undefined, 'orchestration.partyLocation', { address: `dispatch:${dispatchId}` })
+    ).toEqual({ location: { kind: 'chat', sessionId: SESSION_Y, worktreeId: WORKSPACE_X } })
+    expect(await as(undefined, 'orchestration.partyLocation', { address: WORKER_HANDLE })).toEqual({
+      location: { kind: 'terminal', handle: WORKER_HANDLE }
+    })
+    expect(
+      await as(undefined, 'orchestration.partyLocation', { address: 'dispatch:gone' })
+    ).toEqual({ location: null })
+  })
+
+  it("partyLocation: a terminal handle from an earlier run opens as its pane's live terminal, by the mail it sent", async () => {
+    vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockImplementation((paneKey) =>
+      paneKey === WORKER_PANE ? WORKER_HANDLE : null
+    )
+    const mail = h.db.insertMessage({
+      from: 'term_previous_run',
+      to: ADDRESS_X,
+      subject: 's',
+      senderPaneKey: WORKER_PANE
+    })
+    expect(
+      await as(undefined, 'orchestration.partyLocation', {
+        address: 'term_previous_run',
+        messageIds: [mail.id]
+      })
+    ).toEqual({ location: { kind: 'terminal', handle: WORKER_HANDLE } })
+    expect(
+      await as(undefined, 'orchestration.partyLocation', { address: 'term_previous_run' })
+    ).toEqual({ location: null, lost: 'terminal' })
+  })
+})
+
+describe('a /clear-ed chat is shown the Orca session ID it had before the clear', () => {
+  const PROVIDER_ID_Z = 'd00dfeed-1122-4334-8556-778899aabbcc'
+
+  /** Z continued X after a /clear, so X's address is Z's. */
+  function clearXIntoZ(): void {
+    h.records.set(SESSION_X, {
+      ...sessionRecord(SESSION_X),
+      conversationCommand: {
+        command: 'clear',
+        state: 'completed',
+        replacementSessionId: SESSION_Z,
+        operationId: 'op',
+        callerKey: 'caller',
+        phase: 'committed'
+      }
+    })
+    h.records.set(SESSION_Z, sessionRecord(SESSION_Z, { providerId: PROVIDER_ID_Z }))
+  }
+
+  it('in a dispatch preview its own live Orca session ID would fill in', async () => {
+    clearXIntoZ()
+    const runId = await chatRun(SESSION_Z)
+    const task = h.db.createTask({ runId, spec: 'work' })
+
+    const { preamble } = await as(SESSION_Z, 'orchestration.dispatchShow', {
+      task: task.id,
+      preamble: true,
+      from: ADDRESS_Z
+    })
+
+    expect(preamble).toContain(`Your coordinator's Orca session ID is: ${ADDRESS_X}\n`)
+    expect(preamble).not.toContain(SESSION_Z)
+  })
+
+  it("in the refusal that names it for its provider's id", async () => {
+    clearXIntoZ()
+    const response = await call(undefined, 'orchestration.send', {
+      from: WORKER_HANDLE,
+      to: PROVIDER_ID_Z,
+      subject: 's'
+    })
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: CODES.providerId,
+        message: expect.stringContaining(`This session's Orca session ID is ${ADDRESS_X};`)
+      }
+    })
   })
 })
 
@@ -312,7 +423,7 @@ describe('no writer stores a structured worker under its session address', () =>
       .prepare(
         `SELECT m.id FROM messages AS m JOIN dispatch_contexts AS d
            ON d.assignee_orca_session_id IS NOT NULL
-          AND 'session:' || d.assignee_orca_session_id IN (m.to_handle, m.from_handle)`
+          AND 'orca_session_id:' || d.assignee_orca_session_id IN (m.to_handle, m.from_handle)`
       )
       .all()
     expect(h.db.getInbox(100).length).toBeGreaterThanOrEqual(7)

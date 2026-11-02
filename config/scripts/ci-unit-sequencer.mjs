@@ -1,9 +1,9 @@
 import { relative } from 'node:path'
 import { readFileSync } from 'node:fs'
-import { BaseSequencer } from 'vitest/node'
+import RuntimeSequencer from './vitest-runtime-sequencer.mjs'
 import { balanceFiles, readTimingBaseline, writeAssignment } from './ci-shard-assignment.mjs'
 
-export default class TimingSequencer extends BaseSequencer {
+export default class TimingSequencer extends RuntimeSequencer {
   async shard(specs) {
     const { index, count } = this.ctx.config.shard
     const key = (spec) => relative(this.ctx.config.root, spec.moduleId).replaceAll('\\', '/')
@@ -16,13 +16,14 @@ export default class TimingSequencer extends BaseSequencer {
           'utf8'
         )
       )
+      const discovered = new Set(plan.files)
       if (
         plan.version !== 1 ||
         !plan.sourceSha ||
         plan.sourceSha !== process.env.ORCA_SHARD_SOURCE_SHA ||
         JSON.stringify([...plan.files].sort()) !== JSON.stringify(specs.map(key).sort()) ||
         !Array.isArray(plan.executionFiles) ||
-        plan.executionFiles.some((file) => !plan.files.includes(file))
+        plan.executionFiles.some((file) => !discovered.has(file))
       ) {
         throw new Error('Selection provenance or discovery differs')
       }

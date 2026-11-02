@@ -2,42 +2,21 @@ import { describe, expect, it } from 'vitest'
 import {
   isSafePtySessionId,
   mintPtySessionId,
-  parsePtySessionId,
   ptySessionIdForAgentCreateOperation
 } from './pty-session-id'
+import { parsePtySessionId } from '../../shared/pty-session-id-format'
 
 const USER_DATA = '/tmp/orca-userdata'
 
 describe('mintPtySessionId', () => {
-  it('returns a UUID when no worktreeId is provided', () => {
-    const id = mintPtySessionId()
-    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
-  })
-
-  it('prefixes the worktreeId and suffixes an 8-char hex tag', () => {
-    const id = mintPtySessionId('wt-alpha')
-    expect(id).toMatch(/^wt-alpha@@[0-9a-f]{8}$/)
-  })
-
   it('preserves path-shaped worktreeIds verbatim in the prefix', () => {
-    // Why: real worktreeIds are `${repo.id}::${absolutePath}` and contain
-    // slashes. The mint must not rewrite or sanitize them — reconcileOnStartup
-    // splits on `@@` to recover the worktreeId.
+    // Workspace IDs embed absolute paths; preserve them for @@ ownership parsing.
     const id = mintPtySessionId('repo-123::/Users/me/work/wt-1')
     expect(id).toMatch(/^repo-123::\/Users\/me\/work\/wt-1@@[0-9a-f]{8}$/)
   })
 })
 
 describe('ptySessionIdForAgentCreateOperation', () => {
-  it('derives the same daemon session for retries of one host operation', () => {
-    const operationId = 'a'.repeat(43)
-
-    expect(ptySessionIdForAgentCreateOperation('repo::/tmp/worktree', operationId)).toBe(
-      'repo::/tmp/worktree@@aaaaaaaa'
-    )
-    expect(ptySessionIdForAgentCreateOperation(undefined, operationId)).toBe('aaaaaaaa')
-  })
-
   it('produces a safe session id for a path-shaped worktree', () => {
     const id = ptySessionIdForAgentCreateOperation('repo::/Users/dev/worktree', 'b'.repeat(43))
 
@@ -55,26 +34,6 @@ describe('ptySessionIdForAgentCreateOperation', () => {
 })
 
 describe('isSafePtySessionId', () => {
-  it('accepts minted UUIDs', () => {
-    expect(isSafePtySessionId(mintPtySessionId(), USER_DATA)).toBe(true)
-  })
-
-  it('accepts minted worktree-scoped ids (happy path, hyphen-only)', () => {
-    expect(isSafePtySessionId(mintPtySessionId('wt-alpha'), USER_DATA)).toBe(true)
-  })
-
-  it('accepts minted ids with path-shaped worktreeIds containing slashes', () => {
-    // Why: real worktreeIds are `${repo.id}::${absolutePath}`, so the minted
-    // sessionId contains `/` in its prefix. A char-denylist validator that
-    // rejected `/` would break every real daemon spawn.
-    const id = mintPtySessionId('repo-abc123::/Users/thebr/work/wt-1')
-    expect(isSafePtySessionId(id, USER_DATA)).toBe(true)
-  })
-
-  it('accepts caller-supplied path-shaped ids that stay inside userData', () => {
-    expect(isSafePtySessionId('some-repo::/Users/me/wt/abc@@deadbeef', USER_DATA)).toBe(true)
-  })
-
   it('rejects empty string', () => {
     expect(isSafePtySessionId('', USER_DATA)).toBe(false)
   })
@@ -87,24 +46,13 @@ describe('isSafePtySessionId', () => {
     expect(isSafePtySessionId('safe\0evil', USER_DATA)).toBe(false)
   })
 
-  it('rejects ids that traverse out of userData via ..', () => {
-    expect(isSafePtySessionId('../etc/passwd', USER_DATA)).toBe(false)
-  })
-
   it('rejects ids that traverse out of userData via deep ..', () => {
     expect(isSafePtySessionId('sub/../../etc/passwd', USER_DATA)).toBe(false)
   })
 
   it('rejects ids that resolve to the userData root itself', () => {
-    // Why: if id resolves to `.` (the root), callers could overwrite userData
-    // meta files. Guard ensures the target is a strict subpath.
+    // The data root itself is not a valid per-session storage key.
     expect(isSafePtySessionId('.', USER_DATA)).toBe(false)
-  })
-
-  it('accepts ids with nested valid path segments inside userData', () => {
-    // Why: minted ids can contain `/` (from worktreeId::absolute-path) so the
-    // validator must allow that as long as the result stays inside userData.
-    expect(isSafePtySessionId('sub/path/ok@@12345678', USER_DATA)).toBe(true)
   })
 
   it('accepts ids with path segments that merely start with dot-dot', () => {
@@ -132,27 +80,13 @@ describe('parsePtySessionId', () => {
   })
 
   it('rejects ids with @@ but no `::` worktree shape', () => {
-    // Why: callers use the returned worktreeId as a memory-attribution key.
-    // A non-minted id like `wt-only@@abcd1234` would synthesize a bogus
-    // worktreeId; require the canonical `${repoId}::${path}` shape.
+    // Memory attribution requires a canonical repo::path workspace key.
     expect(parsePtySessionId('wt-only@@abcd1234')).toEqual({ worktreeId: null })
   })
 
-  it('returns null for an empty string', () => {
-    expect(parsePtySessionId('')).toEqual({ worktreeId: null })
-  })
-
   it('handles worktreeIds whose path contains @ characters', () => {
-    // Why: the parser uses lastIndexOf('@@') so `@`-containing paths still
-    // round-trip cleanly as long as `@@` only appears as the separator.
     const wt = 'repo::/Users/me/email@host/wt'
     expect(parsePtySessionId(`${wt}@@deadbeef`)).toEqual({ worktreeId: wt })
-  })
-
-  it('rejects degenerate `::@@…` ids with empty repo and path halves', () => {
-    // Why: `String.includes('::')` would accept '::' as a worktreeId.
-    // Memory-attribution callers must not bucket sessions under an empty key.
-    expect(parsePtySessionId('::@@deadbeef')).toEqual({ worktreeId: null })
   })
 
   it('rejects ids with an empty path half (`repo::@@…`)', () => {

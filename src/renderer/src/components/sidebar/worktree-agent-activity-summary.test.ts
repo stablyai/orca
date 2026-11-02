@@ -5,6 +5,8 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { Tab } from '../../../../shared/tab-types'
 import { resolveWorktreeStatus } from '@/lib/worktree-status'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
@@ -64,6 +66,71 @@ describe('selectWorktreeAgentActivitySummary', () => {
     vi.restoreAllMocks()
   })
 
+  it('updates when a represented chat arrives after its status without changing other inputs', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const worktreeId = 'repo::/wt-1'
+    const tab: Tab = {
+      id: 'restored:chat',
+      entityId: 'session-1',
+      worktreeId,
+      groupId: 'group-1',
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    const state: AgentActivityInput = {
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, worktreeId, state: 'working' })
+      },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {},
+      runtimeAgentOrchestrationByPaneKey: {}
+    }
+
+    expect(selectWorktreeAgentActivitySummary(state, worktreeId).hasLiveWorking).toBe(false)
+    const represented = { ...state, unifiedTabsByWorktree: { [worktreeId]: [tab] } }
+    expect(selectWorktreeAgentActivitySummary(represented, worktreeId).hasLiveWorking).toBe(true)
+    expect(
+      selectWorktreeAgentActivitySummary({ ...represented, unifiedTabsByWorktree: {} }, worktreeId)
+        .hasLiveWorking
+    ).toBe(false)
+  })
+
+  it('attributes migration-blocked UUID and legacy terminal panes without affecting other worktrees', () => {
+    for (const paneKey of [makePaneKey('tab-1', LEAF_ID), 'tab-1:0', undefined, 'malformed']) {
+      const state: AgentActivityInput = {
+        tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+        agentStatusEpoch: 0,
+        agentStatusByPaneKey: {},
+        retainedAgentsByPaneKey: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        migrationUnsupportedByPtyId: {
+          legacy: {
+            ptyId: 'legacy',
+            paneKey,
+            worktreeId: 'repo::/wt-1',
+            tabId: 'tab-1',
+            reason: 'legacy-numeric-pane-key',
+            source: 'local',
+            updatedAt: 1_000
+          }
+        }
+      }
+      expect(selectWorktreeAgentActivitySummary(state, 'repo::/wt-1').hasPermission).toBe(
+        paneKey !== undefined && paneKey !== 'malformed'
+      )
+      expect(selectWorktreeAgentActivitySummary(state, 'other').hasPermission).toBe(false)
+    }
+  })
+
   it('builds one cached agent summary index for multiple worktree lookups', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
@@ -101,7 +168,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(nowSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('reuses the cached summary when same-state agent pings only clone the status map', () => {
+  it('reuses equal summaries when same-state agent pings clone the status map', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const tabsByWorktree = {
@@ -131,16 +198,15 @@ describe('selectWorktreeAgentActivitySummary', () => {
       }
     }
 
-    expect(selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')).toMatchObject({
+    const before = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')
+    expect(before).toMatchObject({
       hasLiveWorking: true
     })
-    expect(selectWorktreeAgentActivitySummary(sameStatePing, 'repo::/wt-1')).toMatchObject({
-      hasLiveWorking: true
-    })
-    expect(nowSpy).toHaveBeenCalledTimes(1)
+    expect(selectWorktreeAgentActivitySummary(sameStatePing, 'repo::/wt-1')).toBe(before)
+    expect(nowSpy).toHaveBeenCalledTimes(2)
   })
 
-  it('rebuilds the summary when the agent status epoch changes', () => {
+  it.each([0, 1])('rebuilds for a changed status snapshot with epoch %i', (epoch) => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const tabsByWorktree = {
@@ -160,7 +226,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     }
     const changedState = {
       ...state,
-      agentStatusEpoch: 1,
+      agentStatusEpoch: epoch,
       agentStatusByPaneKey: {
         [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done' })
       }
@@ -201,7 +267,14 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary).toMatchObject({ hasLiveWorking: false, hasLiveMonitoring: true })
   })
 
-  it('separates interrupted outcomes from clean completion', () => {
+  it.each([
+    ['success', { hasLiveDone: true }],
+    ['failure', { hasFailed: true, hasLiveDone: false }],
+    // A user's Stop reads interrupted; a turn anything else cut short is a fault, like a failure.
+    ['cancellation', { hasInterrupted: true, hasLiveDone: false }],
+    ['interruption', { hasFailed: true, hasInterrupted: false, hasLiveDone: false }],
+    ['unconfirmed', { hasUnconfirmed: true, hasLiveDone: false }]
+  ] as const)('flags a %s outcome apart from the others', (outcome, flags) => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const summary = selectWorktreeAgentActivitySummary(
@@ -212,7 +285,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
           [paneKey]: makeAgentStatusEntry({
             paneKey,
             state: 'done',
-            interrupted: true
+            mainAgent: { state: 'done', outcome, stateStartedAt: 1_000 }
           })
         },
         migrationUnsupportedByPtyId: {},
@@ -222,7 +295,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       'repo::/wt-1'
     )
 
-    expect(summary).toMatchObject({ hasInterrupted: true, hasLiveDone: false })
+    expect(summary).toMatchObject(flags)
   })
 
   it('separates a failed outcome from clean completion and from a cancellation', () => {
@@ -424,8 +497,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       (summary, index) => !shallow(summary, before[index])
     ).length
 
-    // Why: shallow store subscriptions wake on the nested pane-id map reference.
-    // One transition must not schedule downstream work for every other card.
+    // One transition must change only its worktree’s nested pane map to avoid waking every card.
     expect(changedReferenceCount).toBe(1)
     expect(shallowNotificationCount).toBe(1)
     expect(after[11]).toMatchObject({ hasLiveWorking: false, hasLiveDone: true })
@@ -575,10 +647,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary.agentStatusPaneIdsByTabId['tab-parent']).toEqual(new Set([LEAF_ID]))
   })
 
-  // Why: Orca injects its own "<Agent> - action required" OSC title on a blocked/waiting hook,
-  // then classifies that title back as evidence. If a pane stopped registering its identity once
-  // its row aged out, that self-authored title outranked the pane's own `done` row and pinned the
-  // workspace card to the question icon with no agent asking anything.
+  // Retain stale pane identity so Orca’s generated permission title cannot outlive its authoritative row.
   it('records a stale entry pane id separately so permission titles stay suppressed', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })
@@ -600,10 +669,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary.hasLiveDone).toBe(false)
   })
 
-  // Reproduces the reported card: a Codex pane parked at its composer, its only agent row `done`
-  // and ~2h old, and the workspace still painting the amber question icon. `permission` outranks
-  // `hasLiveDone` in resolveWorktreeStatus, so the pane's stale self-authored title decided the
-  // card. With no fresh evidence the honest answer is `active`, never a question nobody asked.
+  // A two-hour-old done row must suppress its generated question title without claiming fresh completion.
   it('does not paint a stale self-authored action-required title as a live question', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })

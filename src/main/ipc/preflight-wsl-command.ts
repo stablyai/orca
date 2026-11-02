@@ -9,21 +9,15 @@ export async function runPreflightCommandInWsl(
   command: string,
   timeoutMs: number
 ): Promise<PreflightWslCommandResult> {
-  // Why probe: the cached login PATH gives the user's real nvm/mise/asdf PATH
-  // with no shell in the loop, so there is no rc/motd banner to strip.
+  // Use cached login PATH without shell startup banners.
   const result = await runWslProcess({
     distro: target.distro,
     loginPath: 'preferred',
-    // Appending the version-manager dirs keeps a resolved login PATH
-    // authoritative while stopping a degraded probe from turning an installed
-    // CLI into "not installed" (#9725), the same fallback the native branch has.
+    // Append version-manager fallback directories while keeping resolved login PATH authoritative (#9725).
     script: `${buildPosixFallbackPathPrelude()}\n${command}`,
     timeoutMs
   })
-  // runWslProcess resolves on a timeout and on a non-zero exit; the caller's
-  // try/catch (isCommandAvailable/isCommandOnPath, and isGhAuthenticated's
-  // stdout/stderr marker fallback) expects a rejection carrying stdout/stderr,
-  // matching what execFile's promisified callback put on a non-zero-exit error.
+  // Match execFile rejection semantics so callers retain captured output for auth-success fallback.
   if (result.timedOut || result.code !== 0) {
     throw Object.assign(new Error(`WSL command failed: ${command}`), {
       code: result.code,

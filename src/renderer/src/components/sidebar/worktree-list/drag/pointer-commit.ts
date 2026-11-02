@@ -48,8 +48,6 @@ function commitStatusOrPinDrop(
   })
 }
 
-// Resolve where a released pointer drag lands: workspace board lane, lineage parent,
-// status/pin section, or a reorder slot inside the source group.
 export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
   const { event, drag, ctx } = args
   if (!ctx.refreshWorktreeDragSession()) {
@@ -70,9 +68,9 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
   } else if (boardDropTarget.status) {
     args.onDropWorktreesOnWorkspaceBoard({
       worktreeIds: drag.reorderDraggedIds,
+      draggedCopies: drag.draggedCopies,
       status: boardDropTarget.status,
-      // Why: the target counts rendered cards, but the groups are the full
-      // lane. Board search can make those two differ.
+      // Board search separates the rendered drop-index space from full-lane membership.
       dropIndex: resolveWorkspaceKanbanSidebarFullLaneDropIndex(
         boardDropTarget.status,
         boardDropTarget.dropIndex
@@ -106,7 +104,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status: preferredStatusTarget.status,
-            draggedIds: drag.reorderDraggedIds
+            draggedKeys: drag.reorderDraggedKeys
           })
         : null
       commitStatusOrPinDrop(args, preferredStatusTarget, statusDrop?.dropIndex ?? null)
@@ -118,7 +116,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,
         sourceGroupKey: drag.sourceGroupKey,
-        draggedIds: drag.reorderDraggedIds,
+        draggedKeys: drag.reorderDraggedKeys,
         dropIndex: getFullDropIndexForWorktreeDragUnit({
           groups: ctx.worktreeDragUnitGroups,
           sourceGroupKey: drag.sourceGroupKey,
@@ -134,7 +132,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status: preferredStatusTarget.status,
-            draggedIds: drag.reorderDraggedIds
+            draggedKeys: drag.reorderDraggedKeys
           })
         : null
       const { target, preview: statusDrop } = resolveWorktreeSidebarStatusDropCommitTarget({

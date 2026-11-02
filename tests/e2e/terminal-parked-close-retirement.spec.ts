@@ -68,14 +68,12 @@ test('closing a parked terminal tab retires its exact PTY session', async ({ orc
     .toContain(marker)
   await expect.poll(() => hasPtySession(orcaPage, ptyId), { timeout: 10_000 }).toBe(true)
 
-  // Why: the most recently hidden tab stays warm, so tab B must take that
-  // exemption before the helper opens decoy tab C and makes tab A parkable.
+  // Hide B most recently so it takes the warm exemption while decoy C makes A parkable.
   await createActiveTerminalTab(orcaPage, worktreeId)
   await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, {
     parkDelayMs: PARKING_DELAY_MS
   })
-  // Why: parking must remove only the renderer view; otherwise the retirement
-  // assertion could pass because the PTY died before the close action ran.
+  // Require PTY survival through parking so early session death cannot satisfy close retirement.
   await expect.poll(() => hasPtySession(orcaPage, ptyId), { timeout: 10_000 }).toBe(true)
 
   await orcaPage.evaluate((id) => {

@@ -15,41 +15,12 @@ import {
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 
-/*
- * The lifecycle matrix: every operation a caller can perform, against every
- * shape an unreachable root takes, against both ways discovery reports a root.
- *
- * The indexer is immutable, so "every operation" is a shorter list than it was:
- * `pause`, `resume`, `clear`, `setHistoryDays` and `invalidate` are gone, and
- * the two of them a caller still needs — a settings change and throwing the
- * index away — are here as what replaced them, a new instance over the same
- * path. In their place are the two passes the immutable design added: the
- * periodic sweep, and a pass whose wall-clock deadline expires on its first file.
- *
- * What each cell asserts:
- *   A. No row is retired for a file that still exists. Throwing the index away
- *      is the one exception, and it is stated per operation rather than excused.
- *   B. The unreachable root is named in `degradedRoots`, by a real directory
- *      path — never the delimiter-joined label a merged discovery reports.
- *   C. The phase is never `current` while a root is degraded.
- *   D. Once the root is reachable again, a sweep indexes everything under it.
- *
- * Round 6 ran this as a throwaway harness on the previous design; it lives in
- * the repository now. Two of its shapes changed with the stateless walk. The
- * "present but empty mountpoint" shape is gone, because a readable root that
- * lists nothing is no longer treated as unreachable — that is a root the user
- * emptied, and `session-search-deleted-sources.ts` states the trade. In its
- * place is a root whose transcripts sit behind an unreadable subdirectory,
- * which is the partial-tree case the old shape never covered.
- */
-
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 const INTERVAL_MS = 20_000
 const SESSIONS = ['aaaaaaaa', 'bbbbbbbb', 'cccccccc']
 
 type RootLayout = {
   name: string
-  /** Where the unreachable root's transcripts live, and where its files go. */
   detachedRoot: (harness: SessionSearchIndexerHarness) => string
   detachedFile: (harness: SessionSearchIndexerHarness, session: string) => string
   writeDetached: (path: string, session: string) => Promise<void>
@@ -84,14 +55,7 @@ const ROOT_LAYOUTS: RootLayout[] = [
 type UnreachableMode = {
   name: string
   needsDeniedRead: boolean
-  /**
-   * Whether an empty index can see this at all. Reading the root itself is the
-   * one probe a pass makes with no rows to go on: a root that answers ENOENT is
-   * what an uninstalled agent answers too, and a readable root with an
-   * unreadable subdirectory is swallowed by the file walker, which returns
-   * rather than reporting. Both are invisible until the index holds a row under
-   * the root, which is the evidence the retirement walk runs on.
-   */
+  /** Without indexed rows, only a root-level listing failure exposes this mode as degraded. */
   visibleWithNoRows: boolean
   detach: (root: string, transcriptDir: string, parked: string) => Promise<void>
   attach: (root: string, transcriptDir: string, parked: string) => Promise<void>
@@ -123,11 +87,9 @@ const UNREACHABLE_MODES: UnreachableMode[] = [
 
 type Operation = {
   name: string
-  /** True when the operation throws the index away, so no row survives it. */
   clearsIndex?: boolean
-  /** Healthy-root sessions the operation deletes from disk. */
+  /** Healthy-root session IDs to delete before running the operation. */
   deletes?: readonly string[]
-  /** Construction options for every indexer this cell opens. */
   options?: Partial<SessionSearchIndexerOptions>
   run: (context: MatrixContext) => Promise<void>
 }
@@ -161,15 +123,12 @@ const OPERATIONS: Operation[] = [
     name: 'every healthy transcript deleted',
     deletes: SESSIONS,
     run: async (context) => {
-      // Twice: a root that goes from holding transcripts to holding none in one
-      // pass is unverifiable for that pass, so the second is the proving one.
+      // The first empty-root observation grants one pass of grace; the second can prove deletion.
       await context.indexer().reconcile({ full: true })
       await context.indexer().reconcile({ full: true })
     }
   },
   {
-    // The cadence that replaced every re-arm-on-recovery rule: no caller asks
-    // for this sweep, so the cell drives it off the timer alone.
     name: 'the periodic sweep comes round',
     options: { fullSweepEveryCycles: 2 },
     run: async (context) => {
@@ -179,9 +138,6 @@ const OPERATIONS: Operation[] = [
     }
   },
   {
-    // Every pass is out of wall time from its first file, so each one hands
-    // almost all of its work back. A pass that read almost nothing must still
-    // not conclude anything about what it did not reach.
     name: 'every pass out of time at its first file',
     options: { passDeadlineMs: 0 },
     run: async (context) => {
@@ -190,14 +146,11 @@ const OPERATIONS: Operation[] = [
     }
   },
   {
-    // What replaced `setHistoryDays`: a new instance over the same database.
-    // Every transcript here was written just now, so a 30-day window holds all
-    // of them and no row may be purged.
+    // Fresh transcripts remain inside the narrower window, so reconstruction must preserve them.
     name: 'reconstructed for a narrower history window',
     run: (context) => context.reopen({ historyDays: 30 })
   },
   {
-    // What replaced `clear()`, exactly as the PR body documents it.
     name: 'the index thrown away and rebuilt',
     clearsIndex: true,
     run: (context) => context.reopen({ removeDatabase: true })
@@ -206,7 +159,6 @@ const OPERATIONS: Operation[] = [
 
 type MatrixContext = {
   indexer: () => SessionSearchIndexer
-  /** Closes and constructs again over the same path: the immutable design's one edit. */
   reopen: (args?: { historyDays?: number | null; removeDatabase?: boolean }) => Promise<void>
   cycle: () => Promise<void>
   detachedRoot: string
@@ -248,10 +200,7 @@ function open(overrides: Partial<SessionSearchIndexerOptions> = {}): SessionSear
   return indexer
 }
 
-/**
- * Runs cycles until the index stops growing. Every operation but the
- * out-of-time one settles on the first call; that one reads a transcript a pass.
- */
+/** Drive deadline-limited passes until session count stops increasing or maxCycles is reached. */
 async function driveUntilIndexed(maxCycles: number): Promise<void> {
   let held = indexedSessions().length
   for (let cycle = 0; cycle < maxCycles; cycle++) {
@@ -265,7 +214,6 @@ async function driveUntilIndexed(maxCycles: number): Promise<void> {
   }
 }
 
-/** Session ids the index answers for, whichever agent wrote them. */
 function indexedSessions(): string[] {
   return harness
     .read(
@@ -294,8 +242,6 @@ for (const roots of ROOT_LAYOUTS) {
             const parked = join(harness.root, 'parked-root')
 
             await open(operation.options).start()
-            // A deadline that expires on the first file reads one transcript a
-            // pass, so the setup drives passes until the index has caught up.
             await driveUntilIndexed(SESSIONS.length * 2)
             const detachedIds = detachedPaths.map((_path, index) =>
               roots === ROOT_LAYOUTS[0]
@@ -304,8 +250,6 @@ for (const roots of ROOT_LAYOUTS) {
             )
             const healthyIds = SESSIONS.map((session) => session)
             expect(indexedSessions()).toEqual([...detachedIds, ...healthyIds].sort())
-            // One cycle so the watch set holds the recency window, which is the
-            // state a running indexer is in when a volume goes away.
             clock.advance(INTERVAL_MS)
             await indexer?.settled()
 
@@ -339,28 +283,23 @@ for (const roots of ROOT_LAYOUTS) {
                 detachedPaths
               })
 
-              // A: nothing that still exists lost its rows.
               const survivingDetached = operation.clearsIndex ? [] : detachedIds
               expect(indexedSessions()).toEqual([...survivingDetached, ...kept].sort())
 
               const status = indexer?.status()
               const degraded = status?.degradedRoots.map((root) => root.root) ?? []
-              // With no rows under it, the only thing a pass can go on is
-              // whether the root itself refuses to list.
+              // After clearing the index, missing roots and unreadable subdirectories leave no evidence of degradation.
               if (operation.clearsIndex && !unreachable.visibleWithNoRows) {
                 expect(degraded).not.toContain(detachedRoot)
               } else {
-                // B: named, by a real directory rather than a joined label.
                 expect(degraded).toContain(detachedRoot)
                 expect(degraded.every((root) => !root.includes(delimiter))).toBe(true)
-                // C: not current while a root is degraded.
                 expect(status?.phase).not.toBe('current')
               }
             } finally {
               await unreachable.attach(detachedRoot, transcriptDir, parked)
             }
 
-            // D: reachable again, a sweep reads the whole tree back.
             await mkdir(dirname(healthyPaths[0] ?? ''), { recursive: true })
             await indexer?.reconcile({ full: true })
             await driveUntilIndexed(SESSIONS.length * 2)

@@ -28,8 +28,8 @@ describe('deterministic skill package gzip', () => {
       input.subarray(70_000)
     ])
 
-    expect(chunked).toEqual(whole)
-    expect(gunzipSync(whole)).toEqual(input)
+    expect(chunked.equals(whole)).toBe(true)
+    expect(gunzipSync(whole).equals(input)).toBe(true)
     expect(whole.subarray(0, 10)).toEqual(Buffer.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 0xff]))
   })
 

@@ -4,24 +4,27 @@ import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
+import type { GitStatusMetadataChangedEvent } from '../../../../shared/worktree/types'
+import { isGitStatusSignalForWorktree } from './git-status-signal-attribution'
 
 type UseGitStatusPushSignalRefreshParams = {
   activeRepoId: string | null
   activeWorktreeId: string | null
+  activeWorktreePath: string | null
   enabled: boolean
   fetchStatus: () => void
+  /** Keep stable: it re-subscribes the push signals when it changes. */
+  getRepoWorktreePaths: (repoId: string) => readonly string[]
 }
 
-// Why: these push signals close the latency gap left by the slow terminal-only
-// fallback poll — branch switches and commits made inside shells surface at
-// the coalescer's floor instead of waiting out the fallback cadence. Bursts
-// are safe: the main-process watcher debounces and fetchStatus feeds a
-// coalesced runner with a minimum interval.
+// Push signals beat slow fallback polling after shell mutations; watcher debounce and coalesced pacing absorb bursts.
 export function useGitStatusPushSignalRefresh({
   activeRepoId,
   activeWorktreeId,
+  activeWorktreePath,
   enabled,
-  fetchStatus
+  fetchStatus,
+  getRepoWorktreePaths
 }: UseGitStatusPushSignalRefreshParams): void {
   const fetchStatusRef = useRef(fetchStatus)
   fetchStatusRef.current = fetchStatus
@@ -30,8 +33,7 @@ export function useGitStatusPushSignalRefresh({
     if (!enabled || !activeRepoId) {
       return
     }
-    // Why: remote web surfaces have no preload bridge; the fallback poll
-    // still covers them.
+    // Remote web has no preload bridge; fallback polling still covers it.
     const subscribeToWorktreesChanged = window.api?.worktrees?.onChanged
     const subscribeToGitStatusMetadataChanged = window.api?.worktrees?.onGitStatusMetadataChanged
     if (!subscribeToWorktreesChanged && !subscribeToGitStatusMetadataChanged) {
@@ -43,18 +45,24 @@ export function useGitStatusPushSignalRefresh({
       }
       fetchStatusRef.current()
     }
-    // Repo metadata changed on disk. Hidden windows skip the nudge; the
-    // visibility interval refreshes immediately on reveal.
+    // Ignore sibling-worktree index churn that cannot affect this checkout.
+    const handleGitStatusSignal = (signal: GitStatusMetadataChangedEvent): void => {
+      const paths = getRepoWorktreePaths(signal.repoId)
+      if (isGitStatusSignalForWorktree(signal, activeWorktreePath, paths)) {
+        handleRepoSignal(signal)
+      }
+    }
+    // Skip hidden-window nudges; visibility polling catches up on reveal.
     const unsubs = [
       subscribeToWorktreesChanged?.(handleRepoSignal),
-      subscribeToGitStatusMetadataChanged?.(handleRepoSignal)
+      subscribeToGitStatusMetadataChanged?.(handleGitStatusSignal)
     ].filter((unsubscribe): unsubscribe is () => void => typeof unsubscribe === 'function')
     return () => {
       for (const unsubscribe of unsubs) {
         unsubscribe()
       }
     }
-  }, [enabled, activeRepoId])
+  }, [enabled, activeRepoId, activeWorktreePath, getRepoWorktreePaths])
 
   useEffect(() => {
     if (!enabled || !activeWorktreeId) {

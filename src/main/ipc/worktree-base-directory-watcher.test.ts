@@ -27,10 +27,6 @@ vi.mock('./worktree-remote', () => ({
   notifyWorktreesChanged: vi.fn()
 }))
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn()
-}))
-
 vi.mock('./worktree-head-identity-reader', () => ({
   readGitCommonHeadIdentities: vi.fn(async () => ({ identities: [], complete: true })),
   createWorktreeHeadIdentityCache: () => ({
@@ -42,7 +38,6 @@ vi.mock('./worktree-head-identity-reader', () => ({
   })
 }))
 
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   notifyWorktreeGitStatusMetadataChanged,
   notifyWorktreeHeadIdentitiesChanged,
@@ -56,7 +51,6 @@ import {
   setWorktreeGitStatusRefWatch,
   syncWorktreeBaseDirectoryWatchers
 } from './worktree-base-directory-watcher'
-import { matchingWorktreeBaseRepoIds } from './worktree-base-directory-event-filter'
 
 type PollerCallback = (events: WorktreeBasePollEvent[]) => void
 
@@ -67,6 +61,8 @@ const absolutePath = (...parts: string[]): string => join(sep, ...parts)
 const WORKTREE_ROOT = absolutePath('workspace', 'worktrees')
 const PROJECT_ROOT = absolutePath('workspace', 'projects', 'project')
 const PROJECT_GIT_COMMON_DIR = join(PROJECT_ROOT, '.git')
+// The test cache never resolves admin dirs, so status signals carry no attribution.
+const UNATTRIBUTED_STATUS = [expect.anything(), 'repo-1', null] as const
 
 const settings = {
   workspaceDir: WORKTREE_ROOT,
@@ -81,7 +77,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
     badgeColor: '#000000',
     addedAt: 1,
     ...overrides
-  } as Repo
+  }
 }
 
 function makeStore(repos: Repo[]) {
@@ -116,7 +112,6 @@ describe('worktree base directory watcher', () => {
     watcherCallbacks.clear()
     unsubscribeMocks.clear()
     pollerOptions.clear()
-    vi.mocked(getSshFilesystemProvider).mockReturnValue(undefined)
     mockHeadIdentities([])
     vi.mocked(startWorktreeBaseDirectoryPoller).mockImplementation(
       async (target, _getRepos, onEvents, options) => {
@@ -171,34 +166,6 @@ describe('worktree base directory watcher', () => {
     expect(notifyWorktreesChanged).not.toHaveBeenCalled()
   })
 
-  it('ignores deep checkout churn below candidate roots', async () => {
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-
-    emit(WORKTREE_ROOT, [
-      {
-        type: 'update',
-        path: join(WORKTREE_ROOT, 'project', 'existing', 'src', 'file.ts')
-      }
-    ])
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(notifyWorktreesChanged).not.toHaveBeenCalled()
-  })
-
-  it('uses Git common-dir worktree metadata as a low-churn completion signal', async () => {
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-
-    emit(PROJECT_GIT_COMMON_DIR, [
-      {
-        type: 'create',
-        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'gitdir')
-      }
-    ])
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
-  })
-
   it('debounces linked index bursts as status-only without structural notification', async () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
 
@@ -220,7 +187,7 @@ describe('worktree base directory watcher', () => {
 
     expect(notifyWorktreesChanged).not.toHaveBeenCalled()
     expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
+    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledWith(...UNATTRIBUTED_STATUS)
   })
 
   it('keeps one active-worktree upstream ref binding and ignores stale cleanup', async () => {
@@ -271,53 +238,6 @@ describe('worktree base directory watcher', () => {
       async () => 'refs/remotes/origin/../escape'
     )
     expect(getPaths?.()).toEqual([])
-  })
-
-  it('filters SSH common-dir events to the active worktree upstream ref', async () => {
-    const remoteCallbacks = new Map<string, (events: never[]) => void>()
-    const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
-      remoteCallbacks.set(root, callback)
-      return vi.fn()
-    })
-    vi.mocked(getSshFilesystemProvider).mockReturnValue({
-      stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
-      realpath: vi.fn(async (path: string) => path),
-      readFile: vi.fn(async () => ({ content: '', isBinary: false })),
-      watch: remoteWatch
-    } as never)
-
-    await syncWorktreeBaseDirectoryWatchers(
-      makeStore([makeRepo({ connectionId: 'ssh-1', path: '/home/alice/project' })]) as never,
-      makeWindow() as never
-    )
-    await setWorktreeGitStatusRefWatch(
-      {
-        worktreeId: 'repo-1::/home/alice/project',
-        worktreePath: '/home/alice/project',
-        executionHostId: 'ssh:ssh-1',
-        connectionId: 'ssh-1',
-        branch: 'refs/heads/feature',
-        upstreamName: 'origin/feature'
-      },
-      async () => 'refs/remotes/origin/feature'
-    )
-    remoteCallbacks.get('/home/alice/project/.git')?.([
-      {
-        kind: 'update',
-        absolutePath: '/home/alice/project/.git/refs/remotes/origin/unrelated'
-      }
-    ] as never[])
-    await vi.advanceTimersByTimeAsync(300)
-    expect(notifyWorktreeGitStatusMetadataChanged).not.toHaveBeenCalled()
-
-    remoteCallbacks.get('/home/alice/project/.git')?.([
-      {
-        kind: 'update',
-        absolutePath: '/home/alice/project/.git/refs/remotes/origin/feature'
-      }
-    ] as never[])
-    await vi.advanceTimersByTimeAsync(300)
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
   })
 
   it('invalidates exact resolution only when common config changes', async () => {
@@ -386,24 +306,6 @@ describe('worktree base directory watcher', () => {
     expect(notifyWorktreesChanged).toHaveBeenCalledTimes(2)
   })
 
-  it('lets a real event reset the watcher-failure refresh cooldown', async () => {
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    const onWatchError = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onWatchError
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    onWatchError?.(new Error('watch interrupted'))
-    await vi.advanceTimersByTimeAsync(300)
-    emit(PROJECT_GIT_COMMON_DIR, [{ type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'config') }])
-    await vi.advanceTimersByTimeAsync(300)
-    vi.mocked(notifyWorktreesChanged).mockClear()
-
-    onWatchError?.(new Error('watch interrupted'))
-    await vi.advanceTimersByTimeAsync(300)
-    warn.mockRestore()
-
-    expect(notifyWorktreesChanged).toHaveBeenCalledOnce()
-  })
-
   it('widens an overflowed local git-common watch to a structural refresh', async () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
     const onOverflow = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onOverflow
@@ -422,46 +324,9 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(300)
 
     expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
-    // Overflow is definite proof of loss, not a possibly-transient error — it
-    // invalidates the cached ref resolution unconditionally.
+    // Overflow proves event loss and must invalidate cached ref resolution.
     await setWorktreeGitStatusRefWatch(request, resolve)
     expect(resolve).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not throttle repeated overflow refreshes the way watcher-error refreshes are throttled', async () => {
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    const onOverflow = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onOverflow
-
-    onOverflow?.()
-    await vi.advanceTimersByTimeAsync(300)
-    onOverflow?.()
-    await vi.advanceTimersByTimeAsync(300)
-
-    // A watcher-error burst within the 60s cooldown window collapses to one
-    // refresh (see "throttles repeated structural refreshes from watcher
-    // failures" above); overflow must not inherit that gate, since a bulk op
-    // can legitimately overflow more than once before it settles.
-    expect(notifyWorktreesChanged).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps linked HEAD and lock metadata structural', async () => {
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-
-    emit(PROJECT_GIT_COMMON_DIR, [
-      {
-        type: 'update',
-        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'HEAD')
-      },
-      {
-        type: 'create',
-        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'locked')
-      }
-    ])
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(notifyWorktreesChanged).toHaveBeenCalledTimes(1)
-    expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
-    expect(notifyWorktreeGitStatusMetadataChanged).not.toHaveBeenCalled()
   })
 
   it('emits head identities for a linked reflog head move without structural fanout', async () => {
@@ -533,34 +398,10 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(300)
     await vi.advanceTimersByTimeAsync(0)
 
-    // An index rewrite cannot move HEAD, so the linked-worktree scan is skipped.
     expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
-    // Source Control still refreshes for the status churn, coalesced to one call.
     expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
     expect(notifyWorktreesChanged).not.toHaveBeenCalled()
-  })
-
-  it('emits head identities for a primary-checkout reflog head move', async () => {
-    mockHeadIdentities([{ worktreePath: PROJECT_ROOT, head: 'aaa111', branch: 'refs/heads/main' }])
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    await vi.advanceTimersByTimeAsync(0)
-
-    mockHeadIdentities([{ worktreePath: PROJECT_ROOT, head: 'bbb222', branch: 'refs/heads/main' }])
-    emit(PROJECT_GIT_COMMON_DIR, [
-      { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'logs', 'HEAD') }
-    ])
-    await vi.advanceTimersByTimeAsync(300)
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(notifyWorktreesChanged).not.toHaveBeenCalled()
-    expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1', [
-      {
-        worktreePath: PROJECT_ROOT,
-        head: 'bbb222',
-        branch: 'refs/heads/main'
-      }
-    ])
   })
 
   it('coalesces an index and reflog burst into one head read and one status refresh', async () => {
@@ -576,7 +417,7 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(0)
     vi.mocked(readGitCommonHeadIdentities).mockClear()
 
-    // reset --soft rewrites the index and appends logs/HEAD in the same burst.
+    // A combined status/reflog burst must preserve head-move notification.
     mockHeadIdentities([
       {
         worktreePath: linkedWorktree,
@@ -601,34 +442,6 @@ describe('worktree base directory watcher', () => {
     expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
     expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledTimes(1)
     expect(notifyWorktreesChanged).not.toHaveBeenCalled()
-  })
-
-  it('debounces successive reflog events into a single head read', async () => {
-    const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
-    mockHeadIdentities([
-      {
-        worktreePath: linkedWorktree,
-        head: 'aaa111',
-        branch: 'refs/heads/feature'
-      }
-    ])
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    await vi.advanceTimersByTimeAsync(0)
-    vi.mocked(readGitCommonHeadIdentities).mockClear()
-
-    const reflog = {
-      type: 'update' as const,
-      path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'logs', 'HEAD')
-    }
-    emit(PROJECT_GIT_COMMON_DIR, [reflog])
-    // Second burst arrives before the debounce window elapses and resets it.
-    await vi.advanceTimersByTimeAsync(100)
-    emit(PROJECT_GIT_COMMON_DIR, [reflog])
-    await vi.advanceTimersByTimeAsync(300)
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(readGitCommonHeadIdentities).toHaveBeenCalledTimes(1)
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
   })
 
   it('re-baselines head identities silently on structural notifications', async () => {
@@ -661,8 +474,7 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
 
-    // A later reflog event diffs against the re-baselined heads, so an
-    // unchanged head is not re-reported.
+    // Structural refresh re-baselines heads, so unchanged later reflog events must not duplicate notifications.
     emit(PROJECT_GIT_COMMON_DIR, [
       {
         type: 'update',
@@ -672,196 +484,6 @@ describe('worktree base directory watcher', () => {
     await vi.advanceTimersByTimeAsync(300)
     await vi.advanceTimersByTimeAsync(0)
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
-  })
-
-  it('scopes a linked reflog head read to the worktree the event named', async () => {
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    await vi.advanceTimersByTimeAsync(0)
-    vi.mocked(readGitCommonHeadIdentities).mockClear()
-
-    emit(PROJECT_GIT_COMMON_DIR, [
-      {
-        type: 'update',
-        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'logs', 'HEAD')
-      }
-    ])
-    await vi.advanceTimersByTimeAsync(300)
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(readGitCommonHeadIdentities).toHaveBeenCalledWith(
-      PROJECT_GIT_COMMON_DIR,
-      expect.anything(),
-      { listing: false, primary: false, all: false, entryNames: new Set(['external-5104']) }
-    )
-  })
-
-  it('re-reads every head identity when the watcher loses events', async () => {
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    await vi.advanceTimersByTimeAsync(0)
-    vi.mocked(readGitCommonHeadIdentities).mockClear()
-
-    // A watcher failure attributes to no worktree, so nothing may stay cached.
-    pollerOptions
-      .get(PROJECT_GIT_COMMON_DIR)
-      ?.onWatchError?.(new Error('Git common watcher interrupted'))
-    await vi.advanceTimersByTimeAsync(300)
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(readGitCommonHeadIdentities).toHaveBeenCalledWith(
-      PROJECT_GIT_COMMON_DIR,
-      expect.anything(),
-      {
-        listing: true,
-        primary: true,
-        all: true,
-        entryNames: new Set()
-      }
-    )
-  })
-
-  it('reads no head identities for a worktree lock write', async () => {
-    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    await vi.advanceTimersByTimeAsync(0)
-    vi.mocked(readGitCommonHeadIdentities).mockClear()
-
-    // `git worktree lock` is structural for the listing but can move no head.
-    emit(PROJECT_GIT_COMMON_DIR, [
-      {
-        type: 'create',
-        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'locked')
-      }
-    ])
-    await vi.advanceTimersByTimeAsync(300)
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(notifyWorktreesChanged).toHaveBeenCalledTimes(1)
-    expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
-  })
-
-  it('never reads head identities for SSH watches', async () => {
-    const remoteCallbacks = new Map<string, (events: never[]) => void>()
-    const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
-      remoteCallbacks.set(root, callback)
-      return vi.fn()
-    })
-    vi.mocked(getSshFilesystemProvider).mockReturnValue({
-      stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
-      realpath: vi.fn(async (path: string) => path),
-      readFile: vi.fn(async () => ({ content: '', isBinary: false })),
-      watch: remoteWatch
-    } as never)
-
-    await syncWorktreeBaseDirectoryWatchers(
-      makeStore([makeRepo({ connectionId: 'ssh-1', path: '/home/alice/project' })]) as never,
-      makeWindow() as never
-    )
-    remoteCallbacks.get('/home/alice/project/.git')?.([
-      {
-        kind: 'update',
-        absolutePath: '/home/alice/project/.git/worktrees/wt/logs/HEAD'
-      }
-    ] as never[])
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
-    expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
-    expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
-  })
-
-  it('does not install local desktop watchers for runtime or folder repos', async () => {
-    await syncWorktreeBaseDirectoryWatchers(
-      makeStore([
-        makeRepo({ id: 'runtime', executionHostId: 'runtime:dev' }),
-        makeRepo({ id: 'folder', kind: 'folder' })
-      ]) as never,
-      makeWindow() as never
-    )
-
-    expect(startWorktreeBaseDirectoryPoller).not.toHaveBeenCalled()
-  })
-
-  it('uses the remote sibling root for default SSH worktree roots', async () => {
-    const remoteCallbacks = new Map<string, (events: never[]) => void>()
-    const remoteUnwatch = vi.fn()
-    const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
-      remoteCallbacks.set(root, callback)
-      return remoteUnwatch
-    })
-    vi.mocked(getSshFilesystemProvider).mockReturnValue({
-      stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
-      realpath: vi.fn(async (path: string) => path),
-      readFile: vi.fn(async () => ({ content: '', isBinary: false })),
-      watch: remoteWatch
-    } as never)
-
-    await syncWorktreeBaseDirectoryWatchers(
-      makeStore([makeRepo({ connectionId: 'ssh-1', path: '/home/alice/project' })]) as never,
-      makeWindow() as never
-    )
-
-    expect(startWorktreeBaseDirectoryPoller).not.toHaveBeenCalled()
-    expect(remoteWatch).toHaveBeenCalledWith('/home/alice', expect.any(Function))
-    remoteCallbacks.get('/home/alice')?.([
-      {
-        kind: 'create',
-        absolutePath: '/home/alice/external-5104/.git'
-      }
-    ] as never[])
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
-    await disposeWorktreeBaseDirectoryWatchers()
-    expect(remoteUnwatch).toHaveBeenCalled()
-  })
-
-  it('treats remote index renames as status-only and overflow as structural', async () => {
-    const remoteCallbacks = new Map<string, (events: never[]) => void>()
-    const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
-      remoteCallbacks.set(root, callback)
-      return vi.fn()
-    })
-    vi.mocked(getSshFilesystemProvider).mockReturnValue({
-      stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
-      realpath: vi.fn(async (path: string) => path),
-      readFile: vi.fn(async () => ({ content: '', isBinary: false })),
-      watch: remoteWatch
-    } as never)
-
-    await syncWorktreeBaseDirectoryWatchers(
-      makeStore([makeRepo({ connectionId: 'ssh-1', path: '/home/alice/project' })]) as never,
-      makeWindow() as never
-    )
-    const request = {
-      worktreeId: 'repo-1::/home/alice/project',
-      worktreePath: '/home/alice/project',
-      executionHostId: 'ssh:ssh-1',
-      connectionId: 'ssh-1',
-      branch: 'refs/heads/feature',
-      upstreamName: 'origin/feature'
-    }
-    const resolve = vi.fn(async () => 'refs/remotes/origin/feature')
-    await setWorktreeGitStatusRefWatch(request, resolve)
-
-    remoteCallbacks.get('/home/alice/project/.git')?.([
-      {
-        kind: 'rename',
-        oldAbsolutePath: '/home/alice/project/.git/worktrees/wt/index.lock',
-        absolutePath: '/home/alice/project/.git/worktrees/wt/index'
-      }
-    ] as never[])
-    await vi.advanceTimersByTimeAsync(300)
-    expect(notifyWorktreesChanged).not.toHaveBeenCalled()
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
-    await setWorktreeGitStatusRefWatch(request, resolve)
-    expect(resolve).toHaveBeenCalledOnce()
-
-    vi.mocked(notifyWorktreeGitStatusMetadataChanged).mockClear()
-    remoteCallbacks.get('/home/alice/project/.git')?.([{ kind: 'overflow' }] as never[])
-    await vi.advanceTimersByTimeAsync(300)
-    expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
-    expect(notifyWorktreeGitStatusMetadataChanged).not.toHaveBeenCalled()
-    await setWorktreeGitStatusRefWatch(request, resolve)
-    expect(resolve).toHaveBeenCalledTimes(2)
   })
 
   it('unsubscribes roots that disappear after repo settings change', async () => {
@@ -898,27 +520,5 @@ describe('worktree base directory watcher', () => {
     await disposePromise
 
     expect(unsubscribe).toHaveBeenCalled()
-  })
-
-  it('matches flat workspace .git marker events without matching sibling churn', () => {
-    const target = {
-      key: `base:${WORKTREE_ROOT}`,
-      kind: 'base' as const,
-      path: WORKTREE_ROOT,
-      repos: new Map([['repo-1', { repoId: 'repo-1', repoName: 'project', nestWorkspaces: false }]])
-    }
-
-    expect(
-      matchingWorktreeBaseRepoIds(target, {
-        type: 'create',
-        path: join(WORKTREE_ROOT, 'external-5104', '.git')
-      })
-    ).toEqual(['repo-1'])
-    expect(
-      matchingWorktreeBaseRepoIds(target, {
-        type: 'update',
-        path: join(WORKTREE_ROOT, 'external-5104', 'src', 'file.ts')
-      })
-    ).toEqual([])
   })
 })

@@ -7,6 +7,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 describe('remote terminal renderer backpressure', () => {
   const sendBinary = vi.fn()
@@ -21,18 +22,14 @@ describe('remote terminal renderer backpressure', () => {
     sendBinary.mockReset()
     unsubscribe.mockReset()
     callbacks = null
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          subscribe: vi.fn(async (_args, nextCallbacks) => {
-            callbacks = nextCallbacks
-            queueMicrotask(() => {
-              callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
-            })
-            return { unsubscribe, sendBinary }
-          })
-        }
-      }
+    stubRuntimeEnvironmentBridge({
+      subscribe: vi.fn(async (_args, nextCallbacks) => {
+        callbacks = nextCallbacks
+        queueMicrotask(() => {
+          callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
+        })
+        return { unsubscribe, sendBinary }
+      })
     })
   })
 

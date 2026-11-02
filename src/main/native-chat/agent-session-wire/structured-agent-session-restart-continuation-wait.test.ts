@@ -1,10 +1,7 @@
-// The restart continuation is accepted like any send, so its verdict is its delivery: a cold start
-// longer than the legacy client wait must not turn a continuation that went through into an
-// "unconfirmed" one.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
+
 import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
 
 const SESSION = 'session-1'
@@ -86,7 +83,6 @@ describe('a restart batch holds a chat until its continuation is handed over', (
       })
     await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(released).toBe(false)
-    // Handed over: still pending at the provider, no longer queued.
     submission = { ...submission, handedOverAt: 2 }
     settlement.publish(SESSION, journal)
     await expect(handedOver).resolves.toMatchObject({

@@ -4,6 +4,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../shared/constants'
 import { buildRuntimeSessionPlaceholders } from './workspace-terminal-placeholders'
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
+import { resolveOwner } from '@/lib/resolve-owner'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -78,7 +79,6 @@ describe('buildRuntimeSessionPlaceholders', () => {
 
     expect(result.repos).not.toBe(repos)
     expect(result.repos.map((entry) => entry.id)).toEqual(['repo-1', 'repo-2'])
-    // The caller's array must not be mutated in place.
     expect(repos).toHaveLength(1)
   })
 })
@@ -117,5 +117,75 @@ describe('addHydratedSshWorktreePlaceholders', () => {
     expect(result).not.toBe(worktreesByRepo)
     expect(result['ssh-repo'].map((entry) => entry.id)).toEqual(['ssh-repo::/repos/ssh'])
     expect(worktreesByRepo['ssh-repo']).toHaveLength(0)
+  })
+
+  const placeholderFor = (repos: Repo[]) =>
+    addHydratedSshWorktreePlaceholders(repos, {}, { 'ssh-repo::/repos/ssh': [] })['ssh-repo'][0]
+
+  it('stamps a direct SSH placeholder with its target, as a listing would', () => {
+    const sshRepo: Repo = { ...repo, id: 'ssh-repo', connectionId: 'box', executionHostId: null }
+    expect(placeholderFor([sshRepo])).toMatchObject({ hostId: 'ssh:box' })
+    expect(placeholderFor([sshRepo]).runtimeOwnerEnvironmentId).toBeUndefined()
+  })
+
+  it('stamps a server-nested SSH placeholder with both the target and the server', () => {
+    const hubRepo: Repo = {
+      ...repo,
+      id: 'ssh-repo',
+      connectionId: 'box',
+      executionHostId: 'runtime:hub'
+    }
+    expect(placeholderFor([hubRepo])).toMatchObject({
+      hostId: 'ssh:box',
+      runtimeOwnerEnvironmentId: 'hub'
+    })
+  })
+
+  it('routes a restored, selected server-nested SSH tab through its server, not a direct dial', () => {
+    const hubRepo: Repo = {
+      ...repo,
+      id: 'ssh-repo',
+      connectionId: 'box',
+      executionHostId: 'runtime:hub'
+    }
+    const worktreeId = 'ssh-repo::/repos/ssh'
+    const owner = resolveOwner(
+      {
+        repos: [hubRepo],
+        worktreesByRepo: { 'ssh-repo': [placeholderFor([hubRepo])] },
+        detectedWorktreesByRepo: {},
+        runtimeEnvironments: [{ id: 'hub' }],
+        activeWorktreeId: worktreeId,
+        activeWorkspaceExecutionHostId: 'ssh:box'
+      },
+      { workspaceId: worktreeId }
+    )
+    expect(owner).toEqual({
+      kind: 'resolved',
+      owner: { endpoint: { kind: 'environment', environmentId: 'hub' }, at: 'ssh:box' }
+    })
+  })
+
+  it('leaves the placeholder unstamped when the repo id lives on several hosts', () => {
+    const local: Repo = { ...repo, id: 'ssh-repo', connectionId: null, executionHostId: 'local' }
+    const hub: Repo = { ...local, connectionId: 'box', executionHostId: 'runtime:hub' }
+    const placeholder = placeholderFor([local, hub])
+    expect(placeholder.hostId).toBeUndefined()
+    expect(placeholder.runtimeOwnerEnvironmentId).toBeUndefined()
+  })
+})
+
+describe('buildRuntimeSessionPlaceholders for a server repo that nests SSH', () => {
+  it('stamps the SSH target and the server instead of a bare runtime host', () => {
+    const hubRepo: Repo = { ...repo, connectionId: 'box', executionHostId: 'runtime:hub' }
+    const result = buildRuntimeSessionPlaceholders({
+      repos: [hubRepo],
+      runtimeHostIdByWorkspaceSessionKey: { 'repo-1::/srv/one': 'runtime:hub' },
+      worktreesByRepo: {}
+    })
+    expect(result.worktreesByRepo['repo-1'][0]).toMatchObject({
+      hostId: 'ssh:box',
+      runtimeOwnerEnvironmentId: 'hub'
+    })
   })
 })

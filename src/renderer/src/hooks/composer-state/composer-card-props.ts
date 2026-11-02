@@ -1,12 +1,25 @@
+import { resolveComposerAttachmentTarget } from './composer-attachment-target'
 import { getAttachmentLabel } from '@/lib/new-workspace'
-import {
-  getFullComposerCreateDisabled,
-  getQuickComposerCreateDisabled
-} from '@/lib/new-workspace-create-gates'
+import { getQuickComposerCreateDisabled } from '@/lib/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
+import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { worktreeOwnerHostIds } from '@/lib/worktree-runtime-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { useAppStore } from '@/store'
 
 export function buildComposerCardProps(state: ComposerModel) {
+  const attachmentTarget = resolveComposerAttachmentTarget(state)
+  const targetHostId = attachmentTarget.hostId
+  const existingBranchWorkspace =
+    state.reuseSelectedBranch && state.reuseEligibleBranch && targetHostId
+      ? selectWorktreesByRepo(useAppStore.getState())[state.repoId]?.find(
+          (worktree) =>
+            worktreeOwnerHostIds(worktree).includes(targetHostId) &&
+            worktree.branch.replace(/^refs\/heads\//, '') === state.reuseEligibleBranch
+        )
+      : undefined
   const {
     advancedOpen,
     agentPrompt,
@@ -14,7 +27,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     baseBranch,
     branchNameOverride,
     parentWorktreeId,
-    createGateMode,
     createError,
     createMultiple,
     creating,
@@ -82,14 +94,12 @@ export function buildComposerCardProps(state: ComposerModel) {
     selectedProjectHostSetupId,
     selectedProjectId,
     selectedRepo,
-    selectedRepoExecutionHostId,
     selectedRepoConnectInProgress,
     selectedRepoConnectionId,
     selectedRepoGitHubSourceContext,
     selectedRepoIsGit,
     selectedRepoProjectId,
     selectedRepoRequiresConnection,
-    shouldWaitForIssueAutomationCheck,
     sourceIntentBlocksCreate,
     sparseError,
     selectedRepoSshStatus,
@@ -116,29 +126,25 @@ export function buildComposerCardProps(state: ComposerModel) {
     sparsePresets,
     sparseSelectedPresetId,
     startFromResetHint,
-    submit,
     tuiAgent
   } = state
 
-  const createGateInput = {
+  const repoCreateDisabled = getQuickComposerCreateDisabled({
     repoId,
     workspaceSeedName,
     creating,
-    shouldWaitForSetupCheck,
-    shouldWaitForIssueAutomationCheck,
     sourceIntentBlocksCreate,
     requiresExplicitSetupChoice,
     hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
     sparseError
-  }
-  const repoCreateDisabled =
-    createGateMode === 'quick'
-      ? getQuickComposerCreateDisabled(createGateInput)
-      : getFullComposerCreateDisabled(createGateInput)
+  })
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
   const cardProps: ComposerCardSourceProps & ComposerCardActionProps = {
     eligibleRepos: isProjectGroupTarget ? folderSourceRepos : eligibleRepos,
+    selectedRepo: isProjectGroupTarget
+      ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
+      : (selectedRepo ?? null),
     repoId,
     projectOptions,
     selectedProjectId,
@@ -164,7 +170,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     onBranchNameOverrideChange: isProjectGroupTarget ? () => {} : handleBranchNameOverrideChange,
     parentWorktreeId: isProjectGroupTarget ? null : parentWorktreeId,
     onParentWorktreeIdChange: isProjectGroupTarget ? () => {} : setParentWorktreeId,
-    selectedRepoExecutionHostId: isProjectGroupTarget ? null : selectedRepoExecutionHostId,
+    selectedRepoExecutionHostId: attachmentTarget.hostId,
     selectedRepoProjectId: isProjectGroupTarget ? null : selectedRepoProjectId,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
     onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
@@ -178,13 +184,28 @@ export function buildComposerCardProps(state: ComposerModel) {
     smartNameMode,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
+    reuseEligibleBranch: isProjectGroupTarget ? null : reuseEligibleBranch,
     canReuseSelectedBranch:
       !isProjectGroupTarget &&
       reuseEligibleBranch !== null &&
       smartNameSelection?.kind === 'branch',
     reuseSelectedBranch,
     onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
-    // Why: "create multiple" applies only to worktree (git) targets; folder-workspace keeps create-and-close.
+    onOpenSelectedBranchWorkspace:
+      existingBranchWorkspace && !isProjectGroupTarget
+        ? () => {
+            if (
+              activateAndRevealWorktree(existingBranchWorkspace.id, {
+                executionHostId: attachmentTarget.hostId ?? undefined,
+                navigationIntent: 'user-open'
+              }) !== false
+            ) {
+              state.closeModal()
+              state.onCreated?.()
+            }
+          }
+        : undefined,
+    // Create multiple applies to Git worktrees; folder creation still closes afterward.
     showCreateMultiple: !isProjectGroupTarget,
     createMultiple,
     onCreateMultipleChange: setCreateMultiple,
@@ -193,6 +214,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,
     attachmentPaths,
     getAttachmentLabel,
+    // Quick create has no attachment display or launch-prompt destination.
+    onNativeFileDrop: undefined,
     onAddAttachment: () => void handleAddAttachment(),
     onRemoveAttachment: (pathValue) =>
       setAttachmentPaths((current) => current.filter((currentPath) => currentPath !== pathValue)),
@@ -210,20 +233,20 @@ export function buildComposerCardProps(state: ComposerModel) {
     tuiAgent,
     onTuiAgentChange: setTuiAgent,
     detectedAgentIds: isProjectGroupTarget ? folderDetectedAgentIds : detectedAgentIds,
+    agentRows: resolveComposerAgentRows(state),
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
     projectError: isProjectGroupTarget ? pathStatusProjectError : projectError,
     creating,
-    onCreate: () => void submit(),
     baseBranch: isProjectGroupTarget ? undefined : baseBranch,
     onBaseBranchChange: isProjectGroupTarget ? () => {} : handleBaseBranchChange,
     onBaseBranchPrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchPrSelect,
     onBaseBranchMrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchMrSelect,
     baseBranchLinkedPrNumber:
       linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
-    selectedRepoPath: isProjectGroupTarget ? null : (selectedRepo?.path ?? null),
+    selectedRepoPath: attachmentTarget.path,
     selectedRepoIsRemote: isProjectGroupTarget
       ? folderTargetIsRemote
       : Boolean(selectedRepo?.connectionId),

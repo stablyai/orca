@@ -3,7 +3,7 @@ export type SystemPowerLifecycleListener = {
   onResume: () => void
 }
 
-type SystemPowerState = 'awake' | 'suspended'
+export type SystemPowerState = 'awake' | 'suspended'
 
 const listeners = new Set<SystemPowerLifecycleListener>()
 let state: SystemPowerState = 'awake'
@@ -18,6 +18,10 @@ function notifyListener(listener: SystemPowerLifecycleListener, nextState: Syste
   } catch (error) {
     console.error('[power] System lifecycle listener failed:', error)
   }
+}
+
+export function getSystemPowerState(): SystemPowerState {
+  return state
 }
 
 export function subscribeSystemPowerLifecycle(listener: SystemPowerLifecycleListener): () => void {

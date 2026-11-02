@@ -6,8 +6,7 @@ import {
   stripMobileMarkdownMarkupTags
 } from './mobile-markdown-preview-tag-stripper'
 
-// Why: README HTML snippets can document escaped entities; repeated cleanup
-// passes must not turn `&amp;lt;` into a real tag and strip it.
+// Avoid repeated entity decoding: escaped README &amp;lt; must not become real tag and disappear.
 const escapedHtmlEntityTokens = [
   { pattern: /&amp;nbsp;/gi, token: '\uE000ORCA_MD_ENTITY_NBSP\uE000', value: '&nbsp;' },
   { pattern: /&amp;lt;/gi, token: '\uE000ORCA_MD_ENTITY_LT\uE000', value: '&lt;' },
@@ -274,9 +273,7 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   )
   let next = protectedText
 
-  // Why: repository Markdown often uses small HTML islands for centered README
-  // headers and badges. Preview mode should read like Markdown, while Source
-  // mode remains the exact file bytes.
+  // Normalize README HTML headers/badges for readable Preview; Source keeps exact bytes.
   next = replaceMobileMarkdownPairedMarkupTags(
     next,
     ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],

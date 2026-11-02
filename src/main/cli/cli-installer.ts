@@ -9,10 +9,12 @@ import { withAppImageRegistrationLock } from './appimage-registration-lock'
 import {
   isAppImageInstalledLauncherCurrent,
   isAppImageInstalledLauncherOwnedBySibling,
-  resolveAppImageNamespacePath
+  resolveAppImageNamespacePath,
+  resolveLegacyAppImageNamespacePath
 } from './appimage-extracted-root'
 import { isAppImageStableLauncherReady } from './appimage-stable-launcher'
 import { CliPathRegistration } from './cli-path-registration'
+import { removeLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
 
 export class CliInstaller extends CliPathRegistration {
   isAppImageRegistrationOwnedBySibling(status: CliInstallStatus): boolean {
@@ -133,24 +135,24 @@ export class CliInstaller extends CliPathRegistration {
       )
     }
 
-    // eslint-disable-next-line unicorn/prefer-ternary -- Why: the install path performs async side effects and is easier to audit as an explicit branch than as an awaited ternary.
     if (status.installMethod === 'symlink') {
       await this.installSymlink(status)
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
     } else if (this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath)) {
       // Why: packaged Windows already ships resources/bin/orca.exe; registration only owns the PATH entry.
     } else {
-      // Why: the Windows wrapper dir is user-writable (%LOCALAPPDATA%), so mkdir here can't hit EACCES.
       await mkdir(dirname(status.commandPath), { recursive: true })
       await this.installWindowsWrapper(status.commandPath, status.launcherPath)
     }
 
     if (this.platform === 'win32') {
-      // Why: Windows shells find commands via user PATH, so the installer owns that entry, not the desktop installer.
       await this.ensureWindowsPathEntry(dirname(status.commandPath))
     }
     if (extractedRoot) {
-      await pruneAppImageExtractedRoots(extractedRoot.rootPath)
+      await pruneAppImageExtractedRoots(
+        extractedRoot.rootPath,
+        this.legacyAppImageNamespacePath() ?? undefined
+      )
     }
 
     return extractedRoot
@@ -163,6 +165,7 @@ export class CliInstaller extends CliPathRegistration {
   }
 
   private async removeUnlocked(): Promise<CliInstallStatus> {
+    await this.removeLinuxBareOrcaDispatcher()
     const status = await this.getStatus()
     if (!status.supported || !status.commandPath || !status.launcherPath || !status.installMethod) {
       await this.removeLinuxAppImagePayloads()
@@ -203,16 +206,39 @@ export class CliInstaller extends CliPathRegistration {
     return this.getStatus()
   }
 
+  // Removing the `orca` command also retires the bare-name dispatcher headless serve installed.
+  private async removeLinuxBareOrcaDispatcher(): Promise<void> {
+    if (this.platform !== 'linux' || this.commandPathOverride) {
+      return
+    }
+    try {
+      await removeLinuxBareOrcaDispatcher(this.homePath)
+    } catch (error) {
+      console.warn(
+        '[cli] Could not remove the bare orca dispatcher:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
+  }
+
   private async removeLinuxAppImagePayloads(): Promise<void> {
     const extractionOptions = this.appImageExtractionOptions()
     if (this.isLinuxAppImage() && extractionOptions) {
       await removeAppImageInstalledPayloads(resolveAppImageNamespacePath(extractionOptions))
+      await removeAppImageInstalledPayloads(resolveLegacyAppImageNamespacePath(extractionOptions))
     }
+  }
+
+  private legacyAppImageNamespacePath(): string | null {
+    const extractionOptions = this.appImageExtractionOptions()
+    return extractionOptions ? resolveLegacyAppImageNamespacePath(extractionOptions) : null
   }
 
   private runAppImageRegistrationOperation<T>(operation: () => Promise<T>): Promise<T> {
     return this.isLinuxAppImage()
-      ? withAppImageRegistrationLock(this.appImageCacheRootPath, operation)
+      ? withAppImageRegistrationLock(this.appImageCacheRootPath, operation, {
+          deadlineAt: this.appImageDeadlineAt
+        })
       : operation()
   }
 }

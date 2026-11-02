@@ -83,10 +83,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// The mirror's hydration verdict is stamped with the connection generation
-// (host-session-mirror-hydration.ts), so anything that advances the generation discards it and
-// every mirrored pane re-parks — the tab list rebuild. A flap is unverifiable, not a new
-// connection (docs/reference/ssh-execution-boundary.md), so it must not discard that verdict.
+// Generation changes invalidate hydration and re-park mirrored panes. A transport flap is unverifiable, not a new connection (ssh-execution-boundary.md), so retain its verdict.
 it('keeps the mirror hydrated across an unverifiable probe on the same runtime', () => {
   const store = createSliceStore()
   seedEnvironment(store)
@@ -104,8 +101,7 @@ it('keeps the mirror hydrated across an unverifiable probe on the same runtime',
   expect(hasHostSessionMirrorHydrated(ENVIRONMENT_ID, WORKTREE_ID)).toBe(true)
 })
 
-// The opposite edge must still invalidate: a replacement runtime id is a real new connection,
-// and a verdict from the previous one says nothing about the new one's PTYs.
+// A replacement runtime ID is a new connection; previous PTY verdicts must invalidate.
 it('discards the mirror hydration when the runtime itself was replaced', () => {
   const store = createSliceStore()
   seedEnvironment(store)

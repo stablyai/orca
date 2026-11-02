@@ -6,8 +6,6 @@ import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
 } from '../linear/issue-attribute-filter'
 
-// Why: keep ListIssues param validation co-located with shared limits without
-// pushing linear.ts past the max-lines ratchet.
 export const LinearAttributeFilterId = z
   .string()
   .trim()

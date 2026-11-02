@@ -1,5 +1,6 @@
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
+import { historyReplayWindowsPty } from './daemon-history-replay-pty'
 import {
   DurableHistoryReplayEmulator,
   type NormalBufferHead
@@ -11,22 +12,24 @@ import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profil
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
 
-// Why: the head's serializer ends on the replay's pen and open hyperlink; the live body assumes defaults.
+// Reset the older-row serializer's pen and hyperlink before appending live content.
 const OLDER_ROWS_SEAM = `${RESET_GRAPHIC_RENDITION}\x1b]8;;\x1b\\`
 
-/** Live is the authority for everything it holds; disk only adds normal-buffer rows live evicted. */
+/** Live owns current state; disk contributes only normal-buffer rows evicted from live. */
 export async function buildDurableCheckpointSnapshot(opts: {
   liveSnapshot: TerminalSnapshot
   restoreInfo: ColdRestoreInfo | null
   pendingRecords: readonly PendingOutputRecord[]
   /** Records span the live session's whole life, so restoreInfo is the base it was seeded from. */
   isFirstTake: boolean
+  /** The hosting daemon's, which recorded pendingRecords; absent or null means xterm's. */
+  resizeModel?: string | null
 }): Promise<TerminalSnapshot> {
   const { liveSnapshot, restoreInfo, pendingRecords } = opts
   if (!restoreInfo && pendingRecords.length === 0) {
     return liveSnapshot
   }
-  // Why not on a first fold: live was seeded with disk plus the ground, so disk is never live's copy.
+  // First-fold seeds reset terminal modes, so the original disk checkpoint cannot substitute for live.
   if (
     restoreInfo &&
     pendingRecords.length === 0 &&
@@ -36,17 +39,17 @@ export async function buildDurableCheckpointSnapshot(opts: {
     return diskCheckpointWithLiveIdentity(restoreInfo, liveSnapshot)
   }
 
-  // Why the base's dims: a cold restore spawns and seeds the live session at them.
+  // Replay from the dimensions used to seed the live session.
   const emulator = new DurableHistoryReplayEmulator({
     cols: restoreInfo?.cols ?? liveSnapshot.cols,
     rows: restoreInfo?.rows ?? liveSnapshot.rows,
-    scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS
+    scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
+    windowsPty: historyReplayWindowsPty(opts.resizeModel)
   })
   const replay = new ColdRestoreReplayWriter(emulator)
   try {
     if (restoreInfo) {
-      // Why the seed on a first fold: live got exactly those bytes, so both copies' rows line up
-      // even when the base was a dead TUI's alt screen.
+      // Match the live seed even when the original checkpoint held a dead TUI's alternate screen.
       const segments = opts.isFirstTake
         ? getRecoveredHistorySeedSegments(restoreInfo)
         : restoreSegments(restoreInfo)
@@ -62,17 +65,14 @@ export async function buildDurableCheckpointSnapshot(opts: {
     if (!isValidTerminalHistorySize(liveSnapshot.cols, liveSnapshot.rows)) {
       return liveSnapshot
     }
-    // Why: rows are counted from the bottom, so both buffers must wrap on the same grid.
+    // Bottom-relative row counts require both buffers to wrap on the same grid.
     await replay.resize(liveSnapshot.cols, liveSnapshot.rows)
     const head = emulator.serializeNormalBufferHead(
       liveSnapshot.scrollbackLines + liveSnapshot.rows
     )
     return {
       ...rebaseOnOlderRows(liveSnapshot, head),
-      ...(!liveSnapshot.cwd && restoreInfo?.cwd ? { cwd: restoreInfo.cwd } : {}),
-      ...(!liveSnapshot.lastTitle && restoreInfo?.lastTitle
-        ? { lastTitle: restoreInfo.lastTitle }
-        : {})
+      ...(!liveSnapshot.cwd && restoreInfo?.cwd ? { cwd: restoreInfo.cwd } : {})
     }
   } catch (error) {
     console.warn('[history] durable snapshot rebuild failed:', error)
@@ -82,7 +82,6 @@ export async function buildDurableCheckpointSnapshot(opts: {
   }
 }
 
-/** True when disk already holds live's grid, modes and alt frame, so a rebase would change nothing. */
 function diskCheckpointAgreesWithLive(info: ColdRestoreInfo, live: TerminalSnapshot): boolean {
   return (
     info.cols === live.cols &&
@@ -97,10 +96,16 @@ function diskCheckpointWithLiveIdentity(
   info: ColdRestoreInfo,
   live: TerminalSnapshot
 ): TerminalSnapshot {
-  const { terminalOwner: _diskOwner, pendingOutputSeq: _diskSeq, ...disk } = info
+  const {
+    terminalOwner: _diskOwner,
+    pendingOutputSeq: _diskSeq,
+    lastTitle: _diskTitle,
+    ...disk
+  } = info
   return {
     ...disk,
-    // Why: a normal-screen snapshotAnsi already holds its scrollback.
+    ...(live.lastTitle ? { lastTitle: live.lastTitle } : {}),
+    // Normal-screen snapshotAnsi already includes scrollback.
     scrollbackAnsi: info.modes.alternateScreen ? info.scrollbackAnsi : '',
     scrollbackLines:
       info.scrollbackLines ?? Math.max(0, countAnsiRows(info.scrollbackAnsi) - info.rows),
@@ -110,7 +115,6 @@ function diskCheckpointWithLiveIdentity(
   }
 }
 
-/** Trims a snapshot to `scrollbackRows` of scrollback, keeping its owner and sequence. */
 export async function boundSnapshot(
   snapshot: TerminalSnapshot,
   scrollbackRows: number
@@ -129,7 +133,7 @@ export async function boundSnapshot(
 
 function restoreSegments(restoreInfo: ColdRestoreInfo): string[] {
   return [
-    // Why alt only: a normal-screen snapshotAnsi already holds its scrollback.
+    // Normal-screen snapshotAnsi already includes scrollback.
     restoreInfo.modes.alternateScreen ? restoreInfo.scrollbackAnsi : '',
     restoreInfo.rehydrateSequences,
     restoreInfo.snapshotAnsi,
@@ -141,12 +145,11 @@ function rebaseOnOlderRows(live: TerminalSnapshot, head: NormalBufferHead): Term
   if (head.rowCount === 0) {
     return live
   }
-  // Why a screenful of newlines then home: it scrolls every older row into
-  // scrollback and leaves the blank, homed screen a fresh live replay expects.
+  // Scroll older rows off-screen, then leave a blank, homed screen for live replay.
   const prefix = `${head.ansi}${OLDER_ROWS_SEAM}${'\r\n'.repeat(live.rows)}\x1b[H`
   const scrollbackLines = live.scrollbackLines + head.rowCount
   if (live.modes.alternateScreen) {
-    // Why links untouched: they index the alt screen, which older rows never enter.
+    // Alternate-screen links are unaffected by older normal-buffer rows.
     return { ...live, scrollbackAnsi: prefix + live.scrollbackAnsi, scrollbackLines }
   }
   return {

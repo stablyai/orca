@@ -1,97 +1,89 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
+import { GitBranch, RefreshCw } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors } from '../theme/mobile-theme'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
+import {
+  buildMobileSourceControlPrimaryAction,
+  resolveMobileSourceControlReviewInputs
+} from './mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './MobileSourceControlModals'
-import { MobileSourceControlSegments } from './MobileSourceControlSegments'
-import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
-import { MobileGitHistoryList } from './MobileGitHistoryList'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+import { MobileSourceControlHubCommitsPage } from './MobileSourceControlHubCommitsPage'
+import { MobileSourceControlNextStepBar } from './MobileSourceControlNextStepBar'
+import { useMobileSourceControlNextStep } from './use-mobile-source-control-next-step'
+import { OptionPager } from '../components/BottomDrawer'
+import { useSourceControlHubNavigation } from './use-source-control-hub-navigation'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
-import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
-import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
-import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
+import {
+  SOURCE_CONTROL_HUB_TABS,
+  SOURCE_CONTROL_HUB_TAB_LABELS,
+  type SourceControlHubRouteTab
+} from './mobile-source-control-hub-tab'
+import { groupMobileSourceControlMenu } from './mobile-source-control-actions'
 import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
-import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
+import { MobilePrTabBody } from '../components/MobilePRSidebar'
+import { MobilePrTabSheets } from '../components/pr-sidebar/MobilePrTabSheets'
+import { PrTabScreenView } from '../components/pr-sidebar/PrTabScreenView'
+import {
+  useMobileSourceControlPrTab,
+  type MobilePrTabOpeners
+} from './use-mobile-source-control-pr-tab'
 import { openMobilePrUrl } from '../components/mobile-pr-url'
 
 export type MobileSourceControlPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
-  /** Where the panel was launched from; drives the file-open dismissal path. */
-  origin?: string
   embedded?: boolean
-  /** Initial hub segment (from the route's `tab` deep-link param). */
-  initialTab?: SourceControlHubTab
+  initialTab?: SourceControlHubRouteTab
   onRequestClose?: () => void
-  onFileOpenStart?: () => void
-  onOpenedFileDiff?: (relativePath: string) => void
 }
 
 export function MobileSourceControlPanel({
   hostId,
   worktreeId,
   name = '',
-  origin = '',
   embedded = false,
   initialTab = 'changes',
-  onRequestClose,
-  onFileOpenStart,
-  onOpenedFileDiff
+  onRequestClose
 }: MobileSourceControlPanelProps) {
-  const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
-  // Track first visit so Changes/History stay mounted (keep scroll) after first open; PR still unmounts when inactive.
-  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
-    () => new Set<SourceControlHubTab>([initialTab])
-  )
-  const [historyRefreshNonce, setHistoryRefreshNonce] = useState(0)
-
-  // expo-router reuses the screen instance when only query params change, so adopt the new tab.
-  useEffect(() => {
-    setActiveTab(initialTab)
-    setVisitedTabs((prev) => {
-      if (prev.has(initialTab)) {
-        return prev
-      }
-      const next = new Set(prev)
-      next.add(initialTab)
-      return next
-    })
-  }, [initialTab])
-
-  const selectTab = useCallback((tab: SourceControlHubTab) => {
-    setActiveTab(tab)
-    setVisitedTabs((prev) => {
-      if (prev.has(tab)) {
-        return prev
-      }
-      const next = new Set(prev)
-      next.add(tab)
-      return next
-    })
-  }, [])
-  const openHistoryTab = useCallback(() => selectTab('history'), [selectTab])
-  const openPrTab = useCallback(() => selectTab('pr'), [selectTab])
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const {
+    screens: hubScreens,
+    activeTab,
+    visitedTabs,
+    selectTab
+  } = useSourceControlHubNavigation(initialTab)
+  const [barHeight, setBarHeight] = useState(0)
+  const openHubScreen = hubScreens.open
+  const openCommitsScreen = useCallback(() => openHubScreen('commits'), [openHubScreen])
+  // The PR tab owns the Create PR and Merge sheets; the bar and Changes reach them through this.
+  const prOpeners = useRef<MobilePrTabOpeners>({ createPr: () => {}, merge: () => {} })
+  const openCreatePr = useCallback(() => prOpeners.current.createPr(), [])
+  const openMergeSheet = useCallback(() => prOpeners.current.merge(), [])
 
   const state = useMobileSourceControlState({
     hostId,
     worktreeId,
     name,
-    origin,
-    embedded,
-    onRequestClose,
-    onFileOpenStart,
-    onOpenedFileDiff,
-    onOpenHistory: openHistoryTab
+    onOpenHistory: openCommitsScreen,
+    onCreatePr: openCreatePr
   })
-  const actionSheetActions = useMobileSourceControlActionSheet(state)
   const {
     client,
     connState,
@@ -102,22 +94,14 @@ export function MobileSourceControlPanel({
     worktreeLabel,
     screenState,
     busyAction,
-    openingPath,
-    openingBranchPath,
     loadStatus,
     status,
-    branchCompareResult,
-    branchLabel,
-    syncLabel,
-    unstagedCount,
-    stagedCount,
-    branchEntries,
-    abortConflictOperation
+    branchCompareResult
   } = state
-  const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const ioBusy = busyAction !== null
   const ready = screenState.kind === 'ready'
 
-  // Keep last-known branch/head across a transient status unload so the PR controller isn't wiped ready → hidden → cold start.
+  // Retain branch/head through status unloads so the PR controller does not reset to a cold start.
   const lastPrBranchRef = useRef<string | null>(null)
   const lastPrHeadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -126,7 +110,7 @@ export function MobileSourceControlPanel({
   }, [worktreeId])
   const statusBranch = status?.branch ?? null
   const statusHead = status?.head ?? branchCompareResult?.summary.headOid ?? null
-  // Write last-known identity in an effect, not render: a discarded concurrent render must not leave the fallback stale.
+  // Update fallback identity after commit; discarded concurrent renders must not change it.
   useEffect(() => {
     if (statusBranch) {
       lastPrBranchRef.current = statusBranch
@@ -144,17 +128,39 @@ export function MobileSourceControlPanel({
     branch: prBranch,
     headSha: prHeadSha
   })
+  const prSidebarState = prController.prSidebarState
+  const review = useMemo(
+    () => resolveMobileSourceControlReviewInputs(prSidebarState),
+    [prSidebarState]
+  )
+  const primaryActionArgs = state.primaryActionArgs
+  const actionSheetActions = useMobileSourceControlActionSheet(state, review)
+  // The menu closes on a pick; the bar and the rows show the action's progress.
+  const gitMenu = useMemo(
+    () =>
+      groupMobileSourceControlMenu(
+        actionSheetActions.map((action) => ({
+          ...action,
+          id: action.id ?? '',
+          skipAutoClose: false
+        }))
+      ),
+    [actionSheetActions]
+  )
+  const primaryAction = useMemo(
+    () => buildMobileSourceControlPrimaryAction({ ...primaryActionArgs, review }),
+    [primaryActionArgs, review, t]
+  )
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
   const refetchPr = prController.refetchPRSidebar
   const ensurePrDetails = prController.ensurePrSidebarDetails
-  // Refs so tab effects do not re-fire when headSha recreates load() (soft refresh).
+  // Keep tab effects stable when soft-refresh load changes with headSha.
   const refetchPrRef = useRef(refetchPr)
   refetchPrRef.current = refetchPr
   const ensurePrDetailsRef = useRef(ensurePrDetails)
   ensurePrDetailsRef.current = ensurePrDetails
 
-  // Chip bootstrap: phase-1 only (PR + checks); full payload waits for the PR segment so opening SC to stage doesn't pull details.
   useEffect(() => {
     if (activeTab === 'pr') {
       return
@@ -164,14 +170,23 @@ export function MobileSourceControlPanel({
     }
   }, [activeTab, prBranch, isHostedRepo, prSidebarKind])
 
-  // Keyed by PR number, not a boolean, so a same-branch PR swap re-arms phase 2 for the new PR.
+  // A push leaves HEAD where it was, so reread the PR once it lands: its checks moved to the pushed head.
+  const aheadOfUpstream = status?.upstreamStatus?.ahead ?? 0
+  const lastAheadRef = useRef(aheadOfUpstream)
+  useEffect(() => {
+    const pushed = lastAheadRef.current > 0 && aheadOfUpstream === 0
+    lastAheadRef.current = aheadOfUpstream
+    if (pushed && isHostedRepo && prBranch && prSidebarKind === 'ready') {
+      void refetchPrRef.current({ includeDetails: activeTab === 'pr' })
+    }
+  }, [aheadOfUpstream, activeTab, isHostedRepo, prBranch, prSidebarKind])
+
   const prDetailsMissingFor =
     prController.prSidebarState.kind === 'ready' &&
     prSidebarDetailsNeedFetch(prController.prSidebarState.data.details)
       ? prController.prSidebarState.data.pr.number
       : null
 
-  // PR segment full load / phase-2 fill-in; key on prBranch so a branch arriving while open still loads (kind stays 'hidden').
   useEffect(() => {
     if (activeTab !== 'pr' || !isHostedRepo || !prBranch) {
       return
@@ -185,25 +200,26 @@ export function MobileSourceControlPanel({
     }
   }, [activeTab, isHostedRepo, prBranch, prSidebarKind, prDetailsMissingFor])
 
-  const prChip = useMemo(() => {
-    // No branch (detached HEAD / mid-rebase) never loads a PR, so state stays 'hidden'; hide the chip or it spins forever.
-    if (!isHostedRepo || !prBranch) {
-      return null
-    }
-    const commentCount =
-      prController.prSidebarState.kind === 'ready'
-        ? countUnresolvedReviewThreads(prController.prSidebarState.data.details?.comments)
-        : null
-    return buildMobilePrChipSummary(prController.prSidebarState, commentCount)
-  }, [isHostedRepo, prBranch, prController.prSidebarState])
+  const nextStep = useMobileSourceControlNextStep({
+    worktreeId,
+    state,
+    primaryAction,
+    review,
+    prState: prController.prSidebarState,
+    reviewsSupported: isHostedRepo && prBranch !== null,
+    refetchPr,
+    headSha: prHeadSha,
+    showWorkflowErrors: activeTab !== 'changes',
+    onMerge: openMergeSheet
+  })
 
-  // Refresh the active segment plus git.status (branch card stays honest on History); preserve ready on failure so the PR chip isn't wiped.
+  const barInset =
+    nextStep.view.kind === 'hidden' && !nextStep.notice
+      ? insets.bottom
+      : Math.max(barHeight, insets.bottom)
+
   const onRefresh = useCallback(() => {
-    void loadStatus({ preserveReadyOnFailure: true })
-    if (activeTab === 'history') {
-      setHistoryRefreshNonce((n) => n + 1)
-      return
-    }
+    void loadStatus({ preserveReadyOnFailure: true, rereadSettings: true })
     if (!isHostedRepo) {
       return
     }
@@ -211,16 +227,44 @@ export function MobileSourceControlPanel({
       void refetchPr({ includeDetails: true })
       return
     }
-    // Changes: light chip refresh so the branch card stays current without comments.
     void refetchPr({ includeDetails: false })
   }, [activeTab, isHostedRepo, loadStatus, refetchPr])
+  // Changes: the rarer git actions, then Refresh, then Force push last and red.
+  const changesMenuGroups = useMemo(
+    () => [
+      ...gitMenu.groups,
+      [
+        {
+          id: 'refresh',
+          label: t('sourceControl.header.refresh', 'Refresh source control'),
+          icon: RefreshCw,
+          disabled: ioBusy,
+          onPress: onRefresh
+        }
+      ],
+      ...(gitMenu.forcePush ? [[{ ...gitMenu.forcePush, destructive: true }]] : [])
+    ],
+    [gitMenu, ioBusy, onRefresh, t]
+  )
+  const { prTab, prMenuGroups, branchCompare } = useMobileSourceControlPrTab({
+    state,
+    activeTab,
+    hubPage: hubScreens.page,
+    worktreeId,
+    prController,
+    prBranch,
+    prHeadSha,
+    ready,
+    selectTab,
+    onRefresh,
+    openersRef: prOpeners,
+    openScreen: openHubScreen,
+    shared: nextStep
+  })
 
-  // Embedded mode docks beside the terminal: close the dock instead of popping a route; skip
-  // safe-area chrome (the dock column owns it). Two handlers rather than one chosen by mode,
-  // because the header renders a Close or a Back and they are not the same control.
+  // Embedded close dismisses the dock; route Back pops. The dock column owns safe-area chrome.
   const onBack = () => router.back()
   const onClose = onRequestClose ?? (() => router.back())
-  // Chromeless PR body has no header, so surface open-on-web on the hub chrome while the PR segment is active.
   const prWebUrl =
     activeTab === 'pr' &&
     prController.prSidebarState.kind === 'ready' &&
@@ -237,12 +281,32 @@ export function MobileSourceControlPanel({
       onBack={onBack}
       onClose={onClose}
       onRefresh={onRefresh}
+      menuGroups={
+        activeTab === 'pr'
+          ? prMenuGroups
+          : activeTab === 'changes' && ready
+            ? changesMenuGroups
+            : null
+      }
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
+      accessory={
+        <MobileSegmentedControl
+          segments={SOURCE_CONTROL_HUB_TABS.map((tab) => ({
+            value: tab,
+            label: SOURCE_CONTROL_HUB_TAB_LABELS[tab]
+          }))}
+          selected={activeTab}
+          onSelect={selectTab}
+          fill
+          tabs
+          style={hubStyles.segments}
+        />
+      }
     />
   )
 
-  // Why: a parked reconnect loop makes retry useless — revive the connection instead (issue #5049); loadStatus re-runs on reconnect.
+  // Revive parked reconnect loops; loadStatus reruns after connection.
   const statusRetry = connectionRetryAction({
     hostId,
     needsReconnect: connState !== 'connected',
@@ -251,35 +315,25 @@ export function MobileSourceControlPanel({
   })
   const statusGate =
     screenState.kind === 'loading' ? (
-      <View style={styles.state}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
-      <View style={styles.state}>
-        <Text style={styles.stateTitle}>
-          {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
-        </Text>
-        <Text style={styles.stateText}>{screenState.message}</Text>
-        {screenState.kind === 'error' && statusRetry ? (
-          <Pressable style={styles.retryButton} onPress={statusRetry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <MobileStateView loading title={t('sourceControl.panel.loading', 'Loading changes…')} />
+    ) : screenState.kind === 'unavailable' ? (
+      <MobileStateView
+        icon={GitBranch}
+        title={t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')}
+        message={screenState.message}
+      />
+    ) : screenState.kind === 'error' && connState !== 'connected' ? (
+      <MobileOfflineState onReconnect={statusRetry} />
+    ) : screenState.kind === 'error' ? (
+      <MobileLoadErrorState error={screenState.message} onRetry={statusRetry} />
     ) : null
 
-  // History only needs the RPC client, so it isn't gated on git.status; Changes/PR need status (branch, files, head).
   const showChanges = ready && (activeTab === 'changes' || visitedTabs.has('changes'))
-  const showHistory = activeTab === 'history' || visitedTabs.has('history')
-  // Only mount PR body while active: keep-mounting retained Mermaid WebViews and re-rendered the comment tree per keystroke.
+  // Unmount inactive PR content to release Mermaid WebViews and avoid comment rerenders per keystroke.
   const showPrBody = ready && activeTab === 'pr'
-  const conflictOperation = status?.conflictOperation ?? null
-  // Git status always reports a conflictOperation enum; 'unknown' means none.
-  const hasActiveConflict = conflictOperation != null && conflictOperation !== 'unknown'
-  const conflictAborting = isMobileConflictAborting(busyAction, conflictOperation)
 
-  return (
-    <View ref={setRootRef} style={styles.container}>
+  const hub = (
+    <View style={styles.container}>
       {embedded ? (
         <View style={styles.header}>{header}</View>
       ) : (
@@ -288,28 +342,13 @@ export function MobileSourceControlPanel({
         </SafeAreaView>
       )}
 
-      <MobileSourceControlSegments active={activeTab} onSelect={selectTab} />
-
-      {/* On the PR tab the branch card duplicates the ready PR body, so hide it there — unless a conflict is active, which only this card can abort. */}
-      {ready && (activeTab !== 'pr' || hasActiveConflict) ? (
-        <MobileSourceControlBranchCard
-          branchLabel={branchLabel}
-          syncLabel={syncLabel}
-          unstagedCount={unstagedCount}
-          stagedCount={stagedCount}
-          branchCount={branchEntries.length}
-          conflictOperation={conflictOperation}
-          conflictBusy={busyAction !== null}
-          conflictAborting={conflictAborting}
-          onAbortConflict={(operation) => void abortConflictOperation(operation)}
-          prChip={prChip}
-          onOpenPr={openPrTab}
-        />
-      ) : null}
-
       {showChanges ? (
         <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
-          <MobileSourceControlContent state={state} />
+          <MobileSourceControlContent
+            state={state}
+            bottomInset={barInset}
+            onOpenCommits={openCommitsScreen}
+          />
         </View>
       ) : activeTab === 'changes' ? (
         statusGate
@@ -317,38 +356,66 @@ export function MobileSourceControlPanel({
 
       {showPrBody ? (
         <View style={hubStyles.tabBody}>
-          <MobilePrViewPanelBody
-            client={client}
-            connState={connState}
-            worktreeId={worktreeId}
-            branch={prBranch}
-            headSha={prHeadSha}
-            gitStatus={status}
-            isGithubRepo={isHostedRepo}
-            // Gate on the probe too: isGithubRepo=false mid-probe must render loading, not flash "unavailable".
-            branchContextLoaded={ready && prController.prSidebarRepoProbeLoaded}
-            controller={prController}
-            workspaceLabel={worktreeLabel}
+          <MobilePrTabBody
+            tab={prTab}
+            onRetry={prController.retryPRSidebar}
+            bottomInset={barInset}
+            onOpenChanges={() => selectTab('changes')}
+            branchCompare={branchCompare}
           />
         </View>
       ) : activeTab === 'pr' ? (
         statusGate
       ) : null}
 
-      {showHistory ? (
-        <View style={activeTab === 'history' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
-          <MobileGitHistoryList
-            client={client}
-            connState={connState}
-            worktreeId={worktreeId}
-            hostId={hostId}
-            bottomInset={insets.bottom}
-            refreshNonce={historyRefreshNonce}
-          />
-        </View>
+      {ready ? (
+        <MobileSourceControlNextStepBar
+          view={nextStep.view}
+          notice={nextStep.notice ?? prTab.unlinkError}
+          agentNotice={nextStep.agentNotice}
+          mergeConfirm={nextStep.mergeConfirm}
+          composer={state}
+          primaryAction={primaryAction}
+          keyboardLift={state.keyboardLift}
+          bottomInset={insets.bottom}
+          onHeightChange={setBarHeight}
+        />
       ) : null}
+    </View>
+  )
 
-      <MobileSourceControlModals state={state} actionSheetActions={actionSheetActions} />
+  return (
+    <View ref={setRootRef} style={styles.container}>
+      <OptionPager
+        fill
+        pager={hubScreens}
+        main={hub}
+        page={
+          hubScreens.page === 'commits' ? (
+            <MobileSourceControlHubCommitsPage
+              state={state}
+              hostId={hostId}
+              worktreeId={worktreeId}
+              embedded={embedded}
+              review={review}
+              statusHead={statusHead}
+              onBack={hubScreens.close}
+            />
+          ) : hubScreens.page ? (
+            <PrTabScreenView
+              screen={hubScreens.page}
+              tab={prTab}
+              onBack={hubScreens.close}
+              bottomInset={insets.bottom}
+              onOpenFile={(filePath) =>
+                state.openDiffForFile({ kind: 'changes', filePath, area: 'branch' })
+              }
+            />
+          ) : null
+        }
+      />
+      <MobileSourceControlModals state={state} />
+      <MobilePrTabSheets tab={prTab} />
     </View>
   )
 }

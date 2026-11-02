@@ -78,5 +78,7 @@ function codeForStatus(
       return 'terminal-send-refused'
     case 'partial-submit-failed':
       return 'submit-send-error'
+    case 'unconfirmed':
+      return 'runtime-unverifiable'
   }
 }

@@ -22,6 +22,7 @@ import {
   seedPairedWorktree,
   wrapperForRemotePage
 } from './web-runtime-browser-creation-placement-test-rig'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 vi.mock('./web-runtime-session-snapshot', async (importOriginal) => ({
   ...(await importOriginal<typeof SnapshotModule>()),
@@ -65,7 +66,7 @@ describe('paired browser creation placement', () => {
   it('stages each background link after its source before any await and keeps source, 3, 2, 1', async () => {
     const creates = [openLinkFromSource(), openLinkFromSource(), openLinkFromSource()]
     const staged = pendingCreates.map((create) => create.params.page ?? '')
-    // Why no await above: the rows exist off the synchronous part of each call.
+    // Rows must exist synchronously, before either call is awaited.
     const stagedIds = staged.map((pageId) => wrapperForRemotePage(pageId)!.id)
     expect(groupOrder(G1)).toEqual([
       SOURCE.unifiedTabId,
@@ -262,11 +263,7 @@ describe('paired browser creation placement', () => {
           answerPreparation = resolve
         })
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: { call: runtimeCall, prepareBrowserClientHostPlacement: prepare }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, prepareBrowserClientHostPlacement: prepare })
     const create = openLinkFromSource({ placementPreference: 'auto' })
     const stagedRows = groupOrder(G1)
     expect(stagedRows).toHaveLength(3)

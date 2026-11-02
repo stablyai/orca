@@ -7,6 +7,7 @@ const {
   getMediaAccessStatusMock,
   isTrustedAccessibilityClientMock,
   getMacosFullDiskAccessStatusMock,
+  terminalHostsStatusMock,
   execFileMock,
   createSocketMock,
   socketMock,
@@ -31,6 +32,7 @@ const {
     getMediaAccessStatusMock: vi.fn(),
     isTrustedAccessibilityClientMock: vi.fn(),
     getMacosFullDiskAccessStatusMock: vi.fn(),
+    terminalHostsStatusMock: vi.fn(async () => 'denied'),
     execFileMock: vi.fn(),
     createSocketMock: vi.fn(() => socketMock),
     socketMock,
@@ -64,6 +66,9 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('../macos-full-disk-access-status', () => ({
   getMacosFullDiskAccessStatus: getMacosFullDiskAccessStatusMock
+}))
+vi.mock('../daemon/daemon-full-disk-access-status', () => ({
+  getTerminalHostsFullDiskAccessStatus: terminalHostsStatusMock
 }))
 
 import type { DeveloperPermissionState } from '../../shared/developer-permissions-types'
@@ -166,8 +171,22 @@ describe('registerDeveloperPermissionHandlers', () => {
 
     await expect(handler?.()).resolves.toContainEqual({
       id: 'full-disk-access',
-      status: 'granted'
+      status: 'granted',
+      terminalHostStatus: 'denied'
     })
+  })
+
+  it.each(['win32', 'linux'] as const)('does not probe terminal hosts on %s', async (platform) => {
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+    getMacosFullDiskAccessStatusMock.mockResolvedValue('unsupported')
+    terminalHostsStatusMock.mockClear()
+    registerDeveloperPermissionHandlers()
+
+    await expect(getStatusHandler()()).resolves.toContainEqual({
+      id: 'full-disk-access',
+      status: 'unsupported'
+    })
+    expect(terminalHostsStatusMock).not.toHaveBeenCalled()
   })
 
   it('keeps the local-network status unknown when UDP send settles without an error', async () => {

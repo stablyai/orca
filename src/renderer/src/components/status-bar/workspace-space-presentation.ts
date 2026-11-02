@@ -1,5 +1,5 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -27,6 +27,7 @@ export function isWorkspaceSpaceFilterQueryTooLarge(
 
 export type WorkspaceSpaceDeleteReadiness = {
   isActive: boolean
+  canOpenWorkspace?: boolean
   changedFileCount: number | null
   dirtyEditorBufferCount: number
   activeAgentCount: number
@@ -47,15 +48,13 @@ export type WorkspaceSpaceAgentActivityInputs = {
   now: number
 }
 
-function getPaneKeyTabId(paneKey: string): string | null {
+export function getPaneKeyTabId(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
   if (parsed) {
     return parsed.tabId
   }
 
-  // Why: older hydrated snapshots can still carry `tabId:numericPaneId`.
-  // Delete readiness only needs tab ownership, so preserve the conservative
-  // "workspace is in use" signal instead of treating the row as deletable.
+  // Legacy numeric pane keys still establish tab ownership and must conservatively block deletion.
   const separatorIndex = paneKey.indexOf(':')
   if (
     separatorIndex <= 0 ||
@@ -243,6 +242,7 @@ export function isWorkspaceSpaceRowReadyToDelete(
     worktree.status === 'ok' &&
     !worktree.isMainWorktree &&
     readiness !== undefined &&
+    readiness.canOpenWorkspace !== false &&
     !readiness.isActive &&
     readiness.changedFileCount === 0 &&
     readiness.dirtyEditorBufferCount === 0 &&

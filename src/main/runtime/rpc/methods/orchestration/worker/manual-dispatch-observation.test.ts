@@ -3,7 +3,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
-import { eraseRpcMethods } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 
 describe('manual Dispatch observation', () => {
   let db: OrchestrationDb | undefined
@@ -55,7 +55,7 @@ describe('manual Dispatch observation', () => {
     const dispatchMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === 'orchestration.dispatch'
     )
-    if (!dispatchMethod) {
+    if (!dispatchMethod || isStreamingMethod(dispatchMethod)) {
       throw new Error('Missing method orchestration.dispatch')
     }
 
@@ -74,14 +74,13 @@ describe('manual Dispatch observation', () => {
     expect(db.getDispatchContextById(result.dispatch.id)).toMatchObject({
       assignee_handle: 'term_worker',
       assignee_pane_key: workerPaneKey,
-      process_incarnation: 'runtime_test:term_worker:1',
-      capability_hash: expect.any(String)
+      process_incarnation: 'runtime_test:term_worker:1'
     })
 
     const workerShowMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === 'orchestration.workerShow'
     )
-    if (!workerShowMethod) {
+    if (!workerShowMethod || isStreamingMethod(workerShowMethod)) {
       throw new Error('Missing method orchestration.workerShow')
     }
     await expect(
@@ -89,7 +88,7 @@ describe('manual Dispatch observation', () => {
         runtime
       })
     ).resolves.toMatchObject({
-      worker: { state: 'unsupervised', stage: 'injected' },
+      worker: { state: 'unsupervised', stage: 'context_only' },
       observation: { status: 'live', exactWorker: true }
     })
   })
@@ -126,17 +125,12 @@ describe('manual Dispatch observation', () => {
       'launch-hash',
       'runtime_test:term_worker:1'
     )
-    db.mintDispatchCapability({
-      dispatchId: dispatch.id,
-      paneKey: 'tab_worker:leaf_worker',
-      processIncarnation: 'runtime_test:term_worker:1'
-    })
     const context = { runtime }
     const call = async (name: string, params: Record<string, unknown>) => {
       const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
         (candidate) => candidate.name === name
       )
-      if (!method) {
+      if (!method || isStreamingMethod(method)) {
         throw new Error(`Missing method ${name}`)
       }
       return method.handler(method.params?.parse(params), context)
@@ -180,11 +174,10 @@ describe('manual Dispatch observation', () => {
       dispatch: dispatch.id
     })) as { projection: { liveness: { verdict: string } } | null }
     expect(workerShow).toMatchObject({
-      worker: { state: 'unsupervised', stage: 'injected', agentTerminalHandle: 'term_worker' },
+      worker: { state: 'unsupervised', stage: 'context_only', agentTerminalHandle: 'term_worker' },
       observation: { status: 'live', exactWorker: true }
     })
-    // Why: worker-show published only PTY liveness, so it read `live` for a dispatch that
-    // worker-list called `unverifiable` — and worker-list's nextAction sent you back here.
+    // worker-show must match worker-list's agent verdict, not report PTY-live while list directs recovery here.
     expect(workerShow.projection?.liveness.verdict).toBe(
       workerList.workers[0].projection.liveness.verdict
     )
@@ -239,7 +232,7 @@ describe('manual Dispatch observation', () => {
     const workerListMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === 'orchestration.workerList'
     )
-    if (!workerListMethod) {
+    if (!workerListMethod || isStreamingMethod(workerListMethod)) {
       throw new Error('Missing method orchestration.workerList')
     }
     const result = (await workerListMethod.handler(
@@ -287,7 +280,7 @@ describe('manual Dispatch observation', () => {
       (candidate) => candidate.name === name
     )
 
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Missing method ${name}`)
     }
     const result = await method.handler(method.params?.parse({ dispatch: dispatch.id }), {

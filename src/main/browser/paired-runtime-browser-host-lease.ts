@@ -35,7 +35,7 @@ export class PairedRuntimeBrowserHostLease {
   private readonly commandResultSettler: BrowserHostCommandResultSettler
   private readonly reconnectGraceMs: number
   private readonly reconnectRetryDelayMs: number
-  /** Tracks the live connection's negotiation, which a reconnect may drop or gain. */
+  // File-channel support can change on reconnect.
   private fileChannelActive = false
   private closed = false
 
@@ -78,7 +78,7 @@ export class PairedRuntimeBrowserHostLease {
 
   /** Unversioned, unlike the file channel: an older runtime answers with a reportable error. */
   sendPageMetadataRequest(params: unknown, timeoutMs: number) {
-    // Closing drops the connection in the same turn, so its absence is what "closed" means here.
+    // close drops the connection synchronously.
     return requireBrowserHostLeaseSendRequest(
       this.connection?.sendRequest,
       'Remote runtime browser host lease is unavailable.'

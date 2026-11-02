@@ -1,6 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
+import { TERMINAL_KITTY_SHIFT_ENTER_INPUT } from '../../../../shared/terminal-modified-enter-encoding'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import type {
@@ -28,8 +29,10 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
+import { titleHasExplicitAgentIdentity } from './title-agent-identity'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
-import { isLocalWindowsConptyPaneForCtrlArrow } from './terminal-ctrl-arrow-conpty'
+import { isTerminalPaneLocalWindowsConpty } from './terminal-pane-local-windows-conpty'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import {
   isEditableTarget,
@@ -133,7 +136,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     if (!pane) {
       return false
     }
-    return isLocalWindowsConptyPaneForCtrlArrow({
+    return isTerminalPaneLocalWindowsConpty({
       isWindows,
       userAgent: navigator.userAgent,
       state: useAppStore.getState(),
@@ -176,6 +179,11 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
     return pane ? (paneKittyKeyboardModesRef?.current.get(pane.id)?.flags ?? 0) : 0
   }
+  const getModifyOtherKeysActivePane = (): number => {
+    const manager = managerRef.current
+    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+    return pane ? (paneKittyKeyboardModesRef?.current.get(pane.id)?.modifyOtherKeys ?? 0) : 0
+  }
   const hasActivePaneCtrlEnterCsiUAuthority = (): boolean => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
@@ -188,6 +196,27 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       makePaneKey(tabId, pane.leafId),
       isLocalWindowsConptyPane() ? state.runtimePaneTitlesByTabId[tabId]?.[pane.id] : undefined
     )
+  }
+  const isActivePaneNonAgentFullScreen = (): boolean => {
+    const manager = managerRef.current
+    const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+    if (pane?.terminal.buffer.active.type !== 'alternate') {
+      return false
+    }
+    const state = useAppStore.getState()
+    const paneKey = makePaneKey(tabId, pane.leafId)
+    const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+    if (foreground?.agent && !foreground.shellForeground) {
+      return false
+    }
+    const hookRow = state.agentStatusByPaneKey[paneKey]
+    if (hookRow && hookRow.state !== 'done') {
+      return false
+    }
+    if (isTuiAgent(state.agentLaunchConfigByPaneKey[paneKey]?.identity?.agentType)) {
+      return false
+    }
+    return !titleHasExplicitAgentIdentity(state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? '')
   }
   const resolveShortcutEvent = (
     event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0]
@@ -205,7 +234,9 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       getActivePaneWindowsShiftEnterEncoding,
       isActivePaneWindowsTerminalHost,
       terminalShortcutPolicy,
-      hasActivePaneCtrlEnterCsiUAuthority
+      hasActivePaneCtrlEnterCsiUAuthority,
+      getModifyOtherKeysActivePane,
+      isActivePaneNonAgentFullScreen
     )
   const createCapturedInputSender = (pane: { id: number; leafId: string }, data: string) => {
     const capturedTransport = paneTransportsRef.current.get(pane.id)
@@ -233,7 +264,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       })
       if (sent) {
         recordTerminalUserInputForLeaf(tabId, pane.leafId)
-        if (overrideData === '\x1b[13;2u') {
+        if (overrideData === TERMINAL_KITTY_SHIFT_ENTER_INPUT) {
           requestCapturedTerminalReconfirmation(
             panePtyBindingsRef.current.get(pane.id),
             capturedBinding

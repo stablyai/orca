@@ -28,8 +28,7 @@ export function showWorkspaceCleanupRemovalResultToasts(
   }
   const stillRemovingCount = result.failures.length - definitiveFailures.length
   if (stillRemovingCount > 0) {
-    // Why: rows past the deadline are still removing; an error toast here would
-    // contradict the authoritative outcome reported when they settle.
+    // Timed-out rows still remove; definitive error toasts would contradict later authoritative outcomes.
     toast.info(
       translate(
         'auto.components.workspace.cleanup.backgroundRemoval.stillRemoving',

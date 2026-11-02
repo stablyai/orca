@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
+import {
+  subscribeRuntimeEnvironmentFromPreload,
+  subscribeCrewAttemptFromPreload,
+  cancelRuntimeEnvironmentSubscriptionFromPreload
+} from './runtime-environment-subscriptions'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -49,8 +53,6 @@ function createIpc() {
 }
 
 function dispatch(ipc: ReturnType<typeof createIpc>, event: SubscriptionEvent): void {
-  // A single shared channel listener is registered for the ipc instance; route
-  // through it the same way the real ipcRenderer would deliver the frame.
   ipc.emitSubscriptionEvent(event)
 }
 
@@ -125,8 +127,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     )
     expect(ipc.listenerCount()).toBe(0)
 
-    // After unsubscribe, frames for the released id must no longer reach the
-    // consumer (the dispatcher dropped its closure).
     onResponse.mockClear()
     dispatch(ipc, {
       subscriptionId: 'sub-1',
@@ -160,7 +160,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
       )
     )
 
-    // O(1) attached listeners regardless of subscription count - the leak guard.
     expect(ipc.on).toHaveBeenCalledTimes(1)
     expect(ipc.removeListener).not.toHaveBeenCalled()
     expect(handles).toHaveLength(25)
@@ -205,9 +204,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
       () => 'sub-err'
     )
 
-    // Error frames are non-terminal: shared-control subscriptions survive
-    // reconnects, so repeated errors must NOT detach the dispatcher and must keep
-    // delivering to the live consumer rather than leaking a zombie listener.
     for (let i = 0; i < 50; i++) {
       dispatch(ipc, {
         subscriptionId: 'sub-err',
@@ -220,8 +216,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.removeListener).not.toHaveBeenCalled()
     expect(ipc.listenerCount()).toBe(1)
 
-    // The consumer's unsubscribe is the single release path. After it, error
-    // frames for the same id no longer reach the consumer - no retained closure.
     cleanup.unsubscribe()
     expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:unsubscribe', {
       subscriptionId: 'sub-err'
@@ -261,7 +255,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
 
-    // A rejected subscribe must not leave a routable entry behind.
     dispatch(ipc, {
       subscriptionId: 'sub-2',
       type: 'response',
@@ -322,7 +315,6 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
 
-    // The entry is already gone. A redundant unsubscribe is still safe.
     onClose.mockClear()
     cleanup.unsubscribe()
     dispatch(ipc, { subscriptionId: 'sub-closed', type: 'close' })
@@ -356,5 +348,114 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     )
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
+  })
+})
+
+describe('opt-in crew setup registration', () => {
+  const args = {
+    selector: 'desk',
+    method: 'orchestration.crewSubscribe',
+    subscriptionId: 'crew',
+    expectedEnvironmentPairingRevision: 1,
+    expectedEnvironmentRuntimeId: null
+  } as const
+
+  it('forwards plain failure after a terminal event and releases the exact registration', async () => {
+    const ipc = createIpc()
+    const pending = deferred<unknown>()
+    ipc.invoke.mockReturnValue(pending.promise)
+    const onClose = vi.fn()
+    const onError = vi.fn()
+    const first = subscribeCrewAttemptFromPreload(ipc, args, {
+      onResponse: vi.fn(),
+      onClose,
+      onError
+    })
+    expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:subscribe', {
+      ...args,
+      setupResult: 'crew'
+    })
+    dispatch(ipc, {
+      subscriptionId: 'crew',
+      type: 'error',
+      code: 'remote_runtime_unavailable',
+      message: 'offline'
+    })
+    dispatch(ipc, { subscriptionId: 'crew', type: 'close' })
+    const failure = {
+      subscriptionId: 'crew',
+      ok: false,
+      failure: { message: 'revoked', fact: { kind: 'remote', code: 'unauthorized' } }
+    }
+    pending.resolve(failure)
+    await expect(first).resolves.toBe(failure)
+    expect(ipc.listenerCount()).toBe(0)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases cancelled registrations while held invoke tails settle in either order', async () => {
+    const count = 2
+    const ipc = createIpc()
+    const held = Array.from({ length: count }, () => deferred<unknown>())
+    let next = 0
+    ipc.invoke.mockImplementation((channel) =>
+      channel === 'runtimeEnvironments:subscribe' ? held[next++].promise : Promise.resolve({})
+    )
+    const responses = vi.fn()
+    const attempts = held.map((_, index) =>
+      subscribeCrewAttemptFromPreload(
+        ipc,
+        { ...args, subscriptionId: `crew-${index}` },
+        { onResponse: responses }
+      ).catch((error: unknown) => error)
+    )
+    expect(ipc.listenerCount()).toBe(1)
+    for (let index = 0; index < count; index++) {
+      await cancelRuntimeEnvironmentSubscriptionFromPreload(ipc, `crew-${index}`)
+    }
+    expect(ipc.listenerCount()).toBe(0)
+    expect(ipc.on).toHaveBeenCalledTimes(1)
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    for (let index = 0; index < count; index++) {
+      if (index % 2) {
+        held[index].reject(new Error('late invoke rejection'))
+      } else {
+        held[index].resolve({ subscriptionId: `crew-${index}`, ok: true })
+      }
+      dispatch(ipc, {
+        subscriptionId: `crew-${index}`,
+        type: 'response',
+        response: { id: 'late', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
+      })
+    }
+    await Promise.all(attempts)
+    expect(ipc.listenerCount()).toBe(0)
+    expect(responses).not.toHaveBeenCalled()
+    expect(ipc.invoke).toHaveBeenCalledTimes(count * 2)
+  })
+
+  it('keeps a replacement registration when an old cancelled invoke later rejects', async () => {
+    const ipc = createIpc()
+    const old = deferred<unknown>()
+    ipc.invoke.mockImplementation((channel) =>
+      channel === 'runtimeEnvironments:subscribe' ? old.promise : Promise.resolve({})
+    )
+    const first = subscribeCrewAttemptFromPreload(ipc, args, { onResponse: vi.fn() })
+    const rejected = expect(first).rejects.toThrow('old invoke')
+    await cancelRuntimeEnvironmentSubscriptionFromPreload(ipc, 'crew')
+    ipc.invoke.mockResolvedValue({ subscriptionId: 'crew', ok: true })
+    const response = vi.fn()
+    await subscribeCrewAttemptFromPreload(ipc, args, { onResponse: response })
+    old.reject(new Error('old invoke'))
+    await rejected
+    dispatch(ipc, {
+      subscriptionId: 'crew',
+      type: 'response',
+      response: { id: 'current', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
+    })
+    expect(response).toHaveBeenCalledOnce()
+    expect(ipc.listenerCount()).toBe(1)
+    await cancelRuntimeEnvironmentSubscriptionFromPreload(ipc, 'crew')
   })
 })

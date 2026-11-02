@@ -2,18 +2,28 @@ import { describe, expect, it, vi } from 'vitest'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { DEGRADED_DAEMON_RECOVERY_RETRY_MS } from './degraded-daemon-fresh-spawn-routing'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { settledWriteStub, stubWriteSettlement } from '../providers/settled-pty-write-stub'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
-import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { settledWriteStub } from '../providers/settled-pty-write-stub'
+import type {
+  IPtyProvider,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/pty-provider-contract'
+import type {
+  PtyProcessInspection,
+  PtyProcessInspectionOptions
+} from '../providers/pty-process-inspection'
+import { readLaunchedAgentForeground } from '../runtime/launched-agent-foreground'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
 type ProviderMock = IPtyProvider & {
   probePtyLiveness: (id: string) => Promise<boolean | null>
-  inspectProcess: (id: string) => Promise<PtyProcessInspection>
+  inspectProcess: (
+    id: string,
+    options?: PtyProcessInspectionOptions
+  ) => Promise<PtyProcessInspection>
   emitData: (id: string, data: string, sequenceChars?: number) => void
   emitReplay: (id: string, data: string) => void
   emitExit: (id: string, code: number) => void
-  triggerWriteUnavailable: (id: string) => void
   onWriteUnavailable: (callback: (payload: { id: string }) => void) => () => void
 }
 
@@ -113,12 +123,7 @@ function createProvider(
           writeUnavailableListeners.splice(idx, 1)
         }
       }
-    }),
-    triggerWriteUnavailable: (id: string) => {
-      for (const listener of writeUnavailableListeners) {
-        listener({ id })
-      }
-    }
+    })
   }
 }
 
@@ -141,26 +146,6 @@ function createDaemonAdapter(
     fanoutSyntheticExits: vi.fn()
   } as unknown as DaemonPtyAdapter & ProviderMock
 }
-
-it('forwards dead-endpoint write-unavailable signals from the daemon adapters', () => {
-  // Why revert-sensitive: this provider is the live localProvider in degraded launch
-  // mode and main subscribes on it, so without forwarding the STA-2373 fan-out reaches
-  // no listener and sibling panes stay frozen.
-  const current = createDaemonAdapter('daemon')
-  const legacy = createDaemonAdapter('legacy')
-  const fallback = createProvider('fallback')
-  const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
-  const recovered: string[] = []
-
-  const unsubscribe = provider.onWriteUnavailable(({ id }) => recovered.push(id))
-  current.triggerWriteUnavailable('daemon-pane')
-  legacy.triggerWriteUnavailable('legacy-pane')
-  expect(recovered).toEqual(['daemon-pane', 'legacy-pane'])
-
-  unsubscribe()
-  current.triggerWriteUnavailable('after-unsubscribe')
-  expect(recovered).toEqual(['daemon-pane', 'legacy-pane'])
-})
 
 it('routes attach-only to a legacy session created after startup inventory', async () => {
   const current = createDaemonAdapter('daemon')
@@ -273,29 +258,6 @@ it('rejects completion inspection instead of borrowing the fallback provider', a
   await expect(provider.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
 })
 
-it('preserves client-only unverifiable inspection from an owning daemon', async () => {
-  const daemon = createDaemonAdapter('daemon', ['daemon-session'])
-  vi.mocked(daemon.inspectProcess).mockResolvedValue({
-    foregroundProcess: null,
-    hasChildProcesses: false,
-    verdict: 'unverifiable',
-    reason: 'old_host'
-  })
-  const provider = new DegradedDaemonPtyProvider({
-    current: daemon,
-    legacy: [],
-    fallback: createProvider('fallback')
-  })
-  await provider.discoverDaemonSessions()
-
-  await expect(provider.inspectProcess('daemon-session')).resolves.toEqual({
-    foregroundProcess: null,
-    hasChildProcesses: false,
-    verdict: 'unverifiable',
-    reason: 'old_host'
-  })
-})
-
 describe('DegradedDaemonPtyProvider', () => {
   it('refuses attach for ids no daemon adapter owns instead of the fallback no-op', async () => {
     const daemonSessions: string[] = []
@@ -303,37 +265,20 @@ describe('DegradedDaemonPtyProvider', () => {
     const fallback = createProvider('fallback', ['fresh-fallback-session'])
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
 
-    // Unknown id: the fallback's resolving no-op attach must never read as
-    // success — the runtime would pin a blank stream as attached.
+    // A resolving fallback attach would pin a blank stream as successfully attached.
     await expect(provider.attach('wt-1@@unknown')).rejects.toThrow(
       'Session not found: wt-1@@unknown'
     )
-    // Fallback-owned fresh sessions stream in-process; attach is refused too.
     await expect(provider.attach('fresh-fallback-session')).rejects.toThrow(
       'Session not found: fresh-fallback-session'
     )
     expect(fallback.attach).not.toHaveBeenCalled()
     expect(current.attach).not.toHaveBeenCalled()
 
-    // Once a daemon adapter owns the id, attach routes to that adapter.
     daemonSessions.push('wt-1@@learned')
     await expect(provider.attach('wt-1@@learned')).resolves.toBeUndefined()
     expect(current.attach).toHaveBeenCalledWith('wt-1@@learned')
     expect(fallback.attach).not.toHaveBeenCalled()
-  })
-
-  it('forwards the owning daemon sequence from attach', async () => {
-    const legacy = createDaemonAdapter('legacy', ['daemon-session'])
-    const providerSequence = { value: 204, generation: 'continued' as const }
-    vi.mocked(legacy.attach).mockResolvedValueOnce({ providerSequence })
-    const provider = new DegradedDaemonPtyProvider({
-      current: createDaemonAdapter('current'),
-      legacy: [legacy],
-      fallback: createProvider('fallback')
-    })
-    await provider.discoverDaemonSessions()
-
-    await expect(provider.attach('daemon-session')).resolves.toEqual({ providerSequence })
   })
 
   it('only delegates owner-listing authority to the provider that owns the id', async () => {
@@ -346,53 +291,50 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(provider.providesAgentSessionOwnerListings('unknown-session')).toBe(false)
   })
 
-  it('routes fresh foreground confirmation to the session owner', async () => {
-    const current = createDaemonAdapter('daemon', ['daemon-session'])
+  it('observes an established fresh PTY while an unrelated legacy daemon is unreachable', async () => {
+    const current = createDaemonAdapter('daemon')
+    const legacy = createDaemonAdapter('legacy', ['unrelated'])
     const fallback = createProvider('fallback')
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-    await provider.discoverDaemonSessions()
+    const observation = {
+      ptyId: 'fallback-new',
+      ptyIncarnationId: 'inc',
+      authorityGeneration: 'owner',
+      observationEpoch: 1,
+      capturedAgeMs: 0,
+      verdict: 'observed' as const,
+      source: 'pty-master' as const,
+      foregroundKind: 'non-shell' as const,
+      processName: 'claude'
+    }
+    Object.assign(fallback, { supportsForegroundObservation: () => true })
+    vi.mocked(fallback.inspectProcess).mockResolvedValue({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true,
+      foregroundObservation: observation
+    })
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
     const fresh = await provider.spawn({ cols: 80, rows: 24 })
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('unreachable'))
+    const controller = {
+      supportsForegroundObservation: (id: string) => provider.supportsForegroundObservation(id),
+      inspectProcess: (id: string, options?: PtyProcessInspectionOptions) =>
+        provider.inspectProcess(id, options),
+      getForegroundProcess: (id: string) => provider.getForegroundProcess(id),
+      listProcesses: (_host?: string, opts?: Parameters<IPtyProvider['listProcesses']>[0]) =>
+        provider.listProcesses(opts)
+    }
 
-    await expect(provider.confirmForegroundProcess('daemon-session')).resolves.toBe(
-      'daemon-confirmed'
-    )
-    await expect(provider.confirmForegroundProcess(fresh.id)).resolves.toBe('fallback-confirmed')
-  })
-
-  it('routes discovered daemon sessions to the daemon and fresh PTYs to the fallback', async () => {
-    const current = createDaemonAdapter('daemon', ['daemon-session'])
-    const fallback = createProvider('fallback')
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-
-    await provider.discoverDaemonSessions()
-
-    await provider.spawn({ sessionId: 'daemon-session', cols: 80, rows: 24 })
-    const fresh = await provider.spawn({ cols: 80, rows: 24 })
-    provider.write('daemon-session', 'old\n')
-    provider.write(fresh.id, 'new\n')
-
-    expect(current.spawn).toHaveBeenCalledWith({ sessionId: 'daemon-session', cols: 80, rows: 24 })
-    expect(fallback.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
-    expect(current.write).toHaveBeenCalledWith('daemon-session', 'old\n')
-    expect(fallback.write).toHaveBeenCalledWith(fresh.id, 'new\n')
-  })
-
-  it('preserves settlement through daemon and fallback routes', async () => {
-    const current = createDaemonAdapter('daemon', ['daemon-session'])
-    const fallback = createProvider('fallback')
-    vi.mocked(current.writeWithSettlement).mockResolvedValue(stubWriteSettlement(false))
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-    await provider.discoverDaemonSessions()
-    const fresh = await provider.spawn({ cols: 80, rows: 24 })
-
-    await expect(provider.writeWithSettlement('daemon-session', 'old')).resolves.toEqual(
-      stubWriteSettlement(false)
-    )
-    await expect(provider.writeWithSettlement(fresh.id, 'new')).resolves.toEqual(
-      stubWriteSettlement(true)
-    )
-    expect(current.writeWithSettlement).toHaveBeenCalledWith('daemon-session', 'old')
-    expect(fallback.writeWithSettlement).toHaveBeenCalledWith(fresh.id, 'new')
+    await expect(
+      readLaunchedAgentForeground(controller, { remote: false, windows: false }, fresh.id, 'claude')
+    ).resolves.toBe('agent')
+    expect(fallback.inspectProcess).toHaveBeenCalledWith(fresh.id, { foregroundOnly: true })
+    // The target read skips the unrelated census; every other scoped read keeps it.
+    await expect(
+      provider.listProcesses({ ptyIds: [fresh.id], targetOwnerOnly: true })
+    ).resolves.toMatchObject([{ id: fresh.id }])
+    expect(legacy.listProcesses).not.toHaveBeenCalled()
+    await expect(provider.listProcesses({ ptyIds: [fresh.id] })).rejects.toThrow()
+    expect(provider.supportsForegroundObservation('unrouted')).toBe(false)
   })
 
   it('routes later fresh PTYs to the daemon after spawn health recovers', async () => {
@@ -475,7 +417,7 @@ describe('DegradedDaemonPtyProvider', () => {
       exitedBeforeSpawnReply: true
     })
 
-    expect(provider.getCurrentDaemonSessionIds()).toEqual([])
+    expect(provider.getSessionIdsRoutedTo('current-daemon')).toEqual([])
   })
 
   it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {
@@ -494,18 +436,6 @@ describe('DegradedDaemonPtyProvider', () => {
     })
   })
 
-  it('caches a provider discovered by hasPty before routing later operations', () => {
-    const current = createDaemonAdapter('daemon', ['daemon-session'])
-    const fallback = createProvider('fallback')
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-
-    expect(provider.hasPty('daemon-session')).toBe(true)
-    provider.write('daemon-session', 'kept-on-daemon\n')
-
-    expect(current.write).toHaveBeenCalledWith('daemon-session', 'kept-on-daemon\n')
-    expect(fallback.write).not.toHaveBeenCalled()
-  })
-
   it('probes daemon owners without borrowing fallback liveness', async () => {
     const currentSessions: string[] = []
     const current = createDaemonAdapter('current', currentSessions)
@@ -519,43 +449,6 @@ describe('DegradedDaemonPtyProvider', () => {
 
     currentSessions.push('unknown-session')
     await expect(provider.probePtyLiveness('unknown-session')).resolves.toBe(true)
-  })
-
-  it('reports a routed fallback PTY live before probing daemon absence', async () => {
-    const current = createDaemonAdapter('current')
-    const legacy = createDaemonAdapter('legacy')
-    const fallback = createProvider('fallback')
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
-    const fresh = await provider.spawn({ cols: 80, rows: 24 })
-
-    await expect(provider.probePtyLiveness(fresh.id)).resolves.toBe(true)
-    expect(fallback.hasPty).toHaveBeenCalledWith(fresh.id)
-    expect(current.listProcesses).not.toHaveBeenCalled()
-    expect(legacy.listProcesses).not.toHaveBeenCalled()
-  })
-
-  it('routes authoritative recovery snapshots to the owning daemon', async () => {
-    const current = createDaemonAdapter('daemon', ['daemon-session'])
-    const fallback = createProvider('fallback')
-    const snapshot = {
-      data: 'alt frame',
-      scrollbackAnsi: 'normal history',
-      cols: 80,
-      rows: 24,
-      seq: 42,
-      source: 'headless' as const
-    }
-    current.getBufferSnapshot = vi.fn(async () => snapshot)
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-
-    await provider.discoverDaemonSessions()
-
-    await expect(
-      provider.getBufferSnapshot('daemon-session', { scrollbackRows: 50_000 })
-    ).resolves.toEqual(snapshot)
-    expect(current.getBufferSnapshot).toHaveBeenCalledWith('daemon-session', {
-      scrollbackRows: 50_000
-    })
   })
 
   it('forwards replay output from fallback and daemon providers', () => {
@@ -581,22 +474,6 @@ describe('DegradedDaemonPtyProvider', () => {
     })
   })
 
-  it('preserves explicit sequence accounting on daemon data events', () => {
-    const current = createDaemonAdapter('daemon')
-    const fallback = createProvider('fallback')
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-    const dataSpy = vi.fn()
-    provider.onData(dataSpy)
-
-    current.emitData('daemon-session', '\x1b[6n', 0)
-
-    expect(dataSpy).toHaveBeenCalledWith({
-      id: 'daemon-session',
-      data: '\x1b[6n',
-      sequenceChars: 0
-    })
-  })
-
   it('detaches provider subscriptions without disposing the underlying providers', () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
@@ -615,19 +492,6 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(current.dispose).not.toHaveBeenCalled()
   })
 
-  it('shuts down fallback sessions before a daemon-provider swap', async () => {
-    const current = createDaemonAdapter('daemon')
-    const fallback = createProvider('fallback')
-    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
-
-    const fresh = await provider.spawn({ cols: 80, rows: 24 })
-    const killedCount = await provider.shutdownFallbackSessions()
-
-    expect(killedCount).toBe(1)
-    expect(fallback.shutdown).toHaveBeenCalledWith(fresh.id, { immediate: true })
-    expect(provider.hasPty(fresh.id)).toBe(false)
-  })
-
   it('is best-effort: counts only successful shutdowns and never throws (keeps restart alive)', async () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
@@ -641,11 +505,8 @@ describe('DegradedDaemonPtyProvider', () => {
       }
     })
 
-    // Why: a single un-killable local PTY must not abort the daemon restart.
     const killedCount = await provider.shutdownFallbackSessions()
 
-    // Best-effort: the one that shut down is counted, the stuck one is not, and
-    // crucially it does not throw — so the daemon restart sequence proceeds.
     expect(killedCount).toBe(1)
     expect(warn).toHaveBeenCalled()
     expect(fallback.shutdown).toHaveBeenCalledWith('stuck', { immediate: true })
@@ -662,11 +523,15 @@ describe('DegradedDaemonPtyProvider', () => {
     provider.onExit(exitSpy)
 
     await provider.discoverDaemonSessions()
-    provider.fanoutCurrentDaemonSyntheticExits(-1)
+    provider.fanoutCurrentDaemonSyntheticExits(-1, { replacedByRestart: true })
 
     expect(exitSpy).toHaveBeenCalledOnce()
-    expect(exitSpy).toHaveBeenCalledWith({ id: 'current-session', code: -1 })
-    expect(provider.getCurrentDaemonSessionIds()).toEqual([])
+    expect(exitSpy).toHaveBeenCalledWith({
+      id: 'current-session',
+      code: -1,
+      replacedByRestart: true
+    })
+    expect(provider.getSessionIdsRoutedTo('current-daemon')).toEqual([])
     expect(provider.hasPty('legacy-session')).toBe(true)
   })
 

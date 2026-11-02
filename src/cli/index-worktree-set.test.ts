@@ -41,6 +41,7 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
+import { RuntimeRpcFailureError } from './runtime/types'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
@@ -52,6 +53,122 @@ describe('orca cli worktree awareness', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
+  })
+
+  it('identifies unsupported folder parents and avoids blaming the child for missing parents', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    const child = 'id:repo::/tmp/repo/child'
+    try {
+      for (const parent of ['folder:folder-1', 'id:folder:folder-1']) {
+        logSpy.mockClear()
+        await main(
+          ['worktree', 'set', '--worktree', child, '--parent-worktree', parent, '--json'],
+          '/tmp/repo'
+        )
+        expect(callMock).not.toHaveBeenCalled()
+        const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error
+        expect(output.message).toContain(`Parent selector "${parent}" is a folder.`)
+        expect(output.message).toContain(
+          'Folder parents are accepted only by orca worktree create.'
+        )
+        expect(process.exitCode).toBe(1)
+      }
+
+      callMock.mockRejectedValueOnce(
+        new RuntimeRpcFailureError({
+          id: 'req_missing_parent',
+          ok: false,
+          error: {
+            code: 'selector_not_found',
+            message: 'selector_not_found',
+            data: { orchestrationRequestId: 'req_mutation', nextSteps: ['Inspect mutation.'] }
+          }
+        })
+      )
+      logSpy.mockClear()
+      await main(
+        ['worktree', 'set', '--worktree', child, '--parent-worktree', 'name:missing', '--json'],
+        '/tmp/repo'
+      )
+      const output = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}').error
+      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['worktree.set'])
+      expect(output.data.orchestrationRequestId).toBe('req_mutation')
+      expect(output.data.nextSteps).toContain('Inspect mutation.')
+      expect(output.data.nextSteps.join(' ')).toContain('parent selector "name:missing"')
+      expect(output.data.nextSteps.join(' ')).toContain(
+        'The server did not identify which selector failed.'
+      )
+      expect(output.data.nextSteps.join(' ')).not.toContain(
+        'No Orca workspace matched the worktree selector'
+      )
+      expect(process.exitCode).toBe(1)
+      expect(errSpy).not.toHaveBeenCalled()
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
+
+  it('keeps child and parent lookup recovery distinct before mutation', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    const cwd = '/tmp/not-managed'
+    const rpc = {
+      id: 'req_child',
+      ok: false as const,
+      error: {
+        code: 'selector_not_found',
+        message: 'selector_not_found',
+        data: { orchestrationRequestId: 'req_original', nextSteps: ['Inspect original request.'] }
+      },
+      _meta: { runtimeId: 'runtime_original' }
+    }
+    try {
+      for (const stage of ['child', 'parent', 'preflight']) {
+        for (const json of [true, false]) {
+          callMock.mockReset()
+          log.mockClear()
+          err.mockClear()
+          const worktree = stage === 'child' ? 'current' : 'name:x'
+          const parent = stage === 'parent' ? 'current' : 'name:existing-parent'
+          if (stage === 'preflight') {
+            callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(rpc))
+          } else {
+            queueFixtures(callMock, worktreeListFixture([]))
+          }
+          const args = ['worktree', 'set', '--worktree', worktree, '--parent-worktree', parent]
+          if (stage === 'preflight') {
+            args.push('--gitlab-issue', 'https://gitlab.com/group/repo/-/issues/1')
+          }
+          await main([...args, ...(json ? ['--json'] : [])], cwd)
+          const text = String((json ? log : err).mock.calls.at(-1)?.[0])
+          const response = json ? JSON.parse(text) : undefined
+          expect(callMock.mock.calls.map(([method]) => method)).toEqual([
+            stage === 'preflight' ? 'worktree.show' : 'worktree.list'
+          ])
+          expect(text).toContain(
+            stage === 'preflight' ? 'Inspect original request.' : `current directory: ${cwd}`
+          )
+          expect(text).toContain(
+            stage === 'parent' ? 'explicit parent selector' : 'No Orca workspace matched'
+          )
+          expect(text).not.toContain(stage === 'parent' ? 'name:x' : 'parent selector')
+          if (response) {
+            expect(response.id).toBe(stage === 'preflight' ? rpc.id : 'local')
+            expect(response._meta.runtimeId).toBe(
+              stage === 'preflight' ? rpc._meta.runtimeId : null
+            )
+            if (stage === 'preflight') {
+              expect(response.error.data).toMatchObject({ orchestrationRequestId: 'req_original' })
+            }
+          }
+        }
+      }
+    } finally {
+      process.exitCode = priorExitCode
+    }
   })
 
   it('uses cwd when active is passed to worktree.set', async () => {
@@ -390,5 +507,78 @@ describe('orca cli worktree awareness', () => {
       parentWorktree: undefined,
       noParent: false
     })
+  })
+
+  it.each([
+    ['id:repo::/tmp/repo/child', '--unread', true],
+    ['id:repo::/tmp/repo/child', '--read', false],
+    ['id:folder:folder-1', '--unread', true],
+    ['id:folder:folder-1', '--read', false]
+  ])('passes %s %s through worktree.set as isUnread', async (selector, flag, isUnread) => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_unread', {
+        worktree: { id: selector.slice('id:'.length), isUnread }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['worktree', 'set', '--worktree', selector, flag, '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('worktree.set', {
+      worktree: selector,
+      displayName: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      workspaceStatus: undefined,
+      isUnread,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('leaves isUnread unchanged when neither --unread nor --read is passed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_comment', { worktree: buildWorktree('/tmp/repo/child', 'feature/child') })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--comment', 'hi', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledExactlyOnceWith(
+      'worktree.set',
+      expect.objectContaining({
+        worktree: 'id:repo::/tmp/repo/child',
+        comment: 'hi',
+        isUnread: undefined
+      })
+    )
+  })
+
+  it.each([
+    [['--unread', '--read'], 'Choose either --unread or --read'],
+    [['--read', '--unread'], 'Choose either --unread or --read'],
+    [['--read', 'yes'], '--read takes no value'],
+    [['--read=false'], '--read takes no value'],
+    [['--read='], '--read takes no value'],
+    [['--unread=false'], '--unread takes no value'],
+    [['--unread='], '--unread takes no value']
+  ])('rejects %j on worktree.set before resolving selectors', async (flags, message) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    // Resolving active makes an RPC, so no calls proves validation ran first.
+    await main(['worktree', 'set', '--worktree', 'active', ...flags, '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(message)
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 })

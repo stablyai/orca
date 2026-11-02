@@ -1,27 +1,20 @@
 import { useAppStore } from '@/store'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import {
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive,
-  isWebTerminalSurfaceTabId
-} from '@/runtime/web-runtime-session'
-import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
+import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import {
   beginWebRuntimeWakeTerminalRespawn,
   endWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import {
-  draftViewModeProps,
-  resolveStartupLaunchDraftText,
-  type WorktreeStartupPayload
-} from '@/lib/worktree-startup-payload'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { getConnectionId } from '@/lib/connection-context'
 import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
@@ -30,6 +23,8 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     startup?: WorktreeStartupPayload
     agent?: TuiAgent | null
     activate?: boolean
+    /** The caller knows an unlisted workspace is empty: it just created it, or the host never answers. */
+    unknownHostCountIsEmpty?: boolean
   }
 ): void {
   const state = useAppStore.getState()
@@ -40,7 +35,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
-      : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     return
   }
@@ -70,7 +65,31 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
       return
     }
 
-    if (getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) > 0) {
+    const hostTerminalTabCount =
+      getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) ??
+      (opts?.unknownHostCountIsEmpty ? 0 : null)
+    if (hostTerminalTabCount !== null && hostTerminalTabCount > 0) {
+      return
+    }
+    if (hostTerminalTabCount === null && !opts?.startup) {
+      // Unlisted hosts cannot answer yet; their first real list seeds emptiness. Keep the capability gate until all supported hosts advertise it.
+      void runtimeEnvironmentSupportsCapability(
+        runtimeEnvironmentId,
+        SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY
+      )
+        .catch(() => false)
+        .then((hostAnswersLater) => {
+          if (!hostAnswersLater) {
+            ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
+              ...opts,
+              runtimeEnvironmentId,
+              unknownHostCountIsEmpty: true
+            })
+          }
+        })
+        .catch((error) => {
+          console.error('web runtime terminal after wake failed', worktreeId, error)
+        })
       return
     }
 
@@ -94,37 +113,31 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   }
 
   const startup = opts?.startup
-  const viewModeProps = launchAgent
-    ? initialAgentTabViewModeProps(state.settings, {
-        agent: launchAgent,
-        ...draftViewModeProps(resolveStartupLaunchDraftText(startup)),
-        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-          getConnectionId(worktreeId)
-        )
-      })
-    : {}
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
-  void createWebRuntimeSessionTerminal({
-    worktreeId,
-    environmentId: runtimeEnvironmentId,
-    ...viewModeProps,
-    ...(startup
-      ? {
-          command: startup.command,
-          ...(startup.env ? { env: startup.env } : {}),
-          ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
-          ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
-          ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
-          ...(startup.startupCommandDelivery
-            ? { startupCommandDelivery: startup.startupCommandDelivery }
-            : {})
-        }
-      : launchAgent
-        ? { agent: launchAgent }
-        : {}),
-    activate: opts?.activate !== false,
-    selectWorktree: false
-  })
+  void createWebRuntimeSessionTerminal(
+    {
+      worktreeId,
+      environmentId: runtimeEnvironmentId,
+      ...(startup
+        ? {
+            command: startup.command,
+            ...(startup.env ? { env: startup.env } : {}),
+            ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+            ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
+            ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
+            ...(startup.startupCommandDelivery
+              ? { startupCommandDelivery: startup.startupCommandDelivery }
+              : {})
+          }
+        : launchAgent
+          ? { agent: launchAgent }
+          : {}),
+      activate: opts?.activate !== false,
+      selectWorktree: false
+    },
+    // This flow toasts every failure itself, including a disconnected host.
+    { notifyFailure: false }
+  )
     .then((outcome) => {
       if (outcome.status === 'failed') {
         toast.error(outcome.message, {

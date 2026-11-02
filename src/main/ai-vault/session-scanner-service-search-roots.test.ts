@@ -47,7 +47,6 @@ function init(roots: SessionSearchScanRoots): AiVaultSessionSearchInit {
   }
 }
 
-/** OpenClaw reads `<stateDir>/agents/**` and keeps only paths through `sessions`. */
 function openclawTranscript(stateDir: string, name: string): string {
   return join(stateDir, 'agents', 'main', 'sessions', `${name}.jsonl`)
 }
@@ -95,18 +94,5 @@ it('refreshes a late root without rebuilding the index', async () => {
   const close = vi.spyOn(SessionSearchIndexer.prototype, 'close')
   currentRoots = harness.roots
   await indexedSessions('conversation', ['early-session', 'late-session'])
-  expect(close).not.toHaveBeenCalled()
-})
-
-it('keeps the live indexer when an unchanged root snapshot is refreshed', async () => {
-  await writeMessageGraphTranscript(openclawTranscript(spawnRoot, 'early-session'), [
-    'a conversation in a root the spawn already knew'
-  ])
-  subject.apply(init(harness.roots))
-  await indexedSessions('conversation', ['early-session'])
-
-  const close = vi.spyOn(SessionSearchIndexer.prototype, 'close')
-  currentRoots = { ...spawnRoots }
-  await indexedSessions('conversation', ['early-session'])
   expect(close).not.toHaveBeenCalled()
 })

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { publishProfileStateDatabase } from './profile-state-database-publication'
+import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import { openProfileStateDatabase } from './profile-state-database'
 import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
 import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
@@ -18,11 +19,11 @@ type ProfileStateMigrationOptions = {
   databaseFile: string
   profileId: string
   expectedLegacyJson: string | undefined
-  /** Storage-form state; inactive profiles retain sealed secrets without decrypting them. */
+  /** Inactive profiles retain sealed secrets without decryption. */
   serializedState: string
 }
 
-/** Publish an imported database only after its complete source has committed durably. */
+/** Durably commit the complete import before publishing its database. */
 export function migrateProfileStateToSqlite(options: ProfileStateMigrationOptions): {
   authority: ProfileStateSqliteAuthority
   initialState: ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority>
@@ -45,7 +46,7 @@ export function migrateProfileStateToSqlite(options: ProfileStateMigrationOption
       opened.db.close()
     }
 
-    // Closing checkpoints the temporary database before its canonical path becomes visible.
+    // Closing checkpoints the temporary database before canonical-path publication.
     assertMigrationSourceUnchanged(options)
     if (!publishProfileStateDatabase(temporaryDatabaseFile, options.databaseFile)) {
       throw new Error('Profile state storage changed while importing legacy JSON')
@@ -53,6 +54,7 @@ export function migrateProfileStateToSqlite(options: ProfileStateMigrationOption
     published = true
     const authority = new ProfileStateSqliteAuthority(options.databaseFile, options.profileId)
     try {
+      ensureProfileStateAuthorityMarker(options.databaseFile)
       writeVersionedProfileStateExport(options.dataFile, (path) => authority.writeJsonExport(path))
       const initialState = authority.readInitialState()
       return { authority, initialState }

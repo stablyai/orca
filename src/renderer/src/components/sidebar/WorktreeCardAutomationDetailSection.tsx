@@ -39,17 +39,19 @@ export function WorktreeCardAutomationDetailSection({
     async function resolveAvailability(): Promise<void> {
       setAvailability({ status: 'checking' })
       try {
-        // Why not the workspace's host: the automation's host is recorded on the
-        // provenance, and an automation can land a workspace somewhere else
-        // entirely — substituting one for the other asks the wrong machine.
+        // Automation provenance owns the lookup host; its resulting workspace can live elsewhere.
         const target = getAutomationTargetFromHostId(provenance.hostId)
         const automations = await listAutomationsForTarget(target)
         const automation = automations.find((entry) => entry.id === provenance.automationId)
         if (!automation) {
           if (!cancelled) {
-            // With no recorded host this read went to the desktop on no evidence,
-            // so a miss here is "could not check", never "removed".
-            setAvailability({ status: provenance.hostId ? 'automation-missing' : 'unavailable' })
+            // Why: a miss proves removal only for a host-recorded owner; a client's label may name another desktop.
+            setAvailability({
+              status:
+                provenance.hostId && provenance.origin !== 'client'
+                  ? 'automation-missing'
+                  : 'unavailable'
+            })
           }
           return
         }
@@ -71,7 +73,7 @@ export function WorktreeCardAutomationDetailSection({
     return () => {
       cancelled = true
     }
-  }, [provenance.automationId, provenance.automationRunId, provenance.hostId])
+  }, [provenance.automationId, provenance.automationRunId, provenance.hostId, provenance.origin])
 
   const canOpenAutomation = availability.status === 'available'
   const canOpenAutomationRun = availability.status === 'available' && availability.runAvailable

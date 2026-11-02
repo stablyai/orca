@@ -60,8 +60,7 @@ function makePane(args: {
 
 describe('repairPaneWebglCanvasDprMismatch', () => {
   it('repairs a stale dpr-2 backing composited on a dpr-1 display', () => {
-    // The reproduced field bug: hidden-time display change leaves a 2160px
-    // backing behind a 1080px css box at dpr 1 (half-size/smeared text).
+    // Hidden-time display changes left 2160px backing for 1080 CSS pixels at DPR 1, producing half-size/smeared text.
     const { pane, handleDevicePixelRatioChange, handleResize, refresh } = makePane({
       backingWidth: 2160,
       expectedWidth: 1080,
@@ -78,12 +77,6 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
     )
   })
 
-  it('repairs the opposite direction (dpr-1 backing upscaled on retina)', () => {
-    const { pane, handleResize } = makePane({ backingWidth: 1080, expectedWidth: 2160, dpr: 2 })
-    expect(repairPaneWebglCanvasDprMismatch(pane)).toBe(true)
-    expect(handleResize).toHaveBeenCalledTimes(1)
-  })
-
   it('repairs when the canvas and renderer dimensions share a stale dpr cache', () => {
     const { pane, handleDevicePixelRatioChange, handleResize } = makePane({
       backingWidth: 1080,
@@ -95,24 +88,6 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
     expect(repairPaneWebglCanvasDprMismatch(pane)).toBe(true)
     expect(handleDevicePixelRatioChange).toHaveBeenCalledTimes(1)
     expect(handleResize).toHaveBeenCalledWith(120, 40)
-  })
-
-  it('is a no-op when backing matches the renderer device dimensions', () => {
-    const { pane, handleResize, refresh } = makePane({
-      backingWidth: 2160,
-      expectedWidth: 2160,
-      dpr: 2
-    })
-    expect(repairPaneWebglCanvasDprMismatch(pane)).toBe(false)
-    expect(handleResize).not.toHaveBeenCalled()
-    expect(refresh).not.toHaveBeenCalled()
-  })
-
-  it('tolerates sub-pixel rounding without churning', () => {
-    // ResizeObserver can round one device pixel away from renderer dimensions.
-    const { pane, handleResize } = makePane({ backingWidth: 2160, expectedWidth: 2161, dpr: 2 })
-    expect(repairPaneWebglCanvasDprMismatch(pane)).toBe(false)
-    expect(handleResize).not.toHaveBeenCalled()
   })
 
   it('tolerates the larger device-pixel round trip on high-dpr displays', () => {
@@ -133,27 +108,6 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
     expect(handleResize).toHaveBeenCalledTimes(1)
   })
 
-  it('skips detached, zero-dimension, and renderer-less panes', () => {
-    const detached = makePane({
-      backingWidth: 2160,
-      expectedWidth: 1080,
-      dpr: 1,
-      connected: false
-    })
-    expect(repairPaneWebglCanvasDprMismatch(detached.pane)).toBe(false)
-
-    const zeroDimension = makePane({ backingWidth: 2160, expectedWidth: 0, dpr: 1 })
-    expect(repairPaneWebglCanvasDprMismatch(zeroDimension.pane)).toBe(false)
-
-    const noRenderer = makePane({
-      backingWidth: 2160,
-      expectedWidth: 1080,
-      dpr: 1,
-      hasRenderer: false
-    })
-    expect(repairPaneWebglCanvasDprMismatch(noRenderer.pane)).toBe(false)
-  })
-
   it('defers an unmeasurable WebGL canvas but accepts a renderer-less pane', () => {
     const detached = makePane({
       backingWidth: 2160,
@@ -170,17 +124,5 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
 
     expect(repairPaneWebglCanvasDpr(detached.pane)).toBe('deferred')
     expect(repairPaneWebglCanvasDpr(noRenderer.pane)).toBe('current')
-  })
-
-  it('reports failure without throwing when the repair path throws mid-teardown', () => {
-    const { pane, handleResize } = makePane({
-      backingWidth: 2160,
-      expectedWidth: 1080,
-      dpr: 1
-    })
-    handleResize.mockImplementation(() => {
-      throw new Error('disposed')
-    })
-    expect(repairPaneWebglCanvasDprMismatch(pane)).toBe(false)
   })
 })

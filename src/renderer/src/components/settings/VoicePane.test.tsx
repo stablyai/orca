@@ -270,7 +270,10 @@ describe('VoicePane', () => {
     )
     useShortcutLabelMock.mockReturnValue('Ctrl+Shift+Y')
     installWindowApi(vi.fn(async () => deniedMicrophoneResult))
-    window.api.speech.getOpenAiApiKeyStatus = vi.fn(async () => ({ configured: true }))
+    window.api.speech.getOpenAiApiKeyStatus = vi.fn(async () => ({
+      configured: true,
+      protection: 'sealed' as const
+    }))
     window.api.speech.clearOpenAiApiKey = vi.fn(() => clearing)
 
     const settingsWithKey = (enabled: boolean): GlobalSettings =>
@@ -301,7 +304,6 @@ describe('VoicePane', () => {
       disconnect.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    // The user turns dictation off while the clear-key IPC is still in flight.
     await act(async () => {
       root.render(<VoicePane settings={settingsWithKey(false)} updateSettings={updateSettings} />)
     })

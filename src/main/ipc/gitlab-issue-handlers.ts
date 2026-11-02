@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { GitLabIssueUpdate, GitLabWorkItem } from '../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   normalizeGitLabIssueAssignee,
   normalizeGitLabIssueListState,
@@ -62,9 +62,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
         localGitOptionArgs(store, repo)[0] ?? {},
         page
       )
-      // Why: Tasks page expects GitLabWorkItem[] so it can share row
-      // rendering with MRs. Map IssueInfo → WorkItem here so the renderer
-      // doesn't need a separate code path.
+      // Tasks shares MR/issue row rendering through the WorkItem shape.
       const workItems: GitLabWorkItem[] = result.items.map((issue) => ({
         id: `gitlab-issue-${repo.id}-${issue.number}`,
         type: 'issue' as const,

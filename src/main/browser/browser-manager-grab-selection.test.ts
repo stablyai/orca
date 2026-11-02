@@ -144,7 +144,6 @@ describe('browserManager grab operations', () => {
         screenshot: null
       }
 
-      // The awaitClick script returns a Promise; simulate it resolving
       guestExecuteJavaScriptMock.mockResolvedValueOnce(mockPayload)
 
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
@@ -207,7 +206,6 @@ describe('browserManager grab operations', () => {
     })
 
     it('resolves with error when guest returns structurally invalid payload', async () => {
-      // Missing required 'target' field
       guestExecuteJavaScriptMock.mockResolvedValueOnce({ page: { title: 'test' } })
 
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
@@ -278,16 +276,11 @@ describe('browserManager grab operations', () => {
       expect(result.kind).toBe('selected')
       if (result.kind === 'selected') {
         const attrs = result.payload.target.attributes
-        // Safe value passes through
         expect(attrs.id).toBe('safe-value')
-        // Class with secret pattern is redacted
         expect(attrs.class).toBe('[redacted]')
-        // href containing a secret pattern is redacted (secret check takes
-        // priority over URL sanitization for defense in depth)
+        // Secret-pattern redaction takes precedence over URL sanitization.
         expect(attrs.href).toBe('[redacted]')
-        // src with non-secret query params is sanitized (query stripped)
         expect(attrs.src).toBe('https://example.com/img')
-        // aria-label with secret pattern is redacted
         expect(attrs['aria-label']).toBe('[redacted]')
       }
     })
@@ -346,7 +339,6 @@ describe('browserManager grab operations', () => {
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       expect(result.kind).toBe('selected')
       if (result.kind === 'selected') {
-        // Query string and hash should be stripped by main-side sanitization
         expect(result.payload.page.sanitizedUrl).toBe('https://example.com/page')
       }
     })
@@ -356,7 +348,6 @@ describe('browserManager grab operations', () => {
 
       const promise1 = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
-      // Start a second grab op on same tab
       guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
       void browserManager.awaitGrabSelection('tab-1', 'op-2', guest)
 
@@ -366,23 +357,16 @@ describe('browserManager grab operations', () => {
     })
 
     it('replacement op skips teardown injection to preserve overlay', async () => {
-      // Why: when replacing an op, the old op's cleanup must NOT inject the
-      // teardown script because the new op reuses the already-armed overlay.
       guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
 
       void browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
-      // Record call count before replacement
       const callCountBefore = guestExecuteJavaScriptMock.mock.calls.length
 
-      // Replace with a new op
       guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
       void browserManager.awaitGrabSelection('tab-1', 'op-2', guest)
 
-      // The only new executeJavaScript call should be the awaitClick for op-2.
-      // No teardown should have been injected for op-1's cleanup.
-      // Why: distinguish teardown from awaitClick — both contain 'cancelAwait',
-      // but only the teardown script contains 'if (!grab) return true;'.
+      // Both scripts contain cancelAwait; only teardown contains 'if (!grab) return true;'.
       const newCalls = guestExecuteJavaScriptMock.mock.calls.slice(callCountBefore)
       const teardownCalls = newCalls.filter(([script]) =>
         (script as string).includes('if (!grab) return true;')
@@ -482,7 +466,6 @@ describe('browserManager grab operations', () => {
     })
 
     it('is a no-op when no grab is active', () => {
-      // Should not throw
       browserManager.cancelGrabOp('tab-1', 'user')
     })
 
@@ -538,7 +521,6 @@ describe('browserManager grab operations', () => {
 
       const promise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
-      // Find the did-start-navigation handler and trigger it with isMainFrame=true
       const navHandler = guestOnMock.mock.calls.findLast(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as ((...args: unknown[]) => void) | undefined
@@ -555,7 +537,6 @@ describe('browserManager grab operations', () => {
 
       void browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
-      // Trigger did-start-navigation with isMainFrame=false (subframe)
       const navHandler = guestOnMock.mock.calls.findLast(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as ((...args: unknown[]) => void) | undefined
@@ -563,7 +544,21 @@ describe('browserManager grab operations', () => {
       expect(navHandler).toBeTypeOf('function')
       navHandler?.(null, 'https://ads.example.com/', false, false)
 
-      // Grab should still be active
+      expect(browserManager.hasActiveGrabOp('tab-1')).toBe(true)
+    })
+
+    it('does not cancel grab when the page rewrites its URL in place', async () => {
+      guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
+
+      void browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
+
+      const navHandler = guestOnMock.mock.calls.findLast(
+        ([event]) => event === 'did-start-navigation'
+      )?.[1] as ((...args: unknown[]) => void) | undefined
+
+      expect(navHandler).toBeTypeOf('function')
+      navHandler?.(null, 'https://example.com/#section-2', true, true)
+
       expect(browserManager.hasActiveGrabOp('tab-1')).toBe(true)
     })
   })
@@ -574,7 +569,6 @@ describe('browserManager grab operations', () => {
 
       const promise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
 
-      // Find the destroyed handler and trigger it
       const destroyedHandler = guestOnMock.mock.calls.findLast(
         ([event]) => event === 'destroyed'
       )?.[1] as (() => void) | undefined

@@ -1,15 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import type {
-  SkillSharePreview,
-  SkillShareProgress,
-  SkillSharePublishInput,
-  SkillSharePublishOperation
+import {
+  SKILL_SHARE_NAME_TAKEN_ERROR,
+  type SkillSharePreview,
+  type SkillShareProgress,
+  type SkillSharePublishInput,
+  type SkillSharePublishOperation
 } from '../../shared/skill-sharing-contract'
 import type { SkillCloudVersion } from '../../shared/skill-cloud-contract'
 import { createSkillBundleArchive, type CreatedSkillBundle } from './skill-bundle-creation'
 import type { SkillCloudService } from './skill-cloud-service'
+import { SkillCloudRequestError } from './skill-cloud-request-error'
 import { readSkillInstallReceipt } from './skill-install-provenance'
 
 const PREPARATION_TTL_MS = 30 * 60 * 1000
@@ -66,7 +68,10 @@ export class SkillSharePreparationService {
 
   constructor(
     private readonly root: string,
-    private readonly cloud: Pick<SkillCloudService, 'createShare' | 'publishVersion'>,
+    private readonly cloud: Pick<
+      SkillCloudService,
+      'createShare' | 'findOwnedPackageId' | 'publishVersion'
+    >,
     private readonly options: {
       initializeRoot?: () => Promise<void>
       installStateDirectory?: string
@@ -124,12 +129,13 @@ export class SkillSharePreparationService {
             : source
         })
       )
+      const bundleName = input.bundleName ?? 'shared-skill'
       const created = await createSkillBundleArchive({
         sources,
-        bundleName: input.bundleName ?? 'shared-skill',
+        bundleName,
         description: input.description,
         archivePath: join(directory, 'package.tar.gz'),
-        packageId: input.packageId ?? randomUUID(),
+        packageId: input.packageId ?? (await this.packageIdForName(bundleName)),
         versionId: randomUUID()
       })
       const value: Preparation = {
@@ -206,6 +212,17 @@ export class SkillSharePreparationService {
         current.controller = null
       }
     }
+  }
+
+  // Cloud names have one live package; its id is part of archive identity.
+  private async packageIdForName(bundleName: string): Promise<string> {
+    const owned = await this.cloud.findOwnedPackageId(bundleName, {}).catch((error: unknown) => {
+      throw error instanceof SkillCloudRequestError && error.code === 'skill_package_name_taken'
+        ? new Error(SKILL_SHARE_NAME_TAKEN_ERROR, { cause: error })
+        : error
+    })
+    // Preview works signed out; publish handles authentication.
+    return (owned.status === 'ok' && owned.value) || randomUUID()
   }
 
   cancel(preparationId: string): void {

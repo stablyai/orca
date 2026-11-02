@@ -1,31 +1,18 @@
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore, type AppState } from '@/store'
+import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './WorktreeCardHelpers'
 import {
-  selectLivePtyIdsForWorktree,
   selectTerminalLayoutRootsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
-
-type WorktreeActivityStatusState = Pick<
-  AppState,
-  | 'tabsByWorktree'
-  | 'browserTabsByWorktree'
-  | 'runtimePaneTitlesByTabId'
-  | 'ptyIdsByTabId'
-  | 'terminalLayoutsByTabId'
-  | 'agentStatusEpoch'
-  | 'agentStatusByPaneKey'
-  | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
-  | 'runtimeAgentOrchestrationByPaneKey'
->
+import { selectWorktreeActivityPtyIds } from './use-worktree-activity-status'
 
 export function selectWorktreeActivityStatuses(
-  statusInputs: WorktreeActivityStatusState,
+  statusInputs: AppState,
   worktreeIds: readonly string[]
 ): Map<string, WorktreeStatus> {
   const statuses = new Map<string, WorktreeStatus>()
@@ -36,6 +23,7 @@ export function selectWorktreeActivityStatuses(
       hasLiveMonitoring,
       hasFailed,
       hasInterrupted,
+      hasUnconfirmed,
       hasLiveDone,
       hasRetainedDone,
       hasRetainedFailed,
@@ -47,7 +35,11 @@ export function selectWorktreeActivityStatuses(
       resolveWorktreeStatus({
         tabs: statusInputs.tabsByWorktree[worktreeId] ?? EMPTY_TABS,
         browserTabs: statusInputs.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
-        ptyIdsByTabId: selectLivePtyIdsForWorktree(statusInputs, worktreeId),
+        hasStructuredChat: hasAwakeStructuredChat(
+          statusInputs.unifiedTabsByWorktree[worktreeId],
+          statusInputs.structuredChatSleptAtByPaneKey
+        ),
+        ptyIdsByTabId: selectWorktreeActivityPtyIds(statusInputs, worktreeId),
         runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(statusInputs, worktreeId),
         agentStatusPaneIdsByTabId,
         stalePaneIdsByTabId,
@@ -57,6 +49,7 @@ export function selectWorktreeActivityStatuses(
         hasLiveMonitoring,
         hasFailed,
         hasInterrupted,
+        hasUnconfirmed,
         hasLiveDone,
         hasRetainedDone,
         hasRetainedFailed
@@ -66,13 +59,12 @@ export function selectWorktreeActivityStatuses(
   return statuses
 }
 
-// Why: return a shallow-stable status map so terminal updates outside the
-// visible candidates do not re-render the picker.
+// Keep equal status maps stable so unrelated terminal updates do not rerender the picker.
 export function useWorktreeActivityStatuses(
   worktreeIds: readonly string[]
 ): Map<string, WorktreeStatus> {
   const selectStatuses = useCallback(
-    (state: WorktreeActivityStatusState) => selectWorktreeActivityStatuses(state, worktreeIds),
+    (state: AppState) => selectWorktreeActivityStatuses(state, worktreeIds),
     [worktreeIds]
   )
   return useAppStore(useShallow(selectStatuses))

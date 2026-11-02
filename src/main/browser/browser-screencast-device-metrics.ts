@@ -41,9 +41,7 @@ export function createBrowserScreencastDeviceMetrics(
       return
     }
     const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
-    // Why: Back/Forward and cross-process navigations can drop emulation while
-    // the screencast remains attached. Reapply before fallback captures so the
-    // page lays out at the client pane size, not the host BrowserView size.
+    // Navigation can drop emulation; restore client viewport metrics before fallback captures.
     await sendViewportCommand('Emulation.setDeviceMetricsOverride', {
       width: viewportWidth,
       height: viewportHeight,

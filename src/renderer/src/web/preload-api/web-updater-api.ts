@@ -3,9 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { noopUnsubscribe } from './web-storage'
 
 export function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
-  // Why: the linux-package-install recovery status can only originate in the native main process, so
-  // the web renderer never reaches these branches — reject loudly rather than resolve a fake result.
-  // A fresh Error per rejection: one shared instance would carry this function's stack, not the caller's.
+  // Only desktop main can produce Linux install recovery; reject fake web results. Allocate each Error at the caller for its stack.
   const desktopOnlyMessage = 'Linux package install recovery is only available in the desktop app.'
   return {
     getVersion: () => Promise.resolve('web'),

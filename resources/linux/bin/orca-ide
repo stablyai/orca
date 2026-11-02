@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Why: invoked via ~/.local/bin/orca-ide symlink (from CliInstaller); resolve it
-# so APP_DIR points at the real install, not the symlink's parent.
+# Installed commands are symlinks; locate resources relative to their target.
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do
 	DIR="$(cd "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
@@ -13,8 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 RESOURCES_DIR="$(cd "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 APP_DIR="$(cd "$RESOURCES_DIR/.." >/dev/null 2>&1 && pwd)"
 
-# Why: Linux executableName is `orca-ide` (avoids Ubuntu GNOME Orca conflict);
-# `-f` rejects a same-named directory that `-x` alone would accept.
+# orca-ide avoids the GNOME Orca name; -f excludes executable directories.
 ELECTRON=""
 for candidate in orca-ide orca Orca; do
 	if [ -f "$APP_DIR/$candidate" ] && [ -x "$APP_DIR/$candidate" ]; then
@@ -28,9 +26,7 @@ if [ -z "$ELECTRON" ]; then
 	exit 1
 fi
 
-# Why: Orca packages the CLI entrypoint outside app.asar so the public shell
-# command can execute it directly with ELECTRON_RUN_AS_NODE, mirroring the same
-# launcher model used on macOS instead of maintaining a separate Node binary.
+# The unpacked entrypoint runs directly in Electron's Node mode.
 CLI="$RESOURCES_DIR/app.asar.unpacked/out/cli/index.js"
 
 export ORCA_NODE_OPTIONS="${NODE_OPTIONS-}"
@@ -38,5 +34,4 @@ export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 
-# CLI commands run in Electron's Node mode and must never initialize Chromium.
 ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"

@@ -1,5 +1,6 @@
 import type { ActiveWorktreeStateTransition } from '../../worktree-helpers'
 import type { TabGroup } from '../../../../../../shared/tab-types'
+import type { AppState } from '../../../types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { sanitizeRecentTabIds } from '../../tab-group-state'
@@ -9,15 +10,31 @@ import {
   removeTabIdsFromGroup,
   rekeyFileIdRecord
 } from '../file-ids/open-file-path-rekey'
+import { rekeyEditorBuffers } from '../buffers/editor-buffer-record'
 import type {
   RestoredEditorOwnerMigration,
   RestoredEditorOwnerResult
 } from '../types/restored-editor-owner'
 import { resolveRestoredEditorOwnerDestination } from './restored-editor-owner-destination'
+import { rekeyRestoredEditorTabsInPlace } from './restored-editor-owner-in-place'
+
+/** The group a moved restored tab joins: the workspace's active one, else its first, else a new one. */
+export function restoredEditorTargetGroupId(
+  s: Pick<AppState, 'activeGroupIdByWorktree' | 'groupsByWorktree'>,
+  worktreeId: string
+): string {
+  return (
+    s.activeGroupIdByWorktree[worktreeId] ??
+    s.groupsByWorktree[worktreeId]?.[0]?.id ??
+    createBrowserUuid()
+  )
+}
 
 export function buildRestoredEditorOwnerTransition(
   args: RestoredEditorOwnerMigration,
-  assignResult: (result: RestoredEditorOwnerResult) => void
+  assignResult: (result: RestoredEditorOwnerResult) => void,
+  /** The group main was asked to append to (layout-owner build). */
+  proposedTargetGroupId?: string
 ): ActiveWorktreeStateTransition {
   return (s) => {
     const destination = resolveRestoredEditorOwnerDestination(s, args)
@@ -50,8 +67,7 @@ export function buildRestoredEditorOwnerTransition(
       (tab) => migrations.get(tab.entityId) ?? tab.entityId
     )
     const targetGroups = s.groupsByWorktree[targetWorktreeId] ?? []
-    const targetGroupId =
-      s.activeGroupIdByWorktree[targetWorktreeId] ?? targetGroups[0]?.id ?? createBrowserUuid()
+    const targetGroupId = proposedTargetGroupId ?? restoredEditorTargetGroupId(s, targetWorktreeId)
     const targetGroup = targetGroups.find((group) => group.id === targetGroupId) ?? {
       id: targetGroupId,
       worktreeId: targetWorktreeId,
@@ -120,7 +136,9 @@ export function buildRestoredEditorOwnerTransition(
         ...tab,
         id: tabIdMigration.get(tab.id) ?? tab.id,
         entityId: migrations.get(tab.entityId) ?? tab.entityId,
-        groupId: targetGroupId
+        groupId: targetGroupId,
+        worktreeId: targetWorktreeId,
+        ...(tab.executionHostId ? { executionHostId: args.targetExecutionHostId } : {})
       }))
     ]
 
@@ -170,6 +188,27 @@ export function buildRestoredEditorOwnerTransition(
       delete nextActiveGroupIdByWorktree[sourceWorktreeId]
     }
     nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
+    const tabState =
+      sourceWorktreeId === targetWorktreeId
+        ? rekeyRestoredEditorTabsInPlace(
+            s,
+            targetWorktreeId,
+            migrations,
+            tabIdMigration,
+            args.targetExecutionHostId
+          )
+        : {
+            activeFileIdByWorktree: nextActiveFileIdByWorktree,
+            activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+            activeTabTypeByWorktree: {
+              ...s.activeTabTypeByWorktree,
+              [targetWorktreeId]: 'editor' as const
+            },
+            groupsByWorktree: nextGroupsByWorktree,
+            layoutByWorktree: nextLayoutByWorktree,
+            tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+            unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+          }
 
     assignResult({ ok: true, fileId: newFileId })
     return {
@@ -202,6 +241,9 @@ export function buildRestoredEditorOwnerTransition(
                 }
               : file
         ),
+        ...rekeyEditorBuffers(s, s.openFiles, migrations, 'carry', () => ({
+          pendingOwnerMigration: undefined
+        })),
         editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
         editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
         markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),
@@ -213,16 +255,7 @@ export function buildRestoredEditorOwnerTransition(
           migrations
         ),
         activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
-        activeFileIdByWorktree: nextActiveFileIdByWorktree,
-        activeTabTypeByWorktree: {
-          ...s.activeTabTypeByWorktree,
-          [targetWorktreeId]: 'editor'
-        },
-        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-        groupsByWorktree: nextGroupsByWorktree,
-        layoutByWorktree: nextLayoutByWorktree,
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-        tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+        ...tabState,
         ...(s.pendingEditorReveal?.fileId && migrations.has(s.pendingEditorReveal.fileId)
           ? {
               pendingEditorReveal: {

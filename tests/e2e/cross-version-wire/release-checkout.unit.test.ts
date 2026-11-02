@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -14,8 +15,8 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { afterEach, describe, expect, it } from 'vitest'
-import { forceTerminateProcessTree } from '../../../src/shared/child-process/process-tree-termination'
-import { spawnProcess } from '../../../src/shared/child-process/run-process'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { spawnProcess } from '@orca/process-host'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -25,6 +26,7 @@ import {
   type ReleaseCheckout
 } from './release-checkout'
 const temporaryRoots: string[] = []
+const temporaryRefs: { ref: string; commit: string }[] = []
 
 const COMPRESSED_LOCK_OPTIONS: CheckoutLockOptions = {
   realpath: false,
@@ -44,8 +46,7 @@ function git(args: string[]): string {
 }
 
 function syntheticCheckout(): ReleaseCheckout {
-  // Why realpath: vite-node reports module urls through macOS's /var -> /private/var
-  // symlink, so provenance assertions need the resolved form.
+  // Resolve macOS /var symlinks like vite-node for provenance comparisons.
   const root = realpathSync(temporaryCacheRoot())
   return { ref: 'v0.0.0-synthetic', commit: 'f'.repeat(40), label: 'v0.0.0-synthetic', root }
 }
@@ -214,8 +215,7 @@ async function runContentionPhase(
       acquiredMarker,
       ...(ablateLock ? { ablateLock, stagingMarker, proceedPath, populateStaging: true } : {})
     })
-    // onLockAttempt runs only after the rival's first stamp miss and invocation
-    // of the actual lock function; no elapsed-time guess stands in for contention.
+    // Wait for real lock contention acknowledgement, not an elapsed-time guess.
     await waitForFile(ablateLock ? stagingMarker : attemptMarker, 30_000)
     if (!ablateLock) {
       expect(existsSync(acquiredMarker), rival.output()).toBe(false)
@@ -227,8 +227,7 @@ async function runContentionPhase(
       (error: unknown) => error
     )
     if (ablateLock) {
-      // The staging marker is after the second stamp miss. Publishing before this
-      // acknowledgement would let the ablation pass without exercising deletion.
+      // Wait for the second stamp miss or the ablation could pass without exercising deletion.
       writeFileSync(proceedPath, '')
     }
     await releaseOnce()
@@ -255,6 +254,9 @@ async function runContentionPhase(
 }
 
 afterEach(() => {
+  for (const { ref, commit } of temporaryRefs.splice(0)) {
+    git(['update-ref', '-d', ref, commit])
+  }
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -285,6 +287,7 @@ describe('release checkout materialization', () => {
     expect(relative(cacheRoot, checkouts[0]!.root)).not.toMatch(/^\.\./)
   })
 
+  // Cold extraction and transforms need the cross-version suite's startup budget.
   it('loads a baseline module whose source imports another checkout-root file', async () => {
     const cacheRoot = temporaryCacheRoot()
     const checkout = await materializeReleaseCheckout('v1.4.190', { cacheRoot })
@@ -292,12 +295,43 @@ describe('release checkout materialization', () => {
 
     expect(protocol.REMOTE_SERVER_UPDATE_CAPABILITY).toBe('updater.remote-control.v1')
     expect(relative(cacheRoot, checkout.root)).not.toMatch(/^\.\./)
-  })
+  }, 180_000)
+
+  // Default cache root lets released source resolve packages from the repo's node_modules.
+  it('runs a released schema with an existing package dependency', async () => {
+    const checkout = await materializeReleaseCheckout('v1.4.221')
+    const schema = await importReleaseCheckoutModule(
+      checkout,
+      '/src/shared/agent-session-context-usage-schema.ts'
+    )
+    const isAdmissible = schema.isAdmissibleAgentSessionContextUsage
+    if (typeof isAdmissible !== 'function') {
+      throw new Error('v1.4.221 has no isAdmissibleAgentSessionContextUsage export')
+    }
+
+    expect(
+      isAdmissible({
+        window: { tokens: 200_000, capturedAt: 1 },
+        used: { kind: 'unknown', capturedAt: 1 }
+      })
+    ).toBe(true)
+    expect(isAdmissible({ window: { tokens: 0, capturedAt: 1 } })).toBe(false)
+    expect(isAdmissible({ used: { kind: 'invalid', capturedAt: 1 } })).toBe(false)
+  }, 180_000)
 
   it('keeps an import live while another colliding release label materializes', async () => {
-    const merge = git(['rev-list', '--merges', '-1', 'HEAD'])
-    const firstRef = `${merge}~2`
-    const secondRef = `${merge}^2`
+    // Squash-merged history has no merge parents; create two distinct refs with colliding labels.
+    const scope = `refs/orca-checkout-test/${randomUUID()}`
+    const firstRef = `${scope}/release`
+    const secondRef = `${scope}_release`
+    for (const [ref, revision] of [
+      [firstRef, 'HEAD'],
+      [secondRef, 'v1.4.190']
+    ]) {
+      const commit = git(['rev-parse', `${revision}^{commit}`])
+      git(['update-ref', ref, commit, '0'.repeat(40)])
+      temporaryRefs.push({ ref, commit })
+    }
     expect(git(['rev-parse', `${firstRef}^{commit}`])).not.toBe(
       git(['rev-parse', `${secondRef}^{commit}`])
     )
@@ -328,6 +362,7 @@ describe('release checkout materialization', () => {
     }
 
     await expect(loading).resolves.toMatchObject({ loaded: 'first-release' })
+    expect(first.label).toBe(second.label)
     expect(first.root).not.toBe(second.root)
   })
 
@@ -340,8 +375,7 @@ describe('release checkout materialization', () => {
     })
 
     await expect(runContentionPhase(published, scratch, 'locked', false)).resolves.toBe(true)
-    // In the same causally acknowledged interleaving, a no-lock materializer
-    // deletes the newly published tree. This makes the lock assertion non-vacuous.
+    // The same acknowledged interleaving without a lock must delete the published tree, proving the lock assertion matters.
     await expect(runContentionPhase(published, scratch, 'ablated', true)).resolves.toBe(false)
   }, 120_000)
 
@@ -526,9 +560,7 @@ describe('release checkout module importer', () => {
     const probe = await importReleaseCheckoutModule(checkout, '/src/provenance-probe.mjs')
     expect(String(probe.moduleUrl)).toContain(checkout.root.split('\\').join('/'))
 
-    // The working tree has this module and the synthetic checkout does not:
-    // resolving it would mean a root-relative specifier silently ran current
-    // code as the "old" side — the exact poison this harness exists to prevent.
+    // This module exists only in the working tree; resolving it would silently run current code as the old build.
     await expect(
       importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
     ).rejects.toThrow()

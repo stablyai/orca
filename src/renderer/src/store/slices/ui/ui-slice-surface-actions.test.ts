@@ -6,8 +6,7 @@ describe('workspace port-scan surface actions', () => {
     useAppStore.setState({ workspacePortScanRefreshing: false })
   })
 
-  // Why a listener count and not a state assertion: zustand notifies on identity, so an
-  // unconditional `set` is invisible in the resulting state yet re-runs every selector.
+  // Count notifications: equal state values can still hide new-root writes that rerun every selector.
   const countNotifications = (run: () => void): number => {
     let notifications = 0
     const unsubscribe = useAppStore.subscribe(() => {

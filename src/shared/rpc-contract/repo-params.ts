@@ -1,5 +1,15 @@
 import { z } from 'zod'
-import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
+
+// Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.
+export const RepoList = z.object({
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional()
+})
+import {
+  OptionalBoolean,
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString
+} from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
 import { RepoSelector } from './github-repo-target-params'
 
@@ -26,6 +36,12 @@ export const RepoSetBaseRef = z.object({
 })
 
 export const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
+
+/** See `repoHooksCheckIsBackground`: only `wakeWslDistro` may open a stopped WSL distro (E9). */
+export const RepoHooksCheck = RepoSelector.extend({
+  background: z.boolean().optional(),
+  wakeWslDistro: OptionalBoolean
+})
 
 export const RepoSearchRefs = z.object({
   repo: requiredString('Missing repo selector'),
@@ -62,10 +78,12 @@ export const ProjectGroupSelector = z.object({
   groupId: requiredString('Missing group id')
 })
 
+// Why `connectionId` is optional: older clients omit it, and older hosts strip it (bare selector).
 export const ProjectGroupMoveProject = z.object({
   repo: requiredString('Missing repo selector'),
   groupId: OptionalString.nullable(),
-  order: OptionalFiniteNumber
+  order: OptionalFiniteNumber,
+  connectionId: z.string().nullable().optional()
 })
 
 export const ProjectGroupScanNested = z.object({
@@ -81,16 +99,17 @@ export const ProjectGroupImportNested = z.discriminatedUnion('mode', [
   }),
   z.object({
     parentPath: requiredString('Missing parent path'),
-    // Why: blank group names fall back to the scanned folder basename; separate
-    // imports do not create a group but share the same renderer payload shape.
+    // Blank group names use the scanned folder basename; separate imports share the payload but create no group.
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     mode: z.literal('separate')
   })
 ])
 
+/** `wakeWslDistro`: the user saving their own edit, which may start a stopped WSL distro; older hosts drop it. */
 export const RepoIssueCommandWrite = RepoSelector.extend({
-  content: z.string()
+  content: z.string(),
+  wakeWslDistro: OptionalBoolean
 })
 
 export const RepoSparsePresetSave = RepoSelector.extend({

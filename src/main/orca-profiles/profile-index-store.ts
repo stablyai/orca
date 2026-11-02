@@ -30,6 +30,7 @@ import {
 } from './profile-storage-paths'
 import { copyLegacyStateToProfile } from './profile-legacy-state-import'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
+import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
 import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
 
 export {
@@ -63,8 +64,7 @@ function isProfileSummary(value: unknown): value is OrcaProfileSummary {
   const cloud = value.cloud
   return (
     typeof value.id === 'string' &&
-    // Why: IDs from the on-disk index become filesystem path segments; a
-    // tampered index must not be able to escape the profiles directory.
+    // Index IDs become path segments; reject traversal outside the profile directory.
     /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value.id) &&
     typeof value.name === 'string' &&
     value.name.length > 0 &&
@@ -114,8 +114,7 @@ function readProfileIndexFile(indexPath: string): OrcaProfileIndex | null {
 }
 
 export function readProfileIndex(indexPath: string): OrcaProfileIndex | null {
-  // Why: a torn/corrupt index must not silently reset the app to a single
-  // default profile — that would orphan every other profile's data directory.
+  // Recover from backup rather than orphan other profiles by resetting a corrupt index.
   return readProfileIndexFile(indexPath) ?? readProfileIndexFile(`${indexPath}.bak`)
 }
 
@@ -129,13 +128,12 @@ function readExistingProfileIndex(indexPath: string): OrcaProfileIndex | null {
 
 export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): void {
   mkdirSync(dirname(indexPath), { recursive: true })
-  // Why: only a still-parseable current index may refresh the backup;
-  // copying a corrupt file over the backup would destroy the recovery copy.
+  // Never replace the recovery backup with a corrupt primary index.
   if (existsSync(indexPath) && readProfileIndexFile(indexPath)) {
     try {
       copyFileSync(indexPath, `${indexPath}.bak`)
     } catch {
-      // Best-effort backup; the primary write below still proceeds.
+      // Backup failure must not block the primary write.
     }
   }
   const tmpPath = `${indexPath}.tmp`
@@ -197,19 +195,20 @@ export function ensureActiveOrcaProfile(
   mkdirSync(profileDirectory, { recursive: true })
   const profileDatabaseFile = getOrcaProfileStateDatabaseFile(activeProfile.id, userDataPath)
   const profileDataFile = getOrcaProfileDataFile(activeProfile.id, userDataPath)
-  let hasRetainedProfileStateExport = false
+  let hasRetainedProfileStateAuthority = false
   try {
-    hasRetainedProfileStateExport =
+    hasRetainedProfileStateAuthority =
+      hasProfileStateAuthorityMarker(profileDatabaseFile) ||
       profileStateJsonExportPaths(profileDataFile).length > 0 ||
       profileStateDatabaseBackups(profileDatabaseFile).length > 0
   } catch {
     // An unreadable profile directory must never trigger a fallback copy of legacy state.
-    hasRetainedProfileStateExport = true
+    hasRetainedProfileStateAuthority = true
   }
   if (
     activeProfile.id === DEFAULT_LOCAL_ORCA_PROFILE_ID &&
     !hasOrcaProfileStateDatabase(activeProfile.id, userDataPath) &&
-    !hasRetainedProfileStateExport
+    !hasRetainedProfileStateAuthority
   ) {
     copyLegacyStateToProfile(userDataPath, activeProfile.id)
   }

@@ -139,28 +139,30 @@ describe('ready-for-review required check reuse', () => {
     expect(detector.steps[0].with['sparse-checkout']).toContain(
       '/config/scripts/pr-ready-check-reuse.mjs'
     )
-    for (const job of ['native_cache_changed', ...PR_CHECK_JOBS]) {
+    for (const job of PR_CHECK_JOBS) {
       expect(detector.outputs[job]).toBe(
         `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${job} }}`
       )
     }
     expect(detector.outputs.should_run).toBe('${{ steps.filter.outputs.should_run }}')
-    for (const name of [
-      'test_files',
-      'ssh_source_changed',
-      'native_ime_source_changed',
-      'wsl_source_changed'
-    ]) {
+    for (const name of ['test_files', 'native_ime_source_changed', 'wsl_source_changed']) {
       expect(detector.outputs[name]).toBe(`\${{ steps.e2e_filter.outputs.${name} }}`)
     }
     expect(detector.steps.find((step) => step.id === 'e2e_filter').if).toBe(
       "github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
     )
-    expect(workflow.jobs.verify.if).toBe('${{ !cancelled() }}')
-    expect(workflow.jobs.verify.needs).toEqual(['code_paths', ...PR_CHECK_JOBS])
+    expect(workflow.jobs.verify.needs).toEqual([
+      'code_paths',
+      'preflight',
+      ...new Set(
+        PR_CHECK_JOBS.filter((job) => job !== 'static_analysis' && job !== 'typecheck').map(
+          (job) => (job === 'orcad_browser' ? 'test' : job)
+        )
+      )
+    ])
   })
 
-  it.each(['pr-test-loc.yml', 'mobile.yml'])(
+  it.each(['pr-test-loc.yml'])(
     'does not rerun draft-independent %s on readiness changes',
     (file) => {
       const source = readFileSync(`.github/workflows/${file}`, 'utf8')

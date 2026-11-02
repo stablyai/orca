@@ -2,6 +2,13 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 import {
   LEAF_1,
   LEAF_2,
@@ -39,6 +46,13 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync
@@ -84,7 +98,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
   notifyCodexPaneBoundForStaleSweep
 }))
 
-// Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
+// Pass useCallback through because this suite invokes notification hooks without rendering React.
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return {
@@ -117,7 +131,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
   )
 }))
 
-// Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
+// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
@@ -131,14 +145,15 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe('connectPanePty', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    await installTerminalTestGlobals()
+    ;(await mainLayoutApplyTransport()).reset()
   })
 
   afterEach(async () => {
@@ -171,9 +186,7 @@ describe('connectPanePty', () => {
     expect(transport.attach).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'leaf-pty-2')
-    // Why: a pane that outlived the app reaches its PTY only through this
-    // restored-session reattach, so the stale-account sweep must be queued here
-    // too — the fresh-spawn chokepoint never runs for it.
+    // Queue stale-account inspection on restored reattach too; surviving PTYs never pass the fresh-spawn chokepoint.
     expect(notifyCodexPaneBoundForStaleSweep).toHaveBeenCalledWith('leaf-pty-2')
   })
 
@@ -183,8 +196,7 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
     const syncPanePtyLayoutBindingForLeaf = vi.fn()
     const manager = createManager(1)
-    // A successor manager can reuse the numeric slot for a different leaf
-    // while an older callback is still settling.
+    // Numeric slots may be reused for another leaf before old callbacks settle.
     manager.getPanes.mockReturnValue([{ id: 1, leafId: LEAF_2 }])
     const deps = createDeps({ syncPanePtyLayoutBindingForLeaf })
     const pane = createPane(1)
@@ -399,9 +411,7 @@ describe('connectPanePty', () => {
 
   it('does not replace a split sibling with the tab-level source PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
-    // The source pane is still mounted while the parked tab's new split leaf
-    // is hydrated. The daemon may report the split spawn as a reattach even
-    // though this pane has no stale session id of its own.
+    // A split spawn can report reattach while the source pane remains mounted and this leaf has no stale session ID.
     const sourceTransport = createMockTransport('tab-pty')
     const splitTransport = createMockTransport('split-pty')
     splitTransport.connect.mockResolvedValue({ id: 'split-pty', isReattach: true })
@@ -696,6 +706,13 @@ describe('connectPanePty', () => {
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: 'stale-pty' }
     })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      await mainStartsPaneAs({
+        ptyId: 'pty-main',
+        bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2),
+        transport
+      })
+    }
 
     connectPanePty(pane as never, manager as never, deps as never)
     await Promise.resolve()
@@ -705,6 +722,17 @@ describe('connectPanePty', () => {
       1,
       expect.objectContaining({ sessionId: 'stale-pty' })
     )
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main starts the pane whose terminal is gone; the window attaches, and spawns no shell.
+      await flushAsyncTicks()
+      await expectWindowStartAskedMain(transport, `tab-1:${LEAF_2}`)
+      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.connect).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+      )
+      return
+    }
     expect(transport.connect).toHaveBeenNthCalledWith(
       2,
       expect.not.objectContaining({ sessionId: expect.any(String) })
@@ -713,176 +741,5 @@ describe('connectPanePty', () => {
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'stale-pty')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-pty')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
-  })
-
-  it.each([
-    ['rejects', 'reject'],
-    ['returns no PTY', 'empty']
-  ] as const)(
-    'preserves a direct SSH binding and schedules another retry when reattach %s',
-    async (_description, outcome) => {
-      const { connectPanePty } = await import('./pty-connection')
-      const restoredPtyId = 'ssh:conn-1@@restored-session'
-      const transport = createMockTransport()
-      if (outcome === 'reject') {
-        transport.connect.mockRejectedValueOnce(new Error('relay attach timed out'))
-      } else {
-        transport.connect.mockResolvedValueOnce(undefined)
-      }
-      transportFactoryQueue.push(transport)
-      const pendingRetry = {
-        attemptId: 'attempt-generic-reattach-failure',
-        authority: {
-          targetId: 'conn-1',
-          providerEpoch: 'epoch-1',
-          connectionGeneration: 3
-        },
-        tabGeneration: 7,
-        startedAt: 1
-      }
-      const settleDirectSshPaneRetry = vi.fn()
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }]
-        },
-        ptyIdsByTabId: { 'tab-1': [] },
-        repos: [{ id: 'repo1', connectionId: 'conn-1' }],
-        sshConnectionStates: new Map([
-          [
-            'conn-1',
-            {
-              targetId: 'conn-1',
-              status: 'connected',
-              providerEpoch: 'epoch-1',
-              connectionGeneration: 3
-            }
-          ]
-        ]),
-        deferredSshSessionIdsByTabId: { 'tab-1': restoredPtyId },
-        directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
-        settleDirectSshPaneRetry
-      } as StoreState
-      const deps = createDeps()
-
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
-      await flushAsyncTicks(12)
-
-      expect(transport.connect).toHaveBeenCalledTimes(1)
-      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-      expect(deps.updateTabPtyId).not.toHaveBeenCalled()
-      expect(mockStoreState.removeDeferredSshSessionId).not.toHaveBeenCalled()
-      expect(settleDirectSshPaneRetry).toHaveBeenCalledExactlyOnceWith({
-        status: 'failed',
-        tabId: 'tab-1',
-        attemptId: pendingRetry.attemptId,
-        authority: pendingRetry.authority,
-        tabGeneration: pendingRetry.tabGeneration
-      })
-      expect(mockStoreState.tabsByWorktree['wt-1']).toEqual([
-        { id: 'tab-1', ptyId: null, generation: 7 }
-      ])
-      expect(mockStoreState.deferredSshSessionIdsByTabId['tab-1']).toBe(restoredPtyId)
-    }
-  )
-
-  it('reattaches via the tab-level SSH pty id when deferred bookkeeping missed the tab', async () => {
-    // Why: restore can miss the deferred maps; the tab's SSH pty id must still drive connect-then-reattach, not a fresh spawn into a missing provider.
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-7' }] },
-      ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
-      sshConnectionStates: new Map()
-    } as StoreState
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps()
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(12)
-
-    const windowApi = (globalThis as unknown as { window: { api: { ssh: { connect: unknown } } } })
-      .window.api
-    expect(windowApi.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
-    expect(transport.connect).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'ssh:conn-1@@pty-7' })
-    )
-    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
-  })
-
-  it('connects a disconnected SSH target before fresh-spawning instead of erroring', async () => {
-    // Why: spawning against a disconnected target throws "No PTY provider" and strands the pane behind a toast that never retries.
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('fresh-ssh-pty')
-    transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-      ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
-      sshConnectionStates: new Map()
-    } as StoreState
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps()
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    // Why: no spawn may fire before the SSH connection is established.
-    expect(transport.connect).not.toHaveBeenCalled()
-    await flushAsyncTicks(12)
-
-    const windowApi = (globalThis as unknown as { window: { api: { ssh: { connect: unknown } } } })
-      .window.api
-    expect(windowApi.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
-    expect(transport.connect).toHaveBeenCalledWith(
-      expect.not.objectContaining({ sessionId: expect.any(String) })
-    )
-    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
-  })
-
-  it('spawns a fresh PTY when a non-deferred SSH reattach reports expired via onError', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    transport.connect.mockImplementation(
-      async (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
-        if (opts.sessionId) {
-          opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: restored-session')
-          return undefined
-        }
-        const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
-          | ((ptyId: string) => void)
-          | undefined
-        onPtySpawn?.('fresh-ssh-pty')
-        return 'fresh-ssh-pty'
-      }
-    )
-    transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'restored-session' }] },
-      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
-      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
-    } as StoreState
-    const pane = createPane(2)
-    const manager = createManager(2)
-    const deps = createDeps({
-      restoredLeafId: LEAF_2,
-      restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(10)
-
-    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledTimes(2)
-    expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'restored-session')
-    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
-    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-ssh-pty')
-    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
   })
 })

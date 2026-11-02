@@ -1,0 +1,15 @@
+{
+  "id": "unknown-pane",
+  "engineVersion": 1,
+  "profile": { "screenSource": "live" },
+  "anchors": [],
+  "rules": [
+    {
+      "id": "codex_header_ready",
+      "why": "An adopted pane can run Codex without Orca knowing it. Codex's loaded 0.150-0.157 header on the live screen, with no blocker below it, settles such a pane at once (unlike a Codex pane, which holds it to quiet).",
+      "priority": 500,
+      "when": { "region": "screen", "predicate": "codex-header-ready" },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": false }
+    }
+  ]
+}

@@ -1,6 +1,19 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
+type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
+
+export function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
+  // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
+  const launchToken = startup.launchConfig
+    ? (startup.launchToken ?? createBrowserUuid())
+    : undefined
+  return {
+    ...startup,
+    ...(launchToken ? { launchToken } : {})
+  }
+}
+
 export function createTerminalStartupQueueActions(
   set: TerminalStoreSet,
   get: TerminalStoreGet
@@ -10,8 +23,6 @@ export function createTerminalStartupQueueActions(
   | 'queueTabInitialCwd'
   | 'consumeTabInitialCwd'
   | 'consumeTabStartupCommand'
-  | 'queueTabSetupSplit'
-  | 'consumeTabSetupSplit'
   | 'queueTabIssueCommandSplit'
   | 'consumeTabIssueCommandSplit'
   | 'consumePendingSnapshot'
@@ -19,17 +30,11 @@ export function createTerminalStartupQueueActions(
 > {
   return {
     queueTabStartupCommand: (tabId, startup) => {
-      // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
-      const launchToken = startup.launchConfig
-        ? (startup.launchToken ?? createBrowserUuid())
-        : undefined
+      const normalized = normalizeTabStartupCommand(startup)
       set((s) => ({
         pendingStartupByTabId: {
           ...s.pendingStartupByTabId,
-          [tabId]: {
-            ...startup,
-            ...(launchToken ? { launchToken } : {})
-          }
+          [tabId]: normalized
         }
       }))
     },
@@ -67,26 +72,6 @@ export function createTerminalStartupQueueActions(
         const next = { ...s.pendingStartupByTabId }
         delete next[tabId]
         return { pendingStartupByTabId: next }
-      })
-      return pending
-    },
-    queueTabSetupSplit: (tabId, startup) => {
-      set((s) => ({
-        pendingSetupSplitByTabId: {
-          ...s.pendingSetupSplitByTabId,
-          [tabId]: startup
-        }
-      }))
-    },
-    consumeTabSetupSplit: (tabId) => {
-      const pending = get().pendingSetupSplitByTabId[tabId]
-      if (!pending) {
-        return null
-      }
-      set((s) => {
-        const next = { ...s.pendingSetupSplitByTabId }
-        delete next[tabId]
-        return { pendingSetupSplitByTabId: next }
       })
       return pending
     },

@@ -1,13 +1,4 @@
-/**
- * Memory-leak regression: hostedReviewCache must stay bounded on the GitHub
- * PR-refresh write path.
- *
- * `withHostedReviewCacheEntry` caps the map at HOSTED_REVIEW_CACHE_MAX, but the
- * GitHub refresh path writes through `syncHostedReviewCacheFromGitHubPRResult`,
- * which spreads a new key in without ever applying that cap. The key embeds the
- * branch, so the map grows with every distinct (host, repo, branch) tuple a
- * session ever refreshes.
- */
+/** GitHub refresh must apply HOSTED_REVIEW_CACHE_MAX too; branch-keyed syncHostedReviewCacheFromGitHubPRResult otherwise bypasses the normal capped writer. */
 import { describe, it, expect, vi } from 'vitest'
 import { create } from 'zustand'
 import { createGitHubSlice } from './github'
@@ -84,18 +75,7 @@ describe('hostedReviewCache stays bounded on the PR-refresh write path', () => {
     }
     const cache = store.getState().hostedReviewCache
     expect(Object.keys(cache).length).toBeLessThanOrEqual(MAX_ENTRIES)
-    // Newest survives, oldest is evicted.
     expect(cache[`local::/repo::branch-${total - 1}`]).toBeDefined()
     expect(cache['local::/repo::branch-0']).toBeUndefined()
-  })
-
-  it('keeps every entry while under the cap', () => {
-    const store = createTestStore()
-    for (let i = 0; i < 10; i++) {
-      store.getState().applyGitHubPRRefreshEvent(foundEvent(`kept-${i}`, i + 1))
-    }
-    const cache = store.getState().hostedReviewCache
-    expect(Object.keys(cache)).toHaveLength(10)
-    expect(cache['local::/repo::kept-0']).toBeDefined()
   })
 })

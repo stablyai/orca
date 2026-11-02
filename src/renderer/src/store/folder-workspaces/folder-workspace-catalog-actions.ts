@@ -1,18 +1,22 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '../../runtime/runtime-rpc-client'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import type { FetchedFolderWorkspaceCatalog } from './folder-workspace-catalog'
 import type { HostCatalogFence } from '../host-catalog-fencing'
 import type { RepoSlice } from '../repos/repo-state'
 import { arrayElementsUnchanged } from '../catalog-identity'
-import { claimHostCatalogFence, isHostCatalogFenceCurrent } from '../host-catalog-fencing'
+import {
+  claimHostCatalogFence,
+  isHostCatalogFenceCurrent,
+  loadRuntimeHostCatalogs
+} from '../host-catalog-fencing'
 import {
   clearRestoredFolderWorkspaceSessionOwners,
   fetchFolderWorkspaceCatalogForTarget,
   getFolderWorkspaceCatalogReplacementIdentities,
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
-import { listRuntimeEnvironmentsForAllHostLoad } from '../runtime-catalog-hosts'
 import { reuseEqualRecordMap } from '../slices/repo-identity-reconcile'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
 
@@ -20,128 +24,81 @@ export function createFolderWorkspaceCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'fetchFolderWorkspaces' | 'fetchFolderWorkspacesForAllHosts'> {
+  // Why: folder workspaces are owned through their project groups; merge each host's folder slice against them.
+  const applyCatalog = (
+    catalog: FetchedFolderWorkspaceCatalog,
+    fence: HostCatalogFence
+  ): boolean => {
+    if (!isHostCatalogFenceCurrent(get, fence)) {
+      return false
+    }
+    let applied = false
+    set((current) => {
+      if (!isHostCatalogFenceCurrent(get, fence)) {
+        return current
+      }
+      applied = true
+      getFolderWorkspaceUpdateCoordinator(get).recordCatalogReplacement(
+        getFolderWorkspaceCatalogReplacementIdentities(
+          catalog,
+          current.folderWorkspaces,
+          current.projectGroups
+        )
+      )
+      const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
+        catalog,
+        current.folderWorkspaces,
+        current.projectGroups
+      )
+      if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
+        return current
+      }
+      return {
+        folderWorkspaces,
+        folderWorkspacePathStatuses: {}
+      }
+    })
+    return applied
+  }
+
   return {
     fetchFolderWorkspaces: async (options) => {
       try {
-        const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
-        const target = getActiveRuntimeTarget(
-          settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
-        )
+        const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
-        const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
-        if (!isHostCatalogFenceCurrent(get, fence)) {
-          return
-        }
-        set((current) => {
-          if (!isHostCatalogFenceCurrent(get, fence)) {
-            return current
-          }
-          folderWorkspaceUpdates.recordCatalogReplacement(
-            getFolderWorkspaceCatalogReplacementIdentities(
-              catalog,
-              current.folderWorkspaces,
-              current.projectGroups
-            )
-          )
-          const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
-            catalog,
-            current.folderWorkspaces,
-            current.projectGroups
-          )
-          if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
-            return current
-          }
-          return {
-            folderWorkspaces,
-            folderWorkspacePathStatuses: {}
-          }
-        })
+        applyCatalog(await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups), fence)
       } catch (err) {
         console.error('Failed to fetch folder workspaces:', err)
+        if (options.throwOnError) {
+          throw err
+        }
       }
     },
 
     fetchFolderWorkspacesForAllHosts: async (options) => {
-      const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
-      // Why: folder workspaces are owned through their project groups; fetch groups first, then merge each host's folder slice.
-      const applyCatalog = (
-        catalog: FetchedFolderWorkspaceCatalog,
-        fence: HostCatalogFence
-      ): void => {
-        if (!isHostCatalogFenceCurrent(get, fence)) {
-          return
-        }
-        set((current) => {
-          if (!isHostCatalogFenceCurrent(get, fence)) {
-            return current
-          }
-          folderWorkspaceUpdates.recordCatalogReplacement(
-            getFolderWorkspaceCatalogReplacementIdentities(
-              catalog,
-              current.folderWorkspaces,
-              current.projectGroups
-            )
-          )
-          const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
-            catalog,
-            current.folderWorkspaces,
-            current.projectGroups
-          )
-          if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
-            return current
-          }
-          return {
-            folderWorkspaces,
-            folderWorkspacePathStatuses: {}
-          }
-        })
-      }
-
-      let failed = false
-      try {
-        const target = { kind: 'local' as const }
-        const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
-        applyCatalog(await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups), fence)
-      } catch (err) {
-        failed = true
-        console.error('Failed to fetch local folder workspaces for all-host load:', err)
-      }
-      if (options?.remoteHosts === 'skip') {
-        return
-      }
-
-      const environments = await listRuntimeEnvironmentsForAllHostLoad()
-      await Promise.all(
-        environments.map(async (environment) => {
-          const target = {
-            kind: 'environment' as const,
-            environmentId: environment.id
-          }
-          const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
-          try {
-            applyCatalog(
-              await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups),
-              fence
-            )
-          } catch (err) {
-            failed = true
-            console.warn(
-              `Skipped folder workspaces for runtime environment ${environment.id}:`,
-              err
-            )
-          }
-        })
-      )
-      if (!failed) {
+      const hydratedFolderWorkspaceFences = new Map<ExecutionHostId, HostCatalogFence>()
+      let listedRuntimeHostIds: ReadonlySet<ExecutionHostId> | null = null
+      const localTarget = { kind: 'local' as const }
+      const localFence = claimHostCatalogFence(get, 'folder-workspaces', localTarget)
+      const clearRestoredOwnersForHydratedHosts = (): void => {
+        const hydratedFolderWorkspaceHostIds = new Set(
+          [...hydratedFolderWorkspaceFences]
+            .filter(([, fence]) => isHostCatalogFenceCurrent(get, fence))
+            .map(([hostId]) => hostId)
+        )
         set((s) => {
-          // Why reuseEqualRecordMap: the cleanup rebuilds the record every refresh, and
-          // reference-equality readers (live dashboard selector, popout bridge) re-run on a
-          // fresh-but-equal identity, so the equal case must keep the previous one.
           const restoredRuntimeHostIdByWorkspaceSessionKey = reuseEqualRecordMap(
             s.restoredRuntimeHostIdByWorkspaceSessionKey,
             clearRestoredFolderWorkspaceSessionOwners(
               s.restoredRuntimeHostIdByWorkspaceSessionKey,
-              s
+              s,
+              {
+                hydratedHostIds: hydratedFolderWorkspaceHostIds,
+                // A newer load re-claims the local fence; this load's env list is stale then.
+                listedRuntimeHostIds: isHostCatalogFenceCurrent(get, localFence)
+                  ? listedRuntimeHostIds
+                  : null
+              }
             )
           )
           return restoredRuntimeHostIdByWorkspaceSessionKey ===
@@ -150,6 +107,41 @@ export function createFolderWorkspaceCatalogActions(
             : { restoredRuntimeHostIdByWorkspaceSessionKey }
         })
       }
+      try {
+        const catalog = await fetchFolderWorkspaceCatalogForTarget(localTarget, get().projectGroups)
+        if (applyCatalog(catalog, localFence)) {
+          hydratedFolderWorkspaceFences.set(catalog.hostId, localFence)
+        }
+      } catch (err) {
+        console.error('Failed to fetch local folder workspaces for all-host load:', err)
+      }
+      if (options?.remoteHosts === 'skip') {
+        clearRestoredOwnersForHydratedHosts()
+        return
+      }
+
+      await loadRuntimeHostCatalogs(
+        get,
+        'folder-workspaces',
+        async (target, fence) => {
+          try {
+            const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
+            if (applyCatalog(catalog, fence)) {
+              hydratedFolderWorkspaceFences.set(catalog.hostId, fence)
+            }
+          } catch (err) {
+            console.warn(
+              `Skipped folder workspaces for runtime environment ${target.environmentId}:`,
+              err
+            )
+          }
+        },
+        undefined,
+        (environmentIds) => {
+          listedRuntimeHostIds = new Set(environmentIds.map(toRuntimeExecutionHostId))
+        }
+      )
+      clearRestoredOwnersForHydratedHosts()
     }
   }
 }

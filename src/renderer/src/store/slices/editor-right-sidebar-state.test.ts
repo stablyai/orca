@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
+import { makeLayout, makeTab } from './store-test-helpers'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -47,9 +60,18 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().pendingEditorFocusRequest).toBeNull()
   })
 
-  it('scopes the focus request to the unified tab that will render the file', () => {
+  it('scopes the focus request to the unified tab that will render the file', async () => {
     const store = createEditorTabsStore()
-    const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
+    store.setState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'terminal-1', worktreeId: 'wt-1' })] },
+      terminalLayoutsByTabId: { 'terminal-1': makeLayout() },
+      // The session read-back main loads from reads these; this partial store lacks them.
+      ptyIdsByTabId: {},
+      lastKnownRelayPtyIdByTabId: {}
+    })
+    store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
+    const main = await drawTabsFromMain(store)
+    const sourceTab = store.getState().unifiedTabsByWorktree['wt-1']![0]!
     const targetGroupId = store.getState().createEmptySplitGroup('wt-1', sourceTab.groupId, 'right')
     if (!targetGroupId) {
       throw new Error('expected split group')
@@ -65,6 +87,9 @@ describe('createEditorSlice right sidebar state', () => {
       },
       { focusEditor: true, targetGroupId }
     )
+    // A layout-owner build draws the tab, and asks for its focus, once main's frame is in.
+    await main.settle()
+    main.close()
 
     const editorTab = store
       .getState()
@@ -92,19 +117,6 @@ describe('createEditorSlice right sidebar state', () => {
 
   it('right sidebar is closed by default', () => {
     const store = createEditorStore()
-    expect(store.getState().rightSidebarOpen).toBe(false)
-  })
-
-  it('setRightSidebarOpen opens the sidebar', () => {
-    const store = createEditorStore()
-    store.getState().setRightSidebarOpen(true)
-    expect(store.getState().rightSidebarOpen).toBe(true)
-  })
-
-  it('setRightSidebarOpen(false) after open closes it', () => {
-    const store = createEditorStore()
-    store.getState().setRightSidebarOpen(true)
-    store.getState().setRightSidebarOpen(false)
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
 

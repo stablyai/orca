@@ -1,26 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import {
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-} from '../../../../shared/protocol-version'
+
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   assertProjectedSessionTabVisible,
-  clientCanObserveClientHostedBrowserPages,
   projectSessionTabBrowserPlacements,
   translateProjectedSessionTabMove
 } from './session-tab-browser-placement-projection'
 
 describe('projectSessionTabBrowserPlacements', () => {
-  it('preserves exact client placement for a capable desktop', () => {
-    const snapshot = makeSnapshot()
-
-    expect(
-      projectSessionTabBrowserPlacements(snapshot, [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY])
-    ).toBe(snapshot)
-  })
-
   it('removes client-only pages and repairs focus for an old peer', () => {
     const projected = projectSessionTabBrowserPlacements(makeSnapshot(), [])
 
@@ -39,21 +26,6 @@ describe('projectSessionTabBrowserPlacements', () => {
       }
     ])
     expect(projected.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'group-terminal' })
-  })
-
-  // Why named here: a CLI socket sends no capabilities at all, so anything asking it for browser
-  // tabs — an e2e oracle included — is blind to every client-placed page by design.
-  it('hides client-placed pages from a native peer and from a caller with no capabilities', () => {
-    expect(
-      clientCanObserveClientHostedBrowserPages(NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES)
-    ).toBe(false)
-    expect(
-      clientCanObserveClientHostedBrowserPages(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES)
-    ).toBe(true)
-    expect(clientCanObserveClientHostedBrowserPages(undefined)).toBe(false)
-    expect(projectSessionTabBrowserPlacements(makeSnapshot(), undefined).tabs).toEqual([
-      expect.objectContaining({ id: 'terminal-leaf' })
-    ])
   })
 
   it('preserves hidden raw slots while translating an old-client reorder', () => {

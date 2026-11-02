@@ -7,12 +7,11 @@ import { loadWorktreesUntilPathsPresent } from './helpers/worktree-registration'
 
 test.describe('Workspace Space git status checks', () => {
   test('checks every scanned deletable row, including rows after the first 50', async ({
+    electronApp,
     orcaPage,
     testRepoPath
   }) => {
-    // Why: on symlinked tmpdirs (/var→/private/var on macOS, /tmp→… on CI) Orca
-    // registers worktrees under their realpath, so the parent must be canonical
-    // before `git worktree add` or the recorded paths won't match and rows drop.
+    // Canonicalize parent before git worktree add so macOS/CI tmp symlinks match Orca’s realpath-registered rows.
     const worktreeParent = realpathSync(
       mkdtempSync(path.join(os.tmpdir(), 'orca-space-git-status-'))
     )
@@ -43,8 +42,7 @@ test.describe('Workspace Space git status checks', () => {
         return repo.id
       }, testRepoPath)
 
-      // Why: the 60 worktrees were added via raw git, so poll past the 5s scan
-      // cache TTL until every path registers before deriving the space rows.
+      // Poll past the 5s scan cache until all 60 raw-git-added worktrees register before deriving space rows.
       await loadWorktreesUntilPathsPresent(orcaPage, repoId, registeredWorktreePaths)
 
       const rowDisplayNames = await orcaPage.evaluate(
@@ -88,7 +86,7 @@ test.describe('Workspace Space git status checks', () => {
             branch: worktree.branch,
             isMainWorktree: false,
             isRemote: false,
-            isSparse: worktree.isSparse,
+            isSparse: worktree.isSparse === true,
             canDelete: true,
             lastActivityAt: worktree.lastActivityAt,
             status: 'ok' as const,
@@ -134,19 +132,40 @@ test.describe('Workspace Space git status checks', () => {
         { testRepoPath, worktreePaths: registeredWorktreePaths }
       )
 
-      // Why: `toHaveCount(0)` passes trivially while the list is still empty, so
-      // every row has to be on screen before the absent-status assertion means
-      // anything.
-      const rowCheckboxes = orcaPage.getByRole('checkbox', {
-        name: new RegExp(
-          `^Select (?:${rowDisplayNames
-            .map((displayName) => displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-            .join('|')})$`
-        )
-      })
-      await expect(rowCheckboxes).toHaveCount(rowDisplayNames.length, { timeout: 30_000 })
-
-      await expect(orcaPage.getByText('Keep: git not checked')).toHaveCount(0, { timeout: 30_000 })
+      // Visit every virtualized row so offscreen unchecked statuses cannot pass unnoticed.
+      const findSpacePage = () =>
+        electronApp.windows().find((page) => page.url().endsWith('/space.html'))
+      await expect.poll(() => Boolean(findSpacePage())).toBe(true)
+      const spacePage = findSpacePage()
+      if (!spacePage) {
+        throw new Error('Expected the Space window to open')
+      }
+      const rowName = new RegExp(
+        `^Select (?:${rowDisplayNames
+          .map((displayName) => displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('|')})$`
+      )
+      const list = spacePage.getByTestId('virtualized-list')
+      for (let position = 1; position <= rowDisplayNames.length; position += 1) {
+        const row = list.locator(`[aria-posinset="${position}"]`)
+        if ((await row.count()) === 0) {
+          await list.evaluate(
+            (element, { position, count }) => {
+              const scroller = element.parentElement
+              if (!scroller) {
+                throw new Error('Expected the workspace list scroll container')
+              }
+              scroller.scrollTop = (element.clientHeight * (position - 1)) / count
+            },
+            { position, count: rowDisplayNames.length }
+          )
+        }
+        await expect(row).toHaveAttribute('aria-setsize', String(rowDisplayNames.length))
+        await expect(row.getByRole('checkbox', { name: rowName })).toHaveCount(1)
+        await expect(row.getByText('Keep: git not checked')).toHaveCount(0, {
+          timeout: 30_000
+        })
+      }
     } finally {
       for (const worktreePath of worktreePaths) {
         try {

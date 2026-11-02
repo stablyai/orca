@@ -7,18 +7,7 @@ import {
   type ForegroundTerminalOutputTarget
 } from './pane-terminal-foreground-render-settle'
 
-/**
- * Convergence oracle for the narrowed foreground repaint.
- *
- * Invariant (`terminal-geometry.visible-convergence`): the rows Orca asks xterm
- * to repaint after a forced foreground refresh must cover every viewport row
- * whose rendered content changed during that write, plus the cursor row on both
- * sides of it. A renderer whose model was converged before the write is then
- * still converged after it, so narrowing the span can never strand a stale cell.
- *
- * A `null` span means "repaint the whole viewport" and trivially converges; the
- * corpus below also asserts which cases must stay full-grid.
- */
+/** Require each narrowed repair to cover all changed viewport rows plus both pre/post cursor rows, preserving terminal-geometry.visible-convergence. Null repaints the full grid; corpus cases pin when full repair remains necessary. */
 
 type SpanRequest = { start: number; end: number }
 
@@ -41,9 +30,7 @@ function createHarness(cols = 80, rows = 24): Harness {
 }
 
 function serializeRow(terminal: Terminal, viewportRow: number): string {
-  // Why the offset: `getLine` indexes the whole buffer, so viewport row 0 is the
-  // line at `viewportY`. Comparing raw buffer indices would compare scrollback
-  // that no write can touch and make the oracle vacuous.
+  // Offset getLine by viewportY; raw buffer indices would compare untouched scrollback and make the oracle vacuous.
   const line = terminal.buffer.active.getLine(terminal.buffer.active.viewportY + viewportRow)
   if (!line) {
     return '<missing>'
@@ -100,8 +87,7 @@ async function writeAndSettle(harness: Harness, data: string): Promise<void> {
   await new Promise<void>((resolve) => {
     const accepted = writeForegroundTerminalChunk(harness.target, data, {
       forceViewportRefresh: true,
-      // Why: headless has no `_core.refresh`, so drive the public `refresh` path
-      // the WebGL/async branch uses in the app.
+      // Headless lacks _core.refresh; drive the public path used by WebGL/async app repair.
       shouldRefreshViewportSynchronously: () => false,
       onParsed: () => resolve()
     })
@@ -109,7 +95,6 @@ async function writeAndSettle(harness: Harness, data: string): Promise<void> {
   })
 }
 
-/** Seed the pane without measuring: plain writes, drained before the oracle runs. */
 async function seed(harness: Harness, data: string): Promise<void> {
   await new Promise<void>((resolve) => {
     harness.terminal.write(data, () => resolve())
@@ -120,7 +105,6 @@ type Case = {
   name: string
   setup?: string
   write: string
-  /** Whole-viewport repaint is required (scroll, buffer flip, unknown span). */
   expectFullGrid?: boolean
   cols?: number
   rows?: number
@@ -276,8 +260,7 @@ describe('foreground repaint convergence', () => {
           `row ${row} changed but repaint span was ${request.start}..${request.end}`
         ).toBe(true)
       }
-      // The cursor row must be repainted: xterm's WebGL model drops the caret
-      // whenever an update pass excludes it.
+      // WebGL drops the caret when its row is excluded from repaint.
       expect(cursorBefore).toBeGreaterThanOrEqual(request.start)
       expect(cursorBefore).toBeLessThanOrEqual(request.end)
       expect(cursorAfter).toBeGreaterThanOrEqual(request.start)
@@ -294,8 +277,7 @@ describe('foreground repaint convergence', () => {
     harness.requests.length = 0
     await writeAndSettle(harness, CLAUDE_STYLE_REDRAW)
     const request = harness.requests[0]!
-    // Bottom-anchored redraw: the span ends on the cursor row but stays a few
-    // rows tall instead of the 40-row grid the old repair requested.
+    // Bottom-anchored redraw needs only a few rows through the cursor, rather than all 40.
     expect(request.end - request.start + 1).toBeLessThanOrEqual(8)
     expect(request.start).toBeGreaterThan(0)
     discardForegroundRenderSettle(harness.target)
@@ -303,9 +285,7 @@ describe('foreground repaint convergence', () => {
   })
 
   it('widens the repair to the cursor rows on both sides of the write', () => {
-    // Why a double: xterm's own tracker always happens to include the cursor
-    // row, so only a controlled parse span can prove Orca adds it itself. The
-    // WebGL model drops the caret when an update pass excludes the cursor row.
+    // A controlled span proves Orca adds cursor rows; xterm’s own tracker already includes them and would mask missing repair.
     const requests: SpanRequest[] = []
     let fire: (event: { start: number; end: number } | undefined) => void = () => {}
     const active = { type: 'normal', cursorY: 2, baseY: 0, viewportY: 0 }
@@ -356,7 +336,6 @@ describe('foreground repaint convergence', () => {
     await seed(harness, SCROLLBACK_SEED)
     harness.requests.length = 0
     await writeAndSettle(harness, 'scrolling output\r\n')
-    // Primary repaint is full-grid because the viewport scrolled.
     expect(harness.requests[0]).toEqual({ start: 0, end: 23 })
     discardForegroundRenderSettle(harness.target)
     harness.terminal.dispose()

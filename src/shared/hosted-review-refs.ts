@@ -1,3 +1,5 @@
+import type { BaseRefSearchResult } from './repo-types'
+
 export function normalizeHostedReviewHeadRef(ref: string): string {
   return ref
     .trim()
@@ -23,7 +25,23 @@ export function isRemoteHeadRef(ref: string, remotes: readonly string[] = []): b
   if (remote) {
     return shortRef.slice(remote.length + 1) === 'HEAD'
   }
-  // A stale ref whose remote is no longer configured is unambiguous only in
-  // the conventional two-component `<remote>/HEAD` shape.
+  // Unconfigured stale remotes are unambiguous only as <remote>/HEAD.
   return shortRef.split('/').length === 2 && shortRef.endsWith('/HEAD')
+}
+
+export function normalizeCreateReviewBaseSearchResults(
+  results: readonly BaseRefSearchResult[]
+): string[] {
+  const seen = new Set<string>()
+  const branches: string[] = []
+  for (const result of results) {
+    // APIs need branch names; detailed search resolves remote-qualified refs, including slash-containing remote names.
+    const branch = normalizeHostedReviewBaseRef((result.localBranchName || result.refName).trim())
+    if (!branch || seen.has(branch)) {
+      continue
+    }
+    seen.add(branch)
+    branches.push(branch)
+  }
+  return branches
 }

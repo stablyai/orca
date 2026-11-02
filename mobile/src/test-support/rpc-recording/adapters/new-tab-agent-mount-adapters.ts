@@ -1,7 +1,6 @@
 import { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 
-/** New-tab agent options: a plain loader call, so no React host is needed. */
 export function newTabAgentMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -12,7 +11,9 @@ export function newTabAgentMountAdapters(
       ).loadMobileNewTabAgentOptions
       return {
         action: (_name, args) =>
-          load({ client, worktreeId: String(args.workspace ?? 'repo-1::/folder') }),
+          load({ client, worktreeId: String(args.workspace ?? 'repo-1::/folder') }).then(
+            ({ options }) => options
+          ),
         state: () => ({}),
         dispose: () => {}
       }

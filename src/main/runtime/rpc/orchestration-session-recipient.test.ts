@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mintStructuredWorkerHandle,
@@ -33,17 +34,8 @@ describe('a send addressed to an agent session', () => {
   let visible: string[]
 
   beforeEach(() => {
-    h = createSessionCallerHarness(hostRef)
+    h = createSessionCallerHarness(hostRef, () => ({ present: true, sessionIds: visible }))
     visible = [SESSION_X, SESSION_Y]
-    hostRef.current = {
-      deps: {
-        store: {
-          getRecord: (sessionId: string) => h.records.get(sessionId) ?? null,
-          listRecords: () => [...h.records.values()],
-          getVisibleSessionTabIndex: () => ({ present: true, sessionIds: visible })
-        }
-      }
-    }
   })
 
   afterEach(() => {
@@ -66,8 +58,7 @@ describe('a send addressed to an agent session', () => {
   }
 
   it('stores mail to a live session that coordinates nothing at its own address, and points it', async () => {
-    // The refusal this replaces: "Terminal session:<id> has no live pane or durable Run/Dispatch
-    // mailbox." An agent's id is its public address, coordinator or not.
+    // Public session ids remain routable even without live panes or durable Run/Dispatch mailboxes.
     const deliver = vi.spyOn(h.runtime, 'deliverPendingMessagesForHandle')
     const sent = await send(ADDRESS_X)
     expect(sent).toMatchObject({ ok: true, result: { message: { to_handle: ADDRESS_X } } })
@@ -95,11 +86,11 @@ describe('a send addressed to an agent session', () => {
   it.each([
     [
       'an unknown session',
-      () => `session:0b0b0b0b-1111-4222-8333-444444444444`,
+      () => `orca_session_id:0b0b0b0b-1111-4222-8333-444444444444`,
       'session_caller_unknown'
     ],
-    ['a malformed session address', () => 'session:term_abc', 'session_caller_unknown'],
-    ['a provider id', () => `session:${PROVIDER_ID_X}`, 'session_caller_provider_id'],
+    ['a malformed session address', () => 'orca_session_id:term_abc', 'session_caller_unknown'],
+    ['a provider id', () => `orca_session_id:${PROVIDER_ID_X}`, 'session_caller_provider_id'],
     ['a bare provider id', () => PROVIDER_ID_X, 'session_caller_provider_id']
   ])('refuses %s before storing anything', async (_label, to, code) => {
     const sent = await send(to())
@@ -107,9 +98,29 @@ describe('a send addressed to an agent session', () => {
     expect(h.db.getInbox(100)).toEqual([])
   })
 
+  it.each([
+    ['a provider id', () => `orca_session_id:${PROVIDER_ID_X}`],
+    ['a bare provider id', () => PROVIDER_ID_X]
+  ])('hands back the Orca session address to paste instead of %s', async (_label, to) => {
+    expect(errorMessage(await send(to()))).toBe(
+      `${PROVIDER_ID_X} is the provider's own session id, which changes on /clear. This session's Orca session ID is orca_session_id:${SESSION_X}; address it by that instead. No message was sent.`
+    )
+  })
+
+  it('refuses the retired session:<id> spelling like any unknown terminal handle', async () => {
+    expect(await send(`session:${SESSION_X}`)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'terminal_not_found',
+        message: `Terminal session:${SESSION_X} has no live pane or durable Run/Dispatch mailbox.`
+      }
+    })
+    expect(h.db.getInbox(100)).toEqual([])
+  })
+
   it('refuses a session on another host', async () => {
     h.records.set(SESSION_Y, sessionRecord(SESSION_Y, { location: { executionHostId: 'ssh:box' } }))
-    expect(await send(`session:${SESSION_Y}`)).toMatchObject({
+    expect(await send(`orca_session_id:${SESSION_Y}`)).toMatchObject({
       ok: false,
       error: { code: 'session_caller_host_boundary' }
     })
@@ -118,7 +129,7 @@ describe('a send addressed to an agent session', () => {
 
   it('refuses a session whose chat was closed, naming why', async () => {
     visible = [SESSION_X]
-    const sent = await send(`session:${SESSION_Y}`)
+    const sent = await send(`orca_session_id:${SESSION_Y}`)
     expect(sent).toMatchObject({ ok: false, error: { code: 'session_caller_not_live' } })
     expect(errorMessage(sent)).toContain('its chat was closed')
     expect(h.db.getInbox(100)).toEqual([])
@@ -140,7 +151,7 @@ describe('a send addressed to an agent session', () => {
       maxDepth: Number.MAX_SAFE_INTEGER
     })
     structuredWorkerIdentities.clear()
-    const sent = await send(`session:${SESSION_Y}`)
+    const sent = await send(`orca_session_id:${SESSION_Y}`)
     expect(sent).toMatchObject({ ok: false, error: { code: 'session_caller_not_live' } })
     expect(errorMessage(sent)).toContain('worker identity')
   })
@@ -193,8 +204,7 @@ describe('a live structured worker addressed by its session id', () => {
   }
 
   it('lands in its Dispatch mailbox, which its flagless check reads', async () => {
-    // The defect this pins: the mail was stored at `session:<id>`, pointed at the worker, and its
-    // `check` — which reads the worker's handle and Dispatch mailboxes — returned nothing.
+    // Mail formerly landed at the session address while worker check read handle/Dispatch mailboxes and found nothing.
     const run = h.db.createRun({
       objective: 'pty coordinator',
       coordinatorHandle: 'term_coord',
@@ -208,7 +218,7 @@ describe('a live structured worker addressed by its session id', () => {
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER
     })
-    expect(await sendTo(`session:${SESSION_Y}`)).toMatchObject({
+    expect(await sendTo(`orca_session_id:${SESSION_Y}`)).toMatchObject({
       message: { to_handle: `dispatch:${dispatch.id}` }
     })
     expect(await flaglessCheck()).toMatchObject({ messages: [{ subject: 'hello' }] })
@@ -265,8 +275,7 @@ describe('mail sent to a session address reaches the mailbox that session reads'
   })
 
   it('reaches a chat with no Run after a restart, once the send has started the session host', async () => {
-    // After an app restart the agent-session host starts lazily; routing reads the session record
-    // synchronously, so the send must start the host before it resolves the recipient.
+    // After restart, start the lazy session host before synchronous recipient-record lookup.
     const store = hostRef.current
     hostRef.current = null
     vi.mocked(h.runtime.ensureStructuredAgentSessionHost).mockImplementation(async () => {

@@ -3,13 +3,7 @@ import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
-/**
- * Per-message copy affordance for the native chat. Copies the message's text to
- * the clipboard and briefly swaps the icon to a check tint as success feedback —
- * matching the app's other inline copy buttons (icon swap, no toast). Uses
- * Electron's clipboard IPC, which wraps navigator.clipboard.writeText and avoids
- * the silent failures navigator.clipboard hits inside some renderer contexts.
- */
+/** Use Electron clipboard IPC for reliable copying in renderer contexts; show inline success without a toast. */
 export function NativeChatCopyButton({
   text,
   label: copyLabel,
@@ -58,7 +52,7 @@ export function NativeChatCopyButton({
       aria-label={label}
       title={label}
       className={cn(
-        'flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         copied && 'text-status-success',
         className
       )}

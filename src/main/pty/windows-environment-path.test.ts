@@ -323,8 +323,7 @@ describe('readPersistedWindowsPathSegments', () => {
     try {
       expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
 
-      // Why: an emptied persisted Path is a successful read, not a blocked one —
-      // it must not be mistaken for the failure case and served from the cache.
+      // An empty persisted PATH is successful, not a reason to serve stale cache.
       expect(readPersistedWindowsPathSegments({ forceRefresh: true })).toEqual([])
       expect(readPersistedWindowsPathSegments()).toEqual([])
     } finally {
@@ -647,8 +646,7 @@ describe('resolvePathEnvKey', () => {
     expect(resolvePathEnvKey({ PaTh: 'C:\\Windows' }, 'win32')).toBe('PaTh')
   })
 
-  // Why: Win32 returns the first case-insensitive match in the block, so a dual-cased env is
-  // resolved by position; picking by casing would target the spelling the child never sees.
+  // Win32 resolves the first case-insensitive block entry; casing alone cannot select the live key.
   it('resolves a dual-cased Windows env by block order, not casing', () => {
     expect(resolvePathEnvKey({ PATH: 'C:\\Live', Path: 'C:\\Shadowed' }, 'win32')).toBe('PATH')
     expect(resolvePathEnvKey({ Path: 'C:\\Live', PATH: 'C:\\Shadowed' }, 'win32')).toBe('Path')
@@ -659,7 +657,7 @@ describe('resolvePathEnvKey', () => {
   })
 
   it('falls back to the host block spelling for a Windows env with no path key', () => {
-    // Why: a sparse patch that guesses wrong leaves the daemon's own merge holding both keys.
+    // Match the daemon merge key to avoid creating a shadow PATH entry.
     expect(resolvePathEnvKey({}, 'win32', { PATH: 'C:\\Windows' })).toBe('PATH')
     expect(resolvePathEnvKey({}, 'win32', { Path: 'C:\\Windows' })).toBe('Path')
     expect(resolvePathEnvKey({}, 'win32', { Path: 'C:\\Live', PATH: 'C:\\Shadowed' })).toBe('Path')

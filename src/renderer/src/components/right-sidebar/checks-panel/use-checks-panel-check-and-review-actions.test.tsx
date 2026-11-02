@@ -1,17 +1,31 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import type { ChecksPanelCheckAndReviewActionsInput } from './check-and-review-action-dependencies'
 import { useChecksPanelCheckAndReviewActions } from './use-checks-panel-check-and-review-actions'
 
 type Input = ChecksPanelCheckAndReviewActionsInput
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
-const mocks = vi.hoisted(() => ({ toastError: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  toastError: vi.fn(),
+  startFixChecksAgent: vi.fn(),
+  loadGitLabJobLogDetails: vi.fn()
+}))
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
+}))
+vi.mock('@/lib/fix-checks-agent-launch', () => ({ startFixChecksAgent: mocks.startFixChecksAgent }))
+vi.mock('@/runtime/gitlab-job-trace-client', () => ({
+  loadGitLabJobLogDetails: mocks.loadGitLabJobLogDetails
 }))
 
 function renderActions(overrides: Partial<ChecksPanelCheckAndReviewActionsInput> = {}) {
@@ -237,4 +251,241 @@ describe('useChecksPanelCheckAndReviewActions GitLab links', () => {
     )
     expect(fetchHostedReviewForBranch).toHaveBeenCalledOnce()
   })
+})
+
+describe('useChecksPanelCheckAndReviewActions AI details diagnostics', () => {
+  beforeEach(() => {
+    mocks.startFixChecksAgent.mockReset().mockResolvedValue(true)
+    mocks.loadGitLabJobLogDetails.mockReset().mockResolvedValue(null)
+  })
+
+  function githubInput(overrides: Partial<Input> = {}): Input {
+    return makeInput({
+      sourceControlAiActionsVisible: true,
+      activeReview: {
+        provider: 'github',
+        number: 42,
+        title: 'Fork PR',
+        state: 'open',
+        url: 'https://github.example.com/fork/widgets/pull/42',
+        status: 'failure',
+        updatedAt: '2026-10-13T00:00:00Z',
+        mergeable: 'UNKNOWN'
+      },
+      checks: [
+        { name: 'build', status: 'completed', conclusion: 'failure', url: null, checkRunId: 123 }
+      ],
+      ...overrides
+    })
+  }
+
+  it('logs only the static category and keeps the existing five-check fetch limit', async () => {
+    const original = Object.assign(new Error('SYNTHETIC_SECRET_message'), {
+      stack: 'SYNTHETIC_SECRET_stack',
+      stdout: 'SYNTHETIC_SECRET_stdout',
+      stderr: 'SYNTHETIC_SECRET_stderr',
+      cause: { cause: { message: 'SYNTHETIC_SECRET_cause' } },
+      response: { error: { message: 'SYNTHETIC_SECRET_rpc' } }
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const fetchPRCheckDetails = vi.fn().mockRejectedValueOnce(original).mockResolvedValue(null)
+    const checks: Input['checks'] = Array.from({ length: 7 }, (_, index) => ({
+      name: `build ${index}`,
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      checkRunId: index + 1
+    }))
+    const input = githubInput({ checks, fetchPRCheckDetails })
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+
+    await act(() => result.current.handleFixChecksWithAI())
+
+    expect(warn.mock.calls).toEqual([
+      ['[ChecksPanel] failed to load check details for AI fix prompt']
+    ])
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('SYNTHETIC_SECRET')
+    expect(fetchPRCheckDetails).toHaveBeenCalledTimes(5)
+    expect(fetchPRCheckDetails.mock.calls.map(([, args]) => args.checkRunId)).toEqual([
+      1, 2, 3, 4, 5
+    ])
+    expect(fetchPRCheckDetails).toHaveBeenNthCalledWith(
+      1,
+      '/workspace/repo',
+      {
+        checkRunId: 1,
+        workflowRunId: undefined,
+        checkName: 'build 0',
+        url: null,
+        prRepo: null
+      },
+      { repoId: 'repo-1', repoOwnerExecutionHostId: 'ssh:ssh-1' }
+    )
+    expect(mocks.loadGitLabJobLogDetails).not.toHaveBeenCalled()
+    expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()
+    expect(JSON.stringify(mocks.startFixChecksAgent.mock.calls)).not.toContain('SYNTHETIC_SECRET')
+    expect(input.setIsFixingChecksWithAI).toHaveBeenNthCalledWith(1, true)
+    expect(input.setIsFixingChecksWithAI).toHaveBeenNthCalledWith(2, false)
+  })
+
+  it('keeps the stale-result guard after a captured details failure', async () => {
+    const upstream = Promise.withResolvers<null>()
+    const fetchPRCheckDetails = vi.fn().mockReturnValue(upstream.promise)
+    const isCurrentAsyncResult = vi.fn(() => true)
+    const input = githubInput({ fetchPRCheckDetails, isCurrentAsyncResult })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = result.current.handleFixChecksWithAI()
+    })
+    isCurrentAsyncResult.mockReturnValue(false)
+    upstream.reject(new Error('SYNTHETIC_SECRET_stale'))
+    await act(async () => {
+      await pending
+    })
+
+    expect(fetchPRCheckDetails).toHaveBeenCalledOnce()
+    expect(isCurrentAsyncResult).toHaveBeenCalledWith('state')
+    expect(mocks.startFixChecksAgent).not.toHaveBeenCalled()
+    expect(warn.mock.calls).toEqual([
+      ['[ChecksPanel] failed to load check details for AI fix prompt']
+    ])
+    expect(input.setIsFixingChecksWithAI).toHaveBeenLastCalledWith(false)
+  })
+
+  it('preserves the GitLab trace path and static failure warning', async () => {
+    mocks.loadGitLabJobLogDetails.mockRejectedValue(new Error('SYNTHETIC_SECRET_gitlab'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const input = makeInput({
+      sourceControlAiActionsVisible: true,
+      checks: [
+        {
+          name: 'GitLab build',
+          status: 'completed',
+          conclusion: 'failure',
+          url: null,
+          gitlabJobId: 99
+        }
+      ]
+    })
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+
+    await act(() => result.current.handleFixChecksWithAI())
+
+    expect(mocks.loadGitLabJobLogDetails).toHaveBeenCalledOnce()
+    expect(mocks.loadGitLabJobLogDetails).toHaveBeenCalledWith({
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      repoOwnerExecutionHostId: 'ssh:ssh-1',
+      check: input.checks[0],
+      projectRef: null
+    })
+    expect(input.fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(warn.mock.calls).toEqual([
+      ['[ChecksPanel] failed to load check details for AI fix prompt']
+    ])
+    expect(mocks.startFixChecksAgent).toHaveBeenCalledOnce()
+    expect(JSON.stringify(mocks.startFixChecksAgent.mock.calls)).not.toContain('SYNTHETIC_SECRET')
+  })
+})
+
+function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
+  return {
+    number: 12,
+    title: 'Test PR',
+    state: 'open',
+    url: 'https://github.com/acme/repo/pull/12',
+    checksStatus: 'pending',
+    updatedAt: '2026-05-12T00:00:00Z',
+    mergeable: 'MERGEABLE',
+    headSha: 'head-sha',
+    ...overrides
+  }
+}
+
+it('link refresh reads the selected GitHub PR after the action at both read seams', async () => {
+  const original = useAppStore.getState()
+  const old = Promise.withResolvers<{
+    kind: 'found'
+    pr: ReturnType<typeof makePR>
+    fetchedAt: number
+  }>()
+  const open = makePR({ number: 43, headSha: 'head-a' })
+  const selected = makePR({ number: 43, headSha: 'head-b' })
+  const refreshPRNow = vi
+    .fn()
+    .mockReturnValueOnce(old.promise)
+    .mockResolvedValueOnce({ kind: 'found', pr: selected, fetchedAt: 2 })
+  vi.stubGlobal('api', { gh: { refreshPRNow } })
+  const repo = {
+    id: 'repo-1',
+    path: '/workspace/repo',
+    displayName: 'repo',
+    badgeColor: '',
+    addedAt: 0
+  }
+  useAppStore.setState({ repos: [repo], prCache: {}, hostedReviewCache: {}, prRefreshStates: {} })
+  const input = makeInput({
+    repo,
+    linkedPR: 43,
+    linkedGitLabMR: null,
+    fetchPRForBranch: useAppStore.getState().fetchPRForBranch,
+    // The card read's failure is not the link's failure: checks still load for the new head.
+    fetchHostedReviewForBranch: vi.fn().mockRejectedValue(new Error('lookup capacity reached')),
+    fetchPRChecks: vi.fn(async () => []),
+    fetchPRComments: vi.fn(async () => [])
+  })
+  useAppStore.setState({
+    worktreesByRepo: {
+      [repo.id]: [
+        makeWorktree({
+          id: input.activeWorktreeId!,
+          repoId: repo.id,
+          branch: input.branch,
+          linkedPR: 43
+        })
+      ]
+    }
+  })
+  const before = input.fetchPRForBranch(repo.path, input.branch, {
+    force: true,
+    repoId: repo.id,
+    linkedPRNumber: 43,
+    reason: 'visible'
+  })
+  try {
+    const { result } = renderHook(() => useChecksPanelCheckAndReviewActions(input))
+    await act(async () => result.current.refreshLinkedGitHubPullRequest(43))
+    expect(refreshPRNow).toHaveBeenCalledTimes(2)
+    expect(refreshPRNow).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        candidate: expect.objectContaining({ linkedPRNumber: 43 }),
+        userRefresh: true
+      })
+    )
+    expect(input.fetchHostedReviewForBranch).toHaveBeenCalledWith(
+      repo.path,
+      input.branch,
+      expect.objectContaining({ linkedGitHubPR: 43, userRefresh: true })
+    )
+    expect(input.fetchPRChecks).toHaveBeenCalledWith(
+      repo.path,
+      43,
+      input.branch,
+      'head-b',
+      selected.prRepo,
+      expect.objectContaining({ userRefresh: true })
+    )
+    expect(input.fetchPRComments).toHaveBeenCalledWith(
+      repo.path,
+      43,
+      expect.objectContaining({ userRefresh: true })
+    )
+  } finally {
+    old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+    await before
+    useAppStore.setState(original)
+    vi.unstubAllGlobals()
+  }
 })

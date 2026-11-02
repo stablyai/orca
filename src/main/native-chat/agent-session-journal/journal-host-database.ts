@@ -1,21 +1,15 @@
-// The host's one chat journal database: every structured chat on this state directory, in one
-// file, on one connection. The app and orcad instance locks keep a second process off a profile.
-//
-// A chat's store owns no connection. It goes through this object, so there is nothing per chat to
-// open, close, retry or leak, and the connection closes exactly once, last, at host teardown.
+// One connection per profile; instance locks exclude other processes and host teardown closes it last.
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import {
-  JOURNAL_SYNCHRONOUS,
   openJournalDatabase,
   runJournalTransaction,
   type OpenJournalDatabase
 } from './journal-database'
 import { journalOpenRefusalError } from './journal-open-failure'
-import { journalDirectoryFor } from './journal-paths'
+import { JournalCheckpointOwner } from './journal-checkpoint-owner'
 import { AgentSessionJournalError } from './journal-write-guards'
 
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
@@ -26,24 +20,27 @@ export function journalDatabasePath(stateDirectory: string): string {
 
 export class JournalHostDatabase {
   private connection: Database.Database | null
-  /** A newer Orca wrote the database: every chat's history reads, and no chat writes. */
   readonly readOnly: boolean
-  /** A failed transaction's ROLLBACK failed too, so the transaction may still be open. */
   private stranded = false
+  private readonly checkpoint: JournalCheckpointOwner | undefined
+  private closing: Promise<void> | undefined
 
   private constructor(
-    readonly stateDirectory: string,
-    opened: OpenJournalDatabase
+    opened: OpenJournalDatabase,
+    readonly stateDirectory: string
   ) {
     this.connection = opened.db
     this.readOnly = opened.readOnly
+    if (!this.readOnly) {
+      this.checkpoint = new JournalCheckpointOwner(opened.db, journalDatabasePath(stateDirectory))
+    }
   }
 
   static open(stateDirectory: string): JournalHostDatabase {
     mkdirSync(stateDirectory, { recursive: true })
     return new JournalHostDatabase(
-      stateDirectory,
-      openJournalDatabase(journalDatabasePath(stateDirectory))
+      openJournalDatabase(journalDatabasePath(stateDirectory)),
+      stateDirectory
     )
   }
 
@@ -53,7 +50,7 @@ export class JournalHostDatabase {
 
   get db(): Database.Database {
     const connection = this.connection
-    if (!connection) {
+    if (!connection || this.closing) {
       throw new AgentSessionJournalError('journal_closed', 'the chat journal database is closed')
     }
     if (this.stranded) {
@@ -62,50 +59,64 @@ export class JournalHostDatabase {
     return connection
   }
 
-  /** One IMMEDIATE transaction; see `runJournalTransaction`. */
-  transaction<T>(run: (db: Database.Database) => T): T {
-    return runJournalTransaction(this.db, run, () => {
-      this.stranded = true
-    })
+  /** Streamed text may lose only its trailing suffix on OS crash; the next FULL commit makes it durable. */
+  transaction<T>(
+    run: (db: Database.Database) => T,
+    streamed = false,
+    committed?: (result: T) => void
+  ): T {
+    const db = this.db
+    if (!streamed) {
+      const result = runJournalTransaction(db, run, () => {
+        this.stranded = true
+      })
+      committed?.(result)
+      this.checkpoint?.afterCommit()
+      return result
+    }
+    // Synchronous level changes require no transaction; stranded recovery restores FULL first.
+    db.pragma('synchronous = NORMAL')
+    let result: T
+    try {
+      result = runJournalTransaction(db, run, () => {
+        this.stranded = true
+      })
+      committed?.(result)
+    } finally {
+      if (!db.isTransaction) {
+        db.pragma('synchronous = FULL')
+      }
+    }
+    this.checkpoint?.afterCommit()
+    return result
   }
 
-  /**
-   * The same transaction, committed without an fsync: for rows no reader follows until a later
-   * synced commit, which under WAL makes every earlier frame durable too. The setting is restored
-   * in the same task, so no other chat's commit runs under it.
-   */
-  unsyncedTransaction<T>(run: (db: Database.Database) => T): T {
+  /** Autocommit maintenance may commit earlier statements even when a later statement fails. */
+  writeAutocommit<T>(run: (db: Database.Database) => T): T {
     const db = this.db
-    db.pragma('synchronous = NORMAL')
     try {
-      return this.transaction(run)
+      return run(db)
     } finally {
-      // SQLite refuses the change inside a transaction; freeing a stranded one restores it.
-      if (!db.isTransaction) {
-        db.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
-      }
+      this.checkpoint?.afterCommit()
     }
   }
 
-  /** Where this chat's history lived before the journal was one database per host. */
-  legacyDirectoryFor(
-    identity: Pick<AgentSessionJournalIdentity, 'workspaceId' | 'sessionId'>
-  ): string {
-    return journalDirectoryFor(this.stateDirectory, identity)
+  /** Close after stores drain; preserve failed-close handles for teardown retry. */
+  close(): Promise<void> {
+    this.closing ??= this.finishClose().catch((error: unknown) => {
+      this.closing = undefined
+      throw error
+    })
+    return this.closing
   }
 
-  /** Last, after every store has drained. A close that fails keeps the handle, so the retried
-   *  teardown closes this same connection. */
-  close(): void {
+  private async finishClose(): Promise<void> {
+    await this.checkpoint?.close()
     this.connection?.close()
     this.connection = null
   }
 
-  /**
-   * A failed transaction whose ROLLBACK failed too is still open: every later BEGIN would fail
-   * inside it and every read would see rows that never committed. Each use retries the ROLLBACK,
-   * and until one goes through every chat is refused the way a journal that will not open is.
-   */
+  /** Retry stranded ROLLBACK before every use; uncommitted shared state must never reach another chat. */
   private rollBackStrandedTransaction(connection: Database.Database): void {
     if (connection.isTransaction) {
       try {
@@ -114,7 +125,7 @@ export class JournalHostDatabase {
         throw journalOpenRefusalError(error)
       }
     }
-    connection.pragma(`synchronous = ${JOURNAL_SYNCHRONOUS}`)
+    connection.pragma('synchronous = FULL')
     this.stranded = false
   }
 }

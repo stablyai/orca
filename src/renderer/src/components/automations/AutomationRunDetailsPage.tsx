@@ -7,9 +7,11 @@ import { translate } from '@/i18n/i18n'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { getAutomationRunContent } from './automation-run-content'
+import { automationRunErrorText } from './automation-run-error-copy'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import {
+  AutomationRunErrorNotice,
   formatAutomationDateTimeWithRelative,
   getAutomationRunStatusLabel,
   getAutomationRunStatusVariant
@@ -38,6 +40,8 @@ export function AutomationRunDetailsPage({
   onOpenWorkspace: () => void
   onBack: () => void
 }): React.JSX.Element {
+  const content = getAutomationRunContent(run)
+  const errorText = automationRunErrorText(run)
   return (
     <section className="flex min-h-0 flex-1 p-5">
       <AutomationRunPageFrame
@@ -72,14 +76,9 @@ export function AutomationRunDetailsPage({
                 {translate('auto.components.automations.AutomationsPage.295698292f', 'Rerun')}
               </Button>
             ) : null}
-            {viewState ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!viewState.canOpen}
-                onClick={onOpenWorkspace}
-              >
+            {/* Why: a disabled button with nothing to open reads as broken; status and content explain the run. */}
+            {viewState?.canOpen ? (
+              <Button type="button" variant="outline" size="sm" onClick={onOpenWorkspace}>
                 <Eye className="size-3.5" />
                 {viewState.actionLabel}
               </Button>
@@ -88,9 +87,17 @@ export function AutomationRunDetailsPage({
         }
         onBack={onBack}
       >
+        {/* Why: saved terminal output otherwise hides why the run failed. */}
+        {run.status === 'dispatch_failed' && errorText && content !== errorText ? (
+          <AutomationRunErrorNotice
+            className="mb-4"
+            label={translate('auto.components.automations.AutomationsPage.runError', 'Error:')}
+            error={errorText}
+          />
+        ) : null}
         <CommentMarkdown
           variant="document"
-          content={getAutomationRunContent(run)}
+          content={content}
           className="text-sm leading-relaxed text-foreground"
         />
       </AutomationRunPageFrame>

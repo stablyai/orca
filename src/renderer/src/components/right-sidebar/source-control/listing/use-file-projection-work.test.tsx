@@ -1,13 +1,19 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
+import { useMemo } from 'react'
+import { create } from 'zustand'
+import type { AppState } from '@/store'
+import { toBranchCompareSnapshot } from '@/store/slices/editor/git/git-status-reconciliation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import type * as FileNameSortModule from '../../../../../../shared/file-name-sort'
-import type * as SourceControlTreeModule from '../../source-control-tree'
+import type * as SourceControlTreeModule from '../../../../../../shared/source-control-tree'
 import type * as SubmoduleExpansionModule from './submodule-expansion'
+import type * as FileProjectionModule from './use-file-projection'
+import type * as RowOpeningModule from './use-row-opening'
 
 const counters = vi.hoisted(() => ({
   compareFileNames: 0,
@@ -15,10 +21,12 @@ const counters = vi.hoisted(() => ({
   buildSourceControlTree: 0,
   flattenSourceControlTree: 0,
   injectExpandedSubmoduleRows: 0,
-  injectExpandedSubmoduleEntries: 0
+  injectExpandedSubmoduleEntries: 0,
+  branchKeys: 0,
+  branchNodeVisits: 0,
+  branchIngestions: 0
 }))
 
-/** Lets a test swap in a comparator that is deliberately not a total order. */
 const comparatorOverride = vi.hoisted(() => ({
   current: null as ((a: string, b: string) => number) | null
 }))
@@ -36,7 +44,7 @@ vi.mock('../../../../../../shared/file-name-sort', async (importOriginal) => {
   }
 })
 
-vi.mock('../../source-control-tree', async (importOriginal) => {
+vi.mock('../../../../../../shared/source-control-tree', async (importOriginal) => {
   const actual = await importOriginal<typeof SourceControlTreeModule>()
   return {
     ...actual,
@@ -76,13 +84,90 @@ const { compareFileNames } = await import('../../../../../../shared/file-name-so
 const { getSourceControlFileFilterState, filterSourceControlPathEntries } =
   await import('./file-filter')
 const { useSourceControlFileProjection } = await import('./use-file-projection')
+const { useSourceControlFileListing } = await import('./use-file-listing')
+
+const editorStore = create<
+  Pick<AppState, 'openFiles' | 'activeFileIdByWorktree' | 'activeTabTypeByWorktree'>
+>(() => ({ openFiles: [], activeFileIdByWorktree: {}, activeTabTypeByWorktree: {} }))
+vi.mock('@/store', () => ({
+  useAppStore: (...args: Parameters<typeof editorStore>) => editorStore(...args)
+}))
+vi.mock('./use-submodule-status', () => ({
+  useSourceControlSubmoduleStatus: () => ({
+    expandedSubmoduleKeys: NO_EXPANDED_SUBMODULES,
+    submoduleStatusByKey: NO_SUBMODULE_STATUS
+  })
+}))
+vi.mock('../sync/use-git-history', () => ({ useSourceControlGitHistory: () => ({}) }))
+vi.mock('../commit/use-bulk-actions', () => ({ useSourceControlBulkActions: () => ({}) }))
+
+// Observe the real projection's output, leaving sorting/filtering/tree construction untouched.
+vi.mock('./use-file-projection', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileProjectionModule>()
+  return {
+    ...actual,
+    useSourceControlFileProjection: (
+      ...args: Parameters<typeof actual.useSourceControlFileProjection>
+    ) => {
+      const projection = actual.useSourceControlFileProjection(...args)
+      return {
+        ...projection,
+        filteredBranchEntries: useMemo(
+          () =>
+            projection.filteredBranchEntries.map((entry) => ({
+              ...entry,
+              get path() {
+                counters.branchKeys++
+                return entry.path
+              }
+            })),
+          [projection.filteredBranchEntries]
+        ),
+        visibleBranchTreeRows: useMemo(
+          () =>
+            projection.visibleBranchTreeRows.map((node) => ({
+              ...node,
+              get type() {
+                counters.branchNodeVisits++
+                return node.type
+              },
+              get key() {
+                counters.branchKeys++
+                return node.key
+              }
+            })),
+          [projection.visibleBranchTreeRows]
+        )
+      }
+    }
+  }
+})
+vi.mock('./use-row-opening', async (importOriginal) => {
+  const actual = await importOriginal<typeof RowOpeningModule>()
+  return {
+    ...actual,
+    useSourceControlRowOpening: (args: Parameters<typeof actual.useSourceControlRowOpening>[0]) => {
+      const visibleBranchRowKeys = useMemo(() => {
+        const keys = [...args.visibleBranchRowKeys]
+        keys[Symbol.iterator] = function* (): Generator<string, undefined, unknown> {
+          for (let index = 0; index < keys.length; index++) {
+            counters.branchIngestions++
+            yield keys[index]
+          }
+        }
+        return keys
+      }, [args.visibleBranchRowKeys])
+      return actual.useSourceControlRowOpening({ ...args, visibleBranchRowKeys })
+    }
+  }
+})
 
 const NO_ENTRIES: GitStatusEntry[] = []
 const NO_COLLAPSED_TREE_DIRS = new Set<string>()
 const NO_EXPANDED_SUBMODULES = new Set<string>()
 const NO_COLLAPSED_SECTIONS = new Set<string>()
 const NO_SUBMODULE_STATUS = {}
-const GROUP_ORDER = ['unstaged', 'staged', 'untracked'] as const
+const GROUP_ORDER = ['unstaged', 'staged'] as const
 
 type ProjectionProps = {
   entries: GitStatusEntry[]
@@ -119,7 +204,6 @@ function makeBranchEntries(count: number): GitBranchChangeEntry[] {
   }))
 }
 
-/** Numeric collation, case variants, unicode, collator ties, and an exact duplicate path. */
 const ORDERING_FIXTURE: GitBranchChangeEntry[] = [
   { path: 'migrations/100.sql', status: 'modified' },
   { path: 'migrations/9.sql', status: 'modified' },
@@ -136,7 +220,6 @@ const ORDERING_FIXTURE: GitBranchChangeEntry[] = [
   { path: 'src/dup.ts', status: 'added' }
 ]
 
-/** The pre-change implementation: filter, then copy-and-sort. */
 function legacyFilterThenSort(
   entries: GitBranchChangeEntry[],
   filterQuery: string
@@ -155,10 +238,7 @@ function makeStatusEntries(count: number): GitStatusEntry[] {
   }))
 }
 
-/**
- * Deliberately not a total order: every path under the same top-level directory compares equal, so
- * distinct paths tie. Sort-before-filter must still match filter-before-sort under it.
- */
+/** Tie distinct paths by top-level directory to prove sort/filter equivalence does not require a total order. */
 function compareTopLevelDirOnly(a: string, b: string): number {
   const dirA = a.slice(0, a.indexOf('/'))
   const dirB = b.slice(0, b.indexOf('/'))
@@ -181,7 +261,35 @@ beforeEach(() => {
   }
 })
 
-describe('useSourceControlFileProjection branch entry ordering', () => {
+describe('useSourceControlFileProjection entry ordering', () => {
+  it('sorts combined working changes once across filter changes', () => {
+    const entries = makeStatusEntries(400)
+    const branchEntries: GitBranchChangeEntry[] = []
+    const { result, rerender } = renderProjection({
+      entries,
+      branchEntries,
+      filterQuery: '',
+      sourceControlViewMode: 'list'
+    })
+    const sections = result.current.displaySections
+    const comparesForInitialSort = counters.compareFileNames
+    expect(comparesForInitialSort).toBeGreaterThan(0)
+
+    for (const filterQuery of ['f', 'file-1', 'no-match', '']) {
+      rerender({ entries, branchEntries, filterQuery, sourceControlViewMode: 'list' })
+      expect(result.current.displaySections).toEqual(
+        sections
+          .map((section) => ({
+            ...section,
+            items: section.items.filter((entry) => entry.path.includes(filterQuery))
+          }))
+          .filter((section) => section.items.length > 0)
+      )
+    }
+
+    expect(counters.compareFileNames).toBe(comparesForInitialSort)
+  })
+
   it('sorts committed branch entries once across many filter changes', () => {
     const branchEntries = makeBranchEntries(400)
     const { rerender } = renderProjection({
@@ -222,9 +330,7 @@ describe('useSourceControlFileProjection branch entry ordering', () => {
     }
   })
 
-  // Guards the invariant the sort-before-filter swap actually rests on: a stable sort, not a total
-  // order. If sortedBranchEntries ever stops preserving the original order of tied paths, this
-  // diverges from filter-then-sort even though every total-order fixture above still passes.
+  // Only stable sorting preserves tie order after filtering; total-order fixtures alone cannot detect this regression.
   it('matches filter-then-sort under a comparator that is not a total order', () => {
     comparatorOverride.current = compareTopLevelDirOnly
     const branchEntries = makeTieHeavyEntries(300)
@@ -277,6 +383,23 @@ describe('useSourceControlFileProjection view-mode gating', () => {
     expect(result.current.visibleBranchTreeRows).toEqual([])
   })
 
+  it('preserves untracked selection keys in the combined Changes tree', () => {
+    const { result } = renderProjection({
+      entries: [
+        { path: 'src/new.ts', area: 'untracked', status: 'untracked' },
+        { path: 'src/tracked.ts', area: 'unstaged', status: 'modified' }
+      ],
+      branchEntries: [],
+      filterQuery: '',
+      sourceControlViewMode: 'tree'
+    })
+    expect(result.current.displaySections.map((section) => section.id)).toEqual(['unstaged'])
+    expect(result.current.visibleSelectionEntries.map(({ key, area }) => ({ key, area }))).toEqual([
+      { key: 'untracked::src/new.ts', area: 'untracked' },
+      { key: 'unstaged::src/tracked.ts', area: 'unstaged' }
+    ])
+  })
+
   it('builds no list projection in tree mode', () => {
     const { result } = renderProjection({
       entries,
@@ -319,5 +442,139 @@ describe('useSourceControlFileProjection view-mode gating', () => {
     expect(result.current.visibleTreeRowsBySection).toEqual({})
     expect(result.current.visibleBranchTreeRows).toEqual([])
     expect(result.current.visibleListRowsBySection).toEqual(listRows)
+  })
+})
+
+describe('branch current-row projection contract', () => {
+  it.each([100, 1000])('bounds real listing/opening work for %i committed files', (count) => {
+    const summary = {
+      baseRef: 'main',
+      baseOid: 'base',
+      compareRef: 'feature',
+      headOid: 'head',
+      mergeBase: 'base',
+      changedFiles: count,
+      status: 'ready' as const
+    }
+    const branchEntries = Array.from({ length: count }, (_, index) => ({
+      path: `src/${index % 2 ? 'other' : 'match'}/file-${index}.ts`,
+      status: 'modified' as const
+    }))
+    const openFiles: AppState['openFiles'] = [0, 1].map((index) => ({
+      id: `file-${index}`,
+      worktreeId: 'wt-1',
+      relativePath: branchEntries[index].path,
+      filePath: `/repo/${branchEntries[index].path}`,
+      language: 'typescript',
+      isDirty: false,
+      mode: 'diff',
+      diffSource: 'branch',
+      branchCompare: toBranchCompareSnapshot(summary)
+    }))
+    editorStore.setState({
+      openFiles,
+      activeFileIdByWorktree: { 'wt-1': 'file-0' },
+      activeTabTypeByWorktree: { 'wt-1': 'editor' }
+    })
+    let props: Parameters<typeof useSourceControlFileListing>[0] = {
+      activeRemoteActionSequence: null,
+      activeRepoTarget: null,
+      activeWorktreeId: 'wt-1',
+      branchEntries,
+      branchName: 'feature',
+      branchSummary: summary,
+      collapsedSections: NO_COLLAPSED_SECTIONS,
+      collapsedTreeDirs: NO_COLLAPSED_TREE_DIRS,
+      compareBaseRef: 'main',
+      entries: NO_ENTRIES,
+      filterQuery: '',
+      isBranchVisible: true,
+      isFolder: false,
+      isGitHistoryExpanded: false,
+      isMac: true,
+      refreshActiveGitStatusAfterMutation: async () => {},
+      remoteActionError: null,
+      repositoryHuge: undefined,
+      rightSidebarTab: 'source-control',
+      sourceControlGroupOrder: GROUP_ORDER,
+      sourceControlRef: { current: null },
+      sourceControlViewMode: 'list',
+      worktreeMap: new Map(),
+      worktreePath: '/repo'
+    }
+    let renders = 0
+    const { result, rerender, unmount } = renderHook(
+      (input: typeof props) => {
+        renders++
+        return useSourceControlFileListing(input)
+      },
+      { initialProps: props }
+    )
+    function expectWork(keys: number, visits = 0) {
+      expect([counters.branchKeys, counters.branchNodeVisits, counters.branchIngestions]).toEqual([
+        keys,
+        visits,
+        keys
+      ])
+      counters.branchKeys = counters.branchNodeVisits = counters.branchIngestions = 0
+    }
+    function update(change: Partial<typeof props>) {
+      props = { ...props, ...change }
+      rerender(props)
+    }
+    const active = (index: number) =>
+      expect([...result.current.activeOpenRowKeys]).toEqual([
+        `branch::${branchEntries[index].path}`
+      ])
+    expectWork(count)
+    active(0)
+    rerender(props)
+    update({ branchName: 'irrelevant display update' })
+    expectWork(0)
+    const settledRenders = renders
+    act(() =>
+      editorStore.setState({
+        activeFileIdByWorktree: {
+          ...editorStore.getState().activeFileIdByWorktree,
+          'other-host-worktree': 'unrelated'
+        }
+      })
+    )
+    expect(renders).toBe(settledRenders)
+    expectWork(0)
+    act(() => editorStore.setState({ activeFileIdByWorktree: { 'wt-1': 'file-1' } }))
+    expect(renders).toBeGreaterThan(settledRenders)
+    active(1)
+    expectWork(0)
+    update({ filterQuery: 'match' })
+    expectWork(count / 2)
+    expect(result.current.activeOpenRowKeys.size).toBe(0)
+    update({ collapsedSections: new Set(['branch']) })
+    expectWork(0)
+    update({ filterQuery: '' })
+    expectWork(0)
+    update({ collapsedSections: NO_COLLAPSED_SECTIONS })
+    expectWork(count)
+    active(1)
+    update({ sourceControlViewMode: 'tree' })
+    expectWork(count, count + 3)
+    rerender(props)
+    expectWork(0)
+    update({ collapsedTreeDirs: new Set(['dir::branch::src/other']) })
+    expectWork(count / 2, count / 2 + 3)
+    expect(result.current.activeOpenRowKeys.size).toBe(0)
+    update({ collapsedTreeDirs: NO_COLLAPSED_TREE_DIRS })
+    expectWork(count, count + 3)
+    active(1)
+    update({ filterQuery: 'match' })
+    expectWork(count / 2, count / 2 + 1)
+    update({ collapsedSections: new Set(['branch']) })
+    expectWork(0)
+    update({ filterQuery: '' })
+    expectWork(0)
+    update({ collapsedSections: NO_COLLAPSED_SECTIONS })
+    expectWork(count, count + 3)
+    active(1)
+    unmount()
   })
 })

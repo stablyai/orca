@@ -44,7 +44,8 @@ vi.mock('./client', () => moduleFactories.client())
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
-vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('../ipc/pty/provider/registry', () => moduleFactories.ptyProviderRegistry())
+vi.mock('../ipc/pty/provider/listener-lifecycle', () => moduleFactories.ptyListenerLifecycle())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   beforeEach(() => {
@@ -116,14 +117,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ]),
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
-    // STA-2376: different-app-path replacement, emitted exactly once.
     expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
     expect(trackDaemonReplacedMock).toHaveBeenCalledWith('different_app_path', 0)
   })
 
   it('adopts the winner when a launched daemon loses the endpoint race', async () => {
-    // Why: losing the publish race is an expected outcome, not a crash. Reporting it as a
-    // startup failure strands this app on local non-persistent PTYs beside a healthy daemon.
     const mod = await importFresh()
     await mod.initDaemonPtyProvider(undefined, { macosLoginSessionWatch: true })
 
@@ -131,8 +129,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
-    // Force the replace-and-launch path; otherwise the launcher adopts the healthy daemon and
-    // never forks, and this test would pass without exercising anything.
+    // Force launch so occupied-exit adoption is actually exercised.
     getDaemonLaunchIdentityMock.mockReturnValueOnce('mismatch')
     forkMock.mockImplementationOnce(() => {
       const handlers: Record<string, ((arg?: unknown) => void)[]> = {
@@ -144,8 +141,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         pid: 24680,
         on(event: string, cb: (arg?: unknown) => void) {
           handlers[event]?.push(cb)
-          // Why the exit code and not the message: the launcher settles on exit, so keying
-          // adoption off the notification alone could lose that race.
+          // Carry occupied status on exit; an IPC-only notification can race launcher settlement.
           if (event === 'exit') {
             queueMicrotask(() => cb(20))
           }
@@ -161,11 +157,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }
     })
 
-    // A handle rather than a rejection means the incumbent was adopted.
     await expect(launcher('/fake/socket', '/fake/token')).resolves.toMatchObject({
       shutdown: expect.any(Function)
     })
-    // Guard against passing for the wrong reason: the adoption must follow a real launch.
     expect(forkMock).toHaveBeenCalledTimes(1)
   })
 
@@ -205,7 +199,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(forkMock).toHaveBeenCalledTimes(1)
-    // STA-3491: attribution-severed replacement is billed to its own reason, exactly once.
     expect(trackDaemonReplacedMock).toHaveBeenCalledTimes(1)
     expect(trackDaemonReplacedMock).toHaveBeenCalledWith('severed_tcc_attribution', 0)
   })
@@ -219,7 +212,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
     getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
-    // Why: live sessions must veto replacement — the Settings surface owns the remedy instead.
     daemonClientMock.mockImplementation(function MockDaemonClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
@@ -329,11 +321,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   it('republishes the endpoint owner launch metadata into a repaired PID record', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
-    // Why: the mismatched record's metadata belongs to another daemon, so freshness and
-    // host-pinning fields must come from the authenticated owner — a record without
-    // appVersion reads as a permanently stale bundle and gets needlessly replaced. The
-    // install path deliberately contains a space: re-parsing it out of a space-joined
-    // command line truncated it and made a healthy daemon look like a different app path.
+    // Recover metadata from hello: space-joined command lines cannot reliably preserve paths containing spaces.
     const endpointIdentity = {
       pid: 101,
       startedAtMs: 1_000_000,
@@ -407,8 +395,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         launchNonce: 'stale-owner'
       })
     )
-    // Why: fail open. Losing every persistent terminal because a pid file write failed is a
-    // far worse outcome than a record that disagrees with the endpoint.
     replaceDaemonPidFileMock.mockReturnValueOnce(false)
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
@@ -423,7 +409,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       const handle = await launcher('/fake/socket', '/fake/token', '/fake/daemon.pid', 'unused')
 
       expect(handle).toBeDefined()
-      // The healthy daemon is adopted, not replaced.
       expect(forkMock.mock.calls.length).toBe(forkCallsBefore)
       expect(warn).toHaveBeenCalledWith(
         '[daemon] Could not repair daemon PID ownership; adopting the authenticated endpoint anyway'
@@ -439,10 +424,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     checkDaemonHealthMock.mockResolvedValue('unreachable')
     await mod.initDaemonPtyProvider()
     const forkCallsBefore = forkMock.mock.calls.length
-    // Why: forking beside a survivor is exactly how the endpoint owner and the session host
-    // diverge — one daemon answers the socket while another hosts the visible terminals. But
-    // refusing outright would leave the user with no daemon at all, and something demonstrably
-    // still answers the endpoint, so adopt it degraded: live sessions keep working.
+    // Adopt a surviving endpoint owner in degraded mode so its sessions remain reachable.
     killStaleDaemonMock.mockResolvedValueOnce({
       killed: false,
       liveOwnerSurvived: true
@@ -467,15 +449,13 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('rescues the endpoint owner with a full probe window after the recovery budget is spent', async () => {
-    // Why: this last-resort probe runs AFTER the budget — past the kill, the fork and the lease —
-    // so anything clamped to the remainder is a ~1ms probe that loses to its own timer against a
-    // live socket, and the rescue that saves every persistent session degrades into total loss.
+    // Rescue runs after recovery expires; a remaining-budget probe would time out before a live daemon answers.
     const mod = await importFresh()
     checkDaemonHealthMock.mockResolvedValue('unreachable')
     await mod.initDaemonPtyProvider()
     const clock = { now: 1_700_000_000_000 }
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => clock.now)
-    // The real post-deadline tail: kill, fork and lease all run after recovery has decided.
+    // Simulate the kill completing after the recovery deadline.
     killStaleDaemonMock.mockImplementationOnce(async () => {
       clock.now += DAEMON_RECOVERY_BUDGET_MS + 5_000
       return { killed: true, liveOwnerSurvived: false }
@@ -490,7 +470,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }
     daemonClientMock.mockImplementationOnce(basicClient)
     daemonClientMock.mockImplementationOnce(basicClient)
-    // The fresh child lost the endpoint to another daemon: the lease rejects on identity.
     daemonClientMock.mockImplementationOnce(function MockPostReadyClient() {
       return {
         ...basicClient(),
@@ -618,7 +597,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('adopts a healthy daemon whose pid-file identity cannot be verified (null startedAtMs metadata)', async () => {
-    // Why: startedAtMs null (all pre-fix Windows pid files) → identity 'unknown'; a live daemon must ADOPT, not replace.
+    // Legacy Windows PID records lack start times; healthy endpoints remain adoptable.
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 

@@ -1,18 +1,8 @@
 import type { RuntimeHostStatusSnapshot } from './runtime-host-status'
 import type { RuntimeStatus } from './runtime-types'
 
-/**
- * What a host's last probe is worth, kept apart from what the host actually said.
- *
- * The store's `status` field answers both questions with one nullable value, so a probe still in
- * flight, a probe that failed, a host that refused us and a pairing that was retired all arrive at
- * a reader as the same `null`. Readers then spend that `null` on decisions of very different
- * weight. This names the four answers so the decision happens where the evidence is understood.
- *
- * `unverifiable` is never `exited` (docs/reference/ssh-execution-boundary.md). `refused` and
- * `retired` are the only arms carrying positive evidence, and they are separate because they
- * differ in kind: one is the host turning us away, the other is the pairing being ended.
- */
+/** Separate live answers, unverifiable probes, refusals and retired pairings: nullable store status conflates them.
+ * Loss of contact never proves exit; only refusal/retirement positively withdraw prior facts (ssh-execution-boundary.md). */
 export type RuntimeHostContact =
   | { verdict: 'live'; status: RuntimeStatus }
   | {
@@ -23,11 +13,7 @@ export type RuntimeHostContact =
   | { verdict: 'refused'; lastAnswer: RuntimeStatus | null }
   | { verdict: 'retired'; lastAnswer: RuntimeStatus | null }
 
-/**
- * Why the host's current state is unknown. `never-asked` is the absence of any transport attempt,
- * which is where an unreachable paired host permanently sits — distinct from a handshake in
- * flight, and the reason it must stay actionable rather than spin.
- */
+/** An unreachable host may stay never-asked forever; distinguish that from a handshake in flight to keep actions available. */
 export type RuntimeHostContactUnverifiableReason =
   | 'never-asked'
   | 'checking'
@@ -35,10 +21,7 @@ export type RuntimeHostContactUnverifiableReason =
   | 'transport-connecting'
   | 'transport-down'
 
-/**
- * The host's last answer whatever the verdict, for facts that do not expire — its build's
- * capabilities, its platform, its runtime id. Returns null only when the host never answered.
- */
+/** Retain the last host answer across contact loss; null only if none exists. Callers decide which facts remain usable. */
 export function lastRuntimeHostAnswer(contact: RuntimeHostContact): RuntimeStatus | null {
   return contact.verdict === 'live' ? contact.status : contact.lastAnswer
 }
@@ -53,12 +36,8 @@ export function isRuntimeHostContactRevokedVerdict(contact: RuntimeHostContact):
   return contact.verdict === 'refused' || contact.verdict === 'retired'
 }
 
-/**
- * Why the order matters: it is the order the connection-state derivation already used, and the
- * parity suite pins every combination against it. Transport loss outranks a probe in flight
- * because a dead socket explains the silence; a ready transport with a failed probe is the host
- * being unreachable at the runtime layer, not at the network layer.
- */
+/** Transport loss outranks in-flight probing; ready transport with a failed probe means runtime-layer unreachability.
+ * The parity suite pins this ordering to connection-state derivation. */
 export function runtimeHostContactFromSnapshot(
   snapshot: RuntimeHostStatusSnapshot,
   entryStatus: RuntimeStatus | null = snapshot.status
@@ -88,11 +67,7 @@ export function runtimeHostContactFromSnapshot(
   return { verdict: 'unverifiable', reason: 'never-asked', lastAnswer }
 }
 
-/**
- * The contact for a recorded entry. A stored `contact` wins so a writer can state one the
- * snapshot cannot express — a probe that threw before any snapshot existed, say — and the
- * snapshot derivation is the fallback while writers are still being converted.
- */
+/** Explicit contact can express failures before any snapshot; derive from snapshot only for unconverted writers. */
 export function runtimeHostContactForEntry(
   entry:
     | {

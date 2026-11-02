@@ -1,19 +1,4 @@
-/**
- * Renderer-initiated watchdog for dead main→renderer push delivery.
- *
- * Field evidence (v1.4.121-rc.0 snapshot, 2026-07-06): all `pty:data` push
- * events stop reaching the renderer (a 245-char shell prompt sat un-ACKed;
- * every terminal blank) while invoke IPC keeps working — the wedged window
- * answered `getRendererDeliveryDebugSnapshot` live. The prior recovery layers
- * cannot reach that state: the xterm write-pipeline guards and replay-guard
- * release (#7150) run only after bytes arrive, and the cumulative-ACK +
- * solicited-resync protocol heals lost ACKs but probes over the same push
- * channel that is dead (upstream precedent: electron#37067, one-directional
- * Mojo IPC death). This watchdog is the missing lane: it detects the wedge
- * and heals over invoke — the direction proven alive — with zero cost on the
- * data hot path (one Map upsert per received chunk; a tick does no IPC while
- * output flows or while no PTY delivery is expected).
- */
+/** Invoke can survive dead main → renderer push delivery; ACK probes use that same dead push channel, so detect and pull-restore through invoke. Skip IPC while output flows or no PTY expects delivery. */
 import { e2eConfig } from '@/lib/e2e-config'
 import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
@@ -22,12 +7,9 @@ import { getProcessedPtyCharTotals } from './terminal-pty-ack-gate'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 
 const WATCHDOG_INTERVAL_MS = 15_000
-// Why 2 ticks: one silent interval can be a probe racing an in-transit chunk;
-// two full intervals with zero received events while main reports ACK-starved
-// in-flight bytes only occurs in the wedged state.
+// Two silent ticks distinguish a wedge from one probe racing in-transit output.
 const WATCHDOG_STALL_TICKS_TO_HEAL = 2
-// Why: a heal that could not revive the push channel must not repaint-storm;
-// pull-restores repeat at most once per cooldown while the wedge persists.
+// Failed push revival must not cause a pull-restore repaint storm; enforce cooldown.
 const WATCHDOG_HEAL_COOLDOWN_MS = 60_000
 
 type TerminalDeliveryWatchdogConfig = {
@@ -60,9 +42,7 @@ let lastHealAtMs: number | null = null
 let healCount = 0
 let tickInFlight = false
 
-/** One Map upsert per received chunk — the watchdog's only hot-path cost.
- *  Counted at dispatcher enqueue, BEFORE parse-deferred ACK crediting, so
- *  main can tell "lost in the channel" from "received, parse-pending". */
+/** Count receipt before parse-deferred ACKs so main can distinguish lost delivery from pending parsing; one Map upsert per chunk. */
 export function recordPtyDataReceived(ptyId: string, chars: number): void {
   receivedPtyDataEventCount += 1
   receivedPtyCharTotals.set(ptyId, (receivedPtyCharTotals.get(ptyId) ?? 0) + chars)
@@ -72,16 +52,13 @@ export function clearReceivedPtyCharTotal(ptyId: string): void {
   receivedPtyCharTotals.delete(ptyId)
 }
 
-/** E2e blackhole: simulates the field wedge (push events vanish before the
- *  dispatcher sees them, no receive count, no ACK). Never true in prod. */
+/** E2E blackhole drops push before dispatch receipt/ACK; disabled in production. */
 export function isPtyPushDeliveryBlackholed(): boolean {
   return blackholePtyPushDelivery
 }
 
 function isMainDeliveryStalled(health: PtyRendererDeliveryHealthReply): boolean {
-  // Why msSinceLastAck may be null: a wedged-from-first-byte session (the
-  // field case's brand-new terminal) never ACKs; in-flight debt alone is the
-  // signal then. A recent ACK means some pty still round-trips — not a wedge.
+  // First-byte wedges have no ACK timestamp; use in-flight debt, but reject recent ACKs as evidence of a working channel.
   return (
     health.inFlightTotalChars > 0 &&
     (health.msSinceLastAck === null || health.msSinceLastAck >= watchdogConfig.intervalMs)
@@ -135,9 +112,7 @@ async function healDeadPushDelivery(
   lastHealAtMs = Date.now()
   stallStreakTicks = 0
   healCount += 1
-  // Why read BEFORE re-attach: 0 here = the listener was detached (app-level
-  // bug to hunt); ≥1 = events are being dropped below the emitter (channel
-  // dead, platform-level). The single most valuable field discriminator.
+  // Read before reattach: zero listeners implicates app detachment; existing listeners implicate delivery below the emitter.
   const listenerCountBeforeReattach = window.api?.pty?.getPtyDataListenerCount?.() ?? null
   deps.reattachPushListeners()
   const healed = await report({
@@ -177,8 +152,7 @@ function scheduleWatchdogTimer(): void {
     clearInterval(watchdogTimer)
   }
   watchdogTimer = setInterval(() => {
-    // Why serialized: a heal awaits two invokes; overlapping ticks could
-    // double-heal inside one cooldown window.
+    // Serialize ticks across the two invokes to prevent duplicate heals inside one cooldown.
     if (tickInFlight) {
       return
     }
@@ -193,9 +167,7 @@ export function startTerminalDeliveryWatchdog(deps: TerminalDeliveryWatchdogDeps
   if (watchdogDeps) {
     return
   }
-  // Why gated on the invoke fn: the web remote client and unit tests expose a
-  // partial pty API; without the report lane the watchdog has no safe heal
-  // path and must stay off.
+  // Partial web/test PTY APIs lack the invoke report lane; without it there is no safe heal path.
   if (typeof window.api?.pty?.reportRendererDeliveryState !== 'function') {
     return
   }
@@ -235,8 +207,6 @@ export function getTerminalDeliveryWatchdogDiagnostics(): {
     msSinceLastHeal: lastHealAtMs === null ? null : Date.now() - lastHealAtMs
   }
 }
-
-// ─── E2e control surface ─────────────────────────────────────────────
 
 type E2eTerminalDeliveryWatchdogApi = {
   blackhole: (on: boolean) => void

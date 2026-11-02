@@ -8,7 +8,10 @@ describe('normalizeSourceControlGroupOrder', () => {
   it('keeps supported source control group orders', () => {
     expect(normalizeSourceControlGroupOrder('changes-first')).toBe('changes-first')
     expect(normalizeSourceControlGroupOrder('staged-first')).toBe('staged-first')
-    expect(normalizeSourceControlGroupOrder('untracked-first')).toBe('untracked-first')
+  })
+
+  it('maps the legacy untracked-first preference to combined Changes first', () => {
+    expect(normalizeSourceControlGroupOrder('untracked-first')).toBe('changes-first')
   })
 
   it('falls back to the default for malformed values', () => {

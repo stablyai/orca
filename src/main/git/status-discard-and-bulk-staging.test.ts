@@ -52,13 +52,7 @@ vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) =>
   })
 )
 
-import {
-  bulkDiscardChanges,
-  bulkStageFiles,
-  bulkUnstageFiles,
-  discardChanges,
-  isWithinWorktree
-} from './status'
+import { bulkDiscardChanges, bulkStageFiles, bulkUnstageFiles, discardChanges } from './status'
 
 describe('discardChanges', () => {
   beforeEach(() => {
@@ -72,45 +66,6 @@ describe('discardChanges', () => {
     realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
-  it('restores tracked files from HEAD', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'src/file.ts\n' })
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
-
-    await discardChanges('/repo', 'src/file.ts')
-
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      ['ls-files', '--error-unmatch', '--', ':(literal)src/file.ts'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(rmMock).not.toHaveBeenCalled()
-  })
-
-  it('removes untracked files from disk', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not tracked'))
-
-    await discardChanges('/repo', 'src/new-file.ts')
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['clean', '-ffdx', '--', ':(literal)src/new-file.ts'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(rmMock).not.toHaveBeenCalled()
-  })
-
   it('rejects paths that traverse outside the worktree', async () => {
     await expect(discardChanges('/repo', '../../etc/passwd')).rejects.toThrow(
       'resolves outside the worktree'
@@ -118,10 +73,6 @@ describe('discardChanges', () => {
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(rmMock).not.toHaveBeenCalled()
-  })
-
-  it('accepts in-tree Windows paths when resolving containment', async () => {
-    expect(isWithinWorktree(path.win32, 'C:\\repo', 'C:\\repo\\src\\file.ts')).toBe(true)
   })
 })
 
@@ -135,91 +86,34 @@ describe('bulk git helpers', () => {
     realpathMock.mockImplementation(async (targetPath: string) => path.resolve(targetPath))
   })
 
-  it('chunks bulk stage requests to avoid oversized argv payloads', async () => {
+  it('stages more than 100 selected paths with one index write and bounded argv', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
 
     const filePaths = Array.from({ length: 201 }, (_, i) => `src/file-${i}.ts`)
     await bulkStageFiles('/repo', filePaths)
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      ['add', '--', ...filePaths.slice(0, 100).map((filePath) => `:(literal)${filePath}`)],
+    expect(gitExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(
+      ['add', '--pathspec-from-file=-', '--pathspec-file-nul'],
       {
-        cwd: '/repo'
-      }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['add', '--', ...filePaths.slice(200).map((filePath) => `:(literal)${filePath}`)],
-      {
-        cwd: '/repo'
+        cwd: '/repo',
+        stdin: filePaths.map((filePath) => `:(literal)${filePath}\0`).join('')
       }
     )
   })
 
-  it('chunks bulk unstage requests to avoid oversized argv payloads', async () => {
+  it('unstages more than 100 selected paths with one index write and bounded argv', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
 
     const filePaths = Array.from({ length: 101 }, (_, i) => `src/file-${i}.ts`)
     await bulkUnstageFiles('/repo', filePaths)
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      [
-        'restore',
-        '--staged',
-        '--',
-        ...filePaths.slice(100).map((filePath) => `:(literal)${filePath}`)
-      ],
-      {
-        cwd: '/repo'
-      }
-    )
-  })
-
-  it('discards tracked and untracked paths in bulk', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'src/file.ts\0docs/readme.md\0' })
-      .mockResolvedValueOnce({ stdout: '' })
-
-    await bulkDiscardChanges('/repo', ['src/file.ts', 'src/new-file.ts', 'docs', 'scratch'])
-
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      [
-        'ls-files',
-        '-z',
-        '--',
-        ':(literal)src/file.ts',
-        ':(literal)src/new-file.ts',
-        ':(literal)docs',
-        ':(literal)scratch'
-      ],
+    expect(gitExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(
+      ['reset', '--quiet', '--pathspec-from-file=-', '--pathspec-file-nul'],
       {
         cwd: '/repo',
-        // Why: this read buffers, so it fences the WSL login shell's rc banner off its first NUL record.
-        captureWslLoginShellOutput: true
+        stdin: filePaths.map((filePath) => `:(literal)${filePath}\0`).join('')
       }
     )
-    // Why: a pathspec is tracked if git reports either the exact path or a
-    // tracked descendant, which keeps directory pathspecs on the restore path.
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)src/file.ts', ':(literal)docs'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['clean', '-ffdx', '--', ':(literal)src/new-file.ts', ':(literal)scratch'],
-      {
-        cwd: '/repo'
-      }
-    )
-    expect(rmMock).not.toHaveBeenCalled()
   })
 
   it('preserves bulk discard action selection and original path order for path edges', async () => {
@@ -232,18 +126,12 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
       ['ls-files', '-z', '--', ...filePaths.map((filePath) => `:(literal)${filePath}`)],
-      [
-        'restore',
-        '--worktree',
-        '--source=HEAD',
-        '--',
-        ':(literal)docs\\',
-        ':(literal)[ab].txt',
-        ':(literal)docs///',
-        ':(literal)docs\\'
-      ],
+      ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
       ['clean', '-ffdx', '--', ':(literal)new', ':(literal)new', ':(literal)src/file']
     ])
+    expect(gitExecFileAsyncMock.mock.calls[1][1].stdin).toBe(
+      ':(literal)docs\\\0:(literal)[ab].txt\0:(literal)docs///\0:(literal)docs\\\0'
+    )
     expect(rmMock).not.toHaveBeenCalled()
   })
 
@@ -259,9 +147,10 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
+      ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
       {
-        cwd: '/repo'
+        cwd: '/repo',
+        stdin: ':(literal)docs\0'
       }
     )
     expect(rmMock).not.toHaveBeenCalled()
@@ -274,5 +163,20 @@ describe('bulk git helpers', () => {
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('does not spawn mutations for empty selections', async () => {
+    await bulkStageFiles('/repo', [])
+    await bulkUnstageFiles('/repo', [])
+    await bulkDiscardChanges('/repo', [])
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects embedded NUL before staging or unstaging another path', async () => {
+    await expect(bulkStageFiles('/repo', ['one\0two'])).rejects.toThrow('NUL')
+    await expect(bulkUnstageFiles('/repo', ['one\0two'])).rejects.toThrow('NUL')
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

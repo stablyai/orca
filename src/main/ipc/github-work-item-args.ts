@@ -19,10 +19,7 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-// Why: renderer input crosses the IPC boundary and is untrusted. Reject
-// non-integer or < 1 numbers, and coerce unrecognised `type` values to
-// undefined so getWorkItem falls through to its issue-then-PR probe rather
-// than silently dispatching to the wrong branch.
+// Reject invalid item numbers; unknown types fall back to issue-then-PR probing.
 export function dispatchWorkItem<T>(
   args: WorkItemArgs,
   repo: RegisteredRepoContext,
@@ -41,8 +38,7 @@ export function dispatchWorkItem<T>(
     return null
   }
   const safeType = type === 'issue' || type === 'pr' ? type : undefined
-  // Why: open-by-number must pin the same source the list and start-point use,
-  // else a fork and its upstream sharing a PR number resolve to different PRs.
+  // Open-by-number must use the same origin/upstream source as listing and launch.
   return fn(
     repo.path,
     number,

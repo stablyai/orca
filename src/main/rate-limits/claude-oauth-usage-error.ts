@@ -1,5 +1,5 @@
-// Why: a corrupt/hostile Retry-After must not gate usage refreshes for days.
-const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
+import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
+import { parseUsageRetryAfterMs } from './usage-retry-after'
 
 export class OAuthUsageError extends Error {
   constructor(
@@ -12,32 +12,24 @@ export class OAuthUsageError extends Error {
   }
 }
 
+/** The usage request threw before a usable body: a transport failure or malformed JSON. */
+export class ClaudeUsageRequestError extends Error {
+  readonly failureKind: 'network' | 'parse'
+
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.failureKind = classifyThrownUsageRequestError(cause)
+  }
+}
+
 export async function createOAuthUsageError(res: Response): Promise<OAuthUsageError> {
   return new OAuthUsageError(
     await describeOAuthUsageError(res),
     res.status,
-    // Why: auth/rate-limit responses are already the user-visible usage API
-    // answer. Falling through to /usage can spawn Claude Code needlessly.
+    // Auth/rate-limit responses are authoritative; falling back to /usage would needlessly spawn Claude.
     res.status === 401 || res.status === 403 || res.status === 429,
-    res.status === 429 ? parseRetryAfterMs(res.headers.get('retry-after')) : null
+    res.status === 429 ? parseUsageRetryAfterMs(res.headers.get('retry-after')) : null
   )
-}
-
-function parseRetryAfterMs(header: string | null): number | null {
-  if (!header) {
-    return null
-  }
-  const seconds = Number(header)
-  if (Number.isFinite(seconds)) {
-    return seconds > 0 ? Math.min(seconds * 1000, MAX_RETRY_AFTER_MS) : null
-  }
-  // Why: Retry-After may also be an HTTP-date (RFC 9110).
-  const dateMs = Date.parse(header)
-  if (!Number.isFinite(dateMs)) {
-    return null
-  }
-  const delta = dateMs - Date.now()
-  return delta > 0 ? Math.min(delta, MAX_RETRY_AFTER_MS) : null
 }
 
 async function describeOAuthUsageError(res: Response): Promise<string> {

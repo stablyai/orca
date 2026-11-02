@@ -1,16 +1,7 @@
-/**
- * Classifies a runtime RPC failure by its machine token.
- *
- * Shared rather than renderer-owned because every client reads the same
- * flattened shapes: Electron IPC rewraps the message ("Error invoking remote
- * method 'x': Error: …") and a host that does not know an error class maps it
- * to `runtime_error` with the token left on the message. A client that matches
- * only `.code` therefore classifies a subset of what it receives.
- */
+/** Read machine tokens across IPC wrappers and older hosts that flatten class errors to runtime_error messages.
+ * Matching only code misses those failures. */
 
-// Why: transports re-wrap the token into a longer message and drop the cause, so the
-// token classifies only as the whole message or after a real message boundary (": " or a
-// newline) — prose that merely trails off in the token must not classify.
+// Match whole messages or real message boundaries (: or newline); trailing prose alone must not classify as a token.
 const CODE_TOKEN_BOUNDARY = /(?:: |\n)[ \t]*$/
 
 function endsWithCodeToken(text: string, expectedCode: string): boolean {

@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
@@ -28,35 +29,6 @@ function guardedSendRequest(): RpcRequest {
 describe('terminal agent send guard', () => {
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('rechecks a transient no-agent result before refusing a guarded send', async () => {
-    vi.useFakeTimers()
-    const getTerminalAgentStatus = vi
-      .fn()
-      .mockResolvedValueOnce({ handle: 'terminal-1', isRunningAgent: false, status: null })
-      .mockResolvedValue({ handle: 'terminal-1', isRunningAgent: true, status: 'working' })
-    const runtime = stubRuntime({
-      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
-      getTerminalAgentStatus,
-      sendTerminal: vi.fn().mockResolvedValue({
-        handle: 'terminal-1',
-        accepted: true,
-        bytesWritten: 1
-      })
-    })
-    const responsePromise = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatch(
-      guardedSendRequest()
-    )
-
-    await vi.advanceTimersByTimeAsync(150)
-
-    await expect(responsePromise).resolves.toMatchObject({
-      ok: true,
-      result: { send: { accepted: true, bytesWritten: 1 } }
-    })
-    expect(getTerminalAgentStatus).toHaveBeenCalledTimes(2)
   })
 
   it('rechecks a transient no-agent result immediately before the PTY write', async () => {

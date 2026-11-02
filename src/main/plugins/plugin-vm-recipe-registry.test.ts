@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
-import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
+import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
 import { hashPluginTree } from './plugin-content-hash'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { PluginVmRecipeRegistry } from './plugin-vm-recipe-registry'
@@ -29,7 +29,7 @@ async function recipePlugin(
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id,
-    publisher: 'orca-samples',
+    publisher: 'samples',
     name: id,
     version: '1.0.0',
     engines: { orca: '>=1.0.0' },
@@ -42,7 +42,7 @@ async function recipePlugin(
     throw new Error(content.error)
   }
   return {
-    pluginKey: `orca-samples.${id}`,
+    pluginKey: `samples.${id}`,
     rootDir,
     manifest,
     consentFingerprint: fingerprintPluginConsent(manifest, content.hash),
@@ -148,7 +148,6 @@ describe('PluginVmRecipeRegistry', () => {
     const plugin = await recipePlugin('mutable', [
       { path: 'recipes/cloud.json', recipe: artifact('cloud') }
     ])
-    // Exercise the installed-tree identity as well as mutable dev previews.
     plugin.contentHash = plugin.consentContentHash ?? null
     const registry = new PluginVmRecipeRegistry()
 

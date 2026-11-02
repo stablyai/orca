@@ -11,7 +11,11 @@ import {
   stopSttDictation,
   teardownSttWorker
 } from './stt-session-stop'
-import { getSherpaModulePath, getSttWorkerPath } from './stt-worker-paths'
+import {
+  getSherpaModulePath,
+  getSttWorkerPath,
+  LOCAL_SPEECH_UNAVAILABLE_ERROR
+} from './stt-worker-paths'
 import {
   attachSttWorkerLifecycle,
   initializeSttWorker,
@@ -43,7 +47,7 @@ export async function startSttDictation(
   try {
     await startSttSession(state, modelId, sink, hotwordsFilePath, owner)
     if (state.canceledOwners.delete(owner)) {
-      await stopSttDictation(state, owner, { cancelStarting: false })
+      await stopSttDictation(state, owner, { cancelStarting: false, discard: true })
       throw new Error('dictation_canceled')
     }
     state.activeOwner = owner
@@ -124,9 +128,11 @@ async function startSttSession(
     throw new Error(`Model not ready: ${modelState.status}`)
   }
 
-  const worker = new Worker(getSttWorkerPath(), {
-    workerData: { sherpaModulePath: getSherpaModulePath() }
-  })
+  const sherpaModulePath = getSherpaModulePath()
+  if (!sherpaModulePath) {
+    throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
+  }
+  const worker = new Worker(getSttWorkerPath(), { workerData: { sherpaModulePath } })
   state.worker = worker
   state.activeModelId = modelId
   state.activeHotwordsFilePath = hotwordsFilePath

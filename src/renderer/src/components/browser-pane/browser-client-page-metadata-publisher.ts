@@ -9,19 +9,12 @@ export type BrowserClientPageMetadataSnapshot = Pick<
   'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward'
 >
 
-/**
- * Hands the params to whatever can reach the runtime's browser-host lease. That is main, not this
- * renderer: the runtime only accepts page traffic on the lease's own connection.
- */
+/** Main holds the host lease; the runtime accepts page traffic only on that connection. */
 type BrowserClientPageMetadataPublish = (
   params: BrowserClientPageMetadataParams
 ) => Promise<BrowserClientPageMetadataPublishOutcome>
 
-/**
- * Why a publish that did not land is surfaced: a metadata publish is the only thing that moves the
- * runtime's copy of a client-hosted page off the URL it was created with, and a silent failure here
- * reads downstream as a page that simply never navigated.
- */
+/** A failed publish leaves the runtime at the original URL, indistinguishable from a page that never navigated unless surfaced. */
 export type BrowserClientPageMetadataUnpublished =
   /** Delivered, but the runtime declined it — usually a revision it has already passed. */
   { reason: 'rejected' } | { reason: 'failed'; errorCode: string }
@@ -57,9 +50,7 @@ export function createBrowserClientPageMetadataPublisher(options: {
     inFlight = true
     let request: Promise<BrowserClientPageMetadataPublishOutcome>
     try {
-      // Why the revision is minted inside the try: it is drawn from the page's live attachment and
-      // throws once that page is detached. Outside, the throw escapes into a webview event handler
-      // and leaves this publisher wedged with nothing in flight to release it.
+      // Mint revisions inside try: detach can make the counter throw, and an uncaught throw would wedge the in-flight slot.
       request = options.publish({
         browserHostClientId: options.placement.browserHostClientId,
         browserHostGeneration: options.placement.browserHostGeneration,

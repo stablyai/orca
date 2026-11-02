@@ -1,3 +1,4 @@
+import { quoteCmdDoubleQuoted, quotePosixShellUnlessPlainNoAt } from './shell-argument-quoting'
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
 import {
   buildWindowsCmdRunnerDelayedLaunchCommand,
@@ -48,27 +49,26 @@ export function resolveSetupRunnerCommand(
     if (isWslUncPath(runnerScriptPath)) {
       const linuxPath = wslUncToLinuxPath(runnerScriptPath)
       return {
-        command: `bash ${quotePosixArg(linuxPath)}`,
+        command: `bash ${quotePosixShellUnlessPlainNoAt(linuxPath)}`,
         runnerScriptPathForShell: linuxPath,
         shell: 'posix'
       }
     }
     if (runnerScriptPath.startsWith('/') && !isWindowsAbsolutePathLike(runnerScriptPath)) {
       return {
-        command: `bash ${quotePosixArg(runnerScriptPath)}`,
+        command: `bash ${quotePosixShellUnlessPlainNoAt(runnerScriptPath)}`,
         runnerScriptPathForShell: runnerScriptPath,
         shell: 'posix'
       }
     }
-    // Why: `shell` is the shell that types the command; the runner file's own extension decides
-    // what can execute it. A batch runner never goes to bash even from a Git Bash pane.
+    // Runner extension decides its interpreter; a POSIX terminal still sends batch files to cmd.
     const cmdRunnerFile = isWindowsCmdRunnerPath(runnerScriptPath)
     if (!cmdRunnerFile && (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath))) {
       // Why: WSL shells need /mnt/... paths, while Git Bash expects /c/... when replaying deferred setup scripts.
       if (isWslExecutable(shell?.executable)) {
         const wslPath = nativeWindowsPathToWslShellPath(runnerScriptPath)
         return {
-          command: `bash ${quotePosixArg(wslPath)}`,
+          command: `bash ${quotePosixShellUnlessPlainNoAt(wslPath)}`,
           runnerScriptPathForShell: wslPath,
           shell: 'posix'
         }
@@ -76,28 +76,25 @@ export function resolveSetupRunnerCommand(
       // Why: queued setup launches can outlive the process that generated them, so convert native paths before handing off to POSIX shells.
       const posixPath = nativeWindowsPathToPosixShellPath(runnerScriptPath)
       return {
-        command: `bash ${quotePosixArg(posixPath)}`,
+        command: `bash ${quotePosixShellUnlessPlainNoAt(posixPath)}`,
         runnerScriptPathForShell: posixPath,
         shell: 'posix'
       }
     }
     return {
-      // Why: some path characters survive no amount of quoting on a cmd command line, and a Git
-      // Bash pane rewrites the bare `/c` switch itself into a drive path (issue #6896) so cmd
-      // opens interactively and the runner never starts. Both take the delayed-expansion
-      // launcher, which passes the switch through a PowerShell ProcessStartInfo instead. Every
-      // other case keeps the plain form.
+      // Guard hostile cmd path characters and Git Bash’s rewriting of bare /c (#6896) with delayed expansion
+      // through PowerShell ProcessStartInfo; retain plain invocation for other cases.
       command:
         shell?.family === 'posix' || windowsRunnerPathNeedsCmdGuard(runnerScriptPath)
           ? buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath)
-          : `cmd.exe /c ${quoteWindowsArg(runnerScriptPath)}`,
+          : `cmd.exe /c ${quoteCmdDoubleQuoted(runnerScriptPath)}`,
       runnerScriptPathForShell: runnerScriptPath,
       shell: 'windows'
     }
   }
 
   return {
-    command: `bash ${quotePosixArg(runnerScriptPath)}`,
+    command: `bash ${quotePosixShellUnlessPlainNoAt(runnerScriptPath)}`,
     runnerScriptPathForShell: runnerScriptPath,
     shell: 'posix'
   }
@@ -117,18 +114,6 @@ export function wslUncToLinuxPath(windowsPath: string): string {
   const normalized = windowsPath.replace(/\\/g, '/')
   const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/[^/]+(\/.*)?$/i)
   return match?.[2] || '/'
-}
-
-function quotePosixArg(value: string): string {
-  if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
-    return value
-  }
-
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function quoteWindowsArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
 }
 
 export function nativeWindowsPathToPosixShellPath(value: string): string {

@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { adfToMarkdownText } from '../../../../main/jira/adf-markdown'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
+import { MarkdownPreviewBody } from '@/components/editor/MarkdownPreviewBody'
 import { NativeChatCodeBlock } from '@/components/native-chat/NativeChatCodeBlock'
+import { NativeChatMarkdown } from '@/components/native-chat/NativeChatMarkdown'
 
 describe('CommentMarkdown', () => {
   it('marks compact headings so a parent can opt into block flow', () => {
@@ -13,7 +16,6 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('comment-md-p')
     expect(markup).toContain('role="heading"')
     expect(markup).toContain('aria-level="2"')
-    // Weight-only styling stays the compact default; block flow is opt-in.
     expect(markup).toContain('font-bold')
   })
 
@@ -56,6 +58,30 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('href="https://github.com/another-org/other-repo/issues/42"')
   })
 
+  it('ends bare urls at CJK sentence punctuation', () => {
+    const hrefsIn = (content: string): string[] =>
+      [
+        ...renderToStaticMarkup(<CommentMarkdown content={content} />).matchAll(/href="([^"]*)"/g)
+      ].map((match) => match[1]!)
+
+    expect(hrefsIn('投稿はお願いします (https://github.com/stablyai/orca/pull/1078)。')).toEqual([
+      'https://github.com/stablyai/orca/pull/1078'
+    ])
+    expect(hrefsIn('投稿（https://github.com/stablyai/orca/pull/1078）。')).toEqual([
+      'https://github.com/stablyai/orca/pull/1078'
+    ])
+    expect(hrefsIn('「https://example.com/a」、https://example.com/b。')).toEqual([
+      'https://example.com/a',
+      'https://example.com/b'
+    ])
+    expect(hrefsIn('https://ja.wikipedia.org/wiki/ジョン・スミス。')).toEqual([
+      'https://ja.wikipedia.org/wiki/%E3%82%B8%E3%83%A7%E3%83%B3%E3%83%BB%E3%82%B9%E3%83%9F%E3%82%B9'
+    ])
+    expect(hrefsIn('https://en.wikipedia.org/wiki/Foo_(bar)')).toEqual([
+      'https://en.wikipedia.org/wiki/Foo_(bar)'
+    ])
+  })
+
   it('does not autolink GitHub issue references inside existing links or code', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown
@@ -91,7 +117,6 @@ describe('CommentMarkdown', () => {
   })
 
   it('renders document markdown images with an expand control for the lightbox', () => {
-    // Why: document bodies need a large preview without a provider-specific renderer.
     const markup = renderToStaticMarkup(
       <CommentMarkdown
         variant="document"
@@ -299,5 +324,287 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('max-w-full')
     expect(markup).toContain('[overflow-wrap:anywhere]')
     expect(markup).toContain('overflow-x-auto')
+  })
+})
+
+function renderComment(content: string, variant: 'compact' | 'document' = 'document'): string {
+  return renderToStaticMarkup(<CommentMarkdown variant={variant} content={content} />)
+}
+
+describe('CJK emphasis', () => {
+  it('closes bold that ends in punctuation right before CJK text', () => {
+    expect(
+      renderComment('**单算 Runtime 执行引擎，平均每题 29.78 秒。**边界是开始执行到产出结果。')
+    ).toContain(
+      '<strong>单算 Runtime 执行引擎，平均每题 29.78 秒。</strong>边界是开始执行到产出结果。'
+    )
+  })
+
+  it('keeps CommonMark flanking rules between non-CJK characters', () => {
+    const markup = renderComment('**Note.**Next')
+
+    expect(markup).not.toContain('<strong>')
+    expect(markup).toContain('**Note.**Next')
+  })
+})
+
+describe('GitHub callouts', () => {
+  it.each(['compact', 'document'] as const)(
+    'renders a %s quote that opens with a marker as a titled callout',
+    (variant) => {
+      const markup = renderComment('> [!NOTE]\n> The content of the note.', variant)
+
+      expect(markup).toContain('data-callout="note"')
+      expect(markup).toContain('Note')
+      expect(markup).not.toContain('[!NOTE]')
+      expect(markup).not.toContain('<blockquote')
+      expect(markup).toContain('The content of the note.')
+    }
+  )
+
+  it('keeps blocks that follow a marker-only paragraph', () => {
+    const markup = renderComment('> [!WARNING]\n>\n> ### A heading\n>\n> And a paragraph.')
+
+    expect(markup).toContain('data-callout="warning"')
+    expect(markup).not.toContain('[!WARNING]')
+    expect(markup).toContain('A heading')
+    expect(markup).toContain('And a paragraph.')
+  })
+
+  it('keeps a body line that opens with inline formatting', () => {
+    const markup = renderComment('> [!tip]\n> **Medium Risk** Changes transcript routing.')
+
+    expect(markup).toContain('data-callout="tip"')
+    expect(markup).toContain('<strong>Medium Risk</strong>')
+    expect(markup).toContain('Changes transcript routing.')
+  })
+
+  it.each([
+    ['text sharing the marker line', '> [!NOTE] an ordinary quote', '[!NOTE] an ordinary quote'],
+    ['inline formatting sharing the marker line', '> [!NOTE]*aside*', '[!NOTE]'],
+    ['an unknown marker', "> [!DANGER]\n> Not one of GitHub's.", '[!DANGER]']
+  ])('leaves a quote with %s alone', (_name, content, literal) => {
+    const markup = renderComment(content)
+
+    expect(markup).not.toContain('data-callout')
+    expect(markup).toContain('<blockquote')
+    expect(markup).toContain(literal)
+  })
+
+  it('renders callouts in native chat assistant messages', () => {
+    const markup = renderToStaticMarkup(
+      <NativeChatMarkdown
+        content={'Done.\n\n> [!IMPORTANT]\n> Restart the app to pick up `config.ts`.'}
+        variant="document"
+        renderCodeBlock={NativeChatCodeBlock}
+        onLinkClick={() => {}}
+        linkifyFilePaths
+      />
+    )
+
+    expect(markup).toContain('data-callout="important"')
+    expect(markup).toContain('Important')
+    expect(markup).not.toContain('[!IMPORTANT]')
+    expect(markup).toContain('Restart the app to pick up')
+  })
+
+  it('renders callouts in the markdown preview', () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownPreviewBody content={'> [!CAUTION]\n> Irreversible.'} components={{}} />
+    )
+
+    expect(markup).toContain('data-callout="caution"')
+    expect(markup).not.toContain('[!CAUTION]')
+    expect(markup).toContain('Irreversible.')
+  })
+})
+
+function renderAdf(adf: unknown): string {
+  return renderToStaticMarkup(
+    <CommentMarkdown content={adfToMarkdownText(adf)} variant="document" />
+  )
+}
+
+describe('CommentMarkdown Jira ADF links', () => {
+  it('keeps punctuation immediately before a link from turning it into an image', () => {
+    const markup = renderAdf({
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'Important!' },
+        {
+          type: 'text',
+          text: 'Design spec',
+          marks: [{ type: 'link', attrs: { href: 'https://example.com/spec' } }]
+        }
+      ]
+    })
+    expect(markup).toContain('href="https://example.com/spec"')
+    expect(markup).not.toContain('<img')
+  })
+
+  it.each(['`edge`', '  padded  ', '[bracket] <b>literal</b>', 'cost &amp; unit'])(
+    'preserves the literal linked label %s',
+    (text) => {
+      const content = adfToMarkdownText({
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text,
+            marks: [{ type: 'link', attrs: { href: 'https://example.com/spec' } }]
+          }
+        ]
+      })
+      const markup = renderToStaticMarkup(<CommentMarkdown content={content} variant="document" />)
+      expect(markup).toContain('href="https://example.com/spec"')
+      expect(markup).not.toContain('<b>literal</b>')
+      expect(markup).toContain(
+        text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      )
+    }
+  )
+
+  it('preserves code labels with backticks at either edge', () => {
+    const markup = renderAdf({
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: '`edge`',
+          marks: [{ type: 'code' }, { type: 'link', attrs: { href: 'https://example.com/code' } }]
+        }
+      ]
+    })
+    expect(markup).toContain('>`edge`</code></a>')
+  })
+
+  it('does not allow a link label to introduce HTML or a second link', () => {
+    const markup = renderAdf({
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: '<a href="https://evil.example">x</a> ](https://evil.example)',
+          marks: [{ type: 'link', attrs: { href: 'https://example.com/spec' } }]
+        }
+      ]
+    })
+    expect(markup.match(/<a /g)).toHaveLength(1)
+    expect(markup).not.toContain('href="https://evil.example"')
+  })
+
+  it('keeps marked labels intact when rendered as HTML', () => {
+    const markup = renderAdf({
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'cost ` per unit',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/backtick' } }]
+            },
+            { type: 'text', text: ' see `here`' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'a*b',
+              marks: [
+                { type: 'strong' },
+                { type: 'link', attrs: { href: 'https://example.com/star' } }
+              ]
+            },
+            { type: 'text', text: ' ]' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'bracket [label] ]',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/brackets' } }]
+            }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'line\n\nbreak ]',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/newline' } }]
+            }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'cost ` per unit',
+              marks: [
+                { type: 'code' },
+                { type: 'link', attrs: { href: 'https://example.com/code' } }
+              ]
+            }
+          ]
+        },
+        {
+          type: 'bulletList',
+          content: [
+            {
+              type: 'listItem',
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'list link',
+                      marks: [{ type: 'link', attrs: { href: 'https://example.com/list' } }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          type: 'blockquote',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: 'quote link',
+                  marks: [{ type: 'link', attrs: { href: 'https://example.com/quote' } }]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    expect(markup).toContain('href="https://example.com/backtick"')
+    expect(markup).toContain('>cost ` per unit</a>')
+    expect(markup).toContain('href="https://example.com/star"')
+    expect(markup).toContain('><strong>a*b</strong></a>')
+    expect(markup).toContain('href="https://example.com/newline"')
+    expect(markup).toContain('>line  break ]</a>')
+    expect(markup).toContain('href="https://example.com/brackets"')
+    expect(markup).toContain('>bracket [label] ]</a>')
+    expect(markup).toContain('href="https://example.com/code"')
+    expect(markup).toContain('>cost ` per unit</code></a>')
+    expect(markup).toContain('href="https://example.com/list"')
+    expect(markup).toContain('href="https://example.com/quote"')
   })
 })

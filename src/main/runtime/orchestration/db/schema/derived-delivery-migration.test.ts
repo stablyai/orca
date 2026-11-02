@@ -6,7 +6,7 @@ import Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
 import { dropDerivedDeliverySchema } from './derived-delivery-test-fixture'
 import { resolveOrchestrationMigrationStartVersion } from '../../orchestration-schema-version-skew'
-import { createRootDispatch } from '../root-dispatch-test-fixture'
+import { createRootDispatch, reattachDispatchConsumer } from '../root-dispatch-test-fixture'
 import { SCHEMA_VERSION } from '../contract-constants'
 
 describe('derived delivery migration', () => {
@@ -213,7 +213,7 @@ describe('derived delivery migration', () => {
         processIncarnation: 'worker:2'
       }
       if (consumerSource === 'dispatch') {
-        peer.mintDispatchCapability(authority)
+        reattachDispatchConsumer(peer, authority)
       } else {
         peer.prepareRemoteAttachmentAuthority({
           ...authority,
@@ -250,7 +250,7 @@ describe('derived delivery migration', () => {
       .get() as { sql: string }
     expect(index.sql).not.toContain('UNIQUE')
     expect(index.sql).toContain("status = 'outstanding' AND mailbox_handle != ''")
-    // Why: a v40 binary probes exactly these objects before trusting the stamp; nothing it needs is gone.
+    // A downgraded v40 binary must still find every object its schema probe requires.
     expect(resolveOrchestrationMigrationStartVersion(db.db, SCHEMA_VERSION, 40)).toBe(
       SCHEMA_VERSION
     )

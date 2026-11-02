@@ -17,8 +17,9 @@ export type TabBarProps = {
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
+  /** Set only when this group is one of several splits. */
+  onCloseSplitPane?: () => void
   onNewTerminalTab: () => void
-  /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewSimulatorTab?: () => void

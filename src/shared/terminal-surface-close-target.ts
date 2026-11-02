@@ -9,7 +9,6 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
-/** Validates a close target that crossed a process boundary; anything malformed is rejected. */
 export function parseTerminalSurfaceCloseTarget(value: unknown): TerminalSurfaceCloseTarget | null {
   if (typeof value !== 'object' || value === null || !('kind' in value) || !('tabId' in value)) {
     return null

@@ -43,17 +43,72 @@ const LEGACY_ORCA_PROFILE_LINES = [
   ''
 ]
 
+// Only retired command forms are eligible for cleanup.
 function legacyManagedHookCommand(): string {
-  const legacyScriptPath = join(
+  if (process.platform === 'win32') {
+    return join(homes.userDataDir, 'agent-hooks', 'codex-hook.cmd')
+  }
+  const quoted = `'${join(homes.tmpHome, '.orca', 'agent-hooks', 'codex-hook.sh')}'`
+  return `if [ -x ${quoted} ]; then /bin/sh ${quoted}; fi`
+}
+
+function currentManagedHookCommand(): string {
+  const scriptPath = join(
     homes.tmpHome,
     '.orca',
     'agent-hooks',
     process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
   )
-  return process.platform === 'win32' ? legacyScriptPath : wrapPosixHookCommand(legacyScriptPath)
+  return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
 describe('CodexHookService', () => {
+  it('keeps the shared current entry and its trust while removing a retired form', async () => {
+    const systemCodexHome = join(homes.tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    const currentCommand = currentManagedHookCommand()
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify(
+        {
+          hooks: {
+            Stop: [
+              { hooks: [{ type: 'command', command: 'user-hook' }] },
+              { hooks: [{ type: 'command', command: currentCommand, timeout: 10 }] }
+            ],
+            SessionStart: [{ hooks: [{ type: 'command', command: legacyManagedHookCommand() }] }]
+          }
+        },
+        null,
+        2
+      )}\n`,
+      'utf-8'
+    )
+    const currentTrust = {
+      sourcePath: systemHooksPath,
+      eventLabel: 'stop' as const,
+      groupIndex: 1,
+      handlerIndex: 0,
+      command: currentCommand,
+      timeoutSec: 10
+    }
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      upsertHookTrustEntriesInContent('model = "system-model"\n', [currentTrust]),
+      'utf-8'
+    )
+
+    expect((await new CodexHookService().install()).state).toBe('installed')
+
+    const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    expect(systemHooks.hooks.Stop?.[1]?.hooks?.[0]?.command).toBe(currentCommand)
+    expect(systemHooks.hooks.SessionStart).toBeUndefined()
+    expect(readFileSync(join(systemCodexHome, 'config.toml'), 'utf-8')).toContain(':stop:1:0')
+  })
+
   it('removes legacy Orca-managed hooks from system ~/.codex during install', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
@@ -225,6 +280,12 @@ describe('CodexHookService', () => {
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
     mkdirSync(managedCodexHome, { recursive: true })
+    // remove() rebuilds mirrored user hooks from the canonical home.
+    mkdirSync(join(homes.tmpHome, '.codex'), { recursive: true })
+    writeFileSync(
+      join(homes.tmpHome, '.codex', 'hooks.json'),
+      JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'user-hook' }] }] } })
+    )
     writeFileSync(
       managedHooksPath,
       `${JSON.stringify(
@@ -339,6 +400,6 @@ describe('CodexHookService', () => {
     expect(systemToml).toContain('codex_hooks = true')
     expect(systemToml).not.toContain(':session_start:0:0')
     expect(existsSync(legacyProfilePath)).toBe(false)
-    expect(service.getStatus().state).toBe('installed')
+    expect(service.getStatus(managedCodexHome).state).toBe('installed')
   })
 })

@@ -116,7 +116,7 @@ async function enableInlineAgentCards(page: Page): Promise<void> {
 
     const state = store.getState()
     if (!state.worktreeCardProperties.includes('inline-agents')) {
-      state.toggleWorktreeCardProperty('inline-agents')
+      state.setWorktreeCardProperties([...state.worktreeCardProperties, 'inline-agents'])
     }
     state.closeActivityPage()
   })
@@ -272,6 +272,7 @@ test.describe('Activity Agent Pane Isolation', () => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const [first, second] = await seedActivityThreadsForSplitPanes(orcaPage, snapshot)
 
+    await orcaPage.evaluate(() => window.__store?.getState().setWorktreeCardProperties([]))
     await enableInlineAgentCards(orcaPage)
 
     await clickWorkspaceCardAgentRow(orcaPage, first.prompt)

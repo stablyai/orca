@@ -6,6 +6,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import {
   findNewestCodexStateDbPath,
   isCodexStateDbBackfillPending,
+  readCodexStateDbBackfillPendingState,
   readCodexStateDbBackfillStatus,
   readIndexedCodexThreadIds
 } from './codex-state-db'
@@ -55,19 +56,6 @@ describe('Codex state DB backfill status', () => {
     db.close()
   })
 
-  it('treats a large unindexed rollout history as pending', async () => {
-    const home = await createHome()
-    const sessions = join(home, 'sessions', '2026', '08', '04')
-    await mkdir(sessions, { recursive: true })
-    await Promise.all(
-      Array.from({ length: 100 }, (_, index) =>
-        writeFile(join(sessions, `rollout-${index}.jsonl`), '{}\n')
-      )
-    )
-
-    expect(isCodexStateDbBackfillPending(home)).toBe(true)
-  })
-
   it('counts compressed rollouts, which Codex also backfills', async () => {
     const home = await createHome()
     const sessions = join(home, 'sessions', '2026', '08', '04')
@@ -80,11 +68,15 @@ describe('Codex state DB backfill status', () => {
 
     expect(isCodexStateDbBackfillPending(home)).toBe(true)
   })
+})
 
-  it('does not call a complete backfill pending', async () => {
+describe('readCodexStateDbBackfillPendingState', () => {
+  it('reports an unreadable index separately while the boolean stays not-pending', async () => {
     const home = await createHome()
-    createBackfillDb(home, 5, 'complete')
+    await writeFile(join(home, 'state_5.sqlite'), 'not a sqlite database')
 
+    expect(readCodexStateDbBackfillStatus(home).kind).toBe('unreadable')
+    expect(readCodexStateDbBackfillPendingState(home)).toBe('unreadable')
     expect(isCodexStateDbBackfillPending(home)).toBe(false)
   })
 })

@@ -2,10 +2,7 @@ import { webContents } from 'electron'
 import { browserManager } from '../browser/browser-manager'
 import { onWorkspaceDocGuestRegistered } from '../browser/doc-preview-guest-policy'
 
-// Why: CLI-driven tab creation must wait until the renderer mounts the webview
-// and calls registerGuest, so the tab has a webContentsId and is operable by
-// subsequent commands. Multiple commands can wait for the same page during
-// startup, so keep all one-shot resolvers keyed by browserPageId.
+// CLI commands wait for mounted guest registration; multiple startup callers may wait on one page.
 const pendingTabRegistrations = new Map<string, Set<() => void>>()
 const pendingWorktreeTabRegistrations = new Map<string, Set<() => void>>()
 const pendingAnyTabRegistrations = new Set<() => void>()
@@ -110,12 +107,7 @@ export function waitForAnyTabRegistration(timeoutMs = 8_000): Promise<void> {
   return waitForRegistrationSet(pendingAnyTabRegistrations, timeoutMs, () => {})
 }
 
-/**
- * Why a document page resolves only its own waiters: the worktree-wide and any-tab waits are how
- * the CLI and agents ask for a browser tab to drive, and a preview is neither drivable by them nor
- * visible to them. Only a request already naming this page — a tool the reader opened on the
- * document — is waiting for this.
- */
+// Documents satisfy only page-specific tools, never CLI/agent waits for a drivable browser tab.
 onWorkspaceDocGuestRegistered((browserPageId) => {
   const pendingResolves = pendingTabRegistrations.get(browserPageId)
   pendingTabRegistrations.delete(browserPageId)
@@ -132,4 +124,25 @@ export function resolveTabRegistrationWaiters(browserPageId: string, worktreeId:
   const pendingAnyResolves = new Set(pendingAnyTabRegistrations)
   pendingAnyTabRegistrations.clear()
   resolvePendingRegistrations(pendingAnyResolves)
+}
+
+/** Resolves once a registered page's first navigation stops, or after the timeout; never rejects. */
+export function waitForTabFirstLoad(browserPageId: string, timeoutMs = 10_000): Promise<void> {
+  const id = browserManager.getGuestWebContentsId(browserPageId)
+  const guest = id == null ? null : webContents.fromId(id)
+  // Why the URL: a guest that registered before its src applied reports '' and is not loading yet.
+  if (!guest || guest.isDestroyed() || (!guest.isLoading() && guest.getURL() !== '')) {
+    return Promise.resolve()
+  }
+  return new Promise<void>((resolve) => {
+    const done = (): void => {
+      clearTimeout(timer)
+      guest.off('did-stop-loading', done)
+      guest.off('destroyed', done)
+      resolve()
+    }
+    const timer = setTimeout(done, timeoutMs)
+    guest.on('did-stop-loading', done)
+    guest.on('destroyed', done)
+  })
 }

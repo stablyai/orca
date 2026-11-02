@@ -1,7 +1,3 @@
-/**
- * Geometry and serialized-content readers for visible terminal panes.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import { waitForPaneIdentitySnapshot } from './terminal'

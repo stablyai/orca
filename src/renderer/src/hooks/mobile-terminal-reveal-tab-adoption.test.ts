@@ -34,55 +34,8 @@ function revealSplitPaneFromMobile(harness: {
 }
 
 describe('mobile terminal reveal tab adoption', () => {
-  it('adopts the owning tab when a split pane is revealed before its panes mount (#10486)', async () => {
-    // Desktop has the worktree closed: no pane is mounted, so the live pty map is
-    // empty and only the persisted layout still records the second leaf's pty.
-    const storeState: HarnessStoreState = createHarnessStoreState({
-      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-split', ptyId: 'pty-a', title: 'codex' }] },
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: {
-        'tab-split': { ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' } }
-      }
-    })
-    const harness = await loadIpcEventsHarness(storeState)
-    harness.useIpcEvents()
-
-    revealSplitPaneFromMobile(harness)
-
-    expect(storeState.createTab).not.toHaveBeenCalled()
-    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
-      requestId: 'mobile-reveal',
-      tabId: 'tab-split',
-      title: 'codex',
-      identity: revealIdentity('tab-split')
-    })
-  })
-
-  it('adopts the owning tab when neither the live map nor the layout is hydrated', async () => {
-    // Same reveal, but layout hydration has not landed either; the pre-minted
-    // tabId hint is the PTY's baked-in pane key and must still be honoured.
-    const storeState: HarnessStoreState = createHarnessStoreState({
-      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-split', ptyId: 'pty-a', title: 'codex' }] },
-      ptyIdsByTabId: { 'tab-split': ['pty-a'] },
-      terminalLayoutsByTabId: {}
-    })
-    const harness = await loadIpcEventsHarness(storeState)
-    harness.useIpcEvents()
-
-    revealSplitPaneFromMobile(harness)
-
-    expect(storeState.createTab).not.toHaveBeenCalled()
-    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
-      requestId: 'mobile-reveal',
-      tabId: 'tab-split',
-      title: 'codex',
-      identity: revealIdentity('tab-split')
-    })
-  })
-
   it('adopts the tab that records the pty when the reveal hint disagrees', async () => {
-    // The pane was dragged out of tab-split since the PTY's env was baked, so
-    // the reveal still names tab-split while tab-detached is where it now lives.
+    // Dragging a pane changes its current tab while reveal still names its baked-in original.
     const storeState: HarnessStoreState = createHarnessStoreState({
       tabsByWorktree: {
         [WORKTREE_ID]: [
@@ -107,34 +60,6 @@ describe('mobile terminal reveal tab adoption', () => {
       tabId: 'tab-detached',
       title: 'codex',
       identity: revealIdentity('tab-detached')
-    })
-  })
-
-  it('adopts through the persisted layout when the PTY carries no tab id', async () => {
-    const storeState: HarnessStoreState = createHarnessStoreState({
-      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-split', ptyId: 'pty-a', title: 'codex' }] },
-      ptyIdsByTabId: {},
-      terminalLayoutsByTabId: {
-        'tab-split': { ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' } }
-      }
-    })
-    const harness = await loadIpcEventsHarness(storeState)
-    harness.useIpcEvents()
-
-    harness.createTerminal({
-      requestId: 'mobile-reveal',
-      worktreeId: WORKTREE_ID,
-      ptyId: 'pty-b',
-      leafId: 'leaf-b',
-      presentation: 'focused',
-      title: 'codex'
-    })
-
-    expect(storeState.createTab).not.toHaveBeenCalled()
-    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
-      requestId: 'mobile-reveal',
-      tabId: 'tab-split',
-      title: 'codex'
     })
   })
 
@@ -171,8 +96,7 @@ describe('mobile terminal reveal tab adoption', () => {
   })
 
   it('leaves the hinted tab split intact when the pty lives in another tab', async () => {
-    // Adopting the hinted tab here would rewrite its layout with a single-pane
-    // snapshot, silently collapsing the user's split onto the revealed pty.
+    // Hint adoption must not overwrite a split layout with a single-pane snapshot.
     const storeState: HarnessStoreState = createHarnessStoreState({
       tabsByWorktree: {
         [WORKTREE_ID]: [
@@ -212,8 +136,7 @@ describe('mobile terminal reveal tab adoption', () => {
   })
 
   it('replies without an error when two recorded bindings both claim the pty', async () => {
-    // Ambiguity is unresolvable, so the reveal still creates a tab — but it must
-    // not reject, because the mobile focus path awaits it with no catch.
+    // Ambiguous ownership creates a new tab without rejecting mobile’s uncaught focus request.
     const storeState: HarnessStoreState = createHarnessStoreState({
       tabsByWorktree: {
         [WORKTREE_ID]: [

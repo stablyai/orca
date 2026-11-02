@@ -23,7 +23,9 @@ vi.mock('react-native', () => ({ Platform: platform }))
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   clearMobileRelayPairingJournal,
+  claimMobileRelayPairingJournalPublication,
   loadMobileRelayPairingJournal,
+  releaseMobileRelayPairingJournal,
   resetMobileRelayPairingJournalStoreForTests,
   saveMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
@@ -111,6 +113,15 @@ describe('mobile relay pairing journal store', () => {
 
     expect(asyncStorage.setItem.mock.invocationCallOrder[0]).toBeLessThan(
       secureStore.setItemAsync.mock.invocationCallOrder[0]!
+    )
+    expect(asyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:mobile-relay:pairing-journal:v1',
+      JSON.stringify(journal.metadata)
+    )
+    expect(secureStore.setItemAsync).toHaveBeenCalledWith(
+      'orca.mobile-relay.pairing-journal.v1',
+      JSON.stringify(journal.secrets),
+      expect.objectContaining({ keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' })
     )
     expect(metadataRaw).not.toContain(offer.deviceToken)
     expect(metadataRaw).not.toContain(offer.relay.inviteToken)
@@ -236,12 +247,17 @@ describe('mobile relay pairing journal store', () => {
     const secretReadGate = new Promise<void>((resolve) => {
       releaseSecretRead = resolve
     })
+    let enteredSecretRead = () => {}
+    const secretReadStarted = new Promise<void>((resolve) => {
+      enteredSecretRead = resolve
+    })
     secureStore.getItemAsync.mockImplementationOnce(async () => {
+      enteredSecretRead()
       await secretReadGate
       return secretRaw
     })
     const loading = loadMobileRelayPairingJournal()
-    await vi.waitFor(() => expect(secureStore.getItemAsync).toHaveBeenCalled())
+    await secretReadStarted
 
     const replacement = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
@@ -310,33 +326,105 @@ describe('mobile relay pairing journal store', () => {
     const replacementSave = saveMobileRelayPairingJournal(replacement)
 
     await expect(authorizationUpdate).resolves.toBeUndefined()
-    await expect(replacementSave).rejects.toThrow(/recovery pending/)
+    await expect(replacementSave).rejects.toThrow(/pairing in progress/)
   })
 
   it.each([
     ['winner', { winner: 'direct' as const }],
     ['authorization mode', { authorizationMode: 'authenticated-direct' as const }]
-  ])('refuses replacement once the durable %s exists', async (_name, authorization) => {
+  ])(
+    'refuses replacement while the attempt with a durable %s runs',
+    async (_name, authorization) => {
+      const created = createMobileRelayPairingJournal({
+        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+        hostId: 'host-1',
+        hostName: 'Blue Whale',
+        randomBytes: (length) => new Uint8Array(length).fill(10)
+      })
+      const journal = {
+        ...created,
+        metadata: { ...created.metadata, ...authorization }
+      }
+
+      await saveMobileRelayPairingJournal(journal)
+      const replacement = createMobileRelayPairingJournal({
+        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+        hostId: 'host-2',
+        hostName: 'Red Panda',
+        randomBytes: (length) => new Uint8Array(length).fill(12)
+      })
+      await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(
+        /pairing in progress/
+      )
+      await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
+    }
+  )
+
+  // New scans must supersede stranded authorized journals instead of blocking until expiry (#12518).
+  it.each([
+    ['an earlier launch', () => resetMobileRelayPairingJournalStoreForTests()],
+    ['an ended attempt', (journalId: string) => releaseMobileRelayPairingJournal(journalId)]
+  ])('lets a new scan supersede an authorized journal left by %s', async (_name, end) => {
     const created = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-1',
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(10)
     })
-    const journal = {
+    const stale = {
       ...created,
-      metadata: { ...created.metadata, ...authorization }
+      metadata: {
+        ...created.metadata,
+        winner: 'relay' as const,
+        authorizationMode: 'relay-basis' as const
+      }
     }
-
-    await saveMobileRelayPairingJournal(journal)
+    await saveMobileRelayPairingJournal(stale)
+    end(stale.metadata.journalId)
     const replacement = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-2',
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
-    await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(/recovery pending/)
-    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
+
+    await expect(saveMobileRelayPairingJournal(replacement)).resolves.toBeUndefined()
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+  })
+
+  it('makes a superseding scan wait for a publication in progress, and refuses a stale claim', async () => {
+    vi.useFakeTimers()
+    try {
+      const created = createMobileRelayPairingJournal({
+        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+        hostId: 'host-1',
+        hostName: 'Blue Whale',
+        randomBytes: (length) => new Uint8Array(length).fill(10)
+      })
+      await saveMobileRelayPairingJournal(created)
+      releaseMobileRelayPairingJournal(created.metadata.journalId)
+      const release = await claimMobileRelayPairingJournalPublication(created.metadata.journalId)
+      const replacement = createMobileRelayPairingJournal({
+        offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+        hostId: 'host-2',
+        hostName: 'Red Panda',
+        randomBytes: (length) => new Uint8Array(length).fill(12)
+      })
+      let saved = false
+      const save = saveMobileRelayPairingJournal(replacement).then(() => (saved = true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(saved).toBe(false)
+
+      await clearMobileRelayPairingJournal(created.metadata.journalId)
+      release()
+      await save
+      await expect(loadMobileRelayPairingJournal()).resolves.toEqual(replacement)
+      await expect(
+        claimMobileRelayPairingJournalPublication(created.metadata.journalId)
+      ).rejects.toThrow(/stale/)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('self-heals an undecryptable Android secret so the next QR scan can pair', async () => {
@@ -364,8 +452,7 @@ describe('mobile relay pairing journal store', () => {
 
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
     expect(metadataRaw).toBeNull()
-    // Why: the presence record must outlive the self-heal so reads stay absent instead of
-    // walking back to an older generation; the metadata-less load sweeps it next.
+    // Keep presence through self-heal to prevent fallback to an older secret; the next metadata-less load sweeps it.
     expect(presenceRaw).toBe('0')
 
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()

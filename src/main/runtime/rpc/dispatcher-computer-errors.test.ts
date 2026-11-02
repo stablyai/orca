@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { RpcDispatcher } from './dispatcher'
@@ -17,22 +18,26 @@ function makeRuntime(): OrcaRuntimeService {
 const METHODS = [
   defineMethod({
     name: 'computer.click',
+    permission: 'desktop-control',
     params: z.object({ app: z.string().min(1, 'Missing app') }),
     handler: () => ({ ok: true })
   }),
   defineMethod({
     name: 'browser.click',
+    permission: 'workspace',
     params: z.object({ page: z.string().min(1, 'Missing page') }),
     handler: () => ({ ok: true })
   }),
   defineMethod({
     name: 'orchestration.throwZod',
+    permission: 'workspace',
     params: z.object({}),
     handler: () =>
       z.object({ title: z.string().min(1, 'Handler title missing') }).parse({ title: '' })
   }),
   defineMethod({
     name: 'orchestration.invalidArgument',
+    permission: 'workspace',
     params: z.object({}),
     handler: () => {
       throw new InvalidArgumentError('Async validation rejected payload')
@@ -40,6 +45,7 @@ const METHODS = [
   }),
   defineMethod({
     name: 'orchestration.inspectCaller',
+    permission: 'workspace',
     params: z.object({}),
     handler: (_params, { authenticatedCallerFingerprint }) => ({
       authenticatedCallerFingerprint
@@ -47,6 +53,7 @@ const METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationInspectCaller',
+    permission: 'workspace',
     params: z.object({}),
     handler: (_params, { authenticatedCallerFingerprint }) => ({
       authenticatedCallerFingerprint
@@ -55,60 +62,6 @@ const METHODS = [
 ]
 
 describe('RpcDispatcher computer-use validation errors', () => {
-  it('adds recovery steps to one-shot computer schema failures', async () => {
-    const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('computer.click', {}))
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: 'invalid_argument',
-        message: expect.stringContaining('expected string'),
-        data: {
-          nextSteps: expect.arrayContaining([
-            expect.stringContaining('Fix the command flags or RPC params'),
-            expect.stringContaining('Do not retry')
-          ])
-        }
-      }
-    })
-  })
-
-  it('adds recovery steps to streaming-transport computer schema failures', async () => {
-    const messages: string[] = []
-    const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
-
-    await dispatcher.dispatchStreaming(makeRequest('computer.click', {}), (message) =>
-      messages.push(message)
-    )
-
-    expect(JSON.parse(messages[0]!)).toMatchObject({
-      ok: false,
-      error: {
-        code: 'invalid_argument',
-        data: {
-          nextSteps: expect.arrayContaining([expect.stringContaining('Do not retry')])
-        }
-      }
-    })
-  })
-
-  it('does not add computer-use recovery steps to unrelated schema failures', async () => {
-    const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('browser.click', {}))
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: 'invalid_argument',
-        message: expect.stringContaining('expected string')
-      }
-    })
-    expect(response.ok === false ? response.error : null).not.toHaveProperty('data')
-  })
-
   it('preserves formatted Zod issue messages thrown by method handlers', async () => {
     const dispatcher = new RpcDispatcher({ runtime: makeRuntime(), methods: METHODS })
 

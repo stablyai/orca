@@ -1,3 +1,4 @@
+import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext, RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
@@ -7,6 +8,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { MessageWake } from '../../../../runtime-message-waiters'
 
 function lifecycleGroupRecipientError(
   type: 'worker_done' | 'heartbeat' | 'escalation' | 'decision_gate'
@@ -62,8 +64,7 @@ describe('orchestration RPC methods', () => {
 
     it('sends a message', async () => {
       setup()
-      // Why: send notifies arrival so already-idle recipients get push-on-idle
-      // delivery without waiting for a status transition (#12536).
+      // Notify idle recipients on send so delivery does not wait for a status transition (#12536).
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const result = (await call('orchestration.send', {
         from: 'term_coord',
@@ -101,7 +102,7 @@ describe('orchestration RPC methods', () => {
       })) as { message: { to_handle: string } }
 
       expect(result.message.to_handle).toBe(`run:${activeRunId}`)
-      await expect(waiting).resolves.toBe('notified')
+      await expect(waiting).resolves.toBeInstanceOf(MessageWake)
     })
 
     it('routes exact Dispatch mail independently of terminal handles', async () => {
@@ -221,7 +222,10 @@ describe('orchestration RPC methods', () => {
 
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
-      expect(result).toMatchObject({ lifecycle: { action: 'completed' } })
+      expect(result).toMatchObject({
+        lifecycle: { action: 'completed' },
+        next: 'Recorded. End your turn.'
+      })
     })
 
     it('fences a replacement process for a capability-less manual Dispatch', async () => {
@@ -254,8 +258,8 @@ describe('orchestration RPC methods', () => {
 
       expect(rejected.lifecycle).toEqual({
         action: 'rejected',
-        code: 'sender_not_assignee',
-        reason: `Dispatch ${dispatch.id} process incarnation is no longer current for its pane.`
+        code: 'worker_identity_changed',
+        reason: `term_worker is not the exact process that owns Dispatch ${dispatch.id}.`
       })
       expect(db.getTask(task.id)?.status).toBe('dispatched')
 
@@ -267,6 +271,36 @@ describe('orchestration RPC methods', () => {
         payload
       })) as { lifecycle: { action: string } }
       expect(accepted.lifecycle.action).toBe('completed')
+    })
+
+    it('rejects a current process whose terminal now resolves to another pane', async () => {
+      setup()
+      const task = db.createTask({ spec: 'pane-bound manual work' })
+      const dispatch = createRootDispatch(
+        db,
+        task.id,
+        'term_worker',
+        'tab_worker:leaf_worker',
+        undefined,
+        'runtime_test:term_worker:1'
+      )
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_worker' ? 'tab_foreign:leaf_foreign' : coordinatorPaneKey
+      )
+
+      expect(
+        await call('orchestration.send', {
+          from: 'term_worker',
+          subject: 'Done',
+          type: 'worker_done',
+          payload: JSON.stringify({
+            taskId: task.id,
+            dispatchId: dispatch.id,
+            outcome: 'succeeded'
+          })
+        })
+      ).toMatchObject({ lifecycle: { action: 'rejected', code: 'worker_identity_changed' } })
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
     })
 
     it.each(['escalation', 'decision_gate'] as const)(
@@ -304,7 +338,7 @@ describe('orchestration RPC methods', () => {
 
         expect(rejected.lifecycle).toMatchObject({
           action: 'rejected',
-          code: 'sender_not_assignee'
+          code: 'worker_identity_changed'
         })
         expect(db.getTask(task.id)?.status).toBe('dispatched')
         expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
@@ -389,88 +423,6 @@ describe('orchestration RPC methods', () => {
       expect(runtime.notifyMessageArrived).toHaveBeenCalledWith(`run:${activeRunId}`, 'worker_done')
     })
 
-    it('requires the minted capability, exact pane, and process incarnation', async () => {
-      setup()
-      const task = db.createTask({ spec: 'capability work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
-      const capability = db.mintDispatchCapability({
-        dispatchId: dispatch.id,
-        paneKey: 'tab_worker:leaf_worker',
-        processIncarnation: 'runtime_test:term_worker:1'
-      })
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-        handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
-      )
-      const payload = JSON.stringify({
-        taskId: task.id,
-        dispatchId: dispatch.id,
-        outcome: 'succeeded'
-      })
-
-      const rejected = (await call('orchestration.send', {
-        from: 'term_worker',
-        subject: 'Done',
-        type: 'worker_done',
-        payload
-      })) as { lifecycle: { code: string }; message: { subject: string } }
-      expect(rejected).toMatchObject({
-        lifecycle: { code: 'dispatch_capability_invalid' },
-        message: { subject: 'Rejected worker_done: Done' }
-      })
-      expect(db.getTask(task.id)?.status).toBe('dispatched')
-
-      ctx = { runtime, orchestrationCapability: 'dcap_wrong' }
-      const wrongToken = (await call('orchestration.send', {
-        from: 'term_worker',
-        subject: 'Done',
-        type: 'worker_done',
-        payload
-      })) as { lifecycle: { code: string } }
-      expect(wrongToken.lifecycle.code).toBe('dispatch_capability_invalid')
-
-      ctx = { runtime, orchestrationCapability: capability }
-      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-        handle === 'term_worker' ? 'tab_foreign:leaf_foreign' : coordinatorPaneKey
-      )
-      const wrongPane = (await call('orchestration.send', {
-        from: 'term_worker',
-        subject: 'Done',
-        type: 'worker_done',
-        payload
-      })) as { lifecycle: { code: string } }
-      expect(wrongPane.lifecycle.code).toBe('dispatch_capability_invalid')
-
-      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-        handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
-      )
-      vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
-      const wrongProcess = (await call('orchestration.send', {
-        from: 'term_worker',
-        subject: 'Done',
-        type: 'worker_done',
-        payload
-      })) as { lifecycle: { code: string } }
-      expect(wrongProcess.lifecycle.code).toBe('dispatch_capability_invalid')
-
-      vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
-      await call('orchestration.send', {
-        from: 'term_worker',
-        subject: 'Done',
-        type: 'worker_done',
-        payload
-      })
-      expect(db.getTask(task.id)?.status).toBe('completed')
-      expect(db.getDispatchContextById(dispatch.id)?.capability_revoked_at).toBeTruthy()
-
-      const revoked = (await call('orchestration.send', {
-        from: 'term_worker',
-        subject: 'Done again',
-        type: 'worker_done',
-        payload
-      })) as { lifecycle: { code: string } }
-      expect(revoked.lifecycle.code).toBe('dispatch_capability_invalid')
-    })
-
     it('does not wake waiters for a heartbeat suppressed at send time', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
@@ -491,12 +443,11 @@ describe('orchestration RPC methods', () => {
       expect(db.getMessageById(result.message.id)).toMatchObject({ read: 1 })
     })
 
-    it('still wakes waiters for a heartbeat on an active dispatch', async () => {
+    it('records a heartbeat without delivering it as coordinator mail', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
-      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
-      const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+      const waiting = runtime.waitForMessage(`run:${activeRunId}`, { timeoutMs: 50 })
 
       await call('orchestration.send', {
         from: 'term_worker',
@@ -506,7 +457,9 @@ describe('orchestration RPC methods', () => {
         payload: JSON.stringify({ dispatchId: dispatch.id })
       })
 
-      expect(notify).toHaveBeenCalledWith(`run:${activeRunId}`, 'heartbeat')
+      await expect(waiting).resolves.toBe('timed_out')
+      expect(db.getUnreadMessages(`run:${activeRunId}`)).toEqual([])
+      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeTruthy()
     })
 
     it('allows an omitted recipient so an active Dispatch can default to its Run', () => {
@@ -657,7 +610,7 @@ describe('orchestration RPC methods', () => {
       const task = db.createTask({ spec: 'lock-release work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
 
-      // Why: waiter notification must observe the settled Dispatch, not stale lifecycle state.
+      // Waiter notification must observe the committed Dispatch lifecycle.
       vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {
         expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
       })
@@ -678,7 +631,6 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
       expect(db.getActiveDispatchForTerminal('term_worker')).toBeUndefined()
-      // Lock released — a new dispatch to the same terminal must succeed.
       const t2 = db.createTask({ spec: 'follow-up work' })
       expect(() => createRootDispatch(db, t2.id, 'term_worker')).not.toThrow()
     })

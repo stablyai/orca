@@ -1,4 +1,3 @@
-import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
 import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
@@ -8,12 +7,9 @@ import {
   type MobileCodexResetCreditRpcSender,
   type MobileCodexResetCreditSendScope
 } from './codex-reset-credit-consume-operations'
-import {
-  clearCodexResetAttemptAfterAuthoritativeResponse,
-  CodexResetCreditExpectedScopeSchema,
-  getCodexResetAttemptIdentityKey,
-  getOrCreateCodexResetAttempt
-} from '../storage/codex-reset-attempt-journal'
+import { CodexResetCreditExpectedScopeSchema } from './codex-reset-credit-reply-schema'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
+import { translate } from '../i18n/mobile-i18n'
 import {
   decodeAccountsSnapshot,
   type AccountsSnapshot,
@@ -48,12 +44,6 @@ export type CodexResetCreditRpcResult =
   | CodexResetCreditConsumedRpcResult
   | CodexResetCreditRejectedRpcResult
 
-export type CodexResetCreditRequestResult = CodexResetCreditRpcResult & {
-  // A valid host result remains authoritative even if local cleanup fails.
-  // The retained UUID makes a later retry idempotent instead of hiding success.
-  attemptJournalRetained: boolean
-}
-
 export type CodexResetCreditSummary = {
   availableCount: number
   availabilityLabel: string
@@ -61,7 +51,74 @@ export type CodexResetCreditSummary = {
 }
 
 const RESET_RPC_TIMEOUT_MS = 90_000
-const resetRequests = new Map<string, Promise<CodexResetCreditRequestResult>>()
+
+function resetCreditExpiryLabel(ms: number, count: number): string {
+  if (ms <= 0) {
+    return count === 1
+      ? translate('components.codexResetCredit.expiryNowSingle', 'Expires now')
+      : translate('components.codexResetCredit.expiryNowMultiple', 'Next expires now')
+  }
+  const totalMinutes = Math.floor(ms / 60_000)
+  if (totalMinutes < 60) {
+    return count === 1
+      ? translate('components.codexResetCredit.expiryMinutesSingle', 'Expires in {{minutes}}m', {
+          minutes: totalMinutes
+        })
+      : translate(
+          'components.codexResetCredit.expiryMinutesMultiple',
+          'Next expires in {{minutes}}m',
+          { minutes: totalMinutes }
+        )
+  }
+  const totalHours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (totalHours < 24) {
+    const options = { hours: totalHours, minutes }
+    if (minutes > 0) {
+      return count === 1
+        ? translate(
+            'components.codexResetCredit.expiryHoursMinutesSingle',
+            'Expires in {{hours}}h {{minutes}}m',
+            options
+          )
+        : translate(
+            'components.codexResetCredit.expiryHoursMinutesMultiple',
+            'Next expires in {{hours}}h {{minutes}}m',
+            options
+          )
+    }
+    return count === 1
+      ? translate('components.codexResetCredit.expiryHoursSingle', 'Expires in {{hours}}h', options)
+      : translate(
+          'components.codexResetCredit.expiryHoursMultiple',
+          'Next expires in {{hours}}h',
+          options
+        )
+  }
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+  const options = { days, hours }
+  if (hours > 0) {
+    return count === 1
+      ? translate(
+          'components.codexResetCredit.expiryDaysHoursSingle',
+          'Expires in {{days}}d {{hours}}h',
+          options
+        )
+      : translate(
+          'components.codexResetCredit.expiryDaysHoursMultiple',
+          'Next expires in {{days}}d {{hours}}h',
+          options
+        )
+  }
+  return count === 1
+    ? translate('components.codexResetCredit.expiryDaysSingle', 'Expires in {{days}}d', options)
+    : translate(
+        'components.codexResetCredit.expiryDaysMultiple',
+        'Next expires in {{days}}d',
+        options
+      )
+}
 
 export function getCodexResetCreditSummary(
   limits: ProviderRateLimits | null,
@@ -75,14 +132,18 @@ export function getCodexResetCreditSummary(
   const expiry = credits?.nextExpiresAt
   const expiryLabel =
     typeof expiry === 'number' && Number.isFinite(expiry)
-      ? formatResetCountdown(expiry - now).replace(
-          /^Resets/,
-          count === 1 ? 'Expires' : 'Next expires'
-        )
+      ? resetCreditExpiryLabel(expiry - now, count)
       : null
   return {
     availableCount: count,
-    availabilityLabel: `${count} ${count === 1 ? 'reset' : 'resets'} available`,
+    availabilityLabel:
+      count === 1
+        ? translate('components.codexResetCredit.available_one', '{{count}} reset available', {
+            count
+          })
+        : translate('components.codexResetCredit.available_other', '{{count}} resets available', {
+            count
+          }),
     expiryLabel
   }
 }
@@ -93,18 +154,29 @@ export function getCodexResetCreditOutcomeCopy(outcome: CodexResetCreditOutcome)
 } {
   switch (outcome) {
     case 'reset':
-      return { title: 'Rate limits reset', message: 'Codex usage has been refreshed.' }
     case 'alreadyRedeemed':
-      return { title: 'Reset already applied', message: 'Codex usage has been refreshed.' }
+      return {
+        title:
+          outcome === 'reset'
+            ? translate('components.codexResetCredit.resetTitle', 'Rate limits reset')
+            : translate('components.codexResetCredit.alreadyAppliedTitle', 'Reset already applied'),
+        message: translate('components.codexResetCredit.refresh', 'Codex usage has been refreshed.')
+      }
     case 'nothingToReset':
       return {
-        title: 'Nothing to reset',
-        message: 'No eligible Codex rate-limit window is exhausted.'
+        title: translate('components.codexResetCredit.nothingToResetTitle', 'Nothing to reset'),
+        message: translate(
+          'components.codexResetCredit.nothingToResetMessage',
+          'No eligible Codex rate-limit window is exhausted.'
+        )
       }
     case 'noCredit':
       return {
-        title: 'No reset available',
-        message: 'This account has no earned reset credits available.'
+        title: translate('components.codexResetCredit.noResetTitle', 'No reset available'),
+        message: translate(
+          'components.codexResetCredit.noResetMessage',
+          'This account has no earned reset credits available.'
+        )
       }
   }
 }
@@ -143,7 +215,8 @@ export function getCodexResetCreditScope(
   return parsed.success ? parsed.data : null
 }
 
-function scopesEqual(
+// Match account scope, not offer: host may return unresolved retry attempt against earlier offer.
+function sameAccountScope(
   left: CodexResetCreditExpectedScope,
   right: CodexResetCreditExpectedScope
 ): boolean {
@@ -151,8 +224,13 @@ function scopesEqual(
     left.target.runtime === right.target.runtime &&
     left.target.wslDistro === right.target.wslDistro &&
     left.accountId === right.accountId &&
-    left.accountRevision === right.accountRevision &&
-    left.offerRevision === right.offerRevision
+    left.accountRevision === right.accountRevision
+  )
+}
+
+function invalidResetResponse(): Error {
+  return new Error(
+    translate('components.codexResetCredit.invalidResponse', 'Invalid reset response from host')
   )
 }
 
@@ -161,12 +239,12 @@ function decodeResetResult(
   expectedScope: CodexResetCreditExpectedScope
 ): CodexResetCreditRpcResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Invalid reset response from host')
+    throw invalidResetResponse()
   }
   const result = value as Record<string, unknown>
   const scope = CodexResetCreditExpectedScopeSchema.safeParse(result.scope)
-  if (!scope.success || !scopesEqual(scope.data, expectedScope)) {
-    throw new Error('Invalid reset response from host')
+  if (!scope.success || !sameAccountScope(scope.data, expectedScope)) {
+    throw invalidResetResponse()
   }
   const snapshot = decodeAccountsSnapshot(result.snapshot)
   if (result.status === 'rejectedBeforeProvider') {
@@ -181,7 +259,7 @@ function decodeResetResult(
         reason !== 'offerUnavailable' &&
         reason !== 'offerChanged')
     ) {
-      throw new Error('Invalid reset response from host')
+      throw invalidResetResponse()
     }
     return {
       status: 'rejectedBeforeProvider',
@@ -200,7 +278,7 @@ function decodeResetResult(
       outcome !== 'noCredit' &&
       outcome !== 'alreadyRedeemed')
   ) {
-    throw new Error('Invalid reset response from host')
+    throw invalidResetResponse()
   }
   const snapshotAccount = snapshot.codex.accounts.find(
     (account) => account.id === scope.data.accountId
@@ -211,7 +289,7 @@ function decodeResetResult(
     getActiveCodexAccountIdForRateLimitTarget(snapshot) !== scope.data.accountId ||
     snapshotAccount?.updatedAt !== scope.data.accountRevision
   ) {
-    throw new Error('Invalid reset response from host')
+    throw invalidResetResponse()
   }
   return {
     outcome,
@@ -220,68 +298,20 @@ function decodeResetResult(
   }
 }
 
-async function performCodexResetCreditRequest(
+// Use fresh key per attempt without phone journal; host ledger resumes same-offer/unknown-account attempts so lost replies cannot spend twice.
+export async function requestCodexResetCredit(
   client: MobileCodexResetCreditRpcSender,
-  options: {
-    hostId: string
-    expectedScope: CodexResetCreditExpectedScope
-    createIdempotencyKey: () => string
-  }
-): Promise<CodexResetCreditRequestResult> {
-  const attempt = await getOrCreateCodexResetAttempt(options)
+  expectedScope: CodexResetCreditExpectedScope
+): Promise<CodexResetCreditRpcResult> {
+  const scope = CodexResetCreditExpectedScopeSchema.parse(expectedScope)
   const response = await codexResetCreditConsume.request(
     client,
     {
-      idempotencyKey: attempt.idempotencyKey,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every attempt is parsed through CodexResetAttemptSchema, whose refinement pairs runtime 'host' with a null distro and 'wsl' with a trimmed non-empty one. The bytes are unchanged.
-      expectedScope: attempt.expectedScope as MobileCodexResetCreditSendScope
+      idempotencyKey: randomV4Uuid(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: parsed just above through CodexResetCreditExpectedScopeSchema, whose refinement pairs runtime 'host' with a null distro and 'wsl' with a trimmed non-empty one. The bytes are unchanged.
+      expectedScope: scope as MobileCodexResetCreditSendScope
     },
     { timeoutMs: RESET_RPC_TIMEOUT_MS }
   )
-  const result = decodeResetResult(
-    codexResetCreditConsume.interpret(response),
-    attempt.expectedScope
-  )
-  let attemptJournalRetained = false
-  try {
-    await clearCodexResetAttemptAfterAuthoritativeResponse({
-      hostId: options.hostId,
-      expectedScope: attempt.expectedScope,
-      idempotencyKey: attempt.idempotencyKey
-    })
-  } catch {
-    attemptJournalRetained = true
-  }
-  return { ...result, attemptJournalRetained }
-}
-
-export async function requestCodexResetCredit(
-  client: MobileCodexResetCreditRpcSender,
-  options: {
-    hostId: string
-    expectedScope: CodexResetCreditExpectedScope
-    createIdempotencyKey: () => string
-  }
-): Promise<CodexResetCreditRequestResult> {
-  const requestKey = getCodexResetAttemptIdentityKey(options)
-  const existing = resetRequests.get(requestKey)
-  if (existing) {
-    return existing
-  }
-  // Why: two mounted views can confirm the same offer concurrently. Share the
-  // whole attempt so one authoritative response cannot clear the other's retry key.
-  const operation = performCodexResetCreditRequest(client, options)
-  resetRequests.set(requestKey, operation)
-  try {
-    return await operation
-  } finally {
-    if (resetRequests.get(requestKey) === operation) {
-      resetRequests.delete(requestKey)
-    }
-  }
-}
-
-/** Test-only: clear request singleflight state between cases. */
-export function resetCodexResetCreditRequestsForTests(): void {
-  resetRequests.clear()
+  return decodeResetResult(codexResetCreditConsume.interpret(response), scope)
 }

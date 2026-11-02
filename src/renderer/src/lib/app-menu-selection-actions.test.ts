@@ -8,12 +8,20 @@ import {
 
 describe('app menu selection actions', () => {
   it.each(['copy', 'select-all'] as const)('reports whether %s has an owned target', (action) => {
-    const handler = (event: Event): void => event.preventDefault()
+    let receivedAction: unknown
+    const handler = (event: Event): void => {
+      if (event instanceof CustomEvent) {
+        receivedAction = event.detail
+      }
+      event.preventDefault()
+    }
     window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, handler)
 
-    expect(dispatchAppMenuSelectionAction(action)).toBe(true)
+    const claimed = dispatchAppMenuSelectionAction(action)
 
     window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, handler)
+    expect(claimed).toBe(true)
+    expect(receivedAction).toBe(action)
   })
 
   it('leaves unowned actions available for native fallback', () => {

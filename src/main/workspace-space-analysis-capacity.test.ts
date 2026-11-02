@@ -5,7 +5,7 @@ import type * as NodeProcess from 'node:process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/repo-types'
 import type * as WorkspaceSpaceScanBudgetModule from '../shared/workspace-space-scan-budget'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 
 const { listRepoWorktreesMock } = vi.hoisted(() => ({
   listRepoWorktreesMock: vi.fn()
@@ -37,13 +37,10 @@ vi.mock('./repo-worktrees', () => ({
   listRepoWorktrees: listRepoWorktreesMock
 }))
 
-vi.mock('./providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn()
-}))
-
-vi.mock('./providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: vi.fn()
-}))
+vi.mock('./workspace-space-scan-worker-client', async () => {
+  const { scanLocalWorkspaceSpaceWorktree } = await import('./workspace-space-local-scan')
+  return { scanLocalWorkspaceSpaceWorktreeViaWorker: scanLocalWorkspaceSpaceWorktree }
+})
 
 import { analyzeWorkspaceSpace } from './workspace-space-analysis'
 

@@ -7,8 +7,10 @@ import {
 
 describe('telemetry bundle constant patterns', () => {
   it.each(['const', 'let', 'var'])('accepts %s declarations', (declaration) => {
-    expect(`${declaration} BUILD_IDENTITY = "rc"`).toMatch(BUILD_IDENTITY_RE)
-    expect(`${declaration} WRITE_KEY = "phc_example-key_123"`).toMatch(WRITE_KEY_RE)
+    expect(BUILD_IDENTITY_RE.exec(`${declaration} BUILD_IDENTITY = "rc"`)?.[1]).toBe('rc')
+    expect(WRITE_KEY_RE.exec(`${declaration} WRITE_KEY = "phc_example-key_123"`)?.[1]).toBe(
+      'phc_example-key_123'
+    )
   })
 
   it('rejects assignments and invalid values', () => {
@@ -20,6 +22,21 @@ describe('telemetry bundle constant patterns', () => {
 
   it('accepts minified adjacent declarations', () => {
     const bundle = 'var dde=`stable`,fde=`phc_example-key_123`,pde=(dde===`stable`)'
-    expect(bundle).toMatch(MINIFIED_TELEMETRY_RE)
+    expect(MINIFIED_TELEMETRY_RE.exec(bundle)?.slice(1, 3)).toEqual([
+      'stable',
+      'phc_example-key_123'
+    ])
+  })
+
+  it('accepts the identity as a later declarator in a shared declaration', () => {
+    const bundle = 'var wpe=!0,Tpe=`stable`,Epe=`phc_example-key_123`,Dpe=(Tpe===`stable`)'
+    expect(MINIFIED_TELEMETRY_RE.exec(bundle)?.slice(1, 3)).toEqual([
+      'stable',
+      'phc_example-key_123'
+    ])
+  })
+
+  it('rejects a minified identity with no adjacent write key', () => {
+    expect('var a=!0,b=`stable`,c=null').not.toMatch(MINIFIED_TELEMETRY_RE)
   })
 })

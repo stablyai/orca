@@ -1,0 +1,7 @@
+import './telemetry-orca-cli-feature-tip.spec'
+import './telemetry-events-feature-education.spec'
+import './telemetry-feature-wall-events.spec'
+import './setup-script-telemetry-events.spec'
+import './profile-state-telemetry-schema.spec'
+import './add-repo-existing-workspaces-telemetry.spec'
+import './onboarding-tour-telemetry-events.spec'

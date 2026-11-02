@@ -1,17 +1,38 @@
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import type { JournalItemEcho } from '../agent-session-journal/journal-item-echo'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalProducerLinkage,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
+  AgentJournalProducerLinkage
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
+import {
+  createStructuredAgentSessionTransitionMembers,
+  type StructuredAgentSessionTransitionSink
+} from './structured-agent-session-transition'
+import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type {
+  StructuredAgentSessionIdentityResolver,
+  StructuredAgentSessionHistoryJournal,
+  StructuredAgentSessionLinkageJournal,
+  StructuredAgentSessionRevisionResolver
+} from './structured-agent-session-journal-views'
+export type {
+  StructuredAgentSessionLifecycleJournal,
+  StructuredAgentSessionIdentityResolver,
+  StructuredAgentSessionRevisionJournal,
+  StructuredAgentSessionHistoryJournal,
+  StructuredAgentSessionLinkageJournal,
+  StructuredAgentSessionRevisionResolver
+} from './structured-agent-session-journal-views'
+import { StructuredAgentSessionExitObservation } from './structured-agent-session-exit-observation'
 
 export type StructuredAgentSessionSinkAdmission =
   | { accepted: true }
@@ -26,58 +47,31 @@ export type StructuredAgentSessionSinkState = {
 
 export type StructuredAgentSessionSinkBarrier = { ok: true } | { ok: false; error: unknown }
 
-/** Linkage a producer stamps on the rows it writes. Absent on every append the
- *  session's own agent makes, which is what makes absence mean root. */
+/** Omitted producer linkage means session/root agent. */
 export type StructuredAgentSessionAppendOptions = AgentJournalProducerLinkage & {
-  /** Pending checkpoints with this key replace one another before they run. */
-  coalescingKey?: string
-  /** Marks a critical lifecycle operation for lifecycle barriers and diagnostics. */
   lifecycle?: boolean
-  /** Host clock to stamp on the row instead of its append time. */
   observedAt?: number
 }
 
-/** An item write states which turn its row belongs to; the write that creates the row decides. */
-export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppendOptions & {
-  turnScope: AgentJournalTurnScope
+export type StructuredAgentSessionPublishOptions = Pick<
+  StructuredAgentSessionAppendOptions,
+  'lifecycle'
+> & {
+  coalescingKey?: string
 }
 
-export type StructuredAgentSessionLifecycleJournal = Pick<
-  AgentSessionJournal,
-  'epoch' | 'visitItems'
->
+/** Creation fixes turn scope; revisions keep it. */
+export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppendOptions & {
+  echoOf?: JournalItemEcho['echoOf']
+  turnScope: AgentJournalTurnScope
+  /** A later child execution assumes this reusable row. */
+  executes?: true
+}
 
-export type StructuredAgentSessionIdentityResolver = (
-  journal: StructuredAgentSessionLifecycleJournal
-) => AgentJournalItemIdentity | null
+export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
 
-/** What a revision reads: a keyed read for a row it can name, and the scan for one it cannot. */
-export type StructuredAgentSessionRevisionJournal = Pick<
-  AgentSessionJournal,
-  'epoch' | 'visitItems' | 'itemBody'
->
-
-/** Rows already journaled and who produced each, read by a producer that has to agree with them. */
-export type StructuredAgentSessionLinkageJournal = Pick<
-  AgentSessionJournal,
-  'epoch' | 'visitItemsWithLinkage'
->
-
-/** The row a revision rewrites and its whole new body, read from the journal at execution. */
-export type StructuredAgentSessionRevisionResolver = (
-  journal: StructuredAgentSessionRevisionJournal
-) => { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null
-
-/** A revision's body is derived from the row it revises, so coalescing one away would lose it. */
-export type StructuredAgentSessionRevisionOptions = Omit<
-  StructuredAgentSessionItemAppendOptions,
-  'coalescingKey'
->
-
-/** Compatibility alias for lifecycle callers that already use this resolver. */
-export type StructuredAgentSessionLifecycleIdentityResolver = StructuredAgentSessionIdentityResolver
-
-export type StructuredAgentSessionEventSink = {
+export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
+  observeExit?: StructuredAgentSessionExitObservation['record']
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -91,61 +85,61 @@ export type StructuredAgentSessionEventSink = {
     identity: AgentJournalItemIdentity,
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  publish(options?: StructuredAgentSessionAppendOptions): void
+  publish(options?: StructuredAgentSessionPublishOptions): void
+  /** Not ok if any admitted write failed or close dropped it unwritten. */
+  written?(): Promise<StructuredAgentSessionSinkBarrier>
   setActivity?(activity: AgentSessionTurnActivity | null): void
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues an ordinary append whose identity is resolved after journal bind. */
   tryAppendResolvedItem?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues one resolved append and its publication as a single admitted operation. */
   tryAppendResolvedItemAndPublish?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues a read-modify-write of one row; `reservedBytes` must bound the resolved write. */
+  /** Reserved bytes must bound the eventual resolved revision. */
   tryReviseResolvedItem?(
     reservedBytes: number,
     resolve: StructuredAgentSessionRevisionResolver,
     options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues one revision and its publication as a single admitted operation. */
   tryReviseResolvedItemAndPublish?(
     reservedBytes: number,
     resolve: StructuredAgentSessionRevisionResolver,
     options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
+  /** Resolve on the journal lane; null appends nothing. */
   tryAppendLifecycleTransition?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionIdentityResolver,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Current durable epoch, when this deferred sink is bound to its journal. */
   journalEpoch?(): string | null
-  /** The bound journal's producer linkage; null until bound. */
   journalLinkage?(): StructuredAgentSessionLinkageJournal | null
+  journalHistory?(): StructuredAgentSessionHistoryJournal | null
+  /** Apply the journal’s personal-Stop cancellation rule; false until bound. */
+  journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
   appendLifecycleBatch?(
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission | void
   tryAppendLifecycleBatch?(
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
+    mutations: readonly JournalLifecycleIdentityMutationInput[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
-  tryPublish?(options?: StructuredAgentSessionAppendOptions): StructuredAgentSessionSinkAdmission
+  tryPublish?(options?: StructuredAgentSessionPublishOptions): StructuredAgentSessionSinkAdmission
   /** Couples durable-queue pressure to the exact provider stream producing it. */
   bindReadingControl?(control: StructuredAgentSessionReadingControl): () => void
 }
@@ -158,6 +152,7 @@ export type StructuredAgentSessionEventTarget = {
 
 export type DeferredStructuredAgentSessionEventSink = {
   sink: StructuredAgentSessionEventSink
+  exitObservation(): Omit<StructuredAgentSessionExitObservation, 'record'>
   bind(target: StructuredAgentSessionEventTarget): void
   unbind(): void
   close(): void
@@ -168,13 +163,9 @@ export type DeferredStructuredAgentSessionEventSink = {
 
 export type StructuredAgentSessionSinkWatermarks = {
   pauseQueuedBytes: number
-  maxQueuedBytes: number
   lowQueuedBytes: number
   pauseQueuedOperations: number
-  maxQueuedOperations: number
   lowQueuedOperations: number
-  maxLifecycleQueuedBytes: number
-  maxLifecycleQueuedOperations: number
 }
 
 export type StructuredAgentSessionReadingControl = {
@@ -184,27 +175,33 @@ export type StructuredAgentSessionReadingControl = {
 
 const DEFAULT_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
   pauseQueuedBytes: 16 * 1024 * 1024,
-  maxQueuedBytes: 32 * 1024 * 1024,
   lowQueuedBytes: 8 * 1024 * 1024,
   pauseQueuedOperations: 512,
-  maxQueuedOperations: 1_024,
-  lowQueuedOperations: 256,
-  maxLifecycleQueuedBytes: 16 * 1024 * 1024,
-  maxLifecycleQueuedOperations: 1_024
+  lowQueuedOperations: 256
 }
 
-export function createDeferredStructuredAgentSessionEventSink(
-  deps: {
-    onError?: (error: unknown) => void
-    watermarks?: Partial<StructuredAgentSessionSinkWatermarks>
-    readingControl?: StructuredAgentSessionReadingControl
-    onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
-  } = {}
-): DeferredStructuredAgentSessionEventSink {
+export function createDeferredStructuredAgentSessionEventSink(deps: {
+  sessionId: string
+  logger: StructuredAgentSessionLogger
+  /** Permanent failure; owner decides whether the provider can continue. */
+  onFailed?: (error: unknown) => void
+  watermarks?: Partial<StructuredAgentSessionSinkWatermarks>
+  readingControl?: StructuredAgentSessionReadingControl
+  onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
+}): DeferredStructuredAgentSessionEventSink {
+  const exit = new StructuredAgentSessionExitObservation()
   const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
+  const failed = (error: unknown): void => {
+    deps.logger.error('writing provider events to the chat journal failed', {
+      scope: 'journal-event-sink',
+      sessionId: deps.sessionId,
+      error
+    })
+    deps.onFailed?.(error)
+  }
   const queue = new StructuredAgentSessionSinkQueue({
     watermarks,
-    ...(deps.onError ? { onError: deps.onError } : {}),
+    onFailed: failed,
     ...(deps.readingControl ? { readingControl: deps.readingControl } : {}),
     ...(deps.onBackpressureChange ? { onBackpressureChange: deps.onBackpressureChange } : {})
   })
@@ -212,75 +209,69 @@ export function createDeferredStructuredAgentSessionEventSink(
 
   const appendLifecycleBatch = (
     settlementId: string,
-    mutations: readonly JournalLifecycleMutationInput[],
-    options: StructuredAgentSessionAppendOptions = {}
+    mutations: readonly JournalLifecycleIdentityMutationInput[]
   ): StructuredAgentSessionSinkAdmission =>
-    queue.submit(
-      {
-        bytes: Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
-        coalescingKey: `lifecycle:${settlementId}`,
-        keepsFirst: true,
-        run: (bound) =>
-          bound.journal.appendLifecycleBatch({
-            settlementId,
-            mutations,
-            // No row-level linkage: each mutation names its own (see the batch row builder).
-            fence: bound.fence
-          })
-      },
-      { ...options, lifecycle: true }
-    )
+    queue.submit({
+      bytes: Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
+      run: (bound) =>
+        bound.journal.appendLifecycleBatch({
+          settlementId,
+          mutations,
+          // Preserve per-mutation linkage instead of stamping the whole row.
+          fence: bound.fence,
+          // Provider observations use the bound child’s execution fence.
+          ownerFence: bound.fence
+        })
+    })
 
   const publish = (
-    options: StructuredAgentSessionAppendOptions = {}
+    options: StructuredAgentSessionPublishOptions = {}
   ): StructuredAgentSessionSinkAdmission =>
-    queue.submit(
-      {
-        bytes: 1,
-        coalescingKey: options.coalescingKey ?? 'publish',
-        run: (bound) => bound.publish()
-      },
-      options
-    )
+    queue.submit({
+      bytes: 1,
+      publicationKey: options.coalescingKey ?? 'publish',
+      run: (bound) => bound.publish()
+    })
+
+  const appendItem: NonNullable<StructuredAgentSessionEventSink['tryAppendItem']> = (
+    identity,
+    body,
+    options
+  ) =>
+    queue.submit({
+      bytes: estimateStructuredAgentSessionItemBytes(identity, body),
+      run: (bound) =>
+        bound.journal.appendItem(
+          identity,
+          body,
+          structuredAgentSessionJournalAppendOptions(bound.fence, options)
+        )
+    })
+
+  const appendTombstone = (
+    identity: AgentJournalItemIdentity
+  ): StructuredAgentSessionSinkAdmission =>
+    queue.submit({
+      bytes: Buffer.byteLength(agentJournalItemKey(identity), 'utf8') + 256,
+      run: (bound) => bound.journal.appendTombstone(identity, { fence: bound.fence })
+    })
 
   return {
+    exitObservation: () => exit,
     sink: {
-      appendItem: (identity, body, options) => {
-        queue.submit(
-          {
-            bytes: estimateStructuredAgentSessionItemBytes(identity, body),
-            coalescingKey: options.coalescingKey,
-            run: (bound) =>
-              bound.journal.appendItem(
-                identity,
-                body,
-                structuredAgentSessionJournalAppendOptions(bound.fence, options)
-              )
-          },
-          options
-        )
-      },
-      tryAppendItem: (identity, body, options) =>
-        queue.submit(
-          {
-            bytes: estimateStructuredAgentSessionItemBytes(identity, body),
-            coalescingKey: options.coalescingKey,
-            run: (bound) =>
-              bound.journal.appendItem(
-                identity,
-                body,
-                structuredAgentSessionJournalAppendOptions(bound.fence, options)
-              )
-          },
-          options
-        ),
+      observeExit: exit.record,
+      appendItem: (identity, body, options) => void appendItem(identity, body, options),
+      tryAppendItem: appendItem,
       ...resolvedAppend,
+      ...createStructuredAgentSessionTransitionMembers(queue),
       journalEpoch: queue.journalEpoch,
       journalLinkage: queue.journalLinkage,
-      appendLifecycleBatch: (settlementId, mutations, options = {}) => {
-        const admission = appendLifecycleBatch(settlementId, mutations, options)
+      journalHistory: queue.journalHistory,
+      journalStopDecidesTurn: queue.journalStopDecidesTurn,
+      appendLifecycleBatch: (settlementId, mutations) => {
+        const admission = appendLifecycleBatch(settlementId, mutations)
         if (!admission.accepted) {
-          deps.onError?.(
+          failed(
             new Error(
               `lifecycle journal batch ${settlementId} rejected by sink ${admission.reason}`
             )
@@ -289,33 +280,15 @@ export function createDeferredStructuredAgentSessionEventSink(
         return admission
       },
       tryAppendLifecycleBatch: appendLifecycleBatch,
-      bindReadingControl: (control) => {
-        return queue.bindReadingControl(control)
-      },
-      appendTombstone: (identity, options = {}) => {
-        queue.submit(
-          {
-            bytes: Buffer.byteLength(agentJournalItemKey(identity), 'utf8') + 256,
-            run: (bound) => bound.journal.appendTombstone(identity, { fence: bound.fence })
-          },
-          options
-        )
-      },
-      tryAppendTombstone: (identity, options = {}) =>
-        queue.submit(
-          {
-            bytes: Buffer.byteLength(agentJournalItemKey(identity), 'utf8') + 256,
-            run: (bound) => bound.journal.appendTombstone(identity, { fence: bound.fence })
-          },
-          options
-        ),
-      publish: (options = {}) => {
-        publish(options)
-      },
+      bindReadingControl: (control) => queue.bindReadingControl(control),
+      appendTombstone: (identity) => void appendTombstone(identity),
+      tryAppendTombstone: appendTombstone,
+      publish: (options = {}) => void publish(options),
+      written: queue.written,
       setActivity: (activity) => {
         queue.submit({
           bytes: Buffer.byteLength(JSON.stringify(activity), 'utf8') + 64,
-          coalescingKey: 'turn-activity',
+          publicationKey: 'turn-activity',
           run: (bound) => bound.publish(activity)
         })
       },

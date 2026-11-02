@@ -46,15 +46,18 @@ describe('agent status subjects', () => {
       makePtyRunAgentStatusSubject(scope({ wslDistro: 'Ubuntu' }), identity),
       makePtyRunAgentStatusSubject(scope({ executionHostId: 'ssh:target-a' }), identity),
       makePtyRunAgentStatusSubject(scope({ executionHostId: 'runtime:peer-a' }), identity),
-      makePtyRunAgentStatusSubject(
-        scope({ workspaceId: 'folder-1', workspaceKind: 'folder' }),
-        identity
-      ),
+      makePtyRunAgentStatusSubject(scope({ workspaceId: 'workspace-2' }), identity),
+      makePtyRunAgentStatusSubject(scope({ workspaceKind: 'folder' }), identity),
       makePtyAgentStatusSubject(scope(), identity),
       makeStructuredAgentStatusSubject(scope(), identity)
     ]
 
     expect(new Set(subjects.map(serializeAgentStatusSubject))).toHaveLength(subjects.length)
+    for (const [index, subject] of subjects.entries()) {
+      for (const other of subjects.slice(index + 1)) {
+        expect(agentStatusSubjectsEqual(subject, other)).toBe(false)
+      }
+    }
   })
 
   it('keeps the existing structured-session encoding byte-for-byte stable', () => {
@@ -69,7 +72,7 @@ describe('agent status subjects', () => {
 
   it.each([
     null,
-    { kind: 'future' },
+    { kind: 'future', ...scope(), paneKey: PANE_KEY },
     {
       kind: 'pty-run',
       ...scope(),
@@ -125,7 +128,8 @@ describe('agent status subjects', () => {
     '',
     'agent-status-subject-v1:not-json',
     'agent-status-subject-v1:["pty-run","local",null,"workspace-1","git-worktree"]',
-    'agent-status-subject-v1:["unknown","local",null,"workspace-1","git-worktree","id"]'
+    'agent-status-subject-v1:["unknown","local",null,"workspace-1","git-worktree","id"]',
+    'agent-status-subject-v1:["pty-run","local",null,"workspace-1","git-worktree","run_11111111-1111-4111-8111-111111111111","extra"]'
   ])('rejects malformed serialized subject %#', (value) => {
     expect(deserializeAgentStatusSubject(value)).toBeNull()
   })

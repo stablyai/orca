@@ -1,0 +1,96 @@
+{
+  "list": {
+    "terminals": [
+      {
+        "handle": "handle-1",
+        "ptyId": "pty-a",
+        "incarnationId": null,
+        "orphaned": true,
+        "worktreeId": "repo-1::/tmp/worktree-a",
+        "worktreePath": "/tmp/worktree-a",
+        "branch": "",
+        "tabId": "pty:pty-a",
+        "leafId": "pty:pty-a",
+        "title": null,
+        "connected": true,
+        "writable": true,
+        "lastOutputAt": null,
+        "preview": "",
+        "executionHostId": "local"
+      },
+      {
+        "handle": "handle-2",
+        "ptyId": "pty-b",
+        "incarnationId": null,
+        "orphaned": true,
+        "worktreeId": "repo-1::/tmp/worktree-a",
+        "worktreePath": "/tmp/worktree-a",
+        "branch": "",
+        "tabId": "pty:pty-b",
+        "leafId": "pty:pty-b",
+        "title": null,
+        "connected": true,
+        "writable": true,
+        "lastOutputAt": null,
+        "preview": "",
+        "executionHostId": "local"
+      }
+    ],
+    "hostScope": {
+      "hostIds": ["local"],
+      "omittedHostIds": []
+    },
+    "topologyRevisions": {
+      "repo-1::/tmp/worktree-a": 0
+    },
+    "totalCount": 2,
+    "truncated": false
+  },
+  "show": [
+    {
+      "handle": "handle-1",
+      "ptyId": "pty-a",
+      "incarnationId": null,
+      "orphaned": true,
+      "worktreeId": "repo-1::/tmp/worktree-a",
+      "worktreePath": "",
+      "branch": "",
+      "tabId": "pty:pty-a",
+      "leafId": "pty:pty-a",
+      "title": null,
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": null,
+      "preview": "",
+      "executionHostId": "local",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    },
+    {
+      "handle": "handle-2",
+      "ptyId": "pty-b",
+      "incarnationId": null,
+      "orphaned": true,
+      "worktreeId": "repo-1::/tmp/worktree-a",
+      "worktreePath": "",
+      "branch": "",
+      "tabId": "pty:pty-b",
+      "leafId": "pty:pty-b",
+      "title": null,
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": null,
+      "preview": "",
+      "executionHostId": "local",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    }
+  ],
+  "status": {
+    "graphStatus": "ready",
+    "liveTabCount": 0,
+    "liveLeafCount": 0
+  }
+}

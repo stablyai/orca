@@ -1,4 +1,5 @@
-import { session, type Session } from 'electron'
+import type { Session } from 'electron'
+import { requirePartitionSession } from '../network/http-client'
 import {
   getProxyBypassRulesFromEnvironment,
   getProxyUrlFromEnvironment,
@@ -84,7 +85,7 @@ export async function createOpenCodeRequestSession(
   authCookies: { name: string; value: string }[],
   networkProxySettings?: NetworkProxySettings
 ): Promise<Session> {
-  const openCodeSession = session.fromPartition(OPENCODE_SESSION_PARTITION)
+  const openCodeSession = requirePartitionSession(OPENCODE_SESSION_PARTITION, 'OpenCode Go')
   await clearOpenCodeSessionCookies(openCodeSession)
   // The isolated cookie jar must still honor Orca, environment, and system proxies.
   await ensureProxyForOpenCodeSession(openCodeSession, networkProxySettings)

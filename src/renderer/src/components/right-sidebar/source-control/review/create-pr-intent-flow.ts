@@ -1,7 +1,4 @@
-import {
-  isBehindOnlyUpstream,
-  shouldForcePushWithLeaseForUpstream
-} from '../../../../../../shared/git-upstream-status'
+import type { WorktreeGitCopy } from '@/lib/worktree-git-copy'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
@@ -10,17 +7,9 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../../../../../shared/hosted-review-refs'
-import type { GitStatusEntry, GitUpstreamStatus } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import { summarizeCommitFailure } from '../commit/commit-failure-summary'
-import { getStageAllPaths } from '../commit/discard-all-sequence'
-
-export type CreatePrIntentRemoteStep =
-  | 'publish'
-  | 'push'
-  | 'force_push'
-  | 'fast_forward'
-  | 'blocked'
-  | 'none'
+import { getStageAllPaths } from '../../../../../../shared/source-control-discard-all-sequence'
 
 export type CreatePrIntentRunToken = {
   repoId: string
@@ -29,6 +18,11 @@ export type CreatePrIntentRunToken = {
   branch: string
   provider: HostedReviewProvider
   baseRef?: string | null
+  /**
+   * The worktree copy the run started on, pinned with its transport: a same-path twin on another
+   * host shares the id, and re-resolving later could land on it. Null refuses every call.
+   */
+  pinnedCopy: WorktreeGitCopy | null
   startedAt: number
 }
 
@@ -64,8 +58,7 @@ function normalizeCreatePrIntentBaseIdentityRef(ref: string | null | undefined):
   if (!trimmed) {
     return ''
   }
-  // Why: compare bases are local git refs; origin/main and upstream/main must
-  // stay distinct even though hosted review APIs receive only branch names.
+  // Keep remote-qualified local refs distinct; only hosted review APIs strip them to branch names.
   if (trimmed.startsWith('refs/remotes/')) {
     return trimmed.slice('refs/remotes/'.length)
   }
@@ -96,8 +89,7 @@ export function createPrIntentCurrentTargetConflictsWithToken(
   token: CreatePrIntentRunToken,
   current: CreatePrIntentCurrentTarget
 ): boolean {
-  // Worktree navigation is allowed during a run; only drift within the
-  // token's original worktree should be treated as a conflict.
+  // Navigation is allowed; only drift within the original worktree conflicts with this intent.
   if (current.worktreeId !== token.worktreeId) {
     return false
   }
@@ -131,54 +123,10 @@ export function resolveCreatePrIntentReviewBase({
   eligibilityDefaultBaseRef?: string | null
   composerBaseRef?: string | null
 }): string {
-  // Why: prefer the remote-validated eligibility default over the raw compare
-  // base. The intent flow auto-submits, and its eligibility is recomputed from
-  // this same compare base right before creation — so `eligibilityDefaultBaseRef`
-  // already keeps a pushed base verbatim and corrects a local-only stacked parent
-  // to the repo default. Using it keeps the one-click path consistent with the
-  // composer instead of submitting a base the remote cannot resolve. Fall back to
-  // the compare base only when eligibility supplied no default.
+  // Match the composer's remote-validated eligibility base, correcting local-only stack parents; fall back only when no default exists.
   return normalizeHostedReviewBaseRef(
     eligibilityDefaultBaseRef?.trim() || currentBaseRef?.trim() || composerBaseRef?.trim() || ''
   )
-}
-
-export function resolveCreatePrIntentRemoteStep({
-  upstreamStatus,
-  hostedReviewCreation,
-  branchCommitsAhead,
-  hasCurrentBranch
-}: {
-  upstreamStatus: GitUpstreamStatus | undefined
-  hostedReviewCreation?: HostedReviewCreationEligibility | null
-  branchCommitsAhead?: number
-  hasCurrentBranch: boolean
-}): CreatePrIntentRemoteStep {
-  if (!hasCurrentBranch || !hostedReviewCreation || hostedReviewCreation.canCreate) {
-    return 'none'
-  }
-
-  if (hostedReviewCreation.blockedReason === 'no_upstream') {
-    return branchCommitsAhead && branchCommitsAhead > 0 ? 'publish' : 'blocked'
-  }
-
-  if (hostedReviewCreation.blockedReason === 'needs_push') {
-    return 'push'
-  }
-
-  if (hostedReviewCreation.blockedReason === 'needs_sync') {
-    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
-      return 'force_push'
-    }
-    // Why: auto-prepare only a behind-only branch, and only via `--ff-only`.
-    // Plain sync/merge could create a merge commit if the branch diverges mid
-    // flight or the user has pull.ff=no; --ff-only enforces the no-consent-
-    // merge invariant at execution time. Genuinely diverged branches keep the
-    // explicit sync-first stop.
-    return isBehindOnlyUpstream(upstreamStatus) ? 'fast_forward' : 'blocked'
-  }
-
-  return 'none'
 }
 
 export function shouldAttemptCreateHostedReviewForIntent(
@@ -186,8 +134,7 @@ export function shouldAttemptCreateHostedReviewForIntent(
 ): boolean {
   return (
     eligibility.canCreate ||
-    // Why: `head` separates a real unavailable-lookup result from a loading
-    // placeholder, which carries the same outcome/reason pair but no branch.
+    // Real unavailable-lookup results have a head; loading placeholders share the outcome/reason but lack a branch.
     (eligibility.reviewLookupOutcome === 'unavailable' &&
       eligibility.blockedReason === null &&
       Boolean(eligibility.head?.trim()))
@@ -197,7 +144,7 @@ export function shouldAttemptCreateHostedReviewForIntent(
 export function shouldGenerateHostedReviewDetailsForIntent(
   eligibility: HostedReviewCreationEligibility
 ): boolean {
-  // Why: main rechecks an unavailable lookup immediately before creation; generate first so a recovered create never submits fallback fields.
+  // Generate before main rechecks unavailable lookups so recovered creates never submit fallback fields.
   return shouldAttemptCreateHostedReviewForIntent(eligibility)
 }
 
@@ -211,12 +158,13 @@ export function resolveCreatePrIntentGeneratedReviewFields(
   return {
     ok: true,
     fields: {
-      // Why: intent auto-submits, so generated details must not retarget the review without confirmation.
+      // Automatic submission must not let generated fields silently retarget the review.
       base: current.base,
       title: generated.fields.title.trim() || current.title,
-      // Why: a description is optional everywhere else (composer, GitHub/GitLab), so an intentionally empty generated body is a valid result, not a failure.
+      // Empty descriptions are valid across composer/providers and must remain valid generation results.
       body: generated.fields.body,
-      draft: generated.fields.draft
+      // Without a review form, generation may mark unfinished work but cannot override the user's draft choice.
+      draft: current.draft || generated.fields.draft
     }
   }
 }

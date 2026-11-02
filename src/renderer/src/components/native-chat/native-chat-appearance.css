@@ -1,0 +1,88 @@
+/* Text steps are ratios of the text size setting, so the tiers scale together. */
+.native-chat-appearance {
+  --text-sm: var(--chat-font-size, 0.875rem);
+  /* Labels and controls follow the chat's 12-20 range even when message text follows the terminal. */
+  --chat-ui-size: var(--chat-ui-font-size, var(--text-sm));
+  --text-xs: min(var(--text-sm), calc(var(--chat-ui-size) * 12 / 14));
+  --text-2xs: min(var(--text-sm), calc(var(--chat-ui-size) * 11 / 14));
+  /* Floored so badges stay legible at the smallest setting. */
+  --text-3xs: max(9px, calc(var(--chat-ui-size) * 10 / 14));
+  --text-chat-code: var(--chat-code-font-size, 0.75rem);
+  --ring: var(--chat-focus-ring);
+  /* Icons, gaps and row heights follow the text: 4px at the default 14px. */
+  --spacing: calc(var(--chat-ui-size) / 3.5);
+  font-family: var(--chat-font-family, var(--font-sans));
+}
+
+.native-chat-markdown pre {
+  font-size: var(--text-chat-code);
+}
+
+.native-chat-appearance :is(.font-sans, textarea, [contenteditable='true']) {
+  font-family: inherit;
+}
+
+.native-chat-appearance :is(.font-mono, code, pre) {
+  font-family: var(--chat-code-font-family, var(--font-mono));
+}
+
+/* Not inherited: the run box alone reads it, and an inherited one would restyle every member. */
+@property --native-chat-opened-detail {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* Over a theme image (main.css) a chat that fills its pane paints the canvas once and the layers
+   under it go clear. The canvas follows Background Opacity, floored at 0.8 so body text stays near
+   4.5:1 even over white or black pixels. A chat split beside terminals stays opaque, since the pane
+   manager paints the terminal color under every pane of the split. */
+:root[data-theme-background] [data-terminal-chat-view]:not(.has-multiple-panes) {
+  /* Beats the pane manager's inline split paint (pane-divider.ts applyRootBackground). */
+  background: transparent !important;
+}
+
+:root[data-theme-background]
+  [data-terminal-chat-view]:not(.has-multiple-panes)
+  .native-chat-pane-shell {
+  background-color: transparent;
+}
+
+/* The opaque cover used to hide the terminal and its banners (layers below its z-10); overlays
+   above it stay. Opacity, not visibility, so the covered terminal can still take focus handoffs. */
+:root[data-theme-background]
+  [data-terminal-chat-view]:not(.has-multiple-panes)
+  .pane
+  > :is(.xterm-container, .session-restored-banner, .pane-top-banner) {
+  opacity: 0;
+}
+
+:root[data-theme-background]
+  :is(
+    [data-terminal-chat-view]:not(.has-multiple-panes),
+    [data-structured-agent-session-overlay-tab-id]
+  )
+  [data-native-chat-root] {
+  --chat-pane: transparent;
+  /* Text-bearing surfaces keep an opaque base, as in the light scheme. */
+  --chat-code-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-code-mix),
+    var(--chat-canvas)
+  );
+  --chat-inline-code-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-inline-code-mix),
+    var(--chat-canvas)
+  );
+  --chat-composer-surface: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--chat-composer-mix),
+    var(--chat-canvas)
+  );
+  background-color: color-mix(
+    in srgb,
+    var(--chat-canvas) calc(max(var(--orca-theme-background-surface-opacity), 0.8) * 100%),
+    transparent
+  );
+}

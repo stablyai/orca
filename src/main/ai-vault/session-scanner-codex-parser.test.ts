@@ -108,6 +108,77 @@ describe('parseCodexSessionFile', () => {
     })
   })
 
+  it("keeps a fork's own session_meta when its parent's follows it", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-fork-'))
+    tempRoots.push(root)
+    const sessionPath = join(root, 'sessions', '2026', '10', '07', 'rollout-fork.jsonl')
+    await mkdir(dirname(sessionPath), { recursive: true })
+
+    await writeFile(
+      sessionPath,
+      jsonLines([
+        {
+          timestamp: '2026-10-07T10:00:00.000Z',
+          type: 'session_meta',
+          payload: {
+            id: 'fork-session',
+            forked_from_id: 'parent-session',
+            cwd: '/repo/fork',
+            git: { branch: 'fork-branch' }
+          }
+        },
+        {
+          timestamp: '2026-10-07T09:00:00.000Z',
+          type: 'session_meta',
+          payload: {
+            id: 'parent-session',
+            title: 'Parent chat',
+            history_mode: 'paginated',
+            cwd: '/repo/parent',
+            git: { branch: 'parent-branch' }
+          }
+        },
+        {
+          timestamp: '2026-10-07T09:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Copied prompt' }]
+          }
+        },
+        {
+          timestamp: '2026-10-07T09:00:02.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Copied reply' }]
+          }
+        }
+      ])
+    )
+
+    const sessionStat = await stat(sessionPath)
+    const session = await parseCodexSessionFile(
+      {
+        path: sessionPath,
+        mtimeMs: sessionStat.mtimeMs,
+        modifiedAt: sessionStat.mtime.toISOString()
+      },
+      'darwin',
+      root
+    )
+
+    expect(session).toMatchObject({
+      sessionId: 'fork-session',
+      cwd: '/repo/fork',
+      branch: 'fork-branch',
+      title: 'Copied prompt',
+      messageCount: 2
+    })
+  })
+
   it('uses user-message events instead of later injected user-role records', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-last-prompt-'))
     tempRoots.push(root)
@@ -252,7 +323,6 @@ describe('parseCodexSessionFile', () => {
           }
         },
         {
-          // A /model switch mid-session writes a later turn_context.
           timestamp: '2026-07-05T10:00:03.000Z',
           type: 'turn_context',
           payload: { cwd: '/repo/app', model: 'gpt-5.5' }

@@ -49,7 +49,6 @@ function isPersistableWorktreeRow(value: unknown): value is WorkspaceSpaceWorktr
   )
 }
 
-/** Shape guard so a corrupt persisted blob degrades to null instead of throwing at startup. */
 function parseSnapshot(parsed: unknown): WorkspaceSpaceAnalysis | null {
   if (!isRecord(parsed) || parsed.version !== SNAPSHOT_VERSION) {
     return null
@@ -70,8 +69,7 @@ function parseSnapshot(parsed: unknown): WorkspaceSpaceAnalysis | null {
   return analysis as unknown as WorkspaceSpaceAnalysis
 }
 
-// Why strip topLevelItems: 500+ worktrees x 48 items is a multi-MB blob, and the cached view only
-// needs per-worktree totals. Fold the items into the omitted counters so each row stays consistent.
+// Cached views need totals only; omit per-directory rows to keep large-fleet snapshots small.
 function stripTopLevelItems(analysis: WorkspaceSpaceAnalysis): WorkspaceSpaceAnalysis {
   return {
     ...analysis,
@@ -105,7 +103,7 @@ async function writeSnapshot(file: string, analysis: WorkspaceSpaceAnalysis): Pr
   } satisfies PersistedWorkspaceSpaceAnalysisSnapshot)
 }
 
-/** Persist a completed analysis. Never throws — the snapshot is a refetchable cache. */
+/** Snapshot writes are best-effort; analysis can be fetched again. */
 export async function persistWorkspaceSpaceAnalysisSnapshot(
   snapshotDirectory: string,
   analysis: WorkspaceSpaceAnalysis
@@ -294,7 +292,6 @@ async function pruneWorkspaceSpaceAnalysisSnapshotsWithRegisteredTombstones(
   }
 }
 
-/** Drop removed workspace rows and rebalance their totals in one sidecar transaction. Never throws. */
 export async function pruneWorkspaceSpaceAnalysisSnapshots(
   snapshotDirectory: string,
   targets: readonly WorkspaceSpaceAnalysisSnapshotPruneTarget[]
@@ -318,7 +315,6 @@ export async function finalizeWorkspaceSpaceAnalysisSnapshotPrunes(
   )
 }
 
-/** Drop one removed workspace row and rebalance the totals it contributed. Never throws. */
 export async function pruneWorkspaceSpaceAnalysisSnapshot(
   snapshotDirectory: string,
   worktreeId: string,

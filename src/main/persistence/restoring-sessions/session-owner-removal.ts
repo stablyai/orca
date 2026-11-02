@@ -6,12 +6,16 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
+import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { cloneWorkspaceSessionState, deleteOwnerKeyedSessionFields } from './session-owner-fields'
 
-// Scans the pane-key-keyed maps, the close records and the shutdown list once, removing
-// every entry owned by a key matched by `isRemovedOwner` (or, for pty incarnations, whose
-// tab was removed). Kept separate from the O(1) deletes so a batch prune scans each
-// collection a single time regardless of how many owners are being removed.
+/** Frozen WSL sessions must survive pruning for downgrade. */
+export function withoutWslMoveFrozenOwners(ownerKeys: ReadonlySet<string>): ReadonlySet<string> {
+  const kept = [...ownerKeys].filter((ownerKey) => !isWslMoveWorkspaceSessionFrozen(ownerKey))
+  return kept.length === ownerKeys.size ? ownerKeys : new Set(kept)
+}
+
+// Batch owners into one scan per collection; per-owner scans multiply work across hosts.
 export function deleteScannedSessionFieldsForOwners(
   next: WorkspaceSessionState,
   removedTabIds: ReadonlySet<string>,
@@ -39,11 +43,18 @@ export function deleteScannedSessionFieldsForOwners(
       }
     }
   }
-  // Why: a close record answers for its workspace; once the workspace's rows go, so does it.
+  // Close evidence expires with the workspace it governs.
   if (next.closedTerminalTabTombstonesByTabId) {
     for (const [tabId, record] of Object.entries(next.closedTerminalTabTombstonesByTabId)) {
       if (isRemovedOwner(record.worktreeId)) {
         delete next.closedTerminalTabTombstonesByTabId[tabId]
+      }
+    }
+  }
+  if (next.closedTerminalPanesByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.closedTerminalPanesByPaneKey)) {
+      if (isRemovedOwner(record.worktreeId)) {
+        delete next.closedTerminalPanesByPaneKey[paneKey]
       }
     }
   }
@@ -52,8 +63,7 @@ export function deleteScannedSessionFieldsForOwners(
   )
 }
 
-// Remote (ssh:/runtime:) workspace state can exist in both the renderer's local blob and main's host
-// partition, because the renderer falls back to 'local' whenever worktree ownership is unresolved.
+// Unresolved remote ownership can spill renderer rows into local as well as the host partition.
 export function workspaceSessionPartitionIdsForHost(
   hostId: string | null | undefined
 ): ExecutionHostId[] {
@@ -63,24 +73,17 @@ export function workspaceSessionPartitionIdsForHost(
     : [LOCAL_EXECUTION_HOST_ID]
 }
 
-/** The partition the host actually owns; the others are only spill surfaces for it. */
 export const workspaceSessionOwnerPartitionForHost = workspaceSessionPartitionHostId
 
-/**
- * Drop a deleted workspace's rows from every partition, not only the local blob.
- *
- * Which partition held them is not reliably derivable at delete time: main never persists a folder
- * workspace's `executionHostId`, and `RuntimeWorkspaceSessionController` can infer a connection
- * from the group's repos that the workspace row itself does not name. Boot now enumerates
- * partitions from persistence rather than from the repo catalog, so a row left in any of them is
- * adopted back on the next launch as a workspace that no longer exists. A deleted workspace owns
- * nothing anywhere, so removing it everywhere is the only derivation that cannot miss one.
- */
+/** Delete every partition copy or load may resurrect the workspace; folder host ownership can be inferred. */
 export function removeWorkspaceSessionOwnerEverywhere(
   state: Pick<PersistedState, 'workspaceSession' | 'workspaceSessionsByHostId'>,
   ownerKey: string,
   options: { advanceTerminalTopologyRevision?: boolean } = {}
 ): void {
+  if (isWslMoveWorkspaceSessionFrozen(ownerKey)) {
+    return
+  }
   state.workspaceSession = removeWorkspaceSessionOwner(state.workspaceSession, ownerKey, options)!
   const partitions = state.workspaceSessionsByHostId
   if (!partitions) {
@@ -110,10 +113,7 @@ export function removeWorkspaceSessionOwner(
   return next
 }
 
-// Batch variant of removeWorkspaceSessionOwner: prunes every owner in `ownerKeys`
-// with a single structuredClone and a single scan of each collection, instead of
-// one clone+scan per owner. Project removal can touch many worktrees across many
-// host partitions, so the per-owner clones added up to O(worktrees × hosts).
+// Clone once and scan each collection once for all owners, avoiding per-owner work across host partitions.
 export function removeWorkspaceSessionOwners(
   session: WorkspaceSessionState | undefined,
   ownerKeys: ReadonlySet<string>
@@ -130,4 +130,26 @@ export function removeWorkspaceSessionOwners(
     ownerKeys.has(worktreeId)
   )
   return next
+}
+
+export function removeWorkspaceSessionOwnersEverywhere(
+  state: Pick<PersistedState, 'workspaceSession' | 'workspaceSessionsByHostId'>,
+  allOwnerKeys: ReadonlySet<string>
+): void {
+  const ownerKeys = withoutWslMoveFrozenOwners(allOwnerKeys)
+  if (ownerKeys.size === 0) {
+    return
+  }
+  state.workspaceSession = removeWorkspaceSessionOwners(state.workspaceSession, ownerKeys)!
+  const partitions = state.workspaceSessionsByHostId
+  if (!partitions) {
+    return
+  }
+  const next: Record<string, WorkspaceSessionState> = {}
+  for (const [hostId, partition] of Object.entries(partitions)) {
+    if (partition) {
+      next[hostId] = removeWorkspaceSessionOwners(partition, ownerKeys)!
+    }
+  }
+  state.workspaceSessionsByHostId = next
 }

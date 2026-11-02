@@ -5,6 +5,7 @@ import {
   formatKeybindingList,
   getKeybindingPlatform,
   isKeybindingActionId,
+  keybindingFileDiagnostic,
   normalizeKeybindingArrayForAction,
   type KeybindingActionId,
   type KeybindingFileDiagnostic,
@@ -44,10 +45,12 @@ export function readKeybindingFile(
       commonOverrides: {},
       platformOverrides: {},
       diagnostics: [
-        {
-          severity: 'error',
-          message: `Could not read keybindings file: ${readResult.error ?? 'unknown error'}`
-        }
+        keybindingFileDiagnostic(
+          { severity: 'error' },
+          'readFailed',
+          { reason: readResult.error ?? 'unknown error' },
+          readResult.errorCode
+        )
       ]
     }
   }
@@ -101,20 +104,7 @@ export function migrateLegacyKeybindings(
   writeJsonDocument(path, document)
 }
 
-/**
- * Pin the pre-swap tab-switch chords for a pre-existing install so upgrading
- * users keep the shortcuts they learned. Writes into the active-platform
- * section (mirroring `writeKeybindingOverride`) so the seeded values stay
- * resettable from Settings.
- *
- * Pins per action, not all-or-nothing: an action is seeded only when this
- * platform has no effective override for it yet. That way a user who rebound
- * just one of the swapped actions keeps that choice AND keeps the pre-swap
- * default on the other three — an existing user's behavior is never altered,
- * whether they customized none, some, or all of them. Because every pin equals
- * the action's old default, the seeded set reproduces exactly today's effective
- * config and introduces no new conflicts.
- */
+/** Pin each uncustomized action to its pre-swap chord in the active-platform section, preserving resettable user choices. */
 export function seedLegacyTabSwitchBindings(
   path: string,
   platform: NodeJS.Platform,
@@ -124,9 +114,7 @@ export function seedLegacyTabSwitchBindings(
   const actionIds = Object.keys(legacyBindings) as KeybindingActionId[]
   const current = readKeybindingFile(path, platform)
   const activePlatformOverrides = current.platformOverrides[keybindingPlatform] ?? {}
-  // Why: the new defaults can temporarily make a valid pre-swap customization
-  // look conflicting and remove it from `current.overrides`. Inspect the parsed
-  // common + active-platform sections directly so the seed never replaces it.
+  // New defaults can hide valid pre-swap overrides as conflicts; inspect raw common/platform sections.
   const toSeed = actionIds.filter(
     (actionId) =>
       !Object.hasOwn(current.commonOverrides, actionId) &&
@@ -136,9 +124,7 @@ export function seedLegacyTabSwitchBindings(
     return { seeded: false, snapshot: current }
   }
 
-  // Why: seed every pin that normalizes, but never freeze the one-shot if any
-  // pin was dropped — throw after writing good pins so the cohort stays pending
-  // and a fixed build retries the failed action without wiping the others.
+  // Write valid pins, then throw on dropped pins so a fixed build can retry the pending cohort.
   const pins: (readonly [KeybindingActionId, string[]])[] = []
   const failedActionIds: KeybindingActionId[] = []
   for (const actionId of toSeed) {
@@ -163,8 +149,7 @@ export function seedLegacyTabSwitchBindings(
   return { seeded: pins.length > 0, snapshot }
 }
 
-// Why: the one-shot seed migration and Settings writes must produce the same
-// on-disk document shape; a single assembly path keeps them from drifting.
+// Migration and Settings writes must use the same document assembly.
 function writeActivePlatformSection(
   path: string,
   platform: NodeJS.Platform,
@@ -174,8 +159,7 @@ function writeActivePlatformSection(
   const keybindingPlatform = getKeybindingPlatform(platform)
   const readResult = readJsonDocument(path)
   if (!readResult.document) {
-    // Why: writes must never replace a user-owned file that could not be
-    // parsed; callers surface the error (or retry the migration) after repair.
+    // Never overwrite an unreadable user-owned file; callers surface or retry the error.
     throw new Error(readResult.error ?? 'Could not read keybindings file.')
   }
   const document = { ...readResult.document }
@@ -221,7 +205,12 @@ export function writeKeybindingOverride(
   const currentSnapshot = readKeybindingFile(path, platform)
   const candidateOverrides = { ...currentSnapshot.overrides }
   if (normalizedBindings === null) {
-    delete candidateOverrides[actionId]
+    const common = currentSnapshot.commonOverrides[actionId]
+    if (common) {
+      candidateOverrides[actionId] = common
+    } else {
+      delete candidateOverrides[actionId]
+    }
   } else {
     candidateOverrides[actionId] = normalizedBindings
   }
@@ -240,9 +229,7 @@ export function writeKeybindingOverride(
     currentSnapshot.commonOverrides,
     (activePlatform) => {
       if (normalizedBindings === null) {
-        // Why: Settings edits are scoped to the current platform. A hand-authored
-        // common binding may be intentional for other OSes, so reset only removes
-        // the platform-specific mask instead of deleting the shared value.
+        // Reset only the platform mask; common bindings may be intentional on other OSes.
         delete activePlatform[actionId]
       } else {
         activePlatform[actionId] = normalizedBindings

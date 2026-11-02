@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
-import { WorktreeCreate } from './worktree-create-schemas'
+import { AgentLaunch, AgentLaunchReplay } from '../../../../shared/rpc-contract/agent-launch-params'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 const PROVENANCE = {
   automationProvenance: undefined,
@@ -12,46 +13,40 @@ const build = (params: Record<string, unknown>) =>
   buildManagedWorktreeCreateArgs(WorktreeCreate.parse(params), PROVENANCE)
 
 describe('buildManagedWorktreeCreateArgs', () => {
-  it('omits name provenance when the client did not claim a generated name', () => {
-    // Why: absent must mean user-typed. A truthy default would let the host permanently retire
-    // names people chose on purpose — the pool contains ordinary words like "orca" and "molly".
-    expect(build({ repo: 'id:repo-1', name: 'nautilus' })).not.toHaveProperty('nameWasGenerated')
+  it('carries one transient cwd-choice field through plain, startup and both modern launch schemas', () => {
+    const choices = ['id:repo::/checkout', 'id:repo::/checkout::workspace:sibling']
+    const create = {
+      repo: 'id:repo',
+      name: 'child',
+      cwdParentWorktree: choices[0],
+      cwdParentAmbiguous: true,
+      callerTerminalHandle: 'term_R'
+    }
+    for (const schema of [AgentLaunch, AgentLaunchReplay]) {
+      const request = schema.parse({
+        agent: 'codex',
+        operationId: '1760000000000-0123456789abcdef0123456789abcdef',
+        target: { kind: 'create-worktree', create }
+      })
+      expect(request.target.kind).toBe('create-worktree')
+      if (request.target.kind !== 'create-worktree') {
+        throw new Error('wrong launch target')
+      }
+      expect(build(request.target.create).lineage).toMatchObject({
+        cwdParentAmbiguous: true,
+        cwdParentWorktree: choices[0],
+        callerTerminalHandle: 'term_R'
+      })
+    }
+    for (const payload of [create, { ...create, startupAgent: 'codex', startupPrompt: 'review' }]) {
+      expect(build(payload).lineage).toMatchObject({
+        cwdParentAmbiguous: true,
+        cwdParentWorktree: choices[0],
+        callerTerminalHandle: 'term_R'
+      })
+    }
     expect(
-      build({ repo: 'id:repo-1', name: 'nautilus', nameWasGenerated: false })
-    ).not.toHaveProperty('nameWasGenerated')
-  })
-
-  it('forwards the flag when the client fell back to a generated name', () => {
-    expect(build({ repo: 'id:repo-1', name: 'nautilus', nameWasGenerated: true })).toMatchObject({
-      nameWasGenerated: true
-    })
-  })
-
-  it('keeps the legacy CLI marker on a name-only create request', () => {
-    const args = buildManagedWorktreeCreateArgs(
-      WorktreeCreate.parse({ repo: 'id:repo-1', name: 'feature' }),
-      { ...PROVENANCE, cliProvenance: { kind: 'created-by-cli', createdAt: 1 } }
-    )
-
-    expect(args).toMatchObject({
-      name: 'feature',
-      cliProvenance: { kind: 'created-by-cli', createdAt: 1 }
-    })
-    expect(args.displayName).toBeUndefined()
-  })
-
-  it('carries the parent-pick provenance only when the client marked it manual', () => {
-    // Why: older clients never send it, and those creates really are CLI-flag equivalents.
-    expect(
-      build({ repo: 'id:repo-1', name: 'child', parentWorkspace: 'folder:f1' }).lineage
-    ).not.toHaveProperty('parentWorkspaceOrigin')
-    expect(
-      build({
-        repo: 'id:repo-1',
-        name: 'child',
-        parentWorkspace: 'folder:f1',
-        parentWorkspaceOrigin: 'manual'
-      }).lineage
-    ).toMatchObject({ parentWorkspaceOrigin: 'manual' })
+      build({ repo: 'id:repo', name: 'legacy', cwdParentWorktree: choices[0] }).lineage
+    ).not.toHaveProperty('cwdParentAmbiguous')
   })
 })

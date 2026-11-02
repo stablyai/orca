@@ -27,7 +27,6 @@ export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.browser.use.search.f5b8fdddf5',
         'orca-cli'
       ),
-      ...translateSearchKeyword('auto.components.settings.browser.use.search.6ea88e5206', 'npx'),
       ...translateSearchKeyword(
         'auto.components.settings.browser.use.search.a57c2172dc',
         'agent-browser'

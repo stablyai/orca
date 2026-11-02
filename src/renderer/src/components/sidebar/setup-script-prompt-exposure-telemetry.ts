@@ -22,8 +22,7 @@ export function trackSetupScriptPromptExposure(input: {
     candidate: promptState.candidate,
     hasSharedHooks: promptState.hasSharedHooks
   })
-  // Why: React may re-render the sidebar often; this event should represent
-  // a distinct prompt exposure for this repo/source, not render churn.
+  // Record distinct repo/source exposures rather than sidebar render churn.
   const promptKey = [
     repoHostIdentity,
     telemetry.mode,

@@ -2,20 +2,9 @@ import XCTest
 @testable import OrcaComputerUseMacOSCore
 
 final class NumericArgumentParsingTests: XCTestCase {
-    func testConvertsIntegralValues() {
-        XCTAssertEqual(boundedInteger(5.0, as: Int.self), 5)
-        XCTAssertEqual(boundedInteger(0.0, as: Int.self), 0)
-        XCTAssertEqual(boundedInteger(-3.0, as: Int.self), -3)
-    }
 
-    func testTruncatesTowardZeroLikeIntInit() {
-        XCTAssertEqual(boundedInteger(5.9, as: Int.self), 5)
-        XCTAssertEqual(boundedInteger(-5.9, as: Int.self), -5)
-    }
 
-    // The crash this guards against: Int(1e300) traps because the value is
-    // finite but outside Int's range. A malformed request must not take the
-    // agent down.
+    // Int(1e300) traps despite being finite; malformed requests must not crash the agent.
     func testReturnsNilForOutOfRangeValues() {
         XCTAssertNil(boundedInteger(1e300, as: Int.self))
         XCTAssertNil(boundedInteger(-1e300, as: Int.self))

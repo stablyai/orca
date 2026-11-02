@@ -1,17 +1,44 @@
-import type { AiVaultSession } from './ai-vault-types'
+import type { AiVaultAgent, AiVaultSession } from './ai-vault-types'
+
+export type AiVaultConversationCopy = {
+  sessionId: string
+  filePath?: string
+}
 
 export type AiVaultPrepareSessionResumeArgs = Pick<
   AiVaultSession,
   'agent' | 'filePath' | 'codexHome' | 'executionHostId'
 > &
-  Partial<Pick<AiVaultSession, 'sessionId'>>
+  Partial<Pick<AiVaultSession, 'sessionId'>> & {
+    /** A fork only reads the conversation, so a native chat that owns it does not refuse it.
+     *  Older hosts drop the field and refuse as for a resume. */
+    fork?: boolean
+  }
+
+export const AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY = 'ai-vault.chat-fork-source.v1' as const
+
+export type AiVaultChatForkSource = Pick<
+  AiVaultSession,
+  'agent' | 'sessionId' | 'filePath' | 'cwd' | 'codexHome'
+> & { executionHostPlatform: NodeJS.Platform; sourceAgent: AiVaultAgent }
+
+export type AiVaultPrepareChatForkArgs = {
+  sourceChat: { sessionId: string; workspaceId: string }
+  executionHostId?: string
+  fork: true
+}
+
+export type AiVaultPrepareSessionResumeRequest =
+  | AiVaultPrepareSessionResumeArgs
+  | AiVaultPrepareChatForkArgs
 
 export type AiVaultPrepareSessionResumeResult = {
   useRealCodexHome: boolean
-  // Why: cross-account hardlinking lists one rollout under several per-account
-  // homes, so the owning host repins resume to the selected account's home.
-  // Absent (older hosts included) means resume keeps the session's own home.
+  cliForkSource?: AiVaultChatForkSource
+  // Cross-account hardlinks share rollouts: the host repins to the selected home. Absent/older-host replies retain the session's home.
   substituteCodexHome?: string
+  /** Chat-made fork identity and actual launch agent (opencode2 chats run opencode); older hosts omit it and make no copy. */
+  forkedSession?: AiVaultConversationCopy & { agent: AiVaultAgent }
 }
 
 export type AiVaultSessionResumePreparation = (

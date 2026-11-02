@@ -1,7 +1,7 @@
-// Why: kept out of `commit-message-agent-spec.ts` so the renderer's session-option
-// path can label model ids without pulling in the commit-message agent registry.
+// Keep renderer session-option labels independent of the commit-message agent registry.
 export function labelFromModelId(id: string): string {
   return id
+    .replace(/\[(\d+[km])\]$/i, (_, size: string) => ` (${size.toUpperCase()} context)`)
     .split(/[/-]/)
     .filter(Boolean)
     .map((part) => {

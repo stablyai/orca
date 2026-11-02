@@ -19,11 +19,13 @@ const WORKSPACE_BOARD_KEEP_OPEN_SELECTOR = [
   '[role="menu"][data-state="open"]'
 ].join(', ')
 
+function eventTargetElement(target: EventTarget | null): Element | null {
+  return target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+}
+
 export function isWorkspaceBoardKeepOpenTarget(target: EventTarget | null): boolean {
-  const element =
-    target instanceof Element ? target : target instanceof Node ? target.parentElement : null
-  // Why: board-owned menus and confirmation dialogs portal to document.body,
-  // so DOM containment alone would treat their clicks/focus as board exits.
+  const element = eventTargetElement(target)
+  // Board menus and dialogs portal outside its DOM tree; their events still belong to the board.
   return Boolean(element?.closest(WORKSPACE_BOARD_KEEP_OPEN_SELECTOR))
 }
 
@@ -40,15 +42,24 @@ export function useWorkspaceKanbanOutsideDismiss(params: {
       return
     }
 
-    const handlePointerDown = (event: PointerEvent): void => {
+    const handleOutsideInteraction = (event: MouseEvent): void => {
       const content = boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')
-      if (!content || preserveOpenForMenu) {
+      if (!content) {
         return
       }
       if (event.target instanceof Node && content.contains(event.target)) {
         return
       }
-      if (isWorkspaceBoardKeepOpenTarget(event.target)) {
+      // Why: titlebar tabs switch content the board covers, so it must close to show it.
+      if (eventTargetElement(event.target)?.closest('[data-workspace-board-dismiss]')) {
+        onOpenChange(false)
+        return
+      }
+      if (
+        preserveOpenForMenu ||
+        event.type === 'click' ||
+        isWorkspaceBoardKeepOpenTarget(event.target)
+      ) {
         return
       }
       const rect = content.getBoundingClientRect()
@@ -57,7 +68,11 @@ export function useWorkspaceKanbanOutsideDismiss(params: {
       }
     }
 
-    document.addEventListener('pointerdown', handlePointerDown, true)
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
+    document.addEventListener('pointerdown', handleOutsideInteraction, true)
+    document.addEventListener('click', handleOutsideInteraction, true)
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsideInteraction, true)
+      document.removeEventListener('click', handleOutsideInteraction, true)
+    }
   }, [boardRef, onOpenChange, open, preserveOpenForMenu])
 }

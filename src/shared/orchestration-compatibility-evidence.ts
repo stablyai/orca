@@ -26,10 +26,7 @@ export type OrchestrationCompatibilityEvidence = {
   paneKey?: string
   launchToken?: string
   host?: OrchestrationCompatibilityHostStamp
-  /**
-   * The Orca-minted agent session id from the caller's injected environment. When present it is
-   * the caller's identity: the dispatch entry resolves it, and a declared handle must name it.
-   */
+  /** Injected Orca session identity is authoritative when present; dispatch resolves it and validates any declared handle against it. */
   agentSessionId?: string
 }
 

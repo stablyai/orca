@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentPromptWithContext } from './new-workspace'
 import {
   buildContainedLinkedContextBlock,
-  buildLinearLaunchContextBlock,
   getLaunchableWorkItemDraftContent,
-  getLinkedWorkItemPromptContext,
   LINKED_CONTEXT_BLOCK_MAX_CHARS,
   resolveQuickCreateLinkedWorkItemPrompt
 } from './linked-work-item-context'
@@ -114,72 +111,6 @@ describe('contained linked context block', () => {
   })
 })
 
-describe('buildLinearLaunchContextBlock', () => {
-  it('emits only the Linear identifier and URL', () => {
-    const block = buildLinearLaunchContextBlock({
-      provider: 'linear',
-      identifier: 'ENG-123',
-      title: LINEAR_ITEM.title,
-      url: LINEAR_ITEM.url
-    })
-
-    expect(block?.split('\n')).toEqual([
-      'Linked Linear issue: ENG-123',
-      'https://linear.app/acme/issue/ENG-123/test'
-    ])
-    expectNoLinearTicketContent(block)
-    expectNoProductWorkflowDirection(block)
-  })
-
-  it('returns the identifier line when no URL is available', () => {
-    expect(buildLinearLaunchContextBlock({ identifier: 'ENG-123' })).toBe(
-      'Linked Linear issue: ENG-123'
-    )
-  })
-
-  it('returns a labeled URL reference without an identifier', () => {
-    expect(
-      buildLinearLaunchContextBlock({
-        provider: 'linear',
-        identifier: '  ',
-        url: 'https://linear.app/acme/issue/ENG-123/test'
-      })
-    ).toBe('Linked Linear issue\nhttps://linear.app/acme/issue/ENG-123/test')
-  })
-
-  it('returns null without an identifier or URL', () => {
-    expect(buildLinearLaunchContextBlock({ provider: 'linear', identifier: '  ' })).toBeNull()
-  })
-})
-
-describe('getLinkedWorkItemPromptContext', () => {
-  it('returns a link-only Linear reference for Linear items', () => {
-    const result = getLinkedWorkItemPromptContext(LINEAR_ITEM)
-
-    expect(result.linkedUrls).toEqual([])
-    expect(result.linkedContextBlocks).toEqual([
-      'Linked Linear issue: ENG-123\nhttps://linear.app/acme/issue/ENG-123/test'
-    ])
-    expectNoLinearTicketContent(result.linkedContextBlocks[0])
-    expectNoProductWorkflowDirection(result.linkedContextBlocks[0])
-  })
-
-  it('falls back to the URL for non-Linear items', () => {
-    expect(
-      getLinkedWorkItemPromptContext({
-        url: 'https://gitlab.example.com/group/project/-/issues/1'
-      })
-    ).toEqual({
-      linkedUrls: ['https://gitlab.example.com/group/project/-/issues/1'],
-      linkedContextBlocks: []
-    })
-    expect(getLinkedWorkItemPromptContext(null)).toEqual({
-      linkedUrls: [],
-      linkedContextBlocks: []
-    })
-  })
-})
-
 describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
   it('drafts the note above the link-only Linear reference', () => {
     const result = resolveQuickCreateLinkedWorkItemPrompt(
@@ -209,30 +140,6 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
       )
     ).toEqual({ prompt: 'use this note', draftPrompt: null })
   })
-
-  it('drafts the note above a labeled Linear URL when the identifier is missing', () => {
-    expect(
-      resolveQuickCreateLinkedWorkItemPrompt(
-        { provider: 'linear', number: 0, url: 'https://linear.app/acme/issue/ENG-123/test' },
-        'note'
-      )
-    ).toEqual({
-      prompt: '',
-      draftPrompt: 'note\n\nLinked Linear issue\nhttps://linear.app/acme/issue/ENG-123/test\n'
-    })
-  })
-
-  it('drafts the note above the URL for non-Linear quick creates', () => {
-    expect(
-      resolveQuickCreateLinkedWorkItemPrompt(
-        { number: 42, url: 'https://github.com/acme/repo/issues/42' },
-        'note'
-      )
-    ).toEqual({
-      prompt: '',
-      draftPrompt: 'note\n\nhttps://github.com/acme/repo/issues/42'
-    })
-  })
 })
 
 describe('getLaunchableWorkItemDraftContent', () => {
@@ -257,15 +164,6 @@ describe('getLaunchableWorkItemDraftContent', () => {
     expectNoLinearTicketContent(draft)
     expectNoProductWorkflowDirection(draft)
   })
-
-  it('falls back to the URL for non-Linear items', () => {
-    expect(
-      getLaunchableWorkItemDraftContent({
-        pasteContent: '',
-        url: 'https://github.com/acme/repo/issues/42'
-      })
-    ).toBe('https://github.com/acme/repo/issues/42')
-  })
   it('drafts a labeled Linear URL for provider-preserved items without an identifier', () => {
     expect(
       getLaunchableWorkItemDraftContent({
@@ -275,36 +173,5 @@ describe('getLaunchableWorkItemDraftContent', () => {
         url: 'https://linear.app/acme/issue/ENG-123/test'
       })
     ).toBe('Linked Linear issue\nhttps://linear.app/acme/issue/ENG-123/test\n')
-  })
-})
-
-describe('buildAgentPromptWithContext', () => {
-  it('appends link-only Linear references alongside prompt attachments', () => {
-    const linearBlock = buildLinearLaunchContextBlock({
-      provider: 'linear',
-      identifier: 'ENG-123',
-      url: LINEAR_ITEM.url
-    })
-
-    const prompt = buildAgentPromptWithContext(
-      'Fix this',
-      ['/tmp/report.txt'],
-      [],
-      linearBlock ? [linearBlock] : []
-    )
-
-    expect(prompt).toContain(
-      [
-        'Fix this',
-        '',
-        'Attachments:',
-        '- /tmp/report.txt',
-        '',
-        'Linked Linear issue: ENG-123',
-        'https://linear.app/acme/issue/ENG-123/test'
-      ].join('\n')
-    )
-    expectNoLinearTicketContent(prompt)
-    expectNoProductWorkflowDirection(prompt)
   })
 })

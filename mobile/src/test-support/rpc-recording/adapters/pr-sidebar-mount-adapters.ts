@@ -5,14 +5,7 @@ import type { PrSidebarLoadDeps } from '../../../session/mobile-pr-sidebar-state
 const WORKTREE = 'repo-9::/w'
 const BRANCH = 'feature'
 
-/**
- * Phase 1 of the PR sidebar, whose recorded state is the `PrSidebarState` it resolves to.
- *
- * `PrSidebarLoadDeps` is five client-taking functions, so the load is driven directly and needs no
- * React host. The containment is what the family holds: a checks leg the reader refuses records
- * `ready` with a `checksError`, where routing it back through `failureState` takes the whole
- * sidebar to `error` and loses the PR the user opened it for.
- */
+// Checks failure must retain ready PR state with checksError; observe the real dependency chain rather than replacing it.
 export function prSidebarMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -27,11 +20,13 @@ export function prSidebarMountAdapters(
       const sidebar = modules.load<typeof import('../../../session/mobile-pr-sidebar-state')>(
         'mobile/src/session/mobile-pr-sidebar-state.ts'
       )
-      // The controller's own wiring: every dep is the product read, bound to the scripted client.
       const deps: PrSidebarLoadDeps = {
         fetchForBranch: (worktreeId, args) =>
           reads.fetchHostedReviewForBranch(client, worktreeId, args),
-        fetchWorktreeLinkedPR: (worktreeId) => link.fetchWorktreeLinkedPR(client, worktreeId),
+        fetchWorktreeGitHubPRLink: (worktreeId) =>
+          link.fetchWorktreeGitHubPRLink(client, worktreeId),
+        clearWorktreeReviewLink: (worktreeId, shouldApply) =>
+          link.clearMobileWorktreeReviewLink(client, worktreeId, shouldApply),
         fetchPRForBranch: (worktreeId, args) => reads.fetchPRForBranch(client, worktreeId, args),
         fetchWorkItemDetails: (worktreeId, args) =>
           reads.fetchWorkItemDetails(client, worktreeId, args),

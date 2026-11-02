@@ -18,8 +18,7 @@ import { createWorktreeCopiedPaths, createWorktreeLinkedPaths } from './worktree
 
 const posixIt = process.platform === 'win32' ? it.skip : it
 
-// A byte budget small enough to trip on a fixture that stays trivial on disk —
-// the bound must be injectable or testing it would mean writing gigabytes.
+// Tiny injectable budgets exercise refusals without gigabyte fixtures.
 const TINY_BYTE_BUDGET = { maxBytes: 64, maxEntries: 10_000 }
 const TINY_ENTRY_BUDGET = { maxBytes: 1024 * 1024 * 1024, maxEntries: 3 }
 
@@ -102,7 +101,6 @@ describe('worktree copy budget tracker', () => {
       tracker.admit(join(root, 'huge'), { bytesAreCopied: false })
     ).resolves.toMatchObject({ withinBudget: true })
 
-    // The same source is refused once its bytes actually have to be written.
     const byteTracker = createWorktreeCopyBudgetTracker(TINY_BYTE_BUDGET)
     await expect(byteTracker.admit(join(root, 'huge'))).resolves.toEqual({
       withinBudget: false,
@@ -125,9 +123,7 @@ describe('worktree copy budget tracker', () => {
       })
     }
 
-    // Nothing was admitted, so the copy budget itself is untouched and `tiny`
-    // would fit — it is refused purely because the walk ceiling is spent, and
-    // says so rather than blaming limits it never approached.
+    // Prior refusals spend sizing work but not copy budget; report sizing rather than an unapproached copy limit.
     await expect(tracker.admit(join(root, 'tiny'))).resolves.toEqual({
       withinBudget: false,
       reason: 'sizing'
@@ -135,9 +131,7 @@ describe('worktree copy budget tracker', () => {
   })
 
   it('blames the walk ceiling, not the file limit, for an entry that would have fit', async () => {
-    // 9 sources of 2 entries each leave 2 of the 20-entry walk ceiling — enough
-    // to start measuring `fits`, not enough to finish — while the 4-entry copy
-    // budget stays completely unspent.
+    // Nine two-entry sources leave room to start sizing fits, but not finish, with copy budget untouched.
     for (let index = 0; index < 9; index += 1) {
       mkdirSync(join(root, `dir-${index}`))
       writeFileSync(join(root, `dir-${index}`, 'one'), 'x'.repeat(200))
@@ -152,8 +146,6 @@ describe('worktree copy budget tracker', () => {
       await tracker.admit(join(root, `dir-${index}`))
     }
 
-    // `fits` is 4 entries against an untouched 4-entry budget — the only thing
-    // refusing it is the spent walk, so it must not be told it busted a limit.
     await expect(tracker.admit(join(root, 'fits'))).resolves.toEqual({
       withinBudget: false,
       reason: 'sizing'
@@ -161,8 +153,7 @@ describe('worktree copy budget tracker', () => {
   })
 
   it('lets a small entry through after one huge entry is refused on file count', async () => {
-    // The regression this guards: sizing `node_modules` burns maxEntries + 1
-    // walk, which without headroom would starve every entry listed after it.
+    // An oversized dependency tree must leave sizing headroom for later small entries.
     mkdirSync(join(root, 'node_modules'))
     for (let index = 0; index < 12; index += 1) {
       writeFileSync(join(root, 'node_modules', `pkg-${index}`), '')
@@ -256,7 +247,6 @@ describe('formatWorktreeIncludeCopyWarning', () => {
 
     expect(warning).toContain('"node_modules"')
     expect(warning).toContain('earlier entries used up the budget for measuring')
-    // The limits belong to node_modules' sentence, not to `.env`'s.
     expect(warning).not.toMatch(/"\.env"[^.]*file limit/u)
   })
 })
@@ -351,8 +341,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
       copyBudget: TINY_BYTE_BUDGET
     })
 
-    // An APFS clone is copy-on-write: bytes cost nothing, so refusing on bytes
-    // would deny a copy that is already free.
+    // Copy-on-write skips byte charges; clones still incur entry work.
     expect(skipped).toEqual([])
     expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
   })
@@ -370,7 +359,6 @@ describe('createWorktreeCopiedPaths copy budget', () => {
       copyBudget: TINY_ENTRY_BUDGET
     })
 
-    // Inodes are real work even on the clone path, so the entry limit holds.
     expect(skipped).toEqual([{ path: '.cache', reason: 'entries' }])
     expect(cloneWorktreePath).not.toHaveBeenCalled()
   })
@@ -391,16 +379,13 @@ describe('createWorktreeCopiedPaths copy budget', () => {
 
     expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
     expect(skipped).toEqual([{ path: 'models', reason: 'bytes', mayBePartial: true }])
-    // The whole point: no unbudgeted byte-for-byte copy ran behind the failure.
     expect(existsSync(join(worktree, 'models'))).toBe(false)
   })
 
   it('still copies when the clone was never predicted, so its bytes were already charged', async () => {
-    // Sized so that billing it a second time would bust the 64-byte budget —
-    // that is what makes this test notice a missing short-circuit.
+    // Double-charging this fixture exceeds the byte cap, exposing missing clone-fallback short-circuiting.
     writeFileSync(join(primary, '.env'), 'x'.repeat(40))
-    // A wedged df/diskutil makes the volume probe answer "no clone", so bytes
-    // are charged up front and the real-copy fallback must simply proceed.
+    // Probe timeout predicts a real copy, so fallback must not bill its bytes twice.
     const apfsCloneDeps = {
       execFileAsync: async () => {
         throw new Error('diskutil unavailable')
@@ -421,8 +406,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
   it('bills a recovered clone fallback so a later entry sees the spent budget', async () => {
     writeFileSync(join(primary, 'one'), 'x'.repeat(50))
     writeFileSync(join(primary, 'two'), 'x'.repeat(50))
-    // Clone is predicted for both, then fails, so each falls back to a real
-    // copy. The first bills 50 of the 64-byte budget; the second cannot.
+    // Failed clones must charge real-copy bytes; only the first fits the remaining budget.
     const cloneWorktreePath = vi.fn(async () => {
       throw new Error('clonefile failed')
     })
@@ -434,8 +418,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
     })
 
     expect(readFileSync(join(worktree, 'one'), 'utf8')).toBe('x'.repeat(50))
-    // No mayBePartial: a failed *file* clone publishes via link(2) from a temp
-    // path, so it never leaves anything at the target to go check.
+    // File clones publish via link from a temp path; failed publication leaves no partial target.
     expect(skipped).toEqual([{ path: 'two', reason: 'bytes' }])
     expect(existsSync(join(worktree, 'two'))).toBe(false)
   })

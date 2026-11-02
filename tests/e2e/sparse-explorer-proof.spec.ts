@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { test as base, expect } from './helpers/orca-app'
 import { openFileExplorer } from './helpers/file-explorer'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'

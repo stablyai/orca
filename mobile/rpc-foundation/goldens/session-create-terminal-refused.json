@@ -44,31 +44,25 @@
         }
       }
     },
-    "11bf871f5dfc": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "No pty slots left on the host",
-      "creating": false,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "4c528a84c114": {
+    "6275ace50da2": {
       "activeHandle": "terminal-0",
       "activeSessionTabId": "tab-0",
       "createError": "",
       "creating": true,
       "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
+      "pendingSelection": {
         "$rpc": "null"
       },
-      "pendingActiveTerminalHandle": {
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "7853d5a23971": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "No pty slots left on the host",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
         "$rpc": "null"
       },
       "sessionTabs": [],
@@ -143,7 +137,7 @@
             "mount": "eb79a9b3682a",
             "create": "9270aeb7d9c6"
           },
-          "state": "4c528a84c114",
+          "state": "6275ace50da2",
           "effects": []
         }
       },
@@ -156,7 +150,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "11bf871f5dfc",
+          "state": "7853d5a23971",
           "effects": ["b1152db10a02"]
         }
       }

@@ -17,11 +17,7 @@ type FirstWindowStartupServicesResult = {
 }
 
 export const FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS = 12_000
-// Why: a slow (but succeeding) daemon start must not flip terminals to the
-// LocalPtyProvider fallback — local PTYs are killed on quit, so panes bound to
-// them lose their daemon sessions permanently (#5232). The PTY gate therefore
-// waits for the daemon attempt itself and only fail-opens at a hard cap that
-// exists solely as a deadlock backstop.
+// #5232: wait for slow daemon startup to avoid local PTYs lost on quit; this cap only breaks deadlocks.
 export const LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS = 60_000
 
 function startService(
@@ -56,22 +52,14 @@ function startService(
   }
 }
 
-/**
- * Starts the services that must be ready before restored terminal panes mount.
- */
+/** Gate restored terminals on daemon/hook readiness. */
 export function startFirstWindowStartupServices({
   startDaemonPtyProvider,
   startAgentHookServer,
   onDaemonError,
   onAgentHookServerError
 }: FirstWindowStartupServices): FirstWindowStartupServicesResult {
-  // Why: daemon startup and hook-server binding are independent, but both gate
-  // restored terminals; run them together so cold-start latency is max(), not sum().
-  // The first window fails open quickly so the user sees the app; the local PTY
-  // gate waits for the services themselves (a slow daemon must not flip spawns
-  // to the non-restorable LocalPtyProvider fallback) and only fails open at the
-  // hard cap, which also aborts the services so a late daemon swap cannot
-  // strand any fallback PTYs that spawn after the gate opens.
+  // Start independent services concurrently. Reveal the window sooner, but hold PTYs until settlement or hard-cap abort so late daemon swaps cannot strand fallback PTYs.
   const daemon = startService('daemon PTY provider', startDaemonPtyProvider, onDaemonError)
   const hooks = startService('agent hook server', startAgentHookServer, onAgentHookServerError)
   const allServicesReady = Promise.all([daemon.ready, hooks.ready]).then(() => undefined)
@@ -99,8 +87,7 @@ export function startFirstWindowStartupServices({
     })
   ])
   const localPtyReady = Promise.race([servicesSettled, failOpenReady])
-  // Why: destructive routing only needs daemon authority. A stalled optional
-  // hook server must not hold terminal close for the full fail-open window.
+  // Terminal destruction needs only daemon authority; optional hooks must not delay close.
   const localPtyProviderReady = Promise.race([daemon.ready, failOpenReady])
 
   return { firstWindowReady, localPtyReady, localPtyProviderReady }

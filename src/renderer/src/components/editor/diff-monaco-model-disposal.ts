@@ -2,6 +2,7 @@ import type { editor } from 'monaco-editor'
 
 type DiffViewerModelPathInput = {
   modelKey: string
+  modelOwnerKey?: string
   originalModelKey?: string
   modifiedModelKey?: string
   generationSuffix: string
@@ -40,16 +41,47 @@ export function getDiffViewerMonacoModelPathPrefixes(
   }
 }
 
+type DiffViewerModelPaths = { originalModelPath: string; modifiedModelPath: string }
+
+// Views unmount while keeping their models, so a remount must know which pair it supersedes.
+const lastDiffViewerModelPathsByOwner = new Map<string, Map<string, DiffViewerModelPaths>>()
+
+export function recallDiffViewerModelPaths(
+  ownerKey: string,
+  modelKey: string
+): DiffViewerModelPaths | undefined {
+  return lastDiffViewerModelPathsByOwner.get(ownerKey)?.get(modelKey)
+}
+
+export function rememberDiffViewerModelPaths(
+  ownerKey: string,
+  modelKey: string,
+  paths: DiffViewerModelPaths
+): void {
+  let byModelKey = lastDiffViewerModelPathsByOwner.get(ownerKey)
+  if (!byModelKey) {
+    byModelKey = new Map()
+    lastDiffViewerModelPathsByOwner.set(ownerKey, byModelKey)
+  }
+  byModelKey.set(modelKey, paths)
+}
+
+export function hasDiffViewerModelPaths(ownerKey: string): boolean {
+  return lastDiffViewerModelPathsByOwner.has(ownerKey)
+}
+
+export function forgetDiffViewerModelPaths(ownerKey: string): void {
+  lastDiffViewerModelPathsByOwner.delete(ownerKey)
+}
+
 export function getDiffViewerMonacoModelPaths({
   modelKey,
+  modelOwnerKey = modelKey,
   originalModelKey,
   modifiedModelKey,
   generationSuffix
-}: DiffViewerModelPathInput): {
-  originalModelPath: string
-  modifiedModelPath: string
-} {
-  const prefixes = getDiffViewerMonacoModelPathPrefixes(modelKey)
+}: DiffViewerModelPathInput): DiffViewerModelPaths {
+  const prefixes = getDiffViewerMonacoModelPathPrefixes(modelOwnerKey)
   const resolvedOriginalModelKey = encodeDiffViewerModelKey(originalModelKey ?? modelKey)
   const resolvedModifiedModelKey = encodeDiffViewerModelKey(modifiedModelKey ?? modelKey)
 
@@ -79,13 +111,7 @@ export function disposeUnattachedMonacoModelPaths(
   }
 }
 
-/**
- * Sweeps every owned prefix in a single scan of the global model registry.
- *
- * Why batched: `getModels()` returns every retained model in the app, so closing N diff tabs one
- * prefix at a time costs N full scans and 2xN `uri.toString()` allocations per model. Closing 100
- * tabs against 700 retained models is ~140k throwaway strings inside one synchronous effect.
- */
+/** Sweep owned prefixes in one registry pass; per-prefix scans multiply retained-model enumeration and URI allocations. */
 export function disposeUnattachedMonacoModelsByPathPrefixes(
   monacoRegistry: MonacoModelRegistry,
   modelPathPrefixes: readonly string[],
@@ -106,8 +132,7 @@ export function disposeUnattachedMonacoModelsByPathPrefixes(
 
   const bounds = { shortestPrefixLength, longestPrefixLength }
   for (const model of monacoRegistry.editor.getModels()) {
-    // Why both forms: model URIs are built via `Uri.parse`, so a prefix can match the decoded or
-    // the percent-encoded rendering depending on what characters the tab id carries.
+    // Uri.parse can expose decoded or encoded tab IDs; match both renderings.
     const prefix =
       findOwnedPathPrefix(model.uri.toString(true), ownedPrefixes, bounds) ??
       findOwnedPathPrefix(model.uri.toString(), ownedPrefixes, bounds)
@@ -121,10 +146,7 @@ export function disposeUnattachedMonacoModelsByPathPrefixes(
   }
 }
 
-/**
- * Equivalent to `uri === prefix || uri.startsWith(`${prefix}:`)` for any prefix in the set, but
- * probes the URI's own `:` boundaries instead of testing every prefix — O(segments) not O(prefixes).
- */
+/** Probe URI colon boundaries for exact/prefix ownership, making work depend on segments rather than owned-prefix count. */
 function findOwnedPathPrefix(
   uriString: string,
   ownedPrefixes: ReadonlySet<string>,

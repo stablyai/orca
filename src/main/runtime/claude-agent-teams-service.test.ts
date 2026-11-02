@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ClaudeAgentTeamsService, type AgentTeamsTerminalApi } from './claude-agent-teams-service'
+import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
+import type { AgentTeamsTerminalApi } from './claude-agent-teams-types'
 
 function createServiceWithLeader(): {
   service: ClaudeAgentTeamsService
@@ -146,8 +147,7 @@ describe('ClaudeAgentTeamsService', () => {
     const request = (argv: string[], envPane = leaderPane) =>
       service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
 
-    // Claude splits a holding pane running `cat`, then respawns it with the
-    // real teammate command (the failure mode before respawn-pane was supported).
+    // Claude first splits a cat placeholder, then respawns the real teammate command.
     await expect(
       request([
         'split-window',
@@ -172,15 +172,12 @@ describe('ClaudeAgentTeamsService', () => {
       request(['respawn-pane', '-k', '-t', '%2', '--', teammateCommand])
     ).resolves.toMatchObject({ stdout: '', exitCode: 0 })
 
-    // the placeholder terminal is closed and the pane is recreated, from the same
-    // origin/direction, with the real teammate command.
     expect(api.closeTerminal).toHaveBeenCalledWith('teammate-1')
     expect(splitCalls).toEqual([
       { handle: 'leader-handle', direction: 'vertical', command: 'cat', envPane: '%2' },
       { handle: 'leader-handle', direction: 'vertical', command: teammateCommand, envPane: '%2' }
     ])
 
-    // the fake pane id is preserved and now backed by the relaunched terminal.
     await expect(
       request(['list-panes', '-t', 'orca:0', '-F', '#{pane_id}'])
     ).resolves.toMatchObject({ stdout: '%1\n%2\n' })

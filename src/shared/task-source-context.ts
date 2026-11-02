@@ -1,10 +1,10 @@
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId
+  type ExecutionHostId
 } from './execution-host'
 import {
   areTaskProviderIdentitiesEqual,
@@ -13,7 +13,7 @@ import {
   taskProviderIdentityCachePart,
   type TaskProviderIdentity
 } from './task-provider-identity'
-import type { TaskProvider } from './task-providers'
+import { isTaskProvider, type TaskProvider } from './task-providers'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 
@@ -113,7 +113,7 @@ export function buildTaskSourceContextFromRepo(args: {
   return normalizeTaskSourceContext({
     provider: args.provider,
     projectId: args.projectId,
-    hostId: getRepoHostId(args.repo),
+    hostId: getRepoExecutionHostId(args.repo),
     repoId: args.repo.id,
     projectHostSetupId: args.projectHostSetupId,
     providerIdentity: args.providerIdentity,
@@ -142,6 +142,21 @@ export function areTaskSourceContextsEqual(
   )
 }
 
+/** Jira identity is siteId (site + login); its label is display-only. Callers match providers first. */
+export function haveConflictingTaskSourceAccounts(
+  a: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>,
+  b: Pick<TaskSourceContext, 'provider' | 'providerIdentity' | 'accountLabel'>
+): boolean {
+  if (a.provider === 'jira') {
+    const left = a.providerIdentity?.provider === 'jira' ? a.providerIdentity.siteId : null
+    const right = b.providerIdentity?.provider === 'jira' ? b.providerIdentity.siteId : null
+    return Boolean(left && right && left !== right)
+  }
+  const left = a.accountLabel?.trim()
+  const right = b.accountLabel?.trim()
+  return Boolean(left && right && left !== right)
+}
+
 export function getTaskSourceRuntimeSettings(
   context: Pick<TaskSourceContext, 'hostId'> | null | undefined
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
@@ -155,6 +170,7 @@ export function getTaskSourceCacheScope(
   context: Pick<TaskSourceContext, 'provider' | 'hostId' | 'projectId' | 'projectHostSetupId'> & {
     providerIdentity?: TaskProviderIdentity | null
     repoId?: string | null
+    accountLabel?: string | null
   }
 ): string {
   return [
@@ -163,10 +179,32 @@ export function getTaskSourceCacheScope(
     context.projectId,
     context.projectHostSetupId ?? '',
     context.repoId ?? '',
-    taskProviderIdentityCachePart(context.providerIdentity)
+    taskProviderIdentityCachePart(context.providerIdentity),
+    ...(context.accountLabel?.trim() ? [context.accountLabel.trim()] : [])
   ]
     .map(encodeCachePart)
     .join(':')
+}
+
+// provider, hostId, projectId, projectHostSetupId, repoId, identity; accountLabel is optional.
+const TASK_SOURCE_CACHE_SCOPE_FIXED_PARTS = 6
+
+/** The host a {@link getTaskSourceCacheScope} scope was built for, or null when `scope` isn't a whole one. */
+export function taskSourceCacheScopeHostId(scope: string): ExecutionHostId | null {
+  // Empty scope parts contain ::; require full arity so truncated prefixes cannot parse as whole scopes.
+  const parts = scope.split(':')
+  const whole =
+    parts.length === TASK_SOURCE_CACHE_SCOPE_FIXED_PARTS ||
+    (parts.length === TASK_SOURCE_CACHE_SCOPE_FIXED_PARTS + 1 && parts.at(-1) !== '')
+  const [provider, encodedHostId] = parts
+  if (!whole || !isTaskProvider(provider) || !encodedHostId) {
+    return null
+  }
+  try {
+    return normalizeExecutionHostId(decodeURIComponent(encodedHostId))
+  } catch {
+    return null
+  }
 }
 
 export function buildWorkspaceRunContext(args: {
@@ -191,15 +229,6 @@ export function buildWorkspaceRunContext(args: {
     repoId,
     path: repoPath
   }
-}
-
-function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): ExecutionHostId {
-  const explicit = normalizeExecutionHostId(repo.executionHostId)
-  if (explicit) {
-    return explicit
-  }
-  const connectionId = normalizeNonEmptyString(repo.connectionId)
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
 function normalizeTaskProvider(value: unknown): TaskProvider | null {

@@ -21,6 +21,7 @@ import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
+import { EditorTypographySettings } from './EditorTypographySettings'
 import {
   createAutoSaveDelayDraftState,
   resolveAutoSaveDelayDraftState,
@@ -49,8 +50,7 @@ export function GeneralEditorSettingsSection({
     settings.editorAutoSaveDelayMs
   )
   if (resolvedAutoSaveDelayDraftState !== autoSaveDelayDraftState) {
-    // Why: Settings can be updated outside this pane; reconcile drafts before
-    // paint so the visible input never lags behind the persisted value.
+    // Reconcile external settings before paint so drafts cannot lag persisted values.
     setAutoSaveDelayDraftState(resolvedAutoSaveDelayDraftState)
   }
   const autoSaveDelayDraft = resolvedAutoSaveDelayDraftState.draft
@@ -154,6 +154,10 @@ export function GeneralEditorSettingsSection({
         <div className="flex shrink-0 items-center gap-2">
           <Input
             type="number"
+            aria-label={translate(
+              'auto.components.settings.GeneralEditorSettingsSection.d6cf227ca0',
+              'Auto Save Delay'
+            )}
             min={MIN_EDITOR_AUTO_SAVE_DELAY_MS}
             max={MAX_EDITOR_AUTO_SAVE_DELAY_MS}
             step={250}
@@ -231,6 +235,8 @@ export function GeneralEditorSettingsSection({
         fontSuggestions={fontSuggestions}
         onRequestFontSuggestions={onRequestFontSuggestions}
       />
+
+      <EditorTypographySettings settings={settings} updateSettings={updateSettings} />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
 
@@ -378,7 +384,7 @@ export function GeneralEditorSettingsSection({
         )}
         description={translate(
           'auto.components.settings.GeneralEditorSettingsSection.5f02e6fb21',
-          'Show local markdown review note controls in rich editor mode.'
+          'Show local markdown review note controls in markdown files.'
         )}
         keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
       >
@@ -389,7 +395,7 @@ export function GeneralEditorSettingsSection({
           )}
           description={translate(
             'auto.components.settings.GeneralEditorSettingsSection.f80603d293',
-            'Show local markdown note controls in rich editor mode and agent handoff actions.'
+            'Show markdown note controls in every markdown view and include markdown notes in agent handoff actions.'
           )}
           checked={settings.markdownReviewToolsEnabled}
           onChange={() =>

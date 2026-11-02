@@ -1,20 +1,16 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { isCurrentDirectSshAuthority } from './terminal-pty-identities'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'reconnectPersistedTerminals'> {
   return {
-    reconnectPersistedTerminals: async (signal, options) => {
-      if (
-        signal?.aborted ||
-        (options && !isCurrentDirectSshAuthority(get(), options.directSshAuthority))
-      ) {
+    reconnectPersistedTerminals: async (signal) => {
+      if (signal?.aborted) {
         return
       }
       const {
@@ -25,14 +21,8 @@ export function createWorkspaceTerminalReconnectActions(
         tabsByWorktree,
         ptyIdsByTabId
       } = get()
-      const scopedWorkspaceKeys = options ? new Set(options.workspaceKeys) : null
-      const ids = (pendingReconnectWorktreeIds ?? []).filter(
-        (id) => !scopedWorkspaceKeys || scopedWorkspaceKeys.has(id)
-      )
+      const ids = pendingReconnectWorktreeIds ?? []
       if (ids.length === 0) {
-        if (options) {
-          return
-        }
         set({
           workspaceSessionReady: true,
           pendingReconnectWorktreeIds: [],
@@ -44,9 +34,8 @@ export function createWorkspaceTerminalReconnectActions(
       // Why: defer daemon attachment for real dimensions; eager 80×24 flushes garble output.
       let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
       let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
-      // Why indexed: the loop neither sets state nor awaits, so one index over the
-      // whole store snapshot serves every iteration.
-      const worktreeById = buildWorktreeByIdIndex(get().worktreesByRepo)
+      // No writes/awaits in the loop, so one store-snapshot index serves every iteration.
+      const worktreeById = buildWorktreeByIdIndex(selectWorktreesByRepo(get()))
       const repoById = buildByIdIndex(get().repos)
       for (const worktreeId of ids) {
         const tabs = tabsByWorktree[worktreeId] ?? []
@@ -65,17 +54,9 @@ export function createWorkspaceTerminalReconnectActions(
           const tabId = tab.id
           const layout = terminalLayoutsByTabId[tabId]
           const leafPtyMap = layout?.ptyIdsByLeafId ?? {}
-          const pendingPtyId = pendingReconnectPtyIdByTabId[tabId]
-          const tabLevelPtyId =
-            options &&
-            parseAppSshPtyId(pendingPtyId ?? '')?.connectionId !==
-              options.directSshAuthority.targetId
-              ? undefined
-              : pendingPtyId
+          const tabLevelPtyId = pendingReconnectPtyIdByTabId[tabId]
           const hasLeafMappings = Object.keys(leafPtyMap).length > 0
-          // Why: publish live PTY hints before mount (pty-connection reattaches later) so the
-          // sessions status segment maps daemon IDs to tabs; otherwise all sessions look like orphans until the pane mounts.
-          // A row whose tab.ptyId went to the canonical row has no tab-level id left, but its own leaf PTYs still need advertising.
+          // Advertise leaf PTYs before mount so daemon sessions do not look orphaned; subsumed rows may lack tab.ptyId but retain leaf bindings.
           const allPtyIds = hasLeafMappings
             ? (Object.values(leafPtyMap).filter(Boolean) as string[])
             : tabLevelPtyId
@@ -99,33 +80,17 @@ export function createWorkspaceTerminalReconnectActions(
         }
       }
       // Why: keep deferred SSH session IDs for post-cleanup reconnect.
-      const scopedTabIds = new Set(
-        [...(scopedWorkspaceKeys ?? ids)].flatMap((workspaceKey) =>
-          (tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id)
-        )
-      )
-      const deferredSshSessionIdsByTabId: Record<string, string> = options
-        ? Object.fromEntries(
-            Object.entries(get().deferredSshSessionIdsByTabId).filter(
-              ([tabId]) => !scopedTabIds.has(tabId)
-            )
-          )
-        : {}
+      const deferredSshSessionIdsByTabId: Record<string, string> = {}
       for (const worktreeId of ids) {
         const worktree = worktreeById.get(worktreeId)
-        // Why: SSH worktrees aren't in worktreesByRepo at cold start; fall back to the repo id in the composite worktree id so sessions still reach the deferred map.
+        // Cold-start SSH listings are absent; derive repo ID from the composite worktree ID to retain deferred sessions.
         const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
         const repo = repoId ? (repoById.get(repoId) ?? null) : null
-        const connectionId = options?.directSshAuthority.targetId ?? repo?.connectionId
+        const connectionId = repo?.connectionId
         if (!connectionId) {
           continue
         }
-        // Why: a repo can outlive its SSH target when the target was removed out of
-        // band (a crash between removal and cleanup, or edited out of the config).
-        // Once the authoritative target list has loaded, don't re-defer sessions for
-        // a target it no longer lists — a stranded deferred id reads as liveness and
-        // the orphan sweep could never remove the dead tab. Defer while the list is
-        // still unknown so a normal cold-start reconnect isn't dropped (#9911).
+        // Only a hydrated target catalog proves removal; re-deferring absent targets creates permanent orphan-sweep liveness (#9911).
         if (get().sshTargetsHydrated && !get().sshTargetLabels.has(connectionId)) {
           continue
         }
@@ -136,44 +101,22 @@ export function createWorkspaceTerminalReconnectActions(
         const tabs = tabsByWorktree[worktreeId] ?? []
         for (const tab of tabs) {
           const sessionId = pendingReconnectPtyIdByTabId[tab.id]
-          if (
-            sessionId &&
-            (!options || parseAppSshPtyId(sessionId)?.connectionId === connectionId)
-          ) {
+          if (sessionId) {
             deferredSshSessionIdsByTabId[tab.id] = sessionId
           }
         }
       }
-      if (
-        signal?.aborted ||
-        (options && !isCurrentDirectSshAuthority(get(), options.directSshAuthority))
-      ) {
+      if (signal?.aborted) {
         return
       }
-      const remainingReconnectWorktreeIds = options
-        ? pendingReconnectWorktreeIds.filter((id) => !scopedWorkspaceKeys?.has(id))
-        : []
-      const remainingReconnectTabByWorktree = options
-        ? Object.fromEntries(
-            Object.entries(pendingReconnectTabByWorktree).filter(
-              ([workspaceKey]) => !scopedWorkspaceKeys?.has(workspaceKey)
-            )
-          )
-        : {}
-      const remainingReconnectPtyIdByTabId = options
-        ? Object.fromEntries(
-            Object.entries(pendingReconnectPtyIdByTabId).filter(
-              ([tabId]) => !scopedTabIds.has(tabId)
-            )
-          )
-        : {}
       set({
+        // Only each row's ptyId changes, a field the frame merge leaves to the window.
         ...(reconnectedTabsByWorktree ? { tabsByWorktree: reconnectedTabsByWorktree } : {}),
         ...(reconnectedPtyIdsByTabId ? { ptyIdsByTabId: reconnectedPtyIdsByTabId } : {}),
-        ...(options ? {} : { workspaceSessionReady: true }),
-        pendingReconnectWorktreeIds: remainingReconnectWorktreeIds,
-        pendingReconnectTabByWorktree: remainingReconnectTabByWorktree,
-        pendingReconnectPtyIdByTabId: remainingReconnectPtyIdByTabId,
+        workspaceSessionReady: true,
+        pendingReconnectWorktreeIds: [],
+        pendingReconnectTabByWorktree: {},
+        pendingReconnectPtyIdByTabId: {},
         deferredSshSessionIdsByTabId
       })
     }

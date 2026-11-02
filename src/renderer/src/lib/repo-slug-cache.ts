@@ -1,10 +1,7 @@
-// Why: the slug → Repo cache and its synchronous lookup live here (separate from
-// repo-slug-index.ts) so store slices can import the sync lookup without pulling
-// in repo-slug-index's `@/store` dependency, which would form an import cycle.
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+// Keep synchronous slug cache separate from repo-slug-index so store callers avoid its @/store import cycle.
 import type { Repo } from '../../../shared/repo-types'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { getSettingsForRepoRuntimeOwner } from './repo-runtime-owner'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { runtimeTargetForRepoOwner } from './repo-runtime-owner'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey
@@ -13,18 +10,10 @@ import {
 /** Lowercased `owner/repo` → Repo[]. */
 export type SlugIndex = Map<string, Repo[]>
 
-/** The two ways a slug can match a repo, kept apart so callers that also filter
- *  by repo selection can fall through to `upstream` instead of letting an
- *  unselected clone of the upstream repo shadow the selected fork. */
+/** Keep origin/upstream matches separate so selection-filtered callers can use a fork when an unselected upstream clone exists. */
 export type RepoSlugMatches = { origin: Repo[]; upstream: Repo[] }
 
-/** Identity key of a fork's upstream parent — the second identity a Project row
- *  may legitimately match, since a contributor's clone has the personal fork as
- *  `origin`. `null` when the repo is not a fork or the key cannot be trusted.
- *
- *  Why `originIdentityKey` is required: when `upstream.host` is absent (older
- *  persisted forks), the fork's origin host is the fallback so GHES parents do
- *  not collapse into github.com. Unresolved origins refuse the alias. */
+/** Fork-parent alias, or null if untrusted. Require resolved origin identity as host fallback for older upstream metadata, or GHES parents could collapse into github.com. */
 export function repoUpstreamIdentityKey(
   repo: Repo,
   originIdentityKey: string | null | undefined
@@ -39,9 +28,7 @@ export function repoUpstreamIdentityKey(
   })
 }
 
-/** Module-scope cache keyed by runtime scope + repo.id. A Repo that has already
- *  failed resolution is recorded as `null` briefly so it is not retried on every
- *  cell mount, while still recovering after an external GHES auth login. */
+/** Cache by runtime scope/repo ID, briefly retaining null failures to avoid per-cell retries while recovering after external GHES login. */
 export const slugByRepoId = new Map<string, string | null>()
 const slugFailureExpiresAtByRepoId = new Map<string, number>()
 export const REPO_SLUG_FAILURE_TTL_MS = 60_000
@@ -99,29 +86,24 @@ export function nextRepoSlugFailureRetryDelay(
   return Number.isFinite(earliestExpiry) ? Math.max(0, earliestExpiry - now) : null
 }
 
-export function slugCacheKey(
-  repoId: string,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): string {
-  const target = getActiveRuntimeTarget(settings)
+export function slugCacheKey(repoId: string, target: RuntimeClientTarget): string {
   return `${target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'}:${repoId}`
 }
 
-export function settingsForRepoOwner(
-  repo: Repo,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
-  return getSettingsForRepoRuntimeOwner({ repos: [repo], settings }, repo.id)
+/** A repo's remote metadata is read from the host that owns the row; `null` when no host does. */
+export function repoSlugOwnerTarget(repo: Repo): RuntimeClientTarget | null {
+  return runtimeTargetForRepoOwner({ repos: [repo] }, repo.id)
 }
 
-/** Synchronous slug → Repo lookup against the already-resolved module cache.
- *  Used by store slices (which can't run the async hook-based index) to route
- *  project-row mutations to the matched repo's owner host; callers fall back to
- *  focused settings when nothing matches. Origin matches win over upstream ones
- *  so a clone of the upstream repo itself is never shadowed by someone's fork. */
+/** The slug cache key for a repo on its owner, or `null` when the row names no routable host. */
+export function repoSlugCacheKey(repo: Repo): string | null {
+  const target = repoSlugOwnerTarget(repo)
+  return target ? slugCacheKey(repo.id, target) : null
+}
+
+/** Synchronous owner-routing lookup for store callers that cannot use the async index. Fall back to source host on misses; origin beats forks so upstream clones remain unambiguous. */
 export function lookupReposBySlugFromCache(
   repos: readonly Repo[],
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   slug: string | null | undefined,
   host?: string
 ): Repo[] {
@@ -133,8 +115,8 @@ export function lookupReposBySlugFromCache(
   const matched: Repo[] = []
   const upstreamMatched: Repo[] = []
   for (const repo of repos) {
-    const cacheKey = slugCacheKey(repo.id, settingsForRepoOwner(repo, settings))
-    const originKey = slugByRepoId.get(cacheKey)
+    const cacheKey = repoSlugCacheKey(repo)
+    const originKey = cacheKey ? slugByRepoId.get(cacheKey) : undefined
     if (originKey === target) {
       matched.push(repo)
     } else if (repoUpstreamIdentityKey(repo, originKey) === target) {

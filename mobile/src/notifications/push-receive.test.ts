@@ -69,6 +69,33 @@ describe('shouldSuppressForegroundPush', () => {
       notificationEpoch: 'epoch-1'
     })
 
+  it('drops an older host’s finished-agent push but keeps questions, bells and the push test', async () => {
+    storage.set(
+      'orca:notificationDeliveryPreferences',
+      JSON.stringify({ onlyWhenAgentNeedsInput: true })
+    )
+    const alert = (seq: number, agentState: string) =>
+      apnsData({
+        hostFingerprint,
+        notificationSeq: seq,
+        notificationEpoch: 'epoch-1',
+        source: 'agent-task-complete',
+        agentState
+      })
+    await expect(shouldSuppressForegroundPush(alert(1, 'finished'))).resolves.toBe(true)
+    await expect(shouldSuppressForegroundPush(alert(2, 'needs-input'))).resolves.toBe(false)
+    await expect(
+      shouldSuppressForegroundPush(
+        fcmData({
+          hostFingerprint,
+          notificationSeq: 3,
+          notificationEpoch: 'epoch-1',
+          source: 'terminal-bell'
+        })
+      )
+    ).resolves.toBe(false)
+  })
+
   it('allows one eligible native push and suppresses an in-process duplicate', async () => {
     await expect(shouldSuppressForegroundPush(push())).resolves.toBe(false)
     await expect(shouldSuppressForegroundPush(push())).resolves.toBe(true)
@@ -148,16 +175,15 @@ describe('shouldSuppressForegroundPush', () => {
     dismissalSpy.mockRestore()
   })
 
-  it('keeps unrelated notifications visible when suppression checks throw', async () => {
+  it('keeps unrelated notifications visible without dismissal checks', async () => {
     const dismissals = await import('./push-dismissal-watermarks')
-    const dismissalSpy = vi
-      .spyOn(dismissals, 'wasPushDismissed')
-      .mockRejectedValue(new Error('dismissal read failed'))
+    const dismissalSpy = vi.spyOn(dismissals, 'wasPushDismissed')
     await expect(
       foregroundNotificationBehavior({
         request: { content: { data: { title: 'Other app notification' } } }
       })
     ).resolves.toMatchObject({ shouldShowBanner: true, shouldShowList: true })
+    expect(dismissalSpy).not.toHaveBeenCalled()
     dismissalSpy.mockRestore()
   })
 })
@@ -175,6 +201,26 @@ describe('pushNotificationRouteData', () => {
         params: { hostId: 'host-1', worktreeId: 'repo::/feature' }
       }
     })
+  })
+
+  it('opens a server workspace on its server, from either provider shape', () => {
+    for (const providerData of [apnsData, fcmData]) {
+      const data = pushNotificationRouteData(
+        providerData({
+          hostFingerprint,
+          worktreeId: 'repo::/srv/feature',
+          executionHost: 'runtime:env-1',
+          source: 'agent-task-complete'
+        }),
+        hosts,
+        true
+      )
+      expect(getNotificationNavigationTarget(data)?.sessionTarget?.params).toEqual({
+        hostId: 'host-1',
+        worktreeId: 'repo::/srv/feature',
+        executionHost: 'runtime:env-1'
+      })
+    }
   })
 
   it('maps a push without a worktree to the host screen', () => {
@@ -296,4 +342,28 @@ it('allows the viewed workspace after backgrounding during eligibility reads', a
   resolveHosts(hosts)
   await expect(eligibility).resolves.toBe(true)
   await expect(shouldSuppressForegroundPush(apnsData(payload))).resolves.toBe(false)
+})
+
+it('silences only the viewed workspace on its own host, desktop or server', async () => {
+  AppState.currentState = 'active'
+  let seq = 0
+  const present = (executionHost?: string) =>
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      ...(executionHost ? { executionHost } : {}),
+      notificationId: `viewing-${++seq}`,
+      notificationEpoch: 'epoch',
+      notificationSeq: seq
+    })
+  setNotificationViewingWorkspace({ hostId: 'host-1', worktreeId: 'repo::/work' })
+  await expect(present()).resolves.toBe(false)
+  await expect(present('runtime:env-1')).resolves.toBe(true)
+  setNotificationViewingWorkspace({
+    hostId: 'host-1',
+    worktreeId: 'repo::/work',
+    executionHost: 'runtime:env-1'
+  })
+  await expect(present('runtime:env-1')).resolves.toBe(false)
+  await expect(present()).resolves.toBe(true)
 })

@@ -1,10 +1,4 @@
-/**
- * Pane-title overlay rect state transitions for TerminalPane.
- *
- * Why: both helpers exist to hand React a referentially-equal value when
- * nothing changed, so a measurement pass cannot commit a redundant render
- * (React #185 amplification). Extracted so that identity contract is testable.
- */
+/** Preserve rect-state identity when measurements are unchanged to avoid React #185 render loops. */
 import type { PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
 
 export function arePaneTitleOverlayRectsEqual(

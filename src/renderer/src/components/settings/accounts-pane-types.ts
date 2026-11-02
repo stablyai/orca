@@ -11,15 +11,23 @@ import type {
 import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync-types'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
 import type { ProviderAccountRuntimeView } from './provider-account-visibility'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { SettingsHostScope } from './settings-host-scope'
 
 export type AccountsPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  hostScope: SettingsHostScope
+  nativeAccounts?: boolean
+  onAccountLocationChange?: () => void
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
   accountOwnerPlatform?: NodeJS.Platform | null
+  /** Set when the chosen host is a WSL host: this desktop owns that distro's accounts. */
+  wslHostDistro?: string | null
 }
 
 export type LocalAccountRuntime = {
@@ -61,7 +69,11 @@ export type ClaudeAccountActionRunner = (
 
 export type AccountsPaneSectionModel = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  /** Host whose accounts the pane lists and mutates. */
+  accountOwner: RuntimeClientTarget
+  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  onAccountLocationChange?: () => void
   searchQuery: string
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
   wslSupportedPlatform: boolean
@@ -104,16 +116,4 @@ export type AccountsPaneSectionModel = {
   setRemoveCodexTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runCodexAccountAction: CodexAccountActionRunner
   recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId' | 'apiKey') => void
-  miniMaxRateLimits: ProviderRateLimits | null
-  miniMaxApiKeyDraft: string
-  setMiniMaxApiKeyDraft: Dispatch<SetStateAction<string>>
-  miniMaxApiKeyConfigured: boolean
-  saveMiniMaxApiKey: () => Promise<void>
-  clearMiniMaxApiKey: () => Promise<void>
-  miniMaxCookieDraft: string
-  setMiniMaxCookieDraft: Dispatch<SetStateAction<string>>
-  miniMaxConfigured: boolean
-  miniMaxCredentialBusy: boolean
-  saveMiniMaxCookie: () => Promise<void>
-  clearMiniMaxCookie: () => Promise<void>
 }

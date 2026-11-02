@@ -1,4 +1,5 @@
 import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
+import { withoutNativeChatVisualDirectiveLines } from '../../shared/native-chat/native-chat-visual-directive'
 
 export { sliceAtCodeUnitLimit }
 
@@ -15,7 +16,8 @@ const XML_INSTRUCTIONS_PREFIX = '<INSTRUCTIONS>'
 const HIDDEN_TEXT_BLOCKS = [
   { name: 'system-reminder', closeTag: '</system-reminder>' },
   { name: 'codex_internal_context', closeTag: '</codex_internal_context>' },
-  { name: 'goal_context', closeTag: '</goal_context>' }
+  { name: 'goal_context', closeTag: '</goal_context>' },
+  { name: 'current_datetime', closeTag: '</current_datetime>' }
 ] as const
 
 type TextBuilder = {
@@ -38,17 +40,28 @@ export function normalizeTitleText(value: string): string | null {
   return finalizeNormalizedText(normalizeStringText(value, SESSION_TITLE_TEXT_LIMIT))
 }
 
-export function extractPreviewContentText(value: unknown): string | null {
-  return normalizeContentText(value, SESSION_PREVIEW_TEXT_LIMIT)
+/** Remove assistant visual directives from each part before folding preview lines. */
+export function extractPreviewContentText(value: unknown, role?: string): string | null {
+  return normalizeContentText(value, SESSION_PREVIEW_TEXT_LIMIT, role === 'assistant')
 }
 
-export function normalizePreviewText(value: string): string | null {
-  return finalizeNormalizedText(normalizeStringText(value, SESSION_PREVIEW_TEXT_LIMIT))
+export function normalizePreviewText(value: string, role?: string): string | null {
+  return finalizeNormalizedText(
+    normalizeStringText(previewSource(value, role === 'assistant'), SESSION_PREVIEW_TEXT_LIMIT)
+  )
 }
 
-function normalizeContentText(value: unknown, limit: number): string | null {
+function previewSource(text: string, dropVisualLines: boolean): string {
+  return dropVisualLines ? withoutNativeChatVisualDirectiveLines(text) : text
+}
+
+function normalizeContentText(
+  value: unknown,
+  limit: number,
+  dropVisualLines = false
+): string | null {
   if (typeof value === 'string') {
-    return finalizeNormalizedText(normalizeStringText(value, limit))
+    return finalizeNormalizedText(normalizeStringText(previewSource(value, dropVisualLines), limit))
   }
   if (!Array.isArray(value)) {
     return null
@@ -61,7 +74,7 @@ function normalizeContentText(value: unknown, limit: number): string | null {
       continue
     }
     appendInterPartSpace(builder)
-    appendNormalizedString(builder, text)
+    appendNormalizedString(builder, previewSource(text, dropVisualLines))
     if (builder.truncated) {
       break
     }
@@ -125,8 +138,7 @@ function appendNormalizedString(builder: TextBuilder, value: string, maxScanLeng
       if (builder.text.length > 0) {
         builder.pendingSpace = true
       }
-      // Why: hidden blocks may jump past the scan budget; clamp so multi-MB
-      // suppressed context cannot keep the first-prompt path busy.
+      // Clamp hidden-block skips to the scan budget to bound first-prompt work.
       index = Math.min(hiddenBlockEnd, scanEnd)
       continue
     }
@@ -149,8 +161,7 @@ function appendNormalizedString(builder: TextBuilder, value: string, maxScanLeng
     }
 
     const charLength = codePointLength(value, index)
-    // Why: do not read past scanEnd mid code-point when the budget lands inside
-    // a surrogate pair — drop the incomplete char instead.
+    // Drop incomplete surrogate pairs at the scan boundary.
     if (index + charLength > scanEnd) {
       break
     }
@@ -185,7 +196,7 @@ function hiddenTextBlockEnd(value: string, index: number): number | null {
 
     const openEnd = tagEndIndex(value, afterName)
     if (openEnd === null) {
-      // Why: malformed hidden context should not leak into AI Vault titles/previews.
+      // Suppress malformed hidden context rather than leaking it into titles or previews.
       return value.length
     }
 

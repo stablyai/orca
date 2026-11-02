@@ -3,13 +3,14 @@ import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-s
 import { TERMINAL_SEND_METHODS } from '../../terminal/terminal-send-method'
 import { sendTerminalStreamInput } from '../../terminal/terminal-input-delivery'
 import { eraseRpcMethods, isStreamingMethod, type RpcMethod } from '../../../core'
+import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
 
 const h = createOrchestrationWorkerReleaseHarness()
 beforeEach(() => h.setup())
 afterEach(() => h.cleanup())
 
 it.each(['local', 'ssh'])(
-  'a handle-addressed phone report fences %s worker release',
+  'a handle-addressed phone Keep open fences %s worker release',
   async (host) => {
     if (host === 'ssh') {
       vi.mocked(h.runtime.getOrchestrationDispatchAuthority).mockImplementation((handle) =>
@@ -26,23 +27,17 @@ it.each(['local', 'ssh'])(
     const worker = await h.startSettledWorker()
     expect(h.db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.host_scope).toContain(host)
     h.runtime.registerPreAllocatedHandleForPty('pty-worker', 'term_worker')
-    h.runtime.registerPty('pty-worker', 'repo::worktree', undefined, {
+    registerBoundPty(h.runtime, 'pty-worker', 'repo::worktree', null, {
       tabId: 'tab_worker',
       leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     })
     vi.mocked(h.runtime.getTerminalPaneKey).mockRestore()
     await expect(
-      h.call('orchestration.workerTerminalUserInput', { terminal: 'term_worker' })
-    ).resolves.toEqual({ changed: 1 })
-    expect(h.db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.ownership_state).toBe(
-      'user_owned'
-    )
-    await expect(
-      h.call('orchestration.workerTerminalUserInput', { terminal: 'term_worker' })
-    ).resolves.toEqual({ changed: 0 })
+      h.call('orchestration.workerKeepOpen', { terminal: 'term_worker', keep: true })
+    ).resolves.toEqual({ autoClose: { kept: true } })
     await expect(
       h.call('orchestration.workerRelease', { dispatch: worker.dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', reason: 'user_takeover' })
+    ).resolves.toMatchObject({ state: 'retained', reason: 'user_kept' })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   }
 )
@@ -50,15 +45,15 @@ it.each(['local', 'ssh'])(
 it('an unknown handle does not fence another worker or access the database', async () => {
   const worker = await h.startSettledWorker()
   h.runtime.registerPreAllocatedHandleForPty('pty-worker', 'term_worker')
-  h.runtime.registerPty('pty-worker', 'repo::worktree', undefined, {
+  registerBoundPty(h.runtime, 'pty-worker', 'repo::worktree', null, {
     tabId: 'tab_worker',
     leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   })
   vi.mocked(h.runtime.getTerminalPaneKey).mockRestore()
   const db = vi.spyOn(h.runtime, 'getOrchestrationDb')
   await expect(
-    h.call('orchestration.workerTerminalUserInput', { terminal: 'term_missing' })
-  ).resolves.toEqual({ changed: 0 })
+    h.call('orchestration.workerKeepOpen', { terminal: 'term_missing', keep: true })
+  ).resolves.toEqual({ autoClose: null })
   expect(db).not.toHaveBeenCalled()
   expect(h.db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.ownership_state).toBe('owned')
   await expect(
@@ -70,7 +65,7 @@ it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work'
   const worker = await h.startSettledWorker()
   const runtime = h.runtime
   runtime.registerPreAllocatedHandleForPty('pty-worker', 'term_worker')
-  runtime.registerPty('pty-worker', 'repo::worktree', undefined, {
+  registerBoundPty(runtime, 'pty-worker', 'repo::worktree', null, {
     tabId: 'tab_worker',
     leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     incarnationId: 'runtime_test:term_worker:1'
@@ -80,7 +75,6 @@ it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work'
   const commit = vi.fn(async () => {})
   vi.spyOn(runtime, 'beginMobileInputFloor').mockReturnValue({ commit, rollback: vi.fn() })
   const dbAccess = vi.spyOn(runtime, 'getOrchestrationDb')
-  const takeover = vi.spyOn(h.db, 'markWorkerTerminalUserOwned')
   const prepare = vi.spyOn(h.db.db, 'prepare')
   const exec = vi.spyOn(h.db.db, 'exec')
   const params = {
@@ -103,25 +97,26 @@ it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work'
   expect(write).toHaveBeenCalledWith('pty-worker', 'x', 'driving')
   expect(commit).toHaveBeenCalledTimes(1)
   expect(dbAccess).not.toHaveBeenCalled()
-  expect(takeover).not.toHaveBeenCalled()
   expect(prepare).not.toHaveBeenCalled()
   expect(exec).not.toHaveBeenCalled()
   expect(h.db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.ownership_state).toBe('owned')
 })
 
-it('the report is reachable from a mobile-scoped device token', async () => {
-  // Why: mobile tokens are gated by an allowlist before dispatch. The phone reporter swallows a
-  // refusal, so a missing entry silently reverts every phone to the unfenced behaviour.
+it('Keep open and the countdown are reachable from a mobile-scoped device token', async () => {
+  // An older phone's typing report must keep resolving too, or it would surface errors.
   const { MOBILE_RPC_METHOD_ALLOWLIST } =
     await import('../../../../runtime-rpc/runtime-rpc-mobile-method-allowlist')
-  expect(MOBILE_RPC_METHOD_ALLOWLIST.has('orchestration.workerTerminalUserInput')).toBe(true)
+  for (const method of [
+    'orchestration.workerAutoClose',
+    'orchestration.workerKeepOpen',
+    'orchestration.workerTerminalUserInput'
+  ]) {
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has(method)).toBe(true)
+  }
 })
 
-// Round-1 regression (#19337 review): a phone key landing inside the worker's boot wait used to
-// find no `owned` row, report `changed: 0`, and still arm the client's 30 s gate — so the real
-// takeover was suppressed and `worker-release` closed the pane. #19608 writes custody at terminal
-// creation, so the boot-wait key itself takes the pane.
-it('a phone report during the boot wait takes the pane and fences the later release', async () => {
+// Boot-wait Keep open must find custody written at terminal creation, or a later release closes a kept pane (#19337, #19608).
+it('a phone Keep open during the boot wait keeps the pane and fences the later release', async () => {
   const gate = h.deferred<unknown>()
   vi.spyOn(h.runtime, 'waitForTerminal').mockReturnValue(gate.promise as never)
   const task = h.db.createTask({ spec: 'mid-boot phone takeover', runId: h.activeRunId })
@@ -138,14 +133,14 @@ it('a phone report during the boot wait takes the pane and fences the later rele
   ).dispatch_id
 
   h.runtime.registerPreAllocatedHandleForPty('pty-worker', 'term_worker')
-  h.runtime.registerPty('pty-worker', 'repo::worktree', undefined, {
+  registerBoundPty(h.runtime, 'pty-worker', 'repo::worktree', null, {
     tabId: 'tab_worker',
     leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   })
   vi.mocked(h.runtime.getTerminalPaneKey).mockRestore()
   await expect(
-    h.call('orchestration.workerTerminalUserInput', { terminal: 'term_worker' })
-  ).resolves.toEqual({ changed: 1 })
+    h.call('orchestration.workerKeepOpen', { terminal: 'term_worker', keep: true })
+  ).resolves.toEqual({ autoClose: { kept: true } })
 
   gate.resolve({
     handle: 'term_worker',
@@ -155,11 +150,10 @@ it('a phone report during the boot wait takes the pane and fences the later rele
     exitCode: null
   })
   await expect(start).resolves.toMatchObject({ state: 'ready' })
-  expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('user_owned')
 
   h.settle(task.id, dispatchId, 'succeeded')
   await expect(
     h.call('orchestration.workerRelease', { dispatch: dispatchId })
-  ).resolves.toMatchObject({ state: 'retained', reason: 'user_takeover', processAction: 'none' })
+  ).resolves.toMatchObject({ state: 'retained', reason: 'user_kept', processAction: 'none' })
   expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
 })

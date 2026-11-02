@@ -1,0 +1,6 @@
+{
+  "platforms": ["apple"],
+  "apple": {
+    "appDelegateSubscribers": ["OrcaWindowControlsInsetSubscriber"]
+  }
+}

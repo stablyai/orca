@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
+import { useTerminalSplitLayout } from './use-terminal-split-layout'
 import { Animated, type ScrollView } from 'react-native'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
@@ -6,9 +7,10 @@ import {
   getDefaultTerminalAccessoryBuiltInIds,
   getVisibleTerminalAccessoryKeys
 } from '../terminal/terminal-accessory-layout'
-import type { CustomKey } from '../components/CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import { useTerminalLiveInputModePreference } from './use-terminal-live-input-mode-preference'
+import { listMobileTerminalAgentHandles } from './mobile-terminal-tab-agent'
 import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
@@ -28,24 +30,27 @@ import type { MobileSessionFoundationModel } from './use-mobile-session-foundati
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
   const { worktreeId, hostId, initialCreateWarning } = scope
+  const terminalSplitLayout = useTerminalSplitLayout()
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
-  // Why: track the last applied (epoch, version) so a late older snapshot can't overwrite a newer one and resurrect closed tabs (session-tab-snapshot-gate).
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
   const appliedSessionTabsRevisionRef = useRef(0)
-  // Why: after an optimistic close, suppress the tab (with expiry) until the publisher confirms, so an in-flight snapshot can't flash it back.
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
   const [input, setInput] = useState('')
-  // Why: baseline terminal zoom reloaded on focus so a Settings → Terminal change applies in place (panes stay mounted).
   const [terminalTextScale, setTerminalTextScale] = useState(1)
-  // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
+  const terminalTextScaleRevisionRef = useRef(0)
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
+  const agentHandleKey = listMobileTerminalAgentHandles(sessionTabs).join('\n')
+  const agentHandles = useMemo(
+    () => new Set(agentHandleKey ? agentHandleKey.split('\n') : []),
+    [agentHandleKey]
+  )
   const {
     clearTerminalLiveInputDefault,
     defaultTerminalHandlesToLiveInput,
@@ -53,15 +58,13 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     liveInputTerminalHandlesRef,
     pruneTerminalHandlesFromLiveInput,
     toggleTerminalLiveInput
-  } = useTerminalLiveInputModePreference({ hostId, worktreeId })
+  } = useTerminalLiveInputModePreference({ hostId, worktreeId, agentHandles })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
-  // Reactive teardown signal for the native-chat covered stream; see unsubscribeTerminal.
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
   const activeSessionTabIdRef = useRef<string | null>(null)
   // Preserve an explicit phone tab pick while a host snapshot is transiently incomplete.
   const selectedSessionTabIdRef = useRef<string | null>(null)
-  // Auto-scroll the tab strip so the desktop-synced active tab is revealed without a manual scroll.
   const tabStripRef = useRef<ScrollView>(null)
   const tabStripOffsetRef = useRef(0)
   const tabStripViewportWidthRef = useRef(0)
@@ -76,8 +79,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [pendingDiffNotesDelivery, setPendingDiffNotesDelivery] =
     useState<DiffNotesDelivery | null>(null)
   const [creating, setCreating] = useState(false)
-  // Why: React state isn't a synchronous lock; this ref blocks a double-tap's second create in the same tick before `creating` re-renders.
-  const creatingTerminalRef = useRef(false)
+  // Use a synchronous create id lock to block same-tick double taps and prevent old launches from releasing newer locks.
+  const creatingTerminalRef = useRef<string | null>(null)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -91,6 +94,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
+  const [showTerminalLayout, setShowTerminalLayout] = useState(false)
   const sessionTabActionTargets = useMobileSessionTabActionTargets()
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
     MobileSessionTab,
@@ -99,6 +103,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [directionPadEnabled, setDirectionPadEnabled] = useState(true)
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
   )
@@ -108,9 +113,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
-  // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open, so track keyboard height ourselves and lift the input without resizing the desktop PTY.
+  // Expo edge-to-edge keeps window size on IME open; lift input from keyboard height without resizing the desktop PTY.
   const [keyboardHeight, setKeyboardHeight] = useState(0)
-  // Why: server-authoritative display mode per terminal, populated from subscribe responses.
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
     Map<string, TerminalKeyboardAvoidanceMetrics>
@@ -118,15 +122,15 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [selectModeActive, setSelectModeActive] = useState(false)
   const [canPaste, setCanPaste] = useState(false)
   const [showDictationSetup, setShowDictationSetup] = useState(false)
-  // 'hold' = press-and-hold mic, 'toggle' = tap-to-start/stop; mirrors Settings ▸ Voice ▸ Dictation Mode.
-  // Holds the host's spelling verbatim, and undefined once a setup reply arrives without one: only
-  // the two arms below bind mic handlers, so anything else leaves the button as inert as it starts.
+  // Only known hold/toggle modes bind mic handlers; preserve unknown/absent host values as inert until setup resolves.
   const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
+  const [dictationEnabled, setDictationEnabled] = useState(true)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const toastSeqRef = useRef(0)
   return {
+    ...terminalSplitLayout,
     terminals,
     setTerminals,
     terminalsRef,
@@ -142,6 +146,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setInput,
     terminalTextScale,
     setTerminalTextScale,
+    terminalTextScaleRevisionRef,
     autocompleteEnabled,
     setAutocompleteEnabled,
     terminalLinkOpenMode,
@@ -202,6 +207,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateBrowserModal,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
+    showTerminalLayout,
+    setShowTerminalLayout,
     ...sessionTabActionTargets,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
@@ -211,6 +218,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setRenameTarget,
     customKeys,
     setCustomKeys,
+    directionPadEnabled,
+    setDirectionPadEnabled,
     visibleBuiltInIds,
     setVisibleBuiltInIds,
     showCustomKeyModal,
@@ -232,6 +241,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowDictationSetup,
     dictationMode,
     setDictationMode,
+    dictationEnabled,
+    setDictationEnabled,
     toastMessage,
     setToastMessage,
     toastOpacityRef,

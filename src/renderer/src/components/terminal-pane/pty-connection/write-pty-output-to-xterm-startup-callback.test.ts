@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { bindWritePtyOutputToXterm } from './write-pty-output-to-xterm'
+import { createTerminalInputEchoDelay } from './terminal-input-echo-delay'
+import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 
 const writeTerminalOutput = vi.hoisted(() => vi.fn())
 const forceFullViewportPresent = vi.hoisted(() => vi.fn())
@@ -31,6 +33,8 @@ function createSession(startupOnParsed: () => void) {
     synchronizedForegroundFrameInteractive: false,
     synchronizedForegroundInteractivePresentPending: true,
     lastTerminalInputAt: 0,
+    inputEchoDelay: createTerminalInputEchoDelay(),
+    idleCursorReset: new TerminalIdleCursorReset(),
     scheduleForegroundGridDriftCheck: vi.fn(),
     shouldForceForegroundRenderRefresh: vi.fn(() => ({ refresh: false, inPlaceRewrite: false })),
     isLatencySensitiveForegroundOutput: vi.fn(() => false),

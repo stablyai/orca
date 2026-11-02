@@ -13,12 +13,7 @@ const SERVICE_PREFIX = 'orca.pairing.v'
 // Why: every generation adds one read probe per miss; bound pathological recovery cost.
 const MAX_GENERATION = 8
 
-/**
- * Why: expo-secure-store shares one Android keystore alias across every
- * unauthenticated item under a keychain service. The #6600 rejection proves
- * encryption reached expo's null-message GeneralSecurityException branch; a
- * fresh service selects a distinct alias and can recover an alias-local fault.
- */
+// A new keychain service selects a fresh Android alias to recover alias-local encryption faults (#6600).
 function serviceForGeneration(generation: number): string | undefined {
   // Why: generation 0 must keep expo's default service so existing credentials stay readable.
   return generation <= 0 ? undefined : `${SERVICE_PREFIX}${generation}`
@@ -162,11 +157,8 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
   if (presenceGeneration !== null) {
     const value = await SecureStore.getItemAsync(key, optionsForGeneration(presenceGeneration))
     if (value === null) {
-      // Why: Android reports an undecryptable entry as null, so failing closed here latched
-      // callers out of their own orphan cleanup forever; report absent instead. The presence
-      // record must survive — it is the only thing that keeps a later read from resurrecting
-      // the superseded value under an older generation. Callers clear it via delete or a
-      // re-pair write, so a legitimately-current older value is traded for re-pairing.
+      // Treat Android’s absent/undecryptable null as absent so orphan cleanup remains reachable.
+      // Keep presence to prevent resurrecting an older secret; delete or re-pair clears it.
       return null
     }
     return value
@@ -255,7 +247,6 @@ export function deletePairingKeychainItem(key: string): Promise<void> {
   return enqueueKeychainMutation(() => deletePairingKeychainItemImpl(key))
 }
 
-/** Test-only: drop cached generation and mutation state between cases. */
 export function resetPairingKeychainForTests(): void {
   cachedGeneration = null
   keychainMutation = Promise.resolve()

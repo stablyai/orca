@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  ORCAD_BUILD_TARGET_FILENAME,
-  ORCAD_RIPGREP_ARTIFACTS,
-  orcadArtifactFilenames
+  ORCAD_MOBILE_WEB_MANIFEST,
+  ORCAD_NODE_RUNTIME_MARKER_FILENAME,
+  ORCAD_SERVER_TARGET_FILENAME,
+  orcadArtifactFilenames,
+  orcadRipgrepArtifact
 } from '../../src/shared/orcad-artifacts.ts'
-import { ORCAD_BUN_TARGETS } from '../../src/shared/orcad-bun-runtime.ts'
+import { SERVER_TARGETS } from '../../src/shared/node-runtime-pin.ts'
 import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
 import { readOrcadArtifactIdentity } from '../../src/main/orcad/orcad-artifact-identity.ts'
 import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
@@ -19,30 +21,53 @@ afterEach(() => {
   }
 })
 
-function createArtifactDirectory(target = '') {
+const PAGE_ASSET = 'out/mobile-web/index.html'
+const PAGE_MANIFEST = JSON.stringify({ assets: [{ path: 'index.html' }] })
+
+function createArtifactDirectory(target = 'linux-x64-glibc') {
   const directory = mkdtempSync(join(tmpdir(), 'orcad-version-'))
   directories.push(directory)
-  for (const filename of orcadArtifactFilenames(target)) {
+  for (const filename of orcadArtifactFilenames(target, [PAGE_ASSET])) {
     const path = join(directory, filename)
     mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, filename)
+    writeFileSync(path, filename === ORCAD_MOBILE_WEB_MANIFEST ? PAGE_MANIFEST : filename)
   }
-  writeFileSync(join(directory, ORCAD_BUILD_TARGET_FILENAME), `${target}\n`)
+  writeFileSync(join(directory, ORCAD_SERVER_TARGET_FILENAME), `${target}\n`)
   return directory
 }
 
 describe('standalone runtime version', () => {
   it('changes when a shipped search binary changes and rejects a missing binary', () => {
-    const dir = createArtifactDirectory()
-    const before = computeOrcadFullVersion(dir)
-    const binary = join(dir, ORCAD_RIPGREP_ARTIFACTS[0])
+    const target = 'linux-x64-glibc'
+    const dir = createArtifactDirectory(target)
+    const before = computeOrcadFullVersion(dir, { target })
+    const binary = join(dir, orcadRipgrepArtifact(target))
     writeFileSync(binary, 'updated binary')
-    expect(computeOrcadFullVersion(dir)).not.toBe(before)
+    expect(computeOrcadFullVersion(dir, { target })).not.toBe(before)
     rmSync(binary)
-    expect(() => computeOrcadFullVersion(dir)).toThrow(ORCAD_RIPGREP_ARTIFACTS[0])
+    expect(() => computeOrcadFullVersion(dir, { target })).toThrow(orcadRipgrepArtifact(target))
   })
 
-  it.each(ORCAD_BUN_TARGETS)(
+  it('changes when a page asset changes and rejects a missing one', () => {
+    const target = 'linux-x64-glibc'
+    const dir = createArtifactDirectory(target)
+    const before = computeOrcadFullVersion(dir, { target })
+    writeFileSync(join(dir, PAGE_ASSET), 'updated page')
+    expect(computeOrcadFullVersion(dir, { target })).not.toBe(before)
+    rmSync(join(dir, PAGE_ASSET))
+    expect(() => computeOrcadFullVersion(dir, { target })).toThrow(PAGE_ASSET)
+  })
+
+  it('keys the version on the referenced runtime digest rather than its bytes', () => {
+    const target = 'darwin-arm64'
+    const dir = createArtifactDirectory(target)
+    writeFileSync(join(dir, ORCAD_NODE_RUNTIME_MARKER_FILENAME), `${'a'.repeat(64)}\n`)
+    const before = computeOrcadFullVersion(dir, { target })
+    writeFileSync(join(dir, ORCAD_NODE_RUNTIME_MARKER_FILENAME), `${'b'.repeat(64)}\n`)
+    expect(computeOrcadFullVersion(dir, { target })).not.toBe(before)
+  })
+
+  it.each(SERVER_TARGETS)(
     'matches the installed %s identity with and without its optional browser',
     async (target) => {
       const dir = createArtifactDirectory(target)

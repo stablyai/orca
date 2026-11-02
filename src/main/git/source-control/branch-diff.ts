@@ -4,7 +4,7 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
 import { gitDiffReadDedupe } from './git-read-cache-invalidation'
 import { buildDiffResult } from './diff-result'
-import { readGitBlobAtOidPath } from './git-blob-read'
+import { blobConversion, readGitBlobAtOidPath } from './git-blob-read'
 
 export async function getBranchDiff(
   worktreePath: string,
@@ -42,11 +42,13 @@ async function loadBranchDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
-    // Why concurrent: the two sides are independent `git show` spawns, so awaiting
-    // them in series doubles the latency of every diff the review panel opens.
+    const conversion = blobConversion(worktreePath, args.filePath, options)
+    const leftConversion =
+      leftPath === args.filePath ? conversion : blobConversion(worktreePath, leftPath, options)
+    // Read independent blobs concurrently to avoid doubling diff latency.
     const [leftBlob, rightBlob] = await Promise.all([
-      readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options),
-      readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options)
+      readGitBlobAtOidPath(worktreePath, args.mergeBase, leftPath, options, leftConversion),
+      readGitBlobAtOidPath(worktreePath, args.headOid, args.filePath, options, conversion)
     ])
 
     return buildDiffResult(
@@ -54,7 +56,8 @@ async function loadBranchDiff(
       rightBlob.content,
       leftBlob.isBinary,
       rightBlob.isBinary,
-      args.filePath
+      args.filePath,
+      leftBlob.tooLarge === true || rightBlob.tooLarge === true
     )
   } catch {
     return {

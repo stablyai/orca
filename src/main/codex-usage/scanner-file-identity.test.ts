@@ -31,6 +31,22 @@ vi.mock('node:fs/promises', async () => {
         ? Object.assign(stats, { dev: Number(identity.dev), ino: Number(identity.ino) })
         : stats
     },
+    open: async (...args: Parameters<typeof actual.open>) => {
+      const handle = await actual.open(...args)
+      const identity = fixture.identities.get(String(args[0]))
+      const stat = handle.stat.bind(handle)
+      vi.spyOn(handle, 'stat').mockImplementation(async (options) => {
+        if (options?.bigint) {
+          const stats = await stat({ bigint: true })
+          return identity ? Object.assign(stats, identity) : stats
+        }
+        const stats = await stat()
+        return identity
+          ? Object.assign(stats, { dev: Number(identity.dev), ino: Number(identity.ino) })
+          : stats
+      })
+      return handle
+    },
     realpath: async (filePath: PathLike) => {
       if (fixture.realpathErrors.has(String(filePath))) {
         throw new Error('Fixture realpath unavailable')

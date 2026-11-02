@@ -1,363 +1,333 @@
-// The journal's draft-store collaborator: every read and write of one session's
-// `queued_messages` rows, serialized on the same queue as the journal's own
-// appends so a draft mutation can never interleave with the consume that
-// converts it. Drafts are NEVER owed work: nothing here feeds the reducer,
-// working status, teardown, or the idle sweep.
+import { journalInputOrder } from './journal-input-order'
+import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
+import {
+  journalAttachmentClaimReceipt,
+  journalAttachmentClaimsReceipt
+} from './journal-submission-hook'
+// Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
-import type Database from '../../sqlite/sync-database'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentSessionQueuedMessageMoveAnchor,
+  AgentSessionQueuedMessageMoveResult,
+  AgentSessionQueuedMessageUpdateResult
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
+import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
+import { LegacyQueuedCards } from './journal-queue-import'
+import { retainedQueueFacts } from './journal-queue-retention'
+import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
+import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
 import {
-  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
-  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../../shared/agent-session-host-authority'
-import type { JournalHostDatabase } from './journal-host-database'
-import type { JournalReducerState } from './journal-reducer'
-import type { JournalRow } from './journal-row-schema'
-import type { JournalSubmissionConsume } from './journal-store-contracts'
-import { adoptQueuedMessages, holdQueuedMessages } from './queued-message-holds'
+  deriveQueuePauses,
+  journalUserStopInForce,
+  type DerivedQueuePause,
+  type JournalQueuePauseMarks
+} from './queued-message-pause'
 import {
-  clearQueuePause,
-  queuePauseHoldsBack,
-  readQueuePause,
-  recordQueuePause,
-  retireQueuePauseIfNothingHeld,
-  type QueuePauseFact,
-  type QueuePauseReason
-} from './queued-message-pause-table'
-import {
-  consumeQueuedMessageInTransaction,
-  getQueuedMessage,
-  insertQueuedMessage,
-  listQueuedMessages,
-  queuedMessagesSettledByOp,
-  withdrawQueuedMessages,
+  isUnsettledQueuedMessage,
   type QueuedMessageHoldReason,
   type QueuedMessageRow
 } from './queued-message-table'
-import { draftsDeliveredByAppliedEcho } from './queued-message-delivered-echo'
-import { pruneQueuedMessages, retainedSubmissionVerdict } from './queued-message-retention'
-import {
-  owedBackToWaiting,
-  queuedMessageSettlementOwed,
-  settleOwedQueuedMessages,
-  settleQueuedMessagesForRow
-} from './queued-message-settlement'
-import { AgentSessionJournalError, assertJournalWritable } from './journal-write-guards'
+import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
+import { QueuedMessageEditLeases } from './queued-message-edit-leases'
+import { queuedMessageUpdateDecision, type QueuedMessageUpdate } from './queued-message-update'
+import type { JournalReducerState } from './journal-reducer'
+import { queuedMessageMovePlan } from './queued-message-move'
 
-/** Tombstones must outlive the window in which their operation id could still be admitted as new. */
-export const QUEUED_MESSAGE_REPLAY_WINDOW_MS =
-  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
+export type JournalQueuePlan = {
+  rows: ((seq: number, ts: number) => JournalQueueRow)[]
+  receipt: JournalOperationReceipt
+}
 
-export type JournalQueuedMessagesDeps = {
-  sessionId: string
-  now: () => number
-  serialize: <T>(run: () => Promise<T>) => Promise<T>
-  database: () => JournalHostDatabase
-  readOnly: () => boolean
-  state: () => JournalReducerState
-  /** The journal's own commit notification. Every standalone draft-table
-   *  transaction that changed rows fires it after COMMIT, so a draft or hold
-   *  change publishes and wakes the drain through the same path a journal row
-   *  does — no call site can forget. In-transaction consume and the returned
-   *  transition already ride their row's own commit. */
-  committed: () => void
+export type JournalQueueRestatement = {
+  cards: readonly JournalQueueCardChange[]
+  receipt: JournalOperationReceipt
 }
 
 export class JournalQueuedMessages {
-  /** Bumped on every draft-table write, so publication memos recompute only when they must. */
-  private changeRevision = 0
-  private listed: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
-  private paused: { revision: number; fact: QueuePauseFact | null } | null = null
+  readonly editLeases = new QueuedMessageEditLeases(
+    () => this.list(),
+    undefined,
+    (id) => this.get(id)
+  )
+  private readonly legacy: LegacyQueuedCards
+  private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
 
-  constructor(private readonly deps: JournalQueuedMessagesDeps) {}
-
-  revision(): number {
-    return this.changeRevision
+  constructor(private readonly deps: JournalQueuedMessagesDeps) {
+    this.legacy = new LegacyQueuedCards(deps)
   }
 
-  /** The submission row of the latest accepted turn a person asked for; 0 when none. What
-   *  ends the queue's pause, read from the reducer in O(1). */
-  latestPersonTurnSequence(): number {
-    return this.deps.state().latestPersonTurnSequence
+  get sessionId(): string {
+    return this.deps.sessionId
   }
 
-  /** A journal transaction rolled back: nothing read inside it may stay cached. */
-  invalidate(): void {
-    this.changeRevision++
+  inputState(): JournalReducerState {
+    const state = this.deps.state()
+    journalInputOrder(state).overlay(state, this.legacy.cards())
+    return state
+  }
+  displayState(): JournalReducerState {
+    this.inputState()
+    return this.legacy.displayState()
   }
 
-  /** Cached per revision: the drain re-checks on every journal publish, so an
-   *  unchanged table must cost no SQL read or body parse on token streams. */
+  revision(): string {
+    const { epoch, queue } = this.deps.state()
+    return `${epoch}:${queue.revision}:${this.legacy.key()}`
+  }
+
   list(): readonly QueuedMessageRow[] {
-    if (this.listed?.revision !== this.changeRevision) {
-      this.listed = {
-        revision: this.changeRevision,
-        rows: listQueuedMessages(this.deps.database().db, this.deps.sessionId)
-      }
+    const key = this.revision()
+    if (this.viewed?.key !== key) {
+      const cards = [...this.deps.state().queue.cards.values(), ...this.legacy.cards()]
+      this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
     }
-    return this.listed.rows
+    return this.viewed.cards
   }
 
   get(messageId: string): QueuedMessageRow | null {
-    return getQueuedMessage(this.deps.database().db, this.deps.sessionId, messageId)
+    return this.deps.state().queue.cards.get(messageId) ?? this.legacy.get(messageId) ?? null
   }
 
-  /** Replay receipts for one caller-scoped operation key. */
-  receipts(settledByOp: string): QueuedMessageRow[] {
-    return queuedMessagesSettledByOp(this.deps.database().db, this.deps.sessionId, settledByOp)
+  /** Selection reads identity summaries; current values are resolved after edits. */
+  nextInputCard(automatic = true): QueuedMessageRow | null {
+    const state = this.inputState()
+    const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
+    const card = identity ? this.get(identity.messageId) : null
+    return !card ||
+      card.state === 'returned' ||
+      journalInputOrder(state).paused(state, card, this.deps.reopenFloor()) ||
+      (automatic && this.editLeases.isHeld(card.messageId))
+      ? null
+      : card
   }
 
-  /** `pausedBy`: the queue is paused in the SAME transaction as this card lands
-   *  (a /clear's carry), so the drain never sees it unpaused and no pause fact
-   *  exists without a card under it. */
-  insert(input: {
-    messageId: string
-    body: AgentJournalMessageItem
-    fingerprint: string
-    hostInstance: string
-    pausedBy?: QueuePauseReason
-  }): Promise<QueuedMessageRow> {
-    const { pausedBy, ...draft } = input
-    const { sessionId } = this.deps
-    let inserted = false
-    return this.transact(
-      (db) => {
-        const existing = getQueuedMessage(db, sessionId, draft.messageId)
-        if (existing) {
-          // One id, one draft: admission replays a recorded operation before it
-          // gets here, so an existing row is the same accept landing twice.
-          return existing
+  // Card insertion, attachment claims and send receipt must commit together.
+  insert(
+    input: {
+      messageId: string
+      body: AgentJournalMessageItem
+      requireAttachments?: true
+      holdReason?: QueuedMessageHoldReason
+      options?: AgentSessionExecutionOptions
+    },
+    receipt?: JournalOperationReceipt
+  ): Promise<QueuedMessageRow> {
+    const { messageId, body } = input
+    const claims = journalAttachmentClaimReceipt((db) =>
+      this.deps.claimAttachments(db, body, input.requireAttachments === true)
+    )
+    return this.write(
+      () => {
+        // Existing IDs are duplicate admission of the same accepted card, never new queue work.
+        if (this.get(messageId)) {
+          return { changes: [], result: undefined }
         }
-        inserted = true
-        const row = insertQueuedMessage(db, { ...draft, sessionId, now: this.deps.now() })
-        if (pausedBy) {
-          recordQueuePause(db, { sessionId, fact: this.pauseFact(pausedBy) })
+        const { epoch, lastSequence } = this.deps.state()
+        const position = Math.max(0, ...this.list().map((card) => card.position)) + 1
+        const change = {
+          op: 'queued' as const,
+          body,
+          position,
+          queuedAt: { epoch, sequence: lastSequence },
+          ...(input.holdReason ? { holdReason: input.holdReason } : {}),
+          ...(input.options ? { options: input.options } : {})
         }
-        return row
+        return { changes: [{ messageId, change }], result: undefined }
       },
-      () => inserted
-    )
-  }
-
-  /** Hold one waiting draft whose conversion failed. Stored on the row, so it
-   *  survives handle eviction and restart; withdraw and consume clear it in their
-   *  own UPDATE. */
-  hold(input: { messageIds: readonly string[]; reason: QueuedMessageHoldReason }): Promise<void> {
-    return this.transact(
-      (db) => holdQueuedMessages(db, { ...input, sessionId: this.deps.sessionId }),
-      (held) => held > 0
-    ).then(() => undefined)
-  }
-
-  /** Where the user's last Stop took effect, if it is still recorded; cached per revision. */
-  pause(): QueuePauseFact | null {
-    if (this.paused?.revision !== this.changeRevision) {
-      this.paused = {
-        revision: this.changeRevision,
-        fact: readQueuePause(this.deps.database().db, this.deps.sessionId)
+      composeJournalOperationReceipts(claims, ...(receipt ? [receipt] : []))
+    ).then(() => {
+      const card = this.get(messageId)
+      if (!card) {
+        throw new Error('agent_session_queued_message_lost')
       }
-    }
-    return this.paused.fact
+      return card
+    })
   }
 
-  /** A Stop took effect here: the queue is paused from this position on — if, judged in
-   *  the same transaction, it holds back a card at all. Returns whether it recorded. */
-  recordPause(reason: QueuePauseReason): Promise<boolean> {
-    const fact = this.pauseFact(reason)
-    return this.transact(
-      (db) =>
-        queuePauseHoldsBack(db, this.pauseScope()) &&
-        (recordQueuePause(db, { sessionId: this.deps.sessionId, fact }), true),
-      (recorded) => recorded
+  /** Edits invalidate old leases; require only newly referenced uploads so swept images cannot block text fixes. */
+  update(input: QueuedMessageUpdate): Promise<AgentSessionQueuedMessageUpdateResult> {
+    let edit: { body: AgentJournalMessageItem; previous: AgentJournalMessageItem } | undefined
+    const receipt = journalAttachmentClaimReceipt(
+      (db) => (edit ? this.deps.claimAttachments(db, edit.body, true, edit.previous) : undefined),
+      () => this.editLeases.retire(input.messageId)
     )
+    return this.write<AgentSessionQueuedMessageUpdateResult>(() => {
+      edit = undefined
+      const decision = queuedMessageUpdateDecision(
+        this.get(input.messageId),
+        this.deps.sessionId,
+        input
+      )
+      if (decision.status !== 'ready') {
+        return { changes: [], result: decision }
+      }
+      edit = { body: decision.body, previous: decision.previous }
+      const { messageId } = input
+      return {
+        changes: [{ messageId, change: { op: 'edited', body: decision.body } }],
+        result: { status: 'updated', messageId, fingerprint: decision.fingerprint }
+      }
+    }, receipt)
   }
 
-  /** What `queuePauseHoldsBack` judges a pause by, from this journal's submissions. */
-  private pauseScope() {
-    return {
-      sessionId: this.deps.sessionId,
-      owedToWaiting: owedBackToWaiting(this.deps.state().submissions)
-    }
+  hold(input: { messageIds: readonly string[]; reason: QueuedMessageHoldReason }): Promise<void> {
+    return this.write(() => ({
+      changes: input.messageIds.flatMap((messageId) => {
+        const card = this.get(messageId)
+        return card?.state === 'waiting' && card.holdReason !== input.reason
+          ? [{ messageId, change: { op: 'held' as const, holdReason: input.reason } }]
+          : []
+      }),
+      result: undefined
+    }))
   }
 
-  private pauseFact(reason: QueuePauseReason): QueuePauseFact {
-    const { epoch, lastSequence: sequence } = this.deps.state()
-    return { reason, epoch, sequence, recordedAt: this.deps.now() }
-  }
-
-  /** Ends the queue's pause: `stop` retires that Stop fact (never a later one),
-   *  `adoptInto` adopts a restart's rows into this host instance. Returns whether
-   *  anything changed. */
-  liftPause(input: { stop: QueuePauseFact | null; adoptInto: string | null }): Promise<boolean> {
-    const { sessionId } = this.deps
-    return this.transact(
-      (db) =>
-        (input.stop ? clearQueuePause(db, { sessionId, fact: input.stop }) : 0) +
-        (input.adoptInto === null
-          ? 0
-          : adoptQueuedMessages(db, { sessionId, hostInstance: input.adoptInto })),
-      (changed) => changed > 0
-    ).then((changed) => changed > 0)
-  }
-
-  /** Compare-and-transition waiting ∪ returned rows to op-stamped tombstones,
-   *  kept only so a replay of the settling operation answers "spent". */
-  withdraw(input: {
-    messageIds: readonly string[]
-    settledByOp: string
-  }): Promise<QueuedMessageRow[]> {
-    if (input.messageIds.length === 0) {
-      // Delete races and empty carries land here; neither may cost a write transaction.
+  withdraw(
+    messageIds: readonly string[],
+    receipt?: JournalOperationReceipt
+  ): Promise<QueuedMessageRow[]> {
+    if (messageIds.length === 0) {
       return Promise.resolve([])
     }
-    return this.transact(
-      (db) =>
-        withdrawQueuedMessages(db, {
-          ...input,
-          sessionId: this.deps.sessionId,
-          now: this.deps.now()
-        }),
-      (withdrawn) => withdrawn.length > 0
-    )
-  }
-
-  /** One standalone draft-table transaction on the journal's queue; one that
-   *  changed rows bumps the revision and notifies after COMMIT. */
-  private transact<T>(
-    run: (db: Database.Database) => T,
-    changed: (result: T) => boolean
-  ): Promise<T> {
-    return this.deps.serialize(async () => {
-      assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const { result, retired } = this.deps.database().transaction((db) => ({
-        result: run(db),
-        // Any draft write may take the last card a pause holds back.
-        retired: retireQueuePauseIfNothingHeld(db, this.pauseScope())
-      }))
-      if (changed(result) || retired > 0) {
-        this.changeRevision++
-        this.deps.committed()
-      }
-      return result
-    })
-  }
-
-  /** The standing writer hook, within the append's transaction
-   *  (`settleQueuedMessagesForRow`). */
-  onRowInTransaction(db: Database.Database, row: JournalRow): void {
-    this.changeRevision += settleQueuedMessagesForRow(db, {
-      sessionId: this.deps.sessionId,
-      state: this.deps.state(),
-      drafts: () => this.list(),
-      row,
-      now: this.deps.now()
-    })
-    this.changeRevision += retireQueuePauseIfNothingHeld(db, this.pauseScope())
-  }
-
-  /** The in-transaction consume for `appendSubmission`; a false compare-and-set
-   *  throws so the whole append — draft transition AND submission row — rolls back. */
-  consumeInTransaction(
-    db: Database.Database,
-    input: JournalSubmissionConsume & { consumedAs: string }
-  ): void {
-    const { db: own } = this.deps.database()
-    if (own !== db) {
-      // Same handle only: a second connection could not join the transaction.
-      throw new AgentSessionJournalError('journal_closed', 'consume crossed database handles')
-    }
-    const consumed = consumeQueuedMessageInTransaction(db, {
-      ...input,
-      sessionId: this.deps.sessionId,
-      now: this.deps.now()
-    })
-    if (!consumed) {
-      throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
-    }
-    retireQueuePauseIfNothingHeld(db, this.pauseScope())
-    this.changeRevision++
-  }
-
-  /** A skipped live settlement the journal already decided (`queued-message-settlement.ts`). */
-  settlementOwed(): boolean {
-    return queuedMessageSettlementOwed(this.list(), this.deps.state().submissions)
-  }
-
-  /** Waiting drafts a skipped echo hook left unwithdrawn; reads every item, so only the drain
-   *  step asks, right before a draft would send. */
-  deliveredByEchoOwed(): boolean {
-    return draftsDeliveredByAppliedEcho(this.deps.state(), this.list()).length > 0
-  }
-
-  /** Applies owed settlements now, so a skipped live transition heals without a reopen. */
-  settleOwed(): Promise<void> {
-    return this.transact(
-      (db) =>
-        settleOwedQueuedMessages(db, {
-          sessionId: this.deps.sessionId,
-          state: this.deps.state(),
-          now: this.deps.now()
-        }),
-      (settled) => settled > 0
-    ).then(() => undefined)
-  }
-
-  /** Bookkeeping at open: a failure is reported and retried at the next open,
-   *  never allowed to fail opening the chat. */
-  repairAndPruneAtOpen(): Promise<void> {
-    return this.repairAndPrune().catch((error: unknown) => {
-      console.warn('[journal-open] queued-message repair skipped:', {
-        sessionId: this.deps.sessionId,
-        error: error instanceof Error ? error.message : String(error)
+    return this.write<QueuedMessageRow[]>(() => {
+      const cards = messageIds.flatMap((id) => {
+        const card = this.get(id)
+        return card && isUnsettledQueuedMessage(card) ? [card] : []
       })
+      return {
+        changes: cards.map(({ messageId }) => ({
+          messageId,
+          change: { op: 'withdrawn' as const }
+        })),
+        result: cards.map((card) => ({ ...card, state: 'withdrawn', holdReason: null }))
+      }
+    }, receipt)
+  }
+
+  move(
+    input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor,
+    receipt?: JournalOperationReceipt
+  ): Promise<AgentSessionQueuedMessageMoveResult> {
+    return this.write(() => queuedMessageMovePlan(this.list(), input), receipt)
+  }
+
+  /** Plan on the journal lane; adopt/delete legacy cards in the same transaction before changing them. */
+  plan(changes: readonly JournalQueueCardChange[]): JournalQueuePlan {
+    return journalQueueAdoptionPlan(this.deps, this.legacy, changes)
+  }
+
+  /** Validate the acted-on card on the lane; automatic drain must still own the next queued card. */
+  assertConsumable(
+    input: JournalSubmissionConsume & { consumedAs: string; fingerprint: string }
+  ): void {
+    const card = this.get(input.messageId)
+    const consumable =
+      card !== null &&
+      card.state === input.expect &&
+      card.fingerprint === input.fingerprint &&
+      input.consumedAs !== input.messageId
+    if (consumable && input.yieldsToPause) {
+      const next = this.nextInputCard()
+      if (next?.messageId === input.messageId) {
+        return
+      }
+    } else if (consumable) {
+      return
+    }
+    throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
+  }
+
+  restatement(): JournalQueueRestatement {
+    const cards = retainedQueueFacts(this.list(), this.deps.state().submissions)
+    return {
+      cards,
+      receipt: journalAttachmentClaimsReceipt(
+        this.deps.claimAttachments,
+        cards.flatMap(({ change }) => (change?.op === 'queued' ? [change.body] : [])),
+        this.legacy.deletionOfAll()
+      )
+    }
+  }
+
+  /** Latch legacy card outcomes before retiring their handoff rows. */
+  adoptionOfAll(): JournalQueuePlan {
+    const { rows, receipt } = this.plan(
+      this.legacy.messageIds().map((messageId) => ({ messageId }))
+    )
+    return { rows, receipt: composeJournalOperationReceipts(receipt, this.legacy.deletionOfAll()) }
+  }
+
+  importAtOpen(): Promise<void> {
+    return this.legacy.importAtOpen()
+  }
+
+  pauses(): DerivedQueuePause[] {
+    return this.derivePauses(this.list())
+  }
+
+  awaitReopenMark(): boolean {
+    const { submissions } = this.deps.state()
+    return this.list().some((card) => {
+      if (card.state === 'waiting') {
+        return true
+      }
+      const handOff = card.consumedAs ? submissions.get(card.consumedAs) : undefined
+      // Recovered uncertainty cannot return a card to waiting.
+      return (
+        card.state === 'dispatched' &&
+        (handOff?.dispatchState === 'pending' ||
+          (handOff?.dispatchState === 'unknown' && handOff.recovered !== true))
+      )
     })
   }
 
-  /**
-   * Open-time reconciliation, a re-derivation behind the stored fact: owed
-   * settlements apply exactly as the live hook would have (covers consume →
-   * crash → downgrade → upgrade, where the old build rejected the leftover with
-   * no hook), then retention runs; a pause left holding back nothing retires.
-   */
-  repairAndPrune(): Promise<void> {
-    // No draft, no work, and no write: a chat whose first-use copy is still owed stays uncopied.
-    if (this.deps.readOnly() || (this.list().length === 0 && this.pause() === null)) {
-      return Promise.resolve()
-    }
-    const { sessionId } = this.deps
-    return this.transact(
-      (db) => {
-        const [now, state] = [this.deps.now(), this.deps.state()]
-        return (
-          settleOwedQueuedMessages(db, { sessionId, state, now }) +
-          pruneQueuedMessages(db, {
-            sessionId,
-            now,
-            replayWindowMs: QUEUED_MESSAGE_REPLAY_WINDOW_MS,
-            submissionVerdict: retainedSubmissionVerdict(state.submissions)
-          })
-        )
-      },
-      (changed) => changed > 0
-    ).then(() => undefined)
+  userStopInForce(): JournalQueuePauseMarks['latestStop'] {
+    const state = this.deps.state()
+    return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
   }
-}
 
-/** The per-append hook converting one draft inside the append's own transaction. */
-export function queuedMessageConsumeHook(
-  queuedMessages: JournalQueuedMessages,
-  consumedAs: string,
-  consume: JournalSubmissionConsume
-): (db: Database.Database) => void {
-  return (db) => queuedMessages.consumeInTransaction(db, { ...consume, consumedAs })
-}
+  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
+    const state = this.deps.state()
+    return deriveQueuePauses({
+      epoch: state.epoch,
+      marks: state.queuePauseMarks,
+      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      cards,
+      reopenFloor: this.deps.reopenFloor()
+    })
+  }
 
-export class QueuedMessageNotConsumableError extends Error {
-  constructor(
-    readonly messageId: string,
-    readonly expected: 'waiting' | 'returned'
-  ) {
-    super(`queued message ${messageId} is no longer ${expected}`)
-    this.name = 'QueuedMessageNotConsumableError'
+  /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */
+  private write<T>(
+    plan: () => { changes: readonly JournalQueueCardChange[]; result: T },
+    receipt?: JournalOperationReceipt
+  ): Promise<T> {
+    let planned: { result: T; plan: JournalQueuePlan } | undefined
+    return this.deps.writer
+      .enqueueRows(
+        () => {
+          const next = plan()
+          planned = { result: next.result, plan: this.plan(next.changes) }
+          return planned.plan.rows
+        },
+        {
+          write: (db, row) => {
+            planned?.plan.receipt.write(db, row)
+            receipt?.write(db, row)
+          },
+          committed: () => {
+            planned?.plan.receipt.committed()
+            receipt?.committed()
+          }
+        }
+      )
+      .then(() => {
+        if (!planned) {
+          throw new Error('agent_session_queue_write_unplanned')
+        }
+        return planned.result
+      })
   }
 }

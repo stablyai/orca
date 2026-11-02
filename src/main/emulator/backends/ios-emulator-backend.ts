@@ -1,5 +1,6 @@
 import { platform } from 'node:os'
 import { EmulatorError } from '../emulator-errors'
+import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import {
   ensureSimulatorBooted,
@@ -12,6 +13,7 @@ import {
   execServeSimCommand,
   parseServeSimCommandArgs,
   resolveServeSimExecutable,
+  serveSimKillArgs,
   stripEmulatorTargetArgs,
   type ServeSimExecutable
 } from '../serve-sim-execution'
@@ -25,6 +27,7 @@ import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emula
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
+import { assertSimulatorInputNotShadowedByDeviceHub } from '../simulator-device-hub-input'
 import type {
   BackendAvailability,
   EmulatorBackend,
@@ -32,9 +35,6 @@ import type {
   EmulatorDevice
 } from './emulator-backend'
 
-// The iOS/serve-sim backend: device/helper mechanics extracted from the former
-// monolithic EmulatorBridge. The bridge now routes to this (and, later, an
-// Android backend); per-worktree session state stays in the router.
 export class IosEmulatorBackend implements EmulatorBackend {
   readonly kind = 'ios' as const
   readonly streamCodec = 'mjpeg' as const
@@ -53,10 +53,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
     this.waitForEndpointReady = options.waitForEndpointReady ?? waitForServeSimEndpointReady
   }
 
-  // Why: resolving the executable can materialize the serve-sim runtime (a one-time
-  // recursive copy + xattr subprocess on macOS after each version bump). Defer it
-  // off the startup path — the bridge is constructed before the main window shows —
-  // so it only runs when an emulator command is actually issued.
+  // Defer runtime materialization and its macOS copy/xattr work until the first emulator command.
   private get serveSimExecutable(): ServeSimExecutable {
     this.cachedServeSimExecutable ??= resolveServeSimExecutable()
     return this.cachedServeSimExecutable
@@ -71,7 +68,6 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   async ownsDevice(id: string): Promise<boolean> {
-    // iOS only owns devices on macOS; otherwise it must not claim Android serials.
     if (!this.isSupportedOnHost()) {
       return false
     }
@@ -89,14 +85,8 @@ export class IosEmulatorBackend implements EmulatorBackend {
     return devices.map((device) => toEmulatorDevice(device))
   }
 
-  // iOS-specific passthroughs the router exposes for back-compat with the
-  // runtime/availability code (not part of the cross-backend interface).
   async listSimulators(): Promise<SimulatorDevice[]> {
     return listSimulatorDevices()
-  }
-
-  async listRunningHelpers(): Promise<unknown> {
-    return this.execServeSim(['--list', '-q'], { json: true })
   }
 
   async checkServeSimAvailable(): Promise<void> {
@@ -138,11 +128,12 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async tap(deviceId: string, x: number, y: number): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
+    await assertSimulatorInputNotShadowedByDeviceHub(udid)
     await this.execServeSim(['tap', x.toString(), y.toString(), '-d', udid])
   }
 
   async gesture(
-    _deviceId: string,
+    deviceId: string,
     points: EmulatorGesturePoint[],
     wsUrl: string | null
   ): Promise<void> {
@@ -152,11 +143,13 @@ export class IosEmulatorBackend implements EmulatorBackend {
     if (!wsUrl) {
       throw new EmulatorError('emulator_no_active', 'No active emulator stream for gesture input')
     }
+    await assertSimulatorInputNotShadowedByDeviceHub(deviceId)
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
   async type(deviceId: string, text: string): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
+    await assertSimulatorInputNotShadowedByDeviceHub(udid)
     await this.execServeSim(['type', text, '-d', udid])
   }
 
@@ -215,8 +208,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
       )
     }
 
-    // Why: CoreSimulator can report "Booted" with the display IO ports down
-    // (HID alive, no framebuffer); a shutdown/boot recycle is the only recovery.
+    // CoreSimulator can report Booted without framebuffer ports; retry once after shutdown/boot.
     let didRecycleWedgedBoot = false
     const startHelperRecyclingWedgedBoot = async (): Promise<EmulatorSessionInfo> => {
       try {
@@ -248,11 +240,11 @@ export class IosEmulatorBackend implements EmulatorBackend {
       if (!(await waitForReadyOrKill(info))) {
         throw new EmulatorError(
           'emulator_helper_failed',
-          'serve-sim started but its stream endpoint is not reachable.'
+          emulatorFailureText('serveSimEndpointUnreachable')
         )
       }
     }
-    // Why: serve-sim/CoreSimulator can surface Simulator.app while Orca embeds the stream.
+    // Keep the native Simulator window hidden while Orca embeds its stream.
     await hideNativeSimulatorApp().catch(() => {})
     return { ...info, streamCodec: 'mjpeg', backend: 'ios' }
   }
@@ -261,9 +253,8 @@ export class IosEmulatorBackend implements EmulatorBackend {
     deviceId: string,
     options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
-    await this.execServeSim(['--kill', '-q', deviceId]).catch(() => {})
-    // Why: serve-sim --kill depends on its state file; stale helper binaries
-    // can survive state loss and keep old streams/listeners around.
+    await this.execServeSim(serveSimKillArgs(deviceId)).catch(() => {})
+    // Stale helpers can outlive the state file that serve-sim --kill relies on.
     await killServeSimHelperProcessesForDevice(deviceId, options).catch(() => {})
   }
 
@@ -279,11 +270,16 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   private async hasHelperForSession(info: EmulatorSessionInfo): Promise<boolean> {
-    const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
-      helperPid: info.helperPid,
-      includeOrphaned: true
-    }).catch(() => [])
-    return helpers.length > 0
+    try {
+      const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
+        helperPid: info.helperPid,
+        includeOrphaned: info.helperPid === undefined
+      })
+      return helpers.length > 0
+    } catch {
+      // Endpoint readiness already proves the helper is serving; never recycle it on a failed ps read.
+      return true
+    }
   }
 
   private async execServeSim(
@@ -294,8 +290,6 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 }
 
-// Why: serve-sim's capture helper prints exactly this when a booted device has
-// no com.apple.framebuffer.display IO port: the signature of a wedged boot.
 const MISSING_FRAMEBUFFER_RE = /No framebuffer display descriptor found/i
 
 function isMissingFramebufferError(error: unknown): error is EmulatorError {

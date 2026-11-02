@@ -1,7 +1,7 @@
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { buildDiffResult } from './diff-result'
-import { readGitBlobAtOidPath } from './git-blob-read'
+import { type BlobConversion, blobConversion, readGitBlobAtOidPath } from './git-blob-read'
 import { resolveSubmoduleWorktreePath } from './submodule-paths'
 import {
   readGitlinkOidFromIndex,
@@ -9,17 +9,14 @@ import {
   readWorkingSubmoduleHead
 } from './submodule-gitlink-oid'
 
-/**
- * Synthesize a gitlink pointer diff: Git represents submodule commit changes as a
- * one-line `Subproject commit <oid>` swap, so the old/new oids feed the text differ.
- */
+/** Feed gitlink OIDs to the text differ as Subproject commit lines. */
 export async function buildSubmodulePointerDiff(
   worktreePath: string,
   submodulePath: string,
   staged: boolean,
   compareAgainstHead: boolean,
   options: GitRuntimeOptions,
-  // Why: default to the validated resolver so every caller is guarded against path escape.
+  // Default to the validated resolver to prevent submodule path escape.
   submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
 ): Promise<GitDiffResult> {
   let leftOid = ''
@@ -45,36 +42,48 @@ export async function buildSubmodulePointerDiff(
   )
 }
 
-/**
- * Diff a file inside a submodule across two of its commits — used when the parent
- * gitlink moved but the submodule worktree is clean (change is committed).
- */
+/** Show committed inner-file changes when a clean submodule's gitlink moved. */
 export async function buildSubmoduleInnerCommitRangeDiff(
   submoduleWorktreePath: string,
   innerPath: string,
   fromOid: string,
   toOid: string,
-  options: GitRuntimeOptions
+  options: GitRuntimeOptions,
+  mode: BlobConversion['mode']
 ): Promise<GitDiffResult> {
+  const conversion = blobConversion(submoduleWorktreePath, innerPath, options, mode)
   let originalContent = ''
   let modifiedContent = ''
   let originalIsBinary = false
   let modifiedIsBinary = false
+  let tooLarge = false
   try {
-    const left = await readGitBlobAtOidPath(submoduleWorktreePath, fromOid, innerPath, options)
+    const left = await readGitBlobAtOidPath(
+      submoduleWorktreePath,
+      fromOid,
+      innerPath,
+      options,
+      conversion
+    )
     originalContent = left.content
     originalIsBinary = left.isBinary
-    const right = await readGitBlobAtOidPath(submoduleWorktreePath, toOid, innerPath, options)
+    const right = await readGitBlobAtOidPath(
+      submoduleWorktreePath,
+      toOid,
+      innerPath,
+      options,
+      conversion
+    )
     modifiedContent = right.content
     modifiedIsBinary = right.isBinary
-  } catch {
-    // Fallback to empty content; a missing blob (add/delete) reads as one side.
-  }
+    tooLarge = left.tooLarge === true || right.tooLarge === true
+  } catch {}
   return buildDiffResult(
     originalContent,
     modifiedContent,
     originalIsBinary,
     modifiedIsBinary,
-    innerPath
+    innerPath,
+    tooLarge
   )
 }

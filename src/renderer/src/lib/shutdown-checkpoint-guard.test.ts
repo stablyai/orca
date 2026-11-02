@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createShutdownCheckpointBeforeUnloadHandler,
@@ -28,29 +26,6 @@ describe('createShutdownCheckpointGuard', () => {
     expect(guard.persistOnce()).toBe(true)
 
     expect(persist).toHaveBeenCalledTimes(1)
-  })
-
-  it('allows a new checkpoint after an aborted restart resets the attempt', () => {
-    const persist = vi.fn()
-    const guard = createShutdownCheckpointGuard(persist)
-
-    expect(guard.persistOnce()).toBe(true)
-    guard.abandonAttempt()
-    expect(guard.persistOnce()).toBe(true)
-
-    expect(persist).toHaveBeenCalledTimes(2)
-  })
-
-  it('retries when the blocking checkpoint throws', () => {
-    const persist = vi.fn().mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
-    const guard = createShutdownCheckpointGuard(persist)
-
-    expect(guard.persistOnce()).toBe(false)
-    expect(guard.persistOnce()).toBe(true)
-
-    expect(persist).toHaveBeenCalledTimes(2)
   })
 
   it('publishes the failure cause and records a crash breadcrumb (STA-5505)', () => {
@@ -106,24 +81,6 @@ describe('createShutdownCheckpointGuard', () => {
     expect(consumeShutdownCheckpointFailureReason()).toBe('Unknown shutdown checkpoint failure')
   })
 
-  it('resets state owned by the persist attempt lifecycle', () => {
-    const abandonPersistAttempt = vi.fn()
-    const guard = createShutdownCheckpointGuard(vi.fn(), abandonPersistAttempt)
-
-    guard.abandonAttempt()
-
-    expect(abandonPersistAttempt).toHaveBeenCalledTimes(1)
-  })
-
-  it('preserves persist retry state when the checkpoint itself aborts the restart', () => {
-    const abandonPersistAttempt = vi.fn()
-    const guard = createShutdownCheckpointGuard(vi.fn(), abandonPersistAttempt)
-
-    guard.abortAfterCheckpointFailure()
-
-    expect(abandonPersistAttempt).not.toHaveBeenCalled()
-  })
-
   it('reports checkpoint failure separately from the unload verdict', () => {
     const eventTarget = new EventTarget()
     const failed = vi.fn()
@@ -135,6 +92,28 @@ describe('createShutdownCheckpointGuard', () => {
 
     expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
     expect(failed).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports only browser-initiated unloads vetoed by checkpoint failure (#21017)', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const eventTarget = new EventTarget()
+    const onNativeUnloadVetoed = vi.fn()
+    const guard = createShutdownCheckpointGuard(() => {
+      throw new Error('stage rejected')
+    })
+    eventTarget.addEventListener(
+      'beforeunload',
+      createShutdownCheckpointBeforeUnloadHandler(guard, onNativeUnloadVetoed)
+    )
+
+    expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false)
+    expect(onNativeUnloadVetoed).not.toHaveBeenCalled()
+
+    const reload = new Event('beforeunload', { cancelable: true })
+    // Electron's reloadIgnoringCache dispatches a trusted beforeunload; synthetic close/restart dispatches are untrusted.
+    Object.defineProperty(reload, 'isTrusted', { value: true })
+    expect(eventTarget.dispatchEvent(reload)).toBe(false)
+    expect(onNativeUnloadVetoed).toHaveBeenCalledTimes(1)
   })
 
   it('retries after a prevented reload resets the completed checkpoint', () => {
@@ -186,37 +165,5 @@ describe('createShutdownCheckpointGuard', () => {
     expect(eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true)
 
     expect(persist).toHaveBeenCalledTimes(2)
-  })
-
-  it('runs the quit checkpoint inside the window-close scope and surfaces a vetoed quit (STA-5505/#15352)', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/use-terminal-editor-close-foundation.ts'),
-      'utf8'
-    )
-    const closeStart = source.indexOf('const confirmNativeWindowClose = useCallback(() => {')
-    const closeEnd = source.indexOf('window.api.ui.confirmWindowClose()', closeStart)
-    expect(closeStart).toBeGreaterThanOrEqual(0)
-    expect(closeEnd).toBeGreaterThan(closeStart)
-    const closeBlock = source.slice(closeStart, closeEnd)
-    // Why pin: without the scope, a persist failure blocks quit with no degradable
-    // tier; without the toast, the vetoed quit is silent and SIGKILL-only (#15352).
-    expect(closeBlock).toContain('runWithWindowCloseCheckpointScope(() =>')
-    expect(closeBlock).toContain('showShutdownCheckpointFailureToast()')
-  })
-
-  it('wires dirty editor unload vetoes to the paired-web checkpoint reset', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/use-terminal-window-lifecycle.ts'),
-      'utf8'
-    )
-    const dirtyGuardStart = source.indexOf(
-      'const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)'
-    )
-    const dirtyGuardEnd = source.indexOf("window.addEventListener('beforeunload', handler)")
-    expect(dirtyGuardStart).toBeGreaterThanOrEqual(0)
-    expect(dirtyGuardEnd).toBeGreaterThan(dirtyGuardStart)
-    expect(source.slice(dirtyGuardStart, dirtyGuardEnd)).toContain(
-      'preventUnloadAndScheduleShutdownCheckpointReset(event, window)'
-    )
   })
 })

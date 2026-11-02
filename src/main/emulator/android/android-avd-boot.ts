@@ -1,10 +1,17 @@
 import { spawn } from 'node:child_process'
+import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { EmulatorError } from '../emulator-errors'
+import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { bootCompletedArgs, isBootCompleted } from './adb-devices'
-import { bootAvdArgs, listAvdsArgs, parseAvdList } from './avd-manager'
-import { findRunningAvdSerial, listRunningAdbDevices } from './android-device-inventory'
+import { bootAvdArgs } from './avd-manager'
+import {
+  findRunningAvdSerial,
+  listAvdNames,
+  listConfirmedAdbDevices,
+  listRunningAdbDevices
+} from './android-device-inventory'
 import { emulatorProbeError } from '../emulator-probe'
 
 export type AndroidBootOptions = {
@@ -13,8 +20,18 @@ export type AndroidBootOptions = {
   sleep: (ms: number) => Promise<void>
 }
 
-// Returns the running adb serial for a device/AVD, booting the AVD (detached)
-// and polling sys.boot_completed when it is not already running.
+type AvdLaunch = {
+  // Non-null once the launch failed (spawn error, non-zero exit or signal): its last output lines.
+  failureDetail: () => string | null
+  closeOutput: () => void
+}
+
+const OUTPUT_TAIL_BYTES = 4096
+const EXIT_DETAIL_LINES = 3
+// adb lists a new emulator ~1.5 s after launch; an empty listing proves no other instance of the
+// AVD is booting only after this many polls (~4 s).
+const ADB_REGISTRATION_POLLS = 2
+
 export async function bootAndroidDevice(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths,
@@ -29,35 +46,54 @@ export async function bootAndroidDevice(
   if (existing) {
     return existing
   }
-  // Validate the target is a real AVD before spawning, so a stale/offline serial
-  // doesn't launch an invalid `-avd` and burn the full boot timeout.
-  const avds = parseAvdList((await runner(sdk.emulator, listAvdsArgs)).stdout)
-  if (!avds.includes(deviceOrName)) {
+  // Reject stale serials before launching an invalid AVD and waiting out the boot timeout.
+  const avds = await listAvdNames(runner, sdk)
+  if (!sdk.emulator || !avds.includes(deviceOrName)) {
     throw new EmulatorError(
       'emulator_device_not_found',
-      `"${deviceOrName}" is not a running device or a known AVD.`
+      emulatorFailureText('unknownDeviceOrAvd', { device: deviceOrName })
     )
   }
   const known = new Set(running.map((device) => device.serial))
-  launchAvd(sdk.emulator, deviceOrName)
-  return waitForNewBootedSerial(runner, sdk, deviceOrName, known, options)
+  const launch = launchAvd(sdk.emulator, deviceOrName)
+  try {
+    return await waitForNewBootedSerial(runner, sdk, deviceOrName, known, launch, options)
+  } finally {
+    launch.closeOutput()
+  }
 }
 
-// Launches the emulator with spawn (NOT the command runner: execFile would kill
-// the long-running, verbose emulator at its timeout / stdout maxBuffer). It is
-// NOT detached: DETACHED_PROCESS gives the console-subsystem emulator no console,
-// so it (and its qemu/netsim children) pop their own visible one. windowsHide
-// gives it a hidden console instead; unref lets the app exit without waiting, and
-// managed emulators are shut down on quit anyway. -no-window keeps it headless.
-function launchAvd(emulatorPath: string, avdName: string): void {
+// Unrefed hidden spawn: detached Windows emulators open consoles. Output is piped only for the
+// boot wait; the emulator ignores SIGPIPE, so it keeps running after the pipes close.
+function launchAvd(emulatorPath: string, avdName: string): AvdLaunch {
   const child = spawn(emulatorPath, [...bootAvdArgs(avdName), '-no-window'], {
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
-  // An unhandled 'error' (ENOENT/EACCES) on a ChildProcess crashes the main
-  // process; swallow + log it so the boot wait surfaces a timeout instead.
-  child.on('error', (error) => emulatorProbeError('emulator.launch.fail', error, { avdName }))
+  const output = createOutputSink(OUTPUT_TAIL_BYTES, 'tail')
+  let endReason: string | null = null
+  child.stdout?.on('data', output.write)
+  child.stderr?.on('data', output.write)
+  // Handle spawn errors here so the boot poll reports failure instead of crashing main.
+  child.on('error', (error) => {
+    emulatorProbeError('emulator.launch.fail', error, { avdName })
+    endReason ??= error.message
+  })
+  // A clean exit may be a launcher handing off to qemu, so only a failed exit ends the wait early.
+  child.on('exit', (code, signal) => {
+    if (signal || code !== 0) {
+      endReason ??= signal ? `signal ${signal}` : `exit code ${code}`
+    }
+  })
   child.unref()
+  return {
+    failureDetail: () =>
+      endReason === null ? null : emulatorExitDetail(output.text()) || endReason,
+    closeOutput: () => {
+      child.stdout?.destroy()
+      child.stderr?.destroy()
+    }
+  }
 }
 
 async function waitForNewBootedSerial(
@@ -65,24 +101,44 @@ async function waitForNewBootedSerial(
   sdk: AndroidSdkPaths,
   avdName: string,
   known: Set<string>,
+  launch: AvdLaunch,
   options: AndroidBootOptions
 ): Promise<string> {
-  let waited = 0
-  while (waited < options.bootTimeoutMs) {
-    const fresh = (await listRunningAdbDevices(runner, sdk)).filter(
-      (device) => device.isEmulator && !known.has(device.serial)
-    )
-    for (const device of fresh) {
-      const booted = await runner(sdk.adb, bootCompletedArgs(device.serial))
+  // Wall clock, so adb call time counts toward the timeout the CLI's attach timeout outlasts.
+  const deadline = performance.now() + options.bootTimeoutMs
+  for (let poll = 0; performance.now() < deadline; poll++) {
+    // Read before polling so an instance that appeared as our launch ended is still seen.
+    const failureDetail = launch.failureDetail()
+    const devices = await listConfirmedAdbDevices(runner, sdk)
+    const fresh = (devices ?? []).filter((device) => device.isEmulator && !known.has(device.serial))
+    const serial = await findRunningAvdSerial(runner, sdk, avdName, fresh)
+    if (serial) {
+      const booted = await runner(sdk.adb, bootCompletedArgs(serial))
       if (isBootCompleted(booted.stdout)) {
-        return device.serial
+        return serial
       }
+    } else if (failureDetail !== null && devices !== null && poll >= ADB_REGISTRATION_POLLS) {
+      // Our launch exits on the AVD lock when another instance is booting, so fail only when a
+      // successful adb listing shows none.
+      throw new EmulatorError(
+        'emulator_helper_failed',
+        emulatorFailureText('avdExitedBeforeBoot', { avdName, detail: failureDetail })
+      )
     }
     await options.sleep(options.pollIntervalMs)
-    waited += options.pollIntervalMs
   }
   throw new EmulatorError(
     'emulator_helper_failed',
-    `AVD "${avdName}" did not finish booting in time.`
+    emulatorFailureText('avdBootTimeout', { avdName })
   )
+}
+
+// The emulator prints its reason last, e.g. a missing system image then "FATAL | Cannot find AVD system path".
+function emulatorExitDetail(output: string): string {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(-EXIT_DETAIL_LINES)
+    .join('\n')
 }

@@ -1,12 +1,14 @@
 import type { IUnicodeHandling, IUnicodeVersionProvider } from '@xterm/xterm'
 
+export type XtermUnicodeServiceCore = {
+  unicodeService?: {
+    _providers?: Record<string, IUnicodeVersionProvider>
+  }
+}
+
 type XtermTerminalWithUnicodeCore = {
   unicode: IUnicodeHandling
-  _core?: {
-    unicodeService?: {
-      _providers?: Record<string, IUnicodeVersionProvider>
-    }
-  }
+  _core?: XtermUnicodeServiceCore
 }
 
 const ORCA_UNICODE_VERSION = 'orca-11-zwj'
@@ -43,8 +45,7 @@ class OrcaUnicodeProvider implements IUnicodeVersionProvider {
     }
 
     if (precedingKind === ZERO_WIDTH_JOINER && precedingWidth > 0 && this.wcwidth(codepoint) > 0) {
-      // Why: CLIs render ZWJ emoji as one visible glyph and budget them as one
-      // wide cell pair; xterm Unicode11 otherwise advances for both emoji parts.
+      // CLIs budget ZWJ emoji as one wide glyph; Unicode11 otherwise advances for both emoji parts.
       return createProperties(codepoint, precedingWidth, true)
     }
 

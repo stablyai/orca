@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../shared/execution-host'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
@@ -32,8 +32,7 @@ export function synthesizeDisconnectedSshCleanupCandidates(
   const executionHostId = getRepoExecutionHostId(repo)
   if (targetWorktreeIds) {
     const candidates: WorkspaceCleanupCandidate[] = []
-    // Why: targeted refreshes name their workspaces already; walking all
-    // persisted metadata is unnecessary for disconnected SSH repos.
+    // Targeted refresh already names candidates; avoid traversing all persisted SSH metadata.
     for (const worktreeId of targetWorktreeIds) {
       if (!worktreeId.startsWith(repoWorktreePrefix)) {
         continue
@@ -56,13 +55,22 @@ export function synthesizeDisconnectedSshCleanupCandidates(
     if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
       continue
     }
-    const meta = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
+    const owned = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
+    const meta = owned && withTerminalUse(owned)
     if (!meta || (!includeAllWorkspaces && !isWorkspaceInactiveForCleanup(meta, scannedAt))) {
       continue
     }
     candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
   }
   return candidates
+}
+
+// A terminal used on any device counts, even while its host is unreachable. Unlike the live scan, createdAt is not counted here.
+function withTerminalUse(meta: WorktreeMeta): WorktreeMeta {
+  const usedAt = meta.lastTerminalUseAt
+  return usedAt !== undefined && Number.isFinite(usedAt) && usedAt > meta.lastActivityAt
+    ? { ...meta, lastActivityAt: usedAt }
+    : meta
 }
 
 function createDisconnectedSshCandidate(

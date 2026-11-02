@@ -11,8 +11,7 @@ import {
 } from './pane-manager-registry'
 
 describe('pane manager registry', () => {
-  // Why: the registry is module-global; unregister in afterEach so a failed
-  // assertion cannot leak fake managers into later tests.
+  // Unregister module-global fake managers even after failures so they cannot leak into later tests.
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
 
   function registerManager(): { resetWebglTextureAtlases: Mock<() => void> } {
@@ -58,22 +57,19 @@ describe('pane manager registry', () => {
   })
 
   it('clears every recovered atlas before presenting any pane', () => {
-    // Why: per-pane clear+present interleaves a present against atlas generation
-    // N with the next pane's wipe to N+1. The first synchronized-output column
-    // then keeps pre-hide footer pixels. Wipe first, present once the generation
-    // is final.
+    // Per-pane wipe/present interleaves atlas generations and preserves stale footer pixels; wipe all before presenting.
     const order: string[] = []
     const first = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-reset')),
       clearWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-clear')),
-      presentForcedViewports: vi.fn<() => void>(() => order.push('first-present')),
+      presentViewports: vi.fn<() => void>(() => order.push('first-present')),
       refreshAllPanes: vi.fn<() => void>(() => order.push('first-refresh')),
       isVisibleForAtlasRecovery: () => true
     }
     const second = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-reset')),
       clearWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-clear')),
-      presentForcedViewports: vi.fn<() => void>(() => order.push('second-present')),
+      presentViewports: vi.fn<() => void>(() => order.push('second-present')),
       refreshAllPanes: vi.fn<() => void>(() => order.push('second-refresh')),
       isVisibleForAtlasRecovery: () => true
     }
@@ -93,7 +89,7 @@ describe('pane manager registry', () => {
     const visible = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       clearWebglTextureAtlases: vi.fn<() => void>(),
-      presentForcedViewports: vi.fn<() => void>(),
+      presentViewports: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>(),
       isVisibleForAtlasRecovery: () => true
     }
@@ -102,7 +98,7 @@ describe('pane manager registry', () => {
     const hidden = Array.from({ length: 64 }, () => ({
       resetWebglTextureAtlases: vi.fn<() => void>(),
       clearWebglTextureAtlases: vi.fn<() => void>(),
-      presentForcedViewports: vi.fn<() => void>(),
+      presentViewports: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>(),
       isVisibleForAtlasRecovery: () => false
     }))
@@ -114,13 +110,11 @@ describe('pane manager registry', () => {
     resetAndRefreshAllTerminalWebglAtlases()
 
     expect(visible.clearWebglTextureAtlases).toHaveBeenCalledOnce()
-    expect(visible.presentForcedViewports).toHaveBeenCalledOnce()
+    expect(visible.presentViewports).toHaveBeenCalledOnce()
     expect(
       hidden.every((manager) => manager.clearWebglTextureAtlases.mock.calls.length === 0)
     ).toBe(true)
-    expect(hidden.every((manager) => manager.presentForcedViewports.mock.calls.length === 0)).toBe(
-      true
-    )
+    expect(hidden.every((manager) => manager.presentViewports.mock.calls.length === 0)).toBe(true)
   })
 
   it('continues reset-and-refresh recovery when one manager throws', () => {
@@ -221,8 +215,7 @@ describe('pane manager registry', () => {
     expect(after).toEqual([before[1]])
   })
 
-  // Why: this is the number crash reports could never recover from breadcrumb
-  // multiplicity, since every manager's first pane is id 1.
+  // Every manager starts pane IDs at 1; breadcrumb multiplicity cannot recover population counts.
   it('counts panes across managers and drops them on unregister', () => {
     const twoPanes = {
       resetWebglTextureAtlases: vi.fn<() => void>(),

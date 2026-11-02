@@ -1,28 +1,8 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
-import { createEditorSlice } from './editor'
-import type { AppState } from '../types'
+import { createEditorStore } from './editor-slice-test-harness'
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 
 const MERGE_BASE = '1f3c0d9a5b6e7f8091a2b3c4d5e6f708192a3b4c'
-
-function createEditorStore(): StoreApi<AppState> {
-  // Only the editor slice + activeWorktreeId are needed for these tests.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((...args: any[]) => ({
-    activeWorktreeId: 'wt-1',
-    tabsByWorktree: {},
-    browserTabsByWorktree: {},
-    activeBrowserTabId: null,
-    activeBrowserTabIdByWorktree: {},
-    repos: [{ id: 'repo-1', path: '/repo' }],
-    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
-    folderWorkspaces: [],
-    projectGroups: [],
-    recordFeatureInteraction: vi.fn(),
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
-}
 
 function status(overrides: Partial<GitStatusResult> = {}): GitStatusResult {
   return {
@@ -79,9 +59,7 @@ describe('createEditorSlice branch line total', () => {
       )
     const published = store.getState().gitBranchLineTotalByWorktree['wt-1']
 
-    // Why: an omitted field is "not computed on this pass" — a soft-deadline
-    // miss or a cooldown — and the host keeps backfilling its cache. Clearing
-    // it blanked the chip mid-poll and then flashed it back.
+    // Omitted totals mean deferred computation; retain host backfill cache or polling flashes the chip blank.
     store.getState().setGitStatus('wt-1', status())
 
     expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toBe(published)
@@ -96,6 +74,32 @@ describe('createEditorSlice branch line total', () => {
     store.getState().setGitStatus('wt-1', { ...tick, branchLineTotal: undefined })
 
     expect(store.getState()).toBe(before)
+  })
+
+  it('clears an unavailable total and restores it only after a new exact result', () => {
+    const store = createEditorStore()
+    const total = { added: 0, removed: 3, mergeBase: MERGE_BASE }
+    store.getState().setGitStatus('wt-1', status({ branchLineTotal: total }))
+
+    store.getState().setGitStatus('wt-1', status({ branchLineTotalUnavailable: MERGE_BASE }))
+
+    expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toBeUndefined()
+    store.getState().setGitStatus('wt-1', status())
+    expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toBeUndefined()
+
+    const recovered = { added: 1, removed: 3, mergeBase: MERGE_BASE }
+    store.getState().setGitStatus('wt-1', status({ branchLineTotal: recovered }))
+    expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toEqual(recovered)
+  })
+
+  it('does not clear a newer total when an older fork point becomes unavailable', () => {
+    const store = createEditorStore()
+    const total = { added: 2, removed: 1, mergeBase: 'rebased' }
+    store.getState().setGitStatus('wt-1', status({ branchLineTotal: total }))
+
+    store.getState().setGitStatus('wt-1', status({ branchLineTotalUnavailable: MERGE_BASE }))
+
+    expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toEqual(total)
   })
 
   it('clears a stored total when the listing hits the entry cap', () => {
@@ -216,9 +220,7 @@ describe('createEditorSlice branch line total', () => {
     })
   })
 
-  // Moving a line from a source file into a test file leaves the totals
-  // identical; without the split in the equality check the hover would keep
-  // showing the old share.
+  // Source-to-test line moves preserve totals; compare split counts too or hover retains stale shares.
   it('produces a new state object when only the test split changed', () => {
     const store = createEditorStore()
     const tick = status({

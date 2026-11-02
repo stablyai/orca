@@ -1,10 +1,4 @@
-// Compare-and-swap lease over a single Cloud Storage object.
-//
-// Ported from apps/relay-fence-broker/src/mutation-lease.ts rather than imported: this action is
-// duplicated verbatim into stablyai/orca, so it must carry no repo-local imports. Only the
-// algorithm is shared (read metadata -> write with ifGenerationMatch -> 412 is a conflict ->
-// generation-matched delete -> an expired record is free). The broker's token path is NOT shared;
-// it reads the GCE metadata server, which does not exist on Actions runners.
+// Ported CAS algorithm from relay-fence-broker/mutation-lease.ts: keep repo-local imports out of this duplicated action. Broker metadata-server tokens cannot work on Actions runners; use generation-matched writes/deletes, 412 conflicts and expiry.
 
 export const LEASE_TTL_MS = 35 * 60 * 1_000
 export const RENEW_INTERVAL_MS = 5 * 60 * 1_000

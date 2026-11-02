@@ -83,8 +83,7 @@ export async function executeBrowserClientPageAutomationCommand(
     return run(event.command.params)
   }
   if (method !== 'browser.upload') {
-    // Why: v1 has no way to honor an agent-supplied download path on the remote workspace, and
-    // resolving it on the desktop is the defect this channel exists to remove.
+    // Protocol v1 cannot honor remote download paths; never resolve them on the desktop.
     throw new BrowserClientPageCommandError('browser_client_download_path_unsupported')
   }
   return executeBrowserClientUploadCommand({

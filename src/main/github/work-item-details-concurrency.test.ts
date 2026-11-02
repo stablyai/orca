@@ -1,3 +1,4 @@
+import type * as WorkItemDetailsTestLookup from './work-item-details-test-lookup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -27,8 +28,11 @@ vi.mock('./gh-utils', () => ({
   })
 }))
 
-vi.mock('./client', () => ({
+vi.mock('./client', async () => ({
   getWorkItem: getWorkItemMock,
+  getWorkItemWithRepository: (
+    await vi.importActual<typeof WorkItemDetailsTestLookup>('./work-item-details-test-lookup')
+  ).makeWorkItemDetailsLookupMock(getWorkItemMock),
   getPRComments: getPRCommentsMock,
   getPRChecks: getPRChecksMock
 }))
@@ -38,7 +42,6 @@ vi.mock('./github-api-repository', () => ({
   getOriginGitHubApiRepository: vi.fn(),
   githubHostExecOptions: (repository?: { host?: string } | null) =>
     repository?.host ? { host: repository.host } : {},
-  // Why: getWorkItemDetails awaits resolveGitHubRepoExecution and reads .ownerRepo.
   resolveGitHubRepoExecution: vi.fn(
     async (
       _repoPath: string,
@@ -60,8 +63,13 @@ vi.mock('./rate-limit', () => ({
 
 import { getWorkItemDetails } from './work-item-details'
 
+let activeGhReads = 0
+let peakGhReads = 0
+
 describe('getWorkItemDetails concurrency', () => {
   beforeEach(() => {
+    activeGhReads = 0
+    peakGhReads = 0
     let running = 0
     const queue: (() => void)[] = []
     acquireMock.mockReset()
@@ -112,38 +120,46 @@ describe('getWorkItemDetails concurrency', () => {
 
     ghExecFileAsyncMock.mockReset()
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const query = args.find((arg) => arg.startsWith('query=')) ?? ''
-      if (query.includes('viewerViewedState')) {
-        return {
-          stdout: JSON.stringify({
-            data: {
-              repository: {
-                pullRequest: {
-                  id: 'PR_id',
-                  files: { pageInfo: { hasNextPage: false }, nodes: [] }
+      activeGhReads++
+      peakGhReads = Math.max(peakGhReads, activeGhReads)
+      try {
+        await Promise.resolve()
+        const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+        if (query.includes('viewerViewedState')) {
+          return {
+            stdout: JSON.stringify({
+              data: {
+                repository: {
+                  pullRequest: { participants: { nodes: [] } },
+                  viewedPullRequest: {
+                    id: 'PR_id',
+                    files: { pageInfo: { hasNextPage: false }, nodes: [] }
+                  }
                 }
               }
-            }
-          })
+            })
+          }
         }
-      }
-      if (query.includes('participants')) {
-        return {
-          stdout: JSON.stringify({
-            data: { repository: { pullRequest: { participants: { nodes: [] } } } }
-          })
+        if (query.includes('participants')) {
+          return {
+            stdout: JSON.stringify({
+              data: { repository: { pullRequest: { participants: { nodes: [] } } } }
+            })
+          }
         }
-      }
-      const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint.includes('/files?')) {
-        return { stdout: '[]' }
-      }
-      if (/\/pulls\/\d+$/.test(endpoint)) {
-        return {
-          stdout: JSON.stringify({ body: 'body', head: { sha: 'head' }, base: { sha: 'base' } })
+        const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+        if (endpoint.includes('/files?')) {
+          return { stdout: '[]' }
         }
+        if (/\/pulls\/\d+$/.test(endpoint)) {
+          return {
+            stdout: JSON.stringify({ body: 'body', head: { sha: 'head' }, base: { sha: 'base' } })
+          }
+        }
+        return { stdout: JSON.stringify({ data: {} }) }
+      } finally {
+        activeGhReads--
       }
-      return { stdout: JSON.stringify({ data: {} }) }
     })
   })
 
@@ -153,6 +169,10 @@ describe('getWorkItemDetails concurrency', () => {
     )
 
     expect(details.map((detail) => detail?.item.number)).toEqual([1, 2, 3, 4])
+    expect(details.every((detail) => detail?.pullRequestId === 'PR_id')).toBe(true)
+    expect(peakGhReads).toBeGreaterThan(0)
+    expect(peakGhReads).toBeLessThanOrEqual(4)
+    expect(activeGhReads).toBe(0)
     expect(acquireMock.mock.calls.length).toBeGreaterThan(4)
     expect(releaseMock).toHaveBeenCalledTimes(acquireMock.mock.calls.length)
   })

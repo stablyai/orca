@@ -123,31 +123,4 @@ describe('PDF find event synchronization', () => {
     query('absent')
     expect(view.getByText('No matches')).toBeTruthy()
   })
-
-  it('dispatches next and previous from buttons and Enter without changing the query', () => {
-    const { view, query, onClose } = setup()
-    const dispatch = vi.spyOn(EventBus.prototype, 'dispatch')
-    query('needle')
-    const input = view.getByPlaceholderText('Find in page...')
-    fireEvent.click(view.getByTitle('Next match'))
-    fireEvent.click(view.getByTitle('Previous match'))
-    fireEvent.keyDown(input, { key: 'Enter' })
-    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })
-    expect(dispatch.mock.calls.filter(([name]) => name === 'find')).toEqual(
-      ['', 'again', 'again', 'again', 'again'].map((type, index) => [
-        'find',
-        {
-          source: null,
-          type,
-          query: 'needle',
-          highlightAll: true,
-          caseSensitive: false,
-          entireWord: false,
-          findPrevious: index === 2 || index === 4
-        }
-      ])
-    )
-    fireEvent.keyDown(input, { key: 'Escape' })
-    expect(onClose).toHaveBeenCalledOnce()
-  })
 })

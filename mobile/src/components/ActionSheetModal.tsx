@@ -1,16 +1,22 @@
 import { useRef, type ReactNode } from 'react'
-import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
+import { ActivityIndicator, View, Text } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from './list/ListGroup'
 
 export type ActionSheetAction = {
+  id?: string
   label: string
   icon?: LucideIcon
   renderIcon?: () => ReactNode
   destructive?: boolean
   disabled?: boolean
   hint?: string
+  /** Marks the choice that is current, as a trailing check. */
+  checked?: boolean
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -38,11 +44,14 @@ function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon):
 type ContentProps = {
   title?: string
   message?: string
+  /** Drawn between the header and the actions. */
+  children?: ReactNode
   actions: ActionSheetAction[]
   onClose?: () => void
 }
 
-export function ActionSheetContent({ title, message, actions, onClose }: ContentProps) {
+export function ActionSheetContent({ title, message, children, actions, onClose }: ContentProps) {
+  useMobileColorScheme()
   return (
     <>
       {(title || message) && (
@@ -56,53 +65,43 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
         </View>
       )}
 
-      <View style={styles.actionGroup}>
-        {actions.map((action, i) => {
+      {children}
+
+      <ListGroup separatorInset={LIST_LEADING_INSET}>
+        {actions.map((action) => {
           const Icon = iconForAction(action.label, action.destructive, action.icon)
-          const customIcon = action.renderIcon?.()
           return (
-            <View key={action.label}>
-              {i > 0 && <View style={styles.separator} />}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.action,
-                  action.disabled && styles.actionDisabled,
-                  pressed && !action.disabled && !action.loading && styles.actionPressed
-                ]}
-                disabled={action.disabled || action.loading}
-                onPress={() => {
-                  action.onPress()
-                  if (!action.skipAutoClose && onClose) {
-                    onClose()
-                  }
-                }}
-              >
-                {customIcon ?? (
+            <ListRow
+              key={action.id ?? action.label}
+              title={action.label}
+              subtitle={action.hint}
+              leading={
+                action.renderIcon?.() ?? (
                   <Icon
                     size={16}
                     color={action.destructive ? colors.statusRed : colors.textSecondary}
                   />
-                )}
-                <View style={styles.actionTextBlock}>
-                  <Text
-                    style={[
-                      styles.actionText,
-                      action.destructive && styles.actionTextDestructive,
-                      action.disabled && styles.actionTextDisabled
-                    ]}
-                  >
-                    {action.label}
-                  </Text>
-                  {action.hint ? <Text style={styles.actionHint}>{action.hint}</Text> : null}
-                </View>
-                {action.loading ? (
+                )
+              }
+              accessory={
+                action.loading ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : null}
-              </Pressable>
-            </View>
+                ) : undefined
+              }
+              selected={action.checked ? true : undefined}
+              destructive={action.destructive}
+              disabled={action.disabled}
+              busy={action.loading}
+              onPress={() => {
+                action.onPress()
+                if (!action.skipAutoClose && onClose) {
+                  onClose()
+                }
+              }}
+            />
           )
         })}
-      </View>
+      </ListGroup>
     </>
   )
 }
@@ -125,8 +124,7 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
       visible={visible}
       onClose={onClose}
       onAfterClose={() => {
-        // Why: iOS cannot present a second native modal until the action
-        // sheet's native window has fully unmounted.
+        // Wait for iOS sheet window to unmount before presenting another native modal.
         const pendingAction = pendingActionRef.current
         pendingActionRef.current = null
         pendingAction?.()
@@ -143,62 +141,19 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: LIST_ROW_PADDING,
     paddingBottom: spacing.sm
   },
   title: {
     fontSize: 13,
     fontWeight: '500',
-    color: colors.textMuted
-  },
-  message: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  actionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  actionDisabled: {
-    opacity: 0.58
-  },
-  actionPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  actionTextBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  actionText: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  actionTextDisabled: {
     color: colors.textSecondary
   },
-  actionTextDestructive: {
-    color: colors.statusRed
-  },
-  actionHint: {
-    marginTop: 2,
+  message: {
     fontSize: typography.metaSize,
-    color: colors.textMuted
+    color: colors.textMuted,
+    marginTop: 2
   }
-})
+}))

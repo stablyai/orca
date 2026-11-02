@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-06T04:19:41.191Z",
+  "platform": "darwin",
+  "command": ["codex", "--no-daemon", "-c", "tui.status_line=[\"model-name\"]"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Codex CLI 0.160.1; single model-name status item",
+  "exitCode": 0
+}

@@ -19,9 +19,7 @@ export type ActivePaneHookDescriptor = {
   worktreeId: string
 }
 
-// Why: worktree restoration can render the terminal surface before the legacy
-// global activeTabId settles. Prefer the active worktree's saved terminal tab
-// pointer, then fall back to the first terminal tab.
+// Restoration may mount before global activeTabId settles; prefer the worktree’s saved tab, then its first terminal.
 export async function resolveActiveTabId(page: Page): Promise<string | null> {
   return page.evaluate(() => {
     const store = window.__store
@@ -48,8 +46,6 @@ export async function resolveActiveTabId(page: Page): Promise<string | null> {
   })
 }
 
-// Why: reads the buffer through the SerializeAddon that the PaneManager
-// already loads for every terminal pane (exposed via VITE_EXPOSE_STORE).
 export async function getTerminalContent(page: Page, charLimit = 4000): Promise<string> {
   const tabId = await resolveActiveTabId(page)
   if (!tabId) {

@@ -38,8 +38,13 @@ vi.mock('./EditorPanelHeaderPath', () => ({
   EditorPanelHeaderPath: () => null
 }))
 
-vi.mock('./EditorPanelMarkdownActionsMenu', () => ({
-  EditorPanelMarkdownActionsMenu: () => null
+vi.mock('./EditorPanelActionsMenu', () => ({
+  EditorPanelActionsMenu: ({ fileLocationActions }: { fileLocationActions?: React.ReactNode }) =>
+    fileLocationActions ?? null
+}))
+
+vi.mock('./EditorFileLocationMenuItems', () => ({
+  EditorFileLocationMenuItems: () => <span data-file-location-actions />
 }))
 
 vi.mock('@/components/artifacts/ArtifactPublishButton', () => ({
@@ -90,7 +95,6 @@ const baseProps = {
   onOpenDiffTargetFile: vi.fn(),
   onOpenPreviewToSide: vi.fn(),
   onOpenMarkdownPreview: vi.fn(),
-  onOpenContainingFolder: vi.fn(),
   onToggleSideBySide: vi.fn(),
   onEditorToggleChange: vi.fn(),
   onToggleMarkdownTableOfContents: vi.fn(),
@@ -103,6 +107,30 @@ function renderHeader(overrides: Partial<ComponentProps<typeof EditorPanelHeader
 }
 
 describe('EditorPanelHeader', () => {
+  it.each(['edit', 'markdown-preview'] as const)('offers file actions for %s tabs', (mode) => {
+    expect(renderHeader({ activeFile: { ...activeFile, mode } })).toContain(
+      'data-file-location-actions'
+    )
+  })
+
+  it.each(['diff', 'conflict-review', 'check-details'] as const)(
+    'does not offer on-disk file actions for %s documents',
+    (mode) => {
+      expect(renderHeader({ activeFile: { ...activeFile, mode } })).not.toContain(
+        'data-file-location-actions'
+      )
+    }
+  )
+
+  it('offers file actions for a diff with an openable working file', () => {
+    expect(renderHeader({ isSingleDiff: true, openFileState: { canOpen: true } })).toContain(
+      'data-file-location-actions'
+    )
+    expect(renderHeader({ isSingleDiff: true, openFileState: { canOpen: false } })).not.toContain(
+      'data-file-location-actions'
+    )
+  })
+
   it('shares one tooltip provider across the diff header controls', () => {
     const html = renderHeader()
 
@@ -113,28 +141,27 @@ describe('EditorPanelHeader', () => {
     expect(html).toContain('aria-label="Next change"')
   })
 
-  it('offers artifact sharing only on non-diff Markdown surfaces', () => {
+  it('offers artifact sharing on non-diff surfaces given a shareable document', () => {
     const createRequest = vi.fn()
 
     expect(
       renderHeader({
         isDiffSurface: false,
-        isMarkdown: true,
-        createMarkdownArtifactRequest: createRequest
+        isMarkdown: false,
+        createArtifactRequest: createRequest
       })
     ).toContain('data-artifact-publish="true"')
     expect(
       renderHeader({
         isDiffSurface: true,
         isMarkdown: true,
-        createMarkdownArtifactRequest: createRequest
+        createArtifactRequest: createRequest
       })
     ).not.toContain('data-artifact-publish')
     expect(
       renderHeader({
         isDiffSurface: false,
-        isMarkdown: false,
-        createMarkdownArtifactRequest: createRequest
+        isMarkdown: true
       })
     ).not.toContain('data-artifact-publish')
   })

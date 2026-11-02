@@ -100,8 +100,8 @@ describe('Persisted Claude lead boundaries', () => {
       lastAssistantMessage: 'Lead finished.',
       subagents: [expect.objectContaining({ id: 'arestored-child', state: 'working' })]
     })
-    const turnCompletedAt = firstServer.getStatusSnapshot()[0]?.turnCompletedAt
-    expect(turnCompletedAt).toEqual(expect.any(Number))
+    // A subagent holds the lead's finish, so its Stop is not stamped for announcement.
+    expect(firstServer.getStatusSnapshot()[0]?.turnCompletedAt).toBeUndefined()
     expect(firstServer._getStateForTests().lastStatusByPaneKey.get(PANE)?.hookEventName).toBe(
       'Stop'
     )
@@ -121,7 +121,7 @@ describe('Persisted Claude lead boundaries', () => {
         agentType: 'claude',
         prompt: 'finish after child',
         lastAssistantMessage: 'Lead finished.',
-        turnCompletedAt
+        mainAgent: expect.objectContaining({ state: 'done' })
       })
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
       expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
@@ -166,7 +166,7 @@ describe('Persisted Claude lead boundaries', () => {
       expect(server.getStatusSnapshot()[0]).toMatchObject({
         state: 'done',
         agentType: 'claude',
-        turnCompletedAt: expect.any(Number)
+        mainAgent: expect.objectContaining({ state: 'done' })
       })
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
     } finally {
@@ -212,62 +212,6 @@ describe('Persisted Claude lead boundaries', () => {
       expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', agentType: 'claude' })
       expect(server.getStatusSnapshot()[0]?.restoredUnconfirmed).toBeUndefined()
       expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('clears a persisted lead boundary when sticky permission hides new lead work', async () => {
-    const firstServer = new AgentHookServer()
-    await firstServer.start({ env: 'production', userDataPath })
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'resume after boundary' })
-    )
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'achild-a' })
-    )
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'achild-b' })
-    )
-    await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop' }))
-    await postHookEvent(
-      firstServer,
-      buildBody({
-        hook_event_name: 'PermissionRequest',
-        agent_id: 'achild-a',
-        tool_name: 'Bash',
-        tool_input: { command: 'false' }
-      })
-    )
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'PreToolUse', tool_name: 'Read' })
-    )
-    expect(firstServer.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
-    expect(mainAgentState(firstServer)).toBe('working')
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achild-a' })
-    )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
-
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      await postHookEvent(
-        server,
-        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achild-b' })
-      )
-
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'working',
-        restoredUnconfirmed: true
-      })
-      expect(server.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
     } finally {
       server.stop()
     }

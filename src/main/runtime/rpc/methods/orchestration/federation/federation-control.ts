@@ -1,14 +1,19 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
 import { defineMethod } from '../../../core'
+import { isUserKeptWorkerTerminalOwner } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import { readExactWorkerOutput } from '../worker/worker-output'
+import { exposeWorkerRetainReceipt } from '../worker/worker-terminal-resource-presentation'
+import { archiveWorkerOutputBeforeStop } from '../worker/worker-stop-archive'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
-import { inspectRemoteAttachment, requireHomeAttachment } from './federation-attachment-observation'
 import {
-  readRemoteAttachmentArchive,
-  releaseRemoteAttachment
-} from './federated-worker-release-host'
+  inspectRemoteAttachment,
+  observeRemoteAttachmentLiveness,
+  requireHomeAttachment
+} from './federation-attachment-observation'
+import { releaseRemoteAttachment } from './federated-worker-release-host'
+import { readRemoteAttachmentArchive } from './remote-attachment-archive-read'
 import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
@@ -19,11 +24,14 @@ import {
 export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.federationFleetSnapshot',
+    permission: 'workspace',
     params: FederationFleetSnapshotParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const items = await mapWithConcurrency(params.dispatchIds, 16, async (dispatchId) => {
         requireHomeAttachment(runtime, dispatchId, authenticatedCallerFingerprint)
-        const observation = await inspectRemoteAttachment(runtime, dispatchId)
+        const observation = await observeRemoteAttachmentLiveness(runtime, dispatchId)
+        const db = runtime.getOrchestrationDb()
+        const autoReleaseAt = db.getLiveWorkerTerminalAutoReleaseAt(dispatchId)
         return {
           dispatchId,
           observation: {
@@ -32,7 +40,11 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
                 ? observation.status
                 : 'unverifiable',
             exactWorker: observation.exact,
-            ...(observation.reason ? { reason: observation.reason } : {})
+            ...(observation.reason ? { reason: observation.reason } : {}),
+            ...(db.getRemoteDispatchAttachment(dispatchId)?.stage === 'released'
+              ? { released: true }
+              : {}),
+            ...(autoReleaseAt ? { autoReleaseAt } : {})
           }
         }
       })
@@ -41,6 +53,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationRelease',
+    permission: 'workspace',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -53,7 +66,20 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     }
   }),
   defineMethod({
+    name: 'orchestration.federationRetain',
+    permission: 'workspace',
+    params: FederationDispatchParams,
+    handler: (params, { runtime, authenticatedCallerFingerprint }) => {
+      requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+      return exposeWorkerRetainReceipt(
+        params.dispatchId,
+        runtime.getOrchestrationDb().retainRemoteAttachmentTerminalResource(params.dispatchId)
+      )
+    }
+  }),
+  defineMethod({
     name: 'orchestration.federationShow',
+    permission: 'workspace',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -61,11 +87,15 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
         params.dispatchId,
         authenticatedCallerFingerprint
       )
-      const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+      const observation = await observeRemoteAttachmentLiveness(runtime, params.dispatchId)
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
         attachment: exposeRemoteAttachment(attachment),
+        autoReleaseAt: runtime
+          .getOrchestrationDb()
+          .getLiveWorkerTerminalAutoReleaseAt(params.dispatchId),
+        keptOpen: isUserKeptWorkerTerminalOwner(runtime.getOrchestrationDb(), params.dispatchId),
         terminal: observation.exact ? observation.terminal : null,
         observation: {
           status: observation.status,
@@ -78,13 +108,12 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationRead',
+    permission: 'workspace',
     params: FederationReadParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
-      // Why `=== 'exited'` rather than `!== 'live'`: the other non-live
-      // statuses are already covered by the two guards, and an unverifiable
-      // terminal is still readable — losing stop-contact is not an exit.
+      // Only exited proves death; an unverifiable terminal may still be readable after stop-contact loss.
       if (!observation.exact || !observation.terminal || observation.status === 'exited') {
         throw new OrchestrationError(
           'worker_identity_changed',
@@ -103,6 +132,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationReadOutput',
+    permission: 'workspace',
     params: FederationOutputReadParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       const attachment = requireHomeAttachment(
@@ -186,6 +216,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationStop',
+    permission: 'workspace',
     params: FederationDispatchParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -213,6 +244,13 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           lastError: attachment.last_error
         }
       }
+      await archiveWorkerOutputBeforeStop({
+        runtime,
+        db,
+        dispatchId: params.dispatchId,
+        terminalHandle: observation.terminal.handle,
+        attachedAt: begun.created_at
+      })
       try {
         const close = await runtime.closeTerminal(observation.terminal.handle)
         if (!close.ptyKilled) {

@@ -1,5 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
-import { writeFileToClipboard, type ClipboardFileDeps } from './clipboard-file-copy'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+import {
+  CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS,
+  writeFileToClipboard,
+  type ClipboardFileDeps
+} from './clipboard-file-copy'
+
+function exited(code: number | null): ProcessResult {
+  return { code, signal: null, stdout: '', stderr: '', timedOut: false }
+}
 
 function makeDeps(overrides: Partial<ClipboardFileDeps> = {}): ClipboardFileDeps {
   return {
@@ -7,12 +16,17 @@ function makeDeps(overrides: Partial<ClipboardFileDeps> = {}): ClipboardFileDeps
     desktop: undefined,
     resolveFilePath: async (path) => ({ ok: true, path }),
     writeBuffer: vi.fn(),
-    runCommand: vi.fn(async () => {}),
+    runProcess: vi.fn(async () => exited(0)),
     ...overrides
   }
 }
 
 describe('writeFileToClipboard', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.useRealTimers()
+  })
+
   it('rejects relative paths without touching the clipboard', async () => {
     const writeBuffer = vi.fn()
     expect(await writeFileToClipboard('relative/file.png', makeDeps({ writeBuffer }))).toEqual({
@@ -40,6 +54,15 @@ describe('writeFileToClipboard', () => {
     ).toEqual({ ok: false, reason: 'access-denied' })
   })
 
+  it('fails without publishing when path resolution never settles', async () => {
+    vi.useFakeTimers()
+    const deps = makeDeps({ resolveFilePath: () => new Promise(() => undefined) })
+    const result = writeFileToClipboard('/mnt/stale/file.txt', deps)
+    await vi.advanceTimersByTimeAsync(CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS)
+    await expect(result).resolves.toEqual({ ok: false, reason: 'clipboard-write-failed' })
+    expect(deps.writeBuffer).not.toHaveBeenCalled()
+  })
+
   it('writes a public.file-url buffer on macOS', async () => {
     const writeBuffer = vi.fn()
     const result = await writeFileToClipboard(
@@ -50,7 +73,6 @@ describe('writeFileToClipboard', () => {
     expect(writeBuffer).toHaveBeenCalledTimes(1)
     const [format, buffer] = writeBuffer.mock.calls[0]
     expect(format).toBe('public.file-url')
-    // spaces are percent-encoded into the file URL
     expect(buffer.toString('utf8')).toBe('file:///repo/a%20b.png')
   })
 
@@ -79,82 +101,94 @@ describe('writeFileToClipboard', () => {
     )
   })
 
-  it('shells out to Set-Clipboard on Windows, escaping quotes', async () => {
-    const runCommand = vi.fn(async (_command: string, _args: string[]) => {})
+  it('copies on Windows with Set-Clipboard, passing the path as data, never as script', async () => {
+    vi.stubEnv('SystemRoot', 'D:\\Win')
+    vi.stubEnv('ORCA_TEST_INHERITED', 'kept')
+    const runProcess = vi.fn(async (_spec: ProcessSpec) => exited(0))
     const result = await writeFileToClipboard(
-      "/repo/o'brien.png",
-      makeDeps({ platform: 'win32', runCommand })
+      "/repo/o'brien $(calc).png",
+      makeDeps({ platform: 'win32', runProcess })
     )
     expect(result).toEqual({ ok: true })
-    const [command, args] = runCommand.mock.calls[0]
-    expect(command).toBe('powershell.exe')
-    expect(args.join(' ')).toContain("Set-Clipboard -LiteralPath '/repo/o''brien.png'")
+    const spec = runProcess.mock.calls[0][0]
+    // Absolute System32 path, never a bare name resolved on PATH.
+    expect(spec.program).toBe('D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+    expect(spec.args).toEqual([
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      'Set-Clipboard -LiteralPath $env:ORCA_CLIPBOARD_FILE'
+    ])
+    expect(spec.env?.ORCA_CLIPBOARD_FILE).toBe("/repo/o'brien $(calc).png")
+    // Preserve inherited environment or PowerShell cannot start.
+    expect(spec.env?.ORCA_TEST_INHERITED).toBe('kept')
   })
 
-  it('doubles typographic single quotes, which PowerShell also treats as delimiters', async () => {
-    const runCommand = vi.fn(async (_command: string, _args: string[]) => {})
-    await writeFileToClipboard(
-      '/repo/o\u2019brien.png',
-      makeDeps({ platform: 'win32', runCommand })
-    )
-    expect(runCommand.mock.calls[0][1].join(' ')).toContain(
-      "Set-Clipboard -LiteralPath '/repo/o\u2019\u2019brien.png'"
-    )
-  })
-
-  it('reports a failure (never throws) when PowerShell rejects on Windows', async () => {
-    const runCommand = vi.fn(async (_command: string, _args: string[]) => {
-      throw new Error('powershell.exe not found')
-    })
+  it.each([
+    ['exits non-zero', async () => exited(1)],
+    ['times out', async () => ({ ...exited(null), timedOut: true })],
+    [
+      'cannot start',
+      async () => {
+        throw new Error('spawn ENOENT')
+      }
+    ]
+  ])('reports a Windows copy whose PowerShell %s as failed', async (_, run) => {
     expect(
-      await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'win32', runCommand }))
+      await writeFileToClipboard(
+        '/repo/a.png',
+        makeDeps({ platform: 'win32', runProcess: vi.fn(run) })
+      )
     ).toEqual({ ok: false, reason: 'clipboard-command-failed' })
   })
 
   it('uses the KDE text/uri-list payload on a KDE desktop', async () => {
-    const runCommand = vi.fn(async (_command: string, _args: string[], _stdin?: string) => {})
+    const runProcess = vi.fn(async (_spec: ProcessSpec) => exited(0))
     const result = await writeFileToClipboard(
       '/repo/a b.png',
-      makeDeps({ platform: 'linux', desktop: 'KDE', runCommand })
+      makeDeps({ platform: 'linux', desktop: 'KDE', runProcess })
     )
     expect(result).toEqual({ ok: true })
-    const [command, args, stdin] = runCommand.mock.calls[0]
-    expect(command).toBe('wl-copy')
-    expect(args).toContain('text/uri-list')
-    expect(stdin).toBe('file:///repo/a%20b.png\r\n')
+    const spec = runProcess.mock.calls[0][0]
+    expect(spec.program).toBe('wl-copy')
+    expect(spec.args).toContain('text/uri-list')
+    expect(spec.input).toBe('file:///repo/a%20b.png\r\n')
   })
 
   it('uses the GNOME copied-files payload on non-KDE desktops', async () => {
-    const runCommand = vi.fn(async (_command: string, _args: string[], _stdin?: string) => {})
+    const runProcess = vi.fn(async (_spec: ProcessSpec) => exited(0))
     await writeFileToClipboard(
       '/repo/a.png',
-      makeDeps({ platform: 'linux', desktop: 'GNOME', runCommand })
+      makeDeps({ platform: 'linux', desktop: 'GNOME', runProcess })
     )
-    const [, args, stdin] = runCommand.mock.calls[0]
-    expect(args).toContain('x-special/gnome-copied-files')
-    expect(stdin).toBe('copy\nfile:///repo/a.png')
+    const spec = runProcess.mock.calls[0][0]
+    expect(spec.args).toContain('x-special/gnome-copied-files')
+    expect(spec.input).toBe('copy\nfile:///repo/a.png')
+  })
+
+  it('ignores helper stdout/stderr so a forked selection owner cannot hold the run open', async () => {
+    const runProcess = vi.fn(async (_spec: ProcessSpec) => exited(0))
+    await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'linux', runProcess }))
+    expect(runProcess.mock.calls[0][0].stdio).toEqual(['pipe', 'ignore', 'ignore'])
   })
 
   it('tries each Linux tool and reports unsupported when all fail', async () => {
-    const runCommand = vi.fn(async (_command: string, _args: string[]) => {
-      throw new Error('command not found')
-    })
+    const runProcess = vi
+      .fn(async (_spec: ProcessSpec): Promise<ProcessResult> => exited(1))
+      .mockRejectedValueOnce(new Error('spawn wl-copy ENOENT'))
     expect(
-      await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'linux', runCommand }))
+      await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'linux', runProcess }))
     ).toEqual({ ok: false, reason: 'unsupported-platform' })
-    expect(runCommand).toHaveBeenCalledTimes(2) // wl-copy, then xclip
+    expect(runProcess.mock.calls.map(([spec]) => spec.program)).toEqual(['wl-copy', 'xclip'])
   })
 
-  it('succeeds on Linux when a clipboard tool is available', async () => {
-    const runCommand = vi.fn(async (command: string, _args: string[]) => {
-      if (command === 'wl-copy') {
-        return
-      }
-      throw new Error('no xclip')
-    })
+  it('falls back to xclip when wl-copy fails', async () => {
+    const runProcess = vi.fn(async (spec: ProcessSpec) =>
+      spec.program === 'xclip' ? exited(0) : exited(1)
+    )
     expect(
-      await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'linux', runCommand }))
+      await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'linux', runProcess }))
     ).toEqual({ ok: true })
-    expect(runCommand.mock.calls[0][0]).toBe('wl-copy')
+    expect(runProcess).toHaveBeenCalledTimes(2)
   })
 })

@@ -1,7 +1,6 @@
 import os from 'node:os'
 import { join } from 'node:path'
 
-/** Where a Cursor credential was found. */
 export type CursorAuthSource = 'keychain' | 'cli' | 'desktop'
 
 function cursorConfigRoot(source: Exclude<CursorAuthSource, 'keychain'>): string {
@@ -18,7 +17,7 @@ function cursorConfigRoot(source: Exclude<CursorAuthSource, 'keychain'>): string
   return join(root, source === 'desktop' ? 'Cursor' : 'cursor')
 }
 
-/** Cursor IDE global storage; holds `cursorAuth/*` keys in an `ItemTable` row. */
+/** IDE ItemTable containing cursorAuth/* keys. */
 export function getCursorDesktopStateDbPath(): string {
   return join(cursorConfigRoot('desktop'), 'User', 'globalStorage', 'state.vscdb')
 }
@@ -28,7 +27,7 @@ export function getCursorCliAuthPath(): string {
   return join(cursorConfigRoot('cli'), 'auth.json')
 }
 
-/** `cursor-agent` settings file; its `authInfo` block carries the signed-in identity, never a token. */
+/** CLI identity only; authInfo contains no token. */
 export function getCursorCliConfigPath(): string {
   return join(cursorConfigRoot('cli'), 'cli-config.json')
 }

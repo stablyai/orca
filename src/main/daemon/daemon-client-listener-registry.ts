@@ -1,5 +1,4 @@
-// Why: unsubscribe is by listener identity, so re-registering the same function
-// twice yields two entries and each returned disposer drops only one of them.
+// Track registrations separately so each disposer removes only its own copy of a repeated listener.
 export class DaemonClientListeners<T> {
   private listeners: T[] = []
 

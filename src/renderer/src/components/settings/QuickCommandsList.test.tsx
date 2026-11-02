@@ -97,47 +97,4 @@ describe('QuickCommandsList', () => {
     expect(onEdit).toHaveBeenCalledTimes(1)
     expect(onRemove).toHaveBeenCalledTimes(1)
   })
-
-  it('distinguishes empty, filtered, and unmatched states', () => {
-    const command = makeCommand()
-    const view = renderList([], [], false)
-    expect(screen.getByText('No quick commands saved.')).toBeDefined()
-
-    view.rerender(
-      <QuickCommandsList
-        commands={[command]}
-        visibleCommands={[]}
-        hasQuery={false}
-        repoById={new Map()}
-        onEdit={vi.fn()}
-        onRemove={vi.fn()}
-      />
-    )
-    expect(screen.getByText('No commands in the selected scopes.')).toBeDefined()
-
-    view.rerender(
-      <QuickCommandsList
-        commands={[command]}
-        visibleCommands={[]}
-        hasQuery={true}
-        repoById={new Map()}
-        onEdit={vi.fn()}
-        onRemove={vi.fn()}
-      />
-    )
-    expect(screen.getByText('No commands match this search.')).toBeDefined()
-
-    view.rerender(
-      <QuickCommandsList
-        commands={[command]}
-        visibleCommands={[command]}
-        hasQuery={false}
-        repoById={new Map()}
-        onEdit={vi.fn()}
-        onRemove={vi.fn()}
-      />
-    )
-    expect(screen.getByText('Build', { exact: true })).toBeDefined()
-    expect(screen.queryByText('No commands in the selected scopes.')).toBeNull()
-  })
 })

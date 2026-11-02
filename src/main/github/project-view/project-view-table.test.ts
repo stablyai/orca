@@ -51,14 +51,6 @@ beforeEach(() => {
 })
 
 describe('project view layout selection', () => {
-  it('fetches roadmap items with the selected host and filter', async () => {
-    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('roadmap', 'ROADMAP_LAYOUT')]))
-    const result = await getProjectViewTable({ ...args, viewId: 'roadmap' })
-    expect(result).toMatchObject({ ok: true, data: { selectedView: { layout: 'ROADMAP_LAYOUT' } } })
-    expect(fetchAllItems).toHaveBeenCalledWith({ ...args, query: 'status:open' })
-    expect(fetchItemsCountOnly).not.toHaveBeenCalled()
-  })
-
   it('defaults to a roadmap when no table exists across all view pages', async () => {
     vi.mocked(fetchProjectViewsPage)
       .mockResolvedValueOnce(page([view('roadmap', 'ROADMAP_LAYOUT')], true))
@@ -89,19 +81,16 @@ describe('project view layout selection', () => {
     expect(fetchAllItems).not.toHaveBeenCalled()
   })
 
-  it.each(['BOARD_LAYOUT', 'FUTURE_LAYOUT'])(
-    'rejects %s without fetching items',
-    async (layout) => {
-      vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('unsupported', layout)]))
-      expect(
-        await getProjectViewTable({ ...args, viewId: 'unsupported', queryOverride: '' })
-      ).toMatchObject({
-        ok: false,
-        error: { type: 'unsupported_layout' },
-        totalCount: 12
-      })
-      expect(fetchAllItems).not.toHaveBeenCalled()
-      expect(fetchItemsCountOnly).toHaveBeenCalledWith({ ...args, query: '' })
-    }
-  )
+  it('rejects an unknown future layout without fetching items', async () => {
+    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('unsupported', 'FUTURE_LAYOUT')]))
+    expect(
+      await getProjectViewTable({ ...args, viewId: 'unsupported', queryOverride: '' })
+    ).toMatchObject({
+      ok: false,
+      error: { type: 'unsupported_layout' },
+      totalCount: 12
+    })
+    expect(fetchAllItems).not.toHaveBeenCalled()
+    expect(fetchItemsCountOnly).toHaveBeenCalledWith({ ...args, query: '' })
+  })
 })

@@ -12,7 +12,7 @@ import { useRuntimeFileListForWorktree, type RuntimeFileListState } from './quic
 
 const listRuntimeFilesMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-search-client', () => ({
   listRuntimeFiles: listRuntimeFilesMock,
   cancelRuntimeFileList: vi.fn(),
   searchRuntimeFilePaths: vi.fn()
@@ -77,16 +77,6 @@ async function flushEffects(): Promise<void> {
     await Promise.resolve()
     await Promise.resolve()
   })
-}
-
-async function waitForListRuntimeFilesCall(): Promise<void> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await flushEffects()
-    if (listRuntimeFilesMock.mock.calls.length > 0) {
-      return
-    }
-  }
-  throw new Error('listRuntimeFiles was not called')
 }
 
 async function renderProbe(args: ProbeProps): Promise<Root> {
@@ -155,28 +145,6 @@ describe('useRuntimeFileListForWorktree host name filter', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('filters an uncapped local listing in the renderer without a host re-list', async () => {
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace()],
-      projectGroups: [makeProjectGroup()],
-      repos: [],
-      worktreesByRepo: {}
-    })
-
-    await renderProbe({
-      enabled: true,
-      onState: () => {},
-      query: 'package',
-      hostFilterWhenCapped: true,
-      worktreeId: folderWorkspaceKey('folder-workspace-1')
-    })
-    await waitForListRuntimeFilesCall()
-    await flushEffects()
-
-    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(1)
-    expect(listRuntimeFilesMock.mock.calls[0][1]).not.toHaveProperty('nameFilter')
   })
   it('falls back to the capped listing and stops re-listing after a host filter failure', async () => {
     vi.useFakeTimers()

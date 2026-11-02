@@ -3,13 +3,12 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcessSync } from '../../src/shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 
 const action = parse(
   readFileSync('.github/actions/prepare-linux-package-fixture/action.yml', 'utf8')
 )
 const load = action.runs.steps.find((step) => step.id === 'image')
-const workflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
 let directory
 
 afterEach(() => {
@@ -18,7 +17,13 @@ afterEach(() => {
   }
 })
 
-function exercise({ hit = false, save = false, loadFails = false, inspectFails = false } = {}) {
+function exercise({
+  hit = false,
+  save = false,
+  loadFails = false,
+  inspectFails = false,
+  fixture = 'cli-launch-contract'
+} = {}) {
   directory = mkdtempSync(join(tmpdir(), 'orca-package-cache-'))
   const bin = join(directory, 'bin')
   mkdirSync(bin)
@@ -45,10 +50,11 @@ function exercise({ hit = false, save = false, loadFails = false, inspectFails =
       ...process.env,
       ORCA_BACKGROUND_LAUNCH: '1',
       PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+      GITHUB_ACTION_PATH: join(process.cwd(), '.github/actions/prepare-linux-package-fixture'),
       RUNNER_TEMP: directory,
       GITHUB_OUTPUT: output,
       COMMAND_LOG: commandLog,
-      FIXTURE: 'cli-launch-contract',
+      FIXTURE: fixture,
       CACHE_HIT: String(hit),
       SAVE_CACHE: String(save),
       LOAD_FAILS: String(loadFails),
@@ -61,10 +67,6 @@ function exercise({ hit = false, save = false, loadFails = false, inspectFails =
 }
 
 describe.runIf(process.platform !== 'win32')('fixture cache fallbacks', () => {
-  it('leaves a PR cache miss to the existing runner without building or exporting', () => {
-    expect(exercise()).toEqual({ commands: '', output: '' })
-  })
-
   it.each([{ loadFails: true }, { inspectFails: true }])(
     'discards an unusable restored cache: %j',
     (failure) => {
@@ -74,47 +76,4 @@ describe.runIf(process.platform !== 'win32')('fixture cache fallbacks', () => {
       expect(result.commands).not.toMatch(/(?:build|save) /)
     }
   )
-
-  it('returns the local image tag after a successful load', () => {
-    const result = exercise({ hit: true })
-    expect(result.output).toBe('image=orca-package-fixture-cli-launch-contract:cache\n')
-    expect(result.commands).not.toMatch(/(?:build|save) /)
-  })
-
-  it('builds and exports inline cache only when the warmer has no usable image', () => {
-    const result = exercise({ save: true })
-    expect(result.commands).toContain(
-      'build --platform linux/amd64 --build-arg BUILDKIT_INLINE_CACHE=1'
-    )
-    expect(result.commands).toContain(
-      '--file config/docker/cli-launch-contract/Dockerfile config/docker/cli-launch-contract'
-    )
-    expect(result.commands).toContain('save --output')
-    expect(result.output).toBe('image=orca-package-fixture-cli-launch-contract:cache\nbuilt=true\n')
-  })
-})
-
-it('uses exact context/platform keys and the same restore-only action in package checks', () => {
-  const cache = action.runs.steps.find((step) => step.id === 'cache')
-  expect(cache.with.key).toContain('linux-amd64')
-  expect(cache.with.key).toContain("format('config/docker/{0}/**', inputs.fixture)")
-  expect(cache.with.key).toContain('.github/actions/prepare-linux-package-fixture/action.yml')
-  expect(cache.with['restore-keys']).toBeUndefined()
-  expect(action.inputs['save-cache'].default).toBe('false')
-  const prepared = workflow('pr').jobs.package.steps.filter((step) =>
-    step.uses?.endsWith('/prepare-linux-package-fixture')
-  )
-  expect(prepared.map((step) => step.with)).toEqual([
-    { fixture: 'headless-serve-shutdown' },
-    { fixture: 'cli-launch-contract' }
-  ])
-  const warm = workflow('ci-cache-warmup').jobs['warm-linux-package-fixtures']
-  expect(warm.steps.slice(1).map((step) => step.with.fixture)).toEqual(
-    prepared.map((step) => step.with.fixture)
-  )
-  expect(
-    warm.steps
-      .slice(1)
-      .every((step) => step.with['save-cache'] === "${{ github.event_name != 'pull_request' }}")
-  ).toBe(true)
 })

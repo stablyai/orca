@@ -1,25 +1,9 @@
 import type { Terminal } from '@xterm/xterm'
+import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
+import { terminalPreviewApiFor } from './terminal-preview-api'
 
 const FIT_REQUEST_DEBOUNCE_MS = 200
-// Mirror the runtime's clampTerminalViewport so a request always matches what lands.
-const FIT_MIN_COLS = 20
-const FIT_MAX_COLS = 240
-const FIT_MIN_ROWS = 8
-const FIT_MAX_ROWS = 120
-
-function clampGridAxis(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-/**
- * Negotiates the PTY grid for the popout terminal dialog: measures the live
- * terminal's cell size, computes the grid the dialog box can hold, and asks
- * main to claim it (remote-desktop viewer machinery — the main-window pane
- * parks at the claimed grid and reclaims its own geometry once the claim is
- * released). Requests are keyed by target dims and never re-sent for an
- * unchanged target, so a host or phone taking the grid back doesn't start a
- * resize tug-of-war.
- */
+/** Claim the dialog-sized PTY grid once per target size; unchanged requests must not fight a host or phone reclaiming geometry. */
 export function createPreviewGridClaim(args: {
   ptyId: string
   container: HTMLElement
@@ -52,21 +36,19 @@ export function createPreviewGridClaim(args: {
     ) {
       return
     }
-    const cols = clampGridAxis(Math.floor(box.clientWidth / cellWidth), FIT_MIN_COLS, FIT_MAX_COLS)
-    const rows = clampGridAxis(
-      Math.floor(box.clientHeight / cellHeight),
-      FIT_MIN_ROWS,
-      FIT_MAX_ROWS
+    const { cols, rows } = clampTerminalViewport(
+      Math.floor(box.clientWidth / cellWidth),
+      Math.floor(box.clientHeight / cellHeight)
     )
     const fitKey = `${cols}x${rows}`
     if (fitKey === lastRequestedFit) {
       return
     }
     lastRequestedFit = fitKey
-    // The resize triggers a main-side resync push; the reconnect snapshot
-    // carries the new grid. If the claim didn't land (a phone owns the size),
-    // the dialog's scaled fallback rendering stays correct as-is.
-    void window.api.terminalPreview.fit(args.ptyId, cols, rows).catch(() => undefined)
+    // Successful claims trigger resync with the new grid; rejected claims keep the scaled fallback correct.
+    void terminalPreviewApiFor(args.ptyId)
+      .fit(args.ptyId, cols, rows)
+      .catch(() => undefined)
   }
 
   const schedule = (): void => {

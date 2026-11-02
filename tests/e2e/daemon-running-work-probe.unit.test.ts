@@ -3,18 +3,14 @@ import { Session } from '../../src/main/daemon/session'
 import { inspectTerminalHostProcess } from '../../src/main/daemon/terminal-host-process-inspection'
 import type * as SnapshotReader from '../../src/shared/process-table-snapshot-reader'
 import type { ProcessTableRow } from '../../src/shared/process-table-snapshot'
-import { probePtyRunningWork } from '../../src/renderer/src/components/terminal/pty-running-work-probe'
+import { probePtyRunningWorkWithInspection } from '../../src/shared/pty-running-work-probe'
 
-const { readSnapshot, inspectRuntime } = vi.hoisted(() => ({
-  readSnapshot: vi.fn(),
-  inspectRuntime: vi.fn()
+const { readSnapshot } = vi.hoisted(() => ({
+  readSnapshot: vi.fn()
 }))
 vi.mock('../../src/shared/process-table-snapshot-reader', async (importOriginal) => ({
   ...(await importOriginal<typeof SnapshotReader>()),
   getStrictProcessTableSnapshotWithAge: readSnapshot
-}))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  inspectRuntimeTerminalProcess: inspectRuntime
 }))
 
 afterEach(() => vi.restoreAllMocks())
@@ -71,17 +67,17 @@ it.each(['stopped', 'background', 'idle', 'unreadable'] as const)(
       }
     })
     try {
-      inspectRuntime.mockImplementation(() =>
-        inspectTerminalHostProcess({
-          sessionId: session.sessionId,
-          session,
-          authorityGeneration: 'owner',
-          nextObservationEpoch: () => 1
-        })
+      const [result] = await probePtyRunningWorkWithInspection(
+        ['remote:owner:close-guard'],
+        { timeoutMs: 1000 },
+        () =>
+          inspectTerminalHostProcess({
+            sessionId: session.sessionId,
+            session,
+            authorityGeneration: 'owner',
+            nextObservationEpoch: () => 1
+          })
       )
-      const [result] = await probePtyRunningWork(null, ['remote:owner:close-guard'], {
-        timeoutMs: 1000
-      })
       expect(result.verdict).toBe(
         state === 'idle' ? 'exited' : state === 'unreadable' ? 'unverifiable' : 'live'
       )

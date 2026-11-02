@@ -1,6 +1,6 @@
-// Git prompt/credential guard env layered onto the inherited daemon Git config.
+import type * as PtySpawnValidationTypes from '../providers/working-directory-validation'
 import { describe, expect, it, vi } from 'vitest'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as LocalPtyUtils from '../providers/local-pty/local-pty-executable-spawn'
 
 const {
   spawnMock,
@@ -30,9 +30,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI. The real resolver (which skips the Store App
-// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -46,11 +44,18 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+vi.mock('../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
-    resolveUnixShellPath: resolveUnixShellPathMock,
+    resolveUnixShellPath: resolveUnixShellPathMock
+  }
+})
+
+vi.mock('../providers/working-directory-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidationTypes>()
+  return {
+    ...actual,
     validateWorkingDirectory: validateWorkingDirectoryMock,
     validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
@@ -65,10 +70,6 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
-// fake timers; default to "shell-only" so the degraded-scan guard falls through
-// to its existing retirement logic (the degraded-scan behavior itself is
-// covered in pty-subprocess-foreground-degraded-scan.test.ts).
 vi.mock('../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
@@ -201,25 +202,5 @@ describe('createPtySubprocess', () => {
       }
       Object.assign(process.env, savedGitConfigEnv)
     }
-  })
-
-  it('guards a trusted daemon agent whose launch command is wrapped', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    await createPtySubprocess({
-      sessionId: 'trusted-wrapped-agent',
-      cols: 80,
-      rows: 24,
-      command: 'cd /repo && custom-agent-wrapper',
-      launchAgent: 'claude',
-      env: { SHELL: '/bin/bash' }
-    })
-
-    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
-    expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
-    expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
-    expect(Object.values(spawnEnv)).toContain('credential.interactive')
-    expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
   })
 })

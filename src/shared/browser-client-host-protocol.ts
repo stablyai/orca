@@ -1,4 +1,9 @@
+import {
+  BrowserClientProfileMetadata,
+  BrowserClientProfileSwitchCommand
+} from './browser-client-profile-switch-protocol'
 import { z } from 'zod'
+import { BrowserNetworkExecutionHost } from './browser-network-execution-host'
 import {
   BrowserClientAutomationCommand,
   BrowserClientAutomationResult
@@ -33,11 +38,7 @@ const PageReconciliationProtocolVersion = z.literal(
 )
 const FileChannelProtocolVersion = z.literal(BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION)
 
-/**
- * Sent when an attach names a runtime id this process does not have. It means "a newer authority
- * exists", not "this host is broken" — a client that still holds live guests should wait for the
- * replacement rather than tear them down.
- */
+/** An unknown runtime ID means a newer authority exists; retain live guests while waiting for replacement instead of diagnosing host failure. */
 export const BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE = 'browser_client_host_authority_mismatch'
 
 export const BrowserHostLeaseAuthority = z.object({
@@ -64,8 +65,7 @@ export const BrowserClientHostedPageInventory = z.object({
   executionHostKey: PageInventoryIdentity,
   state: z.enum(['active', 'outcomeUnknown']),
   currentUrl: z.string().max(BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH).optional(),
-  // Echoed back from the createPage command so a restarted runtime can rebuild the page record it
-  // lost with its memory. Absent for pages placed by a runtime that predates the field.
+  // Echo createPage metadata to rebuild records after runtime restart; absent for older placements.
   workspaceId: PageInventoryIdentity.optional()
 })
 
@@ -195,34 +195,6 @@ export const BrowserClientHostLeaseAuthority = BrowserHostLeaseAuthority.extend(
 
 export type BrowserClientHostLeaseAuthority = z.infer<typeof BrowserClientHostLeaseAuthority>
 
-const BrowserNetworkNativeExecutionHost = z.object({
-  kind: z.literal('native'),
-  runtimeId: Identity,
-  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-})
-
-const BrowserNetworkSshExecutionHost = z.object({
-  kind: z.literal('ssh'),
-  targetId: Identity,
-  providerEpoch: Identity,
-  connectionGeneration: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-})
-
-const BrowserNetworkWslExecutionHost = z.object({
-  kind: z.literal('wsl'),
-  runtimeId: Identity,
-  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  distro: Identity
-})
-
-export const BrowserNetworkExecutionHost = z.discriminatedUnion('kind', [
-  BrowserNetworkNativeExecutionHost,
-  BrowserNetworkSshExecutionHost,
-  BrowserNetworkWslExecutionHost
-])
-
-export type BrowserNetworkExecutionHost = z.infer<typeof BrowserNetworkExecutionHost>
-
 const BrowserClientPageCommandAuthority = BrowserClientHostLeaseAuthority.extend({
   pageCommandProtocolVersion: PageCommandProtocolVersion,
   browserPageId: Identity,
@@ -234,9 +206,10 @@ const BrowserClientPageCommandAuthority = BrowserClientHostLeaseAuthority.extend
 const BrowserClientHostCreatePageCommand = z.object({
   type: z.literal('createPage'),
   browserProfileId: Identity,
+  // Sent only to profile-switch-v1 desktops, for host-owned profiles the desktop does not know.
+  profile: BrowserClientProfileMetadata.optional(),
   executionHostKey: Identity,
-  // The client never interprets this; it only echoes it back in the page inventory so a restarted
-  // runtime can rebuild the workspace association it holds nowhere else.
+  // Echo opaque workspace metadata in page inventory so restarted runtimes can rebuild otherwise lost associations.
   workspaceId: Identity.optional()
 })
 
@@ -261,12 +234,14 @@ const BrowserClientHostClosePageCommand = z.object({
 const BrowserClientHostRestorePageCommand = z.object({
   type: z.literal('restorePage'),
   browserProfileId: Identity,
+  profile: BrowserClientProfileMetadata.optional(),
   executionHostKey: Identity,
   url: z.string().min(1).max(8192).optional(),
   workspaceId: Identity.optional()
 })
 
 export const BrowserClientHostPageCommand = z.discriminatedUnion('type', [
+  BrowserClientProfileSwitchCommand,
   BrowserClientHostCreatePageCommand,
   BrowserClientHostNavigateCommand,
   BrowserClientHostReclaimPageCommand,
@@ -325,7 +300,9 @@ export const BrowserClientHostCommandResultParams = BrowserClientPageCommandAuth
   result: BrowserClientHostCommandResult
 })
 
-export const BrowserClientHostCommandResultAck = z.object({ accepted: z.boolean() })
+export const BrowserClientHostCommandResultAck = z.object({
+  accepted: z.boolean()
+})
 
 export const BrowserClientHostEvent = z.union([
   BrowserClientHostReady,

@@ -1,6 +1,13 @@
+import { isCrewSetupFact } from '../shared/runtime-environment-subscription-setup'
+import type {
+  CrewSubscriptionAttemptArgs,
+  CrewSubscriptionAttemptCallbacks,
+  CrewSubscriptionSetupResult
+} from '../shared/runtime-environment-subscription-setup'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 
 type RuntimeEnvironmentSubscribeArgs = {
+  subscriptionId?: string
   selector: string
   method: string
   params?: unknown
@@ -14,6 +21,7 @@ type RuntimeEnvironmentSubscriptionCallbacks = {
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (error: { code: string; message: string }) => void
   onClose?: () => void
+  crewAttempt?: true
 }
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -42,11 +50,7 @@ type RuntimeEnvironmentSubscriptionIpc = {
 
 const SUBSCRIPTION_EVENT_CHANNEL = 'runtimeEnvironments:subscriptionEvent'
 
-// Why: each subscribe() previously attached its own channel listener that the
-// 'error' branch never detached, so reconnecting shared-control subscriptions
-// leaked listener closures that pinned renderer state. One active dispatcher per
-// ipc instance keeps listener retention O(1) while per-subscription state lives
-// only in this map.
+// Share one IPC listener so reconnects cannot accumulate listeners retaining renderer state.
 type RuntimeEnvironmentSubscriptionDispatcher = {
   callbacks: Map<string, RuntimeEnvironmentSubscriptionCallbacks>
   listener: (event: unknown, payload: RuntimeEnvironmentSubscriptionEvent) => void
@@ -98,13 +102,10 @@ function getOrCreateDispatcher(
     } else if (event.type === 'binary') {
       subscriptionCallbacks.onBinary?.(event.bytes)
     } else if (event.type === 'error') {
-      // Why: errors are non-terminal for shared-control subscriptions (they
-      // survive reconnects), so the entry stays mapped until the consumer
-      // unsubscribes.
+      // Shared-control subscriptions survive errors and reconnects.
       subscriptionCallbacks.onError?.({ code: event.code, message: event.message })
     } else {
-      // Why: close is terminal; release before the callback so a throwing or
-      // re-entrant onClose cannot keep renderer state mapped.
+      // Release first so a throwing or reentrant callback cannot retain renderer state.
       callbacks.delete(event.subscriptionId)
       releaseIdleDispatcher(ipc, callbacks, listener)
       subscriptionCallbacks.onClose?.()
@@ -130,13 +131,17 @@ export async function subscribeRuntimeEnvironmentFromPreload(
   callbacks: RuntimeEnvironmentSubscriptionCallbacks,
   createSubscriptionId = createRuntimeEnvironmentSubscriptionId
 ): Promise<RuntimeEnvironmentSubscriptionHandle> {
-  const subscriptionId = createSubscriptionId()
-  // Why: streaming RPCs can emit their first frame before ipcMain.handle()
-  // resolves, so the dispatcher must be routing this id before invoking.
+  const subscriptionId = args.subscriptionId ?? createSubscriptionId()
+  // Route before invoking: streaming RPCs can emit frames before the subscribe reply.
   const dispatcher = getOrCreateDispatcher(ipc)
+  if (dispatcher.callbacks.has(subscriptionId)) {
+    throw new Error('Runtime environment subscription id already exists')
+  }
   dispatcher.callbacks.set(subscriptionId, callbacks)
   const releaseCurrentSubscription = (): void => {
-    releaseSubscription(ipc, dispatcher, subscriptionId)
+    if (dispatcher.callbacks.get(subscriptionId) === callbacks) {
+      releaseSubscription(ipc, dispatcher, subscriptionId)
+    }
   }
   try {
     const result = (await ipc.invoke('runtimeEnvironments:subscribe', {
@@ -161,4 +166,89 @@ export async function subscribeRuntimeEnvironmentFromPreload(
       ipc.send('runtimeEnvironments:subscriptionBinary', { subscriptionId, bytes })
     }
   }
+}
+
+/** Cancel only the opt-in local registration; ordinary finite subscribers keep their contract. */
+export function cancelRuntimeEnvironmentSubscriptionFromPreload(
+  ipc: RuntimeEnvironmentSubscriptionIpc,
+  subscriptionId: string
+): Promise<void> {
+  const dispatcher = subscriptionDispatchers.get(ipc)
+  if (dispatcher?.callbacks.get(subscriptionId)?.crewAttempt) {
+    releaseSubscription(ipc, dispatcher, subscriptionId)
+  }
+  return ipc.invoke('runtimeEnvironments:unsubscribe', { subscriptionId }).then(() => undefined)
+}
+
+export async function subscribeCrewAttemptFromPreload(
+  ipc: RuntimeEnvironmentSubscriptionIpc,
+  args: CrewSubscriptionAttemptArgs,
+  callbacks: CrewSubscriptionAttemptCallbacks
+): Promise<CrewSubscriptionSetupResult> {
+  const { subscriptionId } = args
+  const dispatcher = getOrCreateDispatcher(ipc)
+  if (dispatcher.callbacks.has(subscriptionId)) {
+    return {
+      subscriptionId,
+      ok: false,
+      failure: {
+        message: 'Runtime environment subscription id already exists',
+        fact: { kind: 'input' }
+      }
+    }
+  }
+  const registration: RuntimeEnvironmentSubscriptionCallbacks = { ...callbacks, crewAttempt: true }
+  dispatcher.callbacks.set(subscriptionId, registration)
+  const release = (): void => {
+    if (dispatcher.callbacks.get(subscriptionId) === registration) {
+      releaseSubscription(ipc, dispatcher, subscriptionId)
+    }
+  }
+  try {
+    const result: unknown = await ipc.invoke('runtimeEnvironments:subscribe', {
+      ...args,
+      setupResult: 'crew'
+    })
+    if (!isCrewSubscriptionSetupResult(result) || result.subscriptionId !== subscriptionId) {
+      throw new Error('Invalid crew subscription setup result')
+    }
+    if (!result.ok) {
+      release()
+    }
+    return result
+  } catch (error) {
+    release()
+    throw error
+  }
+}
+
+function isCrewSubscriptionSetupResult(value: unknown): value is CrewSubscriptionSetupResult {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('subscriptionId' in value) ||
+    typeof value.subscriptionId !== 'string' ||
+    !('ok' in value)
+  ) {
+    return false
+  }
+  if (value.ok === true) {
+    return true
+  }
+  if (
+    value.ok !== false ||
+    !('failure' in value) ||
+    typeof value.failure !== 'object' ||
+    value.failure === null
+  ) {
+    return false
+  }
+  const failure = value.failure
+  return (
+    'message' in failure &&
+    typeof failure.message === 'string' &&
+    (!('code' in failure) || typeof failure.code === 'string') &&
+    'fact' in failure &&
+    isCrewSetupFact(failure.fact)
+  )
 }

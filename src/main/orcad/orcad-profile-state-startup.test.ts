@@ -28,7 +28,11 @@ vi.mock('./orcad-profile-state-telemetry', () => ({
   emitOrcadProfileStateAuthoritySelected: emitMock
 }))
 
-const { createOrcadProfileStateStartup } = await import('./orcad-profile-state-startup')
+const {
+  createOrcadProfileStateStartup,
+  orcadProfileWriterIdleStopMs,
+  WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS
+} = await import('./orcad-profile-state-startup')
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -57,6 +61,7 @@ describe('orcad profile-state startup', () => {
     expect(initSshHostKeyStoreFileMock).toHaveBeenCalledWith('/tmp/profile/orca-data.json')
 
     expect(createProfileStateStoreForStartupMock).toHaveBeenCalledWith({
+      userDataPath: '/tmp/user-data',
       dataFile: '/tmp/profile/orca-data.json',
       databaseFile: '/tmp/profile/profile-state.db',
       profileId: 'profile-1',
@@ -106,5 +111,13 @@ describe('orcad profile-state startup', () => {
     await expect(createOrcadProfileStateStartup('/tmp/user-data')).rejects.toBe(failure)
     expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
     expect(emitMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('orcad profile writer idle stop', () => {
+  it('stops an idle writer after a minute on a WSL host only', () => {
+    expect(orcadProfileWriterIdleStopMs(() => true)).toBe(WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS)
+    expect(WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS).toBe(60_000)
+    expect(orcadProfileWriterIdleStopMs(() => false)).toBeUndefined()
   })
 })

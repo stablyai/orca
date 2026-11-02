@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -248,7 +249,7 @@ describe('terminal multiplex RPC', () => {
           enter: false,
           interrupt: false
         },
-        { inputKind: 'driving' }
+        { inputKind: 'driving', inputSource: 'desktop' }
       )
     )
 
@@ -445,7 +446,7 @@ describe('terminal multiplex RPC', () => {
           enter: false,
           interrupt: false
         },
-        { inputKind: 'driving' }
+        { inputKind: 'driving', inputSource: 'desktop' }
       )
     )
 

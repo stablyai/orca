@@ -1,5 +1,5 @@
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime-shared-control-types'
-import { RuntimeRpcCallError } from './runtime-rpc-client'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 
 export function extractRuntimeTransportDiagnostics(
   error: unknown

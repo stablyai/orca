@@ -1,11 +1,4 @@
-/** A restarted SSH relay renumbers PTYs from pty-1, so a fresh spawn is routinely handed an id
- *  whose previous shell is still emitting a late exit. Applying that exit to the new shell reports
- *  it as already dead (`exitedBeforeAttach`), the pane never binds a PTY, and the tab is blank and
- *  unusable forever — the runtime-proven failure behind #16970.
- *
- *  #16970 dated every buffered record and dropped anything older than the spawn request. That fence
- *  is a clock, so it cannot judge a stale exit that arrives AFTER the request left. These specs pin
- *  the identity rule that can: the incarnation names which lifetime of the id died. */
+/** Late prior-owner exits can pass the request-time sequence fence on recycled relay IDs; incarnation evidence must reject them without losing real pre-attach deaths (#16970). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   installIpcPtyWindow,
@@ -41,12 +34,7 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
     restorePtySpecWindow(originalWindow)
   })
 
-  /** Deliver `exit` while the spawn request is in flight, then settle the spawn.
-   *
-   *  Firing from inside the spawn mock makes "after the request left the renderer" *definitional*
-   *  rather than microtask-scheduled: the fence is read before `spawnIpcPty` is called, so an exit
-   *  buffered during the call is always newer than the fence. That is the whole point — the fence
-   *  keeps this record, and only the incarnation can reject it. */
+  /** Emit inside spawn IPC so the buffered exit necessarily follows the request fence; only incarnation can prove it foreign. */
   async function connectWithExitDuringSpawn(
     exit: PtyExitPayload,
     spawnResponse: { id: string; incarnationId?: string }
@@ -70,14 +58,12 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
       { id: RECYCLED_PTY_ID, incarnationId: FRESH_INCARNATION_ID }
     )
 
-    // Positive, not just "not dead": a bare `not.toMatchObject` would also pass on a bailed-out
-    // connect that returned undefined. A healthy fresh spawn resolves to its pty id.
+    // Require the PTY ID too; negative dead-result matching alone could pass a connect that bailed out.
     expect(result).toBe(RECYCLED_PTY_ID)
     expect(paneExit).not.toHaveBeenCalled()
   })
 
-  // The reason the pre-handler buffer exists: a shell that dies before the pane registers its exit
-  // handler must still be reported, or the pane hangs on a PTY that is already gone.
+  // Legitimate death before handler registration must still be delivered to avoid binding an already-dead PTY.
   it('still reports an exit from the incarnation it actually attached to', async () => {
     const { result, paneExit } = await connectWithExitDuringSpawn(
       { id: RECYCLED_PTY_ID, code: 3, incarnationId: FRESH_INCARNATION_ID },
@@ -124,9 +110,7 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
     expect(connected).not.toHaveBeenCalled()
   })
 
-  // Absence is unknown, never a mismatch — so an SSH host predating the field, and the relay's own
-  // unnamed `{ id, code: -1 }` drop, keep exactly the behaviour #16970 shipped. (`remote:` runtime
-  // PTYs are not covered by this: their exits never traverse `pty:exit` at all.)
+  // Missing incarnation stays unknown for old-host/synthetic exits; remote-runtime exits use a different channel.
   it('never discards on incarnation when the host names none', async () => {
     const { result, paneExit } = await connectWithExitDuringSpawn(
       { id: RECYCLED_PTY_ID, code: 3 },

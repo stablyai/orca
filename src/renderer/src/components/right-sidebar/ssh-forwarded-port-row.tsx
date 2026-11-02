@@ -2,11 +2,11 @@ import React, { useCallback, useState } from 'react'
 import { Copy, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-port-actions'
+import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-actions'
 import {
   addressForPortForwardEntry,
   advertisedBrowserUrlForForwardedRow
-} from '@/lib/workspace-port-urls'
+} from '@/lib/workspace-ports/workspace-port-urls'
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 
@@ -27,9 +27,7 @@ export function SshForwardedPortRow({
     setRemoving(true)
     try {
       await window.api.ssh.removePortForward({ id: entry.id })
-    } catch {
-      // broadcast will update state
-    }
+    } catch {}
     if (mountedRef.current) {
       setRemoving(false)
     }
@@ -58,8 +56,7 @@ export function SshForwardedPortRow({
 
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      // Why: keyboard activations have detail=0; only pointer clicks carry
-      // the modifier intent for the system-browser escape hatch.
+      // Keyboard activations have detail=0; only pointer clicks express system-browser modifier intent.
       handleOpenBrowser(event.detail > 0 ? event : undefined)
       if (event.detail > 0) {
         event.currentTarget.blur()

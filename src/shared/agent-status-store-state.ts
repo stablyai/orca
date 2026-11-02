@@ -9,10 +9,9 @@ import {
   type AgentChildWorkRecord
 } from './agent-status-child-work'
 import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
-import { agentStatusStoreFitsByteBudget } from './agent-status-store-byte-budget'
 import {
-  AGENT_STATUS_STORE_LIMITS,
   AGENT_STATUS_STORE_SNAPSHOT_VERSION,
+  AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
   AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
   type AgentStatusFactIdentity,
   type AgentStatusFactRecord,
@@ -78,18 +77,6 @@ export function createEmptyAgentStatusStoreState(epoch: string): AgentStatusStor
   }
 }
 
-export function cloneAgentStatusStoreState(state: AgentStatusStoreState): AgentStatusStoreState {
-  return {
-    epoch: state.epoch,
-    revision: state.revision,
-    parents: new Map(state.parents),
-    children: new Map(state.children),
-    aliases: new Map(state.aliases),
-    facts: new Map(state.facts),
-    tombstones: new Map(state.tombstones)
-  }
-}
-
 function snapshotCandidateFromAgentStatusStoreState(state: AgentStatusStoreState) {
   return {
     version: AGENT_STATUS_STORE_SNAPSHOT_VERSION,
@@ -122,22 +109,6 @@ export type AgentStatusStoreRecordLookups = {
   parents: Lookup<AgentStatusParentRecord>
   children: Lookup<AgentChildWorkRecord>
   tombstones: Lookup<AgentStatusTombstoneRecord>
-}
-
-export function agentStatusStoreSizesFit(sizes: {
-  parents: { size: number }
-  children: { size: number }
-  aliases: { size: number }
-  facts: { size: number }
-  tombstones: { size: number }
-}): boolean {
-  return (
-    sizes.parents.size <= AGENT_STATUS_STORE_LIMITS.parents &&
-    sizes.children.size <= AGENT_STATUS_STORE_LIMITS.children &&
-    sizes.aliases.size <= AGENT_STATUS_STORE_LIMITS.aliases &&
-    sizes.facts.size <= AGENT_STATUS_STORE_LIMITS.facts &&
-    sizes.tombstones.size <= AGENT_STATUS_STORE_LIMITS.tombstones
-  )
 }
 
 export function storedParentIsValid(
@@ -208,7 +179,7 @@ export function storedTombstoneIsValid(
 
 /** Every invariant over the whole store: for snapshot restore, and the oracle mutations are held to. */
 export function validateAgentStatusStoreState(state: AgentStatusStoreState): boolean {
-  if (!agentStatusStoreSizesFit(state)) {
+  if (state.tombstones.size > AGENT_STATUS_STORE_TOMBSTONE_LIMIT) {
     return false
   }
   for (const [key, parent] of state.parents) {
@@ -236,7 +207,7 @@ export function validateAgentStatusStoreState(state: AgentStatusStoreState): boo
       return false
     }
   }
-  return agentStatusStoreFitsByteBudget(state)
+  return true
 }
 
 export function snapshotFromAgentStatusStoreState(

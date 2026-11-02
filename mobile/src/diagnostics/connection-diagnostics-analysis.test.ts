@@ -98,23 +98,6 @@ describe('diagnoseConnection', () => {
     })
   })
 
-  it('marks authenticated Relay liveness failures as safe to send', () => {
-    expect(
-      diagnoseConnection({
-        endpoint: 'ws://192.168.1.2:6768',
-        state: 'reconnecting',
-        activePath: 'relay',
-        entries: [
-          {
-            ...event('Relay health check failed'),
-            code: 'liveness-timeout',
-            path: 'relay'
-          }
-        ]
-      }).reportability
-    ).toBe('orca-relay')
-  })
-
   it.each([
     ['direct timeout', 'connect-timeout', 'tailscale'],
     ['handshake timeout', 'handshake-timeout', 'relay'],
@@ -208,6 +191,30 @@ describe('diagnoseConnection', () => {
     ).toEqual({
       likelyCause: 'The connected host stopped answering authenticated health checks.',
       nextStep: 'Orca closed the stale session and started recovery.',
+      reportability: 'none'
+    })
+  })
+
+  it('does not reuse an earlier endpoint failure after a delayed deadline', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://100.88.90.25:6768',
+        state: 'reconnecting',
+        activePath: 'tailscale',
+        entries: [
+          { ...event('WebSocket connect timeout'), code: 'connect-timeout', path: 'tailscale' },
+          {
+            ...event('WebSocket connect interrupted'),
+            id: 'delayed',
+            ts: 2,
+            code: 'suspended-dial',
+            path: 'tailscale'
+          }
+        ]
+      })
+    ).toEqual({
+      likelyCause: 'Connection deadline delivery was delayed; the app may have been suspended.',
+      nextStep: 'Orca is re-dialing to check the connection. Keep the app open while it retries.',
       reportability: 'none'
     })
   })

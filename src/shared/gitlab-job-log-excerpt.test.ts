@@ -65,7 +65,7 @@ describe('gitLabJobTraceToLogExcerpt', () => {
     expect(excerpt).toContain('Uploading artifact 89')
   })
 
-  it('bounds the raw trace before stripping so a huge log is not scanned in full', () => {
+  it('keeps the error tail and drops the head of a huge trace', () => {
     const filler = `${'x'.repeat(200)}\n`.repeat(6_000) // ~1.2 MB, above the raw cap
     const excerpt = gitLabJobTraceToLogExcerpt(`head marker\n${filler}ERROR: Job failed`)
 

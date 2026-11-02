@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -17,7 +18,7 @@ import {
 } from './service-test-harness'
 import { createCanonicalHookTrustFixture } from './service-hook-trust-test-fixtures'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Keep asserted config bytes independent of platform socket-path limits.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config
@@ -28,9 +29,10 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -82,6 +84,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The teardown process-table reader binds execFile during module initialization.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -105,10 +109,7 @@ describe('CodexAccountService config sync', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
-    // Why: the desktop add path must pass the new account's selection target, as
-    // reauthenticate and select already do. Called with no argument, a WSL add
-    // syncs the host home that did not change and never materializes the WSL
-    // slot that did.
+
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({ runtime: 'host' })
   })
 
@@ -146,6 +147,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The teardown process-table reader binds execFile during module initialization.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -231,8 +234,10 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn(
       (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         const loginHome = options.env.CODEX_HOME
-        expect(loginHome).toBeTruthy()
-        expect(readFileSync(join(loginHome!, '.orca-managed-home'), 'utf-8')).toBe('account-1\n')
+        expect(loginHome).toMatch(/[\\/]account-1[\\/]home[\\/]\.orca-reauth-login$/)
+        expect(readFileSync(join(managedHomePath, '.orca-managed-home'), 'utf-8')).toBe(
+          'account-1\n'
+        )
         expect(readFileSync(join(loginHome!, 'config.toml'), 'utf-8')).toBe(canonicalConfig)
 
         const child = new EventEmitter() as EventEmitter & {
@@ -254,6 +259,8 @@ describe('CodexAccountService config sync', () => {
     )
 
     vi.doMock('node:child_process', () => ({
+      // The teardown process-table reader binds execFile during module initialization.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -411,6 +418,8 @@ describe('CodexAccountService config sync', () => {
       }
     )
     vi.doMock('node:child_process', () => ({
+      // The teardown process-table reader binds execFile during module initialization.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -486,6 +495,8 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn()
 
     vi.doMock('node:child_process', () => ({
+      // The teardown process-table reader binds execFile during module initialization.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))
@@ -532,6 +543,8 @@ describe('CodexAccountService config sync', () => {
     const spawnMock = vi.fn()
 
     vi.doMock('node:child_process', () => ({
+      // The teardown process-table reader binds execFile during module initialization.
+      execFile: vi.fn(),
       execFileSync: vi.fn(),
       spawn: spawnMock
     }))

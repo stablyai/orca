@@ -45,8 +45,7 @@ export function applyManualRepoOrder(
   order: readonly ManualRepoOrderEntry[] | null | undefined
 ): readonly Repo[] {
   const normalized = normalizeManualRepoOrder(order)
-  // Why: results flow straight back into `repos`, so a reorder that moves nothing must return
-  // the input — a fresh array would invalidate every identity-keyed repo memo downstream.
+  // Preserve identity for no-op reorders: fresh arrays invalidate every identity-keyed repo memo downstream.
   if (normalized.length === 0) {
     return repos
   }

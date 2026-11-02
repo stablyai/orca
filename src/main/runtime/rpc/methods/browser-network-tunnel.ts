@@ -11,7 +11,7 @@ import {
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { defineStreamingMethod } from '../core'
 
 const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
@@ -23,6 +23,7 @@ export function createBrowserNetworkTunnelMethods(
   return [
     defineStreamingMethod({
       name: 'network.browserTunnel',
+      permission: 'host-admin',
       params: BrowserNetworkTunnelAttachParams,
       handler: async (
         params,
@@ -236,5 +237,5 @@ function publicExecutionRouteError(error: unknown): Error {
   return new Error('browser_tunnel_execution_host_unavailable', { cause: error })
 }
 
-// Why: tests inject this until a live lease and server-owned route generation authorize TCP opens.
+// Tests inject this until a live lease and server-owned route generation authorize TCP opens.
 export const BROWSER_NETWORK_TUNNEL_METHODS = createBrowserNetworkTunnelMethods()

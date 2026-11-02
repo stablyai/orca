@@ -1,8 +1,5 @@
 import type { IncrementalAgentFixture } from './session-scanner-incremental-fixtures'
 
-// Codex fixture lines for the incremental-parse differential tests, split out
-// of session-scanner-incremental-fixtures.ts to respect the max-lines budget.
-
 const CODEX_SESSION_ID = '019f0000-1111-7222-8333-444444444444'
 
 function codexLine(record: Record<string, unknown>): string {

@@ -1,8 +1,9 @@
 import React from 'react'
-import { ChevronDown, Folder, FolderOpen, Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { ChevronDown, Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { FolderIcon } from '@/components/FileTypeIcon'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { DiscardAllArea } from '../commit/discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import type {
   BranchSourceControlTreeDirectoryNode,
   SourceControlDirectoryActionPaths,
@@ -15,7 +16,6 @@ import {
   SOURCE_CONTROL_TREE_INDENT_PX
 } from './row-layout'
 
-/** Shared chrome for both directory rows: indentation, collapse toggle, folder icon, name, file count. */
 function SourceControlTreeDirectoryHeader({
   node,
   isCollapsed,
@@ -43,11 +43,7 @@ function SourceControlTreeDirectoryHeader({
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
         />
-        {isCollapsed ? (
-          <Folder className="size-3 shrink-0" />
-        ) : (
-          <FolderOpen className="size-3 shrink-0" />
-        )}
+        <FolderIcon folderPath={node.name} open={!isCollapsed} className="size-3 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
       </button>
       <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
@@ -58,10 +54,7 @@ function SourceControlTreeDirectoryHeader({
   )
 }
 
-/**
- * Working-tree directory row. `actionPaths` must already be scoped to the currently visible
- * descendants, and bulk actions only render when that scope is non-empty.
- */
+/** Require visible-descendant actionPaths; hide bulk actions when that scope is empty. */
 export function SourceControlTreeDirectoryRow({
   node,
   actionPaths,
@@ -83,7 +76,7 @@ export function SourceControlTreeDirectoryRow({
   onStagePaths: (paths: readonly string[]) => Promise<void>
   onUnstagePaths: (paths: readonly string[]) => Promise<void>
 }): React.JSX.Element {
-  // Why: filtered tree nodes only contain visible descendants, so folder-wide bulk labels would overpromise on the subset.
+  // Filtered descendants represent only a subset; avoid promising whole-folder actions.
   const canStage = !hideBulkActions && actionPaths.stagePaths.length > 0
   const canUnstage = !hideBulkActions && actionPaths.unstagePaths.length > 0
   const canDiscard = !hideBulkActions && actionPaths.discardPaths.length > 0

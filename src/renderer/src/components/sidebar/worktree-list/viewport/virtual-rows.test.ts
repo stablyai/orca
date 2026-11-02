@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   HOST_STICKY_PINNED_HEIGHT,
   buildLineageRowRekeyMap,
+  estimateRenderRowSize,
   extractWorktreeVirtualRowIndexes,
   getActiveStickyIndexesForScroll,
   getStickyHeaderIndexes,
@@ -32,7 +33,7 @@ function groupRow(key: string, hostId?: ExecutionHostId): RenderRow {
     key,
     label: key,
     count: 1,
-    tone: 'text-foreground',
+    icon: { kind: 'project' },
     ...(hostId ? { hostId } : {})
   }
 }
@@ -77,6 +78,75 @@ describe('getRenderRowKey', () => {
 })
 
 describe('getActiveStickyIndexesForScroll', () => {
+  it('hands off adjacent collapsed project headers at the slot below the host', () => {
+    const adjacentRows = [hostRow('local'), groupRow('collapsed'), groupRow('incoming')]
+    const items = [virtualItem(0, 0), virtualItem(1, 42), virtualItem(2, 80)]
+    const resolve = (scrollOffset: number) =>
+      getActiveStickyIndexesForScroll({
+        rows: adjacentRows,
+        rangeStartIndex: 1,
+        scrollOffset,
+        stickyHeaderIndexes: getStickyHeaderIndexes(adjacentRows),
+        virtualItems: items
+      })
+
+    expect(resolve(43)).toEqual({ hostIndex: 0, groupIndex: 1 })
+    expect(resolve(44)).toEqual({ hostIndex: 0, groupIndex: 2 })
+    expect(resolve(43)).toEqual({ hostIndex: 0, groupIndex: 1 })
+  })
+
+  it('pins the first project once it reaches the host slot while the range still starts at the host', () => {
+    const firstRows = [hostRow('local'), groupRow('first')]
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows: firstRows,
+        rangeStartIndex: 0,
+        scrollOffset: 6,
+        stickyHeaderIndexes: getStickyHeaderIndexes(firstRows),
+        virtualItems: [virtualItem(0, 0), virtualItem(1, 42)]
+      })
+    ).toEqual({ hostIndex: 0, groupIndex: 1 })
+  })
+
+  it('selects the last header at the slot after crossing several collapsed groups', () => {
+    const adjacentRows = [
+      hostRow('local'),
+      groupRow('first'),
+      groupRow('second'),
+      groupRow('third')
+    ]
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows: adjacentRows,
+        rangeStartIndex: 0,
+        scrollOffset: 82,
+        stickyHeaderIndexes: getStickyHeaderIndexes(adjacentRows),
+        virtualItems: [
+          virtualItem(0, 0),
+          virtualItem(1, 42),
+          virtualItem(2, 80),
+          virtualItem(3, 118)
+        ]
+      })
+    ).toEqual({ hostIndex: 0, groupIndex: 3 })
+  })
+
+  it.each([
+    { scrollOffset: 399, hostIndex: 0, groupIndex: 1 },
+    { scrollOffset: 400, hostIndex: 4, groupIndex: null },
+    { scrollOffset: 464, hostIndex: 4, groupIndex: 5 }
+  ])('resolves host transitions with a lagging range at $scrollOffset', (expected) => {
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows,
+        rangeStartIndex: 3,
+        scrollOffset: expected.scrollOffset,
+        stickyHeaderIndexes,
+        virtualItems
+      })
+    ).toEqual({ hostIndex: expected.hostIndex, groupIndex: expected.groupIndex })
+  })
+
   it('pins the host and its inner group while scrolled inside a section', () => {
     expect(
       getActiveStickyIndexesForScroll({
@@ -109,14 +179,12 @@ describe('getActiveStickyIndexesForScroll', () => {
       stickyHeaderIndexes,
       virtualItems
     })
-    // group-a1 (index 1) must not survive into host b's tenure; group-b1 only
-    // pins once it reaches the slot beneath the pinned host card.
+    // Do not carry the previous host’s group below the new pinned host.
     expect(result.groupIndex === 1).toBe(false)
   })
 
   it('offsets the group handoff by the pinned host height', () => {
-    // group-b1 starts at 500; with host pinned it should activate once
-    // scrollOffset + HOST_STICKY_PINNED_HEIGHT reaches 500.
+    // Activate at the incoming group’s start minus the pinned host height.
     const before = getActiveStickyIndexesForScroll({
       rows,
       rangeStartIndex: 5,
@@ -156,8 +224,7 @@ describe('getActiveStickyIndexesForScroll', () => {
   })
 
   it('does not pin a Project header whose virtual item is not mounted yet (#10088)', () => {
-    // Why: after scrollToIndex/reveal, rangeStart can sit on group-b1 while
-    // TanStack has only mounted host-b (and maybe a later item) this frame.
+    // Reveal can advance rangeStart before the virtualizer mounts the corresponding header.
     const partialItems = [virtualItem(4, 400), virtualItem(6, 600)]
     const result = getActiveStickyIndexesForScroll({
       rows,
@@ -167,8 +234,7 @@ describe('getActiveStickyIndexesForScroll', () => {
       virtualItems: partialItems
     })
     expect(result.hostIndex).toBe(4)
-    // group-b1 (index 5) must not become sticky without geometry — that is what
-    // paints the project label across the host card.
+    // A project header without geometry must not paint over the host card.
     expect(result.groupIndex).toBeNull()
   })
 
@@ -195,6 +261,14 @@ describe('getActiveStickyIndexesForScroll', () => {
   })
 })
 
+describe('host header row height', () => {
+  it('reserves the host card height and its padding before the next row', () => {
+    const hostRows = [hostRow('local'), groupRow('first'), hostRow('ssh:remote')]
+    expect(estimateRenderRowSize(hostRows, 0, 0, null)).toBe(36)
+    expect(estimateRenderRowSize(hostRows, 2, 0, null)).toBe(40)
+  })
+})
+
 describe('extractWorktreeVirtualRowIndexes', () => {
   it('keeps the pinned host mounted even when scrolled out of range', () => {
     const indexes = extractWorktreeVirtualRowIndexes({
@@ -213,7 +287,7 @@ describe('extractWorktreeVirtualRowIndexes', () => {
 })
 
 describe('buildLineageRowRekeyMap', () => {
-  // Mirrors buildWorktreeRow: rowKey is `${sectionKey}:${worktree.id}`.
+  // Model section-scoped row keys so pinned and natural occurrences remain distinct.
   function worktreeRow(sectionKey: string, worktreeId: string): RenderRow {
     return {
       type: 'item',
@@ -222,7 +296,6 @@ describe('buildLineageRowRekeyMap', () => {
       worktree: { id: worktreeId },
       depth: 0,
       groupDepth: 0,
-      lineageTrail: [],
       isLastLineageChild: true,
       lineageChildCount: 0
     } as unknown as RenderRow
@@ -242,8 +315,7 @@ describe('buildLineageRowRekeyMap', () => {
     const group = lineageGroupRow('all', 'p', ['c1', 'c2'])
     const rekeys = buildLineageRowRekeyMap([group])
 
-    // The parent's own row key is what an anchor recorded before the child
-    // existed; all members now live inside the single group row.
+    // All former member keys now resolve to the single lineage-group row.
     expect(rekeys.get('wt:all:p')).toBe('lineage-group:all:lineage:p')
     expect(rekeys.get('wt:all:c1')).toBe('lineage-group:all:lineage:p')
     expect(rekeys.get('wt:all:c2')).toBe('lineage-group:all:lineage:p')
@@ -251,8 +323,7 @@ describe('buildLineageRowRekeyMap', () => {
   })
 
   it('dissolves a group key back onto the plain item row', () => {
-    // Last child deleted: lineageChildCount is already 0, but an anchor still
-    // holds the group key, so the reverse mapping must be unguarded.
+    // Last-child removal leaves old anchors holding the group key even after the child count reaches zero.
     const rekeys = buildLineageRowRekeyMap([worktreeRow('all', 'p')])
 
     expect(rekeys.get('lineage-group:all:lineage:p')).toBe('wt:all:p')
@@ -266,8 +337,6 @@ describe('buildLineageRowRekeyMap', () => {
   })
 
   it('keeps the same worktree distinct across sections', () => {
-    // The same worktree renders in both Pinned and All; rowKey embeds the
-    // section so a pinned anchor must never follow the All copy.
     const rekeys = buildLineageRowRekeyMap([
       lineageGroupRow('pinned', 'p', ['c1']),
       lineageGroupRow('all', 'p', ['c1'])

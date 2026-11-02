@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: GitLab item dialogs reset draft/provider state and hydrate details from GitLab IPC when the selected item identity changes. */
 import { useCallback, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GitLabAssignableUser, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
@@ -15,8 +14,7 @@ export function useGitLabItemDialogState(itemId: string | null) {
   }>(() => ({ itemId, value: '' }))
   const commentDraft = commentDraftState.itemId === itemId ? commentDraftState.value : ''
   if (commentDraftState.itemId !== itemId) {
-    // Why: comment drafts are tied to one GitLab item, so switching the sheet
-    // target must not leave a draft that could post to the wrong MR/issue.
+    // Reset before paint so switching items cannot post the prior item’s draft to the new target.
     setCommentDraftState({ itemId, value: '' })
   }
   const [commentSubmitting, setCommentSubmitting] = useState(false)

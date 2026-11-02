@@ -138,6 +138,7 @@ describe('agent token usage', () => {
   })
 
   it('retries rate-limited snapshots without incrementing their revision', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const instance = reporter()
     for (let count = 1; count <= 31; count++) {
       await instance.report([{ ...row, input_tokens: count }])
@@ -145,6 +146,7 @@ describe('agent token usage', () => {
     expect(captures()).toHaveLength(30)
     resetBurstCapsForSession()
     await instance.report([{ ...row, input_tokens: 31 }])
+    expect(captures()).toHaveLength(31)
     expect(captures().at(-1)).toMatchObject({ revision: 31, input_tokens: 31 })
   })
 

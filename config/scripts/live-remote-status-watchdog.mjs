@@ -1,7 +1,4 @@
-/**
- * Mid-storm host health samples for forever-freeze detection.
- * Polls `orca status --json` on an interval while a load storm runs.
- */
+// Poll orca status --json during load storms to distinguish continuous host freeze from recovered stalls.
 import { spawn } from 'node:child_process'
 import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.mjs'
 import { resolveOrcaCliInvocation } from './live-remote-freeze-rpc.mjs'

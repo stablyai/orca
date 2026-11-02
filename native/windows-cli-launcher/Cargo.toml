@@ -1,0 +1,26 @@
+[package]
+name = "orca-cli-launcher"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Why the bin is named `orca`: it ships as resources\bin\orca.exe, and the PE's
+# OriginalFilename must match the file users actually invoke.
+[[bin]]
+name = "orca"
+path = "src/main.rs"
+
+[[bin]]
+name = "orca-administrator-restart"
+path = "src/administrator_launcher.rs"
+
+[build-dependencies]
+winresource = "0.1"
+
+# Minimize launcher size/panic/debug machinery to avoid the heuristic bucket of the previous managed build.
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import type { BigIntStats } from 'node:fs'
-import type { FileStat } from '../../providers/types'
 
 export type WorkerTranscriptSourceIdentity = {
   fingerprint: string
@@ -8,7 +7,7 @@ export type WorkerTranscriptSourceIdentity = {
   mtimeMs: number
 }
 
-export const WORKER_TRANSCRIPT_BOUNDARY_CHECKPOINT_BYTES = 64
+const WORKER_TRANSCRIPT_BOUNDARY_CHECKPOINT_BYTES = 64
 
 export function createWorkerTranscriptBoundaryCheckpoint(bytes: Uint8Array): string {
   return createHash('sha256')
@@ -38,24 +37,6 @@ export function localWorkerTranscriptSourceIdentity(
     Number(stats.size),
     Number(stats.mtimeMs)
   )
-}
-
-export function remoteWorkerTranscriptSourceIdentity(
-  stats: FileStat
-): WorkerTranscriptSourceIdentity | null {
-  const mtimeMs = stats.mtimeMs ?? stats.mtime
-  if (
-    stats.type !== 'file' ||
-    !Number.isSafeInteger(stats.size) ||
-    stats.size < 0 ||
-    !Number.isSafeInteger(stats.dev) ||
-    !Number.isSafeInteger(stats.ino) ||
-    ((stats.dev ?? 0) === 0 && (stats.ino ?? 0) === 0) ||
-    !Number.isFinite(mtimeMs)
-  ) {
-    return null
-  }
-  return createIdentity(String(stats.dev), String(stats.ino), stats.size, mtimeMs)
 }
 
 export function workerTranscriptSourceChanged(

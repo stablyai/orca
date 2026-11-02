@@ -22,9 +22,7 @@ beforeEach(() => {
 
 describe('runPreflightCommandInWsl', () => {
   it('prefers the login PATH but never lets its absence decide the answer', async () => {
-    // Every caller collapses a throw into a verdict: isCommandAvailable returns
-    // false ("not installed"), isGhAuthenticated reads an empty payload as
-    // "not authenticated". A missing login PATH must therefore never be fatal.
+    // Callers can interpret rejected probes as absent/unauthenticated; degraded login PATH must remain usable.
     await runPreflightCommandInWsl({ distro: 'Ubuntu' }, 'gh --version', 5_000)
 
     expect(runWslProcessMock).toHaveBeenCalledWith(
@@ -33,8 +31,7 @@ describe('runPreflightCommandInWsl', () => {
   })
 
   it('still rejects with stdout and stderr attached on a non-zero exit', async () => {
-    // isGhAuthenticated reads these off the caught error as an auth-success
-    // fallback, so dropping them would break gh-in-WSL detection.
+    // Auth callers inspect captured error output for success markers.
     runWslProcessMock.mockResolvedValue({
       environmentResolved: true,
       code: 1,
@@ -53,12 +50,7 @@ describe('the PATH fallback, run by a real POSIX shell', () => {
   const itPosix = process.platform === 'win32' ? it.skip : it
 
   itPosix('finds an nvm-installed CLI a degraded probe would have missed', async () => {
-    // #9725: the caller turns a throw into "not installed", so a degraded probe
-    // told the user to install a CLI their own terminal already runs.
-    //
-    // A fabricated name, not `gh`: CI has a real /usr/bin/gh, and the fallback
-    // APPENDS, so the PATH lookup correctly found the real one and the planted
-    // stub was never reached. The test was asserting the host, not the code.
+    // Use a fabricated CLI: appended fallback PATH must not lose to a real host gh binary (#9725).
     const home = mkdtempSync(join(tmpdir(), 'orca-wsl-cmd-'))
     try {
       const bin = join(home, '.nvm/versions/node/v20.1.0/bin')

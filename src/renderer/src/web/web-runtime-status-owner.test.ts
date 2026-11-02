@@ -3,7 +3,7 @@ import WebSocket from 'ws'
 import {
   createSharedControlTestServer,
   closeSharedControlTestServers
-} from '../../../shared/remote-runtime-shared-control-test-server'
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
 import { WebRuntimeClient } from './web-runtime-client'
 
 const clients: WebRuntimeClient[] = []

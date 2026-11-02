@@ -1,7 +1,5 @@
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,
@@ -13,8 +11,7 @@ import type { StructuredAgentSessionSinkQueue } from './structured-agent-session
 
 type ResolvedItem = { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
 
-/** Resolve a queued item against the journal bound at execution. The queue runs
- *  one operation at a time, so what the resolver reads is what the append revises. */
+/** Resolve at execution in the journal queue, seeing prior writes and no later ones. */
 export function createStructuredAgentSessionResolvedAppend(
   queue: StructuredAgentSessionSinkQueue
 ): Required<
@@ -30,33 +27,33 @@ export function createStructuredAgentSessionResolvedAppend(
   const submit = (
     reservedBytes: number,
     resolve: (journal: StructuredAgentSessionRevisionJournal) => ResolvedItem | null,
-    options: Omit<StructuredAgentSessionItemAppendOptions, 'coalescingKey'>,
-    publish: boolean
+    options: StructuredAgentSessionItemAppendOptions,
+    input: { publish: boolean; lifecycle?: true; overflow: string }
   ) =>
-    queue.submit(
-      {
-        bytes: reservedBytes,
-        run: async (bound) => {
-          const resolved = resolve(bound.journal)
-          if (resolved === null) {
-            return
-          }
-          const bytes = estimateStructuredAgentSessionItemBytes(resolved.identity, resolved.body)
-          if (bytes + (publish ? 1 : 0) > reservedBytes) {
-            throw new Error('structured agent-session resolved item exceeded its reserved size')
-          }
-          await bound.journal.appendItem(
-            resolved.identity,
-            resolved.body,
-            structuredAgentSessionJournalAppendOptions(bound.fence, options)
-          )
-          if (publish) {
-            bound.publish()
-          }
+    queue.submit({
+      bytes: reservedBytes,
+      run: async (bound) => {
+        const landed = await bound.journal.appendResolvedItem(
+          () => {
+            const resolved = resolve(bound.journal)
+            if (
+              resolved !== null &&
+              estimateStructuredAgentSessionItemBytes(resolved.identity, resolved.body) +
+                (input.publish && !input.lifecycle ? 1 : 0) >
+                reservedBytes
+            ) {
+              throw new Error(input.overflow)
+            }
+            return resolved
+          },
+          structuredAgentSessionJournalAppendOptions(bound.fence, options)
+        )
+        if (landed !== null && input.publish) {
+          bound.publish()
         }
-      },
-      options
-    )
+      }
+    })
+  const ITEM_OVERFLOW = 'structured agent-session resolved item exceeded its reserved size'
   const identityOnly = (publish: boolean) =>
     ((identitySizeBound, body, resolveIdentity, options) =>
       submit(
@@ -66,39 +63,28 @@ export function createStructuredAgentSessionResolvedAppend(
           return identity === null ? null : { identity, body }
         },
         options,
-        publish
+        { publish, overflow: ITEM_OVERFLOW }
       )) satisfies NonNullable<StructuredAgentSessionEventSink['tryAppendResolvedItem']>
   return {
     tryAppendResolvedItem: identityOnly(false),
     tryAppendResolvedItemAndPublish: identityOnly(true),
     tryReviseResolvedItem: (reservedBytes, resolve, options) =>
-      submit(reservedBytes, resolve, options, false),
+      submit(reservedBytes, resolve, options, { publish: false, overflow: ITEM_OVERFLOW }),
     tryReviseResolvedItemAndPublish: (reservedBytes, resolve, options) =>
-      submit(reservedBytes + 1, resolve, options, true),
-    tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity, options) => {
-      const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
-      return queue.submit(
-        {
-          bytes,
-          lifecycle: true,
-          run: async (bound) => {
-            const identity = resolveIdentity(bound.journal)
-            if (identity === null) {
-              return
-            }
-            if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
-              throw new Error('structured agent-session item identity exceeded its reserved size')
-            }
-            await bound.journal.appendItem(
-              identity,
-              body,
-              structuredAgentSessionJournalAppendOptions(bound.fence, options)
-            )
-            bound.publish()
-          }
+      submit(reservedBytes + 1, resolve, options, { publish: true, overflow: ITEM_OVERFLOW }),
+    tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity, options) =>
+      submit(
+        estimateStructuredAgentSessionItemBytes(identitySizeBound, body),
+        (journal) => {
+          const identity = resolveIdentity(journal)
+          return identity === null ? null : { identity, body }
         },
-        { lifecycle: true }
+        options,
+        {
+          publish: true,
+          lifecycle: true,
+          overflow: 'structured agent-session item identity exceeded its reserved size'
+        }
       )
-    }
   }
 }

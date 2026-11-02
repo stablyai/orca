@@ -1,5 +1,7 @@
 import type { DaemonFileLog } from './daemon-file-log'
-import type { SubprocessHandle } from './session-subprocess-handle'
+import type { TerminalHostOptions } from './terminal-host-options'
+import type { TerminalSpawnAdmissionMode } from './terminal-spawn-gate'
+import type { HostTerminalPolicy } from './host-terminal-policy'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -14,6 +16,7 @@ export type DaemonServerOptions = {
   protocolVersion?: number
   onIdleShutdown?: () => void
   onRpcShutdown?: () => void
+  onShutdownRequested?: () => void
   initialAdoptionTestConfig?: {
     timeoutMs: number
     clock: {
@@ -27,14 +30,12 @@ export type DaemonServerOptions = {
   onPtySessionExit?: (sessionId: string) => void
   onAuthenticatedClientPair?: () => void
   log?: DaemonFileLog
-  spawnSubprocess: (opts: {
-    sessionId: string
-    cols: number
-    rows: number
-    cwd?: string
-    env?: Record<string, string>
-    command?: string
-    shellOverride?: string
-    isCanceled?: () => boolean
-  }) => SubprocessHandle | Promise<SubprocessHandle>
+  /** Headless hosts enforce; desktop only observes until the client handles deferral. */
+  spawnAdmission?: TerminalSpawnAdmissionMode
+  /** Crash-recovery state for automatic restores. */
+  automaticWorkMarkerPath?: string
+  /** Shared terminal counts for the host-wide cap. */
+  hostTerminalLedgerDir?: string
+  terminalLimitPolicy?: HostTerminalPolicy
+  spawnSubprocess: TerminalHostOptions['spawnSubprocess']
 }

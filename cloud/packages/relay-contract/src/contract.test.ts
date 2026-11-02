@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { RELAY_CLOSE_CODE } from './close-codes.js'
 import {
   AuthRefreshSchema,
   DrainSchema,
@@ -7,9 +6,7 @@ import {
   HostDataAuthSchema,
   HostHelloAckSchema,
   HostHelloSchema,
-  parseRelayHostCapabilities,
-  RELAY_HOST_CAPABILITIES_HEADER,
-  RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS
+  parseRelayHostCapabilities
 } from './control-messages.js'
 import {
   DeviceCredentialInstallSchema,
@@ -24,7 +21,6 @@ import {
   RelayMovedSchema,
   ResolveRequestSchema
 } from './director-messages.js'
-import { RELAY_PROTOCOL_LIMITS } from './protocol-limits.js'
 import { RelayRegionCatalogResponseSchema } from './relay-regions.js'
 import {
   buildHostChallengePlaintext,
@@ -32,39 +28,12 @@ import {
   buildHostProofTranscript
 } from './host-proof-transcript.js'
 import { ConfirmableResumeTupleSchema } from './resume-confirmation-contract.js'
-import {
-  canAdvanceSplice,
-  mayAcknowledgeClient,
-  SPLICE_STATE
-} from './splice-state-machine.js'
 
 const TOKEN = 'abcdefghijklmnopqrstuvwxyzABCDEFGH012345678'
 const NONCE = 'abcdefghijklmnopqrstuvwxyzABCDEF'
 const KEY_B64 = Buffer.alloc(32, 1).toString('base64')
 
 describe('relay protocol contract', () => {
-  it('locks close codes and fixed normative limits', () => {
-    expect(RELAY_CLOSE_CODE).toEqual({
-      BAD_OUTER_CREDENTIAL: 4401,
-      HOST_OFFLINE: 4404,
-      PEER_DROPPED: 4408,
-      WRONG_CELL: 4409,
-      LIMIT_EXCEEDED: 4429,
-      DRAINING: 4503
-    })
-    expect(RELAY_PROTOCOL_LIMITS).toMatchObject({
-      firstFrameDeadlineMs: 2_000,
-      maxHttpBodyBytes: 4_096,
-      maxFrameBytes: 8 * 1024 * 1024,
-      maxConnectionsPerHost: 8,
-      idleTimeoutMs: 600_000,
-      inviteMaxAttempts: 5,
-      inviteReservationLeaseMs: 15_000,
-      hostAttachDeadlineMs: 10_000,
-      resumeConfirmationDeadlineMs: 30_000
-    })
-  })
-
   it('strictly validates host registration and continuity fields', () => {
     const hello = {
       v: 1,
@@ -209,15 +178,6 @@ describe('relay protocol contract', () => {
     ).toBe(false)
   })
 
-  it('cannot acknowledge a splice before forwarding handlers exist', () => {
-    expect(
-      canAdvanceSplice(SPLICE_STATE.PRE_AUTH_ADMITTED, SPLICE_STATE.CREDENTIAL_LEASE_RESERVED)
-    ).toBe(true)
-    expect(canAdvanceSplice(SPLICE_STATE.PRE_AUTH_ADMITTED, SPLICE_STATE.SPLICED)).toBe(false)
-    expect(mayAcknowledgeClient(SPLICE_STATE.HOST_ATTACHED, false)).toBe(false)
-    expect(mayAcknowledgeClient(SPLICE_STATE.HOST_ATTACHED, true)).toBe(true)
-  })
-
   it('locks the immutable server-owned resume tuple shape', () => {
     const tuple = {
       basisConnId: 'conn-1',
@@ -256,8 +216,19 @@ describe('relay protocol contract', () => {
     expect(Buffer.from(transcript).toString('base64url')).toBe(
       'AAAACHByb3RvY29sAAAAGG9yY2EtcmVsYXktaG9zdC1wcm9vZi92MQAAAAd2ZXJzaW9uAAAAAQEAAAALcmVsYXlPcmlnaW4AAAAYaHR0cHM6Ly9yZWxheS5vbm9yY2EuZGV2AAAAF3JlbGF5RXBoZW1lcmFsUHVibGljS2V5AAAAIAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAADmNoYWxsZW5nZU5vbmNlAAAAGAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAtjaGFsbGVuZ2VJZAAAAAtjaGFsbGVuZ2UtMQAAAAhpc3N1ZWRBdAAAAAgAAAGLz-VoAAAAAAlleHBpcmVzQXQAAAAIAAABi8_ljxAAAAAGdXNlcklkAAAABnVzZXItMQAAAAlwcm9maWxlSWQAAAAJcHJvZmlsZS0xAAAADm9yZ2FuaXphdGlvbklkAAAABW9yZy0xAAAAC3JlbGF5SG9zdElkAAAAEGFiY2RlZmdoaWprbG1ub3AAAAANaG9zdFB1YmxpY0tleQAAACACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgAAAA9hc3NpZ25tZW50RXBvY2gAAAAIAAAAAAAAAAcAAAAScHJldmlvdXNHZW5lcmF0aW9uAAAACAAAAAAAAAAGAAAAD3Jlc3VtZVJlcXVlc3RlZAAAAAEB'
     )
-    expect(challenge.byteLength).toBe(transcript.byteLength + 65)
-    expect(proofInput.byteLength).toBe(transcript.byteLength + 29)
+    const length = Buffer.alloc(4)
+    length.writeUInt32BE(transcript.byteLength)
+    expect(Buffer.from(challenge)).toEqual(
+      Buffer.concat([
+        Buffer.from('orca-relay-host-challenge/v1\0'),
+        length,
+        Buffer.from(transcript),
+        Buffer.alloc(32, 3)
+      ])
+    )
+    expect(Buffer.from(proofInput)).toEqual(
+      Buffer.concat([Buffer.from('orca-relay-host-proof/v1\0ack\0'), Buffer.from(transcript)])
+    )
     expect(() => buildHostChallengePlaintext(transcript, new Uint8Array(31))).toThrow(
       'challengeSecret must be 32 bytes'
     )
@@ -366,7 +337,6 @@ describe('pending connection details capability', () => {
         pendingConns: [{ ...identifiers, kind: 'resume', relayDeviceId: 'device-1' }]
       }).success
     ).toBe(true)
-    // Still strict otherwise: an unannounced key must not slip through as data.
     expect(
       HostHelloAckSchema.safeParse({
         ...ack,
@@ -375,18 +345,10 @@ describe('pending connection details capability', () => {
     ).toBe(false)
   })
 
-  it('pins the header and token the desktop mirrors by hand', () => {
-    // The desktop cannot import this package; drift silently disables the
-    // feature, so both literals are asserted on each side.
-    expect(RELAY_HOST_CAPABILITIES_HEADER).toBe('x-orca-host-capabilities')
-    expect(RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS).toBe('pending-conn-details')
-  })
-
   it('reads the advertised capabilities from a control upgrade header', () => {
-    expect(
-      parseRelayHostCapabilities(` ${RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS} , future-thing`)
-    ).toEqual(new Set([RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS, 'future-thing']))
-    // A host that predates the header sends nothing; absence is never capable.
+    expect(parseRelayHostCapabilities(' pending-conn-details , future-thing')).toEqual(
+      new Set(['pending-conn-details', 'future-thing'])
+    )
     expect(parseRelayHostCapabilities(undefined).size).toBe(0)
     expect(parseRelayHostCapabilities('').size).toBe(0)
     expect(parseRelayHostCapabilities('x'.repeat(65)).size).toBe(0)

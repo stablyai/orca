@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 import {
   recordReceivedWebSessionTabsRemoval,
   recordReceivedWebSessionTabsSnapshot,
@@ -14,24 +14,13 @@ import {
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
 import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
 
-vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+// getState: snapshot receipt reads the held paired-tab closes; none here.
+vi.mock('../store', () => ({ useAppStore: { setState: vi.fn(), getState: () => ({}) } }))
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))
 
-/**
- * A host drops a worktree's entry when its last tab closes and announces that with a synthetic
- * `removed:<t>` epoch. That announcement is a retraction by a transient publisher, not a handover:
- * the renderer generation that published the worktree is still the live one and will publish the
- * worktree again the moment a client recreates a terminal in it. Recording the retraction as a
- * publication retired that live generation and locked it out of its own worktree.
- *
- * A predecessor frame already in flight when the retraction landed and the live publisher's next
- * frame are the same epoch at a higher version, so epoch identity cannot separate them and never
- * could. Delivery order can: the first reserved its received frame before the retraction, and the
- * second arrives after it, as the live publisher speaking again. `shouldApplyRecoveredWebSessionTabsSnapshot` holds that order and
- * is the gate every production apply path passes through before `decideWebSessionTabsSnapshot`.
- */
+/** removed:<t> retracts a worktree, not its still-live publisher. Pre-close in-flight lists and post-close republication share an epoch, so fence by receipt order through the full recovery/decision path, never by retiring that generation. */
 const ENVIRONMENT_ID = 'remote-runtime'
 const WORKTREE = 'repo::/worktree'
 const LIVE_EPOCH = 'renderer-generation-1'
@@ -88,11 +77,7 @@ describe('a removal frame must not retire the publisher that is still live', () 
     resetWebSessionTabsSyncTestState()
   })
 
-  /**
-   * The other side of the same contract, and the reason the fix is not simply "stop retiring": a
-   * frame that was already in flight when the retraction landed carries the same epoch at a higher
-   * version, and must still lose. Only its place in the delivery order says so.
-   */
+  // Stopping retirement is insufficient: reject same-epoch pre-close frames by delivery order even at higher versions.
   it('still fences a predecessor frame that was in flight when the removal landed', () => {
     recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
     expect(decideWebSessionTabsSnapshot(liveFrame(1), ENVIRONMENT_ID).apply).toBe(true)
@@ -115,12 +100,7 @@ describe('a removal frame must not retire the publisher that is still live', () 
     expect(admits(delayed, delayedReceived)).toBe(false)
   })
 
-  /**
-   * The receipt ledger is bounded, and one bootstrap inventory records a receipt per worktree under
-   * a single reserved frame. Evicting by insertion count would drop that batch's own earlier
-   * entries, and an absent receipt is what the recovery gate reads as "no evidence for this
-   * worktree" — so the bound would silently discard the worktrees it was meant to protect.
-   */
+  // Bound receipt ledgers by frame, not entry count: one bootstrap inventory shares a frame across worktrees and must not evict its own evidence.
   it('keeps every receipt an inventory recorded under one frame, past the bound', () => {
     const requestReceivedFrame = nextReceivedSessionTabsFrame()
     const worktrees = Array.from(
@@ -148,12 +128,7 @@ describe('a removal frame must not retire the publisher that is still live', () 
     }
   })
 
-  /**
-   * The boundary must outlive the bound. A ledger entry may be dropped once nothing can be ranked
-   * against it, but dropping a retraction boundary readmits every pre-close frame it was fencing —
-   * so a long-lived session that has seen many worktrees must not lose the one thing standing
-   * between a stale list and a resurrected tab.
-   */
+  // Retraction boundaries must survive ledger bounds or delayed pre-close frames resurrect tabs.
   it('keeps a worktree fence after enough other worktrees to evict its receipt', () => {
     const liveReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
     expect(admits(liveFrame(1), liveReceived)).toBe(true)
@@ -162,8 +137,7 @@ describe('a removal frame must not retire the publisher that is still live', () 
     const removedReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, removalFrame())
     expect(admits(removalFrame(), removedReceived)).toBe(true)
 
-    // Churn other worktrees through the same open-and-close cycle, past the bound and past the
-    // frame-age horizon, so both ledgers are over capacity when the delayed list finally lands.
+    // Churn past both capacity and frame-age bounds before the delayed list arrives.
     for (let index = 0; index < MAX_TRACKED_SESSION_TABS_RECEIPTS + 16; index += 1) {
       const worktree = `repo::/churn-${index}`
       recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, { ...liveFrame(1), worktree })
@@ -181,13 +155,7 @@ describe('a removal frame must not retire the publisher that is still live', () 
     expect(admits(delayed, delayedReceived)).toBe(false)
   })
 
-  /**
-   * A worktree the host has published nothing for still answers a forced list, with a synthesized
-   * `none`/v0 frame that means "ask me later" (host-session-snapshot-authority.ts). Every
-   * post-close list and every activation of an emptied worktree gets one. Noting it as a
-   * publication retires the renderer generation that is still live, and since that generation's
-   * epoch is per-process, the terminal the user creates next never reaches this client.
-   */
+  // Synthesized none/v0 means unpublished, not a new publisher (host-session-snapshot-authority.ts); retiring the live process epoch here blocks future terminals.
   it('does not let an unpublished-worktree placeholder retire the live publisher', () => {
     const liveReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
     expect(admits(liveFrame(1), liveReceived)).toBe(true)
@@ -216,13 +184,7 @@ describe('a removal frame must not retire the publisher that is still live', () 
     expect(admits(republished, republishedReceived)).toBe(true)
   })
 
-  /**
-   * The case the version fallback cannot decide. The receipt ledger is one slot, and the live
-   * republication overwrites it, so by the time the pre-close list lands the only record that a
-   * retraction ever happened is the boundary itself. Ranking on version instead readmits the list,
-   * because a host that touched the dying surface on its way out published a HIGHER version than
-   * the renderer's counter restarts at.
-   */
+  // Live republication overwrites the receipt slot; only the retraction boundary rejects pre-close lists with versions higher than the restarted counter.
   it('fences a pre-close list that lands after the live publisher already republished', () => {
     const liveReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
     expect(admits(liveFrame(1), liveReceived)).toBe(true)
@@ -249,12 +211,7 @@ describe('a removal frame must not retire the publisher that is still live', () 
     expect(admits(delayed, delayedReceived)).toBe(false)
   })
 
-  /**
-   * The boundary is evidence, so a retraction may only ever advance it. A visibility-resume
-   * inventory reserves its received frame before it lists, so an omission it reports can be older
-   * than a stream frame that landed meanwhile. Letting that stale omission rewind the ledger would
-   * forget the stream frame's version and readmit a delayed frame the ledger had already outranked.
-   */
+  // Retraction boundaries only advance. Older inventory omissions must not rewind evidence from newer stream frames and readmit delayed lists.
   it('does not let an inventory omission older than the last stream frame rewind the boundary', () => {
     const inventoryReceived = nextReceivedSessionTabsFrame()
     const delayedReceived = nextReceivedSessionTabsFrame()
@@ -284,17 +241,7 @@ describe('a removal frame must not retire the publisher that is still live', () 
     ).toBe(false)
   })
 
-  /**
-   * Rate-independence, which is the point of fixing this at the root. The defect surfaced only 1
-   * run in 6 because the retired-value check is an exact string match while the lineage check
-   * treats `:headless-merge:` as the same publisher, so a merged republication walked past a fence
-   * a bare one hit. The removal path must no longer care which shape arrives; if it did, the defect
-   * would not be fixed, only re-rated.
-   *
-   * Through the full path, not `decideWebSessionTabsSnapshot` alone: the receipt ledger retires
-   * epochs too, so dropping only the retirement inside the decision turns a decide-only case green
-   * while the publisher stays locked out on every real path.
-   */
+  // Exercise full recovery/receipt/decision path for bare and headless-merge epochs. Decision-only tests miss receipt retirement; exact-string differences must not make lockout timing-dependent.
   for (const [label, epoch] of [
     ['bare', LIVE_EPOCH],
     ['headless-merge', `${LIVE_EPOCH}:headless-merge:abc`]

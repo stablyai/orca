@@ -1,10 +1,6 @@
 import { posix, win32 } from 'node:path'
 
-/**
- * Path semantics of the host that owns the files, which is not always the host
- * running this process: a WSL runtime is POSIX and case-sensitive while the
- * process platform is `win32`, and a remote Orca runtime has its own platform.
- */
+/** Use the file-owning host’s semantics: WSL is POSIX even in a win32 process, and remote hosts have their own platform. */
 export type SkillPathSemantics = { caseSensitive: boolean; sep: '/' | '\\' }
 
 export const POSIX_SKILL_PATH_SEMANTICS: SkillPathSemantics = { caseSensitive: true, sep: '/' }

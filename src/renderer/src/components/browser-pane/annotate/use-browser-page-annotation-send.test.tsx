@@ -8,6 +8,7 @@ import { createTestStore } from '@/store/slices/browser-slice-test-harness'
 import type { OpenAgentSendPopoverTargetModeArgs } from '@/store/slices/ui'
 import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
 import { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'
+import { resetNotesInFlightForTests } from '@/lib/notes-send-in-flight'
 
 const state = vi.hoisted((): { store?: ReturnType<typeof createTestStore> } => ({}))
 vi.mock('@/store', () => ({
@@ -22,6 +23,7 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('./BrowserAnnotationSendMenuContent', () => ({
+  browserAnnotationCopyTooltip: () => 'Copy feedback',
   BrowserAnnotationSendMenuContent: ({ onPromptDelivered }: { onPromptDelivered?: () => void }) => (
     <button onClick={onPromptDelivered}>Complete delivery</button>
   )
@@ -93,6 +95,7 @@ beforeEach(() => {
   store = createTestStore()
   state.store = store
   mode = undefined
+  resetNotesInFlightForTests()
   store.setState({
     activeGroupIdByWorktree: {},
     openAgentSendPopoverTargetMode: (next) => {
@@ -194,6 +197,37 @@ describe('website annotation delivery', () => {
     expect(notes()).toHaveLength(1)
   })
 
+  it('switches Send, the open sidebar picker and Copy to page details together', () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText } }
+    })
+    store.setState({
+      openAgentSendPopoverTargetMode: (next) => {
+        mode = next
+        store.setState({
+          agentSendPopoverTargetMode: {
+            ...next,
+            instanceId: 'instance-1',
+            eligiblePaneKeys: [],
+            disabledPaneKeys: {},
+            status: 'open'
+          }
+        })
+      }
+    })
+    const view = mount()
+    act(() => view.result.current.handleAnnotationTraySendOpenChange(true))
+    expect(mode?.prompt).not.toContain('**Computed styles:**')
+
+    act(() => view.result.current.handleIncludePageDetailsChange(true))
+    expect(mode?.prompt).toContain('**Computed styles:**')
+    expect(view.result.current.browserAnnotationsPrompt).toBe(mode?.prompt)
+    act(() => view.result.current.handleCopyBrowserAnnotations())
+    expect(writeClipboardText).toHaveBeenCalledWith(expect.stringContaining('**Computed styles:**'))
+  })
+
   it('does not erase replacement notes after a navigation clears the original page', () => {
     const view = mount()
     const delivered = view.result.current.handleBrowserAnnotationsSentToAgent
@@ -212,5 +246,67 @@ describe('website annotation delivery', () => {
     expect(notes()).toHaveLength(1)
     act(() => view.result.current.handleClearBrowserAnnotations())
     expect(notes()).toEqual([])
+  })
+})
+
+describe('website annotations handed to a send', () => {
+  const second = (): BrowserPageAnnotation => ({
+    ...makeAnnotation('page-1', 'second'),
+    comment: 'Second note'
+  })
+
+  it('sends only an annotation added while an earlier send is still on its way', async () => {
+    const view = mount()
+    const firstDelivered = view.result.current.handleBrowserAnnotationsSentToAgent
+    let deliverFirst!: (result: { delivered: boolean }) => void
+    act(() =>
+      view.result.current.handleBrowserAnnotationsHandedOff(
+        new Promise((resolve) => (deliverFirst = resolve))
+      )
+    )
+    expect(view.result.current.browserAnnotationsPrompt).toBe('')
+
+    act(() => store.getState().addBrowserPageAnnotation(second()))
+    expect(view.result.current.browserAnnotationsPrompt).toContain('Second note')
+    expect(view.result.current.browserAnnotationsPrompt).not.toContain('Fix this button')
+    const secondDelivered = view.result.current.handleBrowserAnnotationsSentToAgent
+
+    act(firstDelivered)
+    await act(async () => deliverFirst({ delivered: true }))
+    expect(notes().map((note) => note.id)).toEqual(['second'])
+    act(secondDelivered)
+    expect(notes()).toEqual([])
+  })
+
+  it('puts annotations back for the next send when their delivery fails', async () => {
+    const view = mount()
+    const delivered = Promise.resolve({ delivered: false, failureNotified: true })
+    act(() => view.result.current.handleBrowserAnnotationsHandedOff(delivered))
+    expect(view.result.current.browserAnnotationsPrompt).toBe('')
+
+    await act(async () => {
+      await delivered
+    })
+
+    expect(view.result.current.browserAnnotationsPrompt).toContain('Fix this button')
+    expect(notes()).toHaveLength(1)
+  })
+
+  it('holds what a running-agent send carries too', () => {
+    const view = mount()
+    act(() => view.result.current.handleAnnotationTraySendOpenChange(true))
+    act(() => mode?.onPromptHandedOff?.(new Promise(() => undefined)))
+    expect(view.result.current.browserAnnotationsPrompt).toBe('')
+  })
+
+  it('offers no send while every annotation is already on its way', () => {
+    const view = mount()
+    act(() => view.result.current.handleBrowserAnnotationsHandedOff(new Promise(() => undefined)))
+
+    act(() => view.result.current.handleAnnotationTraySendOpenChange(true))
+    expect(mode).toBeUndefined()
+
+    render(<AnnotationTrayHarness />)
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
   })
 })

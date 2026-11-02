@@ -12,7 +12,8 @@ import {
   recordWebSessionTerminalPlacement,
   resetWebSessionTerminalPlacementsForTests
 } from './web-session-terminal-placement'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { reconcileClientOwnedTabPlacement } from './web-session-client-owned-tab-placement'
 import {
   ENV,
@@ -181,7 +182,7 @@ describe('client-owned tab placement for paired worktrees', () => {
     resetWebSessionTerminalPlacementsForTests()
   })
 
-  // RED: buildMirroredHostGroups prepends client-placed tabs ahead of the mapped host order.
+  // Host order must not prepend client-placed tabs.
   it('appends a newly client-placed browser tab after the tabs already in its group', () => {
     recordWebSessionBrowserPlacement({
       environmentId: ENV,
@@ -232,7 +233,7 @@ describe('client-owned tab placement for paired worktrees', () => {
     expect(groupById(patch, HOST_GROUP)?.tabOrder).toEqual([T1, T2, T3, BROWSER_HOST_TAB])
   })
 
-  // RED: buildMirroredHostGroups prefers the host group's activeTabId over the client's own focus.
+  // Ambient host activeTabId must not override client focus.
   it('leaves every split group active tab untouched when a snapshot carries no navigation intent', () => {
     recordWebSessionBrowserPlacement({
       environmentId: ENV,
@@ -410,8 +411,7 @@ describe('client-owned tab placement for paired worktrees', () => {
     expect(patch.activeGroupIdByWorktree?.[WT]).toBe(PREVIEW_GROUP)
   })
 
-  // RED: a client-only pane holding only mirrored terminals is folded back into the host group, so
-  // the next create lands in the left pane. Not covered above — the browser pane survives via its placement record.
+  // Client-only panes containing only mirrored terminals must survive; browser panes already have placement reservations.
   it('keeps a client-only pane that holds a mirrored terminal focused across an ambient snapshot', () => {
     const state = makeState({
       activeGroupIdByWorktree: { [WT]: PREVIEW_GROUP },
@@ -458,8 +458,7 @@ describe('client-owned tab placement for paired worktrees', () => {
     expect((patch.activeGroupIdByWorktree ?? state.activeGroupIdByWorktree)[WT]).toBe(PREVIEW_GROUP)
   })
 
-  // Remote-owned browser closes round-trip through the host, so the snapshot — not
-  // closeUnifiedTab — must collapse the pane the vanished tab leaves behind.
+  // Remote browser closes round-trip through host; snapshot removal must collapse the empty pane.
   it('collapses a split pane whose only tab vanished from the snapshot', () => {
     const state = splitClientState()
     const patch = applyWebSessionTabsSnapshot(
@@ -531,8 +530,7 @@ describe('client-owned tab placement for paired worktrees', () => {
     expect(effectiveGroups?.map((group) => group.id)).toEqual([HOST_GROUP, PREVIEW_GROUP])
   })
 
-  // Unreachable through applyWebSessionTabsSnapshot (a no-tab snapshot bails before
-  // placement), so pin the defensive branch at the unit level.
+  // No-tab snapshots bail before placement; test this defensive branch directly.
   it('keeps the last pane when every group empties at once', () => {
     const result = reconcileClientOwnedTabPlacement({
       currentGroups: [

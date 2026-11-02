@@ -1,20 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { CodexAppServerRequestError } from './codex-app-server-connection'
 import {
+  acquireReadyCodexForTest,
   THREAD_ID,
   acquired,
   adapterFor,
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
+import { describe, expect, it, vi } from 'vitest'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session/agent-session-wire'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
@@ -231,7 +230,11 @@ describe('Codex live prompt ownership', () => {
     ).rejects.toThrow(/no longer waiting/)
 
     await adapter.closeSession('session-1')
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
@@ -278,7 +281,7 @@ describe('Codex live prompt ownership', () => {
       'turn/interrupt': () => completeTurn(codex, 'thread-child', 'child-turn')
     })
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9'
@@ -335,7 +338,7 @@ describe('Codex live prompt ownership', () => {
     })
     const recorded = lifecycleRecorder()
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -398,7 +401,7 @@ describe('Codex live prompt ownership', () => {
     })
     const recorded = lifecycleRecorder()
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -448,7 +451,7 @@ describe('Codex live prompt ownership', () => {
     const codex = fakeCodex()
     const recorded = lifecycleRecorder()
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -509,7 +512,7 @@ describe('Codex live prompt ownership', () => {
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
+    ).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     expect(completionThreads(events)).toEqual([])
   })
 
@@ -517,7 +520,7 @@ describe('Codex live prompt ownership', () => {
     const codex = fakeCodex()
     const recorded = lifecycleRecorder(false)
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -559,7 +562,7 @@ describe('Codex live prompt ownership', () => {
       }
     })
     const adapter = adapterFor(codex)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -640,7 +643,11 @@ describe('Codex live prompt ownership', () => {
     }
     expect(codex.connections[0]?.calls.some((call) => call.method === 'turn/interrupt')).toBe(false)
 
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
     await expect(
       adapter.cancelTurn({
         sessionId: 'session-1',

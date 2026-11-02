@@ -1,3 +1,4 @@
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import {
@@ -142,10 +143,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
-      { shouldApply: expect.any(Function) }
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
+    expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedItems).toContainEqual({
+      provider: 'github',
+      type: 'pr',
+      number: 12
+    })
     expect(store.getState().prCache[`${repoId}::${branch}`]).toBeUndefined()
   })
 
@@ -198,8 +204,9 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
       {
+        executionHostId: 'local',
         suppressHostedReviewRefresh: true,
         shouldApply: expect.any(Function)
       }
@@ -256,8 +263,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
-      { shouldApply: expect.any(Function) }
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
   })
@@ -572,8 +579,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(request).resolves.toMatchObject({ number: 12 })
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
-      { shouldApply: expect.any(Function) }
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
+      { executionHostId: 'local', shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
     expect(store.getState().prCache[`${repoId}::${branch}`]).toMatchObject({

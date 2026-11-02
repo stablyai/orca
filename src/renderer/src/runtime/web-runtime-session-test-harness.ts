@@ -31,10 +31,7 @@ export type WebRuntimeSessionMocks = {
   hasMaterializedWebRuntimeBrowserPage: SessionMock
 }
 
-/**
- * Store actions the optimistic browser stage drives, owned here rather than by each test file's
- * hoisted mock object so every browser-create suite models staging the same way.
- */
+/** Centralize optimistic browser actions so every browser-create suite models staging consistently. */
 export const stagedBrowserTabMocks: {
   closeBrowserTab: SessionMock
   removeRemoteBrowserPageHandle: SessionMock
@@ -121,17 +118,6 @@ export function makeSnapshot(): RuntimeMobileSessionTabsResult {
     activeTabType: null,
     tabs: []
   }
-}
-
-/**
- * The `window.api` surface a browser create reaches. Every create now consults the main process for
- * its placement, so a stub that only carries `call` leaves the create failing on a missing IPC.
- */
-export function webRuntimeSessionWindowApi(
-  call: unknown,
-  prepareBrowserClientHostPlacement: unknown = vi.fn().mockResolvedValue({ kind: 'server' })
-): { api: { runtimeEnvironments: { call: unknown; prepareBrowserClientHostPlacement: unknown } } } {
-  return { api: { runtimeEnvironments: { call, prepareBrowserClientHostPlacement } } }
 }
 
 export function stubBrowserTabCreateEnvironment(mocks: WebRuntimeSessionMocks): void {

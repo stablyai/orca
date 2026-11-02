@@ -12,10 +12,6 @@ import {
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 
-// Why: the opencode2 (beta) channel-scoped DB schema differs from v1 —
-// `session_v2` rows plus `session_message` rows whose `data` holds tagged
-// message JSON. These tests pin the defensive reads against that schema.
-
 let tempDirs: string[] = []
 
 afterEach(() => {

@@ -14,11 +14,11 @@ import type {
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
-  addPreviewContent,
   createAccumulator,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import {
   asRecord,
   extractContentText,
@@ -71,7 +71,7 @@ function consumeCursorRecordLine(accumulator: SessionAccumulator, line: string):
     if (role === 'user') {
       accumulator.title ??= extractMessageText(record.message) ?? extractContentText(record.content)
     }
-    addPreviewContent(
+    addSessionContent(
       accumulator,
       role,
       asRecord(record.message)?.content ?? record.content,

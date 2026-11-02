@@ -1,9 +1,9 @@
-// WSL routing: distro selection, cwd translation and env import marking.
+import type * as PtySpawnValidationTypes from '../providers/working-directory-validation'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as LocalPtyUtils from '../providers/local-pty/local-pty-executable-spawn'
 
 const {
   spawnMock,
@@ -33,9 +33,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI. The real resolver (which skips the Store App
-// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -49,11 +47,18 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+vi.mock('../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
-    resolveUnixShellPath: resolveUnixShellPathMock,
+    resolveUnixShellPath: resolveUnixShellPathMock
+  }
+})
+
+vi.mock('../providers/working-directory-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidationTypes>()
+  return {
+    ...actual,
     validateWorkingDirectory: validateWorkingDirectoryMock,
     validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
@@ -68,10 +73,6 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
-// fake timers; default to "shell-only" so the degraded-scan guard falls through
-// to its existing retirement logic (the degraded-scan behavior itself is
-// covered in pty-subprocess-foreground-degraded-scan.test.ts).
 vi.mock('../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
@@ -156,7 +157,6 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    // Keep the fixture Windows-shaped even when this test runs on a Linux CI host.
     const cwd = 'C:\\repo'
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
@@ -403,8 +403,7 @@ describe('createPtySubprocess', () => {
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(spawnCall[1]).toEqual(expect.any(Array))
     expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-    // Why: the daemon inherits optional agent-hook env in development. This
-    // test owns only the terminal handle and Powerlevel10k WSLENV contract.
+    // Inherited development hooks may add WSLENV entries outside this test’s contract.
     expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
         'FOO/u',
@@ -412,6 +411,42 @@ describe('createPtySubprocess', () => {
         'ORCA_HERMES_STARTUP_QUERY',
         POWERLEVEL10K_WIZARD_DISABLE_ENV
       ])
+    )
+  })
+
+  it('imports the guest-relative Claude pointer and profile home verbatim into daemon WSL terminals', async () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const home = '/home/jin/.local/share/orca/claude-profiles/a/home'
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        env: {
+          CLAUDE_CONFIG_DIR: home,
+          ORCA_CLAUDE_INJECTED_CONFIG_DIR: home,
+          ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    // Guest paths must not receive WSLENV host-path translation flags.
+    expect(env.WSLENV.split(':')).toEqual(
+      expect.arrayContaining([
+        'CLAUDE_CONFIG_DIR',
+        'ORCA_CLAUDE_PROFILE_POINTER',
+        'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+      ])
+    )
+    expect(env.ORCA_CLAUDE_PROFILE_POINTER).toBe(
+      '~/.local/share/orca/claude-profiles/selected-wsl-orca'
     )
   })
 

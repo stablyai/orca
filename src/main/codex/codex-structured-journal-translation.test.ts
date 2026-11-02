@@ -1,23 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
-import { projectStructuredAgentSessionStatus } from '../../shared/structured-agent-session-projection'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { projectStructuredAgentSessionStatus } from '../../shared/agent-session/view/structured-agent-session-projection'
 import {
   createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventTarget
+  type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { MAX_CODEX_ACTIVE_TURNS } from './codex-structured-journal-translation-turn-state'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
+import { deferredTarget } from './codex-deferred-sink-target-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -49,7 +46,6 @@ function recorder() {
   }
 }
 
-/** Latest body per identity, in first-seen order: what the journal reducer keeps. */
 function reduced(rows: readonly Row[]): Row[] {
   const latest = new Map<string, Row>()
   for (const row of rows) {
@@ -58,7 +54,6 @@ function reduced(rows: readonly Row[]): Row[] {
   return [...latest.values()]
 }
 
-/** Fires the coalescing window on demand instead of on wall time. */
 function manualWindow() {
   const pending: (() => void)[] = []
   return {
@@ -81,8 +76,12 @@ function manualWindow() {
   }
 }
 
-function notification(method: string, params: unknown): CodexStructuredSessionEvent {
-  return { type: 'notification', sessionId: SESSION_ID, threadId: THREAD_ID, method, params }
+function notification(
+  method: string,
+  params: unknown,
+  threadId = THREAD_ID
+): CodexStructuredSessionEvent {
+  return { type: 'notification', sessionId: SESSION_ID, threadId, method, params }
 }
 
 const TURN_STARTED = notification('turn/started', { turn: { id: TURN_ID } })
@@ -96,74 +95,19 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
   return { translator, tap, window }
 }
 
-function deferredTarget(
-  log: AgentJournalItemBody[],
-  publishes: string[] = []
-): StructuredAgentSessionEventTarget {
-  return {
-    fence: 7,
-    journal: {
-      appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-        log.push(body)
-        return { cursor: { epoch: 'e', sequence: log.length } }
-      }),
-      appendTombstone: vi.fn(async () => ({ epoch: 'e', sequence: log.length })),
-      appendLifecycleBatch: vi.fn(
-        async (input: { mutations: readonly JournalLifecycleMutationInput[] }) => {
-          for (const mutation of input.mutations) {
-            if (mutation.kind === 'item') {
-              log.push(mutation.body)
-            }
-          }
-          return { epoch: 'e', sequence: log.length }
-        }
-      )
-    } as unknown as StructuredAgentSessionEventTarget['journal'],
-    publish: vi.fn(() => {
-      publishes.push('publish')
-    })
-  }
-}
-
-function hardWatermarkDeferred() {
+function pausedDeferred() {
   return createDeferredStructuredAgentSessionEventSink({
+    ...testEventSinkLogging(),
     watermarks: {
       pauseQueuedBytes: 1,
-      maxQueuedBytes: 1,
       lowQueuedBytes: 0,
       pauseQueuedOperations: 1,
-      maxQueuedOperations: 0,
       lowQueuedOperations: 0
     }
   })
 }
 
 describe('codex journal translation', () => {
-  it('refuses an active-turn overflow before publishing an un-settleable lifecycle row', () => {
-    const tap = recorder()
-    const translator = createCodexJournalTranslator({
-      sink: tap.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    for (let index = 0; index < MAX_CODEX_ACTIVE_TURNS; index += 1) {
-      expect(
-        translator.handle(notification('turn/started', { turn: { id: `turn-${index}` } }))
-      ).toEqual({ accepted: true })
-    }
-    expect(
-      translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
-    ).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(MAX_CODEX_ACTIVE_TURNS)
-
-    expect(translator.handle(notification('turn/completed', { turn: { id: 'turn-0' } }))).toEqual({
-      accepted: true
-    })
-    expect(
-      translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
-    ).toEqual({ accepted: true })
-  })
-
   it('projects turns restored by thread/resume into durable conversation rows', () => {
     const { translator, tap } = translatorWith()
 
@@ -272,8 +216,6 @@ describe('codex journal translation', () => {
       expect.objectContaining({ kind: 'turn', turnId: 'turn-later', state: 'interrupted' })
     ])
     expect(tap.tombstones).toEqual([])
-    // Both running rows are revised to interrupted, so no lifecycle identity
-    // remains live after a session end.
     expect(
       projectStructuredAgentSessionStatus(
         reduced(tap.rows).map((row, sequence) => ({
@@ -337,7 +279,6 @@ describe('codex journal translation', () => {
           durationMs: 2_400
         })
       )
-      // The message the user reads is still a row of its own.
       expect(reduced(tap.rows).map((row) => row.body)).toContainEqual(
         expect.objectContaining({
           kind: 'status',
@@ -390,103 +331,6 @@ describe('codex journal translation', () => {
 
       expect(statusOf(tap.rows)).toBe('working')
       expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(1)
-    })
-  })
-
-  describe('the thread reporting it stopped running releases unanswered sends', () => {
-    function statusChanged(type: string) {
-      return notification('thread/status/changed', { threadId: THREAD_ID, status: { type } })
-    }
-
-    function translatorReporting(stopped: string[]) {
-      const tap = recorder()
-      const translator = createCodexJournalTranslator({
-        sink: tap.sink,
-        primaryThreadId: () => THREAD_ID,
-        onPrimaryThreadStoppedRunning: () => stopped.push(THREAD_ID)
-      })
-      return { tap, translator }
-    }
-
-    it.each(['idle', 'systemError'])('reports the thread stopped running on %s', (type) => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(statusChanged(type))
-
-      expect(stopped).toEqual([THREAD_ID])
-    })
-
-    it.each(['active', 'notLoaded'])('stays silent on %s', (type) => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(statusChanged(type))
-
-      expect(stopped).toEqual([])
-    })
-
-    it('stays silent while a turn is open, whatever the thread reports', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(TURN_STARTED)
-      translator.handle(statusChanged('systemError'))
-
-      expect(stopped).toEqual([])
-    })
-
-    it('releases after the failed completion that follows systemError and the error', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(TURN_STARTED)
-      translator.handle(statusChanged('systemError'))
-      translator.handle(
-        notification('error', {
-          turnId: TURN_ID,
-          willRetry: false,
-          error: { message: 'fatal' }
-        })
-      )
-      expect(stopped).toEqual([])
-
-      translator.handle(notification('turn/completed', { turn: { id: TURN_ID, status: 'failed' } }))
-
-      expect(stopped).toEqual([THREAD_ID])
-    })
-
-    it('releases after idle arrives before the terminal turn completion notification', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(TURN_STARTED)
-      translator.handle(statusChanged('idle'))
-      expect(stopped).toEqual([])
-
-      translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
-
-      expect(stopped).toEqual([THREAD_ID])
-    })
-
-    it('reports once the open turn has settled', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(TURN_STARTED)
-      translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
-      translator.handle(statusChanged('idle'))
-
-      expect(stopped).toEqual([THREAD_ID])
-    })
-
-    it('ignores a bare string status from a shape this build does not get', () => {
-      const stopped: string[] = []
-      const { translator } = translatorReporting(stopped)
-
-      translator.handle(notification('thread/status/changed', { status: 'idle' }))
-
-      expect(stopped).toEqual([])
     })
   })
 
@@ -577,7 +421,6 @@ describe('codex journal translation', () => {
     translator.handle(notification('item/agentMessage/delta', { itemId: 'item-1', delta: 'llo' }))
     window.fire()
 
-    // `item/started` had no text to journal; only the coalesced snapshot lands.
     expect(tap.rows).toEqual([
       {
         key: 'codex:thread-abc:turn-1:0',
@@ -601,8 +444,6 @@ describe('codex journal translation', () => {
     )
     window.fire()
 
-    // One key, so the reducer keeps the last write; the stale snapshot cannot
-    // come back after the window it was pending on fires.
     expect(new Set(tap.rows.map((row) => row.key))).toEqual(new Set(['codex:thread-abc:turn-1:0']))
     expect(tap.rows.map((row) => row.body)).toEqual([
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'part' }] },
@@ -628,6 +469,42 @@ describe('codex journal translation', () => {
       'codex:thread-abc:turn-1:0',
       'orca:codex-item%3Athread-abc%3Aitem-2'
     ])
+  })
+
+  it("leaves another thread's streamed output to its own checkpoint cadence", () => {
+    const { translator, tap, window } = translatorWith()
+    const outputBytes = () =>
+      tap.rows.flatMap(({ body }) =>
+        body.kind === 'tool-call' && body.output ? [body.output.byteLength] : []
+      )
+    const itemStarted = (threadId: string) =>
+      notification(
+        'item/started',
+        { item: { type: 'agentMessage', id: 'item-2', text: '' } },
+        threadId
+      )
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'commandExecution', id: 'exec-1', command: 'rg x', status: 'inProgress' }
+      })
+    )
+    translator.handle(
+      notification('item/commandExecution/outputDelta', {
+        itemId: 'exec-1',
+        delta: 'x'.repeat(1024)
+      })
+    )
+    window.fire()
+    translator.handle(
+      notification('item/commandExecution/outputDelta', { itemId: 'exec-1', delta: 'x' })
+    )
+    translator.handle(itemStarted('thread-other'))
+    expect(outputBytes()).toEqual([1024])
+
+    translator.handle(itemStarted(THREAD_ID))
+    expect(outputBytes()).toEqual([1024, 1025])
   })
 
   it('flushes what streamed when the child dies unannounced', () => {
@@ -708,17 +585,16 @@ describe('codex journal translation', () => {
     ])
   })
 
-  it('admits authoritative item completion across the deferred sink hard watermark', async () => {
+  it('admits authoritative item completion while the deferred sink pauses reading', async () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
+      ...testEventSinkLogging(),
       watermarks: {
         pauseQueuedBytes: 1,
-        maxQueuedBytes: 1,
         lowQueuedBytes: 0,
         pauseQueuedOperations: 1,
-        maxQueuedOperations: 0,
         lowQueuedOperations: 0
       },
       readingControl
@@ -742,7 +618,7 @@ describe('codex journal translation', () => {
       })
     )
 
-    expect(deferred.state()).toMatchObject({ queuedOperations: 3, backpressured: true })
+    expect(deferred.state()).toMatchObject({ backpressured: true })
     expect(readingControl.pauseReading).toHaveBeenCalled()
 
     deferred.bind(deferredTarget(bodies, publishes))
@@ -772,11 +648,11 @@ describe('codex journal translation', () => {
     })
   })
 
-  it('admits command approval prompts and their publish across the hard watermark', async () => {
+  it('admits command approval prompts and their publish while the sink pauses reading', async () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const bound: [string, string, string][] = []
-    const deferred = hardWatermarkDeferred()
+    const deferred = pausedDeferred()
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       bindPromptItemId: (journalItemId, threadId, promptKey) =>
@@ -801,7 +677,7 @@ describe('codex journal translation', () => {
         'approval-hard-watermark'
       ]
     ])
-    expect(deferred.state()).toMatchObject({ queuedOperations: 2, backpressured: true })
+    expect(deferred.state()).toMatchObject({ backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -815,11 +691,11 @@ describe('codex journal translation', () => {
     expect(publishes).toHaveLength(1)
   })
 
-  it('admits user-input prompt questions and their publish across the hard watermark', async () => {
+  it('admits user-input prompt questions and their publish while the sink pauses reading', async () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const bound: [string, string, string][] = []
-    const deferred = hardWatermarkDeferred()
+    const deferred = pausedDeferred()
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       bindPromptItemId: (journalItemId, threadId, promptKey) =>
@@ -846,7 +722,7 @@ describe('codex journal translation', () => {
       'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq1',
       'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq2'
     ])
-    expect(deferred.state()).toMatchObject({ queuedOperations: 2, backpressured: true })
+    expect(deferred.state()).toMatchObject({ backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -879,26 +755,5 @@ describe('codex journal translation', () => {
     expect(tap.rows).toEqual([])
     expect(tap.bound).toEqual([])
     expect(tap.publishes()).toBe(0)
-  })
-
-  it('admits turn start publication across the hard watermark', async () => {
-    const bodies: AgentJournalItemBody[] = []
-    const publishes: string[] = []
-    const deferred = hardWatermarkDeferred()
-    const translator = createCodexJournalTranslator({
-      sink: deferred.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    expect(translator.handle(TURN_STARTED)).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 2, backpressured: true })
-
-    deferred.bind(deferredTarget(bodies, publishes))
-    await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-
-    expect(bodies).toEqual([
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' })
-    ])
-    expect(publishes).toHaveLength(1)
   })
 })

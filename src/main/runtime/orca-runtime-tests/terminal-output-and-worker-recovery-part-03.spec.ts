@@ -1,7 +1,8 @@
+import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
-import type { OrchestrationDb } from '../orchestration/db'
 import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -45,23 +46,24 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: () => undefined,
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-reveal-retry',
-          task_id: 'task-reveal-retry',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_reveal_retry',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `pty-reveal-retry:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_reveal_retry'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-reveal-retry',
+        task_id: 'task-reveal-retry',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_reveal_retry',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `pty-reveal-retry:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_reveal_retry'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -393,6 +395,10 @@ describe('OrcaRuntimeService', () => {
     ).toBeUndefined()
     expect(harness.getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(harness.getSession().terminalLayoutsByTabId['legacy-post-reveal']).toBeUndefined()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The window draws main's layout, which no longer holds the tab: its next graph omits it.
+      harness.runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    }
     const runtimeState = harness.runtime as unknown as {
       tabs: Map<string, unknown>
       leaves: Map<string, unknown>
@@ -456,22 +462,23 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-persistence-failure',
-          task_id: 'task-persistence-failure',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_persistence_failure',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `pty-persistence-failure:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_persistence_failure'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-persistence-failure',
+        task_id: 'task-persistence-failure',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_persistence_failure',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `pty-persistence-failure:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_persistence_failure'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),

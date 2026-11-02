@@ -20,8 +20,7 @@ export type ShareUsageCardProps = (ClaudeShareData | CodexShareData) & {
   range: string
 }
 
-// Why: html-to-image uses SVG foreignObject which handles modern CSS fine,
-// but inline styles are kept for portability and to avoid Tailwind class stripping.
+// Keep styles inline for portable image capture without depending on retained Tailwind classes.
 export const ShareUsageCard = forwardRef<HTMLDivElement, ShareUsageCardProps>(
   function ShareUsageCard(props, ref) {
     const { provider, summary, daily, range } = props

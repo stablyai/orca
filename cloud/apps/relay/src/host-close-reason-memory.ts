@@ -11,10 +11,7 @@ const RETENTION_MS = ASSIGNMENT_LIMITS.dormantTtlMs
 // burst well above any single cell's host count without becoming a leak.
 const MAX_ENTRIES = 50_000
 
-// Why in-memory and not Postgres: a phone reaches the cell its host's assignment
-// row already names, which is the same cell that watched the control socket
-// close. Losing this on a cell restart degrades to the pre-existing generic
-// verdict, so the failure mode is the old behaviour rather than a wrong one.
+// Phones reach the cell named by assignment, which observed host close; restart loses only explanation and falls back to the legacy generic verdict.
 export class HostCloseReasonMemory {
   private readonly entries = new Map<string, { reason: RelayHostCloseReason; expiresAt: number }>()
 

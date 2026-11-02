@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from './orca-runtime'
 import {
   isUnstoppedPtyRemovalError,
@@ -20,7 +20,8 @@ import {
   listStructuredSessionsForWorktree,
   retireStructuredSessionTabsForWorktree,
   unclosedStructuredSessions,
-  type StructuredSessionInWorkspace
+  type StructuredSessionInWorkspace,
+  type StructuredWorktreeSweepRuntime
 } from './structured-session-worktree-teardown'
 import {
   createWorktreeSweepTracker,
@@ -34,8 +35,11 @@ import {
   resolveUnstoppedPtyVerdict
 } from './unstopped-pty-verification'
 
+export type WorktreeTeardownRuntime = StructuredWorktreeSweepRuntime &
+  Pick<OrcaRuntimeService, 'stopTerminalsForWorktree' | 'getPtyLivenessVerdict'>
+
 export type WorktreeTeardownDeps = {
-  runtime?: OrcaRuntimeService
+  runtime?: WorktreeTeardownRuntime
   /** Authoritative id for callers whose selector no longer resolves (orphaned workspace). */
   resolvedWorktreeId?: string
   /** SSH connection owning `resolvedWorktreeId`; prevents same-id cross-host graph matches. */
@@ -50,14 +54,7 @@ export type WorktreeTeardownDeps = {
   allowUnverifiedStop?: boolean
   includeProviderInventory?: boolean
   includeLocalRegistry?: boolean
-  /**
-   * Close structured agent sessions best-effort, for a destructive removal that does NOT require
-   * PTY-stop proof — the folder-workspace paths, which sweep and kill PTYs the same way.
-   *
-   * Separate from `requirePhysicalStop` because the two questions are different: that one asks
-   * whether a stop must be PROVEN before files are touched, and it is what licenses a refusal.
-   * Reconciliation sweeps set neither; they repair state and must never close anything.
-   */
+  /** Close structured sessions for destructive folder removals even without PTY proof. This is separate from requirePhysicalStop; reconciliation sets neither and must never close sessions. */
   closeStructuredSessions?: boolean
 }
 
@@ -71,33 +68,8 @@ export type WorktreeTeardownResult = {
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
-export { WORKTREE_TEARDOWN_RPC_MARGIN_MS, teardownRpcDeadline } from './worktree-teardown-deadline'
-
-/**
- * Kills every PTY we can prove belongs to `worktreeId`, across all three
- * registration surfaces (renderer graph, installed PTY provider session list,
- * local pty-registry).
- *
- * Why all three:
- *  - runtime.leaves is authoritative when the renderer is attached, but is
- *    empty in the headless-CLI case (see design §2b).
- *  - The installed provider's listProcesses() surfaces daemon sessions by
- *    the `${worktreeId}@@` session-id contract (§3.1). Because daemon-init
- *    installs the daemon adapter AS the localProvider via
- *    setLocalPtyProvider(), a single call reaches the right backend in both
- *    daemon-on and daemon-off configurations. LocalPtyProvider uses numeric
- *    ids, so the prefix filter is a safe no-op when the daemon is absent.
- *  - pty-registry covers the fallback local provider case and is the
- *    canonical source for memory attribution; it also redundantly backstops
- *    daemon spawns.
- *
- * Sweeps are best-effort by default. Destructive removal callers set
- * `requirePhysicalStop` so a timeout or unproven stop blocks filesystem work.
- * `allowUnverifiedStop` waives that proof so the gate can never wedge a
- * workspace permanently (#11960) — it must come only from an explicit Force
- * Delete or `--force`, never from the `force` an ordinary confirmed delete
- * already sets to skip the dirty-file prompt.
- */
+/** Sweep graph (when attached), provider prefix sessions (daemon adapter), and registry (fallback/memory attribution). Numeric fallback ids never match the provider prefix.
+ * Best-effort by default; requirePhysicalStop blocks deletion without proof. Only explicit Force Delete/--force may waive proof, never ordinary dirty-prompt force (#11960). */
 export async function killAllProcessesForWorktree(
   worktreeId: string,
   deps: WorktreeTeardownDeps
@@ -108,15 +80,7 @@ export async function killAllProcessesForWorktree(
     `${WORKTREE_TEARDOWN_TIMEOUT_PREFIX} ${worktreeId}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
   )
   const sweeps = createWorktreeSweepTracker()
-  // ISSUED first, before a single PTY is touched: a structured agent session is registered on none
-  // of the three surfaces below, so all three answered zero and removal deleted the checkout out
-  // from under a running provider child. Asking the agent plane ahead of the terminal plane also
-  // keeps an intentional stop from reading as a failed process exit.
-  //
-  // Not AWAITED first, though. Its close is serial and each one waits on a provider round trip, so
-  // awaiting here would spend the shared budget before a single PTY was asked — and the sweeps
-  // would then report a timeout for a stop they never attempted. It is joined below, ahead of the
-  // PTY verdict, so a structured refusal still outranks one.
+  // Start structured closure before PTYs so intentional stops are recorded; await alongside them so serial provider round trips cannot consume their budget. Structured refusal still precedes PTY verdict.
   const structuredSweep = sweepStructuredSessions(worktreeId, deps, deadline, sweeps)
   void structuredSweep.catch(() => undefined)
   const stopAttempts = new Map<string, Promise<boolean>>()
@@ -141,10 +105,7 @@ export async function killAllProcessesForWorktree(
     return current
   }
 
-  // Why: headless CLI has no ready renderer graph, and a just-created/removed
-  // worktree may not resolve in the graph yet; either case means zero
-  // runtime-owned PTYs, so both sentinels fall through instead of failing
-  // destructive removal closed.
+  // Missing headless/newly-removed graph entries mean zero runtime PTYs; neither sentinel should block removal.
   const runtimeSweep = deps.runtime
     ? settleBeforeDeadline(
         sweeps.track(() =>
@@ -205,8 +166,7 @@ export async function killAllProcessesForWorktree(
           deadline,
           deps.requirePhysicalStop ? deadlineError : undefined
         )
-  // Why: a rejection here can outlive this call, and only one of the two paths
-  // below observes every promise, so mark them all handled up front.
+  // Handle rejections now: sweeps can outlive this call and not every later branch observes all of them.
   for (const sweep of [runtimeSweep, providerSweep, registrySweep]) {
     void sweep.catch(() => undefined)
   }
@@ -223,10 +183,7 @@ export async function killAllProcessesForWorktree(
       deadlineError
     )
     if (forced.incomplete) {
-      // Carries the structured count out too: this early return skips the PTY verdict, not the
-      // sweep that already closed a user's chats, and dropping it makes the log say `structured=0`
-      // for a removal that closed some. Force deletes whatever the sweeps reported, so the chat
-      // tabs go with the workspace here as well.
+      // Force still removes chat tabs and reports structured closes even when skipping the PTY verdict.
       await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
       return { ...forced.stopped, ...(structuredStopped > 0 ? { structuredStopped } : {}) }
     }
@@ -234,9 +191,7 @@ export async function killAllProcessesForWorktree(
     providerStopped = forced.stopped.providerStopped
     registryStopped = forced.stopped.registryStopped
   } else {
-    // Why: without the waiver a rejection aborts the removal and nothing is
-    // deleted, so failing fast is safe — and keeps a dead host reporting
-    // immediately instead of after the full sweep budget.
+    // Without a force waiver, fail fast: refusal leaves files untouched.
     try {
       ;[runtimeResult, providerStopped, registryStopped] = await Promise.all([
         runtimeSweep,
@@ -244,15 +199,11 @@ export async function killAllProcessesForWorktree(
         registrySweep
       ])
     } catch (error) {
-      // Folder/orphan removals intentionally continue after a best-effort PTY failure and purge
-      // workspace metadata in their caller. Retire tabs before rethrowing so a swallowed teardown
-      // error cannot leave chats pointing at the forgotten workspace.
+      // Best-effort callers may swallow teardown errors and forget metadata; retire chat tabs before rethrowing.
       if (!deps.requirePhysicalStop) {
         await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
       }
-      // Why (#11960): this rejection is the provider's own wording, which the force
-      // classifier cannot recognise — so the wedge Force Delete exists for was the one
-      // failure that never offered it. Re-word it, keeping the original as the cause.
+      // Wrap provider wording so the desktop can offer Force Delete; preserve the original cause (#11960).
       throw deps.requirePhysicalStop && !isUnstoppedPtyRemovalError(describeError(error))
         ? new Error(
             `${describeFailedPtySweep(worktreeId, error)}. ${WORKTREE_TEARDOWN_FORCE_HINT}`,
@@ -281,24 +232,16 @@ export async function killAllProcessesForWorktree(
       }
     } else {
       const summary = describeUnstoppedPtys(worktreeId, failedPtyIds, verdict)
-      // Only a proof-requiring removal may refuse. A folder-workspace removal shares its root, so no
-      // checkout disappears under the child — the harm is a session left pointing at a workspace Orca
-      // has forgotten — and one of those paths is a never-throw forget, which a refusal would wedge.
+      // Proof-free folder removal shares its root and may ignore errors; only proof-requiring removal can refuse.
       if (deps.requirePhysicalStop && !deps.allowUnverifiedStop) {
         throw new Error(`${summary}. ${WORKTREE_TEARDOWN_FORCE_HINT}`)
       }
-      // Why: force is the documented escape hatch, so removal continues — but the
-      // registry rows stay put. Dropping them would unregister a PTY we just saw
-      // alive, so a retry could no longer find it and the user could never see it
-      // (the discoverability half of #11960).
+      // Force continues but retains live registry rows so users and later retries can still find these PTYs (#11960).
       console.warn(`[worktree-teardown] forcing removal despite unstopped PTYs — ${summary}`)
     }
   }
 
-  // Past every refusal, and only here. A removal that refuses — over an unclosed session above, a
-  // sweep that failed outright, or the unstopped-PTY gate just now — leaves the workspace and its
-  // chat tabs exactly where they were, so retiring a tab before this point would take the user's
-  // chat away on a delete that never happened.
+  // Retire tabs only after all refusal points; a refused deletion must leave the workspace's chats in place.
   await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
   return {
     runtimeStopped: runtimeResult.stopped,
@@ -309,34 +252,14 @@ export async function killAllProcessesForWorktree(
 }
 
 type StructuredSweepOutcome = {
-  /** Sessions this sweep proved closed — the count the removal log and result report. */
   closed: number
-  /**
-   * Sessions whose tabs still need retirement once this removal is committed: detached members,
-   * plus live members left unclosed by a forced/best-effort removal. Carried to the caller because
-   * this sweep is joined BEFORE the unstopped-PTY verdict, which may still refuse the removal.
-   */
+  /** Retire detached/unclosed tabs only after removal passes every refusal; structured closure precedes the PTY verdict. */
   retirable: readonly StructuredSessionInWorkspace[]
 }
 
 const NO_STRUCTURED_SWEEP: StructuredSweepOutcome = { closed: 0, retirable: [] }
 
-/**
- * The fourth sweep: structured agent sessions bound to this worktree, on this host.
- *
- * Stops first and refuses only on unproven stops, which is the bargain the unstopped-PTY gate
- * actually strikes: that gate kills every PTY — a terminal running an agent included — and refuses
- * only for the ones whose exit it could not then verify. Refusing merely because a session is
- * attached made an idle chat, which the user is done with, harder to delete than a terminal running
- * the same agent. Attachment is lease state, not work in flight, so it was never the right proxy.
- *
- * Two callers participate. A proof-requiring removal (`requirePhysicalStop`) refuses when a close
- * does not settle, so nothing deletes a checkout out from under a child that is still there. A
- * folder-workspace removal (`closeStructuredSessions`) never refuses: it shares its root so no
- * checkout vanishes under the child, and every one of those call sites discards a rejection, so a
- * refusal there would be words nobody reads. Reconciliation sweeps set neither — they repair state,
- * delete nothing, and must never close a session.
- */
+/** Close this host's structured children, not merely attached leases. Proof-requiring removal refuses unconfirmed closes; folder removal shares its root and stays best-effort. Reconciliation must never close sessions. */
 async function sweepStructuredSessions(
   worktreeId: string,
   deps: WorktreeTeardownDeps,
@@ -346,38 +269,22 @@ async function sweepStructuredSessions(
   if (!deps.requirePhysicalStop && !deps.closeStructuredSessions) {
     return NO_STRUCTURED_SWEEP
   }
-  // `deps` carries the same two host fields the PTY sweeps fence on, and a `repoId::path` id names
-  // a different workspace on every host — so an unfenced list would close a live chat belonging to
-  // an SSH or paired-runtime copy of the id being removed here. The same fence carries the
-  // membership half: a tab retired for one host's workspace is a tab taken from another's.
+  // Fence sessions and tab retirement by host: repo/path ids repeat across local, SSH and runtime owners.
   const { members, live } = listStructuredSessionsForWorktree(worktreeId, deps)
   const liveIds = new Set(live.map((session) => session.sessionId))
-  // A chat with no attached child is precisely the one this removal used to leave a durable tab
-  // reference for, and it is invisible to every list below — so it comes out even when the close
-  // loop below is skipped entirely, which is the common case for a delete from the sidebar.
+  // Detached chats are absent from PTY lists but still need durable tab retirement.
   const retirable = members.filter((session) => !liveIds.has(session.sessionId))
   if (live.length === 0) {
     return { closed: 0, retirable }
   }
-  // Raced against the same sweep budget every PTY surface is bounded by, because `host.close`
-  // awaits a provider round trip whose own eviction steps are each bounded well past this budget.
-  //
-  // Deliberately NOT fail-closed, unlike the PTY sweeps: their timeout sentinel carries the PTY
-  // timeout prefix, which the desktop classifier reads as a TERMINAL failure — so a wedged session
-  // close would refuse in terminal wording, and refuse identically again under the Force Delete
-  // that is meant to clear it (#11960). A close that ran out of time is a session this removal
-  // could not confirm closed, which is exactly what the branch below already words. Tracked so a
-  // forced removal still waits out the abandoned-sweep grace before it deletes files.
-  //
-  // The verdict is read off `progress`, which the serial loop fills as it goes, rather than off
-  // this call's result: the deadline can land mid-loop, and a fallback assembled here could only
-  // guess — it named every session, including the ones already closed, and reported zero closes.
+  // Bound serial closes by the sweep deadline without a PTY timeout sentinel, which would misclassify session failures and defeat Force Delete.
+  // Track abandoned work for force grace; read incremental progress so mid-loop timeouts retain confirmed closes.
   const progress = createStructuredSweepProgress(live)
   await settleBeforeDeadline(
     sweeps.track(() =>
       closeStructuredSessionsForWorktree(progress, deadline, {
         ...(deps.runtime ? { runtime: deps.runtime } : {}),
-        // The only shape of removal that can leave this workspace — and its chat tabs — in place.
+        // Only proof-requiring, unforced removals can leave the workspace and chat tabs in place.
         mayRefuse: Boolean(deps.requirePhysicalStop) && !deps.allowUnverifiedStop
       })
     ),
@@ -389,26 +296,17 @@ async function sweepStructuredSessions(
   if (unstopped.length === 0) {
     return { closed, retirable }
   }
-  // Only a proof-requiring removal may refuse. A folder-workspace removal shares its root, so no
-  // checkout disappears under the child — the harm is a session left pointing at a workspace Orca
-  // has forgotten — and every one of those callers discards a rejection anyway.
+  // Folder removals share the root and ignore refusals; only proof-requiring removal can block deletion.
   if (deps.requirePhysicalStop && !deps.allowUnverifiedStop) {
-    // The prefix is what the desktop classifier matches on; without it the toast shows raw CLI
-    // wording and hides the Force Delete button — the #11960 dead end this file already documents.
+    // Keep the desktop-recognized prefix so Force Delete remains available.
     throw new Error(
       `${RUNNING_AGENT_SESSION_REMOVAL_PREFIX} ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${describeUnclosedStructuredSessions(unstopped)}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
     )
   }
-  // Force is the documented escape hatch, so removal continues — but say so, because the child
-  // outliving its `cwd` is the failure this sweep exists to make visible. Carries the verdict
-  // verbatim, like the unstopped-PTY warn above: this line is the only record a forced removal
-  // leaves, and appending "still attached" asserted the live verdict over sessions the sweep had
-  // just said it could not confirm either way.
+  // Warn with the actual unclosed verdict; do not claim unverifiable children are still attached.
   console.warn(
     `[worktree-teardown] forcing removal of ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${describeUnclosedStructuredSessions(unstopped)}`
   )
-  // A best-effort or forced removal still discards the workspace when a live close remains
-  // unproven. Its close path intentionally leaves the live snapshot tab in place, so carry those
-  // sessions into the post-removal retirement pass alongside the detached members.
+  // Force/best-effort removal forgets the workspace even if close is unproven; retire those tabs with detached members.
   return { closed, retirable: [...retirable, ...unstopped] }
 }

@@ -4,29 +4,36 @@ import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-v
 import { getConnectionId } from '@/lib/connection-context'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-error'
-import { openMarkdownDocumentInFloatingWorkspace } from '@/lib/open-markdown-in-floating-workspace'
+import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { createFloatingWorkspaceTerminalTab } from '@/lib/floating-workspace-tab-creation'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { FloatingTerminalPanelItems } from './use-floating-terminal-panel-items'
+import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
+const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 type FloatingTerminalCreateActionsInput = Pick<
   FloatingTerminalPanelStoreState,
-  'activateTab' | 'setActiveTab' | 'createBrowserTab' | 'browserDefaultUrl' | 'openFile'
+  | 'activateTab'
+  | 'setActiveTab'
+  | 'createTab'
+  | 'createBrowserTab'
+  | 'browserDefaultUrl'
+  | 'openFile'
 > &
-  Pick<FloatingTerminalPanelItems, 'activeGroup' | 'groupTabs'> &
+  Pick<FloatingWorkspaceChromeModel, 'activeGroup' | 'groupTabs'> &
   Pick<FloatingTerminalPanelLocalState, 'markdownCwd'>
 
 export function useFloatingTerminalCreateActions({
   activateTab,
   setActiveTab,
+  createTab,
   createBrowserTab,
   browserDefaultUrl,
   openFile,
@@ -58,9 +65,14 @@ export function useFloatingTerminalCreateActions({
     [activateTab, groupTabs, setActiveTab]
   )
 
-  const createFloatingTerminalTab = useCallback((shellOverride?: string) => {
-    void createFloatingWorkspaceTerminalTab(useAppStore.getState(), shellOverride)
-  }, [])
+  const createFloatingTerminalTab = useCallback(
+    (shellOverride?: string) => {
+      const tabId = createBrowserUuid()
+      createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, { id: tabId })
+      focusTerminalTabSurface(tabId)
+    },
+    [activeGroup, createTab]
+  )
 
   const createFloatingBrowserTab = useCallback(() => {
     if (!ensureClientCreationActionAllowed(FLOATING_TERMINAL_WORKTREE_ID, 'managed-browser')) {
@@ -88,7 +100,7 @@ export function useFloatingTerminalCreateActions({
           markdownCwd,
           FLOATING_TERMINAL_WORKTREE_ID,
           getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
-          LOCAL_RUNTIME_SETTINGS
+          LOCAL_TARGET
         )
         if (!fileInfo) {
           return
@@ -111,7 +123,7 @@ export function useFloatingTerminalCreateActions({
         if (!document) {
           return
         }
-        openMarkdownDocumentInFloatingWorkspace(openFile, document, {
+        openDocumentInFloatingWorkspace(openFile, document, {
           targetGroupId: activeGroup?.id
         })
       } catch (error) {

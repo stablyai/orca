@@ -1,8 +1,4 @@
-/**
- * The GC live set decides what history is "orphaned". Anything missing from it
- * gets deleted, so a workspace kind that owns history and is absent here is a
- * data-loss bug — that is what reverted #14863 (#14975).
- */
+/** An incomplete GC live set deletes owned history; regressions here caused the #14863 revert (#14975). */
 import { describe, expect, it } from 'vitest'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
@@ -22,10 +18,7 @@ describe('getKnownWorktreeIdsForHistoryGc', () => {
     ).toEqual(new Set(['repo-1::/path/wt']))
   })
 
-  // Why: a folder workspace's PTY carries `folder:<id>` as its worktree id, so
-  // injectHistoryEnv mints history under that key. They live in a separate store
-  // collection, so a set built only from worktree metadata makes every live
-  // folder workspace look orphaned and its history gets swept on a later start.
+  // Folder PTYs mint history under folder:<id>; omitting their separate store collection falsely marks live history orphaned.
   it('includes folder workspaces under their PTY workspace key', () => {
     const live = getKnownWorktreeIdsForHistoryGc(
       store(['repo-1::/path/wt'], ['fw-1', 'fw-2']),
@@ -41,9 +34,7 @@ describe('getKnownWorktreeIdsForHistoryGc', () => {
     expect(getKnownWorktreeIdsForHistoryGc(store([], []), noOtherProfiles).size).toBe(0)
   })
 
-  // Why: the history root has no profile segment but the store does, so the
-  // other profiles' worktrees own history this set would otherwise condemn the
-  // first time the user switches profiles.
+  // History is not profile-scoped, so other profiles must remain in the live set.
   it('includes worktrees owned by other profiles', () => {
     const live = getKnownWorktreeIdsForHistoryGc(store(['repo-1::/b'], ['fw-b']), () => ({
       ids: new Set(['repo-1::/a', folderWorkspaceKey('fw-a')]),
@@ -55,10 +46,7 @@ describe('getKnownWorktreeIdsForHistoryGc', () => {
     )
   })
 
-  // Why empty and not "just the ids we did read": an unreadable profile's
-  // worktrees are indistinguishable from deleted ones, and runHistoryGc refuses
-  // to prune on an empty set — so this reports "do not collect" rather than
-  // handing back a set that condemns real history.
+  // Unreadable profiles make ownership unknown; empty means prune nothing, while partial IDs would delete live history.
   it('reports nothing live when a profile could not be read', () => {
     const live = getKnownWorktreeIdsForHistoryGc(store(['repo-1::/b'], ['fw-b']), () => ({
       ids: new Set(['repo-1::/a']),

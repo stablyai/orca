@@ -4,7 +4,7 @@ import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 export function useIpynbScrollRestoration(
   rootRef: RefObject<HTMLDivElement | null>,
   scrollCacheKey: string,
-  content: string
+  contentReady: boolean
 ): void {
   useLayoutEffect(() => {
     const container = rootRef.current
@@ -31,7 +31,7 @@ export function useIpynbScrollRestoration(
       }
       container.removeEventListener('scroll', onScroll)
     }
-  }, [rootRef, scrollCacheKey])
+  }, [rootRef, scrollCacheKey, contentReady])
 
   useLayoutEffect(() => {
     const container = rootRef.current
@@ -39,5 +39,5 @@ export function useIpynbScrollRestoration(
     if (container && targetScrollTop !== undefined) {
       container.scrollTop = targetScrollTop
     }
-  }, [rootRef, scrollCacheKey, content])
+  }, [rootRef, scrollCacheKey, contentReady])
 }

@@ -6,7 +6,8 @@ import {
   recordWebSessionBrowserPlacement,
   resetWebSessionBrowserPlacementsForTests
 } from './web-session-browser-placement'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   NOW,
@@ -115,10 +116,7 @@ function siblingTerminalTab(): Tab {
   }
 }
 
-/**
- * The client state one instant before adoption: the tab was staged into CREATE_GROUP, and the
- * user has since split it into SPLIT_GROUP. `groupId` says where the user left it.
- */
+// User moved staging from CREATE_GROUP to SPLIT_GROUP before adoption; current groupId owns placement.
 function makeStagedState(args: {
   groupId: string
   title: string
@@ -231,9 +229,7 @@ describe('staged browser rows stay authoritative through adoption', () => {
     expect(layoutHasGroup(next.layoutByWorktree[WT], SPLIT_GROUP)).toBe(true)
   })
 
-  // Why a second snapshot: adoption clears the staged flag, but the create is still inside its
-  // materialization wait, so the record outlives the thing that was protecting the row from it.
-  // The host publishes on its own cadence and the next snapshot lands inside that window.
+  // Test a second snapshot: adoption clears staged while create’s placement reservation still outlives materialization.
   it('keeps the split through the snapshot that follows adoption', () => {
     recordCreatePlacement()
     const state = makeStagedState({
@@ -253,13 +249,10 @@ describe('staged browser rows stay authoritative through adoption', () => {
     expect(layoutHasGroup(second.layoutByWorktree[WT], SPLIT_GROUP)).toBe(true)
   })
 
-  // Why the user is sitting in the OTHER group: this is the one case the record has to serve on
-  // its own, and a tab with no group of its own falls back to where the user is. Running it with
-  // the record's group active proves nothing — both answers agree.
+  // Focus OTHER to distinguish record placement from active-group fallback; matching active/requested groups proves nothing.
   it('still honours the create record for a row the client never placed', () => {
     recordCreatePlacement()
-    // No local row at all: staging can refuse (the create records its intent before it stages), and
-    // then the host mirrors the page under its own ids with nothing local to inherit a group from.
+    // Staging can refuse after intent recording; host IDs then arrive without local rows to supply placement.
     const state = makeState({
       activeGroupIdByWorktree: { [WT]: SPLIT_GROUP },
       groupsByWorktree: {
@@ -305,8 +298,7 @@ describe('staged browser rows stay authoritative through adoption', () => {
       url: 'about:blank'
     })
 
-    // The host publishes `title || url || 'Browser'`, so an untitled fresh page arrives titled with
-    // its own url. Neither that nor the bare default may overwrite the staged title.
+    // Host fallback title is URL or Browser; neither may overwrite the staged title.
     const next = applyPatch(state, makeSnapshot([hostTab('about:blank', 'about:blank')]))
 
     expect(next.browserPagesByWorkspace[WORKSPACE_ID]?.[0]?.title).toBe('New Tab')
@@ -340,9 +332,7 @@ describe('staged browser rows stay authoritative through adoption', () => {
     expect(next.browserPagesByWorkspace[WORKSPACE_ID]?.[0]?.title).toBe('Example Domain')
   })
 
-  // Why this is not the same as the case above: the host's url fallback is indistinguishable from
-  // a real title by shape alone. Once the page has moved off the url this client gave it, the
-  // staged title describes a page that is no longer loaded and must stop winning.
+  // After navigation, URL-shaped host titles must win; staged titles describe the old page.
   it('stops holding the staged title once the page navigates away', () => {
     const state = makeStagedState({
       groupId: CREATE_GROUP,

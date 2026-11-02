@@ -19,15 +19,15 @@ import type { FileSearchWorktreeState } from './file-search-worktree-state'
 import type { GitRuntimeOperationOptions } from './git-runtime-operation'
 
 export type EditorGitSlice = {
-  // Cursor line tracking per file
   editorCursorLine: Record<string, number>
   setEditorCursorLine: (fileId: string, line: number) => void
 
-  // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
   gitStatusHeadByWorktree: Record<string, string>
   // Why: set when status hit the entry limit; SCM shows "too many changes" and pauses polling. `{ limit }` when huge, else absent.
   gitStatusHugeByWorktree: Record<string, { limit: number }>
+  // Git's error from the latest failed status read; entries keep the last successful read.
+  gitStatusReadErrorByWorktree: Record<string, string>
   // Why: absent means "not known exact" (stale fork point, old server, capped listing); never fall back to a previous total.
   gitBranchLineTotalByWorktree: Record<string, GitBranchLineTotal | null>
   gitIgnoredPathsByWorktree: Record<string, string[]>
@@ -39,13 +39,9 @@ export type EditorGitSlice = {
   setConflictOperation: (worktreeId: string, operation: GitConflictOperation) => void
   remoteStatusesByWorktree: Record<string, GitUpstreamStatus>
   setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
-  // Why: refcount-backed busy flag; a bare boolean races across worktrees (A finishing re-enables B mid-flight). begin/end must be paired.
   isRemoteOperationActive: boolean
-  remoteOperationDepth: number
-  // Why: which remote op the user triggered, so the primary button mirrors its label+spinner; cleared at depth 0.
-  inFlightRemoteOpKind: RemoteOpKind | null
-  beginRemoteOperation: (kind?: RemoteOpKind) => void
-  endRemoteOperation: () => void
+  remoteOperations: { worktreeId: string; kind: RemoteOpKind }[]
+  beginRemoteOperation: (kind: RemoteOpKind, worktreeId: string) => () => void
   fetchUpstreamStatus: (
     worktreeId: string,
     worktreePath: string,
@@ -114,7 +110,6 @@ export type EditorGitSlice = {
   ) => void
   clearGitBranchCompare: (worktreeId: string) => void
 
-  // File search state
   fileSearchStateByWorktree: Record<string, FileSearchWorktreeState>
   updateFileSearchState: (worktreeId: string, updates: Partial<FileSearchWorktreeState>) => void
   seedFileSearchQuery: (worktreeId: string, query: string) => void
@@ -123,13 +118,11 @@ export type EditorGitSlice = {
   toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
   clearFileSearch: (worktreeId: string) => void
 
-  // Editor navigation (for search result → go-to-line)
   pendingEditorReveal: PendingEditorReveal | null
   setPendingEditorReveal: (reveal: PendingEditorReveal | null) => void
   pendingEditorFocusRequest: PendingEditorFocusRequest | null
   consumeEditorFocusRequest: (token: number) => void
 
-  // Session hydration — restore editor files from persisted workspace session
   hydrateEditorSession: (
     session: WorkspaceSessionState,
     options?: WorkspaceSessionHydrationOptions

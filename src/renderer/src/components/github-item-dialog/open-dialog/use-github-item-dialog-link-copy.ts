@@ -22,7 +22,7 @@ export function useGitHubItemDialogLinkCopy(workItem: GitHubWorkItem | null): {
     setLinkCopyState(resolvedLinkCopyState)
   }
   const linkCopied = resolvedLinkCopyState.copied
-  // Why: clipboard IPC can resolve after unmount; skip copied-state feedback rather than start a reset timer on a stale surface.
+  // Ignore clipboard results after detach so they cannot start stale feedback timers.
   const linkCopyMountedRef = useRef(false)
   const linkCopiedResetTimerRef = useRef<number | null>(null)
   const clearLinkCopiedResetTimer = useCallback((): void => {
@@ -36,7 +36,7 @@ export function useGitHubItemDialogLinkCopy(workItem: GitHubWorkItem | null): {
     (node: HTMLButtonElement | null) => {
       linkCopyMountedRef.current = node !== null
       if (node === null) {
-        // Why: the copied-state timer belongs to this control; clear it on detach without a passive cleanup Effect.
+        // Own the feedback timer at the control’s lifetime; cancel on detach.
         clearLinkCopiedResetTimer()
       }
     },
@@ -48,7 +48,7 @@ export function useGitHubItemDialogLinkCopy(workItem: GitHubWorkItem | null): {
       return
     }
     try {
-      // Why: Electron clipboard IPC works even when browser clipboard APIs lose focus/activation in nested overlays.
+      // Electron IPC works when nested overlays lack browser clipboard focus/activation.
       await window.api.ui.writeClipboardText(workItem.url)
       if (!linkCopyMountedRef.current) {
         return

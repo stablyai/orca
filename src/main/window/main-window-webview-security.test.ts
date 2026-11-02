@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   installNavigationPolicy: vi.fn(),
   isAllowedPartition: vi.fn(),
   attachRouteGuest: vi.fn(),
-  registerPluginGuard: vi.fn()
+  installJavaScriptDialogs: vi.fn(),
+  registerPluginGuard: vi.fn(),
+  admitPluginFrame: vi.fn(),
+  installPluginFramePolicies: vi.fn()
 }))
 
 vi.mock('../browser/browser-manager', () => ({
@@ -15,8 +18,8 @@ vi.mock('../browser/browser-manager', () => ({
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: { isAllowedPartition: mocks.isAllowedPartition }
 }))
-vi.mock('../plugins/plugin-panel-navigation-guard', () => ({
-  registerPluginPanelNavigationGuard: mocks.registerPluginGuard
+vi.mock('./host-frame-navigation-guard', () => ({
+  registerHostFrameNavigationGuard: mocks.registerPluginGuard
 }))
 vi.mock('./privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: mocks.installNavigationPolicy
@@ -28,6 +31,25 @@ vi.mock('../browser/browser-route-session-runtime', () => ({
 vi.mock('../browser/local-ssh-browser-partitions', () => ({
   isLocalSshBrowserPartition: () => false,
   enforceLocalSshWebRtcPolicyForGuest: vi.fn()
+}))
+vi.mock('../browser/extensions/browser-extension-session-loader', () => ({
+  getBrowserExtensionSessionForProfile: () => null
+}))
+vi.mock('../browser/browser-javascript-dialogs', () => ({
+  installBrowserJavaScriptDialogs: mocks.installJavaScriptDialogs
+}))
+vi.mock(import('../plugins/panels/plugin-frame-guest-registry'), async (importOriginal) => ({
+  PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS: (await importOriginal())
+    .PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS,
+  admitPluginFrameAttach: mocks.admitPluginFrame,
+  isPluginFramePartition: (partition: string) => partition.startsWith('persist:orca-plugin-'),
+  attachPluginFrameGuest: (guest: { session?: unknown }, host: unknown) => {
+    if (guest.session !== 'plugin-session') {
+      return false
+    }
+    mocks.installPluginFramePolicies(guest, host)
+    return true
+  }
 }))
 vi.mock('../browser/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
@@ -47,13 +69,14 @@ import { buildDocPreviewUrl, DOC_PREVIEW_PARTITION } from '../../shared/doc-prev
 
 function installOnFakeWindow(): {
   handlers: Record<string, (...args: never[]) => void>
-  webContents: { on: ReturnType<typeof vi.fn> }
+  webContents: { on: ReturnType<typeof vi.fn>; setWebRTCIPHandlingPolicy: ReturnType<typeof vi.fn> }
 } {
   const handlers: Record<string, (...args: never[]) => void> = {}
   const webContents = {
     on: vi.fn((event: string, handler: (...args: never[]) => void) => {
       handlers[event] = handler
-    })
+    }),
+    setWebRTCIPHandlingPolicy: vi.fn()
   }
   installMainWindowWebviewSecurity({ webContents } as never)
   return { handlers, webContents }
@@ -88,6 +111,7 @@ describe('main window webview security', () => {
     expect(preventDefault).toHaveBeenCalledOnce()
     expect(mocks.installNavigationPolicy).toHaveBeenCalledWith(webContents)
     expect(mocks.registerPluginGuard).toHaveBeenCalledWith(webContents)
+    expect(webContents.setWebRTCIPHandlingPolicy).toHaveBeenCalledWith('disable_non_proxied_udp')
   })
 
   it('removes renderer preload input and restores every hardened preference', () => {
@@ -113,12 +137,28 @@ describe('main window webview security', () => {
       partition: 'persist:orca-browser',
       contextIsolation: true,
       nodeIntegration: false,
-      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInSubFrames: true,
       sandbox: true,
       webSecurity: true
     })
     expect(preferences).not.toHaveProperty('preloadURL')
     expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
+  })
+
+  it('runs preloads in subframes of every local profile tab, so extensions switched on later reach it', () => {
+    const { handlers } = installOnFakeWindow()
+    mocks.isAllowedPartition.mockReturnValue(true)
+    const preferences: Record<string, unknown> = {
+      partition: 'persist:orca-browser-work',
+      nodeIntegrationInSubFrames: false
+    }
+    handlers['will-attach-webview']?.(
+      { preventDefault: vi.fn() } as never,
+      preferences as never,
+      { src: 'https://example.com' } as never
+    )
+
+    expect(preferences.nodeIntegrationInSubFrames).toBe(true)
   })
 })
 
@@ -157,9 +197,7 @@ describe('orca-preview scheme admission', () => {
     expect(preferences).not.toHaveProperty('preloadURL')
   })
 
-  // Why both directions: the preview preload is the only script that can turn a press into a
-  // browser tab, so a browsing guest must never receive it — and a preview must never receive
-  // anything else, least of all a value the renderer supplied.
+  // Only preview guests get the pinned link preload; browsing guests must never acquire it and renderer values must never replace it.
   it('pins the preview preload onto a preview attach, replacing whatever the renderer asked for', () => {
     const { handlers } = installOnFakeWindow()
     const grant = mintPreviewGrant()
@@ -238,9 +276,7 @@ describe('orca-preview scheme admission', () => {
     expect(preventDefault).toHaveBeenCalledOnce()
   })
 
-  // Why the host is asserted and not just the profile: it is the renderer that minted the grant,
-  // and it is the only sink a link the reader presses can be reported to. A preview attached
-  // against another window's contents would report its clicks to a reader who is not there.
+  // The granting renderer is the only valid click sink; verify this window hosts the preview, not merely its profile.
   it('attaches a preview guest under the workspace-doc profile, hosted by this window', () => {
     const { handlers, webContents } = installOnFakeWindow()
 
@@ -255,6 +291,7 @@ describe('orca-preview scheme admission', () => {
       }
     )
     expect(mocks.attachRouteGuest).not.toHaveBeenCalled()
+    expect(mocks.installJavaScriptDialogs).not.toHaveBeenCalled()
   })
 
   it('keeps browser guests on the browsing profile and its route registration', () => {
@@ -265,10 +302,10 @@ describe('orca-preview scheme admission', () => {
     expect(mocks.attachGuestPolicies).toHaveBeenCalledOnce()
     expect(mocks.attachGuestPolicies.mock.calls[0]?.[2]).toBeUndefined()
     expect(mocks.attachRouteGuest).toHaveBeenCalledOnce()
+    expect(mocks.installJavaScriptDialogs).toHaveBeenCalledOnce()
   })
 
-  // Why: every live preview belongs to this window, so its teardown is the one moment no grant can
-  // still have a reader — and the failure sink must stop pointing at dead WebContents.
+  // WebContents teardown leaves no preview readers; clear grants and the dead failure sink.
   it('drops the failure sink and every grant when the window contents are destroyed', () => {
     const { handlers } = installOnFakeWindow()
     const grant = mintPreviewGrant()
@@ -287,8 +324,7 @@ describe('orca-preview scheme admission', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
-  // Why: the renderer is the only side that remembers which preview owns which grant, so a grant
-  // that outlives its renderer is a read authority nobody can release.
+  // A renderer owns grant-to-preview bookkeeping; replacing it must revoke otherwise unreleasable read authority.
   it('clears grants a previous renderer left behind when the window is created', () => {
     const stranded = mintPreviewGrant()
 
@@ -314,5 +350,95 @@ describe('orca-preview scheme admission', () => {
     handlers['did-start-navigation']?.({ isMainFrame: false, isSameDocument: false } as never)
 
     expect(getDocPreviewGrant(grant.id)).not.toBeNull()
+  })
+})
+
+describe('plugin frame guests', () => {
+  const partition = 'persist:orca-plugin-0123456789abcdef'
+  const src = 'orca-plugin-frame://0123456789abcdef/panel.html'
+
+  beforeEach(() => vi.clearAllMocks())
+
+  it('refuses a plugin partition main did not prepare for that origin', () => {
+    const { handlers } = installOnFakeWindow()
+    mocks.admitPluginFrame.mockReturnValue(false)
+    const preventDefault = vi.fn()
+    const preferences: Record<string, unknown> = { partition, preload: 'attacker.js' }
+
+    handlers['will-attach-webview']?.(
+      { preventDefault } as never,
+      preferences as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only params.src.
+      { src } as never
+    )
+
+    expect(mocks.admitPluginFrame).toHaveBeenCalledWith(partition, src)
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(preferences.preload).toBe('attacker.js')
+  })
+
+  it('pins the guest preload and every secure preference, whatever the markup asked', () => {
+    const { handlers } = installOnFakeWindow()
+    mocks.admitPluginFrame.mockReturnValue(true)
+    const params: Record<string, unknown> = { src, preload: 'attacker.js', allowpopups: 'true' }
+    const preferences: Record<string, unknown> = {
+      partition,
+      preload: 'attacker.js',
+      preloadURL: 'attacker.js',
+      additionalArguments: ['--x'],
+      sandbox: false,
+      contextIsolation: false,
+      nodeIntegration: true,
+      webSecurity: false,
+      webviewTag: true,
+      disablePopups: false,
+      experimentalFeatures: true,
+      enableWebSQL: true,
+      zoomFactor: 1.25
+    }
+
+    handlers['will-attach-webview']?.(
+      { preventDefault: vi.fn() } as never,
+      preferences as never,
+      params as never
+    )
+
+    expect(params).not.toHaveProperty('preload')
+    expect(params).not.toHaveProperty('allowpopups')
+    expect(preferences).not.toHaveProperty('preloadURL')
+    // Anything main did not pin is dropped; zoom still follows the host window.
+    expect(preferences).not.toHaveProperty('experimentalFeatures')
+    expect(preferences).not.toHaveProperty('enableWebSQL')
+    expect(preferences.zoomFactor).toBe(1.25)
+    // Markup's arguments are replaced by main's renderer pins, never merged.
+    expect(preferences.additionalArguments).toEqual([
+      '--blink-settings=dnsPrefetchingEnabled=false'
+    ])
+    expect(String(preferences.preload)).toMatch(/plugin-frame-guest-preload\.js$/)
+    expect(preferences).toMatchObject({
+      partition,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
+      disablePopups: true,
+      disableDialogs: true
+    })
+    expect(mocks.isAllowedPartition).not.toHaveBeenCalled()
+  })
+
+  it('gives attached plugin guests their own policy, never the browser guest one', () => {
+    const { handlers } = installOnFakeWindow()
+    const guest = { session: 'plugin-session' }
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only guest.session.
+    handlers['did-attach-webview']?.({} as never, guest as never)
+
+    expect(mocks.installPluginFramePolicies).toHaveBeenCalledWith(guest, expect.anything())
+    expect(mocks.attachGuestPolicies).not.toHaveBeenCalled()
+    expect(mocks.installJavaScriptDialogs).not.toHaveBeenCalled()
   })
 })

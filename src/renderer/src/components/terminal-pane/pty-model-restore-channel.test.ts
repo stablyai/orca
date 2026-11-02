@@ -1,7 +1,4 @@
-// Why: the out-of-band pty:modelRestoreNeeded channel replaces the in-band
-// empty-chunk sentinel (ambiguous with chunks fully consumed by OSC-9999
-// stripping). These tests pin the channel routing: one channel subscription,
-// handlers keyed by PTY id, replace-on-reregister semantics.
+// Route restore markers out of band; empty data chunks also result from fully stripped OSC 9999 and cannot prove a gap.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('pty model-restore channel routing', () => {
@@ -64,8 +61,7 @@ describe('pty model-restore channel routing', () => {
 
     const unregisterStale = registerPtyModelRestoreNeededHandler('pty-a', staleHandler)
     registerPtyModelRestoreNeededHandler('pty-a', liveHandler)
-    // Why: a reattaching pane can re-register before the old connection's
-    // teardown runs — the stale unregister must not remove the live handler.
+    // Late unregister cannot remove a replacement handler registered during reattach.
     unregisterStale()
 
     channelCallback?.({ id: 'pty-a', reason: 'unhide' })

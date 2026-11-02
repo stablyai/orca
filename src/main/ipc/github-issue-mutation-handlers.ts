@@ -3,7 +3,7 @@ import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import { addIssueComment, listAssignableUsers, listLabels, updateIssue } from '../github/client'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   assertRegisteredGitHubRepo,
   getGitHubLocalGitOptionArgs,
@@ -15,7 +15,14 @@ import { broadcastGitHubWorkItemMutation } from './github-work-item-mutation-eve
 export function registerGitHubIssueMutationHandlers(store: Store): void {
   ipcMain.handle(
     'gh:updateIssue',
-    async (event, args: GitHubRepoScopedArgs & { number: number; updates: GitHubIssueUpdate }) => {
+    async (
+      event,
+      args: GitHubRepoScopedArgs & {
+        number: number
+        updates: GitHubIssueUpdate
+        ownerRepo?: GitHubOwnerRepo
+      }
+    ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
         return { ok: false, error: 'Invalid issue number' }
@@ -28,7 +35,9 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
         args.number,
         args.updates,
         getGitHubRepoConnectionId(repo),
-        ...getGitHubLocalGitOptionArgs(store, repo)
+        getGitHubLocalGitOptionArgs(store, repo)[0],
+        repo.issueSourcePreference,
+        ...(args.ownerRepo ? [args.ownerRepo] : [])
       )
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
@@ -67,7 +76,9 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
         args.body.trim(),
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
-        ...getGitHubLocalGitOptionArgs(store, repo)
+        getGitHubLocalGitOptionArgs(store, repo)[0],
+        // Issue-source preference must not change PR comment resolution.
+        args.type === 'pr' ? undefined : repo.issueSourcePreference
       )
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
@@ -84,23 +95,46 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('gh:listLabels', (_event, args: GitHubRepoScopedArgs) => {
-    const repo = assertRegisteredGitHubRepo(args, store)
-    return listLabels(
-      repo.path,
-      repo.issueSourcePreference,
-      getGitHubRepoConnectionId(repo),
-      ...getGitHubLocalGitOptionArgs(store, repo)
-    )
-  })
+  ipcMain.handle(
+    'gh:listLabels',
+    (_event, args: GitHubRepoScopedArgs & { ownerRepo?: GitHubOwnerRepo }) => {
+      const repo = assertRegisteredGitHubRepo(args, store)
+      const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)
+      const connectionId = getGitHubRepoConnectionId(repo)
+      if (args.ownerRepo) {
+        return listLabels(
+          repo.path,
+          repo.issueSourcePreference,
+          connectionId,
+          localGitOptions[0],
+          args.ownerRepo
+        )
+      }
+      return listLabels(repo.path, repo.issueSourcePreference, connectionId, ...localGitOptions)
+    }
+  )
 
-  ipcMain.handle('gh:listAssignableUsers', (_event, args: GitHubRepoScopedArgs) => {
-    const repo = assertRegisteredGitHubRepo(args, store)
-    return listAssignableUsers(
-      repo.path,
-      repo.issueSourcePreference,
-      getGitHubRepoConnectionId(repo),
-      ...getGitHubLocalGitOptionArgs(store, repo)
-    )
-  })
+  ipcMain.handle(
+    'gh:listAssignableUsers',
+    (_event, args: GitHubRepoScopedArgs & { ownerRepo?: GitHubOwnerRepo }) => {
+      const repo = assertRegisteredGitHubRepo(args, store)
+      const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)
+      const connectionId = getGitHubRepoConnectionId(repo)
+      if (args.ownerRepo) {
+        return listAssignableUsers(
+          repo.path,
+          repo.issueSourcePreference,
+          connectionId,
+          localGitOptions[0],
+          args.ownerRepo
+        )
+      }
+      return listAssignableUsers(
+        repo.path,
+        repo.issueSourcePreference,
+        connectionId,
+        ...localGitOptions
+      )
+    }
+  )
 }

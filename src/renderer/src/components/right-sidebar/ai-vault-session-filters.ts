@@ -5,11 +5,7 @@ import {
   groupAiVaultSessions,
   type AiVaultSessionFilterState
 } from '../../../../shared/ai-vault-session-filters'
-// Why: the pure filter/group/query core now lives in /shared so the mobile
-// package can reuse it (Metro can't import renderer). Re-export for renderer
-// import parity. Not a byte-for-byte move: tokenizeQuery gained quoted
-// repo:/path: operator values (e.g. path:"/a/My Project"), which the old
-// renderer tokenizer split on spaces.
+// Keep renderer imports stable while mobile reuses the shared core; Metro cannot import renderer code.
 export type {
   AiVaultSessionProject,
   AiVaultSessionFilterState,

@@ -21,37 +21,48 @@ export function getStatusPluginRuntimeStateSource(): string[] {
     'let busyRecoveryUsed = false;',
     'let busyRecoveryEndpointKey = "";',
     'let stateArrivalRevision = 0;',
-    '// Why: OpenCode can create directory-scoped factories and concurrent root',
-    '// sessions in one pane; module ownership lets waiting/busy aggregate safely.',
+    'let reportingOpenCodeMajor = 0;',
+    'let reportingOpenCodeTui = false;',
+    '// Module ownership aggregates concurrent root sessions and directory-scoped factories in one pane.',
     'let nextFactoryID = 0;',
     'const activeFactoryIDs = new Set();',
     'const disposingFactoryIDs = new Set();',
     'const busyRootOwnerBySessionID = new Map();',
-    '// Why: a matching Idle must retire fail-open Busy even when the SDK client',
-    '// is unavailable, without granting an unrelated unknown Idle authority.',
+    '// Only matching provisional Idle may retire fail-open Busy without SDK ancestry.',
     'const provisionalBusyByKey = new Map();',
-    '// Why: a background child outlives the root turn that spawned it, so the',
-    '// pane must stay Busy on its behalf until its own exact Idle (or its',
-    "// factory's disposal) retires it — otherwise the root Idle completes a task",
-    '// tree that is still working.',
+    '// Background children outlive root turns; retain Busy until exact child Idle/factory disposal.',
     'const busyChildRootByKey = new Map();',
     'const pendingAttentionByKey = new Map();',
     'const rootSessionById = new Map();',
     'const rootSessionLookupById = new Map();',
     '',
-    '// Why: message.part.updated re-sends the FULL accumulated text of the part',
-    '// after every streamed append, so posting each event forwards O(n^2) bytes',
-    '// per turn through Orca (loopback HTTP -> main JSON parse -> status compare',
-    '// -> IPC -> renderer store update -> React commit). On Windows that flood',
-    '// saturated both event loops and froze the whole UI a few seconds into a',
-    '// streaming reply. The dashboard only needs a bounded preview at a human',
-    '// cadence: cap the text and trailing-edge coalesce assistant parts.',
+    '// Full accumulated replies per delta cause quadratic traffic; cap and coalesce assistant previews.',
     'const MESSAGE_PART_THROTTLE_MS = 250;',
     'const MESSAGE_PART_MAX_CHARS = 4000;',
     'let pendingAssistantPart = null;',
     'let assistantPartFlushTimer = null;',
     'let messagePartPostInFlight = null;',
     'let deliveredMessagePartFactoryID = null;',
-    'let lastAssistantPartPostAt = 0;'
+    'let lastAssistantPartPostAt = 0;',
+    ...getRunProcessSource()
   ]
+}
+
+// Mirrors isOpenCodeRunCommand (src/shared/opencode-headless-command.ts) over this process's argv.
+function getRunProcessSource(): string[] {
+  return String.raw`
+function isOpenCodeCommandProcess(command) {
+  // Compiled binaries put their embedded entry-script path at argv[1].
+  const args = process.argv.slice(1);
+  if (args.length > 0 && /[\\/]/.test(args[0])) args.shift();
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === "--") return false;
+    if (!args[index].startsWith("-")) return args[index] === command;
+    if (args[index] === "--log-level") index += 1;
+  }
+  return false;
+}
+function isOpenCodeRunProcess() {
+  return isOpenCodeCommandProcess("run");
+}`.split('\n')
 }

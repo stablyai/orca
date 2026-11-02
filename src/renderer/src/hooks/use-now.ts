@@ -41,11 +41,7 @@ export function createSharedNowClock(
     subscribe: (listener) => {
       listeners.add(listener)
       if (!stopInterval) {
-        // Why: all mounted relative-time labels at this cadence share one
-        // visibility-gated timer. installWindowVisibilityInterval runs tick
-        // immediately on (re)start — so remounted or newly-visible labels catch
-        // up at once — and pauses the interval while the window is hidden, so
-        // backgrounded agent rows stop re-rendering for ticks no one can see.
+        // Share one visibility-gated timer per cadence; restart ticks immediately to catch up remounted/revealed labels without hidden-window churn.
         stopInterval = installWindowVisibilityInterval({
           run: tick,
           intervalMs,
@@ -73,26 +69,10 @@ function getSharedNowClock(intervalMs: number): SharedNowClock {
   return clock
 }
 
-// Why: a disabled caller must not hold the shared interval open or re-render on
-// its ticks. It reads the shared snapshot, which is frozen while nobody at this
-// cadence is subscribed — see the activation caveat on useNow.
+// Disabled callers read the shared frozen snapshot without retaining its timer or subscribing to ticks.
 const subscribeWhileDisabled = (): (() => void) => () => {}
 
-// Why: relative timestamps drift once mounted. A coarse tick keeps the "Xm
-// ago" labels honest without burning a render every second.
-//
-// Hoisted to a shared hook so container components (e.g.
-// WorktreeCardAgents) can own a single tick and thread `now` down to every
-// DashboardAgentRow. Previously each row instantiated its own interval,
-// which meant N timers firing at staggered mount times for N rows on
-// screen — turning one logical tick into N independent React commits.
-//
-// Pass `enabled: false` while a surface cannot show the value. Activation is not
-// instant: subscription happens in a passive effect, so the render that flips
-// `enabled` still reads the previous snapshot — at most `intervalMs` old if
-// another caller keeps the cadence running, and arbitrarily old if none does.
-// Fine for a drifting label, wrong for a deadline; check those against
-// `Date.now()` in the effect that acts on them instead.
+/** Share coarse label ticks across rows to avoid N timers/commits. Disabled callers activate through a passive effect and may first read arbitrarily stale time; deadlines must use Date.now() in the acting effect. */
 export function useNow(intervalMs: number, enabled = true): number {
   const clock = getSharedNowClock(intervalMs)
   return useSyncExternalStore(

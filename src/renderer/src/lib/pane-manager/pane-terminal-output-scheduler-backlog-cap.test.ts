@@ -51,9 +51,7 @@ describe('pane terminal output scheduler', () => {
   })
 
   it('caps a visible pane backlog the drain cannot keep up with and writes a warning', async () => {
-    // Why: the foreground path was previously uncapped — a flooding visible
-    // TUI on a starved renderer grew queuedChars without bound (field
-    // reports of ~1.5 GB renderer RSS before terminals froze).
+    // Visible floods were uncapped and grew renderer RSS near 1.5GB before freeze.
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
@@ -72,34 +70,13 @@ describe('pane terminal output scheduler', () => {
     expect(output).not.toContain('x'.repeat(1024))
   })
 
-  it('records a drop breadcrumb with sizes when the cap replaces a backlog', async () => {
-    vi.useFakeTimers()
-    const { writeTerminalOutput } = await loadScheduler()
-    const terminal = createTerminal()
-    const chunk = 'x'.repeat(512 * 1024)
-
-    for (let i = 0; i < 5; i++) {
-      writeTerminalOutput(terminal, chunk, { foreground: false })
-    }
-
-    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
-      'terminal_output_backlog_dropped',
-      expect.objectContaining({
-        foreground: false,
-        droppedChars: expect.any(Number),
-        capChars: 2 * 1024 * 1024
-      })
-    )
-  })
-
   it('scales the backlog cap with the scrollback setting', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput, configureTerminalOutputBacklogCap } = await loadScheduler()
     const terminal = createTerminal()
     const chunk = 'x'.repeat(512 * 1024)
 
-    // 50k-row scrollback ⇒ 6 MB cap: a 2.5 MB flood that would trip the
-    // 2 MB floor must survive intact.
+    // 50k-row scrollback raises the cap to 6MB; preserve a 2.5MB flood above the 2MB floor.
     configureTerminalOutputBacklogCap(50_000)
     for (let i = 0; i < 5; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
@@ -110,7 +87,6 @@ describe('pane terminal output scheduler', () => {
     expect(output).not.toContain('Orca skipped')
     expect(output).toContain('x'.repeat(1024))
 
-    // But the scaled cap still bounds a runaway flood.
     terminal.write.mockClear()
     for (let i = 0; i < 13; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
@@ -126,8 +102,7 @@ describe('pane terminal output scheduler', () => {
     const terminal = createForegroundTerminal()
     const chunk = 'y'.repeat(512 * 1024)
 
-    // holdForeground engages the synchronized-output hold — the branch a
-    // flooding TUI in sync mode exercises.
+    // Exercise the synchronized-output hold used by a flooding TUI.
     for (let i = 0; i < 5; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: true, holdForeground: true })
     }

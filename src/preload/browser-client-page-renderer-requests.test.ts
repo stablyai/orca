@@ -230,4 +230,51 @@ describe('browser client page renderer preload requests', () => {
     expect(callback).toHaveBeenCalledTimes(2)
     expect(ipc.sent).toHaveLength(1)
   })
+
+  it.each(['dispose', 'unsubscribe', 'replace', 'timeout'] as const)(
+    'does not start already-settled callbacks after %s',
+    async (action) => {
+      vi.useFakeTimers()
+      const ipc = new FakeIpc()
+      const requests = createBrowserClientPageRendererRequests({
+        ipc,
+        isTopFrame: () => true,
+        timeoutMs: 50
+      })
+      const callback = vi.fn(() => ({ type: 'mounted' as const, webContentsId: 91 }))
+      const unsubscribe = requests.subscribe(callback)
+      for (let index = 0; index < 64; index += 1) {
+        ipc.emit(request(`request-${index}`))
+      }
+      let errorCode = 'browser_client_page_renderer_preload_disposed'
+      if (action === 'dispose') {
+        requests.dispose()
+      } else if (action === 'unsubscribe') {
+        unsubscribe()
+        errorCode = 'browser_client_page_renderer_subscriber_unavailable'
+      } else if (action === 'replace') {
+        requests.subscribe(() => ({ type: 'mounted', webContentsId: 92 }))
+        errorCode = 'browser_client_page_renderer_subscriber_replaced'
+      } else {
+        vi.advanceTimersByTime(50)
+        errorCode = 'browser_client_page_renderer_subscriber_timeout'
+      }
+      try {
+        await flush()
+        expect(ipc.sent.map(({ reply }) => reply)).toEqual(
+          Array.from({ length: 64 }, (_, index) => ({
+            type: 'failed',
+            errorCode,
+            requestId: `request-${index}`,
+            page: PAGE,
+            operation: 'mountPage'
+          }))
+        )
+        expect(vi.getTimerCount()).toBe(0)
+        expect(callback).not.toHaveBeenCalled()
+      } finally {
+        requests.dispose()
+      }
+    }
+  )
 })

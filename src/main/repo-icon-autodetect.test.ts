@@ -1,13 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { gitExecFileAsync } from './git/runner'
-import {
-  registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider
-} from './providers/ssh-filesystem-dispatch'
-import type { IFilesystemProvider } from './providers/types'
 import { detectRepoIcon, detectRepoIconAndUpstream } from './repo-icon-autodetect'
 
 const PNG_1X1_BASE64 =
@@ -21,30 +16,7 @@ async function makeTempRepoDir(): Promise<string> {
   return dir
 }
 
-const registeredHosts: string[] = []
-
-/** A remote host whose only readable file is a package.json naming a host-specific homepage. */
-function registerHomepageHost(connectionId: string, homepage: string) {
-  const stat = vi.fn(async (filePath: string) => {
-    if (!filePath.endsWith('/package.json')) {
-      throw new Error('ENOENT')
-    }
-    return { type: 'file', size: 64, mtime: 0 }
-  })
-  const readFile = vi.fn(async () => ({
-    content: JSON.stringify({ homepage }),
-    isBinary: false,
-    mimeType: 'application/json'
-  }))
-  registerSshFilesystemProvider(connectionId, { stat, readFile } as unknown as IFilesystemProvider)
-  registeredHosts.push(connectionId)
-  return { stat, readFile }
-}
-
 afterEach(async () => {
-  for (const connectionId of registeredHosts.splice(0)) {
-    unregisterSshFilesystemProvider(connectionId)
-  }
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
@@ -189,8 +161,7 @@ describe('detectRepoIcon', () => {
   })
 
   it('returns no icon for an SSH-hosted repo whose filesystem provider is missing', async () => {
-    // Why: the same path exists on the client machine — reading it would hand
-    // back the local repository's icon for a remote repo.
+    // A real local icon at this path exposes accidental fallback reads.
     const repoPath = await makeTempRepoDir()
     await writeFile(join(repoPath, 'favicon.png'), Buffer.from(PNG_1X1_BASE64, 'base64'))
     await writeFile(
@@ -212,39 +183,13 @@ describe('detectRepoIcon', () => {
     ).resolves.toMatchObject({ source: 'file', label: 'favicon.png' })
   })
 
-  it('routes each SSH host to its own filesystem provider', async () => {
-    const repoPath = await makeTempRepoDir()
-    // On disk on this machine, so a host-blind probe would answer with this one for both hosts.
-    await writeFile(join(repoPath, 'favicon.png'), Buffer.from(PNG_1X1_BASE64, 'base64'))
-    registerHomepageHost('m4air', 'https://m4air.example.com')
-    registerHomepageHost('openclaw', 'https://openclaw.example.com')
-
-    await expect(
-      detectRepoIcon({ repoPath, kind: 'folder', executionHostId: 'ssh:m4air' })
-    ).resolves.toMatchObject({
-      source: 'favicon',
-      src: expect.stringContaining('m4air.example.com')
-    })
-    await expect(
-      detectRepoIcon({ repoPath, kind: 'folder', executionHostId: 'ssh:openclaw' })
-    ).resolves.toMatchObject({
-      source: 'favicon',
-      src: expect.stringContaining('openclaw.example.com')
-    })
-  })
-
-  it('reads nothing for a runtime host even when its nested SSH target is registered here', async () => {
-    // Why: a `runtime:` repo row's `connectionId` names a target in that server's namespace. Both
-    // spellings of the incumbent shape are wrong here — a null one reads this machine's copy of
-    // the path, and the nested id dials a same-named box of ours.
+  it('reads nothing for a runtime host', async () => {
     const repoPath = await makeTempRepoDir()
     await writeFile(join(repoPath, 'favicon.png'), Buffer.from(PNG_1X1_BASE64, 'base64'))
-    const nested = registerHomepageHost('nested-1', 'https://nested.example.com')
 
     await expect(
       detectRepoIcon({ repoPath, kind: 'folder', executionHostId: 'runtime:env-a' })
     ).resolves.toBeUndefined()
-    expect(nested.stat).not.toHaveBeenCalled()
   })
 
   it('falls back to the GitHub owner avatar for GitHub repos', async () => {
@@ -320,7 +265,6 @@ describe('detectRepoIcon', () => {
         source: 'github',
         label: 'stablyai/orca'
       },
-      // Why: fork parents resolve host-qualified so avatars/links stay on the fork's server.
       upstream: { owner: 'stablyai', repo: 'orca', host: 'github.com' }
     })
   })
@@ -346,7 +290,6 @@ describe('detectRepoIcon', () => {
         remoteName: 'upstream',
         remoteUrl: 'git@github.com:upstream-org/rocket.git'
       },
-      // Why: a renamed fork is its own project, so the avatar stays on the origin owner.
       repoIcon: {
         type: 'image',
         src: 'https://github.com/acme.png?size=64',

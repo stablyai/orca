@@ -17,11 +17,7 @@ function closestAnnotationBlockKey(node: Node | null, root: HTMLElement): string
   return block.getAttribute('data-annotation-block-key')
 }
 
-/**
- * Maps the current DOM text selection to the annotation block that should host
- * the review-note composer. Returns null when the selection is collapsed or
- * falls outside an annotatable block of this preview root.
- */
+/** Choose the composer’s annotation block from a noncollapsed selection within this preview. */
 export function getMarkdownAnnotationBlockKeyForSelection(
   root: HTMLElement,
   selection: Selection | null
@@ -29,8 +25,7 @@ export function getMarkdownAnnotationBlockKeyForSelection(
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
     return null
   }
-  // Why: a selection spanning multiple blocks anchors the composer on the
-  // block where the selection started, falling back to where it ended.
+  // For multi-block selections, prefer the anchor block, then the focus block.
   return (
     closestAnnotationBlockKey(selection.anchorNode, root) ??
     closestAnnotationBlockKey(selection.focusNode, root)
@@ -38,8 +33,7 @@ export function getMarkdownAnnotationBlockKeyForSelection(
 }
 
 export function previewHasAnnotationBlockKey(root: HTMLElement, blockKey: string): boolean {
-  // Why: walk attributes instead of building a CSS selector so keys never need
-  // CSS.escape (unavailable in some test environments).
+  // Compare attributes to avoid CSS.escape, which some test environments lack.
   for (const block of root.querySelectorAll('[data-annotation-block-key]')) {
     if (block.getAttribute('data-annotation-block-key') === blockKey) {
       return true
@@ -54,10 +48,6 @@ export type MarkdownPreviewAddReviewNoteKeyResult =
   | { action: 'open'; blockKey: string }
   | { action: 'clear-stale-and-ignore' }
 
-/**
- * Pure decision for the preview add-review-note chord. Keeps product B, OS
- * key-repeat, and stale-block-key handling out of the React component body.
- */
 export function resolveMarkdownPreviewAddReviewNoteKey(options: {
   event: Pick<
     KeyboardEvent,
@@ -91,13 +81,11 @@ export function resolveMarkdownPreviewAddReviewNoteKey(options: {
   }
 
   if (activeAnnotationBlockKey) {
-    // Why: only treat the key as an open draft when the block still mounts a
-    // composer; a stale key after content renumber must not lock the shortcut.
+    // Content renumbering can leave a stale key; only mounted composers should consume the chord.
     if (previewHasAnnotationBlockKey(root, activeAnnotationBlockKey)) {
       return { action: 'consume' }
     }
-    // Fall through after clearing so a held/stale key does not permanently
-    // suppress open. Repeat still must not open (below).
+    // Clear stale keys without letting held chords open a replacement composer.
     if (event.repeat) {
       return { action: 'clear-stale-and-ignore' }
     }

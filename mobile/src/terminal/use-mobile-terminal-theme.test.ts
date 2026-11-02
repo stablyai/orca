@@ -28,6 +28,9 @@ vi.mock('react-native', async () => {
   return {
     StyleSheet: { absoluteFillObject: {}, create: (styles: unknown) => styles },
     View: 'View',
+    Text: 'Text',
+    Pressable: 'Pressable',
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     useColorScheme: () =>
       React.useSyncExternalStore(
         (listener) => {
@@ -38,6 +41,11 @@ vi.mock('react-native', async () => {
       )
   }
 })
+vi.mock('expo-router', async () => {
+  const React = await import('react')
+  return { useFocusEffect: (effect: () => () => void) => React.useEffect(effect, [effect]) }
+})
+vi.mock('../theme/use-mobile-color-scheme', () => ({ useMobileColorScheme: () => state.scheme }))
 
 vi.mock('../storage/terminal-theme-preference', () => ({
   getMobileTerminalThemeMode: () => state.mode,
@@ -68,12 +76,14 @@ function paneProps(hostTheme = hostLight): ComponentProps<typeof TerminalPaneVie
     onSelectionMode: noop,
     onSelectionCopy: noop,
     onSelectionEvicted: noop,
+    onClipboardWrite: noop,
     onModesChanged: noop,
     onKeyboardAvoidanceMetrics: noop,
     onCellBoxChange: noop,
     onHaptic: noop,
     onTerminalInput: noop,
     onTerminalQueryReply: noop,
+    onTerminalInteraction: noop,
     onTerminalTap: noop,
     onFileTap: noop,
     onOpenUrl: noop,
@@ -155,22 +165,24 @@ describe('mobile terminal appearance on an existing pane', () => {
   })
 
   it('updates inactive mounted panes along with the active pane', async () => {
-    await act(async () => {
-      renderer = create(
-        createElement(
-          Fragment,
-          null,
-          createElement(TerminalPaneView, { ...paneProps(), key: 'active' }),
-          createElement(TerminalPaneView, {
-            ...paneProps(),
-            key: 'inactive',
-            handle: 'pty-2',
-            active: false
-          })
-        )
+    const renderPanes = (secondVisible: boolean) =>
+      createElement(
+        Fragment,
+        null,
+        createElement(TerminalPaneView, { ...paneProps(), key: 'active' }),
+        createElement(TerminalPaneView, {
+          ...paneProps(),
+          key: 'inactive',
+          handle: 'pty-2',
+          active: false,
+          visible: secondVisible
+        })
       )
+    await act(async () => {
+      renderer = create(renderPanes(true))
     })
     const panes = renderer!.root.findAllByType(TerminalWebView)
+    act(() => renderer!.update(renderPanes(false)))
     setScheme('light')
     expect(panes.map((pane) => pane.props.terminalTheme.mode)).toEqual(['light', 'light'])
     setMode('dark')

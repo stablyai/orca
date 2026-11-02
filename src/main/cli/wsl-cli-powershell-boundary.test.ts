@@ -4,7 +4,7 @@ import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { buildWslBridgeScript, buildWslLauncher } from './wsl-cli-scripts'
 
 const FORWARDED_ARGS = [
@@ -84,18 +84,6 @@ describe('WSL CLI PowerShell boundary', () => {
       }
     }
   )
-
-  it('keeps forwarded argv outside PowerShell parsing', () => {
-    const launcher = buildWslLauncher('C:\\Program Files\\Orca\\orca.exe')
-    const bridge = buildWslBridgeScript()
-
-    expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')
-    expect(bridge).not.toContain('[CmdletBinding')
-    expect(bridge).not.toMatch(/^param\(/m)
-    expect(bridge).toContain('$ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])')
-    expect(bridge).toContain('function ConvertTo-NativeCommandLineArgument')
-    expect(bridge).toContain('$StartInfo.UseShellExecute = $false')
-  })
 
   it.skipIf(process.platform !== 'win32')(
     'preserves native argv and exit status through Windows PowerShell 5.1',

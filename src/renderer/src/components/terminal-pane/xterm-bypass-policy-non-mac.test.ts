@@ -169,13 +169,8 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     pendingCandidateKeyReleaseActive: false
   }
   const linuxComposing = { ...linuxIdle, compositionActive: true, candidateKeyGuardActive: true }
-  // Post-compositionend guard: the tracker is already inactive but the
-  // committing key's trailing press/release must still be absorbed.
+  // Absorb the commit key’s trailing press/release even after compositionend deactivates tracking.
   const linuxPostCompositionGuard = { ...linuxIdle, candidateKeyGuardActive: true }
-  const linuxOrphanCandidateDigitGuard = {
-    ...linuxIdle,
-    linuxOrphanCandidateDigitGuardActive: true
-  }
   const windowsComposing = {
     ...windowsIdle,
     compositionActive: true,
@@ -194,8 +189,7 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
   })
 
   it('suppresses Windows IME Process keys', () => {
-    // Why: Windows preedit can hit the textarea before compositionstart;
-    // letting the 229 keydown through would flush it via xterm's textarea diff.
+    // Windows preedit may precede compositionstart; suppress 229 so xterm cannot flush its diff early.
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
         event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
@@ -205,8 +199,7 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
   })
 
   it('lets standalone Linux 229 keydowns reach xterm so its CompositionHelper can diff text', () => {
-    // Why: Sogou/fcitx candidate commits can ride a bare 229 keydown outside a
-    // composition session; xterm must see it to schedule its textarea diff.
+    // Bare Sogou/fcitx 229 commits outside composition must reach xterm’s textarea diff.
     expect(
       shouldSuppressTerminalImeKeyboardEvent(
         event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
@@ -324,21 +317,6 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
       }
     })
 
-    it('guards only digits for the orphaned-keyup fallback', () => {
-      expect(
-        shouldSuppressTerminalImeKeyboardEvent(
-          event({ key: '2', code: 'Digit2' }),
-          linuxOrphanCandidateDigitGuard
-        )
-      ).toBe(true)
-      expect(
-        shouldSuppressTerminalImeKeyboardEvent(
-          event({ key: ' ', code: 'Space' }),
-          linuxOrphanCandidateDigitGuard
-        )
-      ).toBe(false)
-    })
-
     it('does not treat modified chords such as Ctrl+Space (IME toggle) as candidate keys', () => {
       expect(
         shouldSuppressTerminalImeKeyboardEvent(
@@ -428,21 +406,6 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
         shouldPreventDefaultTerminalImeCandidateKey(
           event({ key: ' ', code: 'Space' }),
           windowsComposing
-        )
-      ).toBe(false)
-    })
-
-    it('prevents the default only for fallback digit keydowns', () => {
-      expect(
-        shouldPreventDefaultTerminalImeCandidateKey(
-          event({ key: '2', code: 'Digit2' }),
-          linuxOrphanCandidateDigitGuard
-        )
-      ).toBe(true)
-      expect(
-        shouldPreventDefaultTerminalImeCandidateKey(
-          event({ key: ' ', code: 'Space' }),
-          linuxOrphanCandidateDigitGuard
         )
       ).toBe(false)
     })

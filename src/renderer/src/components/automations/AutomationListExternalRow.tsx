@@ -1,5 +1,5 @@
 import React from 'react'
-import { MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -56,11 +56,6 @@ export type AutomationListExternalRowProps = {
     action: ExternalAutomationAction,
     scope: ExternalAutomationScope
   ) => void
-  onEdit: (
-    manager: ExternalAutomationManager,
-    job: ExternalAutomationJob,
-    scope: ExternalAutomationScope
-  ) => void
 }
 
 export function AutomationListExternalRow({
@@ -70,11 +65,9 @@ export function AutomationListExternalRow({
   sshConnectionStates,
   externalActionKey,
   onSelect,
-  onRequestAction,
-  onEdit
+  onRequestAction
 }: AutomationListExternalRowProps): React.JSX.Element {
   const providerLabel = getExternalProviderLabel(entry.manager)
-  const targetKindLabel = getExternalTargetKindLabel(entry.manager)
   const isSelected = selectedExternalKey === entry.key
   const sshStatus =
     entry.manager.target.type === 'ssh'
@@ -83,13 +76,13 @@ export function AutomationListExternalRow({
   const disabledMessage = getExternalAutomationActionDisabledMessage({
     manager: entry.manager,
     providerLabel,
-    targetKindLabel,
     sshStatus,
     actionInProgress: externalActionKey !== null
   })
   const actionDisabled = disabledMessage !== null
   const scheduleLabel = getExternalAutomationScheduleDisplay(entry.manager, entry.job).label
-  const hostLabel = entry.manager.targetLabel || entry.manager.label || 'Local'
+  const hostLabel =
+    entry.manager.targetLabel || entry.manager.label || getExternalTargetKindLabel(entry.manager)
   const projectLabel = entry.job.workdir ?? providerLabel
   const nextRunLabel = entry.job.enabled
     ? formatExternalDate(entry.job.nextRunAt, relativeNow)
@@ -104,8 +97,7 @@ export function AutomationListExternalRow({
           tabIndex={0}
           data-current={isSelected ? 'true' : undefined}
           onClick={(event) => {
-            // Why: Radix portals menus out of the row DOM, but React still
-            // bubbles those clicks here — ignore so menu actions don't open detail.
+            // React bubbles portaled menu clicks through this row; ignore them to avoid opening detail.
             if (isPortaledRowMenuClick(event)) {
               return
             }
@@ -171,15 +163,6 @@ export function AutomationListExternalRow({
                     translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')}
                 </span>
               </DropdownMenuItem>
-              {entry.manager.provider === 'hermes' ? (
-                <DropdownMenuItem
-                  disabled={!entry.manager.canManage || externalActionKey !== null}
-                  onSelect={() => onEdit(entry.manager, entry.job, entry.scope)}
-                >
-                  <Pencil className="size-3.5" />
-                  {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
-                </DropdownMenuItem>
-              ) : null}
               <DropdownMenuItem
                 disabled={actionDisabled}
                 onSelect={() =>
@@ -220,15 +203,6 @@ export function AutomationListExternalRow({
               translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')}
           </span>
         </ContextMenuItem>
-        {entry.manager.provider === 'hermes' ? (
-          <ContextMenuItem
-            disabled={!entry.manager.canManage || externalActionKey !== null}
-            onSelect={() => onEdit(entry.manager, entry.job, entry.scope)}
-          >
-            <Pencil className="size-3.5" />
-            {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
-          </ContextMenuItem>
-        ) : null}
         <ContextMenuItem
           disabled={actionDisabled}
           onSelect={() =>

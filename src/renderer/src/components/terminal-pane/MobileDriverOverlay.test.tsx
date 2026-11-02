@@ -1,4 +1,5 @@
 import type React from 'react'
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 
@@ -23,7 +24,7 @@ const hookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -113,8 +114,8 @@ describe('MobileDriverOverlay', () => {
       onAllAction: vi.fn()
     }) as OverlayElement
 
-    expect(overlay.props.actionLabel).toBe('Restore this terminal')
-    expect(overlay.props.allActionLabel).toBe('Restore all terminals')
+    expect(overlay.props.actionLabel).toBe('Restore')
+    expect(overlay.props.allActionLabel).toBe('Restore all')
   })
 
   it('exposes an all-terminals restore action when provided', async () => {
@@ -123,8 +124,8 @@ describe('MobileDriverOverlay', () => {
 
     const overlay = renderOverlay(onAction, onAllAction)
 
-    expect(overlay.props.actionLabel).toBe('Take back this terminal')
-    expect(overlay.props.allActionLabel).toBe('Take back all terminals')
+    expect(overlay.props.actionLabel).toBe('Take back')
+    expect(overlay.props.allActionLabel).toBe('Take back all')
     expect(overlay.props.allActionPending).toBe(false)
     await overlay.props.onAllAction?.()
 

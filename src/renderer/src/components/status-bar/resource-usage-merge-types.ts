@@ -1,4 +1,5 @@
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { WorktreeMemory } from '../../../../shared/process-stats-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
@@ -6,7 +7,7 @@ import type {
   PtyListedSession
 } from '../../../../shared/pty-listed-session'
 
-/** `null` === "no local sample" (e.g. SSH PTY); UI renders as em-dash. */
+/** Null means no process sample, commonly for SSH PTYs; render an em dash. */
 export type Metric = number | null
 
 /** One `pty.listSessions()` row. Aliased so ownership evidence cannot be dropped locally. */
@@ -14,6 +15,7 @@ export type DaemonSession = PtyListedSession
 
 export type UnifiedSessionRow = {
   sessionId: string
+  incarnationId?: string
   paneKey: string | null
   pid: number
   label: string
@@ -24,6 +26,8 @@ export type UnifiedSessionRow = {
   cpu: Metric
   memory: Metric
   hasLocalSamples: boolean
+  /** Sampled on a paired server; this client cannot end it. */
+  readOnly?: true
 }
 
 export type UnifiedWorktreeRow = {
@@ -37,6 +41,8 @@ export type UnifiedWorktreeRow = {
   hasLocalSamples: boolean
   /** Execution-host metadata drives the remote chip; missing samples do not. */
   isRemote: boolean
+  /** Paired server that sampled this row; absent for this machine and SSH rows. */
+  hostLabel?: string
   sessions: UnifiedSessionRow[]
   browsers: BrowserWorkspace[]
 }
@@ -52,9 +58,7 @@ export type UnifiedProjectGroup = {
 }
 
 export type MergeContext = {
-  /** From useAppStore: maps worktreeId -> tabs[] for tab-walk resolution. */
   tabsByWorktree: Record<string, TerminalTab[]>
-  /** From useAppStore: maps tabId -> ptyIds[] for the bound check. */
   ptyIdsByTabId: Record<string, string[]>
   /** From useAppStore: persisted per-leaf PTY wake hints for deferred reattach. */
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
@@ -68,12 +72,20 @@ export type MergeContext = {
   repoDisplayNameById: Map<string, string>
   /** Repo connectionId by repo id (null/missing == local). */
   repoConnectionIdById: Map<string, string | null>
-  /** Repo runtime-host scope by repo id (missing == keep row). */
-  repoRuntimeScopedById: Map<string, boolean>
+  /** Runtime execution host id by repo id (missing == not hosted by a paired server). */
+  repoRuntimeHostIdById: Map<string, string>
+  /** Process samples each paired server reported for its own workspaces. */
+  runtimeHostResources?: readonly RuntimeHostResourceSample[]
   /** Browser inventory is open-only; the Resource Manager never scans it in the background. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
   /** Canonical workspace names and grouping for every resource source. */
   worktreeById?: ReadonlyMap<string, Worktree>
   /** Ids present on more than one execution host; their catalog row cannot name a host. */
   ambiguousWorktreeIds?: ReadonlySet<string>
+}
+
+export type RuntimeHostResourceSample = {
+  hostId: `runtime:${string}`
+  hostLabel: string
+  worktrees: readonly WorktreeMemory[]
 }

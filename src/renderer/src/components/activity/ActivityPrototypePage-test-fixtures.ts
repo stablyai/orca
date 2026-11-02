@@ -3,8 +3,9 @@ import type { Repo } from '../../../../shared/repo-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import { buildActivityEvents, buildAgentPaneThreads } from './ActivityPrototypePage'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
+import { buildActivityEvents } from './activity-event-builder'
+import { buildAgentPaneThreads } from './activity-thread-builder'
 
 export const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 export const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
@@ -142,6 +143,7 @@ export function makeActivityResult(args: {
   entries?: Record<string, AgentStatusEntry>
   retained?: Record<string, RetainedAgentEntry>
   tab?: TerminalTab
+  tabs?: TerminalTab[]
   now?: number
 }): ReturnType<typeof buildActivityEvents> {
   const repo = makeRepo()
@@ -149,10 +151,11 @@ export function makeActivityResult(args: {
   const tab = args.tab ?? makeTab()
 
   return buildActivityEvents({
+    chatNames: new Map(),
     agentStatusByPaneKey: args.entries ?? {},
     retainedAgentsByPaneKey: args.retained ?? {},
     tabsByWorktree: {
-      [worktree.id]: [tab]
+      [worktree.id]: args.tabs ?? [tab]
     },
     worktreeMap: new Map([[worktree.id, worktree]]),
     repoMap: new Map([[repo.id, repo]]),

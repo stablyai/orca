@@ -1,0 +1,53 @@
+{
+  "sourceBaseline": "4102ea91dce12a3ce11104dc89729132e8674f0b",
+  "mainBaseline": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+  "artifacts": {
+    "16k": {
+      "artifact": "claude-source-compression-16k.json",
+      "sha256": "c89ca2493f6939408d48404cbdbf0991b5607bd10c407fb1f252c11f32811fdd",
+      "currentSourceHashesVerified": true,
+      "sixCounterbalancedRounds": true,
+      "unchangedSourceWrites": 0
+    },
+    "100k": {
+      "artifact": "claude-source-compression-100k.json",
+      "sha256": "4de42062dafe452af3b373b7769daac0342015d3c6136c42004644a5bb955345",
+      "currentSourceHashesVerified": true,
+      "sixCounterbalancedRounds": true,
+      "unchangedSourceWrites": 0
+    },
+    "varied-100k": {
+      "artifact": "claude-source-compression-varied-100k.json",
+      "sha256": "ff196aafeb019143774536ff580c81f9130729b10eecf388ef8d7b2c9e1607b9",
+      "currentSourceHashesVerified": true,
+      "sixCounterbalancedRounds": true,
+      "unchangedSourceWrites": 0
+    }
+  },
+  "method": "Complete production cache read/decompress/verify/decode, scan, gzip, serialization and fsync/rename writes. Cross-arm output parity. Excludes app rendering, real worker/IPC queueing and network. Disk figures include source and report. Varied fixture has deterministic pseudo-random IDs and token totals.",
+  "tools": {
+    "config/scripts/claude-usage-source-compression-benchmark.mjs": "e745a37bbd4161cab061062bb30adc0158d1856d198981d04c5b1f503f1bd5eb",
+    "config/scripts/claude-usage-benchmark-persistence.mjs": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
+    "config/scripts/claude-usage-benchmark-scanner.mjs": "cbaf8140fd02f617419548db76bc46eb8235568d61b8ee06cdef6ed104b048a0"
+  },
+  "fourArmBytes": {
+    "artifact": "claude-source-compression-four-arm-bytes.json",
+    "sha256": "d486a559c2fc1700a7ddcab9bae8867a8a5e74f76c569a5b32de95b6008e494c",
+    "crossArmProjectionParity": true,
+    "currentSourceHashesVerified": true
+  },
+  "localValidation": {
+    "typecheck": "full passed",
+    "quality": "all seven changed gates passed",
+    "tests": 413,
+    "mobileTests": 19,
+    "contracts": 163,
+    "antiSlop": "passed",
+    "binaryWrite": "exact bytes, bounded view and temp cleanup passed",
+    "bindingGuard": {
+      "focusedTests": 32,
+      "nodeTypecheck": "passed",
+      "destinationMutationDuringCompression": "original destination retained; replacement destination absent"
+    }
+  }
+}

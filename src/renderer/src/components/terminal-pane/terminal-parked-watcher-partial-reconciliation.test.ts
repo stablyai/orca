@@ -53,9 +53,11 @@ vi.mock('@/store', () => ({
 
 import {
   captureParkedTerminalPaneCandidates,
+  fallbackParkedPaneCandidates,
   pruneParkedTerminalWatchers,
   syncParkedTerminalTabWatchers
 } from './terminal-parked-tab-watchers'
+import { fallbackParkedPaneCandidates as directFallbackParkedPaneCandidates } from './terminal-parked-watcher-reconciliation'
 
 function sync(): void {
   syncParkedTerminalTabWatchers({
@@ -74,6 +76,10 @@ beforeEach(() => {
 
 afterEach(() => {
   pruneParkedTerminalWatchers(new Set())
+})
+
+it('keeps pane fallback available through the parked watcher module', () => {
+  expect(fallbackParkedPaneCandidates).toBe(directFallbackParkedPaneCandidates)
 })
 
 it('retains a continuing watcher and title while reconciling a reminted split leaf', () => {

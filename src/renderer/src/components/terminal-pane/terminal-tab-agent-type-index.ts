@@ -34,14 +34,13 @@ export function createTerminalTabAgentTypeSelector(
   tabId: string,
   foreground?: Record<string, PaneForegroundAgentEntry>
 ) => TerminalTabAgentTypesByLeaf {
-  let cachedState: TerminalTabAgentTypeState | null = null
-  let cachedForeground: Record<string, PaneForegroundAgentEntry> | null = null
+  let cachedState: WeakRef<TerminalTabAgentTypeState> | null = null
+  let cachedForeground: WeakRef<Record<string, PaneForegroundAgentEntry>> | null = null
   let cachedByTabId = new Map<string, TerminalTabAgentTypesByLeaf>()
 
   return (state, tabId, foreground = EMPTY_FOREGROUND_AGENT_BY_PANE_KEY) => {
-    // Why: production writes replace this map. Its identity lets unrelated
-    // Zustand notifications skip the global scan entirely.
-    if (state !== cachedState || foreground !== cachedForeground) {
+    // Production replaces map identity; unchanged identity skips unrelated store scans.
+    if (state !== cachedState?.deref() || foreground !== cachedForeground?.deref()) {
       const previousByTabId = cachedByTabId
       const nextByTabId = new Map<string, Record<string, AgentType>>()
       for (const [paneKey, entry] of Object.entries(state)) {
@@ -88,13 +87,13 @@ export function createTerminalTabAgentTypeSelector(
         )
       }
       cachedByTabId = stabilizedByTabId
-      cachedState = state
-      cachedForeground = foreground
+      // Identity checks must not keep dropped payloads alive after the last pane parks.
+      cachedState = new WeakRef(state)
+      cachedForeground = new WeakRef(foreground)
     }
     return cachedByTabId.get(tabId) ?? EMPTY_AGENT_TYPES_BY_LEAF
   }
 }
 
-// Why: TerminalPane is mounted once per retained tab. Share one index so a
-// store write scans the global agent map once, not once for every hidden tab.
+// Share one global agent index across retained tabs instead of scanning once per mounted pane per write.
 export const selectTerminalTabAgentTypesByLeaf = createTerminalTabAgentTypeSelector()

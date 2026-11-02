@@ -1,5 +1,6 @@
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import type { WorkspaceCleanupGitState } from '../../../../shared/workspace-cleanup-filter-model'
+import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 import type {
   WorkspaceCleanupContextFilter,
   WorkspaceCleanupFilters,
@@ -44,7 +45,7 @@ export function getWorkspaceCleanupSearchText(
     candidate.path,
     reviewInfo.label,
     reviewInfo.title,
-    getWorkspaceCleanupGitLabel(candidate),
+    getWorkspaceCleanupGitChipLabel(getWorkspaceCleanupGitState(candidate)),
     hasWorkspaceCleanupLocalContext(candidate) ? 'has context' : 'no context'
   ]
     .filter(Boolean)
@@ -95,17 +96,6 @@ export function sortWorkspaceCleanupCandidates(
   })
 }
 
-const GIT_STATE_LABELS: Record<WorkspaceCleanupGitState, string> = {
-  unpushed: 'Unpushed',
-  unknown: 'Unknown',
-  clean: 'Clean',
-  dirty: 'Dirty'
-}
-
-export function getWorkspaceCleanupGitLabel(candidate: WorkspaceCleanupCandidate): string {
-  return GIT_STATE_LABELS[getWorkspaceCleanupGitState(candidate)]
-}
-
 /** Unpushed outranks unknown: a lost commit is worse than an unreadable status. */
 export function getWorkspaceCleanupGitState(
   candidate: WorkspaceCleanupCandidate
@@ -120,10 +110,6 @@ export function getWorkspaceCleanupGitState(
     return 'clean'
   }
   return candidate.git.clean === false ? 'dirty' : 'unknown'
-}
-
-export function hasWorkspaceCleanupUnpushedCommits(candidate: WorkspaceCleanupCandidate): boolean {
-  return hasUnpushedCommits(candidate)
 }
 
 function compareWorkspaceCleanupCandidates(

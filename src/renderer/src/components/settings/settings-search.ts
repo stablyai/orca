@@ -60,8 +60,13 @@ export function isSettingsSearchQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
+// Turkish İ lowercases to i + U+0307; drop the dot so plain-i queries still match.
+function foldSettingsSearchText(value: string): string {
+  return value.toLowerCase().replaceAll('\u0307', '')
+}
+
 export function normalizeSettingsSearchQuery(query: string): string {
-  return query.trim().toLowerCase()
+  return foldSettingsSearchText(query.trim())
 }
 
 function scoreSettingsSearchText(
@@ -72,7 +77,7 @@ function scoreSettingsSearchText(
   if (!value) {
     return SETTINGS_SEARCH_NO_MATCH_SCORE
   }
-  const normalizedValue = value.toLowerCase()
+  const normalizedValue = foldSettingsSearchText(value)
   if (normalizedValue === normalizedQuery) {
     return tier.exact
   }
@@ -110,8 +115,7 @@ export function scoreSettingsSearch(
 
   const values = Array.isArray(entries) ? entries : [entries]
   return values.reduce((score, entry, index) => {
-    // Why: Settings passes the pane entry first so pane-title hits outrank
-    // lower-level setting titles without adding a second search-entry shape.
+    // The first entry is the pane title; rank it above setting titles.
     const titleScore = index === 0 ? PANE_TITLE_SCORE : ENTRY_TITLE_SCORE
     return Math.max(
       score,
@@ -127,8 +131,7 @@ export function getSettingsSectionSearchEntries(section: {
   description: string
   searchEntries: readonly SettingsSearchEntry[]
 }): SettingsSearchEntry[] {
-  // Why: sidebar ranking and active content filtering must receive the same
-  // pane-level entry, otherwise pane-title-only hits can rank but render blank.
+  // Ranking and filtering need the same pane entry so title-only hits render content.
   return [{ title: section.title, description: section.description }, ...section.searchEntries]
 }
 

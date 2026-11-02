@@ -2,9 +2,9 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import { useExpandCollapseActions } from './expand-collapse'
-import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
 import {
   installTerminalImeCompositionRoute,
   XTERM_COMPOSITION_SESSION_START_EVENT
@@ -193,8 +193,7 @@ describe('Windows IME keyboard ownership', () => {
   })
 
   it('does not mark input for a pane binding replaced between capture and send', () => {
-    // Why: the sender captures the binding, then re-reads it at send time — a rehomed
-    // or reconnected pane must not have its redraw scheduling refreshed by the old one.
+    // Re-read the captured binding at send time so old owners cannot refresh redraw state after reconnect/rehome.
     const captured = { markShortcutTerminalInputSent: vi.fn() }
     const replacement = { markShortcutTerminalInputSent: vi.fn() }
     const bindings = new Map([[1, captured]])
@@ -420,9 +419,7 @@ describe('Windows IME keyboard ownership', () => {
     harness.dispose()
   })
 
-  // Why: STA-3291 — busy panes render mid-composition (title updates), and the
-  // chord owner must survive those renders or held-modifier CJK input leaks
-  // newlines. Wiring mirrors TerminalPane: dep objects rebuilt every render.
+  // Rebuild dependency wrappers like TerminalPane; mid-composition rerenders must preserve chord ownership to avoid CJK newline leaks.
   it('absorbs the bare Enter redispatch when re-renders land mid-composition', () => {
     const harness = createHarness()
     const factoryFields = {

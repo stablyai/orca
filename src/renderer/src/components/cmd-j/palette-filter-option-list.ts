@@ -1,15 +1,10 @@
 import type { PaletteFilterOption } from './palette-filter-options'
 
-/** Fixed row height for the virtualized options list. */
 export const FILTER_OPTION_ROW_HEIGHT = 32
 
-/** Viewport height of the options scroller. */
 export const FILTER_OPTION_LIST_MAX_HEIGHT = 280
 
-/**
- * Beyond this, pinning every selected row would bury unselected options.
- * The UI collapses them into a summary; chips still manage individual removals.
- */
+/** Collapse large selected groups so unselected options remain discoverable; chips still remove individual selections. */
 export const FILTER_OPTION_MAX_PINNED_SELECTED = 12
 
 export type FilterOptionRankMode = 'registry' | 'popularity'
@@ -37,11 +32,7 @@ function compareByPopularity(a: PaletteFilterOption, b: PaletteFilterOption): nu
   return a.label.localeCompare(b.label) || a.id.localeCompare(b.id)
 }
 
-/**
- * Filters by pre-normalized searchText, pins selected matches first so they stay
- * undoable, and ranks the rest for discovery (popularity) or stable registry order
- * (hosts: local → SSH). No render cap — the list is virtualized.
- */
+/** Keep selected rows undoable across search mismatches; rank the rest by popularity or registry order without capping the virtualized list. */
 export function rankPaletteFilterOptions({
   options,
   selectedIds,
@@ -58,8 +49,7 @@ export function rankPaletteFilterOptions({
   const unselected: PaletteFilterOption[] = []
   for (const option of options) {
     const isSelected = selectedIds.has(option.id)
-    // Why: selected rows stay visible past a search mismatch so they can still
-    // be unchecked without clearing the whole field or hunting through chips.
+    // Selected rows must stay reachable for unchecking even when they miss the query.
     if (!isSelected && query && !option.searchText.includes(query)) {
       continue
     }
@@ -74,7 +64,6 @@ export function rankPaletteFilterOptions({
     selected.sort(compareByPopularity)
     unselected.sort(compareByPopularity)
   }
-  // registry: keep input order within each partition (hosts stay local-first)
 
   const selectedCollapsed = selected.length > FILTER_OPTION_MAX_PINNED_SELECTED
   return {

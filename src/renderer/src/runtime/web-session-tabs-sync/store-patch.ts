@@ -1,8 +1,19 @@
+import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
+import {
+  markStructuredAgentSessionLaunchesPublished,
+  publishedStructuredSessions
+} from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '../../store'
 import { useAppStore } from '../../store'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { pickParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import {
+  pickHostTurnEnd,
+  pickParsedAgentStatusPayload,
+  type TurnEndDisposition
+} from '../../../../shared/agent-status-types'
 import { normalizeTurnCompletedAtField } from '../../../../shared/agent-status-field-normalization'
+import { isSeenHostReplay } from '@/hooks/ipc-events/agent-status-routing'
 import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'
 import { remapHostAgentStatus } from './agent-status-primitives'
@@ -12,6 +23,7 @@ import {
   hostWorkingClientBoundaryByPaneKey,
   type WebSessionTabsSyncState
 } from './state'
+import { reportVisibleTabPickToHost } from '../web-session-visible-tab-pick-report'
 import {
   createHostSessionMirrorSettle,
   type HostSessionMirrorPatchVerdict,
@@ -20,10 +32,16 @@ import {
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
-  buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+  buildPatch: (
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
+  ) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
   hostMirrorVerdict: HostSessionMirrorPatchVerdict,
   agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
-  allowCompletionNotification = false
+  allowCompletionNotification = false,
+  affectedWorkspaces = hostMirrorVerdict.frames
+    .filter(({ decision }) => decision.apply)
+    .map(({ worktreeId }) => worktreeId)
 ): HostSessionMirrorSettle {
   let mirroredAgentStatusChanged = false
   // Zustand commits before notifying subscribers, so a completed producer has landed even if a subscriber throws.
@@ -34,14 +52,17 @@ export function applyWebSessionTabsStorePatch(
     seedOnly?: true
     payload: ReturnType<typeof pickParsedAgentStatusPayload> & {
       stateStartedAt: number
+      turnEndedAt?: number
+      turnEndDisposition?: TurnEndDisposition
       localStateStartedAt?: number
     }
   }[] = []
 
   const runStorePatch = (
-    state: AppState
+    state: AppState,
+    changedAgentPaneKeys: Set<string>
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
-    const patch = buildPatch(state)
+    const patch = buildPatch(state, changedAgentPaneKeys)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
@@ -77,7 +98,11 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const notificationStatus = clientOwnedNotification ? remapped : accepted
-          if (!notificationStatus) {
+          // Why: an unverifiable `done` restates an earlier turn or none, never a completion.
+          if (
+            !notificationStatus ||
+            (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed)
+          ) {
             continue
           }
           const currentClientStateStartedAt = clientOwnedNotification
@@ -126,31 +151,52 @@ export function applyWebSessionTabsStorePatch(
               }
             }
           }
-          if (!allowCompletionNotification && notificationStatus.state !== 'working') {
+          // Why: a hydrated `done` unlike this renderer's prior row ended while the host was unreachable.
+          const notifyCompletion =
+            allowCompletionNotification ||
+            (!clientOwnedNotification &&
+              !isSeenHostReplay(
+                {
+                  isReplay: true,
+                  stateStartedAt: notificationStatus.stateStartedAt,
+                  turnCompletedAt,
+                  turnEndedAt: notificationStatus.turnEndedAt
+                },
+                notificationStatus.state,
+                state.agentStatusByPaneKey[notificationStatus.paneKey]
+              ))
+          if (!notifyCompletion && notificationStatus.state !== 'working') {
             continue
           }
           acceptedNotificationStatuses.push({
             paneKey: notificationStatus.paneKey,
             worktreeId: notificationStatus.worktreeId ?? snapshot.worktree,
-            ...(!allowCompletionNotification ? { seedOnly: true as const } : {}),
+            ...(!notifyCompletion ? { seedOnly: true as const } : {}),
             payload: {
               ...pickParsedAgentStatusPayload({
                 ...notificationStatus,
                 ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
               }),
               stateStartedAt: notificationStatus.stateStartedAt,
+              ...pickHostTurnEnd(notificationStatus),
               ...(clientOwnedNotification ? { localStateStartedAt } : {})
             }
           })
         }
       }
     }
+    for (const key of new Set(affectedWorkspaces)) {
+      retireRemovedNativeChatDraftPositions(
+        state.unifiedTabsByWorktree[key] ?? [],
+        (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
+      )
+    }
     patchCommitted = true
     return patch
   }
 
   try {
-    useAppStore.setState(runStorePatch)
+    useAppStore.getState().updateAgentStatusState(runStorePatch)
   } catch (error) {
     if (!patchCommitted) {
       throw error
@@ -158,6 +204,15 @@ export function applyWebSessionTabsStorePatch(
     console.warn('[web-session-tabs-sync] a store subscriber failed after the patch landed:', error)
   }
 
+  for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
+    if (decision.apply && source) {
+      markStructuredAgentSessionLaunchesPublished(
+        toRuntimeExecutionHostId(environmentId),
+        publishedStructuredSessions([source])
+      )
+      reportVisibleTabPickToHost(environmentId, source)
+    }
+  }
   const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)
   try {
     if (mirroredAgentStatusChanged) {

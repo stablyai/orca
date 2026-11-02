@@ -14,15 +14,14 @@ type EditorShortcutContext = {
   notifyTerminalCapture: (actionId: KeybindingActionId) => void
 }
 
-// Returns true only when the chord was consumed, so unclaimed editor chords still
-// fall through to the remaining workspace shortcuts.
+// Return false for unclaimed chords so remaining workspace shortcuts can handle them.
 export function handleTerminalWorkspaceEditorShortcut({
   event,
   floatingWorkspaceFocused,
   matchShortcut,
   notifyTerminalCapture
 }: EditorShortcutContext): boolean {
-  // Save active editor file — fallback for when focus is outside the editor (tab bar/sidebar); editor-local handlers own save when the editor is focused.
+  // Save fallback for focus outside the editor; editor-local handlers own focused saves.
   if (!event.repeat && matchShortcut('editor.save')) {
     const target = event.target as HTMLElement | null
     const inEditor =

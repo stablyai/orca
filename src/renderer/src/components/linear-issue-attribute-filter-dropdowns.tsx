@@ -1,5 +1,3 @@
-// Why: Linear Filters chrome mirrors GitHub PR filters — one outline button,
-// sectioned popover, removable pills — without encoding facets into free-text search.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -115,8 +113,7 @@ export default function LinearIssueAttributeFilterDropdowns({
 }: Props): React.JSX.Element {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [openSection, setOpenSection] = useState<LinearIssueFilterSectionKey | null>(null)
-  // Why: each record holds the ids the cap left behind, so it stops applying the moment the
-  // facet carries anything else — prune, pill clear, Clear all, workspace switch (STA-5996).
+  // Tie truncation records to the surviving ids so pruning, clearing or workspace changes retire stale warnings.
   const [stateIdsTruncation, setStateIdsTruncation] = useState<LinearMetadataTruncationRecord>(null)
   const [labelIdsTruncation, setLabelIdsTruncation] = useState<LinearMetadataTruncationRecord>(null)
   const statusTruncated = isLinearMetadataTruncated(stateIdsTruncation, value.stateIds)
@@ -128,8 +125,7 @@ export default function LinearIssueAttributeFilterDropdowns({
     value.labelIds.length > 0 ||
     value.assignee?.kind === 'user'
 
-  // Why: facet ids belong to one workspace, so an unresolved id is as unusable as `all`
-  // — both must show the picker hint rather than accept a filter that goes nowhere.
+  // Unresolved and all-workspace contexts cannot own facet ids; offer a workspace choice instead.
   const scopedWorkspaceId = workspaceId && workspaceId !== 'all' ? workspaceId : null
 
   const activeTeamIds = useMemo(() => {
@@ -150,16 +146,13 @@ export default function LinearIssueAttributeFilterDropdowns({
   const labels = useTeamsLabels(activeTeamIds, settings, concreteWorkspaceId)
   const members = useTeamsMembers(activeTeamIds, settings, concreteWorkspaceId)
 
-  // Why: prune only after a successful non-empty metadata load for the same team set;
-  // loading/error/empty-before-load must never clear active selections (R12).
+  // Prune only after successful nonempty metadata for the same team set; loading/errors must preserve selections.
   const pruneTeamKeyRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeTeamIds.length === 0 || !concreteWorkspaceId) {
       return
     }
-    // Why: restored filters make this run at startup, when availableTeams may still be
-    // the issue-scraped subset. Metadata complete for a partial team set looks valid,
-    // so pruning there would permanently delete facets from another team (R12).
+    // Startup’s issue-scraped teams are incomplete; pruning before the team fetch settles would lose other teams’ restored facets.
     if (!teamsSettled) {
       return
     }
@@ -209,8 +202,7 @@ export default function LinearIssueAttributeFilterDropdowns({
     onChange
   ])
 
-  // Why: workflow states and team labels are per team, so several ids share one name —
-  // one row per name, selecting every id behind it (#16785).
+  // Group per-team ids by display name so one status/label row selects every matching team id.
   const statusOptions = useMemo(
     () =>
       groupLinearMetadataByName(states.data).map((group) => ({
@@ -263,9 +255,7 @@ export default function LinearIssueAttributeFilterDropdowns({
     labelsTruncated
   })
 
-  // Why: one picked row expands to an id per team, so bound here — the IPC/RPC parser rejects a
-  // filter over the transport cap outright. Spread the cap over the picked rows first: the
-  // canonical slice is lexicographic, so it can drop every id of a row the user just checked.
+  // Cap expanded ids before IPC rejects them; spread slots across rows so lexical order cannot erase a picked row.
   const applyPickedFilter = (next: LinearIssueAttributeFilter): void => {
     const bounded = boundLinearIssueAttributeFilter(
       canonicalizeLinearIssueAttributeFilter({
@@ -282,8 +272,7 @@ export default function LinearIssueAttributeFilterDropdowns({
         )
       })
     )
-    // Why: only here are the pre-cap expansion and the survivors both in hand. Re-capping an
-    // untouched facet (a priority click) is a no-op, so keep a record that still matches.
+    // Record where requested and surviving ids coexist; preserve matching records when untouched facets are re-capped.
     setStateIdsTruncation(
       isLinearMetadataTruncated(stateIdsTruncation, bounded.stateIds)
         ? stateIdsTruncation

@@ -1,4 +1,3 @@
-/** The web form: the page has no way out of itself, so the shell is asked. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openExternalLink, publishExternalLinkOpener } from './external-link.web'
 
@@ -44,9 +43,7 @@ describe('opening a URL from inside the shell', () => {
   })
 
   it('refuses everything in a document that published no opener', async () => {
-    // A fresh module, because `post` is module state: every case above has already published one,
-    // and without this the default at the top of the module is never the thing under test. The
-    // reason is asserted for the same rule — `not.toThrow()` passes against any implementation.
+    // Reload module state to test its unpublished default; assert the refusal reason too because not.toThrow alone proves no policy.
     vi.resetModules()
     const fresh: typeof import('./external-link.web') = await import('./external-link.web')
     fresh.openExternalLink('https://example.com')

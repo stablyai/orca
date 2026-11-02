@@ -27,6 +27,19 @@ afterEach(() => {
 })
 
 describe('Cursor hook normalization', () => {
+  it('normalizes the Cursor conversation identity', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'beforeSubmitPrompt',
+        prompt: 'remember the codeword',
+        conversation_id: 'conversation-742'
+      }),
+      'production'
+    )
+    expect(result?.providerSession).toEqual({ key: 'conversation_id', id: 'conversation-742' })
+  })
+
   it('beforeSubmitPrompt maps to working and captures the prompt', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
@@ -115,7 +128,7 @@ describe('Cursor hook normalization', () => {
       }),
       'production'
     )
-    // Why: keeping toolName would let the compact sidebar show the tool instead of the failure text, hiding the error.
+    // A retained tool name would hide the failure text in compact status cards.
     expect(failed?.payload).toMatchObject({
       state: 'working',
       lastAssistantMessage: 'file not found'

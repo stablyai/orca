@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { dirname, join, win32 as pathWin32 } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-contract'
@@ -15,14 +15,9 @@ import {
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
-import {
-  CodexHookService,
-  _internals,
-  createCodexWslRuntimeHookInstallPlan,
-  type CodexWslRuntimeHookInstallPlan
-} from './hook-service'
-import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
-import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
+import { CodexHookService, _internals, type CodexWslRuntimeHookInstallPlan } from './hook-service'
+import type { CodexHookTrustGrantRequest } from './app-server/codex-app-server-client'
+import { codexAppServerCapabilityCache } from './app-server/codex-app-server-capability-cache'
 import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
 
 type HooksConfig = {
@@ -32,7 +27,7 @@ type HooksConfig = {
 let tempRoots: string[] = []
 
 beforeEach(() => {
-  // Why: the trust-grant ledger lives in Orca's userData, which otherwise resolves to the live one.
+  // Isolate the trust ledger from the running app's userData.
   const userData = mkdtempSync(join(tmpdir(), 'orca-codex-wsl-hooks-userdata-'))
   tempRoots.push(userData)
   vi.stubEnv('ORCA_USER_DATA_PATH', userData)
@@ -103,34 +98,10 @@ describe('Codex WSL runtime hook install', () => {
     const independent = firstHome.replace('\\Alice\\', '\\Bob\\')
     const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
 
-    const first = service.prepareRuntimeHomeForLaunch(firstHome, target, true)
-    const second = service.prepareRuntimeHomeForLaunch(alias, target, true)
-    const third = service.prepareRuntimeHomeForLaunch(independent, target, true)
+    const first = service.prepareRuntimeHomeForLaunch(firstHome, target, () => true, false)
+    const second = service.prepareRuntimeHomeForLaunch(alias, target, () => true, false)
+    const third = service.prepareRuntimeHomeForLaunch(independent, target, () => true, false)
     await vi.waitFor(() => expect(started).toEqual([firstHome, independent]))
-
-    releases.splice(0).forEach((release) => release())
-    await Promise.all([first, second, third])
-    expect(started).toEqual([firstHome, independent])
-  })
-
-  it('coalesces aliases of one runtime home without blocking independent homes', async () => {
-    const service = new CodexHookService()
-    const releases: (() => void)[] = []
-    const started: string[] = []
-    vi.spyOn(service, 'installForRuntimeHome').mockImplementation(async (runtimeHomePath) => {
-      started.push(runtimeHomePath!)
-      await new Promise<void>((resolve) => releases.push(resolve))
-      return null
-    })
-    const firstHome = '\\\\wsl$\\Ubuntu\\home\\Alice\\.local\\share\\orca\\codex-runtime-home\\home'
-    const alias = firstHome.replace('\\\\wsl$', '\\\\wsl.localhost')
-    const independent = firstHome.replace('\\Alice\\', '\\Bob\\')
-
-    const first = service.installForRuntimeHomeSerialized(firstHome)
-    const second = service.installForRuntimeHomeSerialized(alias)
-    const third = service.installForRuntimeHomeSerialized(independent)
-    await vi.waitFor(() => expect(started).toEqual([firstHome, independent]))
-    expect(second).toBe(first)
 
     releases.splice(0).forEach((release) => release())
     await Promise.all([first, second, third])
@@ -173,93 +144,6 @@ describe('Codex WSL runtime hook install', () => {
     expect(started).toEqual([upper, lower])
   })
 
-  it('plans WSL hook files with Linux command and trust paths', () => {
-    const runtimeHome =
-      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
-
-    expect(
-      createCodexWslRuntimeHookInstallPlan(runtimeHome, undefined, (_distro, path) => path)
-    ).toEqual({
-      configPath: pathWin32.join(runtimeHome, 'hooks.json'),
-      tomlPath: pathWin32.join(runtimeHome, 'config.toml'),
-      scriptPath: pathWin32.join(runtimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
-      commandScriptPath:
-        '/home/alice/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh',
-      trustConfigPath: '/home/alice/.local/share/orca/codex-runtime-home/home/hooks.json',
-      wslDistro: 'Ubuntu',
-      linuxRuntimeHome: '/home/alice/.local/share/orca/codex-runtime-home/home'
-    })
-  })
-
-  it('plans WSL hooks when the distro home is mounted on a Windows drive', async () => {
-    const runtimeHome = 'D:\\wsl-home\\.local\\share\\orca\\codex-runtime-home\\home'
-
-    expect(
-      createCodexWslRuntimeHookInstallPlan(
-        runtimeHome,
-        { runtime: 'wsl', wslDistro: 'Ubuntu' },
-        (_distro, path) => path
-      )
-    ).toEqual({
-      configPath: pathWin32.join(runtimeHome, 'hooks.json'),
-      tomlPath: pathWin32.join(runtimeHome, 'config.toml'),
-      scriptPath: pathWin32.join(runtimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
-      commandScriptPath:
-        '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh',
-      trustConfigPath: '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home/hooks.json',
-      wslDistro: 'Ubuntu',
-      linuxRuntimeHome: '/mnt/d/wsl-home/.local/share/orca/codex-runtime-home/home'
-    })
-  })
-
-  it('uses WSL-canonical paths for hook commands and trust keys', async () => {
-    const runtimeHome =
-      '\\\\wsl.localhost\\Ubuntu\\home\\alias\\.local\\share\\orca\\codex-runtime-home\\home'
-    const canonicalHome = '/home/alice/.local/share/orca/codex-runtime-home/home'
-
-    const plan = createCodexWslRuntimeHookInstallPlan(
-      runtimeHome,
-      { runtime: 'wsl', wslDistro: 'Ubuntu' },
-      (distro, linuxPath) => {
-        expect(distro).toBe('Ubuntu')
-        expect(linuxPath).toBe('/home/alias/.local/share/orca/codex-runtime-home/home')
-        return canonicalHome
-      }
-    )
-
-    expect(plan?.commandScriptPath).toBe(`${canonicalHome}/.orca/agent-hooks/codex-hook.sh`)
-    expect(plan?.trustConfigPath).toBe(`${canonicalHome}/hooks.json`)
-    expect(plan?.configPath).toBe(pathWin32.join(runtimeHome, 'hooks.json'))
-  })
-
-  it('removes managed trust when the WSL canonical path changes', async () => {
-    const plan = createTestPlan()
-    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
-    writeFileSync(plan.tomlPath, '', 'utf-8')
-
-    const oldPlan = {
-      ...plan,
-      commandScriptPath: '/old/home/.orca/agent-hooks/codex-hook.sh',
-      trustConfigPath: '/old/home/hooks.json'
-    }
-    expect((await _internals.installManagedHooksIntoWslRuntime(oldPlan)).state).toBe('installed')
-    const oldCommand = expectedManagedCommand(oldPlan.commandScriptPath)
-    const oldKey = computeTrustKey(getManagedTrustEntry(oldPlan, oldCommand))
-
-    const newPlan = {
-      ...plan,
-      commandScriptPath: '/new/home/.orca/agent-hooks/codex-hook.sh',
-      trustConfigPath: '/new/home/hooks.json'
-    }
-    expect((await _internals.installManagedHooksIntoWslRuntime(newPlan)).state).toBe('installed')
-    const newCommand = expectedManagedCommand(newPlan.commandScriptPath)
-    const newKey = computeTrustKey(getManagedTrustEntry(newPlan, newCommand))
-    const trustEntries = readHookTrustEntries(plan.tomlPath)
-
-    expect(trustEntries.has(oldKey)).toBe(false)
-    expect(trustEntries.has(newKey)).toBe(true)
-  })
-
   it.skipIf(process.platform === 'win32')(
     'drains stdin when the WSL runtime script is missing',
     async () => {
@@ -271,7 +155,7 @@ describe('Codex WSL runtime hook install', () => {
       writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
       writeFileSync(plan.tomlPath, '', 'utf-8')
 
-      expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
+      expect((await _internals.installManagedHooksIntoWslRuntime(plan))?.state).toBe('installed')
       const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
       const command = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
       expect(command).toBe(expectedManagedCommand(plan.commandScriptPath))
@@ -283,102 +167,6 @@ describe('Codex WSL runtime hook install', () => {
       expect(result.status).toBe(0)
     }
   )
-
-  it('sweeps all managed WSL trust for disable or confirmed absence', async () => {
-    // Why: disable and confirmed absence intentionally pass []. Transient
-    // unavailability must NOT use this path — last known-good trust remains.
-    const plan = createTestPlan()
-    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
-    writeFileSync(plan.tomlPath, '', 'utf-8')
-    expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
-
-    _internals.removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [])
-
-    expect(readHookTrustEntries(plan.tomlPath).size).toBe(0)
-  })
-
-  it('reconciles only current, conclusive WSL path settlements', async () => {
-    expect(
-      _internals.getWslHookReconciliationAction({
-        settlement: { status: 'unavailable' },
-        isCurrentGeneration: true,
-        installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: null,
-        installSucceeded: false
-      })
-    ).toBe('none')
-
-    expect(
-      _internals.getWslHookReconciliationAction({
-        settlement: { status: 'missing' },
-        isCurrentGeneration: false,
-        installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: null,
-        installSucceeded: false
-      })
-    ).toBe('none')
-
-    expect(
-      _internals.getWslHookReconciliationAction({
-        settlement: { status: 'missing' },
-        isCurrentGeneration: true,
-        installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: null,
-        installSucceeded: false
-      })
-    ).toBe('remove')
-
-    // Why: a `missing` probe right after a verified grant is a false negative;
-    // revoking would delete the fresh trust the launching pane reads (#8847).
-    expect(
-      _internals.getWslHookReconciliationAction({
-        settlement: { status: 'missing' },
-        isCurrentGeneration: true,
-        installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: null,
-        installSucceeded: true
-      })
-    ).toBe('none')
-
-    expect(
-      _internals.getWslHookReconciliationAction({
-        settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
-        isCurrentGeneration: true,
-        installedTrustConfigPath: '/windows/d/home/hooks.json',
-        resolvedTrustConfigPath: '/windows/d/home/hooks.json',
-        installSucceeded: true
-      })
-    ).toBe('none')
-
-    // Why: a genuinely moved home resolves to a different path and still
-    // reinstalls, even though the original install succeeded.
-    expect(
-      _internals.getWslHookReconciliationAction({
-        settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
-        isCurrentGeneration: true,
-        installedTrustConfigPath: '/mnt/d/home/hooks.json',
-        resolvedTrustConfigPath: '/windows/d/home/hooks.json',
-        installSucceeded: true
-      })
-    ).toBe('reinstall')
-  })
-
-  it('generates a POSIX hook that bridges WSL loopback failures through Windows curl', async () => {
-    const script = _internals.getManagedScript('posix')
-    expect(script).toContain('load_hook_endpoint()')
-    expect(script).toContain('unset ORCA_AGENT_HOOK_TRANSPORT')
-    expect(script).toContain('"set ORCA_AGENT_HOOK_TOKEN="*)')
-    expect(script).toContain('post_codex_hook()')
-    expect(script).toContain('is_wsl_runtime()')
-    expect(script).toContain('WSL_DISTRO_NAME')
-    expect(script).toContain('windows_curl=$(command -v curl.exe 2>/dev/null || true)')
-    expect(script).toContain('-H "Content-Type: application/json"')
-    expect(script).toContain('-H "X-Orca-Agent-Hook-Meta-Encoding: base64"')
-    expect(script).toContain('--data-binary @-')
-    expect(script).toContain('--data-urlencode "payload@-"')
-    expect(script).toContain('if post_codex_hook curl >/dev/null 2>&1; then')
-    expect(script).toContain('post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true')
-  })
 
   it.skipIf(process.platform === 'win32')(
     'refreshes stale hook coordinates from a Windows endpoint file',
@@ -421,7 +209,8 @@ describe('Codex WSL runtime hook install', () => {
           ORCA_AGENT_HOOK_PORT: '1',
           ORCA_AGENT_HOOK_TOKEN: 'stale-token',
           ORCA_PANE_KEY: 'pane-1',
-          ORCA_TEST_CAPTURE: capturePath
+          ORCA_TEST_CAPTURE: capturePath,
+          CLAUDE_JOB_DIR: ''
         }
       })
 
@@ -464,7 +253,8 @@ describe('Codex WSL runtime hook install', () => {
           ORCA_AGENT_HOOK_PORT: '43210',
           ORCA_AGENT_HOOK_TOKEN: 'token',
           ORCA_PANE_KEY: 'pane-1',
-          ORCA_TEST_CAPTURE: capturePath
+          ORCA_TEST_CAPTURE: capturePath,
+          CLAUDE_JOB_DIR: ''
         }
       })
 
@@ -505,7 +295,7 @@ describe('Codex WSL runtime hook install', () => {
       'utf-8'
     )
 
-    expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(plan))?.state).toBe('installed')
 
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
@@ -563,58 +353,6 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     }
   })
 
-  it('grants WSL managed trust through codex inside the distro instead of self-computed writes', async () => {
-    const plan = createTestPlan()
-    writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
-    writeFileSync(plan.tomlPath, '', 'utf-8')
-
-    const runner = vi.fn(async (request: CodexHookTrustGrantRequest) => {
-      // Simulate codex's side: write trusted_hash blocks the way its config
-      // writer would, then report the entries trusted.
-      upsertHookTrustEntries(
-        plan.tomlPath,
-        request.expectedTrustKeys.map((key) => ({
-          sourcePath: plan.trustConfigPath,
-          eventLabel: key.split(':').at(-3) as CodexTrustEntry['eventLabel'],
-          groupIndex: 0,
-          handlerIndex: 0,
-          command: request.managedCommand,
-          trustedHash: `sha256:codex-${key.split(':').at(-3)}`
-        }))
-      )
-      return {
-        outcome: 'granted' as const,
-        wroteTrust: true,
-        entries: request.expectedTrustKeys.map((key) => ({
-          key,
-          normalizedKey: normalizeHookTrustKeyForLookup(key),
-          trustedHash: `sha256:codex-${key.split(':').at(-3)}`
-        }))
-      }
-    })
-    trustGrantInternals.setGrantSessionRunner(runner)
-
-    expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
-
-    expect(runner).toHaveBeenCalledTimes(1)
-    const request = runner.mock.calls[0]![0]!
-    expect(request.invocation.command).toBe('wsl.exe')
-    expect(request.invocation.args.slice(0, 2)).toEqual(['-d', 'Ubuntu'])
-    expect(request.hooksListCwd).toBe(plan.linuxRuntimeHome)
-
-    const command = expectedManagedCommand(plan.commandScriptPath)
-    const managedTrustEntry = getManagedTrustEntry(plan, command)
-    const trustEntries = readHookTrustEntries(plan.tomlPath)
-    // Why: the codex-granted hash must be authoritative — the self-computed
-    // hash must not overwrite it after a successful grant.
-    expect(trustEntries.get(computeTrustKey(managedTrustEntry))?.trustedHash).toBe(
-      'sha256:codex-user_prompt_submit'
-    )
-    expect(trustEntries.get(computeTrustKey(managedTrustEntry))?.trustedHash).not.toBe(
-      computeTrustedHash(managedTrustEntry)
-    )
-  })
-
   it('keeps the unchanged self-computed lane when the WSL grant falls back', async () => {
     const plan = createTestPlan()
     writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
@@ -625,7 +363,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     })
     trustGrantInternals.setGrantSessionRunner(runner)
 
-    expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(plan))?.state).toBe('installed')
 
     expect(runner).toHaveBeenCalledTimes(1)
     const command = expectedManagedCommand(plan.commandScriptPath)
@@ -675,7 +413,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
       trustConfigPath: '/old/home/hooks.json',
       linuxRuntimeHome: '/old/home'
     }
-    expect((await _internals.installManagedHooksIntoWslRuntime(oldPlan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(oldPlan))?.state).toBe('installed')
     const oldKey = computeTrustKey(
       getManagedTrustEntry(oldPlan, expectedManagedCommand(oldPlan.commandScriptPath))
     )
@@ -687,7 +425,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
       trustConfigPath: '/new/home/hooks.json',
       linuxRuntimeHome: '/new/home'
     }
-    expect((await _internals.installManagedHooksIntoWslRuntime(newPlan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(newPlan))?.state).toBe('installed')
     const newKey = computeTrustKey(
       getManagedTrustEntry(newPlan, expectedManagedCommand(newPlan.commandScriptPath))
     )

@@ -11,8 +11,37 @@ export type RateLimitWindow = {
 
 export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
 
+type ExtraUsageBalanceBase = {
+  enabled: boolean
+  disabledReason: string | null
+  resetsAt: number | null
+}
+
+type CurrencyExtraUsageBalance = ExtraUsageBalanceBase & {
+  unit: 'currency'
+  /** Null when the current balance is unavailable. */
+  balance: number | null
+  currencyCode: string
+  spent: number | null
+  spendLimit: number | null
+  spentPercent: number | null
+}
+
+type CreditExtraUsageBalance = ExtraUsageBalanceBase & {
+  unit: 'credits'
+  balance: number
+  unlimited: boolean
+}
+
+// Discriminate currency/credit balances so consumers cannot invent inappropriate currency or spend-limit fields.
+export type ExtraUsageBalance = CurrencyExtraUsageBalance | CreditExtraUsageBalance
+
 export type RateLimitBucket = RateLimitWindow & {
   name: string
+  /** Model-group name the pool belongs to (Antigravity), when the provider groups pools. */
+  group?: string
+  /** Provider's own window name for the pool, e.g. agy's "Weekly Limit Remaining". */
+  windowName?: string
 }
 
 export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
@@ -35,16 +64,25 @@ export type UsageRateLimitFailureKind =
   | 'usage-unavailable'
   | 'unknown'
 
+/** Renderer-only: why a provider set up on this device shows no usage under the owning host. */
+export type OwnerNotSetUpPlaceholder =
+  | { kind: 'not-configured'; ownerLabel: string; signInSavedHereOnly: boolean }
+  /** The host reports Claude on API-key billing and with no login alike, so it cannot say which. */
+  | { kind: 'claude-unknown'; ownerLabel: string }
+
 export type UsageRateLimitMetadata = {
   source?: UsageRateLimitSource
   attemptedSources?: UsageRateLimitSource[]
   failureKind?: UsageRateLimitFailureKind
   credentialSource?: string
   authProvenance?: string
-  deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
   /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
   retryAtMs?: number
+  /** Renderer-only: the remote host that owns this usage cannot vouch for it. Hosts never set it. */
+  unverifiableOwner?: boolean
+  /** Renderer-only: set up on this device but not on the remote host that owns usage. Hosts never set it. */
+  ownerNotSetUp?: OwnerNotSetUpPlaceholder
 }
 
 export type ProviderRateLimits = {
@@ -67,6 +105,8 @@ export type ProviderRateLimits = {
   fableWeekly?: RateLimitWindow | null
   /** 30-day monthly window (OpenCode Go, Grok unified billing, Cursor plan pools), null if not available. */
   monthly?: RateLimitWindow | null
+  /** Overage / pay-as-you-go balance the plan spends into once its windows cap. */
+  extraUsage?: ExtraUsageBalance | null
   /** Named per-model buckets (Gemini models, Cursor plan pools). */
   buckets?: RateLimitBucket[]
   /** Available earned Codex rate-limit reset credits, if reported. */
@@ -141,35 +181,18 @@ export type RateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
-  /**
-   * True when a MiniMax session cookie is persisted on disk. The cookie lives
-   * outside GlobalSettings, so this flag is the durable signal that the
-   * status bar uses to keep the MiniMax provider visible across reloads and
-   * between snapshot refreshes.
-   */
+  /** Cookie is stored outside GlobalSettings; this durable flag keeps MiniMax visible across reloads/snapshot refreshes. */
   minimaxCookieConfigured: boolean
-  /**
-   * True when a MiniMax API key is persisted on disk. The key value itself
-   * never leaves main, so the renderer only sees this boolean. The status bar
-   * ORs it with the cookie flag to decide whether to keep the MiniMax bar
-   * visible across reloads.
-   */
+  /** Expose API-key presence only; main retains the secret. Combined with cookie presence, keeps MiniMax visible across reloads. */
   minimaxApiKeyConfigured: boolean
-  /**
-   * True when main resolved an OpenCode Go API key (Orca settings,
-   * OPENCODE_API_KEY, or what OpenCode stored on /connect). The key itself
-   * never leaves main; the status bar ORs this with the session cookie to
-   * decide whether the OpenCode Go bar stays visible.
-   */
+  /** Main resolves settings/env/OpenCode-connect keys but exposes only presence; combine with session cookie for persistent bar visibility. */
   opencodeGoApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
-  /**
-   * True when main finds a Cursor session on this machine: the macOS Keychain
-   * item cursor-agent writes, its legacy auth.json, or the Cursor IDE's own
-   * stored login. The token itself never leaves main.
-   */
+  /** Presence of Cursor Keychain/legacy auth/IDE login only; tokens never leave main. */
   cursorAuthConfigured: boolean
+  /** Expose GLM Coding Plan key presence only; retain secret in main and keep ZCode visible across reloads/refreshes. */
+  zcodePlanApiKeyConfigured?: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

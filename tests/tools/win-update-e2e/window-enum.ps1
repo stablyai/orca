@@ -1,22 +1,10 @@
 <#
-  window-enum.ps1 — enumerate visible top-level windows with owner attribution.
-
-  Dot-source this file, then call Get-VisibleTopLevelWindows. It returns objects
-  { handle, pid, processName, title } for every visible, non-cloaked top-level
-  window that has a title.
-
-  WHY window enumeration (and never conhost command-line heuristics): the July
-  2026 post-mortem proved that (a) conhost flag interpretation inverts depending
-  on the parent's console state, and (b) MainWindowHandle is 0 for
-  Windows-Terminal-hosted consoles, so handle-based "is it visible" checks read
-  a visibly-flashing window as hidden. The only sound signal is a real visible
-  top-level window, attributed to an owner process and (for our own children) a
-  canary title. This function is the single instrument every probe shares.
+  Dot-source Get-VisibleTopLevelWindows: { handle, pid, processName, title } for titled, visible, non-cloaked windows.
+  July 2026 evidence: conhost flags invert with parent console state and Windows Terminal leaves
+  MainWindowHandle=0 despite visible consoles. Attribute real top-level windows by process/canary title.
 #>
 
-# Compile the P/Invoke enumerator once. Guard on the type already existing so
-# repeated dot-sourcing inside the watch loop does not re-run Add-Type (which
-# throws on a duplicate type).
+# Compile once: repeated dot-sourcing must not duplicate Add-Type.
 if (-not ('OrcaWinEnum.Native' -as [type])) {
   Add-Type -TypeDefinition @'
 using System;
@@ -72,9 +60,7 @@ namespace OrcaWinEnum {
 }
 
 function Get-VisibleTopLevelWindows {
-  # @() forces an array even when Enumerate() returns a single row — the PS 5.1
-  # single-item unwrap pitfall that caused a production incident when a count
-  # of "1" silently became a scalar.
+  # PS 5.1 unwraps one-row results; @() preserves array/count semantics.
   $rows = @([OrcaWinEnum.Native]::Enumerate())
 
   # Cache pid -> process name so we resolve each owning process at most once.
@@ -106,16 +92,11 @@ function Get-VisibleTopLevelWindows {
     })
   }
 
-  # Return the raw array; callers wrap with @() to normalize the PS 5.1
-  # single-item unwrap. (Do not use the comma operator here — combined with a
-  # caller's @() it produces a nested array.)
+  # Callers normalize with @(); return raw array to avoid comma-created nested arrays.
   return $result.ToArray()
 }
 
-# When run directly (not dot-sourced) emit the snapshot as JSON so this file
-# doubles as the baseline-snapshot tool. Wrapped in an object with a `windows`
-# array; the JS side normalizes single-element results because PS 5.1
-# ConvertTo-Json unwraps a one-element array to a bare object.
+# Direct invocation emits { windows: [...] } for baseline snapshots; JS normalizes PS 5.1’s single-result JSON unwrap.
 if ($MyInvocation.InvocationName -ne '.') {
   [pscustomobject]@{ windows = @(Get-VisibleTopLevelWindows) } |
     ConvertTo-Json -Depth 4 -Compress

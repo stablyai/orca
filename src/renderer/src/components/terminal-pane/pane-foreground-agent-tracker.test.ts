@@ -56,8 +56,7 @@ describe('createPaneForegroundAgentTracker', () => {
     vi.useRealTimers()
   })
 
-  // Why: detach/remount emits no PTY exit, so the store entry outlives this tracker.
-  // A capability retained pending the disposed read would latch there forever.
+  // Detach emits no exit and leaves the store entry alive; disposal must release any capability retained for the pending read.
   it('releases a retained capability when disposed mid-read', async () => {
     readForegroundProcess.mockResolvedValue('pi')
     const tracker = makeTracker()
@@ -110,8 +109,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(tracker.hasReadInFlight()).toBe(true)
   })
 
-  // Why: an abandoned read publishes nothing, so a capability retained pending its
-  // answer would otherwise be held forever with no read left to release it.
+  // Abandoned reads publish nothing, so they must release capabilities with no successor to settle them.
   it('settles the visible confirmation when a pty rebind abandons its read', async () => {
     let resolveRead: (value: string | null) => void = () => {}
     readForegroundProcess.mockImplementation(
@@ -146,9 +144,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
   })
 
-  // Why: callers gate byte authority on "is a read coming?" — onVisiblePtyBound
-  // returning false because a command read already owns the pane must not be
-  // mistaken for "nothing will confirm this pane".
+  // A command read already in flight still promises confirmation when onVisiblePtyBound schedules nothing.
   it('reports a read in flight when a command-finished read owns the pane', async () => {
     readForegroundProcess.mockResolvedValue('claude')
     const tracker = makeTracker()
@@ -165,8 +161,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(tracker.hasReadInFlight()).toBe(true)
   })
 
-  // Why: this branch publishes nothing, so a visible confirmation it replaced
-  // would otherwise never be settled by anyone.
+  // A replacement read that publishes nothing must still settle the visible confirmation it cancelled.
   it('settles the visible confirmation when a command-finished read still sees the agent', async () => {
     readForegroundProcess.mockResolvedValue('claude')
     const tracker = makeTracker()
@@ -364,8 +359,7 @@ describe('createPaneForegroundAgentTracker', () => {
   })
 
   it('re-reads on a bounded ladder while the read still sees an interpreter wrapper', async () => {
-    // Why: daemon shell/helper→agent ancestry resolution has been observed to
-    // take >1.5s for real node-wrapped CLIs, so the ladder gets two re-reads.
+    // Two retries cover observed node-wrapper ancestry enrichment beyond 1.5s.
     readForegroundProcess
       .mockResolvedValueOnce('node')
       .mockResolvedValueOnce('node')
@@ -403,9 +397,7 @@ describe('createPaneForegroundAgentTracker', () => {
   })
 
   it('does not treat a nested shell seen mid-command as prompt proof', async () => {
-    // Why: 133;D cancels pending reads, so a read that still runs means the
-    // command is live — a shell foreground here is a nested sh/bash, and a
-    // shell-foreground mark would suppress live title identity in the pane.
+    // 133;D cancels pending reads; a surviving command read’s sh/bash is nested and must not suppress live title identity.
     readForegroundProcess.mockResolvedValue('sh')
     const tracker = makeTracker()
 
@@ -478,8 +470,7 @@ describe('createPaneForegroundAgentTracker', () => {
     tracker.onCommandFinished()
     await flushSettleRead(COMMAND_SETTLE_MS)
 
-    // Why: with no command read in flight the first D takes the no-RPC path,
-    // so its duplicate has nothing to re-confirm and stays RPC-free too.
+    // Without a pending read, repeated D markers stay on the no-RPC path.
     expect(readForegroundProcess).not.toHaveBeenCalled()
     expect(publish).toHaveBeenCalledTimes(2)
     expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: true })
@@ -624,8 +615,7 @@ describe('createPaneForegroundAgentTracker', () => {
     const tracker = makeTracker(() => knownIdentity)
 
     tracker.onCommandFinished()
-    // Why: pty-connection clears launch metadata in the same OSC 133;D
-    // callback, before this tracker's delayed foreground read starts.
+    // Launch metadata is cleared in the same 133;D callback, before the delayed confirming read.
     knownIdentity = false
     await flushSettleRead(COMMAND_SETTLE_MS)
     expect(publish).toHaveBeenCalledExactlyOnceWith({ agent: null, shellForeground: true })
@@ -760,9 +750,12 @@ describe('createPaneForegroundAgentTracker', () => {
       onCommandFinished: () => tracker.onCommandFinished()
     })
 
-    lifecycle.handlePtyData("printf '\\033]133;A\\007\\033]777;agent=codex\\007\\033]133;D;0\\007'")
+    lifecycle.handlePtyData('\x1b]133;C\x07\x1b]777;agent=codex\x07')
     await flushSettleRead(COMMAND_SETTLE_MS)
 
+    expect(remoteRead).toHaveBeenCalledExactlyOnceWith('ssh:conn-1@@pty-9', {
+      expectedIncarnationId: 'inc-remote'
+    })
     expect(publish).not.toHaveBeenCalledWith(
       expect.objectContaining({ agent: 'codex', shellForeground: false })
     )

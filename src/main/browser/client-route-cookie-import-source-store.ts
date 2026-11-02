@@ -3,16 +3,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { BrowserSessionProfileSource } from '../../shared/browser-workspace-types'
 
-/**
- * Which desktop browser a client-hosted route partition's cookies came from,
- * keyed per (environment × session profile). The server's profile records
- * cannot carry this — the import never touches the server, and each desktop
- * holds its own jar — so the client persists it and the settings view overlays
- * it onto the server's profile list.
- */
+/** Keep import badges on this desktop because its route jars are absent from server profile records. */
 const FILE_NAME = 'client-route-cookie-import-sources.json'
-// Why: one entry per (paired server × profile) the user imported into — a cap this
-// generous only guards against pathological growth, evicting oldest imports first.
 const MAX_ENTRIES = 128
 
 type StoredSources = Record<string, BrowserSessionProfileSource>
@@ -58,7 +50,7 @@ function persist(sources: StoredSources): void {
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, JSON.stringify(sources))
   } catch {
-    // Why: the badge is display-only — never let its persistence fail an import.
+    // A display-only badge must not make cookie import fail.
   }
 }
 
@@ -81,7 +73,6 @@ export function recordClientRouteCookieImportSource(args: {
   persist(next)
 }
 
-/** Sources for one environment's profiles, keyed by profile id. */
 export function clientRouteCookieImportSources(
   environmentId: string
 ): Record<string, BrowserSessionProfileSource> {

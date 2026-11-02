@@ -19,8 +19,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-// The one line guarding the ssh-execution-boundary concern: ownership must ride the return leg,
-// or Back moves a remote tab's browsing onto this desktop.
+// Carry ownership back or Back would move remote browsing onto this desktop.
 describe('returnAcrossBrowserPageConversion', () => {
   it('passes the recorded runtime ownership through to the rebuilt web page', () => {
     returnAcrossBrowserPageConversion('page-1', {

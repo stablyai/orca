@@ -1,7 +1,4 @@
-// Why: the relay and the push gateway both authenticate this host with the same
-// sealed-box challenge shape (the host keypair is X25519, so it cannot sign).
-// Only the domain strings and the transcript fields differ, so the envelope
-// handling lives here and each protocol owns its own field validation.
+// X25519 host keys cannot sign; relay/push share sealed challenges but own domain/field validation.
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import nacl from 'tweetnacl'
 
@@ -77,18 +74,14 @@ export type HostChallengeEnvelope = {
   nonce: Uint8Array
 }
 
-/**
- * Opens the sealed challenge and splits out the transcript and the 32-byte secret.
- * Returns null for any malformed or undecryptable challenge; the caller still has
- * to validate the transcript's fields before answering.
- */
+/** Reject malformed/undecryptable challenges; callers must validate transcript fields before answering. */
 export function openHostChallengeEnvelope(input: {
   peerEphemeralPublicKeyB64: string
   nonceB64: string
   ciphertextB64: string
   hostSecretKey: Uint8Array
   plaintextDomain: string
-  /** Reports the failing check by name only; never receives field values. */
+  /** Diagnostic reasons only; never expose field values. */
   onInvalid?: (reason: string) => void
 }): HostChallengeEnvelope | null {
   const peerKey = decodeCanonicalBase64(input.peerEphemeralPublicKeyB64, 32)

@@ -15,13 +15,16 @@ describe('parseKeybinding memoization', () => {
     expect(parseKeybinding('Mod+P')?.key).toBe('P')
   })
 
-  it('stays bounded and correct when fed far more strings than the cache holds', () => {
-    for (let index = 0; index < 2000; index++) {
-      expect(parseKeybinding(`Mod+Alt+F${(index % 24) + 1}`)?.key).toBe(`F${(index % 24) + 1}`)
+  it('evicts cached entries after many distinct strings and still parses correctly', () => {
+    const before = parseKeybinding('Mod+Shift+K')
+    expect(before?.key).toBe('K')
+    for (let index = 0; index < 600; index += 1) {
+      expect(parseKeybinding(`invalid-cache-entry-${index}`)).toBeNull()
     }
-    // A cleared cache must still return the right answer, not a stale neighbour.
-    expect(parseKeybinding('Mod+Shift+K')?.key).toBe('K')
-    expect(parseKeybinding('DoubleTap+Shift')?.doubleTapModifier).toBe('Shift')
+    const after = parseKeybinding('Mod+Shift+K')
+    expect(after).not.toBe(before)
+    expect(after).toEqual(before)
+    expect(parseKeybinding('DoubleTap+Ctrl')?.doubleTapModifier).toBe('Ctrl')
   })
 
   it('maps token spellings through the table and blocks prototype keys', () => {

@@ -5,11 +5,12 @@ import type {
   WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 import { startGitCommonPolling } from './worktree-git-common-polling'
+import { createSingleFlight } from './single-flight-promise'
 
-// The native stream is still the fast path. A scheduled 15-tick reconciliation
-// bounds silent watcher loss at the existing 30-second backstop without joining
-// the per-repo 2-second timer fleet.
+// Reconcile silent native losses on the shared 15-tick backstop without per-repo two-second timers.
 const NARROW_WATCH_RECONCILIATION_TICKS = 15
+// Gate each reconciliation by directory/in-place signatures; sweep every leaf about every five minutes.
+const RECONCILIATION_FULL_SCAN_EVERY_TICKS = 10
 
 type GitCommonWatchReconciliationOptions = {
   commonDirPath: string
@@ -38,6 +39,8 @@ export function createGitCommonWatchReconciliation({
 }: GitCommonWatchReconciliationOptions): GitCommonWatchReconciliation {
   const worktreesDir = join(commonDirPath, 'worktrees')
   let subscription: WorktreeBaseSubscription | null = null
+  const starting = createSingleFlight()
+  let generation = 0
   const visibilityListeners = new Set<() => void>()
   const pollVisibility: WorktreePollerWindowVisibility = {
     isWindowVisible: visibility.isWindowVisible,
@@ -49,58 +52,71 @@ export function createGitCommonWatchReconciliation({
     }
   }
 
-  return {
-    ensureStarted: async () => {
-      if (subscription || !canStart()) {
-        return
-      }
-      const reconciliation = await startGitCommonPolling(
-        commonDirPath,
-        (events) => {
-          const rootWasReplaced =
-            events.some((event) => event.type === 'delete' && event.path === worktreesDir) &&
-            events.some((event) => event.type === 'create' && event.path === worktreesDir)
-          // Why: this backstop lags the native stream by up to 15 ticks, so it
-          // routinely reports entry creates the stream already delivered. Only
-          // treat them as a replacement when the root itself was also recreated
-          // — otherwise every ordinary `git worktree add` would tear down a
-          // healthy stream and open a deaf window while it resubscribes.
-          const rootRecreated = events.some(
-            (event) => event.type === 'create' && event.path === worktreesDir
-          )
-          const coarseRootReplacement =
-            rootRecreated &&
-            events.some(
-              (event) =>
-                event.type === 'create' &&
-                event.path !== worktreesDir &&
-                dirname(event.path) === worktreesDir
-            )
-          if (rootWasReplaced || coarseRootReplacement) {
-            onRootReplacement()
-          }
-          onEvents(
-            coarseRootReplacement
-              ? events.map((event) =>
-                  event.type === 'update' && event.path === worktreesDir
-                    ? { ...event, type: 'create' }
-                    : event
-                )
-              : events
-          )
-        },
-        pollIntervalMs * NARROW_WATCH_RECONCILIATION_TICKS,
-        pollVisibility,
-        undefined,
-        false,
-        () => [],
-        { forceFullScanEveryTick: true }
+  const handleEvents = (events: WorktreeBasePollEvent[]): void => {
+    const rootDeleted = events.some(
+      (event) => event.type === 'delete' && event.path === worktreesDir
+    )
+    // Ordinary child creates repeat native events; delayed root loss may conservatively rearm a fresh stream.
+    const rootRecreated = events.some(
+      (event) => event.type === 'create' && event.path === worktreesDir
+    )
+    const coarseRootReplacement =
+      rootRecreated &&
+      events.some(
+        (event) =>
+          event.type === 'create' &&
+          event.path !== worktreesDir &&
+          dirname(event.path) === worktreesDir
       )
-      if (!shouldKeep()) {
-        await reconciliation.unsubscribe()
-      } else {
-        subscription = reconciliation
+    if (rootDeleted || coarseRootReplacement) {
+      onRootReplacement()
+    }
+    onEvents(
+      coarseRootReplacement
+        ? events.map((event) =>
+            event.type === 'update' && event.path === worktreesDir
+              ? { ...event, type: 'create' }
+              : event
+          )
+        : events
+    )
+  }
+
+  return {
+    ensureStarted: () => {
+      if (subscription || !canStart()) {
+        return Promise.resolve()
       }
+      return starting.run(async () => {
+        const startGeneration = generation
+        const shouldKeepBaseline = (): boolean => startGeneration === generation && shouldKeep()
+        const reconciliation = await startGitCommonPolling(
+          commonDirPath,
+          handleEvents,
+          pollIntervalMs * NARROW_WATCH_RECONCILIATION_TICKS,
+          pollVisibility,
+          undefined,
+          false,
+          () => [],
+          {
+            reconciliationFullScanEveryTicks: RECONCILIATION_FULL_SCAN_EVERY_TICKS,
+            onRootMissing: (initial) => {
+              if (shouldKeepBaseline()) {
+                if (initial) {
+                  handleEvents([{ type: 'delete', path: worktreesDir }])
+                } else {
+                  onRootReplacement()
+                }
+              }
+            }
+          }
+        )
+        if (!shouldKeepBaseline()) {
+          await reconciliation.unsubscribe()
+        } else {
+          subscription = reconciliation
+        }
+      })
     },
     notifyWindowBecameVisible: () => {
       for (const listener of visibilityListeners) {
@@ -108,6 +124,8 @@ export function createGitCommonWatchReconciliation({
       }
     },
     unsubscribe: async () => {
+      generation++
+      await starting.pending()?.catch(() => {})
       const current = subscription
       subscription = null
       await current?.unsubscribe()

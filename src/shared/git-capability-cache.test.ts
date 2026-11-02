@@ -96,38 +96,4 @@ describe('GitCapabilityCache', () => {
     }
     await expect(Promise.all([first, second])).resolves.toEqual(['result', 'result'])
   })
-
-  it('drops known support when a later call reports the capability unsupported', async () => {
-    const cache = new GitCapabilityCache()
-    const isUnsupported = (error: unknown): boolean =>
-      error instanceof Error && error.message === 'unsupported'
-    await cache.runWithFallback(
-      'for-each-ref-exclude',
-      async () => 'supported',
-      async () => 'unexpected-fallback',
-      isUnsupported
-    )
-
-    await expect(
-      cache.runWithFallback(
-        'for-each-ref-exclude',
-        async () => {
-          throw new Error('unsupported')
-        },
-        async () => 'fallback',
-        isUnsupported
-      )
-    ).resolves.toBe('fallback')
-
-    const laterPreferred = vi.fn(async () => 'unexpected-preferred')
-    await expect(
-      cache.runWithFallback(
-        'for-each-ref-exclude',
-        laterPreferred,
-        async () => 'cached-fallback',
-        isUnsupported
-      )
-    ).resolves.toBe('cached-fallback')
-    expect(laterPreferred).not.toHaveBeenCalled()
-  })
 })

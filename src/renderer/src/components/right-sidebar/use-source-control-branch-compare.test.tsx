@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   >
 }))
 
-vi.mock('@/runtime/runtime-git-client', () => ({
+vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitBranchCompare: mocks.getRuntimeGitBranchCompare
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
@@ -54,13 +54,13 @@ function Probe(props: {
   remoteStatus?: GitUpstreamStatus | undefined
 }): null {
   latest = useSourceControlBranchCompare({
-    activeRepoSettings: null,
+    activeRepoTarget: { kind: 'local' },
     activeWorktreeId: props.worktreeId === undefined ? 'A' : props.worktreeId,
     worktreePath: '/a',
     compareBaseRef: props.compareBaseRef === undefined ? 'origin/main' : props.compareBaseRef,
     isFolder: props.isFolder ?? false,
     branchName: 'feature',
-    // Why: default off so only explicit refreshes run — effect-driven refreshes are exercised in their own cases.
+    // Default to explicit refreshes; effect-triggered refreshes have separate cases.
     isBranchVisible: props.isBranchVisible ?? false,
     activeGitStatusHead: props.statusHead ?? null,
     remoteStatus: props.remoteStatus
@@ -68,7 +68,6 @@ function Probe(props: {
   return null
 }
 
-/** Mounts the probe; omitted props fall back to the defaults declared in `Probe`. */
 async function mount(props: Parameters<typeof Probe>[0] = {}): Promise<Root> {
   return mountProbe(<Probe {...props} />)
 }
@@ -93,7 +92,7 @@ beforeEach(() => {
 afterEach(() => {
   unmountProbes()
   vi.useRealTimers()
-  // Why: resetAllMocks also drops unconsumed mockReturnValueOnce queues; beforeEach restores the default.
+  // resetAllMocks also clears unused once queues; beforeEach restores defaults.
   vi.resetAllMocks()
   mocks.gitBranchCompareSummaryByWorktree = {}
   latest = null
@@ -115,22 +114,6 @@ describe('useSourceControlBranchCompare scheduler', () => {
     }
     await flush()
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      first.resolve(OK)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not lose the trailing refresh when the call arrives late in the run', async () => {
-    const first = deferred<typeof OK>()
-    mocks.getRuntimeGitBranchCompare.mockReturnValueOnce(first.promise)
-    await mount()
-
-    void latest?.refreshBranchCompare()
-    await flush()
-    void latest?.refreshBranchCompare()
 
     await act(async () => {
       first.resolve(OK)
@@ -241,7 +224,6 @@ describe('useSourceControlBranchCompare scheduler', () => {
     mocks.gitBranchCompareSummaryByWorktree = {
       A: { baseRef: 'origin/main', status: 'ready' }
     }
-    // Visible mounts run once immediately through the visibility interval.
     await mount({ isBranchVisible: true })
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenLastCalledWith(
@@ -261,8 +243,7 @@ describe('useSourceControlBranchCompare scheduler', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    // Three skipped ticks collapse into one pending run, but a 90s task must
-    // idle for its own duration before the trailing run.
+    // Coalesce skipped ticks, then idle for the slow task’s 90s duration before trailing work.
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(89_999)

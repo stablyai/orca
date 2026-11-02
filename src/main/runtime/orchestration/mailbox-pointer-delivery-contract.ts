@@ -1,7 +1,7 @@
 import type { OrchestrationDb } from './db'
 import type { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
-import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mailbox-owner'
+import type { OrchestrationMailboxOwner, OrchestrationMailboxTerminal } from './mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 import type { OrchestrationCliCommand } from './cli-command'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
@@ -19,19 +19,13 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   mailboxOwner: OrchestrationMailboxOwner
   deliveryTarget: OrchestrationMailboxDeliveryTarget
   getDb: () => OrchestrationDb | null
-  getLeaf: (leafKey: string) => OrchestrationMailboxLeaf | undefined
-  getLeafKey: (tabId: string, leafId: string) => string
-  getLiveLeafForHandle: (handle: string) => OrchestrationMailboxLeaf
-  /** Whether the pane is settled enough to type the pointer plus Enter into it. */
-  isAgentSettledForDelivery: (leaf: OrchestrationMailboxLeaf) => boolean
+  getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
+  /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
+  isAgentSettledForDelivery: (ptyId: string) => boolean
+  isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
-  getTabTitle: (tabId: string) => string | null | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
-  getTerminalHandleForLeafKey: (leafKey: string) => string | undefined
-  resolveSubmitTarget: (
-    leaf: OrchestrationMailboxLeaf,
-    ptyId: string
-  ) => OrchestrationMailboxPointerSubmitTarget | null
+  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>

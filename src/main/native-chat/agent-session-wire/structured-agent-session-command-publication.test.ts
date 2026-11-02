@@ -1,54 +1,21 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
+
 import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
-import { createStructuredAgentSessionEventCoalescer } from '../../../shared/structured-agent-session-coalescer'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
+import { createStructuredAgentSessionEventCoalescer } from '../../../shared/agent-session/structured-agent-session-coalescer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import {
-  adapterFor,
-  fakeClaude,
-  identityFor,
-  PROVIDER_SESSION_ID
-} from '../../claude/claude-structured-session-test-support'
-
-it('publishes idle provider reloads only when the actual command catalog changes', async () => {
-  const claude = fakeClaude()
-  const adapter = adapterFor(claude)
-  const publish = vi.fn()
-  await adapter.acquire({
-    identity: identityFor(),
-    fence: 7,
-    spawnToken: 'commands',
-    events: {
-      appendItem: vi.fn(),
-      appendTombstone: vi.fn(),
-      publish
-    }
-  })
-  publish.mockClear()
-  const message = {
-    type: 'system',
-    subtype: 'commands_changed',
-    session_id: PROVIDER_SESSION_ID,
-    commands: [{ name: 'new-skill', description: '', argumentHint: '' }]
-  }
-  claude.connections[0].handlers.onMessage?.(message)
-  expect(adapter.readCommands(identityFor().sessionId)).toEqual([
-    { name: 'new-skill', kind: 'command', kindUnspecified: true }
-  ])
-  expect(publish).toHaveBeenCalledTimes(1)
-  claude.connections[0].handlers.onMessage?.(message)
-  expect(publish).toHaveBeenCalledTimes(1)
-})
+import { identityFor } from '../../claude/structured/claude-structured-session-test-support'
 
 it('delivers catalog changes through existing frames without resending them on ordinary output', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-command-publication-'))
@@ -65,7 +32,15 @@ it('delivers catalog changes through existing frames without resending them on o
     let commands: AgentSessionSlashCommand[] | undefined = [
       { name: 'loaded', kind: 'command', kindUnspecified: true }
     ]
-    const subscribers = new AgentSessionSubscribers({ readCommands: () => commands })
+    let roster: AgentSessionBackgroundTaskState | null = null
+    const subscribers = new AgentSessionSubscribers({
+      readCommands: () => commands,
+      readBackgroundTasks: () => roster
+    })
+    const republishRoster = (): void => {
+      roster = roster ? null : { state: 'monitoring' }
+      subscribers.republishBackgroundTasks(sessionId, 7)
+    }
     const close = subscribers.open({
       id: 'one',
       sessionId,
@@ -75,13 +50,13 @@ it('delivers catalog changes through existing frames without resending them on o
     })
     expect(state.commands).toEqual(commands)
     for (let i = 0; i < 25; i++) {
-      subscribers.backgroundTasks(sessionId, null, 7)
+      republishRoster()
     }
     coalescer.flush()
     expect(events.filter((event) => 'commands' in event)).toHaveLength(1)
     commands = []
     subscribers.publish(sessionId, journal)
-    subscribers.backgroundTasks(sessionId, null, 7)
+    republishRoster()
     coalescer.flush()
     expect(state.commands).toEqual([])
     expect(events.filter((event) => 'commands' in event)).toHaveLength(2)
@@ -101,7 +76,7 @@ it('delivers catalog changes through existing frames without resending them on o
     })
     coalescer.flush()
     expect(state.commands).toEqual(commands)
-    subscribers.reset(sessionId, journal, 'epoch_changed', 8)
+    subscribers.snapshot(sessionId, journal, 8)
     expect(state.commands).toEqual(commands)
     commands = undefined
     subscribers.open({

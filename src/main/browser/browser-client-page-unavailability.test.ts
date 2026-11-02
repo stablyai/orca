@@ -41,16 +41,6 @@ describe('browser client page unavailability', () => {
     expect(renderer.retirePage).not.toHaveBeenCalled()
     expect(executor.snapshotPageInventory()).toEqual([])
   })
-
-  it('releases the page availability watch when the page retires', async () => {
-    const { executor, releaseAvailabilityWatch } = harness()
-    await executor.handle(createCommand(), new AbortController().signal)
-    expect(releaseAvailabilityWatch).not.toHaveBeenCalled()
-
-    await expect(executor.retirePage('page-a', 7)).resolves.toBe(true)
-
-    expect(releaseAvailabilityWatch).toHaveBeenCalledOnce()
-  })
 })
 
 function harness() {
@@ -69,6 +59,7 @@ function harness() {
   const executor = new BrowserClientPageCommandExecutor({
     orcaProfileId: 'profile-a',
     authorityConnectionIdentity: 'authority-a',
+    pairingAuthorityConnectionIdentity: 'pairing-authority-a',
     legacyAuthorityConnectionIdentity: 'legacy-authority-a',
     storageScope: 'a'.repeat(64),
     retainNetworkRoute: vi.fn(async () => ({

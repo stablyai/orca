@@ -1,9 +1,7 @@
 import { MAX_PANE_KEY_LEN } from './agent-hook-listener/listener-limits'
 import { parseLegacyNumericPaneKey, parsePaneKey } from './stable-pane-id'
 
-// Why: remint mints an opaque `$$<base32>:L$$` token (same secret-class wrapping as
-// launch tokens). The hook pipeline only accepts `${tabId}:${leafUuid}`, so this
-// exact form is the physical key we may alias — never an arbitrary string.
+// Only exact opaque remint tokens ($$<base32>:L$$) may alias physical pane keys; hook ingress expects tabId:leafUuid.
 const OPAQUE_REMINTED_PANE_KEY_RE = /^\$\$[A-Za-z2-7]{8,64}:L\$\$$/
 
 export function isOpaqueRemintedPaneKey(value: string): boolean {

@@ -1,9 +1,12 @@
 const DOM_DELTA_PIXEL = 0
 const DOM_DELTA_LINE = 1
 const DOM_DELTA_PAGE = 2
-const DISCRETE_PIXEL_WHEEL_DELTA_MIN = 50
 const LEGACY_MOUSE_WHEEL_DELTA_MIN = 100
 const LEGACY_MOUSE_WHEEL_DELTA_UNIT = 120
+const CONTINUOUS_WHEEL_GESTURE_IDLE_MS = 300
+// Chromium's wheelDelta per CSS px for continuous devices: 3 on macOS, 1 on Windows/Linux.
+const CONTINUOUS_WHEEL_LEGACY_RATIOS = [3, 1]
+const CONTINUOUS_WHEEL_LEGACY_TOLERANCE = 3
 const DEFAULT_TERMINAL_CELL_HEIGHT = 16
 const TUI_WHEEL_ACCELERATED_DISTANCE_GAIN = 1.6
 const TUI_WHEEL_BURST_FULL_INTERVAL_MS = 16
@@ -35,6 +38,7 @@ type TerminalTuiMouseWheelMetrics = {
 }
 
 export type TerminalTuiMouseWheelDistanceState = {
+  continuousGestureAt: number | null
   fastStreak: number
   lastDistanceRows: number | null
   lastInputAt: number | null
@@ -44,6 +48,7 @@ export type TerminalTuiMouseWheelDistanceState = {
 
 export function createTerminalTuiMouseWheelDistanceState(): TerminalTuiMouseWheelDistanceState {
   return {
+    continuousGestureAt: null,
     fastStreak: 0,
     lastDistanceRows: null,
     lastInputAt: null,
@@ -67,42 +72,49 @@ function legacyVerticalWheelDelta(event: TerminalTuiWheelEventInput): number | n
   return null
 }
 
-function hasDiscreteLegacyWheelDelta(event: TerminalTuiWheelEventInput): boolean {
-  const legacyDelta = legacyVerticalWheelDelta(event)
-  return legacyDelta !== null && Math.abs(legacyDelta) >= LEGACY_MOUSE_WHEEL_DELTA_MIN
-}
-
-export function isDiscreteTerminalTuiWheelEvent(event: TerminalTuiWheelEventInput): boolean {
-  if ((event.deltaMode ?? DOM_DELTA_PIXEL) !== DOM_DELTA_PIXEL) {
-    return true
-  }
-
-  if (Math.abs(event.deltaY) >= DISCRETE_PIXEL_WHEEL_DELTA_MIN) {
-    return true
-  }
-
-  return hasDiscreteLegacyWheelDelta(event)
-}
-
-function canBurstBoostWheelEvent(event: TerminalTuiWheelEventInput): boolean {
-  if ((event.deltaMode ?? DOM_DELTA_PIXEL) !== DOM_DELTA_PIXEL) {
-    return true
-  }
-
-  return hasDiscreteLegacyWheelDelta(event)
-}
-
-function isTrackpadLikePixelWheelEvent(event: TerminalTuiWheelEventInput): boolean {
-  return (
-    (event.deltaMode ?? DOM_DELTA_PIXEL) === DOM_DELTA_PIXEL && !hasDiscreteLegacyWheelDelta(event)
-  )
-}
-
 function wheelInputTime(event: TerminalTuiWheelEventInput): number | null {
   if (typeof event.timeStamp === 'number' && Number.isFinite(event.timeStamp)) {
     return event.timeStamp
   }
   return null
+}
+
+function matchesContinuousWheelDeltaRatio(
+  event: TerminalTuiWheelEventInput,
+  legacyDelta: number
+): boolean {
+  return CONTINUOUS_WHEEL_LEGACY_RATIOS.some(
+    (ratio) =>
+      Math.abs(Math.abs(event.deltaY) * ratio - Math.abs(legacyDelta)) <=
+      CONTINUOUS_WHEEL_LEGACY_TOLERANCE
+  )
+}
+
+// Why: a small wheelDelta can only come from a continuous device, but a fast
+// trackpad event can reach a notch-sized one (a Mac trackpad reports -3 x deltaY).
+// Native terminals get a per-device precision flag that is constant across a
+// gesture; emulate that by keeping the gesture continuous while large events keep
+// the continuous delta shape, which a notch (4-40 px or 100 px per 120) does not.
+function resolveContinuousWheelGesture(
+  event: TerminalTuiWheelEventInput,
+  state: TerminalTuiMouseWheelDistanceState
+): boolean {
+  if ((event.deltaMode ?? DOM_DELTA_PIXEL) !== DOM_DELTA_PIXEL) {
+    state.continuousGestureAt = null
+    return false
+  }
+  const inputAt = wheelInputTime(event)
+  const legacyDelta = legacyVerticalWheelDelta(event)
+  const continuous =
+    legacyDelta === null ||
+    Math.abs(legacyDelta) < LEGACY_MOUSE_WHEEL_DELTA_MIN ||
+    (inputAt !== null &&
+      state.continuousGestureAt !== null &&
+      inputAt >= state.continuousGestureAt &&
+      inputAt - state.continuousGestureAt <= CONTINUOUS_WHEEL_GESTURE_IDLE_MS &&
+      matchesContinuousWheelDeltaRatio(event, legacyDelta))
+  state.continuousGestureAt = continuous ? inputAt : null
+  return continuous
 }
 
 function normalizeCellHeight(cellHeight: number | undefined): number {
@@ -114,7 +126,8 @@ function normalizeCellHeight(cellHeight: number | undefined): number {
 
 function resolveWheelDistanceRows(
   event: TerminalTuiWheelEventInput,
-  metrics: TerminalTuiMouseWheelMetrics
+  metrics: TerminalTuiMouseWheelMetrics,
+  continuous: boolean
 ): number {
   const deltaMode = event.deltaMode ?? DOM_DELTA_PIXEL
   const deltaY = Math.abs(event.deltaY)
@@ -124,12 +137,13 @@ function resolveWheelDistanceRows(
       : deltaMode === DOM_DELTA_PAGE
         ? deltaY * Math.max(1, metrics.rows ?? 1)
         : deltaY / normalizeCellHeight(metrics.cellHeight)
+  if (continuous) {
+    return rowsFromDelta
+  }
   const legacyDelta = legacyVerticalWheelDelta(event)
   const rowsFromLegacy =
     legacyDelta === null ? 0 : Math.abs(legacyDelta) / LEGACY_MOUSE_WHEEL_DELTA_UNIT
-  const rows = Math.max(rowsFromDelta, rowsFromLegacy)
-
-  return isDiscreteTerminalTuiWheelEvent(event) ? Math.max(1, rows) : rows
+  return Math.max(1, rowsFromDelta, rowsFromLegacy)
 }
 
 function compressWheelDistanceRows(rows: number): number {
@@ -148,13 +162,6 @@ function resolveBurstWheelDistanceRows(
   state: TerminalTuiMouseWheelDistanceState,
   distanceRows: number
 ): number {
-  if (!canBurstBoostWheelEvent(event)) {
-    state.fastStreak = 0
-    state.lastDistanceRows = null
-    state.lastInputAt = null
-    return 0
-  }
-
   const currentInputAt = wheelInputTime(event)
   if (currentInputAt === null) {
     state.fastStreak = 0
@@ -190,20 +197,15 @@ function resolveBurstWheelDistanceRows(
   return TUI_WHEEL_BURST_MAX_BONUS_ROWS * cadence * (state.fastStreak / TUI_WHEEL_BURST_RAMP_EVENTS)
 }
 
-function resolveTrackpadPixelWheelReportCount(
-  event: TerminalTuiWheelEventInput,
+// Map continuous pixels to rows with fractional carry, without caps or tail suppression.
+// Queue batches busy-frame reports into one PTY write so inertia stays real-time.
+function resolveContinuousWheelReportCount(
   state: TerminalTuiMouseWheelDistanceState,
   distanceRows: number
-): number | null {
-  if (!isTrackpadLikePixelWheelEvent(event)) {
-    return null
-  }
-
-  // Why: trackpad pixel streams map 1:1 to physical distance: one report per
-  // terminal row scrolled, fractional remainder carried. No per-event cap and
-  // no momentum-tail suppression: the input write queue batches whatever a
-  // busy frame accumulates into a single PTY write, so the TUI applies it at
-  // once instead of replaying it, and inertial scrolling stays real-time.
+): number {
+  state.fastStreak = 0
+  state.lastDistanceRows = null
+  state.lastInputAt = null
   const totalRows = state.pendingRows + distanceRows
   const reports = Math.trunc(totalRows)
   state.pendingRows = totalRows - reports
@@ -237,10 +239,10 @@ export function resolveTerminalTuiMouseWheelReportCount(
   }
   state.pendingDirection = direction
 
-  const distanceRows = resolveWheelDistanceRows(event, metrics)
-  const trackpadReportCount = resolveTrackpadPixelWheelReportCount(event, state, distanceRows)
-  if (trackpadReportCount !== null) {
-    return trackpadReportCount
+  const continuous = resolveContinuousWheelGesture(event, state)
+  const distanceRows = resolveWheelDistanceRows(event, metrics, continuous)
+  if (continuous) {
+    return resolveContinuousWheelReportCount(state, distanceRows)
   }
 
   const rows =

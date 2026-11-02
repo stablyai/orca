@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildWorkspaceSessionPayload } from './workspace-session'
+import { buildSanitizedTabsByWorktree, buildWorkspaceSessionPayload } from './workspace-session'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { AppState } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
@@ -327,9 +328,7 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.activeBrowserTabIdByWorktree?.['wt-1']).toBeNull()
   })
 
-  // Why: the handle map is in-memory only. Without stamping the remote page identity onto the row
-  // that reaches disk, a relaunch has nothing to rebuild the handle from and the restored tab
-  // silently downgrades to a fresh server page.
+  // Stamp remote page identity onto persisted rows; in-memory handles cannot rebuild after relaunch and would downgrade to fresh server pages.
   it('stamps the remote page identity of a client-hosted browser page onto its persisted row', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
@@ -371,8 +370,7 @@ describe('buildWorkspaceSessionPayload', () => {
     ).toBeUndefined()
   })
 
-  // Why: a row restored from a previous quit has no placement until the host republishes it, so
-  // reading client hosting off the placement alone would lose the marker on a second quit.
+  // Restored rows can precede placement; persist their client-hosted marker through a second quit.
   it('keeps the client-hosted marker on a restored row the host has not republished yet', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
@@ -506,5 +504,32 @@ describe('buildWorkspaceSessionPayload', () => {
 
     expect(payload.activeFileIdByWorktree).toEqual({})
     expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'terminal' })
+  })
+})
+
+describe('a launch pane in the saved session', () => {
+  const tab = (agentLaunchPane: TerminalTab['agentLaunchPane']): TerminalTab => ({
+    id: 'tab-1',
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title: 'claude',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1,
+    agentLaunchPane
+  })
+
+  // A launch's outcome is this session's notice, so a reload spawns the pane as a restart does;
+  // a pending launch stays, so its verdict still lands after the reload.
+  it('keeps a pending launch and drops an outcome', () => {
+    const pending = { leafId: 'leaf-1', operationId: 'op-1' }
+    const saved = buildSanitizedTabsByWorktree({
+      'wt-1': [tab({ ...pending, outcome: { kind: 'not-started', code: 'boom' } })]
+    })
+    expect(saved['wt-1'][0].agentLaunchPane).toEqual(pending)
+    expect(
+      buildSanitizedTabsByWorktree({ 'wt-1': [tab(pending)] })['wt-1'][0].agentLaunchPane
+    ).toEqual(pending)
   })
 })

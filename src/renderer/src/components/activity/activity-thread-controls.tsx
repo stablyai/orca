@@ -2,7 +2,6 @@ import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
 import { useNow } from '@/hooks/use-now'
 import { cn } from '@/lib/utils'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
@@ -10,8 +9,8 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   formatAbsoluteDate,
+  activityThreadStatusId,
   formatRelativeTime,
-  threadAgentState,
   threadAgentStateLabel
 } from './activity-thread-presentation'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
@@ -20,14 +19,14 @@ export { ActivityThreadOptionsMenu } from './activity-thread-options-menu'
 
 export function EventTime({
   timestamp,
-  compact = false
+  compact = false,
+  className
 }: {
   timestamp: number
   compact?: boolean
+  className?: string
 }): React.JSX.Element {
-  // Why: rows reuse their identity across store writes, so this label can't rely on
-  // incidental re-renders to stay honest; the shared visibility-gated clock re-renders
-  // only this leaf (memo'd rows stay bailed out). 30s cadence matches WorktreeCardAgents.
+  // Memoized rows ignore unrelated writes; refresh this leaf from the visibility-gated 30s clock, matching WorktreeCardAgents.
   const now = useNow(30_000)
   const absolute = formatAbsoluteDate(timestamp)
   return (
@@ -37,7 +36,8 @@ export function EventTime({
           type="button"
           className={cn(
             'rounded text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
-            compact ? 'px-0 py-0 text-[11px] tabular-nums' : 'px-1 py-0.5 text-xs'
+            compact ? 'px-0 py-0 text-2xs tabular-nums' : 'px-1 py-0.5 text-xs',
+            className
           )}
           aria-label={absolute}
           onClick={(event) => event.stopPropagation()}
@@ -49,23 +49,6 @@ export function EventTime({
         {absolute}
       </TooltipContent>
     </Tooltip>
-  )
-}
-
-export function ActivityProjectLabel({ repo }: { repo: Repo | null }): React.JSX.Element {
-  const label =
-    repo?.displayName?.trim() ||
-    translate('auto.components.activity.ActivityPrototypePage.5651b216c6', 'Unknown project')
-  return (
-    <div className="flex min-w-0 items-center gap-1.5">
-      {repo ? <RepoBadgeMark color={repo.badgeColor} /> : null}
-      <span
-        className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground"
-        title={label}
-      >
-        {label}
-      </span>
-    </div>
   )
 }
 
@@ -88,7 +71,7 @@ export function ThreadAgentStateIndicator({
 }: {
   thread: AgentPaneThread
 }): React.JSX.Element {
-  const state = threadAgentState(thread)
+  const state = activityThreadStatusId(thread)
   const label = threadAgentStateLabel(thread)
   return (
     <Tooltip>

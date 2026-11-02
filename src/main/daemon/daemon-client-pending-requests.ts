@@ -1,3 +1,4 @@
+import { parseTerminalStartFailure, terminalStartError } from '../../shared/terminal-start-failure'
 import { DaemonConnectionLostError, DaemonProtocolError } from './types'
 import type { RpcResponse } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
@@ -33,7 +34,10 @@ export class DaemonPendingRequests {
         if (response.ok) {
           pending.resolve(response.payload)
         } else {
-          const decoded = decodeDaemonResponseError(response.error)
+          const failure = parseTerminalStartFailure(response.terminalStartFailure)
+          const decoded = failure
+            ? terminalStartError(response.error, failure.cause, failure.incarnationId)
+            : decodeDaemonResponseError(response.error)
           pending.reject(
             decoded instanceof DaemonProtocolError
               ? new DaemonProtocolError(addNodePtyRecoveryHint(response.error))
@@ -44,10 +48,7 @@ export class DaemonPendingRequests {
     }
   }
 
-  // Why: only reached when the socket itself is gone, so the error class must stay
-  // DaemonConnectionLostError — daemon-client-rpc-request keys "may tear down the
-  // shared connection" off it, and a plain DaemonProtocolError would look like an
-  // ordinary error reply.
+  // Keep transport failures distinct from refusal replies: only the former may tear down shared sockets.
   rejectAll(reason: string): void {
     for (const [id, pending] of this.requests) {
       clearTimeout(pending.timer)

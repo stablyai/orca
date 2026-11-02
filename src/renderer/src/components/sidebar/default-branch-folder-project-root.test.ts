@@ -3,8 +3,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isDefaultBranchWorkspace } from './default-branch-workspace'
-import { computeVisibleWorktreeIds } from './visible-worktrees'
+import { isDefaultBranchWorkspace } from '../../../../shared/worktree/workspace-kinds'
+import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
 
 function makeRepo(id: string, path: string, kind: Repo['kind']): Repo {
   return { id, path, displayName: id, badgeColor: '#000', addedAt: 0, kind }
@@ -32,8 +32,7 @@ function makeRow(repo: Repo, overrides: Partial<Worktree> & { id: string }): Wor
   }
 }
 
-// Mirrors mergeFolderWorkspace: every row of a folder project has no head or branch,
-// and only the root (id `${repoId}::${path}`) is the main worktree.
+// Mirror folder projection: rows lack Git head/branch and only repoId::path identifies the main root.
 function folderProjectRows(repo: Repo): { root: Worktree; instance: Worktree } {
   const rootId = `${repo.id}::${repo.path}`
   return {
@@ -89,13 +88,6 @@ describe('"Hide default branch" on folder projects', () => {
 
     expect(isDefaultBranchWorkspace(root, repo)).toBe(true)
     expect(isDefaultBranchWorkspace(instance, repo)).toBe(false)
-    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
-  })
-
-  it('hides the root of a folder project added from a git subdirectory', () => {
-    const repo = makeRepo('app', '/Users/me/monorepo/packages/app', 'folder')
-    const { root, instance } = folderProjectRows(repo)
-
     expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
   })
 

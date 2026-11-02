@@ -50,8 +50,7 @@ function stopTailSession(session: TailSession): void {
     return
   }
   session.closed = true
-  // Why: start IPC can still be resolving when a tab closes. Stop only after
-  // start settles so a late-created main-process watcher cannot escape cleanup.
+  // Wait for start IPC before stopping or a watcher created after tab closure could escape cleanup.
   void session.startPromise
     .then(() => window.api.fs.stopLocalLogTail({ subscriptionId: session.subscriptionId }))
     .catch(() => {})

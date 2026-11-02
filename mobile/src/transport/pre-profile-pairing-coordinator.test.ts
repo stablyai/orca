@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import type { connectMobileRelayForPairing } from './mobile-relay-physical-client'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { racePairingCandidates } from './pairing-candidate-race'
 import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
@@ -100,7 +101,9 @@ function dependencies(client: RpcClient, events: string[]) {
     connectDirect: vi.fn(
       (..._args: Parameters<typeof connect>) => (events.push('connect'), client)
     ),
-    connectRelay: vi.fn(() => unavailableRelay),
+    connectRelay: vi.fn(
+      (..._args: Parameters<typeof connectMobileRelayForPairing>) => unavailableRelay
+    ),
     resolveInviteDirector: vi.fn(async () => {
       throw new Error('director unavailable')
     }),
@@ -120,6 +123,8 @@ function dependencies(client: RpcClient, events: string[]) {
     clearJournal: vi.fn(async () => {
       events.push('clear-journal')
     }),
+    releaseJournal: vi.fn(),
+    recoverPendingJournal: vi.fn(async () => {}),
     writeCredentialBundle: vi.fn(async (_bundle: MobileRelayCredentialBundle) => {
       events.push('write-credential')
     }),
@@ -183,8 +188,7 @@ describe('pre-profile pairing coordinator', () => {
   })
 
   it('reuses the existing host id and name when re-pairing the same desktop key (no duplicate)', async () => {
-    // STA-1840: re-pairing a desktop already stored under a different id must
-    // merge into that card, not mint a new host-${now} and duplicate the row.
+    // Re-pair by preserved identity so a different id cannot create a duplicate host card (STA-1840).
     const events: string[] = []
     const client = fakeClient([success({ version: '1.0.0' })])
     const deps = dependencies(client, events)
@@ -361,11 +365,7 @@ describe('pre-profile pairing coordinator', () => {
     ])
   })
 
-  // Why 'forbidden' and not only 'method_not_found': the desktop's mobile allowlist gate runs
-  // before its RPC dispatcher, so a method a desktop predates is missing from both and the phone
-  // is refused by scope, never by absence. A desktop that old also omits the offer's `relay` block,
-  // so this flow would not probe it at all — what this pins is the skew that stays reachable, a
-  // desktop that offers relay but does not allowlist the probe. Refusing it must still commit.
+  // Even a relay-advertising host may omit probe allowlisting; forbidden must still allow LAN-only pairing.
   it('tolerates an old desktop scope refusal and commits a direct-only host', async () => {
     const events: string[] = []
     const entries: ConnectionLogEntry[] = []
@@ -437,8 +437,7 @@ describe('pre-profile pairing coordinator', () => {
     deps.saveJournal.mockImplementation(async (value) => {
       journal = value
     })
-    // Why: stands in for the physical client's own dial line, proving the sink
-    // actually reaches connectMobileRelayForPairing and not just the candidate.
+    // Emit through the physical connection sink to prove log attribution reaches beyond the candidate.
     deps.connectRelay.mockImplementation((connectArgs) => {
       connectArgs.onLog?.({
         id: 'relay-dial',
@@ -477,8 +476,7 @@ describe('pre-profile pairing coordinator', () => {
     deps.saveJournal.mockImplementation(async (value) => {
       journal = value
     })
-    // Why: the reconnect lines the direct client emits carry the LAN address
-    // and no path label — the exact shape that was misread as relay retrying.
+    // Model unlabeled direct reconnect logs whose LAN addresses were mistaken for relay retries.
     deps.connectDirect.mockImplementation((...args) => {
       const options = args[3]
       if (options && typeof options !== 'function') {
@@ -521,6 +519,31 @@ describe('pre-profile pairing coordinator', () => {
       'Pairing path selected'
     ])
     expect(entries[0]).toMatchObject({ level: 'warn', detail: '10.5.0.2:6768' })
+  })
+
+  it('lets a stale journal recover before the new scan journals, and releases it on failure', async () => {
+    const events: string[] = []
+    const client = fakeClient([])
+    vi.mocked(client.sendRequest).mockRejectedValue(new Error('offline'))
+    const deps = dependencies(client, events)
+    let finishRecovery!: () => void
+    deps.recoverPendingJournal.mockImplementation(
+      () => new Promise<void>((resolve) => (finishRecovery = resolve))
+    )
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+    const settled = attempt.result.catch(() => null)
+    await vi.waitFor(() => expect(deps.recoverPendingJournal).toHaveBeenCalled())
+    expect(events).toEqual([])
+    finishRecovery()
+    await settled
+    expect(events[0]).toBe('save-journal')
+    const journalId = deps.saveJournal.mock.calls[0]?.[0].metadata.journalId
+    expect(journalId).toEqual(expect.any(String))
+    expect(deps.releaseJournal).toHaveBeenCalledWith(journalId)
   })
 
   it('cancels the disposable physical client without publishing a host', async () => {

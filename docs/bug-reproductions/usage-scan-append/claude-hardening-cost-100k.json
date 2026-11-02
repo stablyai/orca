@@ -1,0 +1,509 @@
+{
+  "purpose": "Counterbalanced actual scanner and synchronous production cache-load costs after hardening.",
+  "node": "v24.20.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpuModel": "Apple M4 Max",
+  "rounds": 4,
+  "baselineCommit": "51e7181850b022bae2d41091fe1229accef4bd50",
+  "methodology": {
+    "fixture": "Fresh temporary transcripts with page-cache-warm I/O; source-cache cold before each round.",
+    "timing": "Scanner timings include checkpoint build/verify. Serialization follows actual store indent. Load includes JSON.parse and current on-load integrity validation; fs cache read/durable write are excluded.",
+    "integrityTiming": "Separate actual checksum build and full checkpoint validation calls after parity checks; these are diagnostic components, not additional production scan cost.",
+    "correctness": "Exact append/fresh parity each arm, cross-arm sessions/daily equality, and loaded aggregate equality."
+  },
+  "toolingSha256": "920c7f5bc20e856ddf73f4f2ec5d47b9e2810b222a378b1a2e3c00650972247e",
+  "reproductionTool": {
+    "path": "config/scripts/claude-usage-hardening-cost-benchmark.mjs",
+    "sha256": "f0b6cd7a16512fb42be591f2cc9baa607cf55ae1870e9aed0bb9163b366b2825",
+    "differenceFromMeasuredTool": "The shape identifier and output property were renamed to maximaPattern for lint. Replacing all six maximaPattern occurrences with shape in the final tool reconstructs toolingSha256 exactly. Fixtures, timing operations, source graphs, ordering and assertions are unchanged.",
+    "reversedRenameSha256": "920c7f5bc20e856ddf73f4f2ec5d47b9e2810b222a378b1a2e3c00650972247e"
+  },
+  "storeSha256": {
+    "baseline": "c2457e55948c1982fd1a1cd045d847c1e6cecb6eb5e9eadfc3647da8c6a226c2",
+    "current": "cd0305c4ed01af5bc8c11c8247feb9bf92d6e9df00551a87574cdff8e7389d0b"
+  },
+  "scannerSources": {
+    "baseline": {
+      "bundleSha256": "8fa164852b09d88c42881945df1244ebba0f5780c5b8ede62ae1826b142a189f",
+      "sourceFingerprints": {
+        "src/main/claude-usage/scanner.ts": {
+          "source": "HEAD",
+          "sha256": "933e772e7d33994efa00ac37547ff8fa554dc628905011f7aff511a26f89331a"
+        },
+        "src/main/claude-usage/transcript-file-discovery.ts": {
+          "source": "HEAD",
+          "sha256": "6b1f31b8d25b496ac91b104c46bc67d17efc92c5092b6997efe5ddf69430ffc2"
+        },
+        "src/main/claude-usage/transcript-record-parser.ts": {
+          "source": "HEAD",
+          "sha256": "ec75f6f6f17d3f43ffa9ad7de543a80b2baf445560e80af77a44b38a63c275e2"
+        },
+        "src/main/claude-usage/usage-aggregation.ts": {
+          "source": "HEAD",
+          "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+        },
+        "src/main/claude-usage/worktree-attribution.ts": {
+          "source": "HEAD",
+          "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+        }
+      }
+    },
+    "current": {
+      "bundleSha256": "e09b4de1d51268c352c70bab0825e25332b48285e3eded65a6870126718e7ffd",
+      "sourceFingerprints": {
+        "src/main/claude-usage/scanner.ts": {
+          "source": "worktree",
+          "sha256": "ef42add20f63152cf2ebe106e0794119b9c388c763736c8450b559ae7c2418f5"
+        },
+        "src/main/claude-usage/transcript-file-discovery.ts": {
+          "source": "worktree",
+          "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+        },
+        "src/main/claude-usage/transcript-projection-integrity.ts": {
+          "source": "worktree",
+          "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+        },
+        "src/main/claude-usage/transcript-record-parser.ts": {
+          "source": "worktree",
+          "sha256": "6598c02e38ea1776ef5ef926ca424dbc5880f27e7ff03b651cf8f60b791996f6"
+        },
+        "src/main/claude-usage/transcript-resume-projection.ts": {
+          "source": "worktree",
+          "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+        },
+        "src/main/claude-usage/transcript-token-checkpoint.ts": {
+          "source": "worktree",
+          "sha256": "e96cc4aa9b899cad90aee462f053f483f5bb010dea99de1ee11a9f8fd8a2d0f2"
+        },
+        "src/main/claude-usage/transcript-usage-projection.ts": {
+          "source": "worktree",
+          "sha256": "56e2fe017f806670595dae766b6291e09b05b321b83e4b83e1ae5166bab2041c"
+        },
+        "src/main/claude-usage/usage-aggregation.ts": {
+          "source": "worktree",
+          "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+        },
+        "src/main/claude-usage/worktree-attribution.ts": {
+          "source": "worktree",
+          "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+        },
+        "src/main/usage/jsonl-file-checkpoint.ts": {
+          "source": "worktree",
+          "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+        },
+        "src/main/usage/jsonl-file-snapshot.ts": {
+          "source": "worktree",
+          "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+        },
+        "src/main/usage/jsonl-line-offsets.ts": {
+          "source": "worktree",
+          "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+        }
+      }
+    }
+  },
+  "validationSources": {
+    "bundleSha256": "f14a93f752868172797d895f8c1f8224df4ab32e8b6a15ad7d1ea1eac9e71f70",
+    "sourceFingerprints": {
+      "src/main/claude-usage/transcript-resume-projection.ts": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153",
+      "src/main/claude-usage/transcript-projection-integrity.ts": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2",
+      "src/main/claude-usage/persisted-projection-validation.ts": "b03bc2db9f1f93e9d26ba31b8a469f85f27237498a520ea5cc128df397d1ff94",
+      "src/main/claude-usage/usage-aggregation.ts": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+    }
+  },
+  "scenarios": [
+    {
+      "shape": "repeated-maxima",
+      "usageKeys": 100000,
+      "historyBytes": 45577780,
+      "appendBytes": 449,
+      "arms": {
+        "baseline": {
+          "medians": {
+            "coldScanMs": 252.208,
+            "coldTotalLoadMs": 2.344,
+            "appendScanMs": 242.139,
+            "appendScanAndPersistSerializationMs": 248.679,
+            "appendBytesRead": 45578229,
+            "productionStateBytes": 3882997,
+            "serializeMs": 5.903,
+            "parseMs": 2.447,
+            "loadValidationMs": 0,
+            "totalLoadMs": 2.447,
+            "integrityBuildMs": 0,
+            "integrityValidateMs": 0
+          },
+          "rawSamples": [
+            {
+              "arm": "baseline",
+              "round": 1,
+              "order": ["baseline", "current"],
+              "metrics": {
+                "coldScanMs": 244.69212500000003,
+                "coldTotalLoadMs": 2.2502090000000408,
+                "appendScanMs": 240.15662500000008,
+                "appendScanAndPersistSerializationMs": 246.25241600000004,
+                "appendBytesRead": 45578229,
+                "productionStateBytes": 3882997,
+                "serializeMs": 6.095790999999963,
+                "parseMs": 2.4299590000000535,
+                "loadValidationMs": 0.0002500000000509317,
+                "totalLoadMs": 2.4302090000001044,
+                "integrityBuildMs": 0,
+                "integrityValidateMs": 0
+              }
+            },
+            {
+              "arm": "baseline",
+              "round": 2,
+              "order": ["current", "baseline"],
+              "metrics": {
+                "coldScanMs": 257.3152909999999,
+                "coldTotalLoadMs": 2.476082999999562,
+                "appendScanMs": 653.5890000000009,
+                "appendScanAndPersistSerializationMs": 659.2992500000009,
+                "appendBytesRead": 45578229,
+                "productionStateBytes": 3882997,
+                "serializeMs": 5.710250000000087,
+                "parseMs": 2.309249999999338,
+                "loadValidationMs": 0.0005410000003394089,
+                "totalLoadMs": 2.3097909999996773,
+                "integrityBuildMs": 0,
+                "integrityValidateMs": 0
+              }
+            },
+            {
+              "arm": "baseline",
+              "round": 3,
+              "order": ["baseline", "current"],
+              "metrics": {
+                "coldScanMs": 257.255459,
+                "coldTotalLoadMs": 2.1943750000000364,
+                "appendScanMs": 244.12229099999968,
+                "appendScanAndPersistSerializationMs": 251.10512499999913,
+                "appendBytesRead": 45578229,
+                "productionStateBytes": 3882997,
+                "serializeMs": 6.982833999999457,
+                "parseMs": 2.5047080000003916,
+                "loadValidationMs": 0.0006249999996725819,
+                "totalLoadMs": 2.505333000000064,
+                "integrityBuildMs": 0,
+                "integrityValidateMs": 0
+              }
+            },
+            {
+              "arm": "baseline",
+              "round": 4,
+              "order": ["current", "baseline"],
+              "metrics": {
+                "coldScanMs": 247.1598329999997,
+                "coldTotalLoadMs": 2.438333000000057,
+                "appendScanMs": 236.5707910000001,
+                "appendScanAndPersistSerializationMs": 241.675666000001,
+                "appendBytesRead": 45578229,
+                "productionStateBytes": 3882996,
+                "serializeMs": 5.104875000000902,
+                "parseMs": 2.4630830000005517,
+                "loadValidationMs": 0.00016700000014679972,
+                "totalLoadMs": 2.4632500000006985,
+                "integrityBuildMs": 0,
+                "integrityValidateMs": 0
+              }
+            }
+          ]
+        },
+        "current": {
+          "medians": {
+            "coldScanMs": 351.264,
+            "coldTotalLoadMs": 34.363,
+            "appendScanMs": 92.349,
+            "appendScanAndPersistSerializationMs": 96.882,
+            "appendBytesRead": 25025,
+            "productionStateBytes": 4782596,
+            "serializeMs": 4.597,
+            "parseMs": 6.994,
+            "loadValidationMs": 21.611,
+            "totalLoadMs": 28.572,
+            "integrityBuildMs": 12.419,
+            "integrityValidateMs": 21.943
+          },
+          "rawSamples": [
+            {
+              "arm": "current",
+              "round": 1,
+              "order": ["baseline", "current"],
+              "metrics": {
+                "coldScanMs": 363.798,
+                "coldTotalLoadMs": 37.02550000000019,
+                "appendScanMs": 90.91575000000012,
+                "appendScanAndPersistSerializationMs": 95.35391600000003,
+                "appendBytesRead": 25025,
+                "productionStateBytes": 4782596,
+                "serializeMs": 4.43816599999991,
+                "parseMs": 6.754249999999956,
+                "loadValidationMs": 21.650959000000057,
+                "totalLoadMs": 28.405209000000013,
+                "integrityBuildMs": 14.753624999999829,
+                "integrityValidateMs": 25.137666999999965
+              }
+            },
+            {
+              "arm": "current",
+              "round": 2,
+              "order": ["current", "baseline"],
+              "metrics": {
+                "coldScanMs": 350.3935839999999,
+                "coldTotalLoadMs": 30.364207999999962,
+                "appendScanMs": 93.78304200000002,
+                "appendScanAndPersistSerializationMs": 98.41070900000022,
+                "appendBytesRead": 25025,
+                "productionStateBytes": 4782596,
+                "serializeMs": 4.627667000000201,
+                "parseMs": 7.060374999999567,
+                "loadValidationMs": 20.73075000000017,
+                "totalLoadMs": 27.791124999999738,
+                "integrityBuildMs": 12.121792000000369,
+                "integrityValidateMs": 17.06737499999963
+              }
+            },
+            {
+              "arm": "current",
+              "round": 3,
+              "order": ["baseline", "current"],
+              "metrics": {
+                "coldScanMs": 352.1350000000002,
+                "coldTotalLoadMs": 36.62175000000025,
+                "appendScanMs": 107.52350000000024,
+                "appendScanAndPersistSerializationMs": 112.09029200000077,
+                "appendBytesRead": 25025,
+                "productionStateBytes": 4782596,
+                "serializeMs": 4.566792000000532,
+                "parseMs": 6.9273749999993015,
+                "loadValidationMs": 22.39862500000072,
+                "totalLoadMs": 29.326000000000022,
+                "integrityBuildMs": 12.029959000000417,
+                "integrityValidateMs": 20.325040999999146
+              }
+            },
+            {
+              "arm": "current",
+              "round": 4,
+              "order": ["current", "baseline"],
+              "metrics": {
+                "coldScanMs": 341.9473339999995,
+                "coldTotalLoadMs": 32.10491700000057,
+                "appendScanMs": 85.23504199999934,
+                "appendScanAndPersistSerializationMs": 89.97920899999917,
+                "appendBytesRead": 25025,
+                "productionStateBytes": 4782596,
+                "serializeMs": 4.744166999999834,
+                "parseMs": 7.166833000000224,
+                "loadValidationMs": 21.57116700000006,
+                "totalLoadMs": 28.738000000000284,
+                "integrityBuildMs": 12.717040999999881,
+                "integrityValidateMs": 23.561249999999745
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "shape": "unique-maxima",
+      "usageKeys": 100000,
+      "historyBytes": 47122805,
+      "appendBytes": 450,
+      "arms": {
+        "baseline": {
+          "medians": {
+            "coldScanMs": 250.051,
+            "coldTotalLoadMs": 2.45,
+            "appendScanMs": 245.988,
+            "appendScanAndPersistSerializationMs": 251.654,
+            "appendBytesRead": 47123255,
+            "productionStateBytes": 3883159,
+            "serializeMs": 5.666,
+            "parseMs": 2.422,
+            "loadValidationMs": 0,
+            "totalLoadMs": 2.422,
+            "integrityBuildMs": 0,
+            "integrityValidateMs": 0
+          },
+          "rawSamples": [
+            {
+              "arm": "baseline",
+              "round": 1,
+              "order": ["baseline", "current"],
+              "metrics": {
+                "coldScanMs": 252.89137500000106,
+                "coldTotalLoadMs": 2.6044590000001335,
+                "appendScanMs": 240.32820900000115,
+                "appendScanAndPersistSerializationMs": 245.81670900000063,
+                "appendBytesRead": 47123255,
+                "productionStateBytes": 3883159,
+                "serializeMs": 5.488499999999476,
+                "parseMs": 2.243416999999681,
+                "loadValidationMs": 0.0001250000004802132,
+                "totalLoadMs": 2.2435420000001614,
+                "integrityBuildMs": 0,
+                "integrityValidateMs": 0
+              }
+            },
+            {
+              "arm": "baseline",
+              "round": 2,
+              "order": ["current", "baseline"],
+              "metrics": {
+                "coldScanMs": 251.0910840000015,
+                "coldTotalLoadMs": 2.5352080000011483,
+                "appendScanMs": 251.64820900000086,
+                "appendScanAndPersistSerializationMs": 257.4912920000006,
+                "appendBytesRead": 47123255,
+                "productionStateBytes": 3883159,
+                "serializeMs": 5.843082999999751,
+                "parseMs": 2.432667000000947,
+                "loadValidationMs": 0.00008299999899463728,
+                "totalLoadMs": 2.432749999999942,
+                "integrityBuildMs": 0,
+                "integrityValidateMs": 0
+              }
+            },
+            {
+              "arm": "baseline",
+              "round": 3,
+              "order": ["baseline", "current"],
+              "metrics": {
+                "coldScanMs": 236.60333399999945,
+                "coldTotalLoadMs": 2.3370840000006865,
+                "appendScanMs": 279.01674999999886,
+                "appendScanAndPersistSerializationMs": 285.58491700000013,
+                "appendBytesRead": 47123255,
+                "productionStateBytes": 3883159,
+                "serializeMs": 6.568167000001267,
+                "parseMs": 2.4549999999999272,
+                "loadValidationMs": 0.00016700000014679972,
+                "totalLoadMs": 2.455167000000074,
+                "integrityBuildMs": 0,
+                "integrityValidateMs": 0
+              }
+            },
+            {
+              "arm": "baseline",
+              "round": 4,
+              "order": ["current", "baseline"],
+              "metrics": {
+                "coldScanMs": 249.01095800000076,
+                "coldTotalLoadMs": 2.365084000000934,
+                "appendScanMs": 238.88487499999974,
+                "appendScanAndPersistSerializationMs": 244.02179199999955,
+                "appendBytesRead": 47123255,
+                "productionStateBytes": 3883158,
+                "serializeMs": 5.136916999999812,
+                "parseMs": 2.410707999999431,
+                "loadValidationMs": 0.0005420000015874393,
+                "totalLoadMs": 2.4112500000010186,
+                "integrityBuildMs": 0,
+                "integrityValidateMs": 0
+              }
+            }
+          ]
+        },
+        "current": {
+          "medians": {
+            "coldScanMs": 376.321,
+            "coldTotalLoadMs": 34.048,
+            "appendScanMs": 103.344,
+            "appendScanAndPersistSerializationMs": 109.479,
+            "appendBytesRead": 25026,
+            "productionStateBytes": 6327783,
+            "serializeMs": 5.971,
+            "parseMs": 7.33,
+            "loadValidationMs": 26.131,
+            "totalLoadMs": 33.42,
+            "integrityBuildMs": 13.777,
+            "integrityValidateMs": 19.675
+          },
+          "rawSamples": [
+            {
+              "arm": "current",
+              "round": 1,
+              "order": ["baseline", "current"],
+              "metrics": {
+                "coldScanMs": 380.6284579999992,
+                "coldTotalLoadMs": 35.59991700000137,
+                "appendScanMs": 108.01837499999965,
+                "appendScanAndPersistSerializationMs": 114.36554199999955,
+                "appendBytesRead": 25026,
+                "productionStateBytes": 6327783,
+                "serializeMs": 6.347166999999899,
+                "parseMs": 7.367791999999099,
+                "loadValidationMs": 26.726082999999562,
+                "totalLoadMs": 34.09387499999866,
+                "integrityBuildMs": 13.372209000001021,
+                "integrityValidateMs": 26.753790999999183
+              }
+            },
+            {
+              "arm": "current",
+              "round": 2,
+              "order": ["current", "baseline"],
+              "metrics": {
+                "coldScanMs": 355.4134579999991,
+                "coldTotalLoadMs": 30.82720800000061,
+                "appendScanMs": 98.66912499999853,
+                "appendScanAndPersistSerializationMs": 104.59262499999932,
+                "appendBytesRead": 25026,
+                "productionStateBytes": 6327783,
+                "serializeMs": 5.923500000000786,
+                "parseMs": 7.30712499999936,
+                "loadValidationMs": 26.61158400000022,
+                "totalLoadMs": 33.91870899999958,
+                "integrityBuildMs": 13.743916999999783,
+                "integrityValidateMs": 19.450458000001163
+              }
+            },
+            {
+              "arm": "current",
+              "round": 3,
+              "order": ["baseline", "current"],
+              "metrics": {
+                "coldScanMs": 393.20004100000006,
+                "coldTotalLoadMs": 33.65516600000046,
+                "appendScanMs": 120.03058400000009,
+                "appendScanAndPersistSerializationMs": 125.81766700000117,
+                "appendBytesRead": 25026,
+                "productionStateBytes": 6327783,
+                "serializeMs": 5.787083000001076,
+                "parseMs": 7.270249999999578,
+                "loadValidationMs": 25.65058399999907,
+                "totalLoadMs": 32.92083399999865,
+                "integrityBuildMs": 13.837499999999636,
+                "integrityValidateMs": 19.89983299999949
+              }
+            },
+            {
+              "arm": "current",
+              "round": 4,
+              "order": ["current", "baseline"],
+              "metrics": {
+                "coldScanMs": 372.01324999999997,
+                "coldTotalLoadMs": 34.44166699999914,
+                "appendScanMs": 90.55004200000076,
+                "appendScanAndPersistSerializationMs": 96.56775000000016,
+                "appendBytesRead": 25026,
+                "productionStateBytes": 6327783,
+                "serializeMs": 6.017707999999402,
+                "parseMs": 7.353084000000308,
+                "loadValidationMs": 23.45329099999981,
+                "totalLoadMs": 30.806375000000116,
+                "integrityBuildMs": 13.810583000000406,
+                "integrityValidateMs": 18.219208999998955
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

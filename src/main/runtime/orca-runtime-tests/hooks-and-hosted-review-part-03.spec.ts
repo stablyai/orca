@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, gitRunner, setPlatform } from '../orca-runtime-test-mocks.spec'
+import { readHostedReviewForBranch } from '../../source-control/hosted-review'
+import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -34,8 +36,8 @@ describe('OrcaRuntimeService', () => {
     const wslGitOptions = { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
     let driftCounts = '1\t2\n'
     const asyncGitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(refname)%00%(symref)')) {
+        return { stdout: 'refs/remotes/origin/HEAD\0refs/remotes/origin/main\n', stderr: '' }
       }
       if (isOriginMainBaseRefProbe(args)) {
         return { stdout: 'main-sha\n', stderr: '' }
@@ -67,7 +69,15 @@ describe('OrcaRuntimeService', () => {
         recentSubjects: ['base commit 2', 'base commit 1']
       })
       expect(asyncGitSpy).toHaveBeenCalledWith(
-        ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+        [
+          'for-each-ref',
+          '--format=%(refname)%00%(symref)',
+          'refs/remotes/origin/HEA[D]',
+          'refs/remotes/origin/mai[n]',
+          'refs/remotes/origin/maste[r]',
+          'refs/heads/mai[n]',
+          'refs/heads/maste[r]'
+        ],
         { ...wslGitOptions, timeout: 15_000 }
       )
       expect(asyncGitSpy).toHaveBeenCalledWith(['remote'], wslGitOptions)
@@ -84,7 +94,7 @@ describe('OrcaRuntimeService', () => {
         { cwd: TEST_WORKTREE_PATH, wslDistro: 'Ubuntu', timeout: 15_000 }
       )
       expect(asyncGitSpy).toHaveBeenCalledWith(
-        ['log', '--format=%s', '-n', '5', 'HEAD..origin/main'],
+        ['log', '--no-show-signature', '--no-color', '--format=%s', '-n', '5', 'HEAD..origin/main'],
         { cwd: TEST_WORKTREE_PATH, wslDistro: 'Ubuntu', timeout: 15_000 }
       )
 
@@ -105,4 +115,39 @@ describe('OrcaRuntimeService', () => {
       asyncGitSpy.mockRestore()
     }
   })
+
+  const mr: HostedReviewInfo = {
+    provider: 'gitlab',
+    number: 7,
+    title: 'MR',
+    url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+    state: 'open',
+    status: 'success',
+    mergeable: 'MERGEABLE',
+    updatedAt: '2026-10-30'
+  }
+  it.each([
+    { reportReadOutcome: true, review: mr, label: 'a review' },
+    { reportReadOutcome: true, review: null, label: 'a definitive null' },
+    { reportReadOutcome: false, review: mr, label: 'a review' },
+    { reportReadOutcome: undefined, review: null, label: 'a definitive null' }
+  ])(
+    'answers $label with the read outcome only when asked (reportReadOutcome=$reportReadOutcome)',
+    async ({ reportReadOutcome, review }) => {
+      vi.mocked(readHostedReviewForBranch).mockResolvedValueOnce({
+        review,
+        readOutcome: 'provider'
+      })
+      const runtime = new OrcaRuntimeService(store)
+
+      const reply = await runtime.getHostedReviewForBranch({
+        repoSelector: `id:${TEST_REPO_ID}`,
+        branch: 'feature',
+        userRefresh: true,
+        ...(reportReadOutcome === undefined ? {} : { reportReadOutcome })
+      })
+
+      expect(reply).toEqual(reportReadOutcome ? { review, readOutcome: 'provider' } : review)
+    }
+  )
 })

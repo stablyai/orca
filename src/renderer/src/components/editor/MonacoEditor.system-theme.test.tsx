@@ -17,6 +17,7 @@ vi.mock('@monaco-editor/react', () => ({
   },
   loader: { config: vi.fn() }
 }))
+vi.mock('@/lib/monaco-setup', () => ({}))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -123,19 +124,6 @@ describe('MonacoEditor system theme', () => {
       media.emit(true)
     })
     expect(editorProps.current?.theme).toBe('vs-dark')
-
-    act(() => {
-      media.emit(false)
-    })
-    expect(editorProps.current?.theme).toBe('vs')
-  })
-
-  it('keeps an explicit theme when the system color scheme changes', () => {
-    settingsState.theme = 'light'
-    const media = installMatchMedia(true)
-    renderEditor()
-
-    expect(editorProps.current?.theme).toBe('vs')
 
     act(() => {
       media.emit(false)

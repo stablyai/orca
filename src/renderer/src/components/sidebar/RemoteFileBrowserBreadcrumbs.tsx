@@ -12,7 +12,6 @@ type RemoteFileBrowserBreadcrumbsProps = {
   navigateUp: () => void
 }
 
-/** Breadcrumb bar */
 export function RemoteFileBrowserBreadcrumbs({
   resolvedPath,
   pathFlavor,
@@ -20,7 +19,7 @@ export function RemoteFileBrowserBreadcrumbs({
   navigate,
   navigateUp
 }: RemoteFileBrowserBreadcrumbsProps): React.JSX.Element {
-  // Preserve the separator shape when rebuilding drive breadcrumbs.
+  // Retain drive separator shape when reconstructing breadcrumb paths.
   const browseParts = splitBrowsePath(resolvedPath, pathFlavor)
   const pathSegments = browseParts.segments
   const breadcrumbPathTo = useCallback(

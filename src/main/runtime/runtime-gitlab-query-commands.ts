@@ -4,6 +4,7 @@ import {
   diagnoseAuth,
   getRateLimit,
   getWorkItemByProjectRef,
+  listAssignableUsers,
   listIssues,
   listLabels,
   listMergeRequests,
@@ -17,6 +18,7 @@ import {
   type GitLabIssueListState
 } from '../gitlab/gitlab-preload-args'
 import { getWorkItemDetails } from '../gitlab/work-item-details'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 
@@ -44,7 +46,7 @@ export class RuntimeGitLabQueryCommands {
       perPage ?? 20,
       repo.issueSourcePreference,
       query,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -64,7 +66,7 @@ export class RuntimeGitLabQueryCommands {
       normalizeGitLabPositiveInteger(perPage, 20, 100),
       repo.issueSourcePreference,
       query,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -82,18 +84,18 @@ export class RuntimeGitLabQueryCommands {
   }> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page })
-    // Why: page is after localGitOptions; never spread optional args before it (#13538).
+    // Keep page after localGitOptions; spreading optional args before it shifts positions (#13538).
     const result = await listIssues(
       repo.path,
       normalized.limit,
       repo.issueSourcePreference,
       normalized.state,
       normalized.assignee,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       normalized.page
     )
-    // Why: web runtime mirrors the desktop preload contract used by TaskPage.
+    // Match TaskPage's desktop preload contract on web runtime.
     const items: GitLabWorkItem[] = result.items.map((issue) => ({
       id: `gitlab-issue-${repo.id}-${issue.number}`,
       type: 'issue' as const,
@@ -115,7 +117,11 @@ export class RuntimeGitLabQueryCommands {
 
   async listGitLabRepoTodos(repoSelector: string): Promise<Awaited<ReturnType<typeof listTodos>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return listTodos(repo.path, repo.connectionId ?? null, ...this.deps.getLocalGitArgs(repo))
+    return listTodos(
+      repo.path,
+      getRepoRoutingConnectionId(repo),
+      ...this.deps.getLocalGitArgs(repo)
+    )
   }
 
   diagnoseGitLabAuth(): Promise<Awaited<ReturnType<typeof diagnoseAuth>>> {
@@ -136,7 +142,19 @@ export class RuntimeGitLabQueryCommands {
     return listLabels(
       repo.path,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
+      ...this.deps.getLocalGitArgs(repo)
+    )
+  }
+
+  async listGitLabRepoAssignableUsers(
+    repoSelector: string
+  ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
+    const repo = await this.deps.resolveRepo(repoSelector)
+    return listAssignableUsers(
+      repo.path,
+      repo.issueSourcePreference,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
   }
@@ -145,7 +163,8 @@ export class RuntimeGitLabQueryCommands {
     repoSelector: string,
     iid: number,
     type: 'issue' | 'mr',
-    projectRef?: GitLabProjectRef | null
+    projectRef?: GitLabProjectRef | null,
+    includeReviewDetails?: boolean
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemDetails(
@@ -153,9 +172,10 @@ export class RuntimeGitLabQueryCommands {
       iid,
       type,
       repo.issueSourcePreference,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       projectRef,
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0] ?? {},
+      { includeReviewDetails }
     )
   }
 
@@ -171,10 +191,10 @@ export class RuntimeGitLabQueryCommands {
       projectRef,
       iid,
       type,
-      repo.connectionId ?? null,
+      getRepoRoutingConnectionId(repo),
       ...this.deps.getLocalGitArgs(repo)
     )
-    // Why: successful remote pasted-URL lookups update the same recents as desktop IPC.
+    // Successful pasted-URL lookups must update recents as desktop IPC does.
     if (result) {
       this.deps.recordProjectRecent(projectRef)
     }

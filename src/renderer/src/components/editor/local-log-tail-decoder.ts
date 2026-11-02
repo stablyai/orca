@@ -1,4 +1,5 @@
 import type { LocalLogTailReadResult } from '../../../../shared/local-log-tail-types'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
 
 export const LOCAL_LOG_TAIL_MAX_BYTES = 50 * 1024 * 1024
 
@@ -6,15 +7,6 @@ export type LocalLogTailDecodeResult =
   | { kind: 'append'; content: string; hasMore: boolean }
   | { kind: 'reset' }
   | { kind: 'limit' }
-
-function decodeBase64(contentBase64: string): Uint8Array {
-  const binary = atob(contentBase64)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index++) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-  return bytes
-}
 
 export class LocalLogTailDecoder {
   readonly initialVisibleContent: string
@@ -26,8 +18,7 @@ export class LocalLogTailDecoder {
   constructor(snapshotContent: string, fileIdentity: string) {
     const lastCompleteLineEnd = snapshotContent.lastIndexOf('\n') + 1
     this.initialVisibleContent = snapshotContent.slice(0, lastCompleteLineEnd)
-    // Why: rewind to the last complete line, then re-read the trailing record as
-    // bytes. This preserves a UTF-8 code point split at the snapshot EOF.
+    // Reread the trailing record as bytes to preserve UTF-8 code points split at snapshot EOF.
     this.byteOffset = new TextEncoder().encode(this.initialVisibleContent).byteLength
     this.fileIdentity = fileIdentity
   }
@@ -50,8 +41,12 @@ export class LocalLogTailDecoder {
 
     this.byteOffset = result.nextByteOffset
     this.fileIdentity = result.fileIdentity
-    this.lineCarry += this.decoder.decode(decodeBase64(result.contentBase64), { stream: true })
-    const lastCompleteLineEnd = this.lineCarry.lastIndexOf('\n') + 1
+    const decoded = this.decoder.decode(decodeBase64Bytes(result.contentBase64), { stream: true })
+    const chunkLineEnd = decoded.lastIndexOf('\n') + 1
+    const previousCarryLength = this.lineCarry.length
+    this.lineCarry += decoded
+    // Why: the carry has no LF, so only newly decoded text can complete a record.
+    const lastCompleteLineEnd = chunkLineEnd === 0 ? 0 : previousCarryLength + chunkLineEnd
     if (lastCompleteLineEnd === 0) {
       return { kind: 'append', content: '', hasMore: result.hasMore }
     }

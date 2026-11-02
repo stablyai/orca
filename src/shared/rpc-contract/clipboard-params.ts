@@ -46,7 +46,9 @@ export const StartImageUpload = z.object({
     .int()
     .nonnegative()
     .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, CLIPBOARD_IMAGE_TOO_LARGE_ERROR),
-  connectionId: z.string().min(1).nullable().optional()
+  connectionId: z.string().min(1).nullable().optional(),
+  // Older hosts drop this unknown key and keep naming the upload .png.
+  fileName: z.string().min(1).max(1024).optional()
 })
 
 export const AppendImageUploadChunk = z.object({

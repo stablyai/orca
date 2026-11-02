@@ -171,8 +171,7 @@ describe('SkillInstallDialog', () => {
     ).toBeTruthy()
   })
 
-  // Why: the picker is the only place a recipient can say "not Claude"; the
-  // request has to carry that choice or the host installs everywhere it can.
+  // Carry unchecked-agent choices to the host so it cannot install for every detected provider.
   it('installs only for the agents left checked', async () => {
     const skills = installApi(
       vi.fn().mockResolvedValue({
@@ -232,8 +231,7 @@ describe('SkillInstallDialog', () => {
     )
   })
 
-  // Why: checking agents the machine does not have would write placements no
-  // agent reads, and make the user opt out of tools they never installed.
+  // Default to detected agents so installation cannot create unused placements for absent tools.
   it('starts from the agents the target machine has', async () => {
     const skills = installApi(
       vi.fn().mockResolvedValue({
@@ -253,8 +251,7 @@ describe('SkillInstallDialog', () => {
     })
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
     await inspectSkill()
-    // Canonical-root agents (for example Muse) are shown alongside the
-    // detected provider, so keep this assertion focused on the detected one.
+    // Canonical-root agents may appear alongside the detected provider; assert the detected provider’s participation.
     await screen.findByRole('button', { name: /Installing for: Codex/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Install skill' }))
@@ -263,8 +260,6 @@ describe('SkillInstallDialog', () => {
     expect(request.providers).toEqual(['codex'])
   })
 
-  // Why: a skill description doubles as its trigger documentation and can run
-  // for paragraphs; the row shows one line until the reader opens it.
   it('unclamps a long description when the row is opened', async () => {
     const sharedVersion = version()
     sharedVersion.description = `Use the public CLI. ${'trigger words.'.repeat(20)}`
@@ -287,8 +282,6 @@ describe('SkillInstallDialog', () => {
     expect(description.className).not.toContain('group-data-[state=open]/row:max-h-40')
   })
 
-  // Why: "view the full skill contents" is the point of the row — the file list
-  // is the only place a recipient sees what lands on their machine.
   it('lists the files a skill would write when its row is expanded', async () => {
     const skills = installApi(vi.fn())
     Object.defineProperty(window, 'api', {
@@ -303,8 +296,7 @@ describe('SkillInstallDialog', () => {
     expect(screen.getByText('SKILL.md')).toBeTruthy()
   })
 
-  // Why: a recipient cannot compare a digest against anything, and the badge
-  // language ("Immutable version") explained nothing. Both left the review.
+  // Review omits digests users cannot compare and the uninformative immutable-version badge.
   it.each([
     ['skill', () => version(), 'a'],
     ['bundle', () => bundleVersion(), 'c']
@@ -355,7 +347,7 @@ describe('SkillInstallDialog', () => {
     await inspectSkill()
     expect(screen.getByText(/^2 files$/)).toBeTruthy()
     expect(screen.queryByText(/supporting$/, { selector: 'span' })).toBeNull()
-    expect(screen.getByText('Includes supporting files')).toBeTruthy()
+    expect(screen.getByText('Review the supporting files')).toBeTruthy()
     expect(screen.getByText(/include 1 file beyond SKILL.md/)).toBeTruthy()
     expect(screen.queryByRole('checkbox', { name: /I trust the sender/ })).toBeNull()
     expect(
@@ -422,8 +414,7 @@ describe('SkillInstallDialog', () => {
     render(<SkillInstallDialog open onOpenChange={onOpenChange} />)
 
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Orca skill link' }))
-    // Why: the submit sits in the footer beside Close, so Enter in the field is
-    // the keyboard path rather than tabbing past the back-out action.
+    // Enter submits from the field because the footer action sits beside Close.
     const footerButtons = screen
       .getAllByRole('button')
       .filter((button) => button.getAttribute('data-slot') !== 'dialog-close')

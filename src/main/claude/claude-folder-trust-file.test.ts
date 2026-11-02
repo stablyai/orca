@@ -4,6 +4,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -171,13 +172,14 @@ describe('grantClaudeFolderTrust', () => {
     const lockDir = `${file}.lock`
     mkdirSync(lockDir)
     const oldTime = new Date(Date.now() - 60_000)
-    // Why: a lock older than Claude's 10 s stale window must still not be broken by Orca.
+    // Exceed Claude's 10-second stale window to verify Orca leaves its lock intact.
     utimesSync(lockDir, oldTime, oldTime)
     await expect(grantClaudeFolderTrust({ configFile: file, folderKeys: ['/wt'] })).resolves.toBe(
       'locked'
     )
     expect(readConfig(file)).toEqual({})
     expect(existsSync(lockDir)).toBe(true)
+    expect(readdirSync(root).sort()).toEqual(['.claude.json', '.claude.json.lock'])
   })
 
   it('updates a symlinked config through its target and keeps the link', async () => {
@@ -271,7 +273,6 @@ describe('resolveLocalClaudeTrustConfig', () => {
     wslDistro: 'Ubuntu',
     wslLinuxConfigDir: '/home/u/.claude',
     envPatch: {},
-    stripAuthEnv: true,
     provenance: 'wsl:Ubuntu:system'
   }
 

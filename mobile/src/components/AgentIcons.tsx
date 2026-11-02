@@ -1,9 +1,8 @@
 import Svg, { Path } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-// Why: SVG paths sourced from the desktop codebase
-// (src/renderer/src/components/status-bar/icons.tsx) so mobile and desktop
-// stay visually identical for Claude/Codex branding.
+// Use desktop status-bar SVG paths to keep Claude/Codex branding identical.
 
 export function ClaudeIcon({ size = 16 }: { size?: number }) {
   return (
@@ -18,6 +17,7 @@ export function ClaudeIcon({ size = 16 }: { size?: number }) {
 }
 
 export function OpenAIIcon({ size = 16, color }: { size?: number; color?: string }) {
+  useMobileColorScheme()
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path

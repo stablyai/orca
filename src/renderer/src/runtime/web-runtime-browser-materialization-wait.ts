@@ -8,10 +8,13 @@ export function waitForWebRuntimeBrowserPageMaterialization(args: {
   worktreeId: string
   remotePageId: string
   expectedGroupId?: string
+  /** A frame-drawn workspace's frames took the page over (L284): done, with no handle yet. */
+  handedToFrames?: () => boolean
 }): Promise<boolean> {
-  const hasMaterialized = (): boolean =>
+  const hasMaterialized = (state = useAppStore.getState()): boolean =>
+    args.handedToFrames?.() === true ||
     hasMaterializedWebRuntimeBrowserPage(
-      useAppStore.getState(),
+      state,
       args.environmentId,
       args.worktreeId,
       args.remotePageId,
@@ -36,15 +39,7 @@ export function waitForWebRuntimeBrowserPageMaterialization(args: {
       resolve(materialized)
     }
     unsubscribe = useAppStore.subscribe((state) => {
-      if (
-        hasMaterializedWebRuntimeBrowserPage(
-          state,
-          args.environmentId,
-          args.worktreeId,
-          args.remotePageId,
-          args.expectedGroupId
-        )
-      ) {
+      if (hasMaterialized(state)) {
         finish(true)
       }
     })

@@ -23,8 +23,7 @@ vi.mock('expo-notifications', () => ({
   scheduleNotificationAsync: mocks.schedule
 }))
 
-// Expo's remote-message types are wide and fully required; the two builders below fill them once
-// so the fixtures below can be plain `Notification` values rather than assertions.
+// Build complete Expo message types once so fixtures need no unchecked assertions.
 const REMOTE_NOTIFICATION: FirebaseRemoteMessageNotification = {
   body: null,
   bodyLocalizationArgs: null,
@@ -114,8 +113,7 @@ it('presents a title-only data push with its original identity, routing and chan
   const incoming = notification()
   mocks.receive(incoming)
   await vi.waitFor(() => expect(mocks.schedule).toHaveBeenCalledOnce())
-  // The four members the presenter forwards, named: it rebuilds content rather than passing the
-  // arriving object through, so comparing against the whole fixture would only hold by accident.
+  // Assert only forwarded content fields; the presenter intentionally rebuilds instead of passing through the source object.
   expect(mocks.schedule).toHaveBeenCalledWith({
     identifier: incoming.request.identifier,
     content: {
@@ -161,7 +159,6 @@ it('waits for eligibility before scheduling, even if native presentation will by
   startAndroidForegroundPushPresentation()
   mocks.receive(notification())
   expect(mocks.schedule).not.toHaveBeenCalled()
-  // Model a dismissal arriving while the eligibility reads are in flight.
   resolve(false)
   await Promise.resolve()
   expect(mocks.schedule).not.toHaveBeenCalled()

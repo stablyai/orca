@@ -302,7 +302,7 @@ describe('diagnostics IPC handlers', () => {
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     const collect = handlers.get('diagnostics:collectBundle')!
 
-    expect(collect({}, 30)).toEqual({
+    expect(await collect({}, 30)).toEqual({
       bundleSubmissionId: bundle.bundleSubmissionId,
       bytes: bundle.bytes,
       spanCount: bundle.spanCount

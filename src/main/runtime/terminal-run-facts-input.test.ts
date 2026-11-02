@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import { writePtyFromRuntimeController } from '../ipc/pty/runtime/operations'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
@@ -11,7 +11,6 @@ import { sendTerminalStreamInput } from './rpc/methods/terminal/terminal-input-d
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import {
   pasteWorktreeStartupDraftWhenReady,
-  sendWorktreeStartupFollowupWhenReady,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
 
@@ -93,14 +92,23 @@ describe('run facts: the controller write funnel', () => {
   it('records terminal.send input before the write that could end the process', async () => {
     const run = await createFreshRun()
 
-    await run.runtime.sendTerminal(
-      run.handle,
-      { text: 'exit', enter: true },
-      { inputKind: 'driving' }
-    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+    try {
+      await Promise.all([
+        run.runtime.sendTerminal(
+          run.handle,
+          { text: 'exit', enter: true },
+          { inputKind: 'driving' }
+        ),
+        vi.runAllTimersAsync()
+      ])
 
-    expect(run.firstUserInputAt()).not.toBeNull()
-    expect(run.writes.map((write) => write.inputRecorded)).toEqual([true, true])
+      expect(run.firstUserInputAt()).not.toBeNull()
+      expect(run.writes.map((write) => write.inputRecorded)).toEqual([true, true])
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 
   it('records stream input from a client', async () => {
@@ -147,7 +155,7 @@ describe('run facts: the controller write funnel', () => {
     expect(run.firstUserInputAt()).not.toBeNull()
   })
 
-  it('records a mailbox pointer, which drives the running agent', async () => {
+  it("records a mailbox pointer as driving the agent, but not as a user's draft input", async () => {
     const run = await createFreshRun()
 
     await writeOrchestrationPointerWithSettlement({
@@ -156,8 +164,9 @@ describe('run facts: the controller write funnel', () => {
       controller: run.controller
     })
 
-    expect(run.kinds).toEqual(['driving'])
+    expect(run.kinds).toEqual(['orchestration'])
     expect(run.firstUserInputAt()).not.toBeNull()
+    expect(run.runtime.terminalRunFacts.readLastDrivingInputAt(PTY_ID)).toBeNull()
   })
 
   it('records nothing for a client query reply', async () => {
@@ -225,20 +234,16 @@ describe('run facts: a created worktree’s startup writes', () => {
     }
   }
 
-  it('reads a run whose only input was its create-time draft and follow-up as untyped', async () => {
+  it('reads a run whose only input was its create-time draft as untyped', async () => {
     vi.useFakeTimers()
     const run = await createFreshRun()
     const host = readinessHost(run)
 
     pasteWorktreeStartupDraftWhenReady(host, run.handle, { agent: 'aider', content: 'plan it' })
-    sendWorktreeStartupFollowupWhenReady(host, run.handle, {
-      expectedProcess: 'aider',
-      prompt: 'and ship it'
-    })
     await vi.runAllTimersAsync()
 
-    expect(run.kinds).toEqual(['launch', 'launch'])
-    expect(run.writes).toHaveLength(2)
+    expect(run.kinds).toEqual(['launch'])
+    expect(run.writes).toHaveLength(1)
     expect(run.firstUserInputAt()).toBeNull()
   })
 })

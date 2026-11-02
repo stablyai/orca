@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import { createSkillInstallAuthority } from './runtime-skill-install-authority'
 
@@ -14,15 +14,13 @@ function createHost(overrides: Partial<RuntimeSkillCommandHost> = {}): RuntimeSk
     listFolderWorkspaces: () => [],
     listResolvedWorktrees: async () => [],
     showManagedWorktree: async () => ({ id: WORKTREE_ID, path: '/workspace/app' }),
-    getSshProvider: () => ({ requestHostRpc: vi.fn() }) as never,
     skillTransactionRecovery: Promise.resolve(),
     ...overrides
   } as RuntimeSkillCommandHost
 }
 
 describe('createSkillInstallAuthority', () => {
-  // Why: collapsing a thrown lookup into null reports a transient git/IO failure as a missing
-  // workspace, which is unactionable — the real cause never reaches the caller or the logs.
+  // Preserve thrown Git/I/O errors; converting to missing workspace loses actionable cause.
   it('surfaces a worktree lookup failure instead of reporting it as not found', async () => {
     const authority = createSkillInstallAuthority(
       createHost({
@@ -41,5 +39,15 @@ describe('createSkillInstallAuthority', () => {
     )
 
     await expect(authority.resolveWorktree(WORKTREE_ID)).resolves.toBeNull()
+  })
+
+  it('never resolves a folder workspace as a worktree, where only repo rows fence the host', async () => {
+    const authority = createSkillInstallAuthority(
+      createHost({
+        showManagedWorktree: async () => ({ id: 'folder:remote-folder', path: '/srv/remote' })
+      })
+    )
+
+    await expect(authority.resolveWorktree('folder:remote-folder')).resolves.toBeNull()
   })
 })

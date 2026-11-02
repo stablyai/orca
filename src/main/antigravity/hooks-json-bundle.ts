@@ -77,8 +77,6 @@ function buildEventDefinition(event: AntigravityEvent, command: string): HookDef
       hooks: [buildManagedCommandHook(command)]
     }
   }
-  // Antigravity's direct-command event schema carries the command on the
-  // definition; add the host-level timeout backstop alongside it.
   return { type: 'command', command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 

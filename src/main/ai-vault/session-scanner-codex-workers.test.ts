@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
+import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
 
@@ -10,10 +11,6 @@ afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
-
-function jsonLines(records: unknown[]): string {
-  return records.map((record) => JSON.stringify(record)).join('\n')
-}
 
 describe('scanAiVaultSessions Codex worker sessions', () => {
   it('hides Codex worker transcripts from session history', async () => {
@@ -141,11 +138,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       ])
     )
 
-    // `review` is a sibling tag of `thread_spawn` in the same union, not an
-    // older spelling of it: it states no spawn record, so the parent is on the
-    // payload's own key. `thread_source` is omitted because some releases state
-    // none, and it is the only other signal that would keep this transcript out
-    // of the user's history.
+    // Review is a non-user union kind without a spawn record; omit optional thread_source to test that signal.
     await writeFile(
       join(codexSessionsDir, '2026', '06', '12', 'rollout-role-only-worker-session.jsonl'),
       jsonLines([
@@ -171,8 +164,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       ])
     )
 
-    // A compaction thread is a non-user thread that names no parent at all,
-    // so its tag is the only thing keeping it out of the user's history.
+    // Compaction has no parent; its union tag alone must exclude it from user History.
     await writeFile(
       join(codexSessionsDir, '2026', '06', '12', 'rollout-compaction-session.jsonl'),
       jsonLines([
@@ -198,28 +190,8 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
     )
 
     const result = await scanAiVaultSessions({
-      claudeProjectsDir: join(root, 'claude-projects'),
-      codexSessionsDir,
-      geminiSessionsDir: join(root, 'gemini-sessions'),
-      antigravityBrainDir: join(root, 'antigravity-brain'),
-      copilotSessionsDir: join(root, 'copilot-sessions'),
-      cursorProjectsDir: join(root, 'cursor-projects'),
-      opencodeStorageDir: join(root, 'opencode-storage'),
-      opencodeDbPaths: [],
-      grokSessionsDir: join(root, 'grok-sessions'),
-      devinTranscriptsDir: join(root, 'devin-transcripts'),
-      hermesSessionsDir: join(root, 'hermes-sessions'),
-      rovoSessionsDir: join(root, 'rovo-sessions'),
-      openclawStateDir: join(root, 'openclaw-state'),
-      openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
-      piSessionsDir: join(root, 'pi-sessions'),
-      ompSessionsDir: join(root, 'omp-sessions'),
-      primeAgentSessionsDir: join(root, 'prime-agent-sessions'),
-      droidSessionsDir: join(root, 'droid-sessions'),
-      droidProjectsDir: join(root, 'droid-projects'),
-      kimiSessionsDir: join(root, 'kimi-sessions'),
-      museSessionsDir: join(root, 'muse-sessions'),
-      zcodeDbPath: join(root, 'zcode-db.sqlite'),
+      ...isolatedScanRoots(root),
+      jcodeSessionsDir: join(root, 'jcode-sessions'),
       platform: 'darwin'
     })
 

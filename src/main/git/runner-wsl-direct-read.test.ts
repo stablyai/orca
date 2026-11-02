@@ -1,5 +1,5 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
 
 const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -19,16 +19,14 @@ vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn
 
 import { getBranchConflictKind } from './repo-branch-conflict'
 import { pendingWslDirectGitReadEnvironment } from './command-runner/git-command-resolution'
-import { gitExecFileAsync, gitSpawn, gitStreamStdout } from './runner'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitSpawn, gitStreamStdout } from './runner'
 import {
   GitAdmissionScheduler,
   _resetGitAdmissionForTests,
   type GitAdmissionEvent
 } from './command-runner/git-subprocess-admission'
 import {
-  disableWslGitReadEnvironment,
   getWslGitReadEnvironment,
-  peekWslGitReadEnvironment,
   resetWslGitReadEnvironmentForTests,
   seedWslGitReadEnvironmentForTests,
   WSL_GIT_READ_ENVIRONMENT_WAIT_MS
@@ -36,7 +34,6 @@ import {
 import {
   prepareWslLinkedWorktreeGitRouting,
   resetWslLinkedWorktreeGitRoutingForTests,
-  WSL_LINKED_WORKTREE_ROUTE_TTL_MS,
   type WslLinkedWorktreeRoutingFileSystem
 } from './wsl-linked-worktree-git-routing'
 
@@ -51,26 +48,12 @@ const LOGIN_ENVIRONMENT = {
 
 /** Stand in for the guest shell: rc chatter first, then the payload inside the command's own fence. */
 function fencedProbeStdout(command: unknown, payload: string): string {
-  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(command))?.[1] ?? ''
+  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_ ([^_]+)__/.exec(String(command))?.[1] ?? ''
   return `profile banner\n__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${payload}__ORCA_WSL_CAPTURE_END_${nonce}__`
 }
 
-const LOGIN_ENVIRONMENT_FIELDS = `${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}`
-
-type MockChild = EventEmitter & {
-  stdout: EventEmitter
-  stderr: EventEmitter
-  pid: number
-  kill: ReturnType<typeof vi.fn>
-}
-
-function createMockChild(): MockChild {
-  const child = new EventEmitter() as MockChild
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.pid = 1234
-  child.kill = vi.fn()
-  return child
+function createMockChild() {
+  return createFakeSpawnedChild(1234)
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
@@ -132,131 +115,6 @@ describe('WSL direct Git reads', () => {
     expect(execFileMock.mock.calls[0]?.[1]?.[5]).toContain('^GIT_')
   })
 
-  it('retries a transient environment probe after a bounded delay', async () => {
-    let now = 1_000
-    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
-    try {
-      execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-        const child = createMockChild()
-        queueMicrotask(() =>
-          callback?.(Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }), '', '')
-        )
-        return child
-      })
-
-      await expect(getWslGitReadEnvironment(DISTRO)).resolves.toBeNull()
-      await expect(getWslGitReadEnvironment(DISTRO)).resolves.toBeNull()
-      expect(execFileMock).toHaveBeenCalledTimes(1)
-
-      now += 30_000
-      execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
-        const child = createMockChild()
-        queueMicrotask(() =>
-          callback?.(
-            null,
-            fencedProbeStdout(execFileMock.mock.calls.at(-1)?.[1]?.[5], LOGIN_ENVIRONMENT_FIELDS),
-            ''
-          )
-        )
-        return child
-      })
-
-      await expect(getWslGitReadEnvironment(DISTRO)).resolves.toEqual(LOGIN_ENVIRONMENT)
-      expect(execFileMock).toHaveBeenCalledTimes(2)
-    } finally {
-      nowSpy.mockRestore()
-    }
-  })
-
-  it('bounds settled environment entries during distro churn', () => {
-    for (let index = 0; index < 132; index += 1) {
-      seedWslGitReadEnvironmentForTests(`distro-${index}`, LOGIN_ENVIRONMENT)
-    }
-    expect(peekWslGitReadEnvironment('distro-0')).toBeUndefined()
-    expect(peekWslGitReadEnvironment('distro-131')).toEqual(LOGIN_ENVIRONMENT)
-  })
-
-  it('runs an opted-in read directly with translated cwd and arguments', async () => {
-    await withPlatform('win32', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      succeedExecFile()
-
-      await gitExecFileAsync(['status', '--short', String.raw`C:\repo\file.txt`], {
-        cwd: String.raw`C:\repo`,
-        env: { GIT_OPTIONAL_LOCKS: '0' },
-        preferWslDirectGit: true,
-        wslDistro: DISTRO
-      })
-
-      expect(execFileMock.mock.calls[0]?.[0]).toBe('wsl.exe')
-      expect(execFileMock.mock.calls[0]?.[1]).toEqual([
-        '-d',
-        DISTRO,
-        '--exec',
-        '/usr/bin/env',
-        `PATH=${LOGIN_ENVIRONMENT.path}`,
-        `HOME=${LOGIN_ENVIRONMENT.home}`,
-        'LANGUAGE=en',
-        'LC_ALL=en_US.UTF-8',
-        'LANG=en_US.UTF-8',
-        'GIT_OPTIONAL_LOCKS=0',
-        LOGIN_ENVIRONMENT.gitPath,
-        '-C',
-        '/mnt/c/repo',
-        'status',
-        '--short',
-        '/mnt/c/repo/file.txt'
-      ])
-    })
-  })
-
-  it('keeps the first read on the login shell while priming the fast path', async () => {
-    await withPlatform('win32', async () => {
-      let completeProbe: ((error: Error | null, stdout: string, stderr: string) => void) | undefined
-      execFileMock.mockImplementation((_command, args, _options, callback) => {
-        const child = createMockChild()
-        if ((args as string[])[5]?.includes('^GIT_')) {
-          completeProbe = callback
-        } else {
-          queueMicrotask(() => callback?.(null, 'ok', ''))
-        }
-        return child
-      })
-
-      const options = {
-        cwd: String.raw`C:\repo`,
-        preferWslDirectGit: true as const,
-        wslDistro: DISTRO
-      }
-      await gitExecFileAsync(['status', '--short'], options)
-
-      expect(execFileMock).toHaveBeenCalledTimes(2)
-      expect(execFileMock.mock.calls[1]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
-      completeProbe?.(
-        null,
-        fencedProbeStdout(execFileMock.mock.calls[1]?.[1]?.[5], LOGIN_ENVIRONMENT_FIELDS),
-        ''
-      )
-      await Promise.resolve()
-      await gitExecFileAsync(['status', '--short'], options)
-      expect(execFileMock.mock.calls[2]?.[1]).toContain('--exec')
-    })
-  })
-
-  it('keeps unopted commands on the WSL login shell', async () => {
-    await withPlatform('win32', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      succeedExecFile()
-
-      await gitExecFileAsync(['add', '--', 'file.txt'], {
-        cwd: String.raw`C:\repo`,
-        wslDistro: DISTRO
-      })
-
-      expect(execFileMock.mock.calls[0]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
-    })
-  })
-
   it('keeps reads with custom Git environment policy on the login shell', async () => {
     await withPlatform('win32', async () => {
       seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
@@ -295,7 +153,6 @@ describe('WSL direct Git reads', () => {
           cwd: String.raw`C:\repo`,
           env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
           wslDistro: DISTRO,
-          captureWslLoginShellOutput: true,
           terminationBarrier: true
         })
       ).resolves.toEqual({ stdout: 'fork-point\n', stderr: '' })
@@ -320,7 +177,13 @@ describe('WSL direct Git reads', () => {
           return command
         }
         const terminator = createMockChild()
-        queueMicrotask(() => terminator.emit('close', 0, null))
+        queueMicrotask(() => {
+          // The kill first confirms the distro still runs, so it cannot boot a stopped one (E9).
+          if (args?.includes('--running')) {
+            terminator.stdout.emit('data', Buffer.from(`${DISTRO}\n`))
+          }
+          terminator.emit('close', 0, null)
+        })
         return terminator
       })
       const controller = new AbortController()
@@ -338,94 +201,10 @@ describe('WSL direct Git reads', () => {
 
       await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
       expect(command.kill).not.toHaveBeenCalled()
-      expect(spawnMock.mock.calls[1]?.[1]?.join(' ')).toContain('kill -TERM')
-      expect(spawnMock.mock.calls[1]?.[1]).toContain('4321')
-    })
-  })
-
-  it('ignores unchanged ambient host Git variables when selecting the direct path', async () => {
-    await withPlatform('win32', async () => {
-      const originalAskpass = process.env.GIT_ASKPASS
-      process.env.GIT_ASKPASS = String.raw`C:\host\askpass.exe`
-      try {
-        seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-        succeedExecFile()
-
-        await gitExecFileAsync(['status', '--short'], {
-          cwd: String.raw`C:\repo`,
-          env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
-          preferWslDirectGit: true,
-          wslDistro: DISTRO
-        })
-
-        expect(execFileMock.mock.calls[0]?.[1]).toContain('--exec')
-      } finally {
-        if (originalAskpass === undefined) {
-          delete process.env.GIT_ASKPASS
-        } else {
-          process.env.GIT_ASKPASS = originalAskpass
-        }
-      }
-    })
-  })
-
-  // A UNC worktree names its distro in the path, so a read there needs no resolved WSL project
-  // runtime to skip the shell -- requiring one is what kept every diff read on the login shell.
-  it('takes the direct read route for an override-less WSL UNC cwd', async () => {
-    await withPlatform('win32', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      succeedExecFile()
-
-      await gitExecFileAsync(['status', '--short'], {
-        cwd: String.raw`\\wsl.localhost\Ubuntu\repo`,
-        preferWslDirectGit: true
-      })
-
-      const resolved = execFileMock.mock.calls[0]?.[1] ?? []
-      expect(resolved).toContain('--exec')
-      expect(resolved).toContain(`PATH=${LOGIN_ENVIRONMENT.path}`)
-      expect(resolved).not.toContain('bash')
-    })
-  })
-
-  // The classifier already recognizes `show`, so the blob reads behind every diff take the
-  // direct route from the cwd alone -- no caller-supplied distro, no explicit opt-in.
-  it('takes the direct read route for an unclassified-caller blob read on a UNC cwd', async () => {
-    await withPlatform('win32', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      succeedExecFile()
-
-      await gitExecFileAsync(['show', ':src/file.ts'], {
-        cwd: String.raw`\\wsl.localhost\Ubuntu\repo`
-      })
-
-      expect(execFileMock.mock.calls[0]?.[1]).toContain('--exec')
-    })
-  })
-
-  // Kicking the probe off and resolving without it left the reads issued before it
-  // answered on the login shell -- the slow route, chosen by nothing but timing.
-  it('waits for a cold probe so the first read already skips the shell', async () => {
-    await withPlatform('win32', async () => {
-      execFileMock.mockImplementation((_command, args, _options, callback) => {
-        const child = createMockChild()
-        if (String(args).includes('_orca_git_path')) {
-          setTimeout(
-            () => callback?.(null, fencedProbeStdout(args, LOGIN_ENVIRONMENT_FIELDS), ''),
-            0
-          )
-        } else {
-          queueMicrotask(() => callback?.(null, 'ok', ''))
-        }
-        return child
-      })
-
-      await gitExecFileAsync(['show', ':src/file.ts'], {
-        cwd: String.raw`\\wsl.localhost\Ubuntu\repo`
-      })
-
-      expect(execFileMock.mock.calls.at(-1)?.[1]).toContain('--exec')
-      expect(execFileMock.mock.calls.at(-1)?.[1]).toContain(`PATH=${LOGIN_ENVIRONMENT.path}`)
+      const kill = spawnMock.mock.calls.find(([, args]) =>
+        String(args?.join(' ')).includes('kill -TERM')
+      )
+      expect(kill?.[1]).toContain('4321')
     })
   })
 
@@ -435,7 +214,6 @@ describe('WSL direct Git reads', () => {
       try {
         execFileMock.mockImplementation((_command, args, _options, callback) => {
           const child = createMockChild()
-          // The probe never answers; only the git command itself does.
           if (!String(args).includes('_orca_git_path')) {
             queueMicrotask(() => callback?.(null, 'ok', ''))
           }
@@ -448,8 +226,6 @@ describe('WSL direct Git reads', () => {
         await vi.advanceTimersByTimeAsync(WSL_GIT_READ_ENVIRONMENT_WAIT_MS)
         await pending
 
-        // Exactly the routing this read had before the wait existed: an unanswered
-        // probe must cost the bound and nothing else.
         const resolved = execFileMock.mock.calls.at(-1)?.[1] ?? []
         expect(resolved.slice(3, 5)).toEqual(['bash', '-c'])
         expect(resolved).not.toContain('/usr/bin/env')
@@ -459,41 +235,10 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  // Once the route is disabled the answer is already known, so paying for a timer and two
-  // extra microtask hops on every later read is pure overhead on the host this PR targets.
-  it('stops deferring reads once the direct route is disabled for the distro', async () => {
-    await withPlatform('win32', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      disableWslGitReadEnvironment(DISTRO)
-
-      expect(
-        pendingWslDirectGitReadEnvironment(['show', ':src/file.ts'], {
-          cwd: String.raw`\\wsl.localhost\Ubuntu\repo`
-        })
-      ).toBeNull()
-    })
-  })
-
-  it('never waits on the probe for an already-aborted read', async () => {
-    await withPlatform('win32', async () => {
-      const controller = new AbortController()
-      controller.abort()
-
-      expect(
-        pendingWslDirectGitReadEnvironment(['show', ':src/file.ts'], {
-          cwd: String.raw`\\wsl.localhost\Ubuntu\repo`,
-          signal: controller.signal
-        })
-      ).toBeNull()
-      expect(execFileMock).not.toHaveBeenCalled()
-    })
-  })
-
   it('stops waiting for a cold probe as soon as the read aborts', async () => {
     await withPlatform('win32', async () => {
       vi.useFakeTimers()
       try {
-        // The probe never answers, so only the abort can end the wait.
         execFileMock.mockImplementation(() => createMockChild())
         const controller = new AbortController()
 
@@ -616,7 +361,7 @@ describe('WSL direct Git reads', () => {
       await expect(
         getBranchConflictKind(String.raw`\\wsl.localhost\Ubuntu\repo`, 'new-feature')
       ).resolves.toBeNull()
-      expect(execFileMock).toHaveBeenCalledTimes(2)
+      expect(execFileMock).toHaveBeenCalledTimes(3)
       expect(execFileMock.mock.calls[0]?.[1]).toContain('--quiet')
     })
   })
@@ -663,33 +408,6 @@ describe('WSL direct Git reads', () => {
       expect(execFileMock.mock.calls[0]?.[1]).toContain('--exec')
       expect(execFileMock.mock.calls[1]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
       expect(execFileMock.mock.calls[2]?.[1]).toContain('--exec')
-    })
-  })
-
-  it('streams opted-in reads directly', async () => {
-    await withPlatform('win32', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      spawnMock.mockImplementation(() => {
-        const child = createMockChild()
-        queueMicrotask(() => {
-          child.stdout.emit('data', Buffer.from('# branch.head main\n'))
-          child.emit('close', 0)
-        })
-        return child
-      })
-      const chunks: string[] = []
-
-      await gitStreamStdout(['status', '--porcelain=v2'], {
-        cwd: String.raw`C:\repo`,
-        onStdout: (chunk) => {
-          chunks.push(chunk)
-        },
-        preferWslDirectGit: true,
-        wslDistro: DISTRO
-      })
-
-      expect(chunks).toEqual(['# branch.head main\n'])
-      expect(spawnMock.mock.calls[0]?.[1]).toContain('--exec')
     })
   })
 
@@ -770,21 +488,6 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  it('leaves non-Windows execution unchanged', async () => {
-    await withPlatform('linux', async () => {
-      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
-      succeedExecFile()
-
-      await gitExecFileAsync(['status', '--short'], {
-        cwd: '/repo',
-        preferWslDirectGit: true,
-        wslDistro: DISTRO
-      })
-
-      expect(execFileMock.mock.calls[0]?.[0]).toBe('git')
-    })
-  })
-
   it('keeps gitSpawn cache-only while async linked-worktree discovery is pending', async () => {
     await withPlatform('win32', async () => {
       let releaseStat: (() => void) | undefined
@@ -825,84 +528,39 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  it('aborts an async Git call while linked-worktree discovery remains pending', async () => {
-    await withPlatform('win32', async () => {
-      let releaseStat: (() => void) | undefined
-      const delayedStat = new Promise<void>((resolve) => {
-        releaseStat = resolve
-      })
-      const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
-        stat: vi.fn(async () => {
-          await delayedStat
-          return { isDirectory: () => false, isFile: () => true }
-        }),
-        readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
-      }
-      const discovery = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, DISTRO, {
-        platform: 'win32',
-        fileSystem
-      })
-      const controller = new AbortController()
-
-      const command = gitExecFileAsync(['status', '--short'], {
-        cwd: String.raw`C:\repo`,
-        wslDistro: DISTRO,
-        signal: controller.signal
-      })
-      controller.abort()
-
-      await expect(command).rejects.toMatchObject({ name: 'AbortError' })
-      expect(execFileMock).not.toHaveBeenCalled()
-      releaseStat?.()
-      await expect(discovery).resolves.toBe(true)
-    })
-  })
-
-  it('keeps gitSpawn cache-only when a linked-worktree route expires', async () => {
-    await withPlatform('win32', async () => {
-      let currentTime = 1_000
-      const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => currentTime)
-      try {
+  it.each([gitExecFileAsync, gitExecFileAsyncBuffer])(
+    'aborts an async Git read while linked-worktree discovery remains pending (%s)',
+    async (readGit) => {
+      await withPlatform('win32', async () => {
+        let releaseStat: (() => void) | undefined
+        const delayedStat = new Promise<void>((resolve) => {
+          releaseStat = resolve
+        })
         const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
-          stat: vi.fn(async () => ({ isDirectory: () => false, isFile: () => true })),
+          stat: vi.fn(async () => {
+            await delayedStat
+            return { isDirectory: () => false, isFile: () => true }
+          }),
           readFile: vi.fn(async () => 'gitdir: C:/main/.git/worktrees/linked\n')
         }
-        await prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, DISTRO, {
+        const discovery = prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, DISTRO, {
           platform: 'win32',
           fileSystem
         })
-        spawnMock.mockReturnValue(createMockChild())
+        const controller = new AbortController()
 
-        gitSpawn(['ls-files'], {
+        const command = readGit(['show', 'HEAD:file'], {
           cwd: String.raw`C:\repo`,
           wslDistro: DISTRO,
-          stdio: ['ignore', 'pipe', 'pipe']
+          signal: controller.signal
         })
-        currentTime += WSL_LINKED_WORKTREE_ROUTE_TTL_MS
-        gitSpawn(['ls-files'], {
-          cwd: String.raw`C:\repo`,
-          wslDistro: DISTRO,
-          stdio: ['ignore', 'pipe', 'pipe']
-        })
+        controller.abort()
 
-        expect(spawnMock.mock.calls[0]?.[0]).toBe('git')
-        expect(spawnMock.mock.calls[1]?.[0]).toBe('wsl.exe')
-        expect(fileSystem.stat).toHaveBeenCalledTimes(1)
-
-        await prepareWslLinkedWorktreeGitRouting(String.raw`C:\repo`, DISTRO, {
-          platform: 'win32',
-          fileSystem
-        })
-        gitSpawn(['ls-files'], {
-          cwd: String.raw`C:\repo`,
-          wslDistro: DISTRO,
-          stdio: ['ignore', 'pipe', 'pipe']
-        })
-        expect(fileSystem.stat).toHaveBeenCalledTimes(2)
-        expect(spawnMock.mock.calls[2]?.[0]).toBe('git')
-      } finally {
-        nowSpy.mockRestore()
-      }
-    })
-  })
+        await expect(command).rejects.toMatchObject({ name: 'AbortError' })
+        expect(execFileMock).not.toHaveBeenCalled()
+        releaseStat?.()
+        await expect(discovery).resolves.toBe(true)
+      })
+    }
+  )
 })

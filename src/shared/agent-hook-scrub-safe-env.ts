@@ -1,23 +1,4 @@
-/**
- * Scrub-safe aliases for the two pane-identity env vars whose NAMES some agent harnesses
- * refuse to pass through to a hook process.
- *
- * DeepSeek Harness runs command hooks through its own shell executor, which drops every
- * variable whose name contains `KEY`, `TOKEN`, `SECRET` or `PASSWORD` before the hook
- * process starts. That is a reasonable credential-scrub default, and it is not something
- * Orca can turn off — but it takes `ORCA_PANE_KEY` and `ORCA_AGENT_LAUNCH_TOKEN` with it,
- * which are the two values a status hook needs to say *which pane* it is reporting for.
- * Without them the hook has nothing to attribute to and exits without posting, so the pane
- * reads as an agent Orca never hears from.
- *
- * Verified against `@deepseek-ai/dsh` 0.1.5-rc.1 by running a probe hook that printed its
- * own environment: `PROBE_PLAIN`, `PROBE_AUTH`, `PROBE_CREDENTIAL`, `PROBE_HOOK_PORT` and
- * `PROBE_PANE_ID` arrive; `PROBE_KEY`, `PROBE_TOKEN`, `PROBE_SECRET`, `PROBE_PASSWORD` and
- * `PROBE_PANE_KEY` do not.
- *
- * These are aliases, never replacements: the canonical names stay exactly as they are, so
- * every existing agent, script and test keeps reading what it reads today.
- */
+/** DSH0.1.5-rc.1 and Claude2.1.310 (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB) scrub KEY/TOKEN/SECRET/PASSWORD names, including pane identity. Use scrub-safe aliases without replacing canonical names. */
 
 /** Alias for `ORCA_PANE_KEY`. */
 export const ORCA_SCRUB_SAFE_PANE_ENV = 'ORCA_AGENT_PANE' as const
@@ -30,13 +11,7 @@ const ALIASES: readonly (readonly [source: string, alias: string])[] = [
   ['ORCA_AGENT_LAUNCH_TOKEN', ORCA_SCRUB_SAFE_LAUNCH_ENV]
 ]
 
-/**
- * Mirror pane identity onto its scrub-safe aliases, in place.
- *
- * An alias is written only when its source is present, and dropped when the source is
- * absent — a stale alias inherited from a parent pane would attribute this pane's hooks to
- * the wrong row, which is worse than no status at all.
- */
+/** Drop aliases whose source is absent so inherited parent identity cannot claim this pane's hooks. */
 export function applyScrubSafeAgentEnvAliases(env: Record<string, string>): void {
   for (const [source, alias] of ALIASES) {
     const value = env[source]
@@ -46,4 +21,19 @@ export function applyScrubSafeAgentEnvAliases(env: Record<string, string>): void
     }
     env[alias] = value
   }
+}
+
+/** POSIX hook prologue: refill the canonical names from their aliases; never overwrites a live value. */
+export function buildPosixScrubSafeEnvRestoreLines(): string[] {
+  return [
+    ...ALIASES.map(([source, alias]) => `: "\${${source}:=\${${alias}:-}}"`),
+    `export ${ALIASES.map(([source]) => source).join(' ')}`
+  ]
+}
+
+/** Windows `.cmd` hook prologue with the same contract. */
+export function buildWindowsScrubSafeEnvRestoreLines(): string[] {
+  return ALIASES.map(
+    ([source, alias]) => `if not defined ${source} if defined ${alias} set "${source}=%${alias}%"`
+  )
 }

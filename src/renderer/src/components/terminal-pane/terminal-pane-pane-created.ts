@@ -1,26 +1,28 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { createOsc52OscHandler } from './osc52-clipboard'
+import { createOsc52OscHandler } from '../../../../shared/osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
+  showOsc52ClipboardCopyRetryToast,
   showOsc52ClipboardFailedToast
 } from './osc52-clipboard-toast'
 import { parseOsc7 } from './parse-osc7'
 import { mergePaneCwdFromOsc7, settlePaneCwdDeferredSpawn } from './resolve-split-cwd'
 import {
-  appendDeferredSplitPaneInput,
+  deferredSplitPaneConnectionInput,
   beginDeferredSplitPaneHandoff,
   claimDeferredSplitPaneHandoff,
   clearDeferredSplitPaneHandoff,
   discardDeferredSplitPaneHandoffForKey,
   type DeferredSplitPaneHandoffHandle
 } from './deferred-split-pane-handoff'
-import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { isPaneReplaying } from './replay-guard'
 import { connectPanePty } from './pty-connection'
+import { completePaneSpawnPlacement } from './terminal-pane-spawn-placement'
 import {
   createQueuedStartupConsumer,
   resolvePaneSeedCwd,
@@ -33,13 +35,12 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 
 export type PaneCreatedSetupContext = TerminalPaneManagerOptionsContext
 
-/** Creates the PaneManager `onPaneCreated` callback. */
 export function createTerminalPaneCreatedHandler(
   context: PaneCreatedSetupContext
 ): (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void {
   // Split spawn hints let the renderer pane appear before a slow inherited-cwd lookup finishes.
   return (pane, spawnHints) => {
-    const { deps, refs, ptyDeps, startupWithSetupSplitWait, startup, osc7UncHost } = context
+    const { deps, refs, ptyDeps, startup, osc7UncHost } = context
     const manager = deps.managerRef.current
     if (!manager) {
       return
@@ -67,8 +68,7 @@ export function createTerminalPaneCreatedHandler(
         }
       }
     } else {
-      // A restored PTY or explicit spawn hint is authoritative; an older
-      // deferred record must not be claimed by a later remount.
+      // Restored PTY or explicit spawn hints outrank older deferred records on remount.
       discardDeferredSplitPaneHandoffForKey(paneKey)
     }
     const handoffForInput = deferredSplitHandoff
@@ -82,7 +82,13 @@ export function createTerminalPaneCreatedHandler(
           getReplaying: () => isPaneReplaying(replayingPanesRef, pane.id),
           writeClipboardText: (text) => window.api.ui.writeTerminalClipboardText(text),
           showBlockedWriteToast: showOsc52ClipboardBlockedToast,
-          showWriteFailedToast: showOsc52ClipboardFailedToast
+          // Web clipboards need a recent gesture that a host round trip can outlive (#33937).
+          showWriteFailedToast: isWebClientLocation()
+            ? (text) =>
+                showOsc52ClipboardCopyRetryToast(text, (retry) =>
+                  window.api.ui.writeTerminalClipboardText(retry)
+                )
+            : showOsc52ClipboardFailedToast
         })
       )
     )
@@ -109,8 +115,7 @@ export function createTerminalPaneCreatedHandler(
     }
     if (effectiveSpawnHints?.cwdPromise) {
       const cwdPromise = effectiveSpawnHints.cwdPromise
-      // A rejected lookup keeps the seed cwd; either way the settled identity
-      // stays until bind/failure so a stale cleanup cannot clear a newer lookup.
+      // Failed cwd lookup keeps the seed; settled identity remains until bind/failure so stale cleanup cannot erase a newer lookup.
       const applySettledCwd = (cwd: string | null): void => {
         const current = paneCwdRef.current.get(pane.id)
         if (!current || current.confirmed || current.pendingCwd !== cwdPromise) {
@@ -169,7 +174,7 @@ export function createTerminalPaneCreatedHandler(
     context.applyAppearance(manager)
     const onQueuedStartupSpawned = createQueuedStartupConsumer(
       ptyDeps.startup,
-      startupWithSetupSplitWait,
+      startup,
       () => useAppStore.getState().consumeTabStartupCommand(deps.tabId),
       () => useAppStore.getState().pendingStartupByTabId[deps.tabId] === startup
     )
@@ -192,16 +197,22 @@ export function createTerminalPaneCreatedHandler(
           }
         : {}),
       ...(handoffForInput
-        ? {
-            onPreconnectInput: (input: PtyPreconnectInputEntry) =>
-              appendDeferredSplitPaneInput(handoffForInput, input)
-          }
-        : {}),
-      ...(claimedDeferredSplitHandoff?.preconnectInput.length
-        ? { preconnectInput: claimedDeferredSplitHandoff.preconnectInput }
+        ? deferredSplitPaneConnectionInput(
+            handoffForInput,
+            claimedDeferredSplitHandoff?.preconnectInput
+          )
         : {}),
       ...(effectiveSpawnHints?.cwd ? { cwd: effectiveSpawnHints.cwd } : {}),
       ...(effectiveSpawnHints?.cwdPromise ? { cwdPromise: effectiveSpawnHints.cwdPromise } : {}),
+      ...(effectiveSpawnHints?.placement
+        ? {
+            placement: completePaneSpawnPlacement(effectiveSpawnHints.placement, {
+              worktreeId: deps.worktreeId,
+              tabId: deps.tabId,
+              container: deps.containerRef.current
+            })
+          }
+        : {}),
       restoredPtyIdByLeafId: effectiveSpawnHints?.ptyId
         ? {
             ...ptyDeps.restoredPtyIdByLeafId,

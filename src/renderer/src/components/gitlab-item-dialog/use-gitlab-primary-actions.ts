@@ -1,3 +1,4 @@
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
@@ -7,6 +8,7 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function useGitLabPrimaryActions(
   item: GitLabWorkItem | null,
@@ -28,7 +30,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('close')
     try {
-      const res = await window.api.gl.closeMR({ ...repoSelector, iid: item.number })
+      const res = await gitLabApiFor(repoSelector).closeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -41,7 +43,7 @@ export function useGitLabPrimaryActions(
         }
       } else {
         if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       }
     } catch (error) {
@@ -61,7 +63,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('reopen')
     try {
-      const res = await window.api.gl.reopenMR({ ...repoSelector, iid: item.number })
+      const res = await gitLabApiFor(repoSelector).reopenMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -74,7 +76,7 @@ export function useGitLabPrimaryActions(
         }
       } else {
         if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       }
     } catch (error) {
@@ -94,7 +96,7 @@ export function useGitLabPrimaryActions(
     }
     setActionInFlight('merge')
     try {
-      const res = await window.api.gl.mergeMR({ ...repoSelector, iid: item.number })
+      const res = await gitLabApiFor(repoSelector).mergeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -107,7 +109,7 @@ export function useGitLabPrimaryActions(
         }
       } else {
         if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       }
     } catch (error) {
@@ -137,16 +139,14 @@ export function useGitLabPrimaryActions(
     }
     setCommentSubmitting(true)
     try {
-      // Why: the IPC for issue comments takes `number`, MR takes `iid`.
-      // Branch on the item type to hit the right channel.
       const res =
         item.type === 'mr'
-          ? await window.api.gl.addMRComment({
+          ? await gitLabApiFor(repoSelector).addMRComment({
               ...repoSelector,
               iid: item.number,
               body: bodyState.body
             })
-          : await window.api.gl.addIssueComment({
+          : await gitLabApiFor(repoSelector).addIssueComment({
               ...repoSelector,
               number: item.number,
               body: bodyState.body
@@ -161,7 +161,7 @@ export function useGitLabPrimaryActions(
         }
       } else {
         if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       }
     } catch (error) {

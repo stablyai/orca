@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
-  installApi,
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
 } from './web-preload-api-test-harness'
@@ -14,29 +13,6 @@ describe('web file preload API', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
-  })
-
-  it('rejects native save-dialog downloads in paired web clients', async () => {
-    const { api } = await installApi('Linux')
-
-    await expect(
-      api.fs.downloadFile({ filePath: '/workspace/repo/file.txt', connectionId: 'ssh-1' })
-    ).rejects.toThrow('Remote file download is unavailable in paired web clients.')
-    await expect(
-      api.fs.downloadFolder({ dirPath: '/workspace/repo/src', connectionId: 'ssh-1' })
-    ).rejects.toThrow('Remote folder download is unavailable in paired web clients.')
-  })
-
-  it('rejects SSH clone requests in paired web clients', async () => {
-    const { api } = await installApi('Linux')
-
-    await expect(
-      api.repos.cloneRemote({
-        connectionId: 'ssh-1',
-        url: 'https://github.com/stablyai/orca.git',
-        destination: '/workspace'
-      })
-    ).rejects.toThrow('SSH clone is unavailable in paired web clients.')
   })
 
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {

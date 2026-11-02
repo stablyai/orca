@@ -103,12 +103,12 @@ export function RuntimeEnvironmentRemoveDialog({
           <DialogDescription>
             {removingActiveServer
               ? translate(
-                  'auto.components.settings.RuntimeEnvironmentsPane.removeActiveServerDescription',
-                  'Choose another Active Server in Advanced before removing this server. Existing host sessions are left alone.'
+                  'auto.components.settings.RuntimeEnvironmentsPane.removeDefaultServerDescription',
+                  'This server is the default host for new projects. Choose another one under New projects open on before removing it. Existing host sessions are left alone.'
                 )
               : translate(
                   'auto.components.settings.RuntimeEnvironmentsPane.ed3e3f069d',
-                  'This removes the saved server from Orca. It does not change the active server.'
+                  'This removes the saved server from Orca. It does not change the default host for new projects.'
                 )}
           </DialogDescription>
         </DialogHeader>

@@ -1,4 +1,7 @@
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
+import {
+  ANSI_INTRODUCER_PATTERN,
+  stripAnsiEscapeSequences
+} from '../../../../shared/ansi-escape-sequences'
 
 /** 0-15 index the themed ANSI palette; strings are explicit CSS colors. */
 export type AnsiColor = number | string
@@ -76,6 +79,9 @@ function applySgr(style: AnsiStyle, params: string): AnsiStyle {
 
 /** Splits terminal output into styled runs; non-SGR escape sequences are dropped. */
 export function parseAnsiSegments(input: string): AnsiSegment[] {
+  if (!ANSI_INTRODUCER_PATTERN.test(input)) {
+    return input ? [{ text: input }] : []
+  }
   const segments: AnsiSegment[] = []
   let style: AnsiStyle = {}
   let offset = 0

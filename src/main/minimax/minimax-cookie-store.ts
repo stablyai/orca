@@ -1,11 +1,12 @@
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../../shared/secret-store'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 const MINIMAX_COOKIE_FILE = 'minimax-session-cookie.enc'
-const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
+export const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
 let cachedMiniMaxCookie: string | null = null
 let warnedMiniMaxCookieStatusHardenFailure = false
 
@@ -18,7 +19,7 @@ function getOrcaDir(): string {
   return join(homedir(), '.orca')
 }
 
-function getMiniMaxCookiePath(): string {
+export function getMiniMaxCookiePath(): string {
   return join(getOrcaDir(), MINIMAX_COOKIE_FILE)
 }
 
@@ -46,9 +47,7 @@ function decodeCookieEnvelope(raw: Buffer): MiniMaxCookieEnvelope | null {
   }
 }
 
-// Why: migrates cookies saved before the envelope format existed. Older files
-// hold raw bytes (safeStorage-encrypted or plaintext), so we sniff the content
-// to tell the two apart rather than removing this as seemingly dead code.
+// Legacy files contain raw encrypted or plaintext bytes; sniff them before envelope migration.
 function looksLikeCookieHeader(value: string): boolean {
   const trimmed = value.trim()
   if (!trimmed) {
@@ -71,16 +70,16 @@ function readEnvelope(envelope: MiniMaxCookieEnvelope): string {
   if (envelope.kind === 'plaintext') {
     return envelope.payload.toString('utf8')
   }
-  if (!safeStorage.isEncryptionAvailable()) {
+  if (!getSecretStore().isEncryptionAvailable()) {
     throw new Error('MiniMax session cookie could not be decrypted')
   }
-  return safeStorage.decryptString(envelope.payload)
+  return getSecretStore().decryptString(envelope.payload)
 }
 
 function readLegacyCookie(raw: Buffer): string {
-  if (safeStorage.isEncryptionAvailable()) {
+  if (getSecretStore().isEncryptionAvailable()) {
     try {
-      return safeStorage.decryptString(raw)
+      return getSecretStore().decryptString(raw)
     } catch {
       const plaintext = raw.toString('utf8')
       if (looksLikeCookieHeader(plaintext)) {
@@ -94,6 +93,24 @@ function readLegacyCookie(raw: Buffer): string {
     return plaintext
   }
   throw new Error('MiniMax session cookie could not be decrypted')
+}
+
+/** Inspect protection without decryption/keychain prompts; legacy files use the reader's sniff. */
+export function getMiniMaxSessionCookieProtection(): SecretAtRestProtection | null {
+  const cookiePath = getMiniMaxCookiePath()
+  if (!existsSync(cookiePath)) {
+    return null
+  }
+  try {
+    const raw = readFileSync(cookiePath)
+    const envelope = decodeCookieEnvelope(raw)
+    if (envelope) {
+      return envelope.kind === 'plaintext' ? 'plaintext' : 'sealed'
+    }
+    return looksLikeCookieHeader(raw.toString('utf8')) ? 'plaintext' : 'sealed'
+  } catch {
+    return null
+  }
 }
 
 export function hasMiniMaxSessionCookie(): boolean {
@@ -117,10 +134,10 @@ export function saveMiniMaxSessionCookie(cookie: string): void {
   if (!trimmed) {
     throw new Error('MiniMax session cookie is required')
   }
-  if (safeStorage.isEncryptionAvailable()) {
+  if (getSecretStore().isEncryptionAvailable()) {
     writeSecureFile(
       getMiniMaxCookiePath(),
-      encodeCookieEnvelope('encrypted', safeStorage.encryptString(trimmed))
+      encodeCookieEnvelope('encrypted', getSecretStore().encryptString(trimmed))
     )
     cachedMiniMaxCookie = trimmed
     return
@@ -141,8 +158,7 @@ export function readMiniMaxSessionCookie(): string | null {
   if (!existsSync(keyPath)) {
     return null
   }
-  // Why: keep hardening out of the decode/decrypt try below so a chmod/ACL
-  // failure isn't misreported as a decrypt failure (matches hasMiniMaxSessionCookie).
+  // Keep permission failures outside decryption handling so they retain their actual diagnosis.
   try {
     hardenExistingSecureFile(keyPath)
   } catch (error) {

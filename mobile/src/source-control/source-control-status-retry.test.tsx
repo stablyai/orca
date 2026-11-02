@@ -17,17 +17,45 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
-// The panel's collaborators, each rendering nothing: what is under test is its own status gate.
+vi.mock('lucide-react-native', () => ({
+  CircleAlert: 'Icon',
+  GitBranch: 'Icon',
+  RefreshCw: 'Icon',
+  WifiOff: 'Icon'
+}))
 vi.mock('./MobileSourceControlHeader', () => ({ MobileSourceControlHeader: () => null }))
 vi.mock('./MobileSourceControlContent', () => ({ MobileSourceControlContent: () => null }))
 vi.mock('./MobileSourceControlModals', () => ({ MobileSourceControlModals: () => null }))
-vi.mock('./MobileSourceControlSegments', () => ({ MobileSourceControlSegments: () => null }))
 vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCard: () => null }))
-vi.mock('./MobileGitHistoryList', () => ({ MobileGitHistoryList: () => null }))
-vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))
+vi.mock('./MobileSourceControlHubCommitsPage', () => ({
+  MobileSourceControlHubCommitsPage: () => null
+}))
+vi.mock('./MobileSourceControlNextStepBar', () => ({ MobileSourceControlNextStepBar: () => null }))
+vi.mock('./use-mobile-source-control-next-step', () => ({
+  useMobileSourceControlNextStep: () => ({
+    view: { kind: 'hidden' },
+    notice: null,
+    agentNotice: null,
+    mergeConfirm: null
+  })
+}))
+vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../components/BottomDrawer', () => ({
+  useOptionPager: () => ({ page: null, open: () => {}, close: () => {}, forget: () => {} }),
+  OptionPager: ({ main }: { main: unknown }) => main
+}))
 vi.mock('../components/mobile-pr-url', () => ({ openMobilePrUrl: () => {} }))
+vi.mock('../components/MobilePRSidebar', () => ({ MobilePrTabBody: () => null }))
+vi.mock('../components/pr-sidebar/MobilePrTabSheets', () => ({ MobilePrTabSheets: () => null }))
+vi.mock('../components/pr-sidebar/PrChecksScreen', () => ({ PrChecksScreen: () => null }))
+vi.mock('../components/pr-sidebar/PrCommentsScreen', () => ({ PrCommentsScreen: () => null }))
+vi.mock('../components/pr-sidebar/use-mobile-pr-tab', () => ({
+  useMobilePrTab: () => ({ openCreatePrSheet: () => {} })
+}))
+vi.mock('../components/pr-sidebar/use-pr-tab-menu', () => ({ usePrTabMenuGroups: () => null }))
+vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('./use-mobile-source-control-action-sheet', () => ({
-  useMobileSourceControlActionSheet: () => ({})
+  useMobileSourceControlActionSheet: () => []
 }))
 vi.mock('../session/use-mobile-pr-sidebar-controller', () => ({
   useMobilePrSidebarController: () => ({
@@ -38,8 +66,7 @@ vi.mock('../session/use-mobile-pr-sidebar-controller', () => ({
     ensurePrSidebarDetails: () => Promise.resolve()
   })
 }))
-// A status read that failed while the host was unreachable, with `forceReconnect` as the provider
-// hands it out: null on the page, a re-dial natively.
+// The page has no forceReconnect; native providers supply it to redial after failed reads.
 vi.mock('./use-mobile-source-control-state', () => ({
   useMobileSourceControlState: () => ({
     client: null,
@@ -51,17 +78,27 @@ vi.mock('./use-mobile-source-control-state', () => ({
     worktreeLabel: 'wt',
     screenState: { kind: 'error', message: 'Waiting for desktop...' },
     busyAction: null,
-    openingPath: null,
-    openingBranchPath: null,
     loadStatus: doubles.loadStatus,
     status: null,
     branchCompareResult: null,
     branchLabel: '',
-    syncLabel: '',
     unstagedCount: 0,
     stagedCount: 0,
     branchEntries: [],
-    abortConflictOperation: () => Promise.resolve()
+    abortConflictOperation: () => Promise.resolve(),
+    resolveConflict: () => Promise.resolve(),
+    completeMerge: () => Promise.resolve(),
+    primaryActionArgs: {
+      status: null,
+      hasUnresolvedConflicts: false,
+      stageablePaths: [],
+      stagedCount: 0,
+      unstagedCount: 0,
+      commitMessage: '',
+      busyAction: null,
+      branchCompareResult: null,
+      handlers: {}
+    }
   })
 }))
 
@@ -90,7 +127,7 @@ function retryControls(rendered: ReactTestRenderer): ReactTestInstance[] {
     .filter((node) =>
       node
         .findAll((text) => String(text.type) === 'Text')
-        .some((text) => text.props.children === 'Retry')
+        .some((text) => text.props.children === 'Reconnect')
     )
 }
 
@@ -99,12 +136,12 @@ describe("source control's status Retry while the host is unreachable", () => {
     doubles.forceReconnect = null
     const rendered = render()
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).not.toHaveLength(0)
     expect(retryControls(rendered)).toHaveLength(0)
   })
 
-  it('still renders natively and re-dials this host', () => {
+  it('offers Retry when a reconnect callback is available and dispatches this host', () => {
     const forceReconnect = vi.fn(() => Promise.resolve())
     doubles.forceReconnect = forceReconnect
     const [retry] = retryControls(render())

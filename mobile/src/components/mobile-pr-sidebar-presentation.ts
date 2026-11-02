@@ -1,7 +1,6 @@
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 
-// Pure presentation helpers for the mobile PR sidebar. No React/native imports so
-// the responsive + render-branch decisions are unit-testable under node Vitest.
+// Keep sidebar decisions pure and RN-free for Node tests.
 
 export type PrSidebarPresentationMode = 'inline' | 'overlay'
 
@@ -19,8 +18,7 @@ export function canDockPrSidebar(args: {
   )
 }
 
-// Wide layouts dock the sidebar inline beside the diff only when the measured
-// row can preserve a usable main column; otherwise it falls back to the overlay.
+// Dock only when measured wide row preserves usable main column; otherwise overlay.
 export function resolvePresentationMode(
   isWideLayout: boolean,
   canDock = isWideLayout
@@ -28,10 +26,7 @@ export function resolvePresentationMode(
   return isWideLayout && canDock ? 'inline' : 'overlay'
 }
 
-// The header trigger is only meaningful in overlay mode: in wide/docked mode the
-// sidebar is always visible, so the trigger is hidden (not disabled). The dedicated
-// PR icon shows on any GitHub repo regardless of whether a PR is linked — a no-PR
-// branch opens to an empty state rather than hiding the entry point.
+// Show PR trigger only in overlay mode, on any GitHub repo; no-PR branches open create/empty state instead of hiding entry point.
 export function shouldShowTrigger(args: {
   isGithubRepo: boolean
   isWideLayout: boolean

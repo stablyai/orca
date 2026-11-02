@@ -18,6 +18,7 @@ type UseTerminalLiveInputFocusOptions<T extends TerminalLiveInputFocusTarget> =
   TerminalLiveInputFocusContext & {
     readonly activeHandleRef: RefObject<string | null>
     readonly inputRef: RefObject<T | null>
+    readonly commandInputRef: RefObject<TerminalLiveInputFocusTarget | null>
     readonly lifecycleIdentity: object | null
     readonly lifecycleKey: string
     readonly timerRef: TerminalLiveInputFocusTimerRef
@@ -32,6 +33,7 @@ type TerminalLiveInputFocusHandlers = {
 export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget>({
   activeHandleRef,
   canSend,
+  commandInputRef,
   inputRef,
   keyboardHeight,
   lifecycleIdentity,
@@ -62,6 +64,15 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
 
   // Retained Expo routes must not carry focus work across navigation or reconnect scopes.
   useLayoutEffect(() => resetLiveInputFocus, [lifecycleIdentity, lifecycleKey, resetLiveInputFocus])
+
+  useLayoutEffect(() => {
+    const inactive = liveInputEnabled ? commandInputRef : inputRef
+    if (inactive.current?.isFocused?.()) {
+      clearTerminalLiveInputFocusTimer(timerRef)
+      const active = liveInputEnabled ? inputRef : commandInputRef
+      active.current?.focus()
+    }
+  }, [commandInputRef, inputRef, liveInputEnabled, timerRef])
 
   const focusLiveInput = useCallback(() => {
     const context = contextRef.current

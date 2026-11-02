@@ -11,15 +11,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from './check-details-model'
+import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
   const {
     checks,
+    checksError,
     checksLoading,
     checkDetailsContextKey,
     detailsStickySurface = 'sidebar',
@@ -45,7 +48,6 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
   } = useChecksListState(props)
   return (
     <>
-      {/* Checks Summary */}
       {checks.length > 0 && (
         <button
           type="button"
@@ -59,42 +61,41 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           {passingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleCheck className="size-3 text-emerald-500" />
-              {passingCount}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.02ca4f9074',
-                'passing'
+                'auto.components.right.sidebar.checks.panel.content.passingCount',
+                '{{count}} passing',
+                { count: passingCount, defaultValue_one: '{{count}} passing' }
               )}
             </span>
           )}
           {failingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleX className="size-3 text-rose-500" />
-              {failingCount}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.5e52f4ef7f',
-                'failing'
+                'auto.components.right.sidebar.checks.panel.content.failingCount',
+                '{{count}} failing',
+                { count: failingCount, defaultValue_one: '{{count}} failing' }
               )}
             </span>
           )}
           {pendingCount > 0 && (
             <span className="flex items-center gap-1">
               <LoaderCircle className="size-3 text-amber-500" />
-              {pendingCount}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.9ad98f2a17',
-                'pending'
+                'auto.components.right.sidebar.checks.panel.content.pendingCount',
+                '{{count}} pending',
+                { count: pendingCount, defaultValue_one: '{{count}} pending' }
               )}
             </span>
           )}
-          {/* Why: without this chip a list of only unresolved checks rendered a header with no
-              counts at all, so nothing said why the pill was grey. */}
+          {/* Name unresolved counts so an all-neutral list still explains its grey pill. */}
           {neutralCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleDashed className="size-3 text-muted-foreground" />
-              {neutralCount}{' '}
               {translate(
-                'auto.components.right.sidebar.checks.panel.content.checksUnresolvedChip',
-                'unresolved'
+                'auto.components.right.sidebar.checks.panel.content.unresolvedCount',
+                '{{count}} unresolved',
+                { count: neutralCount, defaultValue_one: '{{count}} unresolved' }
               )}
             </span>
           )}
@@ -103,10 +104,13 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         </button>
       )}
 
-      {/* Checks List */}
       {checksLoading && checks.length === 0 ? (
         <div className="flex items-center justify-center py-8">
           <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : checks.length === 0 && checksError ? (
+        <div role="alert" className="px-4 py-8 text-[11px] break-words text-destructive">
+          {checksError}
         </div>
       ) : checks.length === 0 ? (
         <div className="px-4 py-8 text-[11px] text-muted-foreground">
@@ -131,6 +135,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
               return (
                 <div key={row.key} className="min-w-0">
                   <div
+                    ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
                     className={cn(
                       'group/check-row flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
                       expanded && 'bg-accent/25'
@@ -147,7 +152,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                       className={cn(
                         'size-3.5 shrink-0',
                         color,
-                        conclusion === 'pending' && 'animate-spin'
+                        conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
                       )}
                     />
                     <span className="flex-1 truncate text-[12px] text-foreground">
@@ -171,7 +176,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                               )}
                               onClick={(event) => {
                                 event.stopPropagation()
-                                window.api.shell.openUrl(openUrl)
+                                openAppHttpLink(openUrl, { event })
                               }}
                             >
                               <ExternalLink className="size-3" />

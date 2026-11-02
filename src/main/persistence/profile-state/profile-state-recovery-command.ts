@@ -16,8 +16,18 @@ import { restoreProfileStateDatabaseBackup } from './profile-state-database-reco
 import { quarantineProfileStateDatabase } from './profile-state-database-quarantine'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
-import type { ProfileStateMaintenance } from './profile-state-access'
+import { assertProfileStateMaintenance, type ProfileStateMaintenance } from './profile-state-access'
+import {
+  openProfileStateDatabaseReadOnly,
+  openWritableProfileStateDatabase
+} from './profile-state-database'
+import {
+  writeProfileStateAuthorityJsonExport,
+  writeProfileStateRecoveryJsonExport
+} from './legacy-json/profile-state-authority-exports'
+import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
 import { readProfileStateDomain } from './profile-state-domain-reader'
+import { repairProfileStateSections } from './profile-state-section-repair'
 import { isRecord } from './profile-state-document-validation'
 import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
 import {
@@ -25,8 +35,11 @@ import {
   writeHttp1CompatibilityMarker
 } from '../../startup/http1-compatibility-marker'
 
-export function getProfileStateExports(userDataPath: string): ProfileStateExportsResult {
-  const location = getActiveProfileStateLocation(userDataPath)
+export function getProfileStateExports(
+  userDataPath: string,
+  profileId?: string
+): ProfileStateExportsResult {
+  const location = getActiveProfileStateLocation(userDataPath, profileId)
   if (location === undefined) {
     throw new ProfileStateRecoveryCommandError(
       'runtime_error',
@@ -45,9 +58,10 @@ export function getProfileStateExports(userDataPath: string): ProfileStateExport
 export function rollbackProfileState(
   userDataPath: string,
   selector: ProfileStateRecoverySelector,
-  maintenance: ProfileStateMaintenance
+  maintenance: ProfileStateMaintenance,
+  profileId?: string
 ): ProfileStateRollbackResult {
-  const result = getProfileStateExports(userDataPath)
+  let result = getProfileStateExports(userDataPath, profileId)
   if (profileHasPendingProjectMove(result.profileId, userDataPath)) {
     throw new ProfileStateRecoveryCommandError(
       'runtime_error',
@@ -60,7 +74,33 @@ export function rollbackProfileState(
   if (selector.kind === 'current-sqlite') {
     return adoptCurrentDatabase(userDataPath, result, maintenance)
   }
-  const revision = selector.kind === 'json' ? selector.revision : null
+  if (selector.kind === 'repair') {
+    const repaired = repairProfileStateSections({
+      maintenance,
+      location: { ...result, userDataPath },
+      approved: selector.sections,
+      beforeRepair: () => invalidateActiveProfileMarker(userDataPath, result.profileId)
+    })
+    syncHttp1CompatibilityMarkerFromDatabase(userDataPath, result)
+    return {
+      ...result,
+      storage: 'sqlite',
+      restoredPath: result.databaseFile,
+      revision: repaired.revision,
+      quarantineDirectory: repaired.quarantineDirectory,
+      removedDatabaseFiles: [],
+      repairedSections: repaired.sections
+    }
+  }
+  const revision =
+    selector.kind === 'latest-json'
+      ? exportLatestProfileStateJson(result, maintenance)
+      : selector.kind === 'json'
+        ? selector.revision
+        : null
+  if (selector.kind === 'latest-json') {
+    result = getProfileStateExports(userDataPath, profileId)
+  }
   const exportPath =
     revision === null ? result.dataFile : profileStateJsonExportPath(result.dataFile, revision)
   if (revision !== null && !result.exportPaths.includes(exportPath)) {
@@ -76,7 +116,7 @@ export function rollbackProfileState(
     exportPath,
     profileId: result.profileId,
     ...(revision === null ? { reason: 'profile-state-adopt-current-json' } : {}),
-    beforeRestore: () => invalidateHttp1CompatibilityMarker(userDataPath)
+    beforeRestore: () => invalidateActiveProfileMarker(userDataPath, result.profileId)
   })
   syncHttp1CompatibilityMarkerAfterRollback(userDataPath, result.dataFile, result.profileId)
   return {
@@ -86,6 +126,34 @@ export function rollbackProfileState(
     revision,
     quarantineDirectory: recovered.quarantine.directory,
     removedDatabaseFiles: recovered.removedDatabaseFiles
+  }
+}
+
+function exportLatestProfileStateJson(
+  profile: ProfileStateExportsResult,
+  maintenance: ProfileStateMaintenance
+): number {
+  assertProfileStateMaintenance(maintenance, {
+    profileId: profile.profileId,
+    dataFile: profile.dataFile,
+    databasePath: profile.databaseFile
+  })
+  const opened = openProfileStateDatabaseReadOnly(profile.databaseFile, profile.profileId)
+  try {
+    const revision = writeVersionedProfileStateExport(
+      profile.dataFile,
+      (targetPath) => writeProfileStateAuthorityJsonExport(opened.db, targetPath),
+      { retainAllExports: true }
+    )
+    if (revision === undefined) {
+      throw new ProfileStateRecoveryCommandError(
+        'runtime_error',
+        'The SQLite profile has no persisted state to export.'
+      )
+    }
+    return revision
+  } finally {
+    opened.db.close()
   }
 }
 
@@ -108,7 +176,7 @@ function restoreDatabaseBackup(
     dataFile: result.dataFile,
     backupPath: backup.path,
     profileId: result.profileId,
-    beforeRestore: () => invalidateHttp1CompatibilityMarker(userDataPath)
+    beforeRestore: () => invalidateActiveProfileMarker(userDataPath, result.profileId)
   })
   syncHttp1CompatibilityMarkerFromDatabase(userDataPath, result)
   return {
@@ -122,7 +190,7 @@ function restoreDatabaseBackup(
   }
 }
 
-/** Keep SQLite and replace diverged JSON (e.g. edited by an older build) with its export. */
+/** Keep SQLite authoritative by replacing diverged legacy JSON with its accepted export. */
 function adoptCurrentDatabase(
   userDataPath: string,
   result: ProfileStateExportsResult,
@@ -131,7 +199,7 @@ function adoptCurrentDatabase(
   maintenance.assertProfile(result.profileId, result.dataFile, result.databaseFile)
   const authority = new ProfileStateSqliteAuthority(result.databaseFile, result.profileId)
   try {
-    // Validate before archiving so an unreadable database leaves both copies untouched.
+    // Validate first so unreadable authority leaves both copies untouched.
     authority.readInitialState()
     if (authority.revision === 0) {
       throw new ProfileStateRecoveryCommandError(
@@ -146,13 +214,13 @@ function adoptCurrentDatabase(
       'profile-state-adopt-current-sqlite',
       existsSync(result.dataFile) ? [result.dataFile] : []
     )
-    invalidateHttp1CompatibilityMarker(userDataPath)
-    // A retained JSON the marker never accepted would fail the compatibility export's fence.
+    invalidateActiveProfileMarker(userDataPath, result.profileId)
+    // Unaccepted retained JSON would fail the compatibility export fence.
     const divergedJson = existsSync(result.dataFile) ? readFileSync(result.dataFile) : undefined
     rmSync(result.dataFile, { force: true })
     let revision: number
     try {
-      revision = authority.writeJsonCompatibilityExport(result.dataFile) ?? authority.revision
+      revision = republishCurrentDatabaseJson(result, authority.revision)
     } catch (error) {
       if (divergedJson !== undefined && !existsSync(result.dataFile)) {
         writeFileDurableSync(durableWriteTempPath(result.dataFile), result.dataFile, divergedJson)
@@ -177,6 +245,9 @@ function syncHttp1CompatibilityMarkerFromDatabase(
   userDataPath: string,
   result: ProfileStateExportsResult
 ): void {
+  if (getActiveProfileStateLocation(userDataPath)?.profileId !== result.profileId) {
+    return
+  }
   const settings = readProfileStateDomain(result.databaseFile, result.profileId, 'settings')
   if (settings.kind !== 'unreadable') {
     const enabled =
@@ -192,6 +263,9 @@ function syncHttp1CompatibilityMarkerAfterRollback(
   dataFile: string,
   profileId: string
 ): void {
+  if (getActiveProfileStateLocation(userDataPath)?.profileId !== profileId) {
+    return
+  }
   let enabled = false
   try {
     const parsed: unknown = JSON.parse(readFileSync(dataFile, 'utf8'))
@@ -199,8 +273,26 @@ function syncHttp1CompatibilityMarkerAfterRollback(
       enabled = parsed.settings.electronHttp1CompatibilityMode === true
     }
   } catch {
-    // Leave the invalidated marker absent so startup reads the restored JSON itself.
+    // Keep the marker absent so startup reads the restored JSON.
     return
   }
   writeHttp1CompatibilityMarker(userDataPath, enabled, profileId)
+}
+
+function invalidateActiveProfileMarker(userDataPath: string, profileId: string): void {
+  if (getActiveProfileStateLocation(userDataPath)?.profileId === profileId) {
+    invalidateHttp1CompatibilityMarker(userDataPath)
+  }
+}
+
+function republishCurrentDatabaseJson(
+  profile: ProfileStateExportsResult,
+  revision: number
+): number {
+  const opened = openWritableProfileStateDatabase(profile.databaseFile, profile.profileId)
+  try {
+    return writeProfileStateRecoveryJsonExport(opened.db, profile.dataFile, revision)
+  } finally {
+    opened.db.close()
+  }
 }

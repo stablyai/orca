@@ -3,9 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-ses
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 
-// Why: this is a receive-side contract on content a newer host may extend (wire-compat Rule 3), so it
-// pins only the fields recovery and the mirror's coordinate logic read. Labels such as tab kinds,
-// agent names, and status enums stay open; additive fields at every depth pass through untouched.
+// Wire-compat Rule 3: receive-side validation pins only recovery/mirror coordinates. Keep label enums open and additive fields at every depth untouched.
 const identity = z.string().regex(/\S/)
 const nullableString = z.string().nullable()
 const version = z.number().int().nonnegative()

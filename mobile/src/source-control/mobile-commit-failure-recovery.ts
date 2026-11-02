@@ -7,7 +7,6 @@ export {
   summarizeCommitFailure
 } from '../../../src/shared/source-control-commit-failure'
 
-/** What the fix-commit prompt needs from a staged row. `area` is pinned, not carried. */
 export type MobileCommitFailureStagedEntry = Pick<MobileGitStatusEntry, 'path' | 'status'> & {
   area: 'staged'
 }
@@ -26,8 +25,7 @@ export function getMobileCommitFailureStagedEntries(
   return (
     (entries ?? [])
       .filter((entry) => entry.area === 'staged')
-      // 'staged' literal, not `entry.area`: the filter above is what makes it one, and the schema's
-      // area is optional so an unplaceable row could not be typed through here.
+      // The filter establishes staged; optional entry.area cannot carry that guarantee.
       .map((entry) => ({ path: entry.path, status: entry.status, area: 'staged' as const }))
   )
 }

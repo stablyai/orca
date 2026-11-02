@@ -1,6 +1,6 @@
 import { ipcMain, nativeTheme } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
@@ -12,24 +12,24 @@ import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notifica
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
-import {
-  registerPtyHandlers,
-  type CodexHomePtySpawnedLifecycleArgs,
-  type GetSelectedCodexHomePath,
-  type PrepareCodexSessionResume
-} from '../ipc/pty'
-import { registerDaemonManagementHandlers } from '../ipc/pty-management'
-import { registerSshHandlers } from '../ipc/ssh'
-import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
+import { registerPtyHandlers } from '../ipc/pty/register-handlers'
+import type {
+  CodexHomePtySpawnedLifecycleArgs,
+  GetSelectedCodexHomePath,
+  PrepareCodexSessionResume
+} from '../ipc/pty/host-env/types'
+import { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
+import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history-gc'
+import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
+import { listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
-import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import {
   scheduleWorktreeBaseDirectoryWatcherSync,
@@ -38,6 +38,11 @@ import {
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
+import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
+import { isPluginFramePermissionRequest } from './host-frame-permission-policy'
+import { installPluginDesktopFrameServices } from '../plugins/panels/plugin-frame-desktop-services'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
@@ -59,7 +64,7 @@ export function attachMainWindowServices(
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
-    // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
+    // Skip the crash-recovery reload in PTY orphan sweeping (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     onPtyExit?: (id: string, exitSequence: number) => void
@@ -71,17 +76,16 @@ export function attachMainWindowServices(
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store, runtime)
-  // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
+  // Repo IPC mutations must invalidate paired-client catalogs too (#11994).
   setRepoRemoteClientNotifier(runtime)
   setWorktreeCatalogRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {
     onWorktreeLifecycle: options?.onWorktreeLifecycle
   })
-  // Why: repo/settings mutations resync watchers through this attached main-window context.
+  // Repo/settings mutations resync watchers through this window context.
   setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
-  // Why: folder projects get no watch target, so an external `git init` needs its own
-  // marker poll to upgrade them without a restart (#11477).
+  // Folder projects have no watcher target; poll for external git init so they upgrade without restart (#11477).
   startFolderRepoGitUpgradeWatch(store, mainWindow)
   registerWorkspaceCleanupHandlers(store)
   registerPtyHandlers(
@@ -101,12 +105,14 @@ export function attachMainWindowServices(
       systemPrefersDark: () => nativeTheme.shouldUseDarkColors
     }
   )
-  // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).
+  // Register after PTY handlers so macOS reactivation reinstalls management IPC (docs/daemon-staleness-ux.md §Phase 1).
   registerDaemonManagementHandlers()
-  // Why: don't enumerate repo paths in background GC — `git worktree list` can touch protected macOS folders and trigger access prompts.
+  // Background git worktree list can trigger protected-folder prompts on macOS; use remembered IDs.
   scheduleHistoryGc(async () => {
     return getKnownWorktreeIdsForHistoryGc(store)
   })
+  openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
+  openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)
   const localPtyProviderStartupReady = options?.awaitLocalPtyProviderStartup?.()
   if (localPtyProviderStartupReady) {
     void localPtyProviderStartupReady
@@ -121,15 +127,25 @@ export function attachMainWindowServices(
     void hydrateLocalPtyRegistryAtBoot(store)
   }
   registerSshHandlers(store, () => mainWindow, runtime)
-  registerRemoteWorkspaceHandlers(store, () => mainWindow, runtime)
-  registerFileDropRelay(mainWindow)
+  registerDroppedPathPreparation(mainWindow, async () => {
+    await ensureStructuredAgentSessionHostUnlessRefused(() =>
+      runtime.ensureStructuredAgentSessionHost()
+    )
+    return getAgentSessionAttachmentStore()
+  })
   registerTccPromptNoticeHandlers(mainWindow)
   scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
+  installPluginDesktopFrameServices(mainWindow, store)
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback, details) => {
+      // Plugin srcdoc frames share this session but never the app's trust.
+      if (isPluginFramePermissionRequest(details)) {
+        callback(false)
+        return
+      }
       if (permission === 'media') {
         void requestSystemMediaAccess(details).then(callback, (error: unknown) => {
           console.error('[permissions] Failed to request media access:', error)
@@ -150,7 +166,7 @@ export function attachMainWindowServices(
   )
 
   mainWindow.on('closed', () => {
-    // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
+    // Drop guest registrations so stale tab/webContents IDs cannot survive close or hot reload.
     browserManager.unregisterAll()
   })
 }
@@ -171,7 +187,7 @@ function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
   ipcMain.removeHandler(dismissChannel)
   const mainWebContents = mainWindow.webContents
   const releaseOwnerClaim = (): void => releasePendingTccPromptNotice(handlerToken)
-  // Why: a renderer reload/crash destroys its claim callbacks without closing the BrowserWindow.
+  // Reload/crash destroys renderer claim callbacks without closing the window.
   mainWebContents.on('did-start-loading', () => {
     if (mainWebContents.isLoadingMainFrame()) {
       releaseOwnerClaim()
@@ -198,7 +214,7 @@ function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
       dismissTccPromptNotice()
     }
   })
-  // Why: macOS can stay windowless; drop stale closures without letting an old close clear newer handlers.
+  // Windowless macOS must release closures; late old-window close must not clear replacement handlers.
   mainWindow.on('closed', () => {
     if (activeTccPromptHandlerToken !== handlerToken) {
       return
@@ -216,7 +232,7 @@ function registerAppReloadHandler(
   mainWindow: BrowserWindow,
   onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
 ): void {
-  // Why: the process-global IPC handler can outlive the window, so guard both lifetimes before using the WebContents.
+  // Process-global IPC outlives windows; guard both window and WebContents lifetimes.
   const handlerToken = ++appReloadHandlerTokenCounter
   activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
@@ -236,34 +252,8 @@ function registerAppReloadHandler(
     if (activeAppReloadHandlerToken !== handlerToken) {
       return
     }
-    // Why: macOS keeps the process alive with no window; this handler would otherwise retain the closed window until reopen.
+    // Remove the process-global handler so windowless macOS does not retain a closed window.
     ipcMain.removeHandler('app:reload')
     activeAppReloadHandlerToken = null
-  })
-}
-
-function registerFileDropRelay(mainWindow: BrowserWindow): void {
-  const channel = 'terminal:file-dropped-from-preload'
-  const mainWebContents = mainWindow.webContents
-  ipcMain.removeAllListeners(channel)
-  const relayFileDrop = (event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
-    if (
-      mainWindow.isDestroyed() ||
-      mainWebContents.isDestroyed() ||
-      event.sender !== mainWebContents
-    ) {
-      return
-    }
-    if (!isNativeFileDropPayload(args)) {
-      return
-    }
-
-    // Why: one IPC event per drop gesture so the renderer gets the full path batch without timer-based reconstruction.
-    mainWindow.webContents.send('terminal:file-drop', args)
-  }
-  ipcMain.on(channel, relayFileDrop)
-  mainWindow.on('closed', () => {
-    // Why: macOS keeps the process alive after window close; drop the closure so the destroyed window isn't retained.
-    ipcMain.removeListener(channel, relayFileDrop)
   })
 }

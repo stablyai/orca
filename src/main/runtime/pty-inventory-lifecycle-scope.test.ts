@@ -10,10 +10,37 @@ import {
   WORKTREE,
   type InventoryListing
 } from './pty-inventory-lifecycle-fixture'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from './orca-runtime-postlude'
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('lifecycle invalidation respects inventory scope and retry bounds', () => {
+  it('answers a targeted read while a later background census is still pending', async () => {
+    vi.useFakeTimers()
+    const first = deferred<PtyProcessInfo[]>()
+    const background = deferred<PtyProcessInfo[]>()
+    const list = vi
+      .fn<InventoryListing>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValue(background.promise)
+    const { runtime } = createInventoryRuntime(list)
+    let answered = false
+    const targeted = runtime.read(undefined, WORKTREE).then((result) => {
+      answered = result?.allLivePtyIds.has(PTY) === true
+      return result
+    })
+    const polling = runtime.read()
+    first.resolve([processRow()])
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(answered).toBe(true)
+    } finally {
+      background.resolve([processRow()])
+      await Promise.all([targeted, polling])
+      vi.useRealTimers()
+    }
+  })
+
   it.each(['remote:unscoped-handle', 'remote:paired-host@@term_guest'])(
     'conservatively rejects pending inventory for foreign lifecycle ID %s',
     async (id) => {
@@ -25,7 +52,7 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
       reply.resolve([processRow('ssh:host-b@@child')])
       expect(await pending).toBeNull()
       expect(list).toHaveBeenCalledTimes(1)
-      expect(list.mock.calls[0][0]).toBe('host-b')
+      expect(list.mock.calls[0][0]).toBe('ssh:host-b')
       expect(hasPty).not.toHaveBeenCalled()
       expect(runtime.capture(id).connected).toBe(true)
     }
@@ -88,7 +115,7 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     const a = deferred<PtyProcessInfo[]>()
     const b = deferred<PtyProcessInfo[]>()
     const { runtime } = createInventoryRuntime((connection) =>
-      connection === 'a' ? a.promise : b.promise
+      connection === 'ssh:a' ? a.promise : b.promise
     )
     const pa = runtime.read('a')
     const pb = runtime.read('b')
@@ -111,6 +138,112 @@ describe('lifecycle invalidation respects inventory scope and retry bounds', () 
     aggregate.resolve([processRow('ssh:a@@child', PREDECESSOR)])
     expect(await pa).toBeNull()
     expect(runtime.capture('ssh:a@@child').incarnationId).toBe(SUCCESSOR)
+  })
+
+  it('joins a newer aggregate listing instead of re-listing past it', async () => {
+    const first = deferred<PtyProcessInfo[]>()
+    const second = deferred<PtyProcessInfo[]>()
+    const list = vi
+      .fn<InventoryListing>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const { runtime } = createInventoryRuntime(list)
+    const a = runtime.read(undefined, 'repo::/tmp/a')
+    const b = runtime.read(undefined, 'repo::/tmp/b')
+    second.resolve([processRow()])
+    expect((await b)?.allLivePtyIds).toEqual(new Set([PTY]))
+    first.resolve([processRow('stale-listing')])
+    expect((await a)?.allLivePtyIds).toEqual(new Set([PTY]))
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-lists instead of joining a newer listing that waits less for slow hosts', async () => {
+    const first = deferred<PtyProcessInfo[]>()
+    const second = deferred<PtyProcessInfo[]>()
+    const list = vi
+      .fn<InventoryListing>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+      .mockResolvedValue([processRow('relisted')])
+    const { runtime } = createInventoryRuntime(list)
+    vi.spyOn(Date, 'now').mockReturnValue(1000)
+    const patient = runtime.read(undefined, 'repo::/tmp/a', 4000)
+    const hasty = runtime.read(undefined, 'repo::/tmp/b', 1500)
+    second.resolve([processRow('short-wait')])
+    expect((await hasty)?.allLivePtyIds).toEqual(new Set(['short-wait']))
+    first.resolve([processRow('overtaken')])
+    expect((await patient)?.allLivePtyIds).toEqual(new Set(['relisted']))
+    expect(list).toHaveBeenCalledTimes(3)
+  })
+
+  it('re-lists instead of joining a newer listing that asked for different process evidence', async () => {
+    const first = deferred<PtyProcessInfo[]>()
+    const second = deferred<PtyProcessInfo[]>()
+    const list = vi
+      .fn<InventoryListing>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+      .mockResolvedValue([processRow('relisted')])
+    const { runtime } = createInventoryRuntime(list)
+    const withEvidence = runtime.read(undefined, 'repo::/tmp/a', undefined, {
+      includeForegroundProcessEvidence: true
+    })
+    const without = runtime.read(undefined, 'repo::/tmp/b', undefined, {
+      includeForegroundProcessEvidence: false
+    })
+    second.resolve([processRow('no-evidence')])
+    expect((await without)?.allLivePtyIds).toEqual(new Set(['no-evidence']))
+    first.resolve([processRow('overtaken')])
+    expect((await withEvidence)?.allLivePtyIds).toEqual(new Set(['relisted']))
+    expect(list).toHaveBeenCalledTimes(3)
+    expect(list.mock.calls[2]?.[1]?.includeForegroundProcessEvidence).toBe(true)
+  })
+
+  it('caps a deadline-free read at one listing budget however many listings it joins', async () => {
+    const first = deferred<PtyProcessInfo[]>()
+    const list = vi
+      .fn<InventoryListing>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValue(new Promise<PtyProcessInfo[]>(() => {}))
+    const { runtime } = createInventoryRuntime(list)
+    let now = 1000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const pending = runtime.read(undefined, 'repo::/tmp/a')
+    runtime.onPtySpawned('other-terminal', SUCCESSOR)
+    void runtime.read(undefined, 'repo::/tmp/b')
+    // The first listing answers just before its budget runs out; the joined one never answers.
+    now = 1000 + PTY_CONTROLLER_LIST_TIMEOUT_MS - 1
+    first.resolve([processRow()])
+    const settled = await Promise.race([
+      pending.then(() => 'settled'),
+      new Promise((resolve) => setTimeout(() => resolve('still waiting'), 500))
+    ])
+    expect(settled).toBe('settled')
+    expect(await pending).toBeNull()
+  })
+
+  it('stops a deadline-free read at its cap while newer listings keep overtaking it', async () => {
+    const listings: ReturnType<typeof deferred<PtyProcessInfo[]>>[] = []
+    const list = vi.fn<InventoryListing>(() => {
+      const listing = deferred<PtyProcessInfo[]>()
+      listings.push(listing)
+      return listing.promise
+    })
+    const { runtime } = createInventoryRuntime(list)
+    let now = 1000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    let result: unknown = 'pending'
+    void runtime.read(undefined, 'repo::/tmp/a').then((value) => (result = value))
+    // Each hop: a poller starts a newer listing, then the one the read waits on answers late.
+    for (let hop = 1; hop <= 5 && result === 'pending'; hop += 1) {
+      runtime.onPtySpawned('other-terminal', SUCCESSOR)
+      void runtime.read(undefined, `repo::/tmp/poller-${hop}`)
+      now += 1000
+      listings[hop - 1]?.resolve([processRow()])
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    expect(result).toBeNull()
+    expect(now - 1000).toBeLessThanOrEqual(PTY_CONTROLLER_LIST_TIMEOUT_MS + 1000)
   })
 
   it('allows only one target retry and keeps a second invalidation unknown', async () => {

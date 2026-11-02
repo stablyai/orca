@@ -44,14 +44,6 @@ export const Scroll = BrowserTarget.extend({
     .optional()
 })
 
-export const Screenshot = BrowserTarget.extend({
-  format: z
-    .unknown()
-    .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
-    .pipe(z.union([z.enum(['png', 'jpeg']), z.undefined()]))
-    .optional()
-})
-
 export const Screencast = BrowserTarget.extend({
   format: z
     .unknown()
@@ -83,15 +75,8 @@ export const Eval = BrowserTarget.extend({
 
 export const TabList = z.object({ worktree: OptionalString })
 
-// Why: --index xor --page must be present. The refine guards that invariant
-// so the dispatcher surfaces a single legible error instead of either shape
-// leaking into the runtime.
-//
-// `focus` is opt-in: when true, the runtime sends `browser:pane-focus` to
-// the renderer after the switch lands. The renderer surfaces the browser
-// pane only if the user is already on the targeted worktree; otherwise it
-// pre-stages per-worktree state silently. This avoids cross-worktree screen
-// theft when multiple agents drive browsers in parallel worktrees.
+// Require exactly one of index/page. Opt-in focus reveals only within the current worktree;
+// other worktrees silently stage selection so parallel agents cannot steal the screen.
 export const TabSwitch = BrowserTarget.extend({
   index: z
     .unknown()
@@ -135,6 +120,10 @@ export const TabProfileClone = BrowserTarget.extend({
 })
 
 export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })
+
+export const ProfileClearGoogleCookies = ProfileDelete.extend({
+  executorRuntimeId: z.string().min(1)
+})
 
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),

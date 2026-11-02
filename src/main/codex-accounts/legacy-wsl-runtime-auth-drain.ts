@@ -73,9 +73,7 @@ export function startLegacyWslRuntimeAuthDrain(
   if (completedDistroKeys.has(key)) {
     return Promise.resolve()
   }
-  // Coalesce launch/rate-limit callers while a drain is in flight. Queuing a
-  // new pass for every poll can otherwise build an unbounded promise chain
-  // while a legacy pane keeps the migration pending.
+  // Coalesce callers so polling a pending migration cannot build an unbounded promise chain.
   const inFlight = drainQueueByDistro.get(key)
   if (inFlight) {
     return startOptions.throwOnFailure ? inFlight : logDrainFailure(inFlight)

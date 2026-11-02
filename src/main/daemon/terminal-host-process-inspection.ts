@@ -1,3 +1,6 @@
+import type { TerminalForegroundObservation } from '../../shared/terminal-foreground-observation'
+import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
+import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
@@ -15,8 +18,10 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from './types'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 
 export type TerminalHostProcessInspection = {
+  foregroundObservation?: TerminalForegroundObservation
   foregroundProcess: string | null
   hasChildProcesses: boolean
   childProcessEvidence?: PtyChildProcessVerdict
@@ -25,19 +30,18 @@ export type TerminalHostProcessInspection = {
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
-/**
- * Tick tiers for a POSIX pane. `cheap` forks `ps` without `tty=`/`command=` (11-38x cheaper)
- * and answers from the anchored identity when the pane fingerprint is unchanged; anything it
- * cannot prove escalates to `full`, today's evidence capture.
- */
+/** Cheap POSIX polls reuse anchored identity; unresolved reads escalate to full evidence capture. */
 export type TerminalHostInspectionTier = 'full' | 'cheap'
 
 export async function inspectTerminalHostProcess(args: {
   sessionId: string
   session: Session | null
+  currentSession?: () => Session | undefined
   expectedIncarnationId?: string
+  foregroundOnly?: boolean
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
+  ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
   nextObservationEpoch: () => number
@@ -52,7 +56,8 @@ export async function inspectTerminalHostProcess(args: {
     ) {
       return {
         foregroundProcess: null,
-        hasChildProcesses: false,
+        hasChildProcesses: args.foregroundOnly === true,
+        ...(args.foregroundOnly === true ? { childProcessEvidence: 'unverifiable' as const } : {}),
         foregroundProcessEvidence: {
           authorityGeneration: args.authorityGeneration,
           observationEpoch: args.nextObservationEpoch(),
@@ -69,32 +74,61 @@ export async function inspectTerminalHostProcess(args: {
 
   const incarnationMatches =
     !expectedIncarnationId || expectedIncarnationId === session.incarnationId
+  if (args.foregroundOnly === true) {
+    const requestedAt = Date.now()
+    const sample = incarnationMatches
+      ? await session.observeForeground()
+      : { verdict: 'unverifiable' as const, reason: 'incarnation_mismatch' }
+    const current = session.isAlive && (!args.currentSession || args.currentSession() === session)
+    return {
+      foregroundProcess: current && sample.verdict === 'observed' ? sample.processName : null,
+      hasChildProcesses: true,
+      childProcessEvidence: 'unverifiable',
+      foregroundObservation: {
+        ptyId: sessionId,
+        ptyIncarnationId: session.incarnationId,
+        authorityGeneration: args.authorityGeneration,
+        observationEpoch: args.nextObservationEpoch(),
+        capturedAgeMs: Math.max(0, Date.now() - requestedAt),
+        ...(current ? sample : { verdict: 'unverifiable' as const, reason: 'session_changed' })
+      }
+    }
+  }
   if (args.steadyState === true && incarnationMatches) {
     const anchored = await readAnchoredForeground(session)
     if (anchored !== null) {
       args.onTier?.('cheap')
-      // No evidence member on purpose: a tty-less capture cannot fence anything, and a
-      // fabricated fence would be read by remote/restore consumers as an observation.
+      // A tty-less capture cannot supply fencing evidence to remote or restore consumers.
       return { foregroundProcess: anchored, hasChildProcesses: true }
     }
   }
   args.onTier?.('full')
 
-  let foregroundProcess = session.getForegroundProcess()
+  const windowsDecision = process.platform === 'win32' && args.steadyState !== true
+  let foregroundProcess = windowsDecision ? null : session.getForegroundProcess()
   let childProcessEvidence: PtyChildProcessVerdict | undefined = session.processNameIsSpawnFile
     ? 'unverifiable'
     : undefined
-  if (session.processNameIsSpawnFile && process.platform === 'win32' && incarnationMatches) {
-    foregroundProcess = await session.confirmForegroundProcess()
-    childProcessEvidence = session.inspectChildProcesses()
-  }
   let evidence: RemoteForegroundEvidence
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
+  } else if (process.platform === 'win32') {
+    if (windowsDecision || session.processNameIsSpawnFile) {
+      foregroundProcess = await session.confirmForegroundProcess(
+        windowsDecision ? { decision: true } : undefined
+      )
+    }
+    // A steady-state poll never decides adoption or close, so it may read the cached process table.
+    childProcessEvidence = await session.inspectChildProcesses(
+      args.steadyState !== true,
+      args.ignoreDetached === true
+    )
+    // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
+    evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
       const snapshot = await getStrictProcessTableSnapshotWithAge()
-      if (session.processNameIsSpawnFile && process.platform !== 'win32') {
+      if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
         childProcessEvidence = inspectSpawnFileChildProcessesFromRows(
@@ -124,8 +158,12 @@ export async function inspectTerminalHostProcess(args: {
       clearSteadyStateAnchor(session)
     }
   }
+  if (!session.isAlive || (args.currentSession && args.currentSession() !== session)) {
+    childProcessEvidence = 'unverifiable'
+    evidence = unverifiableEvidence(args, session, 'session_changed')
+  }
   const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
-  // Evidence names recognized agents only, so its null must not erase an ordinary command (#18078).
+  // Agent-only evidence must not erase an ordinary foreground command.
   const ordinaryForeground =
     nonShellForeground && !recognizeAgentProcess(foregroundProcess) ? foregroundProcess : null
   return {
@@ -142,13 +180,7 @@ export async function inspectTerminalHostProcess(args: {
   }
 }
 
-/**
- * Cheap tier, gated on an anchor the last full capture established. Start discovery therefore
- * keeps today's exact behaviour: a pane with no anchor never gets here. A recognized agent's
- * exit is a pid vanishing from the subtree, which the fingerprint always sees, so completion
- * detection is unaffected. Any mismatch, unreadable capture, changed node-pty name, or non-POSIX
- * host answers null -> full tier.
- */
+/** Reuse identity only while the pane fingerprint and raw foreground name still match the full capture. */
 async function readAnchoredForeground(session: Session): Promise<string | null> {
   const anchor = getSteadyStateAnchor(session)
   if (process.platform === 'win32' || !anchor) {
@@ -186,4 +218,30 @@ function unverifiableEvidence(
     verdict: 'unverifiable',
     reason
   }
+}
+
+export function inspectTerminalHostSession(
+  sessions: ReadonlyMap<string, Session>,
+  retired: Map<string, RetiredIncarnation>,
+  sessionId: string,
+  options: PtyProcessInspectionOptions | undefined,
+  authorityGeneration: string,
+  nextObservationEpoch: () => number
+): Promise<TerminalHostProcessInspection> {
+  pruneRetiredPtyIncarnations(retired)
+  const session = getInspectableTerminalHostSession(
+    sessions,
+    retired,
+    sessionId,
+    options?.expectedIncarnationId
+  )
+  return inspectTerminalHostProcess({
+    sessionId,
+    currentSession: () => sessions.get(sessionId),
+    session: session?.isAlive ? session : null,
+    ...options,
+    retiredIncarnation: retired.get(sessionId),
+    authorityGeneration,
+    nextObservationEpoch
+  })
 }

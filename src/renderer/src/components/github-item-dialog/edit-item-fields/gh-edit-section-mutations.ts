@@ -6,11 +6,13 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage,
   validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
-} from '@/components/task-page-github-status-actions'
-import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page-github-dialog-state-authority'
+} from '@/components/task-page/github/task-page-github-status-actions'
+import { assertTaskPageGitHubDialogStateAuthority } from '@/components/task-page/github/task-page-github-dialog-state-authority'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubPatchWorkItemOptions } from '@/store/github/cache-model'
 import { translate } from '@/i18n/i18n'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 
@@ -28,6 +30,7 @@ type GHEditMutationBase = {
   repoPath: string | null
   sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  issueRepo?: GitHubOwnerRepo | null
   run: GHEditMutationRun
   patchProjectRowIfNeeded: (patch: GHEditProjectRowPatch) => void
   onMutated: () => void
@@ -43,6 +46,7 @@ export function runGHEditStateChange({
   repoPath,
   sourceContext,
   projectOrigin,
+  issueRepo,
   run,
   onStateChange,
   patchWorkItem,
@@ -58,7 +62,7 @@ export function runGHEditStateChange({
     id: string,
     patch: { state: GitHubWorkItem['state'] },
     repoId: string | undefined,
-    options: { sourceContext?: TaskSourceContext | null }
+    options: GitHubPatchWorkItemOptions
   ) => void
 }): void {
   // Why: a close reason still has to reach GitHub even when the item already reads as closed locally.
@@ -66,8 +70,7 @@ export function runGHEditStateChange({
     return
   }
   const prevState = localState
-  // Why: without registry authority a search-lagged Tasks refetch silently
-  // reverts this row to its pre-mutation state (STA-3343).
+  // Keep registry authority so search-lagged Tasks refetches cannot revert this mutation.
   let authority: { revert: () => boolean } | null = null
   void run('state', {
     mutate: () =>
@@ -76,6 +79,7 @@ export function runGHEditStateChange({
         repoPath,
         sourceContext,
         projectOrigin,
+        issueRepo,
         number: itemNumber,
         updates:
           newState === 'closed' && closeAction
@@ -87,22 +91,32 @@ export function runGHEditStateChange({
         repoId: itemRepoId,
         itemId,
         state: newState,
-        sourceContext
+        sourceContext,
+        ownerRepo: projectOrigin ?? issueRepo
       })
       onStateChange(newState)
-      patchWorkItem(itemId, { state: newState }, itemRepoId, { sourceContext })
+      patchWorkItem(itemId, { state: newState }, itemRepoId, {
+        sourceContext,
+        ownerRepo: projectOrigin ?? issueRepo
+      })
       patchProjectRowIfNeeded({ state: newState })
     },
     onRevert: () => {
       if (authority?.revert()) {
         onStateChange(prevState)
-        patchWorkItem(itemId, { state: prevState }, itemRepoId, { sourceContext })
+        patchWorkItem(itemId, { state: prevState }, itemRepoId, {
+          sourceContext,
+          ownerRepo: projectOrigin ?? issueRepo
+        })
         patchProjectRowIfNeeded({ state: prevState })
       }
     },
     onSuccess: () => {
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      patchWorkItem(itemId, { state: newState }, itemRepoId, { sourceContext })
+      patchWorkItem(itemId, { state: newState }, itemRepoId, {
+        sourceContext,
+        ownerRepo: projectOrigin ?? issueRepo
+      })
       patchProjectRowIfNeeded({ state: newState })
       onMutated()
     },
@@ -145,6 +159,7 @@ export function runGHEditLabelToggle({
   repoPath,
   sourceContext,
   projectOrigin,
+  issueRepo,
   run,
   onLabelsChange,
   patchWorkItem,
@@ -159,42 +174,13 @@ export function runGHEditLabelToggle({
     id: string,
     patch: { labels: string[] },
     repoId: string | undefined,
-    options: { sourceContext?: TaskSourceContext | null }
+    options: GitHubPatchWorkItemOptions
   ) => void
 }): void {
   const isAdding = !localLabels.includes(label)
   const prevLabels = localLabels
   const newLabels = isAdding ? [...prevLabels, label] : prevLabels.filter((l) => l !== label)
 
-  if (isAdding) {
-    void run('labels', {
-      mutate: () =>
-        runIssueUpdate({
-          repoId: itemRepoId,
-          repoPath,
-          sourceContext,
-          projectOrigin,
-          number: itemNumber,
-          updates: { addLabels: [label] }
-        }),
-      onOptimistic: () => {
-        onLabelsChange(newLabels)
-        patchWorkItem(itemId, { labels: newLabels }, itemRepoId, { sourceContext })
-        patchProjectRowIfNeeded({ labels: newLabels })
-      },
-      onSuccess: () => {
-        useAppStore.getState().recordFeatureInteraction('github-tasks')
-        onMutated()
-      },
-      onRevert: () => {
-        onLabelsChange(prevLabels)
-        patchWorkItem(itemId, { labels: prevLabels }, itemRepoId, { sourceContext })
-        patchProjectRowIfNeeded({ labels: prevLabels })
-      },
-      onError: (err) => toast.error(err)
-    })
-    return
-  }
   void run('labels', {
     mutate: () =>
       runIssueUpdate({
@@ -202,17 +188,24 @@ export function runGHEditLabelToggle({
         repoPath,
         sourceContext,
         projectOrigin,
+        issueRepo,
         number: itemNumber,
-        updates: { removeLabels: [label] }
+        updates: isAdding ? { addLabels: [label] } : { removeLabels: [label] }
       }),
     onOptimistic: () => {
       onLabelsChange(newLabels)
-      patchWorkItem(itemId, { labels: newLabels }, itemRepoId, { sourceContext })
+      patchWorkItem(itemId, { labels: newLabels }, itemRepoId, {
+        sourceContext,
+        ownerRepo: projectOrigin ?? issueRepo
+      })
       patchProjectRowIfNeeded({ labels: newLabels })
     },
     onRevert: () => {
       onLabelsChange(prevLabels)
-      patchWorkItem(itemId, { labels: prevLabels }, itemRepoId, { sourceContext })
+      patchWorkItem(itemId, { labels: prevLabels }, itemRepoId, {
+        sourceContext,
+        ownerRepo: projectOrigin ?? issueRepo
+      })
       patchProjectRowIfNeeded({ labels: prevLabels })
     },
     onSuccess: () => {
@@ -233,6 +226,7 @@ export function runGHEditAssigneeToggle({
   repoPath,
   sourceContext,
   projectOrigin,
+  issueRepo,
   run,
   setLocalAssignees,
   patchProjectRowIfNeeded,
@@ -260,6 +254,7 @@ export function runGHEditAssigneeToggle({
           repoPath,
           sourceContext,
           projectOrigin,
+          issueRepo,
           number: itemNumber,
           updates: { removeAssignees: [login] }
         }),
@@ -288,6 +283,7 @@ export function runGHEditAssigneeToggle({
         repoPath,
         sourceContext,
         projectOrigin,
+        issueRepo,
         number: itemNumber,
         updates: { addAssignees: [login] }
       }),

@@ -2,7 +2,15 @@ import {
   enqueueAgentProcessInspection,
   type InspectionPriority
 } from './agent-process-inspection-queue'
-import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
+import {
+  recognizeAgentProcess,
+  type RecognizedAgentProcess
+} from '../../../../shared/agent-process-recognition'
+import { isShellProcess } from '../../../../shared/shell-process-detection'
+import {
+  clientOnlyUnverifiableInspection,
+  isClientOnlyUnverifiableInspection
+} from '../../../../shared/terminal-process-inspection'
 import type { ProcessMonitorOptions } from './agent-completion-process-types'
 import { createAgentCompletionPollScheduler } from './agent-completion-poll-scheduler'
 import {
@@ -100,15 +108,13 @@ export function createAgentCompletionProcessMonitor({
     enqueueAgentProcessInspection({
       priority,
       canRun: () => !state.disposed,
-      // Local reads all resolve out of one process-table capture; remote ones each cost their
-      // own execution-host round trip and stay admitted one at a time.
+      // Local reads share one capture; remote reads consume separate host round trips.
       sharesHostObservation: options.isRemotePtyId?.(ptyId) !== true,
       run: async () => {
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
-          // Only a cadence tick on a local pane reads nothing but the name; every other read
-          // (pending-title, remote) needs the full capture and must not ask for the cheap one.
+          // Only local cadence reads may omit evidence; pending-title and remote decisions require the full capture.
           const inspectOptions = {
             ...(expectedIncarnationIdAtRequest
               ? { expectedIncarnationId: expectedIncarnationIdAtRequest }
@@ -117,11 +123,42 @@ export function createAgentCompletionProcessMonitor({
               ? { steadyState: true }
               : {})
           }
-          const result = await (Object.keys(inspectOptions).length > 0
-            ? options.inspectProcess(options.getSettings(), ptyId, inspectOptions)
-            : options.inspectProcess(options.getSettings(), ptyId))
+          let result = await (Object.keys(inspectOptions).length > 0
+            ? options.inspectProcess(ptyId, inspectOptions)
+            : options.inspectProcess(ptyId))
+          // A stale shell cache must not retire a live agent and disable its mouse reporting (#29996).
+          if (
+            options.isRemotePtyId?.(ptyId) !== true &&
+            options.confirmForegroundProcess &&
+            state.lastForegroundAgent &&
+            state.hasAgentRunEvidence &&
+            !isClientOnlyUnverifiableInspection(result) &&
+            result.childProcessEvidence !== 'unverifiable' &&
+            !result.hasChildProcesses &&
+            !recognizeAgentProcess(result.foregroundProcess)
+          ) {
+            const processSessionAtConfirmation = state.processSession
+            const foregroundProcess = await options.confirmForegroundProcess(ptyId)
+            // Another foreground reader can replace the agent while this check is pending.
+            if (state.processSession !== processSessionAtConfirmation) {
+              return
+            }
+            result =
+              foregroundProcess === null
+                ? clientOnlyUnverifiableInspection('foreground_unconfirmed')
+                : {
+                    ...result,
+                    foregroundProcess,
+                    // An unlisted shell name (-zsh, wsl.exe) that matches the cached read is still exit evidence.
+                    hasChildProcesses:
+                      !isShellProcess(foregroundProcess) &&
+                      foregroundProcess !== result.foregroundProcess
+                  }
+          }
           if (
             !state.disposed &&
+            options.isLive() &&
+            options.getPtyId() === ptyId &&
             generationAtRequest === state.inspectionGeneration &&
             (options.getExpectedIncarnationId?.() ?? null) === expectedIncarnationIdAtRequest
           ) {

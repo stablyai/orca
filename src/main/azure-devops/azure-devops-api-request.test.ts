@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  _resetAzureDevOpsPreviewApiVersionCache,
+  _resetAzureDevOpsApiVersionCache,
   requestAzureDevOpsJson,
   requestAzureDevOpsJsonAtBase
 } from './azure-devops-api-request'
@@ -37,29 +37,12 @@ describe('Azure DevOps API request (STA-3494)', () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
     delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
-    _resetAzureDevOpsPreviewApiVersionCache()
+    _resetAzureDevOpsApiVersionCache()
   })
 
   afterEach(() => {
     process.env = OLD_ENV
     globalThis.fetch = OLD_FETCH
-  })
-
-  it('retries with -preview when Azure DevOps Server rejects the api-version', async () => {
-    const versions: (string | null)[] = []
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      versions.push(url.searchParams.get('api-version'))
-      if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
-        return previewRejection()
-      }
-      return Response.json({ authenticatedUser: { providerDisplayName: 'Server User' } })
-    }) as never
-
-    await expect(
-      requestAzureDevOpsJsonAtBase(SERVER_BASE, '/_apis/connectionData')
-    ).resolves.toEqual({ authenticatedUser: { providerDisplayName: 'Server User' } })
-    expect(versions).toEqual(['7.1', '7.1-preview'])
   })
 
   it('remembers the -preview requirement per origin after the first rejection', async () => {
@@ -76,8 +59,46 @@ describe('Azure DevOps API request (STA-3494)', () => {
     const base = 'https://ado-sticky.example.com/tfs/MyCollection'
     await requestAzureDevOpsJsonAtBase(base, '/_apis/connectionData')
     await requestAzureDevOpsJsonAtBase(base, '/_apis/connectionData')
-    // First request learns the suffix; the second must not repeat the 400 round trip.
     expect(versions).toEqual(['7.1', '7.1-preview', '7.1-preview'])
+  })
+
+  it('negotiates down to a Server capped at 6.1 and caches the version per origin (#36423)', async () => {
+    const versions: (string | null)[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const version = new URL(String(input)).searchParams.get('api-version')
+        versions.push(version)
+        if (version?.startsWith('7.')) {
+          return Response.json({ typeKey: 'VssVersionOutOfRangeException' }, { status: 400 })
+        }
+        return version === '6.1' ? previewRejection() : Response.json({ ok: true })
+      })
+    )
+
+    await expect(
+      requestAzureDevOpsJsonAtBase(SERVER_BASE, '/_apis/connectionData')
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      requestAzureDevOpsJsonAtBase(SERVER_BASE, '/_apis/connectionData')
+    ).resolves.toEqual({ ok: true })
+    expect(versions).toEqual(['7.1', '6.1', '6.1-preview', '6.1-preview'])
+  })
+
+  it('stops once the oldest known version is out of range', async () => {
+    const versions: (string | null)[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        versions.push(new URL(String(input)).searchParams.get('api-version'))
+        return Response.json({ typeKey: 'VssVersionOutOfRangeException' }, { status: 400 })
+      })
+    )
+
+    await expect(
+      requestAzureDevOpsJsonAtBase(SERVER_BASE, '/_apis/connectionData')
+    ).resolves.toBeNull()
+    expect(versions).toEqual(['7.1', '6.1', '5.1'])
   })
 
   it('does not retry a 400 that is not a preview-version rejection', async () => {
@@ -104,7 +125,6 @@ describe('Azure DevOps API request (STA-3494)', () => {
     }) as never
 
     await requestAzureDevOpsJson(serverRepoRef(), '/_apis/git/repositories/my-repo')
-    // Collection-level env base must not strip the project segment Git endpoints need.
     expect(paths).toEqual(['/tfs/MyCollection/MyProject/_apis/git/repositories/my-repo'])
   })
 

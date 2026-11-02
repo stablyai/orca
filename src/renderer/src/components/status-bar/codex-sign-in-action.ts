@@ -12,7 +12,7 @@ import type { CodexStatusRuntimeTarget } from './status-bar-runtime-targets'
 
 type CodexSignInActionDependencies = {
   accountState: CodexRateLimitAccountsState
-  accountsExpandedRef: MutableRefObject<boolean>
+  menuOpenRef: MutableRefObject<boolean>
   fetchInactiveCodexAccountUsage: AppState['fetchInactiveCodexAccountUsage']
   fetchSettings: AppState['fetchSettings']
   isSwitching: boolean
@@ -20,7 +20,6 @@ type CodexSignInActionDependencies = {
   reauthenticatingAccountId: string | null
   recordFeatureInteraction: AppState['recordFeatureInteraction']
   setAccounts: Dispatch<SetStateAction<CodexRateLimitAccountsState>>
-  setAccountsExpanded: Dispatch<SetStateAction<boolean>>
   setReauthenticatingAccountId: Dispatch<SetStateAction<string | null>>
 }
 
@@ -31,7 +30,7 @@ export async function signInCodexAccount(
 ): Promise<void> {
   const {
     accountState,
-    accountsExpandedRef,
+    menuOpenRef,
     fetchInactiveCodexAccountUsage,
     fetchSettings,
     isSwitching,
@@ -39,7 +38,6 @@ export async function signInCodexAccount(
     reauthenticatingAccountId,
     recordFeatureInteraction,
     setAccounts,
-    setAccountsExpanded,
     setReauthenticatingAccountId
   } = dependencies
   if (isSwitching || reauthenticatingAccountId !== null) {
@@ -50,8 +48,7 @@ export async function signInCodexAccount(
   try {
     const next = await window.api.codexAccounts.reauthenticate({
       accountId,
-      // Why: signing in from a signed-out status bar should leave the account
-      // usable; the main process still refuses to steal an existing selection.
+      // Activate a newly signed-in account only if selection remains empty; main preserves an existing selection.
       activateIfSelectionWasEmpty: true
     })
     recordFeatureInteraction('codex-account-switching')
@@ -61,8 +58,7 @@ export async function signInCodexAccount(
     await fetchSettings()
     const nextActiveAccountId = getCodexStatusActiveId(next, target)
     if (previousActiveAccountId !== nextActiveAccountId) {
-      // Why: sign-in that lands on a new active account changes pane credentials
-      // exactly like an explicit switch, so it owes the same restart prompt.
+      // A changed active login needs the same pane-restart prompt as an explicit account switch.
       await markLiveCodexSessionsForRestart({
         previousAccountLabel: resolveCodexRestartPromptAccountLabel(
           accountState.accounts,
@@ -71,12 +67,11 @@ export async function signInCodexAccount(
         nextAccountLabel: resolveCodexRestartPromptAccountLabel(next.accounts, nextActiveAccountId),
         previousAccountId: previousActiveAccountId ?? null,
         nextAccountId: nextActiveAccountId ?? null,
+        // Why: reauthenticate is local IPC, so only this computer's panes changed.
+        owner: { kind: 'local' },
         target
       })
-      if (mountedRef.current) {
-        setAccountsExpanded(false)
-      }
-    } else if (mountedRef.current && accountsExpandedRef.current) {
+    } else if (mountedRef.current && menuOpenRef.current) {
       await fetchInactiveCodexAccountUsage()
     }
     toast.success(

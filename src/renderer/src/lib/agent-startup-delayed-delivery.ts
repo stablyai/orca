@@ -28,8 +28,7 @@ export function resolveAgentStartupTabId(
   worktreeId: string,
   primaryTabId: string | null | undefined
 ): string | null {
-  // Why: the caller may know the exact tab that received the queued startup
-  // command. Prefer it over focus-derived state, which can change mid-create.
+  // Prefer the caller’s exact startup tab; focus can change during creation.
   return (
     primaryTabId ??
     state.activeTabIdByWorktree[worktreeId] ??
@@ -91,17 +90,14 @@ function ensurePendingAgentStartupSubscription(): void {
     return
   }
   const initial = useAppStore.getState()
-  // Capture the individual references so the gate stays allocation-free and
-  // remains correct even if a subscribe adapter reuses its state object.
+  // Capture references individually to avoid allocation and support subscribe adapters that reuse state objects.
   let previousTabs = initial.tabsByWorktree
   let previousPendingStartups = initial.pendingStartupByTabId
   let previousLaunchConfigs = initial.agentLaunchConfigByPaneKey
   let previousPtyIds = initial.ptyIdsByTabId
   let previousLayouts = initial.terminalLayoutsByTabId
   unsubscribePendingAgentStartupDeliveries = useAppStore.subscribe((state) => {
-    // Why: a background workspace can stay unmounted indefinitely. Only these
-    // five immutable slices can change delivery eligibility; unrelated title,
-    // status, focus, and usage ticks must not rescan every launch registration.
+    // Only five immutable slices affect delivery; title/status/focus/usage churn must not rescan indefinitely unmounted launches.
     if (
       state.tabsByWorktree === previousTabs &&
       state.pendingStartupByTabId === previousPendingStartups &&
@@ -196,9 +192,7 @@ function flushPendingAgentStartupDeliveries(): void {
     if (!ptyId) {
       continue
     }
-    // Why: once the launch-bound PTY exists, the bounded readiness/paste path
-    // owns success or failure. Consume before awaiting so store churn cannot
-    // duplicate a linked-work-item draft.
+    // Consume before awaiting bounded readiness/paste so store churn cannot deliver the linked-work-item draft twice.
     if (beginAgentStartupDeliveryAttempt(delivery)) {
       void delivery.deliver(tabId, ptyId, delivery.startup).catch((error) => {
         console.warn('Queued agent startup delivery failed', error)

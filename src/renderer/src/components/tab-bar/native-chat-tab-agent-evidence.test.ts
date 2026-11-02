@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { resolveNativeChatTabAgentEvidence } from './native-chat-tab-agent-evidence'
 
 describe('resolveNativeChatTabAgentEvidence', () => {
+  it('does not offer recognition-only DeepSeek Build as a native chat agent', () => {
+    expect(resolveNativeChatTabAgentEvidence({ title: 'DeepSeek Build' })).toBeNull()
+  })
+
   it('uses the retained provider identity when a generated title masks the process title', () => {
     expect(
       resolveNativeChatTabAgentEvidence(

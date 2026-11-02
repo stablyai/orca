@@ -1,24 +1,30 @@
-import { execFile } from 'node:child_process'
 import type { JobTerminationOutcome } from './windows/windows-pty-job'
 import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
   verifyWindowsTreeKillTarget,
   type WindowsTreeKillTarget
 } from './windows-pty-root-identity'
-import { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
+import type { ProcessTableRow } from './pty-process-table-parser'
+import {
+  DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+  readFreshProcessTable,
+  type ProcessTableCapture,
+  type ProcessTableReader
+} from './pty-descendant-fresh-table'
 
 export { parseProcessTable, type ProcessTableRow } from './pty-process-table-parser'
 
+export {
+  DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+  type ProcessTableCapture,
+  type ProcessTableReader
+} from './pty-descendant-fresh-table'
+
 export const DESCENDANT_KILL_GRACE_MS = 2_000
-export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
-// Why: a full process table on a busy host can exceed execFile's 1MB default;
-// truncation would silently drop descendants from the snapshot.
-const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
 
 export type PosixProcessIdentity = Pick<ProcessTableRow, 'pid' | 'startedAt'>
 
 export type DescendantSnapshot = {
-  /** Identity of the root observed in the same process-table capture. */
   root?: PosixProcessIdentity
   rootPgid: number | null
   descendants: ProcessTableRow[]
@@ -26,62 +32,19 @@ export type DescendantSnapshot = {
   capturedAtMs: number
   /** Per-PID identity boundaries for merged captures. */
   capturedAtMsByPid?: Readonly<Record<string, number>>
-  /**
-   * PIDs this walk re-derived from a live root. A ppid walk only reaches what
-   * the root actually parents, so membership is proof of ownership that owes
-   * nothing to `lstart`'s one-second resolution: a stranger would have to have
-   * been forked into our own tree, and then it is not a stranger. Rows a merge
-   * retained from an earlier walk are absent, and still answer to start time.
-   */
+  /** Fresh ancestry proves ownership despite lstart’s second-resolution timestamps; retained merge rows do not. */
   reDerivedPids?: ReadonlySet<number>
 }
 
-export type ProcessTableCapture = {
-  rows: ProcessTableRow[]
-  /** Start boundary of the scan that produced rows, never a later consumer's time. */
-  capturedAtMs: number
-}
-
-export type ProcessTableReader = (timeoutMs?: number) => Promise<ProcessTableCapture>
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
 
-function readFreshProcessTable(
-  timeoutMs = DESCENDANT_SNAPSHOT_TIMEOUT_MS
-): Promise<ProcessTableCapture> {
-  // Why: identity safety must use the boundary before ps starts. Stamping the
-  // result later could make a capture-second PID look safe after a rollover.
-  const capturedAtMs = Date.now()
-  return new Promise((resolve, reject) => {
-    execFile(
-      'ps',
-      ['-axo', 'pid=,ppid=,pgid=,lstart='],
-      {
-        maxBuffer: PS_MAX_BUFFER_BYTES,
-        timeout: timeoutMs,
-        killSignal: 'SIGKILL',
-        // Why: ps localizes lstart, but delayed identity checks must parse it
-        // identically for every user locale.
-        env: { ...process.env, LANG: 'C', LC_ALL: 'C' }
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve({ rows: parseProcessTable(stdout), capturedAtMs })
-      }
-    )
-  })
-}
-
-/** Coalesces same-turn teardown bursts but never serves a completed or already
- * started scan to a later request, because stale PIDs are unsafe to signal. */
+/** Share only scans not yet started; later requests need fresh identities before signalling. */
 export function createProcessTableSnapshotReader(
   readFresh: ProcessTableReader
 ): ProcessTableReader {
   let queued: { promise: Promise<ProcessTableCapture>; started: boolean } | null = null
 
-  return (timeoutMs) => {
+  const read: ProcessTableReader = (timeoutMs) => {
     if (queued && !queued.started) {
       return queued.promise
     }
@@ -91,9 +54,7 @@ export function createProcessTableSnapshotReader(
       started: false
     }
     entry.promise = Promise.resolve().then(() => {
-      // Why: a later caller's deadline starts when it requests a fresh table.
-      // Waiting behind an older scan can consume that entire budget, then run
-      // this subprocess after nobody can use its result.
+      // Start each later request’s scan within its own deadline, without queuing behind an older one.
       entry.started = true
       return readFresh(timeoutMs)
     })
@@ -106,6 +67,9 @@ export function createProcessTableSnapshotReader(
     void entry.promise.then(clearQueued, clearQueued)
     return entry.promise
   }
+  // Sharing a scan keeps the wrapped reader's in-process allowance.
+  read.deadlineAllowanceMs = readFresh.deadlineAllowanceMs
+  return read
 }
 
 export const readProcessTable = createProcessTableSnapshotReader(readFreshProcessTable)
@@ -124,7 +88,10 @@ export function readProcessTableBeforeDeadline(
       clearTimeout(timer)
       resolve(capture)
     }
-    const timer = setTimeout(() => finish(null), timeoutMs)
+    const timer = setTimeout(
+      () => finish(null),
+      timeoutMs + (readTable.deadlineAllowanceMs?.(timeoutMs) ?? 0)
+    )
     timer.unref?.()
     try {
       void readTable(timeoutMs).then(
@@ -147,8 +114,7 @@ export function collectDescendantRows(
   let duplicateRoot = false
   for (const row of table) {
     if (row.pid === rootPid) {
-      // A non-atomic process-table read can contain both an old and a recycled
-      // root row. There is no safe identity to retain in that case.
+      // Duplicate root rows from a non-atomic read leave its identity ambiguous.
       duplicateRoot = rootRow !== null
       rootRow ??= row
       continue
@@ -160,10 +126,7 @@ export function collectDescendantRows(
       childrenByPpid.set(row.ppid, [row])
     }
   }
-  // Why: a ppid walk is only meaningful while the root is alive in this snapshot.
-  // An absent root has already exited — its real descendants reparent to pid 1 and
-  // become unreachable by ppid, so any rows still pointing at the vacated PID are a
-  // PID-reuse coincidence. Sweeping them could signal an unrelated process, so bail.
+  // After root exit, descendants reparent; remaining rows with its old PID as parent may reflect PID reuse.
   if (!rootRow || duplicateRoot) {
     return { rootPgid: null, descendants: [], capturedAtMs }
   }
@@ -173,8 +136,7 @@ export function collectDescendantRows(
   for (let nextIndex = 0; nextIndex < queue.length; nextIndex += 1) {
     const pid = queue[nextIndex]
     for (const child of childrenByPpid.get(pid) ?? []) {
-      // Why: ps is not an atomic snapshot. PID reuse can produce duplicate or
-      // cyclic-looking rows, which must not hang the Electron main thread.
+      // Non-atomic ps output can contain duplicate or cyclic rows; never loop on them.
       if (visited.has(child.pid)) {
         continue
       }
@@ -198,13 +160,7 @@ type SnapshotDeps = {
   timeoutMs?: number
 }
 
-/**
- * Snapshots a PTY root's live descendant tree. Must run BEFORE the root is
- * signalled: once the root dies, surviving descendants reparent to pid 1 and
- * can no longer be found by a ppid walk. Resolves null (never rejects) on
- * Windows, ps failure, or timeout — callers then degrade to shell-only kill
- * on POSIX, or identity-gated Windows `taskkill /T` via killWithDescendantSweep.
- */
+/** Capture before signalling the root: exited parents’ descendants reparent and become unfindable; failure returns null. */
 export async function captureDescendantSnapshot(
   rootPid: number,
   deps: SnapshotDeps = {}
@@ -215,8 +171,7 @@ export async function captureDescendantSnapshot(
   }
   const readTable = deps.readTable ?? readProcessTable
   const timeoutMs = deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
-  // Why both layers: the deadline keeps injected/custom readers bounded while
-  // the production execFile timeout actually kills a wedged ps subprocess.
+  // Bound custom readers too; production execFile separately kills wedged ps processes.
   const capture = await readProcessTableBeforeDeadline(readTable, timeoutMs)
   if (!capture) {
     return null
@@ -230,29 +185,13 @@ type KillSweepDeps = SnapshotDeps &
     /** Shutdown can retain the owner until descendant escalation finishes. */
     terminateDescendants?: (snapshot: DescendantSnapshot) => void | Promise<unknown>
     awaitEscalation?: boolean | (() => boolean)
-    /**
-     * Terminate the PTY's job object. Returns `unavailable` when this tree has
-     * no job, which is not permission to assume it is gone.
-     */
+    /** unavailable means no owned job exists, not that the tree exited. */
     terminateOwnedTree?: () => JobTerminationOutcome
-    /** Injectable Windows tree killer (defaults to taskkill /T /F). */
     killWindowsTree?: WindowsTreeKiller
-    /** Injectable Windows root-identity probe (defaults to a live process query). */
     verifyTreeKillTarget?: (rootPid: number) => Promise<WindowsTreeKillTarget>
   }
 
-/**
- * Standard agent-session kill sequencing.
- * - POSIX: snapshot the descendant tree, signal members, then killRoot.
- * - Windows: terminate the PTY's job object, which is exact and needs no
- *   identity probe. Only when this build has no job does it fall back to the
- *   old scheme — a process-table scrape gating `taskkill /T /F` on a
- *   parent-pid walk, which refuses whenever it cannot prove ownership and so
- *   leaves the tree running (#9045, #10475).
- * Callers must not signal the root before this runs on POSIX — a dead root's
- * descendants reparent to pid 1 and become unfindable. Snapshot failure
- * degrades to killRoot alone on POSIX.
- */
+/** Call before killing the root: POSIX needs live ancestry; Windows prefers an owned job, then an identity-gated PID walk. */
 export async function killWithDescendantSweep(
   rootPid: number,
   killRoot: () => void,
@@ -262,16 +201,11 @@ export async function killWithDescendantSweep(
   if (platform === 'win32') {
     try {
       if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
-        // Why first: the job names the tree Orca created, so it is immune to the
-        // pid recycling the probe below exists to guard against, and it reaches
-        // descendants that reparented away from the shell.
+        // Owned jobs survive PID reuse and include descendants reparented away from the shell.
         if (deps.terminateOwnedTree?.() === 'terminated') {
           return
         }
-        // Why: ownsRoot() is JS state only, and node-pty's ConPTY exit watcher closes
-        // the last shell handle before it queues the JS exit callback — Windows may
-        // already have recycled this PID while the map still looks live. taskkill /T /F
-        // on a recycled PID force-kills an unrelated tree, so demand OS identity first.
+        // ConPTY closes the shell handle before JS sees exit; require OS identity to reject recycled PIDs.
         const verify = deps.verifyTreeKillTarget ?? verifyWindowsTreeKillTarget
         const target = await verify(rootPid).catch((): WindowsTreeKillTarget => 'unknown')
         // Re-check ownership: the identity query awaits, so exit can land meanwhile.
@@ -279,7 +213,7 @@ export async function killWithDescendantSweep(
           const killTree =
             deps.killWindowsTree ??
             ((pid: number) => terminateWindowsProcessTree(pid, { site: 'pty-descendant-sweep' }))
-          // Why: taskkill may race an already-exited tree; never block killRoot on that.
+          // A taskkill failure must not skip root termination.
           await killTree(rootPid).catch(() => {})
         }
       }
@@ -307,8 +241,7 @@ export async function killWithDescendantSweep(
     return
   }
   try {
-    // Signal the captured descendants while their parent links still exist;
-    // killing the root first creates a reparent/PID-reuse window.
+    // Signal descendants before root death creates a reparent/PID-reuse window.
     if (snapshot && (deps.ownsRoot?.() ?? true)) {
       descendants = deps.terminateDescendants
         ? deps.terminateDescendants(snapshot)
@@ -322,9 +255,7 @@ export async function killWithDescendantSweep(
 export function sendDescendantSignal(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(pid, signal)
-  } catch {
-    /* already gone */
-  }
+  } catch {}
 }
 
 export type TerminateDeps = {
@@ -343,17 +274,11 @@ export function hasUnambiguousStartTime(startedAt: string, capturedAtMs: number)
   if (!Number.isFinite(startedAtMs)) {
     return false
   }
-  // ps lstart is second-resolution. A process born in the capture second can
-  // be replaced by a different process with the same displayed timestamp.
+  // lstart cannot distinguish PID reuse within the capture second.
   return startedAtMs < Math.floor(capturedAtMs / 1_000) * 1_000
 }
 
-/**
- * Terminates a snapshotted descendant tree: SIGTERM every descendant now,
- * reaching detached-pgid children the PTY's SIGHUP cannot, then after a grace
- * window SIGKILL identity-safe survivors. Processes born in the capture second
- * are not escalated because ps cannot distinguish same-second PID reuse.
- */
+/** Reach detached descendants with SIGTERM, then escalate only survivors whose identity excludes same-second PID reuse. */
 export function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
   deps: TerminateDeps = {}
@@ -376,8 +301,7 @@ export function terminateDescendantSnapshot(
       }
       const expectedPids = new Set(snapshot.descendants.map((row) => row.pid))
       const liveTargets = new Map<number, ProcessTableRow | null>()
-      // Why: a process table may be large, while one agent's descendants are
-      // normally few. Index only signal targets instead of duplicating every row.
+      // Index only the small set of signal targets, not the whole process table.
       for (const live of capture.rows) {
         if (expectedPids.has(live.pid)) {
           // Duplicate PID rows make identity ambiguous, so never escalate them.

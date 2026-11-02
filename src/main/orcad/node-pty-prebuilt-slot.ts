@@ -1,44 +1,59 @@
-/**
- * Install the shipped node-pty prebuilt that matches this host, so a deployment needs
- * no C/C++ toolchain.
- *
- * Why copy into `build/Release` rather than leave it in `prebuilds/`: node-pty's own
- * loader falls back to `prebuilds/<platform>-<arch>` with no libc in the name, so a
- * glibc binary parked there is loaded on Alpine and dies in the dynamic loader. Putting
- * the chosen slot's binary in `build/Release` is what makes the libc dimension real —
- * node-pty only ever sees the one we picked.
- *
- * The prebuilds themselves are built from the PATCHED source (config/patches/node-pty@1.1.0.patch)
- * by config/scripts/build-orcad-prebuilds.mjs. An upstream tarball would not do: the patch
- * carries the `.symver` pins and the `--no-as-needed` libutil/libpthread flags that hold the
- * Ubuntu 20.04 / glibc 2.31 floor (docs/reference/linux-glibc-compatibility.md).
- */
+// Copy the selected N-API/libc/arch slot into build/Release to avoid node-pty’s libc-blind fallback.
+// Build slots from patched sources: symbol pins and linker flags preserve the glibc floor.
+import { createHash } from 'node:crypto'
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
+import { z } from 'zod'
 import { usesNodePtySpawnHelper } from '../../shared/node-pty-spawn-helper'
-import { nativeSlotName, type NativeHostAbi } from './native-host-abi'
+import { COMPAT_SERVER_TARGET_BASES, COMPAT_SERVER_TARGETS } from '../../shared/node-runtime-pin'
+import {
+  compareDottedVersions,
+  hostNodeApiVersion,
+  nativeSlotName,
+  type NativeHostAbi
+} from './native-host-abi'
 
-export type PrebuiltSlotManifest = {
-  module: string
-  version: string
-  nodeAbi: string
-  slots: string[]
-}
+const SHA256 = /^[0-9a-f]{64}$/
+// Slot-relative POSIX paths prevent manifest traversal outside build/Release.
+const SLOT_FILE = /^(?!.*(?:^|\/)\.\.(?:\/|$))[\w.-]+(?:\/[\w.-]+)*$/
+
+const PrebuiltSlotEntrySchema = z.object({
+  platform: z.string(),
+  arch: z.string(),
+  libc: z.enum(['glibc', 'musl', 'none']),
+  /** Highest required strong GLIBC_ symbol; null off glibc. */
+  glibc: z.string().nullable(),
+  napi: z.number().int().positive(),
+  files: z.record(z.string().regex(SLOT_FILE), z.string().regex(SHA256))
+})
+
+const PrebuiltSlotManifestSchema = z.object({
+  schemaVersion: z.literal(2),
+  module: z.string(),
+  version: z.string(),
+  napi: z.number().int().positive(),
+  slots: z.record(z.string(), PrebuiltSlotEntrySchema)
+})
+
+export type PrebuiltSlotEntry = z.infer<typeof PrebuiltSlotEntrySchema>
+type PrebuiltSlotManifest = z.infer<typeof PrebuiltSlotManifestSchema>
+
+type PrebuiltSlotRefusal =
+  | 'no-slot'
+  | 'no-prebuilds-dir'
+  | 'no-manifest'
+  | 'napi-unsupported'
+  | 'libc-mismatch'
+  | 'arch-mismatch'
+  | 'glibc-too-old'
+  | 'hash-mismatch'
 
 export type PrebuiltSlotOutcome =
   | { installed: true; slot: string; spawnHelper: boolean }
-  | {
-      installed: false
-      slot: string
-      why: 'no-slot' | 'no-prebuilds-dir' | 'abi-mismatch'
-      detail?: string
-    }
+  | { installed: false; slot: string; why: PrebuiltSlotRefusal; detail?: string }
 
-/**
- * Where a deployment's prebuilds live: beside the bundle that is running. `argv[1]` is
- * `orcad.js` itself, so this stays correct wherever the install directory ends up.
- */
+/** Resolve beside the running bundle, independent of install location. */
 export function resolveOrcadPrebuildsDir(entryScript = process.argv[1]): string | null {
   const override = process.env.ORCA_ORCAD_PREBUILDS_DIR
   if (override) {
@@ -48,74 +63,136 @@ export function resolveOrcadPrebuildsDir(entryScript = process.argv[1]): string 
 }
 
 export function readPrebuiltSlotManifest(prebuildsDir: string): PrebuiltSlotManifest | null {
+  let raw: unknown
   try {
-    const parsed = JSON.parse(readFileSync(join(prebuildsDir, 'manifest.json'), 'utf8')) as unknown
-    if (!parsed || typeof parsed !== 'object') {
-      return null
-    }
-    const manifest = parsed as Partial<PrebuiltSlotManifest>
-    if (typeof manifest.nodeAbi !== 'string' || typeof manifest.version !== 'string') {
-      return null
-    }
-    return {
-      module: typeof manifest.module === 'string' ? manifest.module : 'node-pty',
-      version: manifest.version,
-      nodeAbi: manifest.nodeAbi,
-      slots: Array.isArray(manifest.slots)
-        ? manifest.slots.filter((s) => typeof s === 'string')
-        : []
-    }
+    raw = JSON.parse(readFileSync(join(prebuildsDir, 'manifest.json'), 'utf8'))
   } catch {
     return null
   }
+  const parsed = PrebuiltSlotManifestSchema.safeParse(raw)
+  return parsed.success ? parsed.data : null
 }
 
-/**
- * Copy `<prebuilds>/<slot>/pty.node` (and `spawn-helper`) into node-pty's `build/Release`.
- *
- * Refuses on an ABI mismatch instead of copying: a binary built for another
- * `NODE_MODULE_VERSION` cannot load, and installing it would replace a "no prebuilt"
- * diagnosis with a loader failure that reads as a corrupt install.
- */
+/** Reject incompatible binaries before they obscure the missing-prebuilt diagnosis. */
+function checkPrebuiltSlotEntry(
+  entry: PrebuiltSlotEntry,
+  abi: NativeHostAbi,
+  hostNapi: number | null
+): { why: PrebuiltSlotRefusal; detail: string } | null {
+  if (entry.platform !== abi.platform || entry.arch !== abi.arch) {
+    return {
+      why: 'arch-mismatch',
+      detail: `slot was built for ${entry.platform}/${entry.arch}, this host is ${abi.platform}/${abi.arch}`
+    }
+  }
+  if (entry.libc !== abi.libc) {
+    return {
+      why: 'libc-mismatch',
+      detail: `slot was built against ${entry.libc}, this host runs ${abi.libc}`
+    }
+  }
+  if (hostNapi === null || hostNapi < entry.napi) {
+    return {
+      why: 'napi-unsupported',
+      detail: `slot needs N-API ${entry.napi}, this Node supports ${hostNapi ?? 'no N-API version it reports'}`
+    }
+  }
+  // Unknown glibc versions defer compatibility to the load probe.
+  if (entry.glibc && abi.glibcVersion && compareDottedVersions(abi.glibcVersion, entry.glibc) < 0) {
+    return {
+      why: 'glibc-too-old',
+      detail: `slot needs glibc ${entry.glibc}, this host has ${abi.glibcVersion}`
+    }
+  }
+  return null
+}
+
+function sha256File(path: string): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
+}
+
+function compatSlotsFor(slot: string): string[] {
+  return COMPAT_SERVER_TARGETS.filter((compat) => COMPAT_SERVER_TARGET_BASES[compat] === slot)
+}
+
+type SlotChoice =
+  | { slot: string; entry: PrebuiltSlotEntry }
+  | { slot: string; why: PrebuiltSlotRefusal; detail?: string }
+
+/** Try compat slots only for absence/old glibc; libc, arch and N-API refusals apply to both. */
+function chooseSlot(
+  manifest: PrebuiltSlotManifest,
+  slot: string,
+  abi: NativeHostAbi,
+  hostNapi: number | null
+): SlotChoice {
+  const own = manifest.slots[slot]
+  const ownRefusal = own ? checkPrebuiltSlotEntry(own, abi, hostNapi) : null
+  if (own && !ownRefusal) {
+    return { slot, entry: own }
+  }
+  if (!own || ownRefusal?.why === 'glibc-too-old') {
+    for (const compat of compatSlotsFor(slot)) {
+      const entry = manifest.slots[compat]
+      if (entry && !checkPrebuiltSlotEntry(entry, abi, hostNapi)) {
+        return { slot: compat, entry }
+      }
+    }
+  }
+  return ownRefusal ? { slot, ...ownRefusal } : { slot, why: 'no-slot' }
+}
+
 export function installPrebuiltSlot(options: {
   abi: NativeHostAbi
   nodePtyDir: string
   prebuildsDir?: string | null
+  hostNapi?: number | null
 }): PrebuiltSlotOutcome {
-  const slot = nativeSlotName(options.abi)
+  const hostSlot = nativeSlotName(options.abi)
   const prebuildsDir = options.prebuildsDir ?? resolveOrcadPrebuildsDir()
   if (!prebuildsDir || !existsSync(prebuildsDir)) {
-    return { installed: false, slot, why: 'no-prebuilds-dir' }
+    return { installed: false, slot: hostSlot, why: 'no-prebuilds-dir' }
   }
   const manifest = readPrebuiltSlotManifest(prebuildsDir)
-  if (manifest && manifest.nodeAbi !== options.abi.nodeAbi) {
+  if (!manifest) {
     return {
       installed: false,
-      slot,
-      why: 'abi-mismatch',
-      detail: `shipped prebuilds target Node ABI ${manifest.nodeAbi}, this host runs ABI ${options.abi.nodeAbi}`
+      slot: hostSlot,
+      why: 'no-manifest',
+      detail: 'manifest.json is missing or not a schema 2 prebuild manifest'
     }
   }
-  const source = join(prebuildsDir, slot, 'pty.node')
-  if (!existsSync(source)) {
-    return { installed: false, slot, why: 'no-slot' }
+  const hostNapi = options.hostNapi === undefined ? hostNodeApiVersion() : options.hostNapi
+  const choice = chooseSlot(manifest, hostSlot, options.abi, hostNapi)
+  if (!('entry' in choice)) {
+    return { installed: false, ...choice }
   }
-  const releaseDir = join(options.nodePtyDir, 'build', 'Release')
-  mkdirSync(releaseDir, { recursive: true })
-  copyFileSync(source, join(releaseDir, 'pty.node'))
+  const { slot, entry } = choice
+  const files = Object.entries(entry.files)
+  for (const [file, expected] of files) {
+    const source = join(prebuildsDir, slot, ...file.split('/'))
+    if (!existsSync(source) || sha256File(source) !== expected) {
+      return {
+        installed: false,
+        slot,
+        why: 'hash-mismatch',
+        detail: `${slot}/${file} is missing or does not match its manifest sha256`
+      }
+    }
+  }
 
-  // Why this matters as much as pty.node: on macOS node-pty posix_spawns
-  // build/Release/spawn-helper. Without it every spawn fails with ENOENT at the moment
-  // a user opens a terminal, long after the "install succeeded" line.
-  let spawnHelper = false
-  if (usesNodePtySpawnHelper(options.abi.platform)) {
-    const helperSource = join(prebuildsDir, slot, 'spawn-helper')
-    if (existsSync(helperSource)) {
-      const helperDest = join(releaseDir, 'spawn-helper')
-      copyFileSync(helperSource, helperDest)
-      chmodSync(helperDest, 0o755)
-      spawnHelper = true
-    }
+  const releaseDir = join(options.nodePtyDir, 'build', 'Release')
+  for (const [file] of files) {
+    const destination = join(releaseDir, ...file.split('/'))
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(join(prebuildsDir, slot, ...file.split('/')), destination)
+  }
+
+  // macOS execs spawn-helper at terminal creation; validate it before claiming installation succeeded.
+  const spawnHelper =
+    usesNodePtySpawnHelper(options.abi.platform) && Object.hasOwn(entry.files, 'spawn-helper')
+  if (spawnHelper) {
+    chmodSync(join(releaseDir, 'spawn-helper'), 0o755)
   }
   return { installed: true, slot, spawnHelper }
 }

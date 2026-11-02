@@ -1,6 +1,97 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
+import type { AiVaultSearchResponse } from '../../src/shared/ai-vault-search-types'
+
+test('search excerpts keep matches visible after long leading context', async ({
+  electronApp,
+  orcaPage,
+  seededRepoPath
+}, testInfo) => {
+  const excerpts = [
+    '…/Users/example/Documents/projects/application/apps/server/src/server.ts:534).\n\n**Codex, [[inspected with REA]]:** Version `26.1013.40934` contains three relevant…',
+    `https://example.com/${'W'.repeat(80)}[[inspected with REA]] after a long URL`,
+    `${'😀'.repeat(40)}x[[inspected with REA]] after Unicode context`,
+    `Earlier analysis. ${'W'.repeat(15)} [[inspected with REA]] after a wide word`
+  ]
+  const response: AiVaultSearchResponse = {
+    kind: 'results',
+    hits: excerpts.map((snippet, index) => ({
+      agent: 'codex',
+      sessionId: `excerpt-layout-${index}`,
+      title: `Search excerpt ${index + 1}`,
+      cwd: seededRepoPath,
+      branch: null,
+      updatedAt: null,
+      messageCount: 67,
+      score: 1,
+      source: { presence: 'present', filePath: '/synthetic/transcript.jsonl' },
+      evidence: {
+        role: 'assistant',
+        timestamp: null,
+        snippet
+      }
+    })),
+    page: { cursor: null, hasMore: false },
+    generation: 1,
+    truncated: { candidates: false, snippets: 0, query: false, freshness: false },
+    durationMs: 1
+  }
+  await electronApp.evaluate(({ ipcMain }, result) => {
+    ipcMain.removeHandler('aiVault:searchSessions')
+    ipcMain.handle('aiVault:searchSessions', () => result)
+  }, response)
+  await orcaPage.evaluate(async () => {
+    const state = window.__store?.getState()
+    await state?.updateSettingsOrThrow({ aiVaultSearch: { enabled: true, historyDays: null } })
+    state?.setRightSidebarOpen(true)
+    state?.setRightSidebarTab('vault')
+    state?.setRightSidebarWidth(400)
+  })
+  await orcaPage
+    .getByRole('textbox', { name: 'Search sessions', exact: true })
+    .fill('inspected with REA')
+  const match = orcaPage.locator('mark').filter({ hasText: 'inspected with REA' })
+  await expect(match).toHaveCount(excerpts.length)
+  const cdp = await orcaPage.context().newCDPSession(orcaPage)
+  for (const appearance of [
+    { theme: 'light', width: 400 },
+    { theme: 'dark', width: 220 }
+  ] as const) {
+    await orcaPage.evaluate(async ({ theme, width }) => {
+      await window.__store?.getState().updateSettingsOrThrow({ theme })
+      window.__store?.getState().setRightSidebarWidth(width)
+    }, appearance)
+    for (const details of ['collapsed', 'expanded']) {
+      await expect
+        .poll(() =>
+          match.evaluateAll((elements) =>
+            elements.map((element) => {
+              const rect = element.getBoundingClientRect()
+              const container = element.closest('.line-clamp-2')?.getBoundingClientRect()
+              return (
+                container !== undefined &&
+                rect.top >= container.top &&
+                rect.bottom <= container.bottom &&
+                rect.left >= container.left &&
+                rect.right <= container.right
+              )
+            })
+          )
+        )
+        .toEqual(excerpts.map(() => true))
+      const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' })
+      writeFileSync(
+        testInfo.outputPath(`excerpt-${appearance.theme}-${details}.png`),
+        Buffer.from(data, 'base64')
+      )
+      for (let index = 0; index < excerpts.length; index++) {
+        await orcaPage.getByText(`Search excerpt ${index + 1}`, { exact: true }).click()
+      }
+    }
+  }
+  await cdp.detach()
+})
 
 test('panel consent enables real local transcript search; clearing restores history', async ({
   electronApp,
@@ -111,41 +202,49 @@ test('panel consent enables real local transcript search; clearing restores hist
   await cdp.detach()
 })
 
-test('panel renders transport failure and unavailable reasons without a local fallback', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => {
-  await orcaPage.evaluate(async () => {
-    await window.__store
-      ?.getState()
-      .updateSettingsOrThrow({ aiVaultSearch: { enabled: true, historyDays: null } })
-    window.__store?.getState().setRightSidebarOpen(true)
-    window.__store?.getState().setRightSidebarTab('vault')
-  })
-  await electronApp.evaluate(({ ipcMain }) => {
-    ipcMain.removeHandler('aiVault:searchSessions')
-    ipcMain.handle('aiVault:searchSessions', () => {
-      throw new Error('Synthetic transport failure')
+// Title-only fallback persists for the host, so each reason needs a fresh panel.
+for (const reason of ['disabled', 'not-ready', 'no-service'] as const) {
+  test(`panel retries transport failure and handles ${reason} search availability`, async ({
+    electronApp,
+    orcaPage
+  }, testInfo) => {
+    await orcaPage.evaluate(async () => {
+      await window.__store
+        ?.getState()
+        .updateSettingsOrThrow({ aiVaultSearch: { enabled: true, historyDays: null } })
+      window.__store?.getState().setRightSidebarOpen(true)
+      window.__store?.getState().setRightSidebarTab('vault')
     })
-  })
-  const input = orcaPage.getByRole('textbox', { name: 'Search sessions', exact: true })
-  await input.fill('needle')
-  await expect(
-    orcaPage.getByText('Could not search this computer.', { exact: false })
-  ).toBeVisible()
-  await orcaPage.screenshot({ path: testInfo.outputPath('failure.png') })
-  for (const reason of ['disabled', 'not-ready', 'no-service'] as const) {
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('aiVault:searchSessions')
+      ipcMain.handle('aiVault:searchSessions', () => {
+        throw new Error('Synthetic transport failure')
+      })
+    })
+    const input = orcaPage.getByRole('textbox', { name: 'Search sessions', exact: true })
+    await input.fill('needle')
+    await expect(
+      orcaPage.getByText('Could not search this computer.', { exact: false })
+    ).toBeVisible()
+    await orcaPage.screenshot({ path: testInfo.outputPath('failure.png') })
     await electronApp.evaluate(({ ipcMain }, value) => {
       ipcMain.removeHandler('aiVault:searchSessions')
       ipcMain.handle('aiVault:searchSessions', () => ({ kind: 'unavailable', reason: value }))
     }, reason)
-    await orcaPage.getByRole('button', { name: 'Try again', exact: true }).click()
+    const retry = orcaPage.getByRole('button', { name: 'Try again', exact: true })
+    await retry.click()
     const copy =
-      reason === 'disabled'
-        ? 'Search is disabled on this computer.'
-        : reason === 'not-ready'
-          ? 'The search index is not ready yet.'
-          : 'Search is unavailable on this computer.'
+      reason === 'not-ready'
+        ? 'The search index is not ready yet.'
+        : 'Full-text search is off on this computer, so only session titles are matched.'
     await expect(orcaPage.getByText(copy, { exact: false })).toBeVisible()
-  }
-})
+    if (reason === 'not-ready') {
+      await expect(retry).toBeVisible()
+    } else {
+      await expect(retry).toHaveCount(0)
+      await input.fill('another needle')
+      await expect(orcaPage.getByText(copy, { exact: false })).toBeVisible()
+    }
+    await orcaPage.screenshot({ path: testInfo.outputPath(`${reason}.png`) })
+  })
+}

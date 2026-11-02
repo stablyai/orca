@@ -10,7 +10,7 @@ export type TerminalPasteSource =
 export type TerminalPasteRuntime = {
   platform: NodeJS.Platform
   runtimeKey: string
-  kind: 'local' | 'wsl' | 'ssh' | 'remote-runtime'
+  kind: 'local' | 'wsl' | 'remote-runtime'
   isWindowsConpty?: boolean
 }
 
@@ -36,8 +36,7 @@ export type TerminalPastePlan = {
   target: TerminalPasteTarget
   payload: TerminalPastePayload
   mode: 'direct' | 'chunked' | 'bracketed-terminal' | 'windows-input-record' | 'reject'
-  // Why: 'terminal-cr' marks plans whose paste bytes Orca constructs itself, so
-  // every write path applies xterm's native \r?\n -> \r before ConPTY sees LF.
+  // Every Orca-built paste path must normalize LF to CR before ConPTY, matching xterm native paste.
   newlinePolicy: 'preserve' | 'terminal-cr' | 'windows-input-record'
   windowsInputRecordNewline?: WindowsInputRecordNewline
   runtimeKey: string

@@ -1,0 +1,4 @@
+[?9001h[?1004h[?25l[2J[m[HPS C:\Users\user\orca\workspaces\orca\run-ownership-validation>[1C]0;C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.7.0_x64__8wekyb3d8bbwe\pwsh.exe[?25h[?25l[93mWrite-Output[97m[2m[3m FOREIGN_LANE_COMMAND; Get-FileHash C:/elsewhere/other.py[1;77H[?25h[?25l[m[93m[1;65HWrite-Output [97m[2m[3mFOREIGN_LANE_COMMAND; Get-FileHash C:/elsewhere/other.py[1;78H[?25h[m[?25l[93m[1;65HWrite-Output [37mOWN_MARKER                                 [m
+[13X[1;88H[?25h
+OWN_MARKER
+PS C:\Users\user\orca\workspaces\orca\run-ownership-validation> 

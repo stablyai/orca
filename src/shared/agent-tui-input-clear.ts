@@ -1,7 +1,4 @@
-// Clearing an agent TUI's input buffer when it may hold MORE THAN ONE line.
-//
-// Shared by desktop native chat and mobile: the law below is a property of the
-// agent TUIs (Claude Code, codex), not of either client.
+// Share multiline TUI clearing across desktop/mobile; the rule belongs to Claude/Codex inputs, not clients.
 
 /** Ctrl+U — clears toward the start of the input buffer. */
 export const AGENT_TUI_CLEAR_INPUT_LINE = '\x15'
@@ -19,13 +16,7 @@ export function buildAgentTuiClearInput(lineCount: number): string {
   )
 }
 
-/**
- * Headroom over the line count Orca knows about. The text Orca injected is a
- * LOWER BOUND on what the buffer holds — the user can also type straight into
- * the TUI line — so the count is deliberately biased upward. Overshoot is free:
- * 41 Ctrl+U against a 1-line buffer measured perfectly clean on both agents,
- * and an undershoot is what leaves residue to glue onto the next message.
- */
+/** Injected line count is a lower bound because users type too. Bias upward: 41 Ctrl+U cleanly cleared a one-line buffer on both agents; undershoot leaves residue for the next send. */
 export const AGENT_TUI_CLEAR_LINE_SLACK = 8
 
 /** Bounds the burst so a pathological draft cannot emit an unbounded write. */

@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
-import type { PtyProcessInfo } from '../providers/types'
+import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
+import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
 const cleanups: (() => void)[] = []

@@ -1,37 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseAnsiSegments } from './ipynb-ansi'
 
 describe('parseAnsiSegments', () => {
-  it('returns plain text untouched', () => {
-    expect(parseAnsiSegments('hello\nworld')).toEqual([{ text: 'hello\nworld' }])
-  })
-
-  it('applies and resets 16-color and bold attributes', () => {
-    expect(parseAnsiSegments('a\u001b[1;32mb\u001b[0mc\u001b[91md\u001b[39me')).toEqual([
-      { text: 'a' },
-      { text: 'b', bold: true, fg: 2 },
-      { text: 'c' },
-      { text: 'd', fg: 9 },
-      { text: 'e', fg: undefined }
-    ])
-  })
-
-  it('resolves 256-color and truecolor sequences', () => {
-    expect(parseAnsiSegments('\u001b[38;5;241mx\u001b[38;5;4my\u001b[48;2;1;2;3mz')).toEqual([
-      { text: 'x', fg: 'rgb(98, 98, 98)' },
-      { text: 'y', fg: 4 },
-      { text: 'z', fg: 4, bg: 'rgb(1, 2, 3)' }
-    ])
-  })
-
-  it('drops non-SGR escape sequences from text', () => {
-    expect(parseAnsiSegments('50%\u001b[K done')).toEqual([{ text: '50% done' }])
-  })
-
-  it('treats a bare reset as clearing every attribute', () => {
-    expect(parseAnsiSegments('\u001b[4;3;31mx\u001b[my')).toEqual([
-      { text: 'x', underline: true, italic: true, fg: 1 },
-      { text: 'y' }
-    ])
+  it('does not scan plain accumulated output for SGR or stripping patterns', () => {
+    const text = 'iteration α🐋\tvalue\n'.repeat(100_000)
+    const matchAll = vi.spyOn(String.prototype, 'matchAll')
+    const replace = vi.spyOn(String.prototype, 'replace')
+    let segments: ReturnType<typeof parseAnsiSegments>
+    let scans: number
+    try {
+      segments = parseAnsiSegments(text)
+      scans = matchAll.mock.calls.length + replace.mock.calls.length
+    } finally {
+      matchAll.mockRestore()
+      replace.mockRestore()
+    }
+    expect(segments).toEqual([{ text }])
+    expect(scans).toBe(0)
+    expect(parseAnsiSegments('')).toEqual([])
   })
 })

@@ -1,8 +1,8 @@
-import { useRef, useCallback } from 'react'
+import { useCallback } from 'react'
 import { openExternalLink } from '../platform/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
-import { resolveMobileNativeChatFileSessionId } from './mobile-native-chat-eligibility'
-import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
+import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
+import { useProvideSessionScreenHandlers } from './session-screen-handlers'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
 
@@ -21,18 +21,18 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     activeSessionTab,
     activeSessionTabTypeRef,
     switchSessionTabRef,
+    switchTab,
     handleCreateBrowserRef,
     scheduleDelayedAction,
     nativeChatSendError,
     fetchSessionTabs
   } = scope
-  // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
     client,
     hostId,
     worktreeId,
     worktreeName: routeWorktreeName,
-    nativeChatSessionId: resolveMobileNativeChatFileSessionId(activeSessionTab),
+    nativeChatSessionId: resolveMobileNativeChatSessionId(activeSessionTab),
     activeHandleRef,
     terminalCwdRef,
     openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
@@ -45,44 +45,9 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     reportChatTapFailure: nativeChatSendError.show
   })
 
-  const handleOpenedFileDiffActivationSeqRef = useRef(0)
-  // Capture active tab at tap time; reading it after openDiff would misread a mid-RPC switch and let the retry steal focus.
-  const fileOpenStartActiveTabIdRef = useRef<string | null>(null)
-  const handleFileOpenStart = useCallback(() => {
-    fileOpenStartActiveTabIdRef.current = activeSessionTabIdRef.current
-  }, [])
-  const handleOpenedFileDiff = useCallback(
-    (relativePath: string) => {
-      const activationSeq = ++handleOpenedFileDiffActivationSeqRef.current
-      const activeTabIdAtTap = fileOpenStartActiveTabIdRef.current
-
-      let activated = false
-      const activateOpenedTab = async (): Promise<void> => {
-        // Route matching through the shared helper so the repro test exercises the same logic production runs.
-        const settled = await activateOpenedSourceControlDiffTab<MobileSessionTab>({
-          relativePath,
-          activeTabIdAtTap,
-          fetchSessionTabs,
-          getTabs: () => sessionTabsRef.current,
-          getActiveTabId: () => activeSessionTabIdRef.current,
-          getActivationState: () => ({
-            activated,
-            activationSeq,
-            latestActivationSeq: handleOpenedFileDiffActivationSeqRef.current
-          }),
-          switchSessionTab: (tab) => switchSessionTabRef.current?.(tab)
-        })
-        if (settled) {
-          activated = true
-        }
-      }
-
-      scheduleDelayedAction(() => void activateOpenedTab(), 300)
-      scheduleDelayedAction(() => void activateOpenedTab(), 900)
-      scheduleDelayedAction(() => void activateOpenedTab(), 1800)
-    },
-    [fetchSessionTabs, scheduleDelayedAction]
-  )
+  useProvideSessionScreenHandlers(hostId, worktreeId, {
+    onResumedTerminal: switchTab
+  })
 
   const handleTerminalOpenUrl = useCallback(
     (handle: string, url: string) => {
@@ -102,10 +67,6 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   return {
     handleFileTap,
     handleNativeChatFileTap,
-    handleOpenedFileDiffActivationSeqRef,
-    fileOpenStartActiveTabIdRef,
-    handleFileOpenStart,
-    handleOpenedFileDiff,
     handleTerminalOpenUrl
   }
 }

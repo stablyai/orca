@@ -32,7 +32,6 @@ export function findNewestCodexStateDbPath(codexHomePath: string): string | null
   return newest ? join(codexHomePath, newest.name) : null
 }
 
-/** Reads Codex-owned backfill metadata without creating or mutating its database. */
 export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStateDbBackfillStatus {
   const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
   if (!stateDbPath) {
@@ -71,10 +70,7 @@ export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStat
   }
 }
 
-/**
- * Lower-cased thread ids already in Codex's state DB, or null when the DB is
- * missing or unreadable. Read-only; never creates or mutates Codex's database.
- */
+/** Null means the database is absent or unreadable. */
 export function readIndexedCodexThreadIds(codexHomePath: string): Set<string> | null {
   const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
   if (!stateDbPath) {
@@ -118,7 +114,6 @@ export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number):
         pendingDirectories.push(join(directory, entry.name))
       } else if (
         entry.isFile() &&
-        // Why: Codex's startup backfill parses compressed rollouts too.
         (entry.name.endsWith('.jsonl') || entry.name.endsWith('.jsonl.zst'))
       ) {
         count += 1
@@ -133,18 +128,29 @@ export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number):
 
 export const BACKFILL_PENDING_MIN_SESSION_FILES = 100
 
-export function isCodexStateDbBackfillPending(codexHomePath: string): boolean {
+export type CodexStateDbBackfillPendingState = 'pending' | 'not-pending' | 'unreadable'
+
+export function readCodexStateDbBackfillPendingState(
+  codexHomePath: string
+): CodexStateDbBackfillPendingState {
   const status = readCodexStateDbBackfillStatus(codexHomePath)
   if (status.kind === 'incomplete') {
-    return true
+    return 'pending'
+  }
+  if (status.kind === 'unreadable') {
+    return 'unreadable'
   }
   if (status.kind !== 'missing' && status.kind !== 'not-tracked') {
-    return false
+    return 'not-pending'
   }
-  return (
-    countCodexSessionFilesUpTo(
-      join(codexHomePath, 'sessions'),
-      BACKFILL_PENDING_MIN_SESSION_FILES
-    ) >= BACKFILL_PENDING_MIN_SESSION_FILES
-  )
+  return countCodexSessionFilesUpTo(
+    join(codexHomePath, 'sessions'),
+    BACKFILL_PENDING_MIN_SESSION_FILES
+  ) >= BACKFILL_PENDING_MIN_SESSION_FILES
+    ? 'pending'
+    : 'not-pending'
+}
+
+export function isCodexStateDbBackfillPending(codexHomePath: string): boolean {
+  return readCodexStateDbBackfillPendingState(codexHomePath) === 'pending'
 }

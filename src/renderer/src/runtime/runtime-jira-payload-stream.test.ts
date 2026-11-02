@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 type RuntimeEnvironmentSubscribeCallbacks = Parameters<
   typeof window.api.runtimeEnvironments.subscribe
@@ -37,7 +38,7 @@ describe('readRuntimeJiraPayload', () => {
         return { unsubscribe, sendBinary: vi.fn() }
       }
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+    stubRuntimeEnvironmentBridge({ subscribe })
 
     await expect(
       readRuntimeJiraPayload<{ key: string }>(
@@ -61,7 +62,7 @@ describe('readRuntimeJiraPayload', () => {
         return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
       }
     )
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+    stubRuntimeEnvironmentBridge({ subscribe })
 
     await expect(
       readRuntimeJiraPayload(

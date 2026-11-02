@@ -101,9 +101,7 @@ export function GeneralWorkspaceSettingsSection({
         />
       </SearchableSetting>
 
-      {/* Why: the "Don't ask again" toast in the delete-worktree dialog
-          deep-links here, so the wrapper id must stay stable. Renaming it
-          breaks that toast action even though this pane still renders fine. */}
+      {/* Keep this ID stable: the delete-worktree Don’t ask again toast deep-links here. */}
       <div id="general-skip-delete-worktree-confirm" className="scroll-mt-6">
         <SearchableSetting
           title={translate(
@@ -218,6 +216,9 @@ export function GeneralWorkspaceSettingsSection({
             'launcher',
             'cursor',
             'zed',
+            'windsurf',
+            'devin',
+            'devin desktop',
             'command',
             'vscode',
             'finder',

@@ -12,6 +12,11 @@ import {
   profileStateDatabaseBackupFiles
 } from './profile-state-backup-path'
 import { profileStateJsonExportPaths } from './legacy-json/profile-state-export-path'
+import {
+  ensureProfileStateAuthorityMarker,
+  hasProfileStateAuthorityMarker,
+  profileStateAuthorityMarkerPath
+} from './profile-state-authority-marker'
 import { assertProfileStateMaintenance, type ProfileStateMaintenance } from './profile-state-access'
 import {
   quarantineProfileStateDatabase,
@@ -35,7 +40,7 @@ export type ProfileStateDatabaseRecovery = {
   removedDatabaseFiles: readonly string[]
 }
 
-/** Replace the database family only while startup and offline access are excluded. */
+/** Require maintenance ownership to exclude startup and offline access during replacement. */
 export function restoreProfileStateDatabaseBackup(
   options: ProfileStateDatabaseRecoveryOptions
 ): ProfileStateDatabaseRecovery {
@@ -61,6 +66,9 @@ export function restoreProfileStateDatabaseBackup(
     const recoveryFiles = [
       ...profileStateDatabaseBackupFiles(options.databasePath),
       ...profileStateJsonExportPaths(options.dataFile),
+      ...(hasProfileStateAuthorityMarker(options.databasePath)
+        ? [profileStateAuthorityMarkerPath(options.databasePath)]
+        : []),
       ...(existsSync(options.dataFile) ? [options.dataFile] : [])
     ]
     const quarantine = quarantineProfileStateDatabase(
@@ -71,10 +79,9 @@ export function restoreProfileStateDatabaseBackup(
       recoveryFiles
     )
     options.beforeRestore?.()
+    ensureProfileStateAuthorityMarker(options.databasePath)
 
-    // JSON exports are revisioned for the legacy authority. Remove them after
-    // archiving so a later SQLite revision can publish a fresh export at the
-    // same number without colliding with an older divergent payload.
+    // Archive then remove legacy exports so reused revisions cannot collide with divergent old payloads.
     const retainedJsonExports = profileStateJsonExportPaths(options.dataFile)
     for (const exportPath of retainedJsonExports) {
       rmSync(exportPath)

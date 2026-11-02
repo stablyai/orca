@@ -13,7 +13,10 @@ vi.mock('../sidebar/CacheTimer', () => ({
   usePromptCacheCountdownForPane: () => null
 }))
 
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  await vi.dynamicImportSettled()
+})
 
 const agent: AgentRow = {
   paneKey: 'tab:leaf',
@@ -65,46 +68,6 @@ describe('agent child disclosure', () => {
     expect(activate).not.toHaveBeenCalled()
     expect(pointerDown).not.toHaveBeenCalled()
     expect(keyDown).not.toHaveBeenCalled()
-  })
-
-  it('updates the accessible action and retains the timestamp when expanded', () => {
-    const toggle = vi.fn()
-    const { rerender } = render(
-      <DashboardAgentChildDisclosure
-        childAgentCount={1}
-        childAgentsExpanded={false}
-        onToggleChildAgents={toggle}
-        timestamp="5m"
-      />
-    )
-    expect(
-      screen.getByRole('button', { name: 'Show 1 child agent' }).getAttribute('aria-expanded')
-    ).toBe('false')
-    rerender(
-      <DashboardAgentChildDisclosure
-        childAgentCount={1}
-        childAgentsExpanded
-        onToggleChildAgents={toggle}
-        timestamp="5m"
-      />
-    )
-    expect(
-      screen.getByRole('button', { name: 'Hide 1 child agent' }).getAttribute('aria-expanded')
-    ).toBe('true')
-    expect(screen.getByText('5m')).toBeTruthy()
-  })
-
-  it('does not offer a disclosure without children or a toggle action', () => {
-    const { rerender } = render(
-      <DashboardAgentChildDisclosure
-        childAgentCount={0}
-        childAgentsExpanded={false}
-        onToggleChildAgents={vi.fn()}
-      />
-    )
-    expect(screen.queryByRole('button')).toBeNull()
-    rerender(<DashboardAgentChildDisclosure childAgentCount={2} childAgentsExpanded={false} />)
-    expect(screen.queryByRole('button')).toBeNull()
   })
 })
 

@@ -122,6 +122,16 @@ export default function SearchDialog({ dialogId = 'docs-search-dialog', onClose 
     return query.data
   }, [query.data])
 
+  const highlightedResults = useMemo(() => {
+    const highlights = new Map<string, React.ReactNode[]>()
+    for (const result of results) {
+      if (result.content && !highlights.has(result.content)) {
+        highlights.set(result.content, renderHighlighted(result.content))
+      }
+    }
+    return highlights
+  }, [results])
+
   const selectedIndex = Math.min(activeIndex, Math.max(results.length - 1, 0))
 
   useEffect(() => {
@@ -354,7 +364,10 @@ export default function SearchDialog({ dialogId = 'docs-search-dialog', onClose 
                               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                           )}
                         >
-                          {g.page.content ? renderHighlighted(g.page.content) : g.page.url}
+                          {g.page.content
+                            ? (highlightedResults.get(g.page.content) ??
+                              renderHighlighted(g.page.content))
+                            : g.page.url}
                         </Link>
                       )}
                       <ul className="space-y-0.5">
@@ -377,7 +390,10 @@ export default function SearchDialog({ dialogId = 'docs-search-dialog', onClose 
                                 )}
                               >
                                 <div className="truncate">
-                                  {r.content ? renderHighlighted(r.content) : r.url}
+                                  {r.content
+                                    ? (highlightedResults.get(r.content) ??
+                                      renderHighlighted(r.content))
+                                    : r.url}
                                 </div>
                               </Link>
                             </li>

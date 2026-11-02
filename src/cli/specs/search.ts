@@ -1,8 +1,6 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 
-// Why one command and not a `search status` subcommand: the query is a bare
-// positional, so `orca search status` would be indistinguishable from searching
-// for the word "status". The index report is a flag on the same command instead.
+// Status is a flag because a subcommand would collide with searching for the word "status".
 export const SEARCH_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['search'],

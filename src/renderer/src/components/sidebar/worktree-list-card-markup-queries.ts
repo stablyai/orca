@@ -9,9 +9,7 @@ export function getCardOpeningTag(markup: string, worktreeId: string): string {
 }
 
 export function getOptionOpeningTag(markup: string, worktreeId: string): string {
-  // Why: option ids are keyed by the row's rowKey, which is
-  // `<section>:<host>|<worktreeId>` once URI-encoded (e.g. all%3Alocal%7Cchild).
-  // The worktree id is the suffix after the encoded host separator (STA-4343).
+  // Option IDs encode section:host|worktreeId; match the workspace suffix after the encoded host separator.
   return (
     markup.match(
       new RegExp(`<div[^>]*id="worktree-list-option-[^"]*%7C${escapeRegex(worktreeId)}"[^>]*>`)

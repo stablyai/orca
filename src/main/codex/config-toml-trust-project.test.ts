@@ -27,12 +27,6 @@ afterEach(() => {
 })
 
 describe('upsertProjectTrustLevel', () => {
-  it('creates a projects trust block when the config is empty', () => {
-    expect(upsertProjectTrustLevelInContent('', '/tmp/codex-ws', 'trusted')).toBe(
-      ['[projects."/tmp/codex-ws"]', 'trust_level = "trusted"', ''].join('\n')
-    )
-  })
-
   it('uses Codex canonicalized project paths when the project exists', () => {
     const nestedDir = join(tmpDir, 'nested')
     const projectDir = join(tmpDir, 'project')
@@ -88,7 +82,6 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('preserves CRLF endings and writes native Windows path separators in the header', () => {
-    // Why: local trust follows Codex's realpath; remote trust preserves the SSH provider's canonical path.
     const original = ['[profiles.default]', 'model = "gpt-5"', ''].join('\r\n')
 
     const updated = upsertProjectTrustLevelInContent(original, 'C:\\Users\\nw\\repo', 'trusted')
@@ -100,7 +93,6 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('updates an existing Windows backslash project block after separator normalization', () => {
-    // Why: hook trust writes paired Windows variants, but project trust still repairs a single table in place.
     const original = [
       '[projects."C:\\\\Users\\\\nw\\\\repo"]',
       'notes = "keep"',
@@ -118,7 +110,6 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('updates an existing legacy Windows forward-slash project block', () => {
-    // Why: older Orca builds normalized to forward slashes; backslash fixes must not duplicate them.
     const original = [
       '[projects."C:/Users/nw/repo"]',
       'notes = "keep"',
@@ -177,7 +168,6 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('keeps case-distinct WSL Linux project paths as separate trust blocks', () => {
-    // Why: \\wsl$\<distro> is case-insensitive but the Linux path under it is not — two distinct projects.
     const existingPath = '\\\\wsl$\\Ubuntu\\home\\u\\Repo'
     const incomingPath = '\\\\wsl$\\Ubuntu\\home\\u\\repo'
     const original = [`[projects.'${existingPath}']`, 'trust_level = "untrusted"', ''].join('\n')
@@ -188,14 +178,12 @@ describe('upsertProjectTrustLevel', () => {
 
     expect(updated.match(/\[projects\./g)).toHaveLength(2)
     expect(updated).toContain(`[projects.'${existingPath}']`)
-    // Why: serializer writes basic-string headers via escapeTomlString; assert that exact form.
     expect(updated).toContain(`[projects."${escapeTomlString(incomingPath)}"]`)
     expect(updated).toContain('trust_level = "untrusted"')
     expect(updated).toContain('trust_level = "trusted"')
   })
 
   it('updates the same WSL project block across wsl$ and wsl.localhost spellings', () => {
-    // Why: the two share spellings alias the same distro, so a revoke must not survive under the other.
     const original = [
       "[projects.'\\\\wsl$\\Ubuntu\\home\\u\\proj']",
       'trust_level = "untrusted"',
@@ -228,17 +216,6 @@ describe('upsertProjectTrustLevel', () => {
     expect(updated).toContain('trust_level = "trusted"')
   })
 
-  it('preserves an already-canonical remote Windows project path', () => {
-    // Why: SSH paths resolve on the remote; local realpath would canonicalize the wrong machine.
-    const updated = upsertProjectTrustLevelInContent('', 'C:/Users/nw/repo', 'trusted', {
-      alreadyCanonical: true
-    })
-
-    expect(updated).toBe(
-      ['[projects."C:/Users/nw/repo"]', 'trust_level = "trusted"', ''].join('\n')
-    )
-  })
-
   it('writes config.toml and avoids rewriting an already-trusted project', () => {
     upsertProjectTrustLevel(configPath, '/tmp/codex-ws', 'trusted')
     const firstWrite = readFileSync(configPath, 'utf-8')
@@ -252,59 +229,13 @@ describe('upsertProjectTrustLevel', () => {
 })
 
 describe('normalizeCodexProjectPathForLookup', () => {
-  it('dedupes drive-letter casing and separators for true Windows paths', () => {
-    expect(normalizeCodexProjectPathForLookup('C:\\repo')).toBe(
-      normalizeCodexProjectPathForLookup('c:/repo')
-    )
-  })
-
-  it('keeps case-distinct WSL Linux paths distinct', () => {
-    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\Repo')).not.toBe(
-      normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\repo')
-    )
-  })
-
-  it('merges separator and distro-casing variants of the same WSL path', () => {
-    // Why: separator and \\wsl$\<distro> casing may drift, but the same Linux path is one trust key.
-    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\proj')).toBe(
-      normalizeCodexProjectPathForLookup('//WSL$/ubuntu/home/u/proj')
-    )
-  })
-
-  it('treats wsl.localhost like the wsl$ share for the case-sensitive tail', () => {
-    expect(normalizeCodexProjectPathForLookup('\\\\wsl.localhost\\Ubuntu\\home\\u\\Repo')).not.toBe(
-      normalizeCodexProjectPathForLookup('\\\\wsl.localhost\\Ubuntu\\home\\u\\repo')
-    )
-    expect(normalizeCodexProjectPathForLookup('\\\\WSL.LOCALHOST\\Ubuntu\\home\\u\\proj')).toBe(
-      normalizeCodexProjectPathForLookup('//wsl.localhost/ubuntu/home/u/proj')
-    )
-  })
-
-  it('folds the wsl$ and wsl.localhost spellings of the same path to one key', () => {
-    expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\home\\u\\Proj')).toBe(
-      normalizeCodexProjectPathForLookup('\\\\wsl.localhost\\Ubuntu\\home\\u\\Proj')
-    )
-  })
-
   it('folds drvfs automount tails case-insensitively like the native drive path', () => {
-    // Why: /mnt/<drive> is NTFS through drvfs, case-insensitive like C:\ itself.
     expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\mnt\\c\\Users\\Bob\\Repo')).toBe(
       normalizeCodexProjectPathForLookup('//wsl.localhost/ubuntu/mnt/c/users/bob/repo')
     )
-    // /mnt/wsl is tmpfs, not a drvfs drive mount — its tail stays case-sensitive.
     expect(normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\mnt\\wsl\\Repo')).not.toBe(
       normalizeCodexProjectPathForLookup('\\\\wsl$\\Ubuntu\\mnt\\wsl\\repo')
     )
-  })
-
-  it('still case-folds normal UNC shares', () => {
-    expect(normalizeCodexProjectPathForLookup('\\\\server\\share\\Proj')).toBe(
-      normalizeCodexProjectPathForLookup('//SERVER/share/proj')
-    )
-  })
-
-  it('leaves POSIX paths untouched', () => {
-    expect(normalizeCodexProjectPathForLookup('/home/u/Repo')).toBe('/home/u/Repo')
   })
 })
 

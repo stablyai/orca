@@ -3,6 +3,7 @@ import { preparePendingSplitClose } from './pending-split-close-test-fixture'
 import { preparePendingRuntimeClose } from './pending-runtime-pane-close-test-fixture'
 import { flushPtySideEffects } from './pty-transport-test-harness'
 import type { PtyRunningWorkProbe } from '../terminal/pty-running-work-probe'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 beforeEach(() => vi.clearAllMocks())
 afterEach(() => vi.useRealTimers())
@@ -23,10 +24,13 @@ async function prepare(remote = false, requestedPtyId?: string) {
   vi.mocked(probePtyRunningWork).mockReturnValueOnce(reply.promise)
   const verdict = (value: PtyRunningWorkProbe['verdict']) =>
     reply.resolve([{ ptyId: 'captured', verdict: value, timedOut: false, remote }])
+  // A layout-owner build asks main to close the pane (main stops its terminal); else it is killed here.
   const closed = () =>
     paired
       ? paired.runtimeCall.mock.calls.some(([request]) => request.method === 'terminal.close')
-      : vi.mocked(window.api.pty.kill).mock.calls.length > 0
+      : ORCA_LAYOUT_OWNER_IS_MAIN
+        ? 'sentPaneCloses' in p && p.sentPaneCloses().length > 0
+        : vi.mocked(window.api.pty.kill).mock.calls.length > 0
   const settle = async () => {
     if (paired) {
       paired.acceptCompatibility()
@@ -44,7 +48,6 @@ it.each([false, true])('requires confirmation for pending live work, paired=%s',
   const p = await prepare(remote)
   p.actions.handleRequestClosePane(1)
   expect(p.probePtyRunningWork).toHaveBeenCalledWith(
-    expect.any(Object),
     [remote ? 'remote:env-1@@term_original' : 'pty-restored'],
     expect.any(Object)
   )
@@ -103,10 +106,11 @@ it('uses the direct SSH identity in the running-work probe', async () => {
   p.actions.handleRequestClosePane(1)
   p.verdict('live')
   await flushPtySideEffects()
-  expect(p.probePtyRunningWork).toHaveBeenCalledWith(expect.any(Object), [id], expect.any(Object))
+  expect(p.probePtyRunningWork).toHaveBeenCalledWith([id], expect.any(Object))
   expect(p.closed()).toBe(false)
   p.actions.handleConfirmClose(false)
   await p.settle()
+  expect(p.closed()).toBe(true)
   expect(window.api.pty.kill).toHaveBeenCalledWith(id)
 })
 

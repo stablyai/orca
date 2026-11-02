@@ -1,66 +1,55 @@
-// Stop's pause on the queue. A Stop never withdraws a draft and no text ever
-// travels back over the wire: it records WHERE in the journal it took effect,
-// and the queue is paused from there (`structured-agent-session-queued-pause.ts`
-// derives it) until a turn a person asked for starts, or they Resume. The cards
-// stay published, and Send-now sends one card without lifting the pause for the
-// rest until that card's turn starts. The record is bookkeeping: a failure is
-// reported and never gates the interrupt.
+// Stop atomically records its event/queued-send withdrawal without withdrawing draft text.
+// Derive pause until a later send’s turn starts or Resume; Send-now alone lifts only its own card.
 
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   isUnsettledQueuedMessage,
   type QueuedMessageRow
 } from '../agent-session-journal/queued-message-table'
-import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import type { AgentSessionTurnContext } from './structured-agent-session-turns'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import {
+  structuredAgentSessionStopNamesEndedTurn,
+  structuredAgentSessionStopNamesTurnNotLive
+} from './structured-agent-session-turn-stop-notes'
 
-/** The one unsettled-card predicate /clear's carry and the budget share:
- *  waiting or returned. Pending/unknown/accepted deliveries stay outside it. */
+/** Unsettled means waiting/returned; pending, unknown and accepted deliveries are excluded. */
 export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMessageRow[] {
   return journal.queuedMessages.list().filter(isUnsettledQueuedMessage)
 }
 
-/**
- * Runs a Stop and records its queue pause at the point it takes effect — after
- * it withdrew the queued sends, as it reaches the agent, or, reaching no agent,
- * once it withdrew something — and only over cards it then holds back. The Stop
- * calls `tookEffect` there. A Stop that throws before then changed nothing and
- * recorded nothing, so there is nothing to undo; one that fails after it keeps
- * the pause, since the interrupt may have landed. A draft whose hand-off the
- * Stop withdrew is back to waiting in its own place, under this same pause. The
- * drain cannot slip a draft in between: it runs on the same serialized lane as
- * the Stop.
- */
-export async function runStopWithQueuePause<TValue>(
-  ctx: AgentSessionTurnContext,
-  stop: (tookEffect: () => Promise<void>) => Promise<TurnOutcome<TValue>>
-): Promise<TurnOutcome<TValue>> {
-  let attempted = false
-  return stop(async () => {
-    if (attempted) {
-      return
-    }
-    attempted = true
-    const { queuedMessages } = ctx.journal
-    // A hand-off this Stop's withdrawal sent back may not have caught up yet (its hook
-    // was skipped): heal it first, as the drain would, so the pause sees it waiting.
-    try {
-      if (queuedMessages.settlementOwed()) {
-        await queuedMessages.settleOwed()
-      }
-    } catch (error) {
-      report(ctx, 'owed settlement', error)
-    }
-    // Recorded only over a card it holds back — judged in its own transaction, which
-    // still counts an owed return to waiting if that heal failed.
-    await queuedMessages
-      .recordPause('stopped')
-      .catch((error: unknown) => report(ctx, 'queue pause', error))
-  })
+/** Distinguish unrecorded work, repeated Stop without later sends, and late Stops naming ended turns. */
+export function stopReachesUnrecordedWork(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
+  namedTurnId: string | undefined
+): 'unrecorded' | 'repeat' | 'late' {
+  const work = contextStructuredAgentSessionCurrentWork(ctx)
+  if (structuredAgentSessionStopNamesEndedTurn(ctx.journal, work, namedTurnId)) {
+    return 'late'
+  }
+  const live = work.activeTurnId()
+  const inForce = ctx.journal.queuedMessages.userStopInForce()
+  if (inForce === null) {
+    return 'unrecorded'
+  }
+  // This interrupt may return later sends to waiting, so it must hold them.
+  return sentSinceStop(ctx.journal, inForce) ||
+    structuredAgentSessionStopNamesTurnNotLive(inForce.event.turnId, live)
+    ? 'unrecorded'
+    : 'repeat'
 }
 
-function report(ctx: AgentSessionTurnContext, step: string, error: unknown): void {
-  console.warn(`[agent-session] Stop's ${step} skipped:`, {
-    sessionId: ctx.sessionId,
-    error: error instanceof Error ? error.message : String(error)
-  })
+/** Include nonrefused later sends even if unknown; missing sequence is legacy data. */
+export function sentSinceStop(
+  journal: Pick<AgentSessionJournal, 'submissions'>,
+  inForce: { sequence: number }
+): boolean {
+  return journal
+    .submissions()
+    .some(
+      (entry) =>
+        entry.dispatchState !== 'rejected' &&
+        entry.acceptedSequence !== undefined &&
+        entry.acceptedSequence > inForce.sequence
+    )
 }

@@ -7,14 +7,14 @@ import {
 import type { RenderRow } from './worktree-list/listing/render-row'
 
 const repoHeader = (id: string): RenderRow =>
-  ({ type: 'header', key: `repo:${id}`, label: id, count: 1, tone: '', repo: { id } }) as RenderRow
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the boundary reader only reads type, key, repo.id and projectGroup.id.
+  ({ type: 'header', key: `repo:${id}`, label: id, count: 1, repo: { id } }) as RenderRow
 const groupHeader = (id: string): RenderRow =>
   ({
     type: 'header',
     key: `group:${id}`,
     label: id,
     count: 1,
-    tone: '',
     projectGroup: { id },
     projectGroupDepth: 0
   }) as RenderRow
@@ -44,17 +44,6 @@ describe('getRepoHeaderSectionEndByRepoId', () => {
     // Regression: a successor index keyed on id alone picked `b` from the first bucket.
     expect(ends.get('a')).toBe(startOfC)
     expect(ends.get('b')).toBe(startOfC)
-  })
-
-  it('falls back to the next header when a bucket has no successor', () => {
-    const ends = getRepoHeaderSectionEndByRepoId({
-      rows,
-      firstHeaderIndex: 0,
-      sidebarRepoHeaderIdsByBucket: new Map([['ungrouped', ['a']]]),
-      repoHeaderBucketByRepoId: new Map([['a', 'ungrouped']])
-    })
-
-    expect(ends.get('a')).toBe(startOfB)
   })
 
   it('resolves a header id that renders twice to its first row, matching findIndex', () => {

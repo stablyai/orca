@@ -4,6 +4,7 @@ import {
   recognizeAgentProcess
 } from '../../shared/agent-process-recognition'
 import { isOpenCodeNativeTitle } from '../../shared/agent-detection'
+import { isShellProcess } from '../../shared/shell-process-detection'
 import { isKnownReadyPromptPreview } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -13,7 +14,10 @@ import {
   classifyLatestAgentTitle,
   getLatestAgentCandidateTitle,
   getLatestLeafTitle,
-  ptyTitleProvesAgentPresence
+  getLeafDisplayRecord,
+  getPtyDisplayRecord,
+  ptyTitleProvesAgentPresence,
+  type TitleDisplayClear
 } from './runtime-worktree-status-projection'
 
 const WRAPPER_RETRY_INTERVAL_MS = 150
@@ -28,6 +32,9 @@ type RuntimeTerminalAgentPresenceDependencies = {
   getTrackedPty(ptyId: string): RuntimePtyWorktreeRecord | null
   getTabTitle(tabId: string): string | null
   getForegroundProcess(ptyId: string): Promise<string | null> | null
+  confirmForegroundProcess(ptyId: string): Promise<string | null> | null
+  /** The stale-working timer's display-only clear of the PTY's own title, if one stands. */
+  getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
 }
 
 export type RuntimeTerminalAgentPresenceOptions = {
@@ -43,19 +50,27 @@ export class RuntimeTerminalAgentPresence {
     handle: string,
     options: RuntimeTerminalAgentPresenceOptions = {}
   ): Promise<boolean> {
-    // Before every PTY probe below, because none of them can answer for a session that has no
-    // pane: `getLiveLeaf` threw, the catch turned that into `false`, and a coordinator running
-    // `dispatch --inject` concluded its structured worker was a bare shell — `no_agent_detected`.
-    // A structured session IS the agent; there is no foreground process to recognise.
+    // Resolve structured sessions before PTY probes: they are agents without panes and otherwise falsely become no_agent_detected on inject.
     if (this.deps.isLiveStructuredAgent?.(handle)) {
       return true
     }
     try {
+      // Presence follows display records; after stale cwd-spinner clearing, foreground evidence decides whether an agent remains.
       const pty = this.deps.getLivePty(handle)
       if (pty) {
-        return await this.isPtyRunning(pty, this.deps.getPrimaryLeaf(pty.ptyId), options)
+        const clear = this.deps.getTitleDisplayClear(pty.ptyId)
+        const leaf = this.deps.getPrimaryLeaf(pty.ptyId)
+        return await this.isPtyRunning(
+          getPtyDisplayRecord(pty, clear),
+          leaf ? getLeafDisplayRecord(leaf, clear) : null,
+          options
+        )
       }
-      const leaf = this.deps.getLiveLeaf(handle)
+      const liveLeaf = this.deps.getLiveLeaf(handle)
+      const leaf = getLeafDisplayRecord(
+        liveLeaf,
+        liveLeaf.ptyId ? this.deps.getTitleDisplayClear(liveLeaf.ptyId) : null
+      )
       const trackedPty = leaf.ptyId ? this.deps.getTrackedPty(leaf.ptyId) : null
       const paneTitle = getLatestLeafTitle(leaf, null)
       const paneClassification = classifyAgentTitle(paneTitle)
@@ -184,14 +199,17 @@ export class RuntimeTerminalAgentPresence {
     suppressClaude: boolean,
     retryForegroundWrappers: boolean
   ): Promise<boolean> {
-    const recognized = recognizeAgentProcess(foregroundProcess)
+    const wrapper = isAgentForegroundWrapperProcess(foregroundProcess)
+    // Why: macOS p_comm names the native Claude install by its version directory (`2.1.310`).
+    const recognized =
+      recognizeAgentProcess(foregroundProcess) ??
+      (retryForegroundWrappers && !wrapper && !isShellProcess(foregroundProcess)
+        ? recognizeAgentProcess(await this.deps.confirmForegroundProcess(ptyId))
+        : null)
     if (recognized) {
       return !(suppressClaude && isExpectedAgentProcess(recognized.processName, 'claude'))
     }
-    if (!isAgentForegroundWrapperProcess(foregroundProcess)) {
-      return false
-    }
-    if (!retryForegroundWrappers) {
+    if (!wrapper || !retryForegroundWrappers) {
       return false
     }
     const startedAt = Date.now()

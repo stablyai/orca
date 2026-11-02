@@ -1,4 +1,9 @@
-import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import {
+  isWindowsAbsolutePathLike,
+  relativePathInsideRoot
+} from '../../../shared/cross-platform-path'
+
+export { normalizeRelativePath } from '../../../shared/cross-platform-path'
 
 function stripTrailingSeparators(path: string): string {
   return path.replace(/[\\/]+$/, '')
@@ -12,10 +17,6 @@ function getSeparator(path: string): '/' | '\\' {
   return path.includes('\\') ? '\\' : '/'
 }
 
-export function normalizeRelativePath(path: string): string {
-  return stripLeadingSeparators(path).replace(/[\\/]+/g, '/')
-}
-
 export function getRelativePathInsideRoot(
   filePath: string,
   rootPath: string | null
@@ -23,8 +24,7 @@ export function getRelativePathInsideRoot(
   if (!rootPath) {
     return null
   }
-  // Why: delegate so renderer containment folds Unicode the same way the rest of
-  // the app does — a local copy silently missed NFD-vs-NFC matches (#10832).
+  // Share Unicode containment folding; local case-only copies missed NFD/NFC matches (#10832).
   return relativePathInsideRoot(rootPath, filePath)
 }
 
@@ -74,9 +74,14 @@ export function joinPath(basePath: string, relativePath: string): string {
     return basePath
   }
 
-  const separator = getSeparator(basePath)
-  const normalizedBasePath = stripTrailingSeparators(basePath)
-  const normalizedRelativePath = stripLeadingSeparators(relativePath).replace(/[\\/]+/g, separator)
+  const windowsPath = isWindowsAbsolutePathLike(basePath)
+  const separator = windowsPath ? getSeparator(basePath) : '/'
+  const normalizedBasePath = windowsPath
+    ? stripTrailingSeparators(basePath)
+    : basePath.replace(/\/+$/, '')
+  const normalizedRelativePath = windowsPath
+    ? stripLeadingSeparators(relativePath).replace(/[\\/]+/g, separator)
+    : relativePath.replace(/^\/+/, '').replace(/\/+/g, '/')
 
   return `${normalizedBasePath}${separator}${normalizedRelativePath}`
 }

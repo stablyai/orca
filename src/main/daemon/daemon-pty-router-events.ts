@@ -15,4 +15,8 @@ export type DaemonPtyRouterExitEvent = {
   incarnationId?: PtyIncarnationId
   /** Absent from a daemon predating exit causes; readers fall back to `unknown`. */
   cause?: TerminalExitCause
+  /** Main ended the session to restart the daemon; the pane stays for its next process. */
+  replacedByRestart?: true
+  /** The session's host went away (a WSL bridge pane's distro stopped); its pane and history stay to cold-restore. */
+  hostLost?: true
 }

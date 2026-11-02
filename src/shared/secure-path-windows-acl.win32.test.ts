@@ -1,199 +1,164 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { runProcessSync } from './child-process/run-process'
-import { windowsSystem32Binary } from './child-process/windows-system-binary'
+import { Worker } from 'node:worker_threads'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { __resetSecureFileHardenedPathsForTests, writeSecureFile } from './secure-file'
 import {
   setSecurePathHardeningReporter,
   type SecurePathHardeningReport
 } from './secure-path-hardening-report'
+import { restrictWindowsPathSync } from './secure-path-windows-acl'
 import {
-  bestEffortRestrictWindowsPath,
-  resetSecureFileWindowsUserSidForTests,
-  restrictWindowsPathSync
-} from './secure-path-windows-acl'
+  loadWindowsSecurity,
+  resetWindowsSecurityLoadForTests,
+  setWindowsSecurityForTests,
+  type WindowsSecurity
+} from './windows-security-addon'
+import {
+  CONTAINER_INHERIT_ACE,
+  findSecureDaclViolation,
+  OBJECT_INHERIT_ACE
+} from './windows-secure-dacl'
 import { removeTreeSync } from './windows-transient-lock-removal'
 
-/**
- * The half of the proof a mocked argv test cannot give.
- *
- * The shipped bug was not a wrong argv — it was an argv the *callee* never
- * received: `powershell.exe -Command <script> <path> <sid>` leaves `$args`
- * empty, so the script died on its first statement and every caller was told
- * the path had been hardened. Asserting on the constructed arguments passed
- * happily throughout. Only reading the resulting ACL back off a real file
- * catches it, so that is what this does.
- *
- * Runs only on win32; skipped elsewhere.
- */
+/** Real NTFS read-back covers what fake addons cannot: relocated C:\ roots inheriting broad Modify access. Windows only. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
-const EVERYONE_SID = 'S-1-1-0'
-const BUILTIN_ADMINISTRATORS_SID = 'S-1-5-32-544'
-/** High, System and Protected mandatory levels: the token is elevated. Medium (S-1-16-8192) is not. */
-const ELEVATED_INTEGRITY_SID = /\bS-1-16-(?:12288|16384|20480)\b/
-
-/** The SID the production code will grant to, so a planted DACL can differ only in its flags. */
-function currentUserSid(): string {
-  const result = runProcessSync({
-    program: windowsSystem32Binary('whoami.exe'),
-    args: ['/user', '/fo', 'csv', '/nh'],
-    timeoutMs: 10_000
-  })
-  return result.stdout.trim().split(/","/)[1]!.replace(/"$/, '')
-}
-
-/**
- * Plants an exact DACL. Two invocations on purpose: combining `/inheritance:r` with `/grant:r`
- * leaves the argument order to icacls, and on Windows Server the inherited ACEs survive the
- * combined form as explicit ones -- which is a planted precondition that silently is not the
- * one written down. Removing inheritance first makes the grant the whole DACL.
- */
-function plantDacl(path: string, grants: string[]): void {
-  expect(icacls(path, '/inheritance:r', '/q').code).toBe(0)
-  expect(icacls(path, ...grants.flatMap((grant) => ['/grant:r', grant]), '/q').code).toBe(0)
-}
-
-function icacls(...args: string[]): { code: number | null; stdout: string } {
-  const result = runProcessSync({
-    program: windowsSystem32Binary('icacls.exe'),
-    args,
-    timeoutMs: 10_000
-  })
-  return { code: result.code, stdout: result.stdout }
-}
-
-/**
- * Whether this process could rewrite a system file's DACL — decided before anything is written.
- *
- * `icacls <hosts> /save` is not the probe it looks like: `BUILTIN\Users` holds `(RX)`, so
- * READ_CONTROL succeeds unelevated and every machine would report elevated. The token's mandatory
- * integrity level is the thing that actually differs, and it is a SID rather than a localized
- * string, so it reads the same on a non-English Windows.
- */
-function isElevated(): boolean {
-  if (process.platform !== 'win32') {
-    return false
-  }
-  const result = runProcessSync({
-    program: windowsSystem32Binary('whoami.exe'),
-    args: ['/groups', '/fo', 'csv', '/nh'],
-    timeoutMs: 10_000
-  })
-  if (ELEVATED_INTEGRITY_SID.test(result.stdout)) {
-    return true
-  }
-  // Unelevated, Administrators is present only as "Group used for deny only".
-  const administrators = result.stdout
-    .split(/\r?\n/)
-    .find((line) => line.includes(BUILTIN_ADMINISTRATORS_SID))
-  return administrators?.includes('Enabled group') ?? false
-}
-
-/**
- * The `Principal:(flags)` entries of `icacls <path>`. The first line carries the path, which is
- * stripped by the exact string passed in so its own spaces cannot be mistaken for the separator.
- */
-function readAclEntries(path: string): string[] {
-  const arg = path.length < 260 ? path : `\\\\?\\${path}`
-  const { stdout } = icacls(arg)
-  const entries: string[] = []
-  for (const [index, rawLine] of stdout.split(/\r?\n/).entries()) {
-    const line = index === 0 ? rawLine.slice(arg.length) : rawLine
-    const trimmed = line.trim()
-    if (!trimmed && index > 0) {
-      break
-    }
-    if (trimmed.includes(':(')) {
-      entries.push(trimmed)
-    }
-  }
-  return entries
-}
-
-/**
- * `toHaveLength` reports only the count, and vitest elides the array past a few items — which on a
- * host that lists a DACL differently is exactly the information needed. Name the entries.
- */
-function listed(entries: string[]): string {
-  return `icacls listed ${entries.length} entries: ${entries.join(' | ')}`
-}
-
-describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
-  const elevated = isElevated()
+describeOnWindows('Windows secure paths against a real filesystem', () => {
+  let addon: WindowsSecurity['addon']
+  let sid: string
   let root: string
+  /** A relocated data root: `C:\orca-…` inherits BUILTIN\Users and Authenticated Users from C:\. */
+  let relocatedRoot: string
+
+  const daclOf = (path: string) => addon.getDaclAces(path)
+  const sidsOf = (path: string) => (daclOf(path)?.aces ?? []).map((ace) => ace.sid).sort()
+  const INHERITABLE = OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
+  const INHERITED_ACE = 0x10
+  const ORCA_PRINCIPALS = () => ['S-1-5-18', 'S-1-5-32-544', sid].sort()
 
   beforeAll(() => {
-    resetSecureFileWindowsUserSidForTests()
+    const loaded = loadWindowsSecurity()
+    if ('error' in loaded) {
+      throw new Error(`the windows-security addon did not load: ${loaded.error}`)
+    }
+    addon = loaded.addon
+    sid = loaded.userSid
     root = mkdtempSync(join(tmpdir(), 'orca-acl-win32-'))
-    // %TEMP% grants [user, SYSTEM, Administrators] (OI)(CI)(F) by default, and those
-    // propagate into every fixture below. Strip them here so a planted DACL is exactly what
-    // the test planted: on a host where the running user is also one of the three principals
-    // a test grants, an inherited copy is otherwise indistinguishable from a planted one.
-    plantDacl(root, [`*${currentUserSid()}:(OI)(CI)(F)`])
+    relocatedRoot = join('C:\\', `orca-acl-test-${randomBytes(4).toString('hex')}`)
+    mkdirSync(relocatedRoot)
+  })
+
+  afterEach(() => {
+    resetWindowsSecurityLoadForTests()
+    __resetSecureFileHardenedPathsForTests()
+    setSecurePathHardeningReporter(null)
   })
 
   afterAll(() => {
-    // This suite plants hostile DACLs on purpose, and `removeTreeSync` only retries *transient*
-    // locks. Should a repair regress, an `(OI)(CI)(IO)` grant leaves the tree permanently
-    // undeletable — so restore inheritance first rather than leaking it into %TEMP% every run.
-    icacls(root, '/reset', '/t', '/q')
-    removeTreeSync(root)
+    // Hostile DACL fixtures may become undeletable if repair regresses; restore this user’s access before cleanup.
+    for (const tree of [root, relocatedRoot]) {
+      unlockTree(tree)
+      removeTreeSync(tree)
+    }
   })
 
-  it('actually applies the ACL to a real file, dropping inherited and foreign ACEs', () => {
-    const file = join(root, 'credential.json')
-    writeFileSync(file, '{"token":"secret"}')
-    // A planted explicit ACE: /inheritance:r alone does not remove these.
-    expect(icacls(file, '/grant', `*${EVERYONE_SID}:(R)`).code).toBe(0)
+  function unlockTree(path: string): void {
+    try {
+      addon.setDaclSddl(path, `D:P(A;OICI;FA;;;${sid})`)
+    } catch {
+      return
+    }
+    if (lstatSync(path).isDirectory()) {
+      for (const name of readdirSync(path)) {
+        unlockTree(join(path, name))
+      }
+    }
+  }
 
-    const before = readAclEntries(file)
-    expect(before.some((entry) => entry.startsWith('Everyone:'))).toBe(true)
-    expect(before.some((entry) => entry.includes('(I)'))).toBe(true)
+  it('starts from a relocated root that really is broader than Orca allows', () => {
+    const verdict = findSecureDaclViolation(addon.getDaclAces(relocatedRoot), sid, true)
+    expect(verdict).toMatch(/unexpected rule for S-1-5-(11|32-545)/)
+  })
+
+  it('restricts a real file, dropping inherited and planted foreign rules', () => {
+    const file = join(relocatedRoot, 'credential.json')
+    writeFileSync(file, '{"token":"secret"}')
+    addon.grantAccess(file, 'S-1-1-0', 0x120089, { inheritable: false, replace: false })
+    expect(sidsOf(file)).toContain('S-1-1-0')
 
     expect(restrictWindowsPathSync(file, false)).toBe(true)
 
-    const after = readAclEntries(file)
-    // No inherited ACE survives: the DACL is protected.
-    expect(after.every((entry) => !entry.includes('(I)'))).toBe(true)
-    expect(after.some((entry) => entry.startsWith('Everyone:'))).toBe(false)
-    // Exactly the three intended principals, each with FullControl.
-    expect(after).toHaveLength(3)
-    expect(after.every((entry) => entry.endsWith(':(F)'))).toBe(true)
+    expect(daclOf(file)?.protected).toBe(true)
+    expect(sidsOf(file)).toEqual(ORCA_PRINCIPALS())
   })
 
-  it('gives a real directory inheritable rules so files created inside stay restricted', () => {
-    const dir = join(root, 'secure-dir')
+  it('gives a directory inheritable rules so files created inside start restricted', () => {
+    const dir = join(relocatedRoot, 'secure-dir')
     mkdirSync(dir)
 
     expect(restrictWindowsPathSync(dir, true)).toBe(true)
 
-    const after = readAclEntries(dir)
-    expect(after).toHaveLength(3)
-    expect(after.every((entry) => entry.endsWith(':(OI)(CI)(F)'))).toBe(true)
-    expect(after.every((entry) => !entry.includes('(I)'))).toBe(true)
-
-    // The point of the inheritance flags: a child written afterwards is already restricted.
-    const child = join(dir, 'inherited.json')
+    expect(daclOf(dir)?.aces.every((ace) => ace.flags === INHERITABLE)).toBe(true)
+    const child = join(dir, 'plain.json')
     writeFileSync(child, '{}')
-    const childEntries = readAclEntries(child)
-    expect(childEntries).toHaveLength(3)
-    expect(childEntries.every((entry) => entry.includes('(I)'))).toBe(true)
-    expect(childEntries.some((entry) => entry.startsWith('Everyone:'))).toBe(false)
+    expect(sidsOf(child)).toEqual(ORCA_PRINCIPALS())
+    expect(daclOf(child)?.aces.every((ace) => (ace.flags & INHERITED_ACE) !== 0)).toBe(true)
   })
 
-  // Paths reach this code from user-chosen workspace locations, so the quoting hazards that
-  // ruled out interpolating them into a PowerShell command line get exercised for real.
+  it.each([
+    ['(OI) without (CI), leaving subdirectories unprotected', 'OI'],
+    ['(OI)(CI)(IO), which grants nobody anything on the directory itself', 'OICIIO']
+  ])('repairs a directory whose rules are %s', (_label, flags) => {
+    const dir = join(root, `wrong-flags-${flags}`)
+    mkdirSync(dir)
+    addon.setDaclSddl(dir, `D:P(A;${flags};FA;;;SY)(A;${flags};FA;;;BA)(A;${flags};FA;;;${sid})`)
+
+    expect(restrictWindowsPathSync(dir, true)).toBe(true)
+
+    expect(daclOf(dir)?.aces.every((ace) => ace.flags === INHERITABLE)).toBe(true)
+    expect(() => writeFileSync(join(dir, 'child.json'), '{}')).not.toThrow()
+  })
+
+  it('repairs a protected three-rule DACL that grants the wrong principal', () => {
+    const file = join(root, 'substituted.json')
+    writeFileSync(file, '{}')
+    addon.setDaclSddl(file, 'D:P(A;;FA;;;WD)(A;;FA;;;SY)(A;;FA;;;BA)')
+
+    expect(restrictWindowsPathSync(file, false)).toBe(true)
+
+    expect(sidsOf(file)).toEqual(ORCA_PRINCIPALS())
+  })
+
+  it('never rewrites a path the icacls-era hardening already locked', () => {
+    const file = join(root, 'icacls-era.json')
+    writeFileSync(file, '{}')
+    addon.setDaclSddl(file, `D:PAI(A;;FA;;;BA)(A;;FA;;;SY)(A;;FA;;;${sid})`)
+    const before = addon.getDaclAces(file)
+    const writes = countingAddon()
+
+    expect(restrictWindowsPathSync(file, false)).toBe(true)
+
+    expect(writes.count).toBe(0)
+    expect(addon.getDaclAces(file)).toEqual(before)
+  })
+
   it.each([
     ['spaces', 'a b c'],
     ['single quote and dollar', "quo'te $var"],
     ['backtick', 'back`tick'],
-    ['brackets', 'brack[et]s'],
     ['semicolon and ampersand', 'semi;colon & amp'],
-    ['comma', 'com,ma'],
-    ['parentheses', 'paren(s)'],
-    ['caret and percent', 'car^et %PATH%']
+    ['caret and percent', 'car^et %PATH%'],
+    ['non-ASCII', 'résumé 資料']
   ])('hardens a path containing %s', (_label, segment) => {
     const dir = join(root, segment)
     mkdirSync(dir, { recursive: true })
@@ -201,10 +166,7 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
     writeFileSync(file, '{}')
 
     expect(restrictWindowsPathSync(file, false)).toBe(true)
-
-    const after = readAclEntries(file)
-    expect(after).toHaveLength(3)
-    expect(after.every((entry) => !entry.includes('(I)'))).toBe(true)
+    expect(sidsOf(file)).toEqual(ORCA_PRINCIPALS())
   })
 
   it('hardens a path longer than MAX_PATH', () => {
@@ -214,191 +176,168 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
     }
     mkdirSync(dir, { recursive: true })
     const file = join(dir, 'secret.json')
-    expect(file.length).toBeGreaterThan(260)
     writeFileSync(file, '{}')
 
     expect(restrictWindowsPathSync(file, false)).toBe(true)
-    expect(readAclEntries(file)).toHaveLength(3)
+    expect(sidsOf(`\\\\?\\${file}`)).toEqual(ORCA_PRINCIPALS())
   })
 
-  /**
-   * The shape of a DACL is not the same question as who is on it. This one is protected, carries
-   * exactly three non-inherited full-control rules, and grants Everyone — so it satisfies every
-   * check that does not compare SIDs, and hardening would report success and leave it alone.
-   */
-  it('repairs a protected three-rule DACL that grants the wrong principal', () => {
-    const file = join(root, 'substituted.json')
-    writeFileSync(file, '{"token":"secret"}')
-    plantDacl(file, [`*${EVERYONE_SID}:(F)`, '*S-1-5-18:(F)', '*S-1-5-32-544:(F)'])
-
-    const before = readAclEntries(file)
-    expect(before, listed(before)).toHaveLength(3)
-    expect(before.every((entry) => !entry.includes('(I)'))).toBe(true)
-    expect(before.some((entry) => entry.startsWith('Everyone:'))).toBe(true)
-
-    expect(restrictWindowsPathSync(file, false)).toBe(true)
-
-    const after = readAclEntries(file)
-    expect(after, listed(after)).toHaveLength(3)
-    expect(after.some((entry) => entry.startsWith('Everyone:'))).toBe(false)
-  })
-
-  /**
-   * Wrong *flags* rather than a wrong principal. Both of these are protected, carry three
-   * non-inherited full-control rules for exactly the right SIDs, and differ from correct only in
-   * their inheritance flags — so a check that tests OI alone accepts them.
-   *
-   * That under-check was harmless while /reset + /grant ran unconditionally and repaired whatever
-   * was there. Verify-first made it load-bearing: what verification accepts is now left alone.
-   */
-  it.each([
-    ['(OI) without (CI), leaving subdirectories unprotected', '(OI)(F)'],
-    ['(OI)(CI)(IO), which grants nobody anything on the directory itself', '(OI)(CI)(IO)(F)']
-  ])('repairs a directory whose rules are %s', (_label, rights) => {
-    const dir = join(root, `wrong-flags-${rights.replace(/[^A-Z]/g, '')}`)
-    mkdirSync(dir)
-    plantDacl(dir, [
-      `*${currentUserSid()}:${rights}`,
-      `*S-1-5-18:${rights}`,
-      `*S-1-5-32-544:${rights}`
-    ])
-
-    const before = readAclEntries(dir)
-    expect(before, listed(before)).toHaveLength(3)
-    expect(before.every((entry) => !entry.includes('(I)'))).toBe(true)
-    expect(before.every((entry) => entry.endsWith(rights))).toBe(true)
-
-    expect(restrictWindowsPathSync(dir, true)).toBe(true)
-
-    const after = readAclEntries(dir)
-    expect(after, listed(after)).toHaveLength(3)
-    expect(after.every((entry) => entry.endsWith(':(OI)(CI)(F)'))).toBe(true)
-
-    // The point of the (IO) case: before the repair the directory object grants nobody anything,
-    // so Orca cannot write into the directory it just cached as hardened.
-    const child = join(dir, 'child.json')
-    expect(() => writeFileSync(child, '{}')).not.toThrow()
-    expect(readAclEntries(child).every((entry) => entry.includes('(I)'))).toBe(true)
-  })
-
-  it('is idempotent: a second harden leaves the same DACL', () => {
-    const file = join(root, 'idempotent.json')
-    writeFileSync(file, '{}')
-
-    expect(restrictWindowsPathSync(file, false)).toBe(true)
-    const first = readAclEntries(file)
-    expect(restrictWindowsPathSync(file, false)).toBe(true)
-
-    expect(readAclEntries(file)).toEqual(first)
-  })
-
-  /**
-   * Verification writes a temp SDDL file. If it cannot, the ACL may well have been applied — but
-   * it cannot be *proved*, so hardening must report failure rather than assume success. Fail
-   * closed, and say so: a silently-unverifiable control is the shape of the original bug.
-   */
-  it('reports failure, loudly, when verification cannot write its descriptor', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const file = join(root, 'unverifiable.json')
-    writeFileSync(file, '{}')
-    const realTemp = process.env.TEMP
-    const realTmp = process.env.TMP
-    // Point the descriptor save at a directory that cannot exist.
-    process.env.TEMP = join(root, 'no-such-dir', 'nested')
-    process.env.TMP = process.env.TEMP
-
-    try {
-      expect(restrictWindowsPathSync(file, false)).toBe(false)
-      expect(warn).toHaveBeenCalledWith(
-        '[secure-path.windows-acl] failed to restrict path',
-        expect.objectContaining({ stage: 'verify' })
-      )
-    } finally {
-      if (realTemp === undefined) {
-        delete process.env.TEMP
-      } else {
-        process.env.TEMP = realTemp
-      }
-      if (realTmp === undefined) {
-        delete process.env.TMP
-      } else {
-        process.env.TMP = realTmp
-      }
-      warn.mockRestore()
-    }
-
-    // And the ACL itself was still applied, so the failure is a loss of proof, not of protection.
-    expect(readAclEntries(file)).toHaveLength(3)
-  })
-
-  it('reports failure for a path that does not exist', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    expect(restrictWindowsPathSync(join(root, 'absent.json'), false)).toBe(false)
-    expect(warn).toHaveBeenCalledWith(
-      '[secure-path.windows-acl] failed to restrict path',
-      expect.objectContaining({ stage: 'reset' })
-    )
-    warn.mockRestore()
-  })
-
-  /**
-   * Skipped rather than branched: elevated, hardening *succeeds* here, so the case would assert
-   * nothing and would instead rewrite `hosts`. `icacls /reset` is no undo — it drops all explicit
-   * ACEs, and `hosts` ships with an explicit `NT AUTHORITY\SYSTEM:(F)`. Ephemeral on a CI runner;
-   * permanent for anyone running this lane from an elevated shell. So: assert, or skip.
-   */
-  it.skipIf(elevated)('reports failure for a path it has no permission to modify', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // Owned by TrustedInstaller; a non-elevated user cannot rewrite its DACL.
-    const systemFile = windowsSystem32Binary('drivers\\etc\\hosts')
-
-    expect(restrictWindowsPathSync(systemFile, false)).toBe(false)
-    expect(warn).toHaveBeenCalledWith(
-      '[secure-path.windows-acl] failed to restrict path',
-      expect.objectContaining({ detail: expect.stringContaining('denied') })
-    )
-    warn.mockRestore()
-  })
-
-  /**
-   * `void promise.then(onSettled)` attaches no rejection handler, so a throw from `onSettled` —
-   * which runs *after* the promise resolved, outside every try/catch inside the apply — rejects a
-   * promise nobody holds. Node's default turns that into a dead Electron main process, which
-   * presents as an Orca crash rather than as the hardening problem it is.
-   */
-  it('reports rather than crashes when the settlement callback throws', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('reports failure, not success, for a path that does not exist', () => {
     const reports: SecurePathHardeningReport[] = []
     setSecurePathHardeningReporter((entry) => reports.push(entry))
-    const file = join(root, 'settle-throws.json')
-    writeFileSync(file, '{}')
 
-    const unhandled: unknown[] = []
-    const capture = (reason: unknown): void => {
-      unhandled.push(reason)
-    }
-    process.on('unhandledRejection', capture)
-    let settled = false
-    try {
-      bestEffortRestrictWindowsPath(file, false, () => {
-        settled = true
-        throw new Error('settlement callback exploded')
-      })
-      await vi.waitFor(() => expect(settled).toBe(true))
-      // An unhandled rejection is raised a turn later, so give the loop one.
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    } finally {
-      process.off('unhandledRejection', capture)
-      setSecurePathHardeningReporter(null)
-      warn.mockRestore()
-    }
-
-    expect(unhandled).toEqual([])
-    expect(reports).toContainEqual(
-      expect.objectContaining({
-        stage: 'settle',
-        detail: expect.stringContaining('settlement callback exploded')
-      })
-    )
+    expect(restrictWindowsPathSync(join(root, 'missing.json'), false)).toBe(false)
+    expect(reports).toContainEqual(expect.objectContaining({ stage: 'apply' }))
   })
+
+  it('keeps hardening alive when the installed reporter throws', () => {
+    setSecurePathHardeningReporter(() => {
+      throw new Error('caller bug')
+    })
+
+    expect(restrictWindowsPathSync(join(root, 'missing-reporter.json'), false)).toBe(false)
+  })
+
+  it('never exposes a staged or published credential under the relocated root', async () => {
+    const dir = join(relocatedRoot, 'race')
+    mkdirSync(dir)
+    const target = join(dir, 'orca-e2ee-keypair.json')
+    const observer = observeDacls(dir, 1500)
+    await observer.ready
+
+    let restricted = 0
+    const startedAt = performance.now()
+    while (performance.now() - startedAt < 1000) {
+      try {
+        restricted += writeSecureFile(target, JSON.stringify({ secretKey: 'x'.repeat(64) })) ? 1 : 0
+      } catch (error) {
+        // The observer's own open handle can make a replace-rename fail; that is the racer, not us.
+        expect(error).toMatchObject({ code: 'EPERM', syscall: 'rename' })
+      }
+    }
+    const observed = await observer.result
+
+    expect(restricted).toBeGreaterThan(50)
+    expect(observed.samples).toBeGreaterThan(50)
+    const broad = Object.keys(observed.distinct).filter(
+      (dacl) => findSecureDaclViolation(JSON.parse(dacl), sid, false) !== null
+    )
+    console.log(
+      `[live-acl] ${restricted} writes, ${observed.samples} DACL samples, ` +
+        `${Object.keys(observed.distinct).length} distinct, ${broad.length} broad`
+    )
+    expect(broad).toEqual([])
+    expect(daclOf(target)?.protected).toBe(true)
+  })
+
+  // Directory relock must stay off the write path and run once; allow its 60s wait plus 4,000 creates beyond the default timeout.
+  it('relocks a large relocated directory off the write path, exactly once', async () => {
+    const dir = join(relocatedRoot, 'large')
+    mkdirSync(dir)
+    for (let index = 0; index < 4000; index++) {
+      writeFileSync(join(dir, `cache-${index}`), 'x')
+    }
+    const writes = countingAddon()
+
+    const writeStartedAt = performance.now()
+    expect(writeSecureFile(join(dir, 'secret.json'), '{}')).toBe(true)
+    const writeMs = performance.now() - writeStartedAt
+    writeSecureFile(join(dir, 'second.json'), '{}')
+
+    const relockStartedAt = performance.now()
+    // The parent turns protected before propagation reaches its children, so wait on both ends.
+    await vi.waitFor(
+      () => {
+        expect(daclOf(dir)?.protected).toBe(true)
+        expect(sidsOf(join(dir, 'cache-0'))).toEqual(ORCA_PRINCIPALS())
+        expect(sidsOf(join(dir, 'cache-3999'))).toEqual(ORCA_PRINCIPALS())
+      },
+      { timeout: 60_000, interval: 20 }
+    )
+    const relockMs = performance.now() - relockStartedAt + writeMs
+    console.log(
+      `[live-acl] write ${writeMs.toFixed(1)}ms while relock of 4000 entries ~${relockMs.toFixed(0)}ms`
+    )
+
+    expect(writes.asyncCount).toBe(1)
+
+    // A new process finds the directory already locked and leaves it alone.
+    __resetSecureFileHardenedPathsForTests()
+    const nextLaunch = countingAddon()
+    writeSecureFile(join(dir, 'third.json'), '{}')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(nextLaunch.asyncCount + nextLaunch.count).toBe(0)
+    expect(readFileSync(join(dir, 'third.json'), 'utf-8')).toBe('{}')
+  }, 90_000)
+
+  /** Installs the real addon behind a proxy that counts DACL rewrites. */
+  function countingAddon(): { count: number; asyncCount: number } {
+    const counts = { count: 0, asyncCount: 0 }
+    setWindowsSecurityForTests({
+      ...addon,
+      currentUserSid: () => sid,
+      setDaclSddl: (path, sddl) => {
+        counts.count += 1
+        addon.setDaclSddl(path, sddl)
+      },
+      setDaclSddlAsync: (path, sddl) => {
+        counts.asyncCount += 1
+        return addon.setDaclSddlAsync(path, sddl)
+      }
+    })
+    return counts
+  }
 })
+
+type ObservedDacls = { samples: number; distinct: Record<string, number> }
+
+function observeDacls(
+  dir: string,
+  durationMs: number
+): { ready: Promise<void>; result: Promise<ObservedDacls> } {
+  const worker = new Worker(
+    `
+    const { parentPort, workerData } = require('node:worker_threads')
+    const { readdirSync } = require('node:fs')
+    const { join } = require('node:path')
+    const addon = require(workerData.addonPath)
+    parentPort.postMessage('ready')
+    const distinct = {}
+    let samples = 0
+    const deadline = Date.now() + workerData.durationMs
+    while (Date.now() < deadline) {
+      let names = []
+      try { names = readdirSync(workerData.dir) } catch {}
+      for (const name of names) {
+        try {
+          const sddl = JSON.stringify(addon.getDaclAces(join(workerData.dir, name)))
+          samples += 1
+          distinct[sddl] = (distinct[sddl] || 0) + 1
+        } catch {}
+      }
+    }
+    parentPort.postMessage({ samples, distinct })
+    `,
+    {
+      eval: true,
+      workerData: { dir, durationMs, addonPath: require.resolve('@orca/windows-security') }
+    }
+  )
+  let markReady: () => void = () => undefined
+  const ready = new Promise<void>((resolve) => {
+    markReady = resolve
+  })
+  const result = new Promise<ObservedDacls>((resolve, reject) => {
+    worker.on('message', (message: unknown) => {
+      if (message === 'ready') {
+        markReady()
+        return
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker above posts exactly this shape after 'ready'.
+      resolve(message as ObservedDacls)
+      void worker.terminate()
+    })
+    worker.on('error', reject)
+  })
+  return { ready, result }
+}

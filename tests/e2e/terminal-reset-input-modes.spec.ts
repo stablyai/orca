@@ -1,9 +1,4 @@
-/**
- * Reset Terminal grounds the input modes an app left armed where the host saw
- * no command end, and the ground survives park and reveal. The reveal builds a
- * fresh xterm from the host's model, so a renderer-only reset would come back
- * armed.
- */
+// Require Reset Terminal to ground modes in the host model across park/reveal; renderer-only reset would re-arm the fresh xterm.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'

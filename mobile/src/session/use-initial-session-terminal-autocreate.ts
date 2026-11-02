@@ -6,10 +6,7 @@ type InitialSessionTerminalAutoCreateState = {
   sawSessionTabs: boolean
 }
 
-/**
- * Fresh auto-create bookkeeping. The route must re-create this on every worktree
- * change, or a revisit inherits the previous workspace's `sawSessionTabs`.
- */
+// Reset bookkeeping per workspace so revisits cannot inherit another route’s hydrated state.
 export function createInitialSessionAutoCreateState(): InitialSessionTerminalAutoCreateState {
   return { autoCreatedForWorktree: null, sawSessionTabs: false }
 }
@@ -28,10 +25,6 @@ type InitialSessionTerminalAutoCreateArgs = {
   createTerminal: () => void
 }
 
-/**
- * Creates the first terminal of a newly created mobile workspace that hydrates
- * empty, at most once per route. See initial-session-terminal.
- */
 export function useInitialSessionTerminalAutoCreate(
   args: InitialSessionTerminalAutoCreateArgs
 ): void {
@@ -46,8 +39,7 @@ export function useInitialSessionTerminalAutoCreate(
     stateRef,
     worktreeId
   } = args
-  // Why: the route re-creates both callbacks every render; useEffectEvent keeps them
-  // out of the deps without mutating a ref during render.
+  // Keep changing route callbacks out of effect dependencies without mutating refs during render.
   const consumeCreationRoute = useEffectEvent(args.consumeCreationRoute)
   const createTerminal = useEffectEvent(args.createTerminal)
 
@@ -91,10 +83,7 @@ export function useInitialSessionTerminalAutoCreate(
   ])
 }
 
-/**
- * Tracks "tabs hydrated" per worktree so a reused route reports `false` until the
- * new workspace's own snapshot lands, rather than inheriting the old one's.
- */
+// Key hydration by workspace so route reuse cannot expose the previous workspace’s ready state.
 export function useWorktreeSessionTabsLoaded(
   worktreeId: string
 ): readonly [boolean, (loaded: boolean) => void] {

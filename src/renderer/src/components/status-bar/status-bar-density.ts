@@ -13,9 +13,7 @@ export type StatusBarDensity = {
   collapseUsage: boolean
 }
 
-// Why: ordered roomiest → tightest so each step gives up the least useful detail first.
-// Usage gives way before right-side labels (collapsing into "+N" before those go
-// icon-only) because the Usage popover holds everything the bar drops.
+// Drop usage detail before other labels because the Usage popover retains everything hidden by density.
 export const STATUS_BAR_DENSITY_LEVELS: readonly StatusBarDensity[] = [
   { compact: false, usageTightestOnly: false, segmentsIconOnly: false, collapseUsage: false },
   { compact: true, usageTightestOnly: false, segmentsIconOnly: false, collapseUsage: false },
@@ -49,7 +47,7 @@ export function pickStatusBarDensityLevel(
   return tightest
 }
 
-/** A level measuring differently than before means the content changed, so every other level's width is stale. */
+/** Natural-width changes invalidate all other levels; fit-only changes invalidate collapsing levels. */
 export function recordStatusBarDensityWidth(
   levelWidths: readonly (StatusBarLevelWidth | undefined)[],
   level: number,
@@ -78,12 +76,7 @@ function measureWidth(ref: ElementRef): number {
   return ref.current?.getBoundingClientRect().width ?? 0
 }
 
-/**
- * Picks the roomiest density at which the usage cluster and the right-side segments fit
- * on one line. Widths are measured from the rendered content, so a transient segment
- * (update ready, chats to resume) condenses the bar only while it is present. At the
- * collapsing levels it also names the usage chips that give way to a "+N" chip.
- */
+/** Measure rendered widths to choose the roomiest fitting density and collapse usage chips when needed. */
 export function useStatusBarDensity(): {
   density: StatusBarDensity
   overflowing: boolean
@@ -132,7 +125,8 @@ export function useStatusBarDensity(): {
           usage.chips,
           required - available - WIDTH_TOLERANCE_PX,
           usage.moreChipWidth,
-          usage.chipGap
+          usage.chipGap,
+          usage.unitLabelWidth
         )
       : NO_COLLAPSED_USAGE
     if (nextCollapsed.join() !== collapsedUsageRef.current.join()) {
