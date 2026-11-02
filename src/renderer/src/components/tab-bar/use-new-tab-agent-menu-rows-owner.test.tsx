@@ -783,15 +783,34 @@ it.each([1, 10])(
     expect(await visitsFor(focusWrite(null))).toBe(storeOnly.focus)
     expect(renders).toEqual(settled)
     expect(pending()).toEqual(targets.map(() => false))
+    // Which consumers rendered during one settled update, against a fresh baseline.
+    const renderedDuring = async (update: () => Promise<unknown>) => {
+      const before = [...renders]
+      await update()
+      return renders.map((count, index) => count > before[index])
+    }
+    const none = targets.map(() => false)
+    const firstWorkspace = targets.map((id) => id === ids[0])
     // Another host's row changing re-resolves each target over its own id's rows only.
-    const readinessVisits = (await visitsFor(republish('late1'))) - storeOnly.republish
+    let readinessVisits = 0
+    expect(
+      await renderedDuring(async () => {
+        readinessVisits = (await visitsFor(republish('late1'))) - storeOnly.republish
+      })
+    ).toEqual(none)
     expect(readinessVisits).toBeLessThanOrEqual(3 * repos.length + 4 * targets.length)
-    expect(pending()).toEqual(targets.map(() => false))
+    expect(pending()).toEqual(none)
     // Stamping one row with a server still checking, with no OS, waits only that row's pickers.
-    await act(async () => useAppStore.setState({ detectedWorktreesByRepo: detected(true) }))
-    expect(pending()).toEqual(targets.map((id) => id === ids[0]))
-    await act(async () => useAppStore.setState(hubA('verified')))
-    expect(pending()).toEqual(targets.map(() => false))
+    expect(
+      await renderedDuring(() =>
+        act(async () => useAppStore.setState({ detectedWorktreesByRepo: detected(true) }))
+      )
+    ).toEqual(firstWorkspace)
+    expect(pending()).toEqual(firstWorkspace)
+    expect(
+      await renderedDuring(() => act(async () => useAppStore.setState(hubA('verified'))))
+    ).toEqual(firstWorkspace)
+    expect(pending()).toEqual(none)
     hooks.forEach((hook) => hook.unmount())
   }
 )
