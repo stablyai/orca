@@ -4,14 +4,9 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  ORCA_PLANE_SKILL_INSTALL_COMMAND,
-  ORCA_PLANE_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import { ORCA_PLANE_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { getPlaneUsageExamples } from '@/lib/plane-usage-examples'
 import { PlaneAgentSkillPane } from './PlaneAgentSkillPane'
-
-const UPDATE_COMMAND = 'npx skills update orca-plane --global'
 
 const mocks = vi.hoisted(() => ({
   panelProps: [] as Record<string, unknown>[],
@@ -32,23 +27,16 @@ vi.mock('./AgentSkillSetupPanel', () => ({
         {!props.hideHeader && <h3>{String(props.title)}</h3>}
         {props.description != null && <p>{String(props.description)}</p>}
         <span>{props.installed ? 'Installed' : 'Not installed'}</span>
-        <code>{String(props.command)}</code>
-        <code>{String(props.installedCommand)}</code>
+        <code>{String(props.skillNames)}</code>
+        <code>{String(props.installedSkillNames)}</code>
         <span data-testid="freshness">{String(props.freshnessSkillName)}</span>
       </section>
     )
   }
 }))
 
-vi.mock('./CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (command: string) => command,
-  ensureWslCliAvailableForAgentSkillTerminal: vi.fn(),
-  getWslCliDistroRequest: () => undefined
-}))
-
 vi.mock('@/lib/plane-agent-skill-update-command', () => ({
   getPlaneAgentSkillUpdateTarget: () => ({
-    command: UPDATE_COMMAND,
     skillName: mocks.updateSkillName
   })
 }))
@@ -68,9 +56,8 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     discoveryTarget: undefined,
     agentRuntime: { runtime: mocks.runtime },
-    terminalShellOverride: undefined,
     installDisabledReason: null,
-    canUseLocalSkillFreshness: mocks.runtime !== 'wsl'
+    canUseSkillFreshness: mocks.runtime !== 'wsl'
   })
 }))
 
@@ -213,13 +200,13 @@ describe('PlaneAgentSkillPane', () => {
     )
   })
 
-  it('passes the orca-plane install/update commands and freshness on a local runtime', async () => {
+  it('passes the orca-plane install/update skills and freshness on a local runtime', async () => {
     await renderPane()
 
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
-        command: ORCA_PLANE_SKILL_INSTALL_COMMAND,
-        installedCommand: UPDATE_COMMAND,
+        skillNames: [ORCA_PLANE_SKILL_NAME],
+        installedSkillNames: [ORCA_PLANE_SKILL_NAME],
         freshnessSkillName: ORCA_PLANE_SKILL_NAME
       })
     )
