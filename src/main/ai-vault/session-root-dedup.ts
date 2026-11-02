@@ -2,6 +2,7 @@ import { antigravitySessionOrigin } from '../../shared/antigravity-session-origi
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { codexSessionAliasKey, codexSessionAliasBeats } from './codex-session-root-dedup'
 import { sessionSortTime } from './session-scanner-accumulator'
+import { dshSessionFileGeneration } from './session-scanner-dsh-paths'
 
 function sessionAliasKey(session: AiVaultSession): string | null {
   if (session.agent === 'antigravity') {
@@ -10,6 +11,14 @@ function sessionAliasKey(session: AiVaultSession): string | null {
       .slice(0, -4)
       .join('/')
     return `antigravity\0${session.executionHostId}\0${antigravitySessionOrigin(session.filePath) ?? 'cli'}\0${root}\0${session.sessionId}`
+  }
+  if (session.agent === 'dsh') {
+    // One session dir can hold several on-disk format generations; one row per dir.
+    const sessionDir = session.filePath
+      .split(/[\\/]+/)
+      .slice(0, -1)
+      .join('/')
+    return `dsh\0${session.executionHostId}\0${sessionDir}`
   }
   if (session.agent !== 'devin') {
     const codexKey = codexSessionAliasKey(session)
@@ -30,6 +39,9 @@ function sessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boo
       return full(candidate.filePath)
     }
     return sessionSortTime(candidate) > sessionSortTime(best)
+  }
+  if (candidate.agent === 'dsh') {
+    return dshSessionFileGeneration(candidate.filePath) > dshSessionFileGeneration(best.filePath)
   }
   if (candidate.agent !== 'devin') {
     return codexSessionAliasBeats(candidate, best)
