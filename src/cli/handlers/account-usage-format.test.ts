@@ -73,17 +73,19 @@ function snapshot(rateLimits: Partial<RateLimitState>): AccountsUsageSnapshot {
   }
 }
 
+const SESSION = {
+  usedPercent: 41,
+  windowMinutes: 300,
+  resetsAt: NOW + 2 * HOUR,
+  resetDescription: null
+}
+
 describe('account usage rows', () => {
   it('attributes active and inactive Claude usage to each managed account', () => {
     const rows = buildAccountUsageRows(
       snapshot({
         claude: limits('claude', {
-          session: {
-            usedPercent: 41,
-            windowMinutes: 300,
-            resetsAt: NOW + 2 * HOUR,
-            resetDescription: null
-          },
+          session: SESSION,
           weekly: {
             usedPercent: 30,
             windowMinutes: 10080,
@@ -95,7 +97,7 @@ describe('account usage rows', () => {
           {
             accountId: 'a2',
             rateLimits: limits('claude', {
-              status: 'error',
+              status: 'unavailable',
               error: 'Sign in again to use this account.'
             }),
             updatedAt: NOW,
@@ -107,16 +109,36 @@ describe('account usage rows', () => {
     )
 
     expect(rows.filter((row) => row.agent === 'claude')).toEqual([
-      expect.objectContaining({
+      {
+        agent: 'claude',
         accountId: 'a1',
         label: 'work@example.com',
         active: true,
+        status: 'ok',
+        error: null,
         windows: [
-          { name: '5h', usedPercent: 41, windowMinutes: 300, resetsAt: NOW + 2 * HOUR },
-          { name: '7d', usedPercent: 30, windowMinutes: 10080, resetsAt: NOW + 50 * HOUR }
-        ]
-      }),
-      expect.objectContaining({ accountId: 'a2', active: false, status: 'error', windows: [] })
+          {
+            name: '5h',
+            usedPercent: 41,
+            windowMinutes: 300,
+            resetsAt: '2026-10-24T14:00:00.000Z'
+          },
+          {
+            name: '7d',
+            usedPercent: 30,
+            windowMinutes: 10080,
+            resetsAt: '2026-10-26T14:00:00.000Z'
+          }
+        ],
+        updatedAt: '2026-10-24T12:00:00.000Z'
+      },
+      expect.objectContaining({
+        accountId: 'a2',
+        active: false,
+        status: 'unavailable',
+        error: 'Sign in again to use this account.',
+        windows: []
+      })
     ])
     expect(formatAccountUsage(rows, NOW)).toBe(
       [
@@ -128,6 +150,54 @@ describe('account usage rows', () => {
         '  Codex: Codex CLI not found'
       ].join('\n')
     )
+  })
+
+  it('lists a managed account whose usage was never read', () => {
+    const rows = buildAccountUsageRows(snapshot({ claude: limits('claude', { session: SESSION }) }))
+
+    expect(rows.find((row) => row.accountId === 'a2')).toEqual({
+      agent: 'claude',
+      accountId: 'a2',
+      label: 'home@example.com',
+      active: false,
+      status: 'unavailable',
+      error: 'No usage read yet; run with --fresh.',
+      windows: [],
+      updatedAt: null
+    })
+    expect(formatAccountUsage(rows, NOW)).toBe(
+      [
+        'Claude',
+        '  work@example.com (active)  5h 41% (resets in 2h 0m)',
+        '  home@example.com           No usage read yet; run with --fresh.'
+      ].join('\n')
+    )
+  })
+
+  it('attributes the active usage to the account selected for the WSL rate-limit target', () => {
+    const base = snapshot({
+      claude: limits('claude', { session: SESSION }),
+      claudeTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' }
+    })
+    const rows = buildAccountUsageRows({
+      ...base,
+      claude: {
+        ...base.claude,
+        activeAccountId: 'a1',
+        activeAccountIdsByRuntime: { host: 'a1', wsl: { Ubuntu: 'a2' } }
+      }
+    })
+
+    expect(rows.filter((row) => row.agent === 'claude')).toEqual([
+      expect.objectContaining({
+        accountId: 'a1',
+        active: true,
+        status: 'unavailable',
+        error: 'Selected on another runtime; Orca reads usage for the WSL Ubuntu selection only.',
+        windows: []
+      }),
+      expect.objectContaining({ accountId: 'a2', active: true, status: 'ok' })
+    ])
   })
 
   it('falls back to per-model buckets only when a provider reports no main windows', () => {
