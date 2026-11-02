@@ -191,6 +191,7 @@ export function SourceControlAgentActionDialogForm({
               model={surfaceRows.model}
               worktreeId={surfaceRows.worktreeId}
               agent={selectedAgent}
+              cli={surfaceRows.selection.cli}
               disabled={!surfaceRows.selection.ready || isStarting}
               draftForEntry={draftForEntry}
               onPick={onPickerPick}

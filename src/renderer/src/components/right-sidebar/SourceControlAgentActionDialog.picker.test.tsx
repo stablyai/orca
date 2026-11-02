@@ -771,7 +771,7 @@ it.each(['claude', 'codex'] as const)(
     f.view.unmount()
     const reopened = f.mount()
     expect(f.controller.recipe).toMatchObject({ ...recipe, surface: 'chat' })
-    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toContain('Chat')
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).not.toContain('(CLI)')
     expect(f.controller.agentArgsApply).toBe(false)
     reopened.unmount()
   }

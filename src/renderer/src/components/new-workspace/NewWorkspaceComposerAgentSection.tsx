@@ -81,6 +81,7 @@ export function NewWorkspaceComposerAgentSection({
           model={agentSurfaceRows?.model ?? { state: 'loading', placeholderCount: 2 }}
           agent={quickSetupOnly ? null : quickAgent}
           value={agentPickerDraft}
+          cli={agentSurfaceRows?.selection.cli === true}
           setupDisabled={agentSetupDisabled}
           onTriggerEnter={createDisabled ? undefined : onCreate}
           emptyLabel={

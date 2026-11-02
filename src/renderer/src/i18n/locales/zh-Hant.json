@@ -22785,8 +22785,6 @@
     "launchChat": "啟動聊天",
     "launchTerminal": "啟動終端機",
     "select": "選擇代理程式",
-    "chat": "聊天",
-    "terminal": "終端機",
     "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案"
   }

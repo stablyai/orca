@@ -23,6 +23,9 @@ export function useRepositoryActionPickerInputs(props: RepositorySourceControlAi
   const canSaveSurface = canSaveSourceControlActionSurface(rows.target)
   const nativeDetectedAgents = useAppStore(readNativeDetectedAgents)
   const disabledAgents = useAppStore((state) => state.settings?.disabledTuiAgents)
+  // The row list is memoized. These are what the closed "(CLI)" label reads besides the saved surface.
+  const agentDefaultSurface = useAppStore((state) => state.settings?.agentDefaultSurface)
+  const nativeChatProviders = useAppStore((state) => state.settings?.nativeChatProviders)
   const current = useRef({ props })
   useLayoutEffect(() => {
     current.current = { props }
@@ -64,6 +67,8 @@ export function useRepositoryActionPickerInputs(props: RepositorySourceControlAi
     observation,
     canSaveSurface,
     nativeDetectedAgents,
-    disabledAgents
+    disabledAgents,
+    agentDefaultSurface,
+    nativeChatProviders
   }
 }

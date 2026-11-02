@@ -23100,8 +23100,6 @@
     "launchChat": "Sohbet başlat",
     "launchTerminal": "Terminal başlat",
     "select": "Aracı seç",
-    "chat": "Sohbet",
-    "terminal": "Terminal",
     "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
     "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
   }

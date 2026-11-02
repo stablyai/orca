@@ -23018,8 +23018,6 @@
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
     "legacyModelCount": "{{total}} modèles",
     "select": "Choisir un agent",
-    "chat": "Chat",
-    "terminal": "Terminal",
     "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
     "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers"
   },

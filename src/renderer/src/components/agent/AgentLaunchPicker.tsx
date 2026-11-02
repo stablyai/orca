@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
+import { rowLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
@@ -35,6 +36,7 @@ export const AgentLaunchPicker = memo(
     disabled,
     setupDisabled,
     emptyLabel,
+    cli,
     children,
     onTriggerEnter,
     onPick
@@ -48,6 +50,8 @@ export const AgentLaunchPicker = memo(
     disabled?: boolean
     setupDisabled?: boolean
     emptyLabel?: string
+    /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
+    cli?: boolean
     children?: ReactNode
     onTriggerEnter?: () => void
     onPick: (
@@ -76,14 +80,12 @@ export const AgentLaunchPicker = memo(
       (entry && entry.catalog.origin !== 'unknown'
         ? entry.catalog.models.find((model) => model.id === choices?.model)?.label
         : undefined) ?? choices?.model
-    const chosenSurface = draft?.surface ?? entry?.defaultSurface
-    const surfaceLabel =
-      entry && entry.surfaces.length > 1 && chosenSurface
-        ? chosenSurface === 'chat'
-          ? translate('agentPicker.chat', 'Chat')
-          : translate('agentPicker.terminal', 'Terminal')
-        : undefined
-    const summary = [surfaceLabel, modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
+    const summary = [modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
+    const agentLabel = agent
+      ? cli
+        ? rowLabel({ kind: 'cli', agent })
+        : getAgentLabel(agent)
+      : (emptyLabel ?? translate('agentPicker.select', 'Select agent'))
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -104,9 +106,7 @@ export const AgentLaunchPicker = memo(
             >
               {agent ? <AgentIcon agent={agent} size={14} /> : null}
               <span className="min-w-0 flex-1 truncate text-left">
-                {agent
-                  ? getAgentLabel(agent)
-                  : (emptyLabel ?? translate('agentPicker.select', 'Select agent'))}
+                {agentLabel}
                 {agent && summary ? (
                   <span className="text-muted-foreground"> · {summary}</span>
                 ) : null}

@@ -23117,8 +23117,6 @@
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
     "select": "Agent auswählen",
-    "chat": "Chat",
-    "terminal": "Terminal",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
     "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
   }

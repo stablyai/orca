@@ -7,6 +7,7 @@ import { selectSourceControlActionRecipe } from '../../../../../../shared/source
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
 import { sourceControlActionExecutionArgs } from '../../../../../../shared/source-control-action-launch-preferences'
 import type { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import type { NativeChatDefaultSettings } from '../../../../../../shared/structured-native-chat-launch-route'
 import {
   SourceControlActionAgentPickerView,
   sourceControlActionAgentPreview
@@ -92,6 +93,8 @@ const SelectedRepositoryActionRows = memo(
     canSaveSurface: boolean
     nativeDetectedAgents: TuiAgent[] | null
     disabledAgents: TuiAgent[] | undefined
+    agentDefaultSurface: NativeChatDefaultSettings['agentDefaultSurface']
+    nativeChatProviders: NativeChatDefaultSettings['nativeChatProviders']
   }): JSX.Element {
     useUiLanguageRevision()
     const selections = useMemo(
@@ -248,6 +251,7 @@ const SelectedRepositoryActionRows = memo(
                       draftScope={draftScopes.get(actionId)}
                       agent={selectedAgent}
                       surface={recipe.surface}
+                      cli={observation.selectionFor(selectedAgent, recipe.surface).cli}
                       observation={observation}
                       canSaveSurface={canSaveSurface}
                       disabled={!hasOverride || isSavingAction}
@@ -379,6 +383,7 @@ const SelectedRepositoryActionRows = memo(
   (a, b) => {
     const { observation: x, ...before } = a
     const { observation: y, ...after } = b
+    // The surface default stays in this shallow compare so the closed "(CLI)" label updates.
     return (
       shallow(before, after) &&
       x.preferencesPending === y.preferencesPending &&

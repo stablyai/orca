@@ -22328,8 +22328,6 @@
     "searchAgentModels": "{{agent}} のモデルを検索…",
     "legacyModelCount": "{{total}} 個のモデル",
     "select": "Agent を選択",
-    "chat": "チャット",
-    "terminal": "ターミナル",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
     "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
   },

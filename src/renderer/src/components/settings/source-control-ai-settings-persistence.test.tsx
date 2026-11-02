@@ -624,7 +624,7 @@ it.each([
     )
     fireEvent.click(screen.getByRole('button', { name: 'Launch chat' }))
     await waitFor(() => expect(read()).toEqual({ ...before, surface: 'chat' }))
-    expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain('Chat')
+    expect(row().getByRole('button', { name: 'Select agent' }).textContent).not.toContain('(CLI)')
     await open()
     fireEvent.click(
       screen.getByRole('menuitem', { name: new RegExp(agent === 'claude' ? '^Claude' : '^Codex') })
@@ -642,7 +642,7 @@ it.each([
     view.unmount()
     view = mount()
     expect(read()).toEqual({ ...before, surface: 'terminal' })
-    expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain('Terminal')
+    expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain('(CLI)')
     view.unmount()
   }
 )
@@ -693,12 +693,11 @@ it.each([false, true])(
     }
     await open()
     fireEvent.click(screen.getByRole('menuitem', { name: /^Codex/ }))
-    const initialSurface = chatDefault ? 'Chat' : 'Terminal'
-    await waitFor(() =>
-      expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain(
-        initialSurface
-      )
-    )
+    await waitFor(() => {
+      const text = row().getByRole('button', { name: 'Select agent' }).textContent ?? ''
+      expect(text.includes('(CLI)')).toBe(!chatDefault)
+      expect(text).not.toContain('Chat')
+    })
     expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual({
       agentId: 'codex',
       commandInputTemplate: 'current {basePrompt}',
@@ -719,8 +718,8 @@ it.each([false, true])(
     )
     view.unmount()
     view = mount()
-    expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain(
-      chatDefault ? 'Terminal' : 'Chat'
+    expect(row().getByRole('button', { name: 'Select agent' }).textContent?.includes('(CLI)')).toBe(
+      chatDefault
     )
     expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual(saved)
     view.unmount()
