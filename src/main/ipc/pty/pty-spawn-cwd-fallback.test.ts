@@ -11,7 +11,7 @@ import { _setWslCachesForTests } from '../../wsl'
 import { acquireWatcherRemovalGate } from '../watcher-removal-gate'
 import { registerPtyHandlers } from './register-handlers'
 import { join } from 'node:path'
-import { getShellReadyWrapperRoot } from '../../providers/local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

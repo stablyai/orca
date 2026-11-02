@@ -181,10 +181,6 @@
       "yearsAgo_one": "{{count}}y ago",
       "yearsAgo_other": "{{count}}y ago"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})"
-    },
     "emptyState": {
       "commitsReady_one": "{{count}} commit on {{branch}} is ready to go into {{base}}.",
       "commitsReady_other": "{{count}} commits on {{branch}} are ready to go into {{base}}."

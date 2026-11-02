@@ -7334,6 +7334,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Der Speicherort der Konten konnte nicht gespeichert werden. Versuche es erneut.",
           "c2d2751587": "Konto entfernen",
           "dbb9626ed1": "Abbrechen",
           "63843e37e2": "Claude-Konto entfernen?",

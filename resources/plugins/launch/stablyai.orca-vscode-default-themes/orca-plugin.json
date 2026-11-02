@@ -1,0 +1,39 @@
+{
+  "manifestVersion": 2,
+  "id": "orca-vscode-default-themes",
+  "publisher": "stablyai",
+  "name": "VS Code Default Themes for Orca",
+  "version": "1.0.0",
+  "execution": "data",
+  "description": "Unofficial ports of VS Code's default color themes: Dark Modern, Light Modern, Dark+ and Light+.",
+  "license": "MIT",
+  "repository": "https://github.com/stablyai/orca-plugins/tree/main/plugins/vscode-default-themes",
+  "engines": {
+    "orca": ">=1.4.245"
+  },
+  "contributes": {
+    "themes": [
+      {
+        "id": "vs-code-dark",
+        "title": "VS Code Dark+",
+        "path": "themes/vs-code-dark.json"
+      },
+      {
+        "id": "vs-code-dark-modern",
+        "title": "VS Code Dark Modern",
+        "path": "themes/vs-code-dark-modern.json"
+      },
+      {
+        "id": "vs-code-light",
+        "title": "VS Code Light+",
+        "path": "themes/vs-code-light.json"
+      },
+      {
+        "id": "vs-code-light-modern",
+        "title": "VS Code Light Modern",
+        "path": "themes/vs-code-light-modern.json"
+      }
+    ]
+  },
+  "capabilities": []
+}

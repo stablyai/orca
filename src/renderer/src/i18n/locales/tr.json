@@ -7320,6 +7320,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "c2d2751587": "Hesabı Kaldır",
           "dbb9626ed1": "İptal",
           "63843e37e2": "Claude Hesabı Kaldırılsın mı?",

@@ -1521,21 +1521,6 @@
       "showMore": "再显示 {{count}} 条",
       "title": "评论"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "落后 {{count}} 个提交（基础提交：{{baseCommit}}）",
-      "commitsBehind_other": "落后 {{count}} 个提交（基础提交：{{baseCommit}}）",
-      "copyCommands": "复制命令",
-      "copyFailed": "复制文本失败",
-      "copyRefreshCommands": "复制可合并性刷新命令",
-      "detailsUnavailable": "冲突文件详细信息不可用",
-      "filesHeading": "冲突的文件",
-      "localMergeClean": "GitHub 提示存在冲突，但本地 Git 未能复现。请刷新 PR 或推送分支，以重新计算可合并性。",
-      "mustResolve": "该分支存在必须解决的冲突",
-      "refreshing": "刷新冲突细节…",
-      "resolveWithAi": "使用 AI 解决冲突",
-      "runFromWorktree": "从此工作树运行",
-      "title": "冲突"
-    },
     "linkPrForm": {
       "linkButton": "关联 PR",
       "linkNumber": "关联 #{{number}}",

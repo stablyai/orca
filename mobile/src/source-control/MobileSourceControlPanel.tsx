@@ -362,8 +362,6 @@ export function MobileSourceControlPanel({
             bottomInset={barInset}
             onOpenChanges={() => selectTab('changes')}
             branchCompare={branchCompare}
-            // The bar offers Create and the review steps; on a local step Merge stays reachable here.
-            showBottomAction={!nextStep.offersMerge && prTab.state.kind === 'ready'}
           />
         </View>
       ) : activeTab === 'pr' ? (
@@ -373,7 +371,7 @@ export function MobileSourceControlPanel({
       {ready ? (
         <MobileSourceControlNextStepBar
           view={nextStep.view}
-          notice={nextStep.notice}
+          notice={nextStep.notice ?? prTab.unlinkError}
           agentNotice={nextStep.agentNotice}
           mergeConfirm={nextStep.mergeConfirm}
           composer={state}

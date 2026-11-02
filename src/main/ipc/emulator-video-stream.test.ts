@@ -209,10 +209,14 @@ it('reports malformed HTTP packets only to their owner and leaves Android delive
   const deviceId = 'emulator-5554'
   devices.add(deviceId)
   scrcpyVideoRegistry.register(deviceId, () => {})
+  const meta = { codecId: 'h264', width: 1080, height: 2400 }
+  scrcpyVideoRegistry.pushMeta(deviceId, meta)
+  const androidReady = once(android, 'emulator:videoStreamMeta')
   const failed = once(sender, 'emulator:videoStreamError')
   const closed = once(lifecycle, 'closed')
   start(sender, { streamId: 'malformed', deviceId: 'simulator', avccStreamUrl })
   start(android, { streamId: 'android', deviceId })
+  await androidReady
   await failed
   await closed
   expect(sender.messages).toEqual([
@@ -222,14 +226,12 @@ it('reports malformed HTTP packets only to their owner and leaves Android delive
     }
   ])
   expect(sender.listenerCount('destroyed')).toBe(0)
-  const meta = { codecId: 'h264', width: 1080, height: 2400 }
   const frame = {
     config: true,
     keyFrame: false,
     pts: '0',
     bytes: Uint8Array.from([0, 0, 0, 1]).buffer
   }
-  scrcpyVideoRegistry.pushMeta(deviceId, meta)
   scrcpyVideoRegistry.pushFrame(deviceId, frame)
   expect(android.messages).toEqual([
     { channel: 'emulator:videoStreamMeta', data: { streamId: 'android', deviceId, meta } },

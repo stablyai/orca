@@ -2135,3 +2135,83 @@ diff --git a/src/worker/conoutSocketWorker.ts b/src/worker/conoutSocketWorker.ts
    server.listen(getWorkerPipeName(conoutPipeName));
    if (!parentPort) {
      throw new Error('worker_threads parentPort is null');
+diff --git a/src/unix/pty.cc b/src/unix/pty.cc
+--- a/src/unix/pty.cc
++++ b/src/unix/pty.cc
+@@ -1337,7 +1337,19 @@
+  * Init
+  */
+-
++
++Napi::Value PtyForegroundGroup(const Napi::CallbackInfo& info) {
++  Napi::Env env = info.Env();
++  if (info.Length() != 1 || !info[0].IsNumber()) {
++    throw Napi::TypeError::New(env, "Expected a PTY master descriptor");
++  }
++  const int fd = info[0].As<Napi::Number>().Int32Value();
++  const pid_t group = fd < 0 ? -1 : tcgetpgrp(fd);
++  if (group > 0) return Napi::Number::New(env, group);
++  return env.Null();
++}
++
+ Napi::Object init(Napi::Env env, Napi::Object exports) {
++  exports.Set("foregroundProcessGroup", Napi::Function::New(env, PtyForegroundGroup));
+   exports.Set("fork",    Napi::Function::New(env, PtyFork));
+   exports.Set("open",    Napi::Function::New(env, PtyOpen));
+   exports.Set("resize",  Napi::Function::New(env, PtyResize));
+diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
+--- a/src/unixTerminal.ts
++++ b/src/unixTerminal.ts
+@@ -252,6 +252,15 @@
+     } catch (e) { /* swallow */ }
+   }
+ 
++  /**
++   * Gets the foreground process group from the master: null once the master is closed,
++   * undefined when the native addon predates this export.
++   */
++  public getForegroundProcessGroup(): number | null | undefined {
++    if (this._fd < 0) return null;
++    return typeof pty.foregroundProcessGroup === 'function' ? pty.foregroundProcessGroup(this._fd) : undefined;
++  }
++
+   /**
+    * Gets the name of the process.
+    */
+diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
+--- a/lib/unixTerminal.js
++++ b/lib/unixTerminal.js
+@@ -233,6 +233,10 @@
+         }
+         catch (e) { /* swallow */ }
+     };
++    UnixTerminal.prototype.getForegroundProcessGroup = function () {
++        if (this._fd < 0) return null;
++        return typeof pty.foregroundProcessGroup === 'function' ? pty.foregroundProcessGroup(this._fd) : undefined;
++    };
+     Object.defineProperty(UnixTerminal.prototype, "process", {
+         /**
+          * Gets the name of the process.
+diff --git a/typings/node-pty.d.ts b/typings/node-pty.d.ts
+--- a/typings/node-pty.d.ts
++++ b/typings/node-pty.d.ts
+@@ -114,6 +114,7 @@
+    * An interface representing a pseudoterminal, on Windows this is emulated via the winpty library.
+    */
+   export interface IPty {
++    getForegroundProcessGroup?(): number | null | undefined;
+     /**
+      * The process ID of the outer process.
+      */
+diff --git a/src/native.d.ts b/src/native.d.ts
+--- a/src/native.d.ts
++++ b/src/native.d.ts
+@@ -19,6 +19,7 @@
+ }
+-
++
+ interface IUnixNative {
++  foregroundProcessGroup?(fd: number): number | null;
+   fork(file: string, args: string[], parsedEnv: string[], cwd: string, cols: number, rows: number, uid: number, gid: number, useUtf8: boolean, helperPath: string, onExitCallback: (code: number, signal: number) => void): IUnixProcess;
+   open(cols: number, rows: number): IUnixOpenProcess;
+   process(fd: number, pty?: string): string;

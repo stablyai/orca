@@ -164,7 +164,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/renderer/src/components/browser-pane/annotate/browser-grab-toast-owner-cleanup.test.tsx',
   'src/main/window/native-chat-paste-files.test.ts',
   'src/main/computer/desktop-script-serve-channel.test.ts',
-  'src/main/providers/local-pty-child-process-verdict.test.ts',
+  'src/main/providers/local-pty/local-pty-child-process-verdict.test.ts',
   'src/main/providers/working-directory-validation.test.ts',
   'src/main/pty/posix-pty-process-groups.integration.test.ts',
   'src/shared/ephemeral-vm-recipe-output-capture.test.ts',
