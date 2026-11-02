@@ -28,7 +28,11 @@ const catalog = {
     group('ssh-only'),
     group('empty'),
     group('cycle-a', { parentGroupId: 'cycle-b' }),
-    group('cycle-b', { parentGroupId: 'cycle-a' })
+    group('cycle-b', { parentGroupId: 'cycle-a' }),
+    // A ring with a branch hanging below it: every member reaches the branch's repo.
+    group('ring-x', { parentGroupId: 'ring-y' }),
+    group('ring-y', { parentGroupId: 'ring-x' }),
+    group('ring-branch', { parentGroupId: 'ring-y' })
   ],
   repos: [
     { path: '/elsewhere/a', projectGroupId: 'pinned-child' },
@@ -40,7 +44,11 @@ const catalog = {
     { path: '/elsewhere/g', projectGroupId: 'cycle-b', executionHostId: 'ssh:remote' },
     { path: '/work/inside', connectionId: 'remote' },
     { path: '/work/runtime', executionHostId: 'runtime:env', connectionId: 'nested' },
-    { path: '/work' }
+    { path: '/work' },
+    { path: '/elsewhere/h', projectGroupId: 'ring-branch', connectionId: 'remote' },
+    { path: 'C:\\Work\\Chat\\sub', connectionId: 'remote' },
+    { path: '\\\\wsl$\\Ubuntu\\home\\Me\\proj', connectionId: 'remote' },
+    { path: '//wsl.localhost/Ubuntu/home/me/other' }
   ],
   folderWorkspaces: [
     folder('row-pinned', 'empty', { executionHostId: 'ssh:row' }),
@@ -61,7 +69,19 @@ const catalog = {
     folder('cycle', 'cycle-a'),
     folder('twice', 'ssh-only'),
     folder('twice', 'empty', { folderPath: '/nowhere' }),
-    folder('ungrouped', 'missing-group')
+    folder('ungrouped', 'missing-group'),
+    folder('ring-x', 'ring-x'),
+    folder('ring-y', 'ring-y'),
+    folder('ring-branch', 'ring-branch'),
+    // One Windows directory spelled three ways, and a sibling that only shares a prefix.
+    folder('windows', 'empty', { folderPath: 'C:\\Work\\Chat' }),
+    folder('windows-slashes', 'empty', { folderPath: 'c:/work/chat/' }),
+    folder('windows-case', 'empty', { folderPath: 'C:\\WORK\\Chat\\' }),
+    folder('windows-sibling', 'empty', { folderPath: 'C:\\Work\\Chatter' }),
+    // WSL server and distro spellings fold; the Linux tail's case does not.
+    folder('wsl', 'empty', { folderPath: '\\\\wsl$\\Ubuntu\\home\\Me' }),
+    folder('wsl-alias', 'empty', { folderPath: '//wsl.localhost/ubuntu/home/Me' }),
+    folder('wsl-other-case', 'empty', { folderPath: '//wsl.localhost/Ubuntu/home/me' })
   ]
 }
 
@@ -77,4 +97,26 @@ it('decides every folder exactly as the scalar resolver does, for any required h
       ])
     }
   }
+})
+
+it('reads each repo path once for every spelling of a directory', () => {
+  let reads = 0
+  const repos = catalog.repos.map(
+    (repo) =>
+      new Proxy(repo, {
+        get: (target, key, receiver) => {
+          reads += key === 'path' ? 1 : 0
+          return Reflect.get(target, key, receiver)
+        }
+      })
+  )
+  const resolve = createFolderWorkspaceHostIndex({ ...catalog, repos })
+  const answers = ['windows', 'windows-slashes', 'windows-case', 'wsl', 'wsl-alias'].map((id) =>
+    resolve(id)
+  )
+  expect(answers.map((answer) => answer.kind === 'selected' && answer.value.hostId)).toEqual(
+    Array(5).fill('ssh:remote')
+  )
+  expect(resolve('wsl-other-case')).toMatchObject({ kind: 'selected', value: { hostId: 'local' } })
+  expect(reads).toBe(repos.length)
 })

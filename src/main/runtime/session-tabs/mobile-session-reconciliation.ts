@@ -4,6 +4,7 @@ import { OrcaRuntimeWithWriteOrchestrationPointerPty } from '../orchestration/te
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
+import { storedFrameFollowsRendererPublication } from '../mobile-session-snapshot-version'
 
 export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
   protected abstract buildPreservedHeadlessMobileSessionSnapshot(
@@ -129,8 +130,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       if (
         existing &&
         accepted &&
-        (existing.publicationEpoch === accepted.publicationEpoch ||
-          existing.publicationEpoch.startsWith(`${accepted.publicationEpoch}:headless-merge:`)) &&
+        storedFrameFollowsRendererPublication(existing, accepted) &&
         existing.tabs.length >= accepted.rendererTabCount &&
         (existing.tabs.length === accepted.rendererTabCount ||
           !this.storedMobileSnapshotHasStalePreservedTab(

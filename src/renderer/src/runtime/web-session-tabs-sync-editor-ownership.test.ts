@@ -276,4 +276,45 @@ describe('host editor file ownership', () => {
       buildOwnedEditorFileId(filePath, WT, ENV)
     ])
   })
+
+  it('keeps the mirrored editor when a newer frame from its host drops a chat that moved away', () => {
+    const chat = {
+      type: 'agent-session' as const,
+      id: 'agent-session:moved',
+      title: 'Chat',
+      sessionId: 'moved',
+      agent: 'codex' as const,
+      isActive: false
+    }
+    const initial = makeState()
+    const before = {
+      ...initial,
+      ...applyWebSessionTabsSnapshot(
+        initial,
+        makeSnapshot([hostTab, chat], { activeTabId: hostTab.id, activeTabType: 'file' }),
+        ENV,
+        NOW
+      )
+    }
+    expect(before.unifiedTabsByWorktree[WT]?.map((tab) => tab.contentType)).toEqual([
+      'editor',
+      'agent-session'
+    ])
+    // The host's correction is its whole frame again, without the chat.
+    const after = {
+      ...before,
+      ...applyWebSessionTabsSnapshot(
+        before,
+        makeSnapshot([hostTab], {
+          activeTabId: hostTab.id,
+          activeTabType: 'file',
+          snapshotVersion: 2
+        }),
+        ENV,
+        NOW
+      )
+    }
+    expect(after.openFiles).toEqual(before.openFiles)
+    expect(after.unifiedTabsByWorktree[WT]?.map((tab) => tab.contentType)).toEqual(['editor'])
+  })
 })

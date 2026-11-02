@@ -24,6 +24,7 @@ import { restoredChatTabChanges } from '../../src/main/runtime/session-tabs/rest
 import { structuredSessionPlacementAllowed } from '../../src/main/runtime/session-tabs/structured-session-placement'
 import {
   UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
+  type RuntimeMobileSessionFileTab,
   type RuntimeMobileSessionTabsResult,
   type RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
@@ -84,9 +85,37 @@ const savedAt = (rig: AuthorityRig, workspace: string, derived = true) => {
   ).filter((tab) => tab.entityId === B)
 }
 
+// A window's own frame for a workspace: its non-chat rows, never chats.
+const windowFrame = (
+  worktree: string,
+  snapshotVersion: number,
+  tabs: RuntimeMobileSessionTabsSnapshot['tabs'] = []
+): RuntimeMobileSessionTabsSnapshot => ({
+  worktree,
+  publicationEpoch: 'renderer',
+  snapshotVersion,
+  activeGroupId: null,
+  activeTabId: null,
+  activeTabType: null,
+  tabGroups: [{ id: 'window-group', activeTabId: null, tabOrder: tabs.map((tab) => tab.id) }],
+  tabs
+})
+const notes: RuntimeMobileSessionFileTab = {
+  type: 'file',
+  id: 'notes-tab',
+  title: 'notes.md',
+  filePath: '/project/notes.md',
+  relativePath: 'notes.md',
+  language: 'markdown',
+  isDirty: false,
+  isActive: false
+}
+
 it('a phone move with an attached window republishes the old frame without the chat, even when the destination tab already exists and the old registration returns', async () => {
   const rig = await retired()
   const window = attachWindow(rig)
+  rig.runtime.mobileSessionTabsByWorktree.delete(rig.old)
+  rig.runtime['syncMobileSessionTabs']([windowFrame(rig.old, 7, [notes])])
   project(rig, rig.old)
   project(rig, rig.destination)
   const before = rig.runtime.mobileSessionTabsByWorktree.get(rig.old)!.snapshotVersion
@@ -99,10 +128,11 @@ it('a phone move with an attached window republishes the old frame without the c
     })
   }
   stop()
-  // The window replaces its old slice from a newer frame that no longer lists the chat.
+  // The window replaces its old slice from its own whole frame, newer and without the chat.
   const oldFrames = published.filter((snapshot) => snapshot.worktree === rig.old)
-  expect(oldFrames.at(-1)?.snapshotVersion).toBeGreaterThan(before)
-  expect(chatsIn(oldFrames.at(-1)?.tabs)).toEqual([])
+  expect(oldFrames).toHaveLength(1)
+  expect(oldFrames[0].snapshotVersion).toBeGreaterThan(before)
+  expect(oldFrames[0].tabs.map((tab) => tab.id)).toEqual([notes.id])
   expect(await listedAt(rig, rig.old)).toEqual([])
   expect(await listedAt(rig, rig.destination)).toHaveLength(1)
   // The window owns the saved layout, so the old row stays as a hint no read shows.
@@ -122,56 +152,121 @@ it('a phone move with an attached window republishes the old frame without the c
   expect(await listedAt(fresh, rig.old)).toEqual([])
 })
 
-it.each(['absent', 'accepted empty'] as const)(
-  'a phone move republishes an old workspace the host frames as %s, keeping the chat that stays there',
+it("a phone move gives back the window's own old-workspace frame whole: the editor and a neighbour saved without its agent label stay", async () => {
+  const rig = await retired([C])
+  attachWindow(rig)
+  // The optional saved label is gone; the record still says what C is.
+  const saved = rig.profile.getWorkspaceSession('local')!
+  rig.profile.setWorkspaceSession({
+    ...saved,
+    unifiedTabs: {
+      ...saved.unifiedTabs,
+      [rig.old]: saved.unifiedTabs![rig.old].map(({ agentSessionAgent: _label, ...tab }) => tab)
+    }
+  })
+  // The window's frame lists no chats; the host holds none there either.
+  rig.runtime.mobileSessionTabsByWorktree.delete(rig.old)
+  rig.runtime['syncMobileSessionTabs']([windowFrame(rig.old, 7, [notes])])
+  const before = rig.runtime.mobileSessionTabsByWorktree.get(rig.old)!.snapshotVersion
+  const published: RuntimeMobileSessionTabsResult[] = []
+  const stop = rig.runtime.onMobileSessionTabsChanged((snapshot) => published.push(snapshot))
+  for (let attempt = 0; attempt < 2; attempt++) {
+    expect(await reveal(rig)).toMatchObject({
+      ok: true,
+      result: { ok: true, workspaceId: rig.destination }
+    })
+  }
+  stop()
+  const oldFrames = published.filter((snapshot) => snapshot.worktree === rig.old)
+  expect(oldFrames).toHaveLength(1)
+  expect(oldFrames[0].snapshotVersion).toBeGreaterThan(before)
+  expect(oldFrames[0].publicationEpoch).not.toBe(UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH)
+  expect(oldFrames[0].tabs.map((tab) => tab.id)).toEqual([notes.id, `agent-session:${C}`])
+  expect(chatsIn(oldFrames[0].tabs, C)).toMatchObject([
+    { agent: rig.store.getConversation(C)!.provider }
+  ])
+  // The window's next unchanged graph leaves the correction in place.
+  rig.runtime['syncMobileSessionTabs'](
+    [windowFrame(rig.old, 7, [notes])],
+    [rig.old, rig.destination]
+  )
+  expect(await listedAt(rig, rig.old)).toEqual([])
+  expect(await listedAt(rig, rig.old, C)).toHaveLength(1)
+  expect(await listedAt(rig, rig.destination)).toHaveLength(1)
+})
+
+it.each(['has no frame', 'holds a frame this host built'] as const)(
+  'a phone move asks a window whose old workspace %s to resend it, without publishing a frame the host cannot complete',
   async (frame) => {
-    // The window shows B and C at the old workspace from its saved layout alone.
-    const rig = await retired([C])
+    const rig = await retired()
     attachWindow(rig)
     rig.runtime.mobileSessionTabsByWorktree.delete(rig.old)
-    // A window's own frame lists no chats.
-    const graph = (snapshotVersion: number): RuntimeMobileSessionTabsSnapshot => ({
-      worktree: rig.old,
-      publicationEpoch: 'renderer',
-      snapshotVersion,
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null,
-      tabGroups: [],
-      tabs: []
-    })
-    if (frame === 'accepted empty') {
-      rig.runtime['syncMobileSessionTabs']([graph(7)])
-      expect(rig.runtime.mobileSessionTabsByWorktree.get(rig.old)?.tabs).toEqual([])
-    }
-    const before = rig.runtime.mobileSessionTabsByWorktree.get(rig.old)?.snapshotVersion ?? 0
-    const published: RuntimeMobileSessionTabsResult[] = []
-    const stop = rig.runtime.onMobileSessionTabsChanged((snapshot) => published.push(snapshot))
-    for (let attempt = 0; attempt < 2; attempt++) {
-      expect(await reveal(rig)).toMatchObject({
-        ok: true,
-        result: { ok: true, workspaceId: rig.destination }
+    if (frame === 'holds a frame this host built') {
+      // Accepted from the window once, then replaced by host rows: counts still match.
+      rig.runtime['syncMobileSessionTabs']([windowFrame(rig.old, 7)])
+      project(rig, rig.old)
+      const stored = rig.runtime.mobileSessionTabsByWorktree.get(rig.old)!
+      rig.runtime.mobileSessionTabsByWorktree.set(rig.old, {
+        ...stored,
+        publicationEpoch: 'structured:host'
       })
     }
+    const published: RuntimeMobileSessionTabsResult[] = []
+    const stop = rig.runtime.onMobileSessionTabsChanged((snapshot) => published.push(snapshot))
+    expect(await reveal(rig)).toMatchObject({
+      ok: true,
+      result: { ok: true, workspaceId: rig.destination }
+    })
     stop()
-    // One affirmed newer slice, so the window replaces its old one: B goes, C stays.
-    const oldFrames = published.filter((snapshot) => snapshot.worktree === rig.old)
-    expect(oldFrames).toHaveLength(1)
-    expect(oldFrames[0].snapshotVersion).toBeGreaterThan(before)
-    expect(oldFrames[0].publicationEpoch).not.toBe(UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH)
-    expect(oldFrames[0].agentSessionsUnverifiable).toBeUndefined()
-    expect(chatsIn(oldFrames[0].tabs)).toEqual([])
-    expect(chatsIn(oldFrames[0].tabs, C)).toHaveLength(1)
-    // The window's next unchanged graph leaves the correction in place.
-    rig.runtime['syncMobileSessionTabs'](frame === 'accepted empty' ? [graph(7)] : [], [
-      rig.old,
-      rig.destination
-    ])
+    expect(published.filter((snapshot) => snapshot.worktree === rig.old)).toEqual([])
+    // The window's next graph lists the workspace unchanged; the answer asks for it in full.
+    const resync = new Set<string>()
+    rig.runtime['syncMobileSessionTabs']([], [rig.old], resync)
+    expect([...resync]).toEqual([rig.old])
+    const changed = rig.runtime['syncMobileSessionTabs']([windowFrame(rig.old, 8, [notes])])
+    expect([...changed]).toContain(rig.old)
     expect(await listedAt(rig, rig.old)).toEqual([])
-    expect(await listedAt(rig, rig.old, C)).toHaveLength(1)
-    expect(await listedAt(rig, rig.destination)).toHaveLength(1)
   }
 )
+
+it('a real move assembles each old workspace once, at C and 10C chats kept beside the moved one', async () => {
+  const rig = await retired()
+  attachWindow(rig)
+  await reveal(rig)
+  const conversation = rig.store.getConversation(B)!
+  vi.spyOn(rig.host, 'isSessionTabVisible').mockReturnValue(true)
+  vi.spyOn(rig.store, 'getConversation').mockImplementation(
+    (id) => ({ ...conversation, sessionId: id }) as never
+  )
+  const store = rig.runtime.storeMobileSessionSnapshot.bind(rig.runtime)
+  let rows = 0
+  vi.spyOn(rig.runtime, 'storeMobileSessionSnapshot').mockImplementation((workspace, snapshot) => {
+    rows += snapshot.tabs.length
+    return store(workspace, snapshot)
+  })
+  const counts: number[] = []
+  for (const kept of [20, 200]) {
+    const ids = Array.from({ length: kept }, (_, i) => `kept-${kept}-${i}`)
+    rig.profile.setWorkspaceSession(
+      withChatTabChanges(
+        'local',
+        getDefaultWorkspaceSession(),
+        rig.old,
+        [B, ...ids].map((sessionId) => ({
+          open: { sessionId, agent: 'codex' as const, tabId: `agent-session:${sessionId}` }
+        }))
+      )!
+    )
+    rig.runtime.mobileSessionTabsByWorktree.delete(rig.old)
+    rig.runtime['acceptedRendererMobileSnapshotByWorktree'].delete(rig.old)
+    rig.runtime['syncMobileSessionTabs']([windowFrame(rig.old, kept, [notes])])
+    rows = 0
+    await rig.runtime.retireMovedStructuredSessionPlacement(B)
+    expect(rig.runtime.mobileSessionTabsByWorktree.get(rig.old)?.tabs).toHaveLength(kept + 1)
+    counts.push(rows)
+  }
+  expect(counts[1]).toBeLessThanOrEqual(12 * counts[0])
+})
 
 it("saved reads and saves drop moved chats in one pass that keeps other hosts' tabs and unrelated state, pass after pass", async () => {
   const rig = await retired()

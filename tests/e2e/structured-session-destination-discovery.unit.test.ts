@@ -301,6 +301,44 @@ const sameDirectoryScopes: [
         })
       )
     })
+  ],
+  [
+    'spellings of the directory over repos on another host',
+    (n) => ({
+      folders: Array.from({ length: n }, (_, i) =>
+        folderRow(`alias-${i}`, {
+          projectGroupId: `alias-${i}`,
+          folderPath: root + '/'.repeat(i + 1)
+        })
+      ),
+      groups: Array.from({ length: n }, (_, i) => groupRow(`alias-${i}`)),
+      repos: Array.from({ length: n }, (_, i) =>
+        storeRepo({
+          id: `alias-repo-${i}`,
+          path: `${root}/sub-${i}`,
+          executionHostId: 'ssh:foreign'
+        })
+      )
+    })
+  ],
+  [
+    'a ring of unpinned groups, each holding a repo on another host',
+    (n) => ({
+      folders: Array.from({ length: n }, (_, i) =>
+        folderRow(`ring-folder-${i}`, { projectGroupId: `ring-${i}`, folderPath: root })
+      ),
+      groups: Array.from({ length: n }, (_, i) =>
+        groupRow(`ring-${i}`, { parentGroupId: `ring-${(i + 1) % n}` })
+      ),
+      repos: Array.from({ length: n }, (_, i) =>
+        storeRepo({
+          id: `ring-repo-${i}`,
+          path: `/elsewhere/${i}`,
+          projectGroupId: `ring-${i}`,
+          executionHostId: 'ssh:foreign'
+        })
+      )
+    })
   ]
 ]
 
@@ -310,6 +348,14 @@ it.each(sameDirectoryScopes)(
     const rig = await retired(root, 'folder')
     rig.profile.addRepo(storeRepo({ id: 'current', path: root, kind: 'folder' }))
     const counter = countCatalogReads(rig)
+    // Group lookups inside the index count too: a ring must not be walked once per member.
+    const get = Map.prototype.get
+    vi.spyOn(Map.prototype, 'get').mockImplementation(function (this: Map<unknown, unknown>, key) {
+      if (typeof key === 'string' && key.startsWith('ring-')) {
+        counter.reads++
+      }
+      return get.call(this, key)
+    })
     const counts: { prepare: number; admit: number }[] = []
     for (const n of [20, 200]) {
       Object.assign(counter, { repos: [], folders: [], groups: [] }, scopes(n))
