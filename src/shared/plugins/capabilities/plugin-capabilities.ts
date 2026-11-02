@@ -65,7 +65,7 @@ export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
 export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string> = {
   'workspace:read':
     'Read the name, branch, and terminal list of your focused workspace, and get notified when workspaces are created or removed',
-  'workspace:write': 'Open your workspaces in Orca',
+  'workspace:write': 'Open your workspaces and their files in Orca, and run its built-in commands',
   'agent:read': 'Get notified when agent status changes',
   'agent:launch': 'Start agents in your workspaces, local and SSH',
   'terminal:send': 'Type and run commands in your terminals, local and SSH',

@@ -178,6 +178,18 @@ declare module 'orca/host' {
       result: { terminalId: string }
       surfaces: "worker"
     }
+    /** Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace. Since host API 1.3. */
+    "editor.open": {
+      params: { workspaceId: string; path: string }
+      result: { opened: true }
+      surfaces: "worker"
+    }
+    /** Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only. Since host API 1.3. */
+    "commands.run": {
+      params: { action: "worktree.history.back" | "worktree.history.forward" | "sidebar.left.toggle" | "sidebar.sleepingWorkspaces.toggle" | "floatingWorkspace.maximize" | "tab.rename" | "workspace.rename" | "workspace.openBoard" | "view.tasks" | "sidebar.right.toggle" | "sidebar.explorer.toggle" | "sidebar.search.toggle" | "sidebar.sourceControl.toggle" | "sidebar.checks.toggle" | "sidebar.ports.toggle" }
+      result: { ran: true }
+      surfaces: "worker"
+    }
   }
   export type HostMethodName = keyof HostMethods
   /** Methods a surface may call; any other gets `not_permitted`. */

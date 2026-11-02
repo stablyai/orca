@@ -18,6 +18,7 @@ import {
   type PluginPanelBridgeServices
 } from './plugin-host-panel-method-bindings'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
+import type { PluginHostRendererActions } from '../view/plugin-host-renderer-actions'
 import {
   PLUGIN_STATUS_BAR_HANDLERS,
   type PluginStatusBarServices
@@ -89,6 +90,8 @@ export type PluginHostServices = {
   statusBar?: PluginStatusBarServices | null
   /** The runtime methods the `orca` CLI calls, for workspace actions; absent without a runtime. */
   runtimeRpc?: PluginRuntimeRpc | null
+  /** Orca's window, for actions only it can take; absent in headless serve. */
+  renderer?: PluginHostRendererActions | null
   settings: {
     getAll(pluginId: string): Record<string, PluginJsonValue>
     set(

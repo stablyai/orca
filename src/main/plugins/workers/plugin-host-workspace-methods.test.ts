@@ -3,8 +3,12 @@ import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
 import { pluginHostCallRevoked, type PluginHostCallScope } from './plugin-host-call-scope'
 import type { PluginRuntimeRpc } from './plugin-host-workspace-method-bindings'
+import type { PluginHostRendererActions } from '../view/plugin-host-renderer-actions'
 
-function services(runtimeRpc: PluginRuntimeRpc | null): PluginHostServices {
+function services(
+  runtimeRpc: PluginRuntimeRpc | null,
+  renderer: PluginHostRendererActions | null = null
+): PluginHostServices {
   return {
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
     listWorktreeTerminals: vi.fn().mockResolvedValue([]),
@@ -19,7 +23,8 @@ function services(runtimeRpc: PluginRuntimeRpc | null): PluginHostServices {
       protection: vi.fn().mockReturnValue('unavailable')
     },
     settings: { getAll: vi.fn().mockReturnValue({}), set: vi.fn() },
-    runtimeRpc
+    runtimeRpc,
+    renderer
   }
 }
 
@@ -56,6 +61,7 @@ function call(
     capabilities?: PluginCapabilityKind[]
     surface?: 'worker' | 'panel'
     scope?: PluginHostCallScope
+    renderer?: PluginHostRendererActions | null
   } = {}
 ) {
   return executePluginHostCall({
@@ -64,7 +70,7 @@ function call(
     params,
     surface: options.surface ?? 'worker',
     grantedCapabilities: options.capabilities ?? ALL,
-    services: services(rpc),
+    services: services(rpc, options.renderer ?? null),
     audit: { record: vi.fn().mockResolvedValue(undefined) },
     ...(options.scope ? { scope: options.scope } : {})
   })
@@ -247,5 +253,33 @@ describe('workspace host actions', () => {
     expect(calls).toEqual([])
     await flush()
     await expect(call('workspace.list', undefined, null)).resolves.toMatchObject({ ok: false })
+  })
+
+  it('editor.open asks the window to open a file inside the workspace', async () => {
+    const renderer = { openFile: vi.fn().mockResolvedValue(undefined), runAction: vi.fn() }
+    await expect(
+      call('editor.open', { workspaceId: 'app', path: 'src/main.ts' }, null, { renderer })
+    ).resolves.toEqual({ ok: true, value: { opened: true } })
+    expect(renderer.openFile).toHaveBeenCalledWith('app', 'src/main.ts')
+    for (const path of ['../secret', '/etc/passwd', 'C:\\x', 'a/../../b', '.']) {
+      await expect(
+        call('editor.open', { workspaceId: 'app', path }, null, { renderer })
+      ).resolves.toMatchObject({ ok: false, code: 'invalid_params' })
+    }
+    expect(renderer.openFile).toHaveBeenCalledTimes(1)
+  })
+
+  it("commands.run runs only built-in actions, and needs Orca's window", async () => {
+    const renderer = { openFile: vi.fn(), runAction: vi.fn().mockResolvedValue(undefined) }
+    await expect(
+      call('commands.run', { action: 'sidebar.left.toggle' }, null, { renderer })
+    ).resolves.toEqual({ ok: true, value: { ran: true } })
+    expect(renderer.runAction).toHaveBeenCalledWith('sidebar.left.toggle')
+    await expect(
+      call('commands.run', { action: 'editor.save' }, null, { renderer })
+    ).resolves.toMatchObject({ ok: false, code: 'invalid_params' })
+    await expect(
+      call('commands.run', { action: 'sidebar.left.toggle' }, null)
+    ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
   })
 })

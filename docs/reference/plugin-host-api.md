@@ -36,6 +36,8 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`terminal.create`](#terminalcreate) | `terminal:send` | worker | yes | 1.3 | Opens a terminal in a workspace, optionally running a command, in the background. |
 | [`terminal.read`](#terminalread) | `terminal:read` | worker | no | 1.3 | Reads a terminal's newest output as plain text, at most 2000 lines. |
 | [`agent.launch`](#agentlaunch) | `agent:launch` | worker | yes | 1.3 | Starts an agent's CLI in a new terminal of a workspace, in the background, and returns as soon as it starts; a `prompt` is sent once the agent is ready. |
+| [`editor.open`](#editoropen) | `workspace:write` | worker | yes | 1.3 | Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace. |
+| [`commands.run`](#commandsrun) | `workspace:write` | worker | yes | 1.3 | Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only. |
 
 ### `workspace.readContext`
 
@@ -227,6 +229,22 @@ Starts an agent's CLI in a new terminal of a workspace, in the background, and r
 
 ```ts
 (params: { workspaceId: string; agent: string; prompt?: string }) => { terminalId: string }
+```
+
+### `editor.open`
+
+Opens a file of a workspace in an editor tab of Orca's window; desktop app only. `workspace.open` shows the workspace.
+
+```ts
+(params: { workspaceId: string; path: string }) => { opened: true }
+```
+
+### `commands.run`
+
+Runs one of Orca's built-in actions in its window, never a plugin's replacement of it; desktop app only.
+
+```ts
+(params: { action: "worktree.history.back" | "worktree.history.forward" | "sidebar.left.toggle" | "sidebar.sleepingWorkspaces.toggle" | "floatingWorkspace.maximize" | "tab.rename" | "workspace.rename" | "workspace.openBoard" | "view.tasks" | "sidebar.right.toggle" | "sidebar.explorer.toggle" | "sidebar.search.toggle" | "sidebar.sourceControl.toggle" | "sidebar.checks.toggle" | "sidebar.ports.toggle" }) => { ran: true }
 ```
 
 ## Events

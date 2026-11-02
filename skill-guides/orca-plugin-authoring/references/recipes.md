@@ -148,4 +148,6 @@ A `trusted-worker` can act as the `orca` CLI does, on whichever host owns the wo
 `host.call('workspace.list')` (`workspace:read`) for ids, kinds, paths and branches;
 `terminal.create({ workspaceId, command })` (`terminal:send`) then `terminal.read({ terminalId,
 maxLines })` (`terminal:read`) for its output; `agent.launch({ workspaceId, agent: 'claude', prompt })`
-(`agent:launch`); `workspace.open({ workspaceId })` (`workspace:write`) to show one. Panels get none.
+(`agent:launch`); `workspace.open({ workspaceId })`, `editor.open({ workspaceId, path })` (a path
+inside it) and `commands.run({ action })` (a built-in `contributes.commands[].action`, never a plugin's
+replacement) need `workspace:write` and the desktop app. Panels get none.

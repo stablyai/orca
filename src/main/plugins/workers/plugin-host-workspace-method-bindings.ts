@@ -11,6 +11,7 @@ import {
 } from './plugin-host-method-bind'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 import { PluginHostCallError } from './plugin-host-call-scope'
+import type { PluginHostRendererActions } from '../view/plugin-host-renderer-actions'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 
 /** The runtime RPC the `orca` CLI calls, run in process; rejects with the runtime's error.
@@ -64,6 +65,13 @@ const terminalReadAnswer = z.object({
 const agentLaunchAnswer = z.object({
   outcome: z.object({ kind: z.enum(['structured', 'terminal']), handle: z.string() })
 })
+
+function renderer(services: PluginHostServices): PluginHostRendererActions {
+  if (!services.renderer) {
+    throw new PluginHostCallError('unavailable', 'only the Orca desktop app can do this')
+  }
+  return services.renderer
+}
 
 function rpc(services: PluginHostServices): PluginRuntimeRpc {
   if (!services.runtimeRpc) {
@@ -200,5 +208,17 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       })
     }
     return { terminalId }
+  }),
+  'editor.open': bind(api['editor.open'], async ({ workspaceId, path }, { services, scope }) => {
+    scope.assertActive()
+    await renderer(services).openFile(workspaceId, path)
+    return { opened: true as const }
+  }),
+  'commands.run': bind(api['commands.run'], async ({ action }, { services, scope }) => {
+    scope.assertActive()
+    // Always Orca's own action, never a plugin command that replaces it: a replacement that
+    // calls commands.run for the original would otherwise call itself.
+    await renderer(services).runAction(action)
+    return { ran: true as const }
   })
 } satisfies Record<string, BoundPluginHostMethod>

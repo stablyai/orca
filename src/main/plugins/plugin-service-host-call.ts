@@ -20,6 +20,7 @@ import type {
   PluginSurface
 } from '../../shared/plugins/frames/plugin-protocol'
 import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
+import { getPluginHostRendererActions } from './view/plugin-host-renderer-actions'
 
 /** Who made a call: the open panel (frames only), and its host window's WebContents for desktop
  *  IPC calls. */
@@ -84,6 +85,7 @@ export function resolvePluginServiceHostCallPolicy(input: {
           pluginsDataDir: input.pluginsDataDir,
           desktop: input.desktop,
           panels: input.panels,
+          renderer: getPluginHostRendererActions(),
           declaredSettings: plugin?.manifest.contributes.settings,
           statusBar: input.statusBar,
           declaredStatusBarItemIds: plugin?.manifest.contributes.statusBarItems.map(
