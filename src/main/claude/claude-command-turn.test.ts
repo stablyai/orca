@@ -272,6 +272,38 @@ describe('a captured /compact as the open Claude turn', () => {
     }
   )
 
+  it('keeps a 403 access denial in its own words, not as sign-in guidance', async () => {
+    const h = harness()
+    h.begin('compact-input')
+    const denied =
+      'Failed to authenticate. API Error: 403 Your organization does not have access to this model.'
+    // The recorded signed-out pair with the CLI's 403 variant, which it also labels authentication_failed.
+    for (const frame of await recordedSignedOut()) {
+      h.frame(
+        frame.type === 'result'
+          ? { ...frame, subtype: 'success', api_error_status: 403, result: denied }
+          : {
+              ...frame,
+              message: {
+                role: 'assistant',
+                content: [{ type: 'text', text: 'Failed to authenticate.' }]
+              }
+            }
+      )
+    }
+    expect(h.commandTurn()).toMatchObject({ state: 'completed', outcome: 'failure' })
+    const statuses = h.drawn().filter((row) => row.body.kind === 'status')
+    expect(statuses).toEqual([
+      expect.objectContaining({
+        turnScope: IN_COMMAND,
+        body: expect.objectContaining({ text: expect.stringContaining(denied) })
+      })
+    ])
+    expect(
+      statuses.some((row) => row.body.kind === 'status' && row.body.failure?.kind === 'notSignedIn')
+    ).toBe(false)
+  })
+
   it.each([
     'received before the command',
     'received during an earlier command',

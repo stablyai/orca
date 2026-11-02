@@ -76,8 +76,10 @@ export function journalClaudeResult(
   const usageLimit = settlesTurn
     ? usageLimits.result(message, !command && failure !== null, usageEvidence, compactionFailure)
     : null
-  // As on an ordinary send, a sign-in notice from the hidden reply outranks quota.
-  const terminalFailure = (compactionFailure && command?.notice) || usageLimit
+  // A sign-in notice from the hidden reply outranks quota, as on an ordinary send. Claude also
+  // labels a 403 access denial authentication_failed; its result, not sign-in guidance, says why.
+  const notice = compactionFailure && message.api_error_status !== 403 ? command?.notice : null
+  const terminalFailure = notice || usageLimit
   if (command && commandResult?.row && !terminalFailure) {
     sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
   }
