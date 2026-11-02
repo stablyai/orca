@@ -1,4 +1,4 @@
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 export type WorkspacePortGroup = {
   worktreeId: string

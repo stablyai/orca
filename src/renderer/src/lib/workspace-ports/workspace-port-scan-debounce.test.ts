@@ -4,7 +4,7 @@ import {
   type KeyedPortScan,
   type PortScanDebounceState
 } from './workspace-port-scan-debounce'
-import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 function good(portIds: string[]): WorkspacePortScanResult {
   return {

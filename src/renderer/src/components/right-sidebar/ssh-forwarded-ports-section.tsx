@@ -8,7 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { SshForwardedPortRow } from './ssh-forwarded-port-row'
 import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
-import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
+import { browserUrlForPortForwardEntry } from '@/lib/workspace-ports/workspace-port-urls'
 
 const NO_FORWARDS: readonly PortForwardEntry[] = []
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []

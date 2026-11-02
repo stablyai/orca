@@ -1,6 +1,6 @@
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callHostRoute } from '@/runtime/host-route-call'
 import type { HostRoute } from '@/runtime/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -11,9 +11,9 @@ import type {
   WorkspacePortPageProbeRequest,
   WorkspacePortPageProbeResult,
   WorkspacePortScanResult
-} from '../../../shared/workspace-ports'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
-import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+} from '../../../../shared/workspace-ports'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/workspace-ports-runtime-capabilities'
 
 export const WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON =
   'Update the server to see ports on its SSH hosts.'

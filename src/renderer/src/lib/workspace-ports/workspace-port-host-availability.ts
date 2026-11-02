@@ -1,4 +1,4 @@
-import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 /** Distinguish unknown scan keys from local so leaked projection keys cannot become local-host failures. */
 export type WorkspacePortHostRef =

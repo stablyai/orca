@@ -1,19 +1,19 @@
-import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
+import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RelayAssignmentStore,
   type AssignOptions,
   type RelayAssignment
-} from './assignment/assignment-store.js'
-import type { RelayCellConfig } from './config.js'
+} from './assignment-store.js'
+import type { RelayCellConfig } from '../config.js'
 import {
   openInMemoryRelayDatabase,
   type RelayDatabase,
   type RelayLockOptions,
   type RelayTransactionOptions,
   type SqlRow
-} from './database.js'
-import { ReservePaceError } from './reserve-assignment.js'
+} from '../database.js'
+import { ReservePaceError } from '../reserve-assignment.js'
 
 const CELLS: RelayCellConfig[] = [
   { id: 'us-c1', url: 'https://us-c1.relay.example.com', region: 'us-central1', capacityRequests: 100 },

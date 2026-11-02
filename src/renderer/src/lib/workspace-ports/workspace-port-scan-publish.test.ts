@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()

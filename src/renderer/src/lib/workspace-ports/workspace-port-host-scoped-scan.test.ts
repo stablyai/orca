@@ -17,7 +17,7 @@ import {
   WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON,
   type HostScopedPortHost
 } from './workspace-port-scan-client'
-import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/workspace-ports-runtime-capabilities'
 
 const host: HostScopedPortHost = {
   route: { target: { kind: 'environment', environmentId: 'env-e' }, at: 'ssh:t' },
