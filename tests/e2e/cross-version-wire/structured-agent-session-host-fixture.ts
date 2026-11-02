@@ -60,6 +60,8 @@ export function structuredHostStub(
     restartResumeAll: vi.fn(async () => []),
     restartContinueAll: vi.fn(async () => ({ resumed: [], continued: [] })),
     continueInterrupted: vi.fn(async () => ({ sessionId, outcome: 'superseded' })),
+    // Flat like restart-resume; installableHost rebuilds the nested usageLimitContinue member.
+    cancelUsageLimitContinue: vi.fn(async () => {}),
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     create: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     // Accept create-location probes so an unstubbed harness method cannot cause every ensure to refuse.
@@ -179,7 +181,8 @@ export function installableHost(
       resume: hostCalls.restartResumeAll,
       continueAfterRestart: hostCalls.restartContinueAll,
       continueInterrupted: hostCalls.continueInterrupted
-    }
+    },
+    usageLimitContinue: { cancel: hostCalls.cancelUsageLimitContinue }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a spy map standing in for the host; the dispatcher reaches only the members stubbed above, and a missing one fails the call rather than type-checking.
   return host as unknown as StructuredAgentSessionHost
