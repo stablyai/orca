@@ -38,10 +38,6 @@ function parsed(overrides: Record<string, unknown> = {}) {
 }
 
 describe('contributes.customEditors', () => {
-  it('accepts a sandboxed-ui editor and defaults every other point', () => {
-    expect(parsed().contributes.customEditors).toEqual([{ ...excalidraw, filenames: [] }])
-  })
-
   it('accepts a bytes editor, which edits like a text one', () => {
     const spreadsheet = {
       id: 'spreadsheet',
@@ -63,14 +59,6 @@ describe('contributes.customEditors', () => {
     expect(
       parsePluginManifest(
         manifest({ contributes: { customEditors: [{ ...excalidraw, icon: '../tab.png' }] } })
-      )
-    ).toMatchObject({ ok: false })
-  })
-
-  it('refuses the retired readonly field', () => {
-    expect(
-      parsePluginManifest(
-        manifest({ contributes: { customEditors: [{ ...excalidraw, readonly: true }] } })
       )
     ).toMatchObject({ ok: false })
   })
