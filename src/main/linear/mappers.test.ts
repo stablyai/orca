@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapLinearIssue } from './mappers'
+import { mapLinearIssue, mapLinearLinkedPullRequests } from './mappers'
 
 describe('mapLinearIssue', () => {
   it('keeps core issue details when optional Linear relations fail', async () => {
@@ -46,5 +46,43 @@ describe('mapLinearIssue', () => {
       assignee: undefined,
       project: undefined
     })
+  })
+})
+
+describe('mapLinearLinkedPullRequests', () => {
+  it('keeps only GitHub PR and GitLab MR attachments', () => {
+    expect(
+      mapLinearLinkedPullRequests([
+        {
+          id: 'a-1',
+          title: 'feat: add PR links',
+          url: 'https://github.com/acme/app/pull/42',
+          subtitle: 'Open'
+        },
+        {
+          id: 'a-2',
+          title: 'fix: MR',
+          url: 'https://gitlab.com/acme/group/app/-/merge_requests/7',
+          subtitle: null
+        },
+        { id: 'a-3', title: 'Issue', url: 'https://github.com/acme/app/issues/42' },
+        { id: 'a-4', title: 'Commit', url: 'https://github.com/acme/app/commit/abc123' },
+        { id: 'a-5', title: 'Doc', url: 'https://docs.google.com/document/d/1' },
+        { id: 'a-6', title: 'Spoof', url: 'https://github.com.evil.dev/acme/app/pull/1' }
+      ])
+    ).toEqual([
+      {
+        id: 'a-1',
+        title: 'feat: add PR links',
+        url: 'https://github.com/acme/app/pull/42',
+        subtitle: 'Open'
+      },
+      {
+        id: 'a-2',
+        title: 'fix: MR',
+        url: 'https://gitlab.com/acme/group/app/-/merge_requests/7',
+        subtitle: undefined
+      }
+    ])
   })
 })

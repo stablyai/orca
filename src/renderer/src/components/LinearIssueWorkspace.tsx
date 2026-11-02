@@ -14,6 +14,7 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { LinearIssueActivity } from './linear-issue-activity'
 import { LinearIssueSubIssues } from './linear-issue-sub-issues'
+import { LinearIssueLinkedPullRequests } from './linear-issue-linked-pull-requests'
 import { useLinearIssueWorkspaceDetail } from './linear-issue-workspace-detail-state'
 import { LinearIssueWorkspaceHeader } from './linear-issue-workspace-header'
 import { LinearIssueWorkspaceSidebar } from './linear-issue-workspace-sidebar'
@@ -96,6 +97,7 @@ function LinearIssueWorkspaceIssue({
               onOpenIssue={onOpenIssue}
               sourceContext={sourceContext}
             />
+            <LinearIssueLinkedPullRequests issue={detail.displayed} />
             <LinearIssueActivity
               issue={detail.displayed}
               comments={detail.comments}
