@@ -3,7 +3,7 @@ import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { WorktreeCardDetailsHoverProps } from './worktree-card-meta-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
-import { makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 
 const noop = (): void => {}
 
