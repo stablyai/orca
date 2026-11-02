@@ -33,6 +33,7 @@ export type NativeChatPromptEditorProps = Omit<
   /** The composer's thumbnail ids, in order, which number its image chips. */
   imageRow?: readonly string[]
   inputRef: RefObject<NativeChatComposerInput | null>
+  isComposing?: () => boolean
   initialValue: string
   disabled: boolean
   placeholder: string
