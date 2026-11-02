@@ -1,5 +1,5 @@
 import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import { vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'

@@ -60,7 +60,8 @@ export function mergeFetchedRepoCatalog(
   const repos = mergeFetchedReposForHost(
     currentRepos,
     withoutPendingRuntimeRepoRemovals(catalog.repos, catalog.hostId),
-    catalog.hostId
+    catalog.hostId,
+    catalog.reposAtRequest
   )
   return {
     repos,

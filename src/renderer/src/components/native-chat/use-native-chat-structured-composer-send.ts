@@ -1,3 +1,5 @@
+import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
+import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -8,6 +10,7 @@ import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
   isStructuredAgentSessionHostCommand,
+  isStructuredAgentSessionGoalCommand,
   structuredAgentSessionCommandChangesConversation
 } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -31,7 +34,7 @@ import {
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
 import {
   admitNativeChatPastedText,
-  resolveNativeChatPastedText
+  projectNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
 
 export type UseNativeChatStructuredComposerSendArgs = {
@@ -71,7 +74,9 @@ export function useNativeChatStructuredComposerSend({
       if (!admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)) {
         return false
       }
-      text = resolveNativeChatPastedText(draftScopeKey, text)
+      const submitted = readNativeChatComposerDraft(draftScopeKey)
+      const submittedText = text
+      text = projectNativeChatPastedText(text, submitted.pastedTextFiles)
       const hostCommand = isStructuredAgentSessionHostCommand(
         text,
         structuredTransport.threadGoal !== undefined
@@ -103,6 +108,18 @@ export function useNativeChatStructuredComposerSend({
         structuredTransport.onSubmitted?.()
       }
       const isCurrent = structuredTransport.capturePresentation()
+      if (
+        mayHoldAgentReferences(submittedText) &&
+        (!hostCommand ||
+          (structuredTransport.threadGoal && isStructuredAgentSessionGoalCommand(text)))
+      ) {
+        text = serializeNativeChatAgentReferences(
+          submittedText,
+          submitted.document,
+          submitted.pastedTextFiles,
+          hostCommand ? 'goal' : 'message'
+        )
+      }
       const submission = captureNativeChatComposerSubmission(draftScopeKey)
       let consumed = false
       let completeAddition = false

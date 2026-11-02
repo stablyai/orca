@@ -8,7 +8,7 @@ import {
   lockedStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionSnapshot
 } from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
-import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/structured-agent-session-options-write-owner'
+import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
 import { structuredAgentSessionShownSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'

@@ -56,6 +56,14 @@ function result(value: WslMoveResult, reload: 'idle' | 'checkpoint-refused' = 'i
 }
 
 describe('preview', () => {
+  it('says why to move, that projects keep working as before, and the way back', () => {
+    const why = preview().match(/data-testid="wsl-move-why">([^<]*)</)?.[1] ?? ''
+    expect(why).toContain('Work then runs inside Linux, next to your files')
+    expect(why).toContain('“Use on this computer again”')
+    // Plain claims only: no measured numbers in the copy.
+    expect(why).not.toMatch(/\d/)
+  })
+
   it('cannot start while checking, with nothing selected, or with blockers', () => {
     expect(preview({ preview: null })).toContain('Checking the selected projects')
     expect(preview({ preview: null })).toMatch(/disabled=""[^>]*>Move 1 project/)

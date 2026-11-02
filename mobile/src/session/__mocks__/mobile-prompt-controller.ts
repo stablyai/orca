@@ -139,6 +139,7 @@ function Harness(props: HarnessProps) {
   const { tab = baseTab, tabId = 'tab-1', connState = 'connected', hostId = 'host' } = props
   const current = useMobileNativeChatController({
     client,
+    pairedHostClient: client,
     hostId,
     worktreeId: 'folder:work',
     activeSessionTab: tab,

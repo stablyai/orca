@@ -28,13 +28,20 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       return result
     })
   }
+  // Once: the editor asked for its document, so plugin shot knows it is wired.
+  var documentSubscribed = false
+  function markDocumentSubscribed() {
+    if (!documentSubscribed) { documentSubscribed = true; post({ kind: 'evt', event: E.editorSubscribed }) }
+  }
   if (C.surface === 'editor') {
     orca.document = Object.freeze({
       get: function () {
+        markDocumentSubscribed()
         return latest ? Promise.resolve(latest) : new Promise(function (resolve) { waiting.push(resolve) })
       },
       // Why replay: editors often subscribe after their bundle loads, when the first document is in.
       onDidChange: function (fn) {
+        markDocumentSubscribed()
         var subscription = on(E.editorDocument, fn)
         var current = latest
         var live = true
@@ -66,6 +73,7 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
     var merge = typeof o.merge === 'function' ? o.merge : null
     // Why 250: the host takes 60 edits per 10 s, and typing must stay under that.
     var debounceMs = typeof o.debounceMs === 'number' && o.debounceMs >= 0 ? o.debounceMs : 250
+    markDocumentSubscribed()
     return whenStarted().then(function (first) {
       var doc = first
       var base = decode(first.content)
@@ -160,6 +168,24 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       }
       var documents = on(E.editorDocument, function (next) {
         if (disposed || next.version === doc.version) return
+        // A disk change under the tab's unsaved edits: merge it with them and send the result.
+        // Nothing moves unless the merge succeeds, so a later edit never acknowledges a failed one.
+        if (next.ancestor && merge) {
+          var merged
+          try {
+            merged = merge(decode(next.ancestor), decode(next.content), value)
+          } catch (error) {
+            console.error(error)
+            return
+          }
+          rebase(next)
+          value = merged
+          dirty = true
+          generation += 1
+          emitReplace(value)
+          if (!inFlight) send().catch(function () {})
+          return
+        }
         doc = next
         // Unaccepted work waits for its edit's conflict, where merge runs.
         if (dirty || inFlight) return
@@ -171,6 +197,8 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       var flushes = on(C.editor.flush, function () {
         return disposed || doc.readOnly ? undefined : flush()
       })
+      // Orca then hands this session disk changes made under unsaved edits, instead of a banner.
+      if (merge) post({ kind: 'evt', event: E.editorMerges, payload: {} })
       return Object.freeze({
         get value() { return value },
         get readOnly() { return doc.readOnly },

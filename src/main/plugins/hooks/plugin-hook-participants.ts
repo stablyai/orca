@@ -11,6 +11,7 @@ import {
 } from '../../../shared/plugins/workers/plugin-hook-chain'
 import { setPluginHookRunner, type PluginHookRunner } from './plugin-hook-dispatch'
 import type { PluginService } from '../plugin-service'
+import { setAgentToolHookTerminalResolver } from '../../agent-hooks/agent-tool-call-reader'
 import type { PluginWorkerHandle } from '../workers/plugin-host-process'
 import { PLUGIN_WORKER_READY_TIMEOUT_MS } from '../../../shared/plugins/workers/plugin-host-protocol'
 
@@ -152,8 +153,12 @@ export function createPluginHookWarmer(
 /** Points Orca's hook sites at this service's plugins, through the same path events take, and
  *  keeps hook plugins' workers started as plugins change. */
 export function installPluginHookRunner(
-  service: Pick<PluginService, 'eventDelivery' | 'options' | 'onChanged'>
+  service: Pick<PluginService, 'eventDelivery' | 'options' | 'onChanged'>,
+  runtime?: { getTerminalHandleForPaneKey(paneKey: string): string | null }
 ): void {
+  setAgentToolHookTerminalResolver(
+    runtime ? (paneKey) => runtime.getTerminalHandleForPaneKey(paneKey) : null
+  )
   const context = {
     ...service.eventDelivery,
     isEnabled: () => service.options.isPluginSystemEnabled()

@@ -1,4 +1,4 @@
-import type { ClaudeAccountRecipe } from '../../shared/agent-session-acquired-account'
+import type { ClaudeAccountRecipe } from '../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
