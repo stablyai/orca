@@ -35,14 +35,6 @@ import type {
   CustomEditorUnappliedEdit
 } from './plugin-custom-editor-host-types'
 
-export type {
-  CustomEditorBinaryDocument,
-  CustomEditorEditRefusal,
-  CustomEditorHost,
-  CustomEditorHostOptions,
-  CustomEditorUnappliedEdit
-} from './plugin-custom-editor-host-types'
-
 /** The frame only ever holds the document: Orca owns the buffer, dirty state and save. */
 export function createCustomEditorHost(options: CustomEditorHostOptions): CustomEditorHost {
   const budget =
@@ -94,6 +86,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
 
   const postDocument = (document: CustomEditorDocument, transfer: Transferable[] = []): void => {
     post(pluginEvent(FRAME_EVENTS.editorDocument, document), transfer)
+    options.onFrameProgress?.('delivered')
   }
 
   const pushBinaryDocument = (force: boolean, binary: CustomEditorBinaryDocument | null): void => {
@@ -237,7 +230,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
           now(),
           structuredCloneMessageBytes(data, CUSTOM_EDITOR_DOCUMENT_MAX_BYTES)
         )
-        if (refusal) {
+        // While a save waits, the edits it asked for commit at once; the rate limit resumes after.
+        if (refusal === 'oversized' || (refusal && pendingFlushes.size === 0)) {
           refuseEdit(data, refusal)
           return true
         }
@@ -252,6 +246,10 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         pushDocument(true)
       },
       onEvent(event, context) {
+        if (event.event === FRAME_EVENTS.editorSubscribed) {
+          options.onFrameProgress?.('subscribed')
+          return
+        }
         const chord =
           event.event === FRAME_EVENTS.editorKeydown
             ? readCustomEditorKeyChord(event.payload)
@@ -272,9 +270,10 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       if (!ready) {
         return Promise.resolve(!lostEdit)
       }
+      // Drain first: the frame answers only once its edits settle, and a held one would not.
+      applyHeldEdit()
       // A read-only document takes no edits, and a frame without a window cannot answer.
       if (options.getDocument().readOnly || !options.getFrameWindow()) {
-        applyHeldEdit()
         return Promise.resolve(!lostEdit)
       }
       const requestId = nextFlushId++

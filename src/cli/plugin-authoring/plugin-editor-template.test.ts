@@ -1,94 +1,53 @@
-// @vitest-environment happy-dom
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { createPluginFromTemplate } from './plugin-create'
+import { checkPluginEditors } from './plugin-editor-check'
+import { validatePluginTarget } from './plugin-folder-validation'
+import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
 
-import { describe, expect, it } from 'vitest'
-import {
-  flush,
-  mountShell
-} from '../../shared/plugins/frames/plugin-frame-shell-mount.test-fixture'
-import { editor } from './plugin-frame-templates'
-
-const doc = (version: number, text: string) => ({
-  orca: 1,
-  kind: 'evt',
-  event: 'editor.document',
-  payload: { version, readOnly: false, content: { kind: 'text', text } }
+const roots: string[] = []
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-function mountEditorTemplate() {
-  const html = editor({ id: 'notes', name: 'Notes' }).files['editor/index.html']
-  document.body.innerHTML = html.match(/<body>([\s\S]*?)<script>/)?.[1] ?? ''
-  const shell = mountShell('editor')
-  // A block scopes the template's top-level consts to this mount.
-  window.eval(`{${html.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? ''}}`)
-  const textarea = document.querySelector('textarea')!
-  const notice = document.getElementById('notice')!
-  const type = (value: string) => {
-    textarea.value = value
-    textarea.dispatchEvent(new Event('input'))
-  }
-  return { ...shell, textarea, notice, type }
+async function editorPlugin(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'orca-editor-template-'))
+  roots.push(root)
+  const dir = join(root, 'sketch')
+  await createPluginFromTemplate({ dir, template: 'editor' })
+  return dir
 }
 
-describe('editor template', () => {
-  it('keeps typing Orca has not accepted when the file changes outside', async () => {
-    const { fromHost, textarea, type } = mountEditorTemplate()
-    fromHost(doc(1, 'start'))
-    await flush()
-    expect(textarea.value).toBe('start')
-    type('start typed')
-    fromHost(doc(2, 'outside'))
-    expect(textarea.value).toBe('start typed')
-  })
-
-  it('follows outside changes once its edits are accepted', async () => {
-    const { fromHost, textarea, type } = mountEditorTemplate()
-    fromHost(doc(1, 'start'))
-    await flush()
-    type('mine')
-    fromHost({ orca: 1, kind: 'res', id: 0, result: null })
-    await flush()
-    fromHost(doc(2, 'outside'))
-    expect(textarea.value).toBe('outside')
-  })
-
-  it('shows a refused edit and clears it once an edit is accepted', async () => {
-    const { fromHost, notice, posted, type } = mountEditorTemplate()
-    fromHost(doc(1, 'start'))
-    await flush()
-    type('mine')
-    fromHost({
-      orca: 1,
-      kind: 'res',
-      id: 0,
-      error: { code: 'conflict', message: 'The file changed outside this editor.' }
+describe('orca plugin create --template editor', () => {
+  it('writes the recipe: a session-based TypeScript editor in an isolated frame', async () => {
+    const dir = await editorPlugin()
+    const manifest: unknown = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
+    expect(manifest).toMatchObject({
+      engines: { orca: '>=1.4.248' },
+      contributes: {
+        customEditors: [{ extensions: ['.sketch'], entry: 'editor/main.ts', frame: 'isolated' }]
+      }
     })
-    await flush()
-    expect(notice.textContent).toBe('Not saved: The file changed outside this editor.')
-    fromHost(doc(2, 'outside'))
-    type('mine again')
-    expect(posted().at(-1)).toMatchObject({ params: { baseVersion: 2 } })
-    fromHost({ orca: 1, kind: 'res', id: 1, result: null })
-    await flush()
-    expect(notice.textContent).toBe('')
+    expect(await readFile(join(dir, 'editor', 'sync.ts'), 'utf8')).toContain(
+      'document.session<string>({ merge: mergeText })'
+    )
+    expect((await validatePluginTarget(dir)).valid).toBe(true)
   })
 
-  it('lets only the newest input settle dirty and the notice', async () => {
-    const { fromHost, textarea, notice, type } = mountEditorTemplate()
-    fromHost(doc(1, 'start'))
-    await flush()
-    type('A')
-    type('AB')
-    type('A')
-    fromHost({ orca: 1, kind: 'res', id: 0, result: null })
-    await flush()
-    // The final `A` is still unanswered, so an outside change must not replace it.
-    fromHost(doc(2, 'outside'))
-    expect(textarea.value).toBe('A')
-    fromHost({ orca: 1, kind: 'res', id: 2, error: { code: 'conflict', message: 'Changed.' } })
-    await flush()
-    // An older success arriving after a newer refusal keeps the notice.
-    fromHost({ orca: 1, kind: 'res', id: 1, result: null })
-    await flush()
-    expect(notice.textContent).toBe('Not saved: Changed.')
-  })
+  it(
+    'passes plugin check and plugin test as generated',
+    async () => {
+      const dir = await editorPlugin()
+      const [check] = await checkPluginEditors(dir)
+      expect(check?.issues).toEqual([])
+      expect(check?.files).toEqual(['editor/main.ts', 'editor/sync.ts'])
+      const files = await findPluginTestFiles(dir)
+      expect(files).toEqual(['editor/sync.test.ts'])
+      expect(await runPluginTests({ dir, files, quietStdout: true })).toMatchObject({ code: 0 })
+    },
+    // The test run starts its own Node process and transpiles the plugin.
+    60_000
+  )
 })

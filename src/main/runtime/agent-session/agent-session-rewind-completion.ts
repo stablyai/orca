@@ -2,7 +2,7 @@ import {
   cancelAgentSessionUsageLimitContinue,
   type UsageLimitContinueIdentity
 } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 import type { AgentSessionStoreState } from './records/agent-session-store-state'
 import { settleAgentSessionOperationInto } from './ownership/agent-session-operation-admission'

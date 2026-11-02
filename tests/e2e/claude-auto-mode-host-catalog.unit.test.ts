@@ -28,7 +28,7 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', ()
 
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../src/main/ipc/desktop-renderer-runtime-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
 import type { SessionOptionDescriptor } from '../../src/shared/native-chat/input/native-chat-session-options'
 import { createClaudeModelCatalogProbe } from '../../src/main/claude/claude-model-catalog-probe'

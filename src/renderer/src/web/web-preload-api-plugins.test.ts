@@ -32,4 +32,13 @@ describe('web plugins preload API', () => {
     // The catalog indexes counts by plugin key, so they must stay a record.
     expect(usePluginInstallCountsStore.getState().counts).toEqual({})
   })
+
+  it('opens files in Source: a browser client lists no plugins and does not retry', async () => {
+    installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const { usePluginPanelsStore } = await import('../store/plugin-panels')
+    await usePluginPanelsStore.getState().fetchPlugins()
+    expect(usePluginPanelsStore.getState()).toMatchObject({ fetchStatus: 'ready', plugins: [] })
+  })
 })
