@@ -2041,6 +2041,7 @@
       "providerRetrying": "{{agent}} столкнулся с временной неполадкой и повторяет попытку.",
       "providerRetryingQuoted": "{{agent}} повторяет попытку: {{detail}}.",
       "providerStartFailed": "{{agent}} остановился до завершения запуска.",
+      "savedConversationMissing": "{{agent}} не удалось найти сохранённую беседу этого чата.",
       "queueFull": "Слишком много сообщений ожидает агента, поэтому это сообщение не отправлено.",
       "quitTerminalAgent": "Завершите работу этого агента, чтобы продолжить чат здесь.",
       "runCommandAgain": "Выполните /{{command}} снова.",

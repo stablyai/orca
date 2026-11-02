@@ -1,4 +1,4 @@
-import * as selectionOperations from '../../../src/shared/structured-agent-session-selection-operations'
+import * as selectionOperations from '../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
 import {
   rememberMobileCreatedStructuredSession,
   mobileCreatedStructuredSession

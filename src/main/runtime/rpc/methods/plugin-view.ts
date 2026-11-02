@@ -2,6 +2,8 @@ import { defineMethod } from '../core'
 import type { PluginViewDesktop } from '../../../plugins/view/plugin-view-desktop'
 import {
   PluginOpenParams,
+  PluginShotChromeParams,
+  PluginShotEditorParams,
   PluginShotParams,
   PluginShotReplayParams
 } from '../../../../shared/rpc-contract/plugins-params'
@@ -33,6 +35,18 @@ export const PLUGIN_VIEW_METHODS = [
     permission: 'host-admin',
     params: PluginShotParams,
     handler: async (params) => requirePluginView().shot(params)
+  }),
+  defineMethod({
+    name: 'plugins.shotEditor',
+    permission: 'host-admin',
+    params: PluginShotEditorParams,
+    handler: async (params) => requirePluginView().shotEditor(params)
+  }),
+  defineMethod({
+    name: 'plugins.shotChrome',
+    permission: 'host-admin',
+    params: PluginShotChromeParams,
+    handler: async (params) => requirePluginView().shotChrome(params)
   }),
   defineMethod({
     // Never opens the plugin's panel or reaches its guest or worker; see plugin-view-replay-shot.
