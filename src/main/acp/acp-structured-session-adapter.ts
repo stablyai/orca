@@ -13,14 +13,13 @@ import { rejectedAcpDispatch, type AcpStructuredSession } from './acp-structured
 import { applyAcpMessageOptions } from './acp-message-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { awaitAcpTurnEnd, interruptAcpTurn } from './acp-structured-stop'
-import { acpSessionAcceptsImages } from './acp-structured-options'
+import { acpSessionAcceptsImages, readAcpLiveOptions } from './acp-structured-options'
 import { acpDispatchPrompt, acpPromptBlocks, ACP_PROMPT_LINE_BUDGET } from './acp-prompt-content'
 import {
   ACP_OPTION_WRITE_TIMEOUT_MS,
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
-import { readAcpLiveOptions } from './acp-structured-options'
 import { writeAcpSessionOption } from './acp-session-option-write'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 import * as childState from './acp-structured-child'

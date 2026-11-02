@@ -2,7 +2,9 @@ import type { StructuredAgentSessionExpiredStartup } from './structured-agent-se
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChildIdentity,
+  StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import { retireOutgrownStructuredAgentSessionChild } from './structured-agent-session-outgrown-child'
@@ -12,7 +14,6 @@ import {
 } from './structured-agent-session-launch-permission'
 import type { StructuredAgentSessionConversationLifetimeHost } from './structured-agent-session-conversation-lifetime-host'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-lifetime'
-import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -20,7 +21,6 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session/record
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { deriveContextTransferState } from '../agent-session-journal/context-transfer-state'
 import { prepareNativeRecovery } from './structured-agent-session-recovery'
-import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 
 export function recoveryContinuationRequired(
   journal: AgentSessionJournal,

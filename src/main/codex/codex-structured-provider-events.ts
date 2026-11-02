@@ -1,9 +1,12 @@
-import type { CodexAcquisitionAttempt } from './codex-structured-session-state'
+import type {
+  CodexAcquisitionAttempt,
+  CodexSession,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
 import type { CodexAppServerServerRequest } from './app-server/codex-app-server-connection-types'
 import { disposeCodexServerRequest } from './codex-server-request-disposition'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import * as codexRewind from './codex-structured-rewind'
-import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { readCodexThreadId } from './codex-structured-thread-facts'
 
 type EmitCodexEvent = (

@@ -1,14 +1,15 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSnapshot,
+  AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
-import type { ContextTransferHandoff } from './context-transfer-record'
+import type { ContextTransferHandoff, ContextTransferRecord } from './context-transfer-record'
 import { exportContextTransfer } from './context-transfer-export'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type Database from '../../sqlite/sync-database'
-import type { ContextTransferRecord } from './context-transfer-record'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalReducerState } from './journal-reducer'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
 import { matchContextTransferEcho } from './context-transfer-echo'
 import { contextTransferOwner, readContextTransfers } from './context-transfer-repository'

@@ -1,12 +1,12 @@
-import { normalizeConstruction } from '../native-chat/agent-session-wire/structured-agent-session-construction'
+import {
+  normalizeConstruction,
+  readyConstruction,
+  type ConstructionStep
+} from '../native-chat/agent-session-wire/structured-agent-session-construction'
 import {
   codexHistoricalInputBytes,
   injectCodexHistoricalContext
 } from './codex-structured-context-delivery'
-import {
-  readyConstruction,
-  type ConstructionStep
-} from '../native-chat/agent-session-wire/structured-agent-session-construction'
 import { projectCodexSessionOptions } from './codex-structured-service-tier'
 import * as codexRewind from './codex-structured-rewind'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'

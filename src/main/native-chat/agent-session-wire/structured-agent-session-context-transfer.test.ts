@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import * as storedAgentRecord from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import { persistRewindRecord } from './structured-rewind-recovery'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  parseAgentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   contextTransferFixture,
@@ -12,13 +15,12 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
-  hostTestMessage
+  hostTestMessage,
+  hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { hostTestOperationId } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { deriveContextTransferState } from '../agent-session-journal/context-transfer-state'

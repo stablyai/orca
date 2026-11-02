@@ -2,15 +2,13 @@ import { normalizeConstruction } from './structured-agent-session-construction'
 import type { RecoveryConstructionPermit } from './structured-agent-session-construction'
 import {
   AgentSessionAcquisitionRootExitObservedError,
-  type AgentSessionAcquisition
+  type AgentSessionAcquisition,
+  type StructuredAgentSessionAcquireInput,
+  type StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import type { StructuredAgentRegistration } from './structured-agent-registry'
-import type {
-  StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionAdapter
-} from './structured-agent-session-adapter'
 
 export type SessionRoute = {
   registration: StructuredAgentRegistration

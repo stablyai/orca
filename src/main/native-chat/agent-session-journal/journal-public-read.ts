@@ -1,7 +1,8 @@
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalTurnLifecycle
+  AgentJournalTurnLifecycle,
+  AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
@@ -11,7 +12,6 @@ import {
 } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
 import type { JournalItemLinkageVisitor } from './journal-store-contracts'
-import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { renderJournalState, type JournalReducerState } from './journal-reducer'
 
