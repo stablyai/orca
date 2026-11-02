@@ -9,7 +9,10 @@ import {
   modelLifetimeEditorModel,
   resetModelLifetimeFixtures
 } from './editor-model-lifetime-fixture'
-import { getDiffViewerMonacoModelPaths } from './diff-monaco-model-disposal'
+import {
+  getDiffViewerMonacoModelPaths,
+  rememberDiffViewerModelPaths
+} from './diff-monaco-model-disposal'
 import {
   scrollTopCache,
   editorSelectionCache,
@@ -454,6 +457,26 @@ it('releases tab-scoped diff models when their file closes', async () => {
     modelOwnerKey: file.id,
     generationSuffix: ''
   })
+  const original = modelLifetimeTextModel(paths.originalModelPath)
+  const modified = modelLifetimeTextModel(paths.modifiedModelPath)
+  store.setState({ openFiles: [file] })
+  attach()
+  store.getState().closeFile(file.id)
+  await Promise.resolve()
+  expect(original.isDisposed()).toBe(true)
+  expect(modified.isDisposed()).toBe(true)
+})
+
+it('releases Changes-mode diff models when their edit tab closes', async () => {
+  const { store, attach } = createModelLifetimeFixture()
+  const file = modelLifetimeFile('changes-mode', 'edit')
+  const paths = getDiffViewerMonacoModelPaths({
+    modelKey: `${file.id}::tab-uuid`,
+    modelOwnerKey: file.id,
+    originalModelKey: `${file.id}::tab-uuid:original:head`,
+    generationSuffix: ''
+  })
+  rememberDiffViewerModelPaths(file.id, `${file.id}::tab-uuid`, paths)
   const original = modelLifetimeTextModel(paths.originalModelPath)
   const modified = modelLifetimeTextModel(paths.modifiedModelPath)
   store.setState({ openFiles: [file] })

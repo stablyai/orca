@@ -41,16 +41,46 @@ export function getDiffViewerMonacoModelPathPrefixes(
   }
 }
 
+type DiffViewerModelPaths = { originalModelPath: string; modifiedModelPath: string }
+
+// Views unmount while keeping their models, so a remount must know which pair it supersedes.
+const lastDiffViewerModelPathsByOwner = new Map<string, Map<string, DiffViewerModelPaths>>()
+
+export function recallDiffViewerModelPaths(
+  ownerKey: string,
+  modelKey: string
+): DiffViewerModelPaths | undefined {
+  return lastDiffViewerModelPathsByOwner.get(ownerKey)?.get(modelKey)
+}
+
+export function rememberDiffViewerModelPaths(
+  ownerKey: string,
+  modelKey: string,
+  paths: DiffViewerModelPaths
+): void {
+  let byModelKey = lastDiffViewerModelPathsByOwner.get(ownerKey)
+  if (!byModelKey) {
+    byModelKey = new Map()
+    lastDiffViewerModelPathsByOwner.set(ownerKey, byModelKey)
+  }
+  byModelKey.set(modelKey, paths)
+}
+
+export function hasDiffViewerModelPaths(ownerKey: string): boolean {
+  return lastDiffViewerModelPathsByOwner.has(ownerKey)
+}
+
+export function forgetDiffViewerModelPaths(ownerKey: string): void {
+  lastDiffViewerModelPathsByOwner.delete(ownerKey)
+}
+
 export function getDiffViewerMonacoModelPaths({
   modelKey,
   modelOwnerKey = modelKey,
   originalModelKey,
   modifiedModelKey,
   generationSuffix
-}: DiffViewerModelPathInput): {
-  originalModelPath: string
-  modifiedModelPath: string
-} {
+}: DiffViewerModelPathInput): DiffViewerModelPaths {
   const prefixes = getDiffViewerMonacoModelPathPrefixes(modelOwnerKey)
   const resolvedOriginalModelKey = encodeDiffViewerModelKey(originalModelKey ?? modelKey)
   const resolvedModifiedModelKey = encodeDiffViewerModelKey(modifiedModelKey ?? modelKey)
