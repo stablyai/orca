@@ -198,3 +198,24 @@ export function resolveTerminalWorktreeRoute(
 export function hasUnroutableTerminalWorktreeOwner(state: AppState, worktreeId: string): boolean {
   return resolveTerminalWorktreeRoute(state, worktreeId) === null
 }
+
+/**
+ * Whether this renderer could ever draw a terminal surface for the id. Why: routing
+ * accepts repo-level evidence (`hasKnownRepo`), but Terminal builds surfaces from
+ * `worktreesByRepo`, so a routable id with no worktree row mints a tab whose pane
+ * never mounts — and create then waits out its full timeout for a PTY nobody will spawn.
+ */
+export function hasRenderableTerminalWorktreeSurface(
+  state: Pick<AppState, 'worktreesByRepo'>,
+  worktreeId: string
+): boolean {
+  // Why: these surfaces are hosted outside the worktree list, and the route guard already vetted them.
+  if (
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
+    parseWorkspaceKey(worktreeId)?.type === 'folder' ||
+    isEphemeralSetupTerminalWorktreeId(worktreeId)
+  ) {
+    return true
+  }
+  return resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing'
+}
