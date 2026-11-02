@@ -302,7 +302,35 @@ the buffer, dirty state, saving, the external-change banner, read-only tabs and 
 paired host) files; the frame only gets the document, never a path. Editor and panel plugins are
 trusted code, and an editor can read every file it opens, so install ones you trust.
 
-An editor's `window.orca` adds `document`:
+An editor's `window.orca` adds `document`. Most editors need only `session()`, which does the
+document sync for you:
+
+```js
+const doc = await orca.document.session({
+  decode: (content) => parseScene(content.text), // default: the text itself
+  encode: (scene) => ({ kind: 'text', text: serializeScene(scene) }), // default: plain text
+  merge: (base, outside, mine) => mergeScenes(base, outside, mine), // optional
+  debounceMs: 250 // optional, the default
+})
+render(doc.value) // the latest value, including changes Orca has not accepted yet
+doc.onReplace((scene) => render(scene)) // the file changed outside, or a conflict merged
+onUserEdit((scene) => doc.change(scene)) // a no-op while doc.readOnly
+await doc.flush() // send now; rejects with the refusal's code
+```
+
+`session()` resolves once Orca has sent the theme, locale and first document, so start the editor
+from it. It keeps one edit in flight and coalesces later changes, moves its baseline only when Orca
+accepts an edit, and never hands your own accepted edits back through `onReplace`. A refused edit
+keeps your draft and rejects `flush()`. On `conflict` it calls `merge(base, outside, mine)` once,
+where `base` is the last accepted value, and sends the result; without `merge` it keeps the draft,
+and the next change or flush sends it over the newer document. It answers Orca's `editor.flush`
+itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
+orca.document` to support older Orca.
+
+Orca keeps no undo history for a custom editor: Cmd/Ctrl+Z reaches the frame, and the editor owns
+undo.
+
+The lower-level calls, for an editor that does its own sync:
 
 ```js
 const doc = await orca.document.get() // { version, readOnly, content, fileType? }

@@ -24,7 +24,17 @@ export type FrameOrca = {
     get: () => Promise<unknown>
     onDidChange: (handler: (document: unknown) => void) => { dispose: () => void }
     applyEdit: (edit: unknown) => Promise<unknown>
+    session: (options?: object) => Promise<FrameDocumentSession>
   }
+}
+
+export type FrameDocumentSession = {
+  readonly value: unknown
+  readonly readOnly: boolean
+  change: (next: unknown) => void
+  flush: () => Promise<void>
+  onReplace: (handler: (value: unknown) => void) => { dispose: () => void }
+  dispose: () => void
 }
 
 const realParent = window.parent

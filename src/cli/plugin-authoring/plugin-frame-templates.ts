@@ -63,35 +63,23 @@ export function editor(input: PluginTemplateInput): PluginTemplate {
     <script>
       const text = document.getElementById('text')
       const notice = document.getElementById('notice')
-      let version = 0
-      // True while the textarea holds typing Orca has not accepted yet.
-      let dirty = false
-      // Only the newest input's answer settles dirty and the notice; older ones are stale.
-      let generation = 0
-      // Orca sends the document now and again whenever the file changes outside the editor.
-      orca.document.onDidChange((doc) => {
-        version = doc.version
+      // The session sends edits, keeps unaccepted typing, and answers Orca's save.
+      orca.document.session().then((doc) => {
+        text.value = doc.value
         text.readOnly = doc.readOnly
-        if (!dirty && doc.content.kind === 'text' && text.value !== doc.content.text) {
-          text.value = doc.content.text
-        }
-      })
-      text.addEventListener('input', () => {
-        dirty = true
-        const current = ++generation
-        orca.document
-          .applyEdit({ baseVersion: version, content: { kind: 'text', text: text.value } })
-          .then(
-            () => {
-              if (current !== generation) return
-              dirty = false
-              notice.textContent = ''
-            },
-            (error) => {
-              // Your text stays; the next keystroke edits the latest document.
-              if (current === generation) notice.textContent = 'Not saved: ' + error.message
-            }
-          )
+        doc.onReplace((value) => (text.value = value))
+        let check = 0
+        text.addEventListener('input', () => {
+          doc.change(text.value)
+          clearTimeout(check)
+          // Once typing pauses, show a refused edit; your text stays either way.
+          check = setTimeout(() => {
+            doc.flush().then(
+              () => (notice.textContent = ''),
+              (error) => (notice.textContent = 'Not saved: ' + error.message)
+            )
+          }, 500)
+        })
       })
     </script>
   </body>
