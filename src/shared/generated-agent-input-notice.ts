@@ -12,6 +12,8 @@ export type GeneratedAgentInputNotice = {
   worktreeId: string
   ptyId: string | null
   certainty: 'not-sent' | 'unconfirmed'
+  /** False for an unsubmitted draft, which keeps the notes wording; absent means a prompt. */
+  submitted?: boolean
 }
 
 /** One ordered slice of a notice's exact text, with the notice's metadata. */

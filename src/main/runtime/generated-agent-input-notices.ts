@@ -123,12 +123,14 @@ export function captureGeneratedInputRecovery(
   >,
   handle: string,
   agent: GeneratedAgentInputNotice['agent'],
-  text: string
+  text: string,
+  submitted = true
 ): (certainty: GeneratedAgentInputNotice['certainty']) => void {
   return runtime.generatedInputNotices.recovery({
     handle,
     agent,
     text,
+    ...(submitted ? {} : { submitted: false }),
     ptyId: runtime.getTerminalPtyIdForHandle(handle),
     worktreeId: runtime.getTerminalWorktreeIdForHandle(handle) ?? ''
   })

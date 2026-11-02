@@ -207,7 +207,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
 
   /** Detached: creation already succeeded, so a refusal becomes this runtime's recovery notice. */
   protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
-    const recover = captureGeneratedInputRecovery(this, handle, draft.agent, draft.content)
+    const recover = captureGeneratedInputRecovery(this, handle, draft.agent, draft.content, false)
     void deliverGeneratedTerminalInput(this, handle, {
       text: draft.content,
       submit: false,

@@ -14,6 +14,8 @@ const frameSchema = z.object({
   worktreeId: z.string(),
   ptyId: z.string().nullable(),
   certainty: z.enum(['not-sent', 'unconfirmed']),
+  // Older hosts never send it: their notices are prompts.
+  submitted: z.boolean().optional(),
   textLength: z.number().int().min(0),
   offset: z.number().int().min(0),
   chunk: z.string()

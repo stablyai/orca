@@ -208,3 +208,28 @@ it('reads the host again after a dropped change, keeping additions and dismissal
     cleanup()
   }
 })
+
+// A detached draft's notice keeps its draft meaning across the wire, so clients say "notes".
+it('carries an unsubmitted draft through frames and pages, and reads older notices as prompts', async () => {
+  const h = harness()
+  h.notices.add({
+    agent: 'claude',
+    text: 'draft text',
+    handle: 'h',
+    worktreeId: 'w',
+    ptyId: null,
+    certainty: 'not-sent',
+    submitted: false
+  })
+  h.add('a prompt')
+  void h.connect()
+  await h.settle()
+  await h.settle()
+  expect(h.views.at(-1)!.map(({ text, submitted }) => ({ text, submitted }))).toEqual([
+    { text: 'draft text', submitted: false },
+    { text: 'a prompt', submitted: undefined }
+  ])
+  for (const cleanup of h.cleanups.values()) {
+    cleanup()
+  }
+})

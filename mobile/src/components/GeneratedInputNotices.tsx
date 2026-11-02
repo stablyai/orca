@@ -80,25 +80,17 @@ export function GeneratedInputNotices({
     <>
       {shown.map(({ key, notice }) => {
         const agent = generatedInputAgentName(notice.agent)
-        const message =
-          notice.certainty === 'unconfirmed'
-            ? t(
-                'agentPrompt.deliveryUnconfirmed',
-                '{{agent}} may have received part of your prompt. Check its terminal before sending again.',
-                { agent }
-              )
-            : t(
-                'agentPrompt.notSent',
-                "Your prompt wasn't sent to {{agent}}. Answer any dialog in its terminal, then paste your prompt.",
-                { agent }
-              )
+        const message = generatedInputNoticeMessage(t, notice, agent)
         return (
           <HostRouteNoticeBanner
             key={key}
             message={message}
             tone="failure"
             action={{
-              label: t('agentPrompt.copy', 'Copy prompt'),
+              label:
+                notice.submitted === false
+                  ? t('agentPrompt.copyNotes', 'Copy notes')
+                  : t('agentPrompt.copy', 'Copy prompt'),
               onPress: () => {
                 void clipboard.writeText(notice.text).catch(() => {})
               }
@@ -147,4 +139,37 @@ function ServerGeneratedInputNotices({
   const scoped = scopeRpcClientToExecutionHost(client, hostId)
   const gates = useHostStatusGates({ hostId: undefined, client: scoped, connState: 'connected' })
   return <GeneratedInputNotices client={scoped} capabilities={gates.hostCapabilities} />
+}
+
+/** An unsubmitted draft keeps the existing notes wording; a prompt says prompt. */
+function generatedInputNoticeMessage(
+  t: ReturnType<typeof useMobileTranslation>,
+  notice: GeneratedAgentInputNotice,
+  agent: string
+): string {
+  const unconfirmed = notice.certainty === 'unconfirmed'
+  if (notice.submitted === false) {
+    return unconfirmed
+      ? t(
+          'agentPrompt.notesUnconfirmed',
+          '{{agent}} may have received part of your notes. Check its terminal before sending again.',
+          { agent }
+        )
+      : t(
+          'agentPrompt.notesNotSent',
+          "Your notes weren't sent to {{agent}}. Answer any dialog in its terminal, then paste your notes.",
+          { agent }
+        )
+  }
+  return unconfirmed
+    ? t(
+        'agentPrompt.deliveryUnconfirmed',
+        '{{agent}} may have received part of your prompt. Check its terminal before sending again.',
+        { agent }
+      )
+    : t(
+        'agentPrompt.notSent',
+        "Your prompt wasn't sent to {{agent}}. Answer any dialog in its terminal, then paste your prompt.",
+        { agent }
+      )
 }
