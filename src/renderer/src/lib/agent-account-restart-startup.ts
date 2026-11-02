@@ -20,12 +20,18 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   resolveTuiAgentLaunchRawArgs,
-  resolveTuiAgentLaunchEnv
+  resolveTuiAgentLaunchEnv,
+  tuiAgentArgsBypassPermissions
 } from '../../../shared/tui-agent-launch-defaults'
+import { agentPermissionArgs } from '../../../shared/tui-agent-permission-choice'
+import { buildClaudeResumeLaunchCommand } from '../../../shared/agent-resume-launch-command'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { resolveAgentLaunchCommand } from '../../../shared/tui-agent-launch-command'
-import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import {
+  resolveStartupShell,
+  type AgentStartupShell
+} from '../../../shared/tui-agent-startup-shell'
 
 export type AgentAccountRestartStartup = {
   command: string
@@ -82,28 +88,33 @@ export function resolveAgentAccountRestartResumeStartup(
     (entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
     (sleeping?.agent === agent ? sleeping.launchConfig : undefined)
   const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
+  const startupShell = resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+  const recipe = keepLiveClaudeBypass(
+    agent,
+    providerSession,
+    {
+      agentArgs:
+        launchConfig !== undefined
+          ? launchConfig.agentArgs
+          : unrecordedLaunchUsesDefaults
+            ? resolveTuiAgentLaunchRawArgs(agent, state.settings, undefined, startupShell)
+            : null,
+      ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {})
+    },
+    startupShell
+  )
   const startupPlan = buildAgentResumeStartupPlan({
     agent,
     providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchRawArgs(
-              agent,
-              state.settings,
-              undefined,
-              resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
-            )
-          : null,
+    agentArgs: recipe.agentArgs,
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
         : unrecordedLaunchUsesDefaults
           ? resolveTuiAgentLaunchEnv(agent, state.settings, resumeTarget.platform)
           : null,
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+    ...(recipe.agentCommand ? { agentCommand: recipe.agentCommand } : {}),
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
@@ -129,6 +140,41 @@ export function resolveAgentAccountRestartResumeStartup(
     launchConfig: startupPlan.launchConfig,
     // Main repins launch home only when the spawn names its resumed session; keep that identity with the account move.
     resumeProviderSession: providerSession
+  }
+}
+
+type ResumeRecipe = { agentArgs: string | null; agentCommand?: string }
+
+/** Claude enters bypass only when its own launch allowed it, so keeping the mode grants nothing new; hand-started sessions record no flags. */
+function keepLiveClaudeBypass(
+  agent: AccountRestartAgent,
+  providerSession: AgentProviderSessionMetadata,
+  recipe: ResumeRecipe,
+  shell: AgentStartupShell
+): ResumeRecipe {
+  if (
+    agent !== 'claude' ||
+    providerSession.permissionMode !== 'bypassPermissions' ||
+    // Why: a recorded command replaces the arguments on resume, so it decides what runs.
+    tuiAgentArgsBypassPermissions('claude', recipe.agentCommand ?? recipe.agentArgs, shell)
+  ) {
+    return recipe
+  }
+  const bypass = agentPermissionArgs('claude', 'full-access')
+  return {
+    agentArgs: tuiAgentArgsBypassPermissions('claude', recipe.agentArgs, shell)
+      ? recipe.agentArgs
+      : [bypass, recipe.agentArgs].filter(Boolean).join(' '),
+    // Reuse the resume splice so the flag lands before Claude's `--` terminator.
+    ...(recipe.agentCommand
+      ? {
+          agentCommand: buildClaudeResumeLaunchCommand(
+            recipe.agentCommand,
+            bypass.split(/\s+/),
+            shell
+          )
+        }
+      : {})
   }
 }
 

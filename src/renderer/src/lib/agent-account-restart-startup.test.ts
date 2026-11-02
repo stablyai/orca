@@ -250,6 +250,62 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(startup?.env?.CLAUDE_DEFAULT_ONLY).toBeUndefined()
   })
 
+  // A hand-typed `claude --dangerously-skip-permissions` records no flags, but its hooks report the mode.
+  it('keeps the bypass a hand-started Claude reports running in', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, permissionMode: 'bypassPermissions' }
+    })
+
+    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
+      `claude '--dangerously-skip-permissions' '--resume' '${SESSION_ID}'`
+    )
+  })
+
+  // A recorded command replaces the arguments on resume; `claude` with empty args is what a lossy restart recorded.
+  it.each([
+    { agentArgs: '' },
+    { agentArgs: '--model opus' },
+    { agentArgs: '--dangerously-skip-permissions --model opus' },
+    { agentArgs: '', agentCommand: 'claude' },
+    { agentArgs: '--model opus', agentCommand: "claude '--model' 'opus'" },
+    {
+      agentArgs: '--dangerously-skip-permissions',
+      agentCommand: "claude '--dangerously-skip-permissions'"
+    }
+  ])('adds a live bypass to the recorded launch %j once, keeping it', (recorded) => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, permissionMode: 'bypassPermissions' }
+    })
+    useAppStore
+      .getState()
+      .registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), { ...recorded, agentEnv: {} })
+
+    const command = buildPaneAccountRestartStartup('claude', pane)?.command ?? ''
+    expect(command.split('--dangerously-skip-permissions')).toHaveLength(2)
+    expect(command.includes('--model')).toBe(recorded.agentArgs.includes('--model'))
+  })
+
+  it('adds a live bypass before a recorded command’s -- terminator', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: { key: 'session_id', id: SESSION_ID, permissionMode: 'bypassPermissions' }
+    })
+    useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
+      agentArgs: '',
+      agentCommand: 'claude --',
+      agentEnv: {}
+    })
+
+    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toMatch(
+      /--dangerously-skip-permissions.* --$/
+    )
+  })
+
   it('still applies the configured default arguments to an unrecorded Codex launch', () => {
     seedAgentStatus({
       agentType: 'codex',
