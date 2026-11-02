@@ -6,6 +6,7 @@
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
+  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import {
@@ -224,7 +225,7 @@ function resourceEvidence(
   if (sshTargetId && !environmentId) {
     return {
       kind: 'authority',
-      authority: { endpoint: { kind: 'self' }, at: `ssh:${sshTargetId}` }
+      authority: { endpoint: { kind: 'self' }, at: toSshExecutionHostId(sshTargetId) }
     }
   }
   // Explicit null is this app; undefined says nothing.

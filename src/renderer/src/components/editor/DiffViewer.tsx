@@ -110,6 +110,9 @@ export default function DiffViewer({
     return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
   }, [scrollToDiffCommentId, diffComments, worktreeId])
 
+  // A draft keeps its captured owner across a same-tab rename but saves under the file's current path.
+  const relativePathRef = useRef(relativePath)
+  relativePathRef.current = relativePath
   const handleCreateComment = useCallback(
     async ({
       lineNumber,
@@ -133,7 +136,7 @@ export default function DiffViewer({
       const result = await (commentOwner
         ? addDiffComment(commentOwner, {
             worktreeId,
-            filePath: relativePath,
+            filePath: relativePathRef.current,
             source: 'diff',
             startLine,
             lineNumber,
@@ -148,7 +151,7 @@ export default function DiffViewer({
       }
       return Boolean(result)
     },
-    [commentOwner, addDiffComment, onAddLineComment, relativePath, worktreeId]
+    [commentOwner, addDiffComment, onAddLineComment, worktreeId]
   )
 
   // Only local diffs can edit notes; gate the decorator on a valid comment target.

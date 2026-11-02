@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { createTestStore } from './store-test-helpers'
 import { selectWorktreeDiffCommentsOrEmpty } from '../worktree-diff-comments-selector'
 
@@ -768,6 +769,32 @@ describe('captured note owners across delivery and selection', () => {
       expect.anything()
     )
     expect(updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('keeps a restored external SSH target whose id needs encoding on its own listed copy', async () => {
+    const hostId = toSshExecutionHostId('user@box')
+    const store = createTwinStore(hostId)
+    store.setState({
+      repos: [{ ...repoBase, connectionId: 'user@box', executionHostId: hostId }],
+      worktreesByRepo: { [REPO]: [worktree(hostId, [note('n1', 'listed')])] }
+    })
+    const view = selectDiffCommentView(store.getState(), WT, {
+      runtimeEnvironmentId: null,
+      externalSshTargetId: 'user@box'
+    })
+
+    expect(view.comments?.map((comment) => comment.body)).toEqual(['listed'])
+    expect(await addNoteFor(store, view.owner)).not.toBeNull()
+    expect(updateMeta).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: WT,
+      executionHostId: hostId,
+      updates: {
+        diffComments: [
+          expect.objectContaining({ body: 'listed' }),
+          expect.objectContaining({ body: 'ssh note' })
+        ]
+      }
+    })
   })
 
   it('reports a copy gone since Send or edit once, through the existing failure toast', async () => {

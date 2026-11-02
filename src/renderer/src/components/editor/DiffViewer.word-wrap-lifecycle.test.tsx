@@ -3,6 +3,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { useEffect, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import DiffViewer from './DiffViewer'
+import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffNavigationProvider, useDiffNavigation } from './diff-navigation-context'
 import { getLargeDiffRenderLimitFromCounts } from './large-diff-render-limit'
 
@@ -39,7 +40,10 @@ const fixture = vi.hoisted(() => {
     scrollToDiffCommentId: null,
     setScrollToDiffCommentId: vi.fn()
   }
-  return { createEditor, editors, state }
+  const noView: { owner: { kind: 'worktree'; worktreeId: string } | null; comments?: [] } = {
+    owner: null
+  }
+  return { createEditor, editors, state, view: noView }
 })
 
 vi.mock('@monaco-editor/react', () => ({
@@ -71,7 +75,7 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/store/diff-comment-owner', () => ({
   sourceParts: () => [],
-  createDiffCommentViewSelector: () => () => ({ owner: null, comments: undefined }),
+  createDiffCommentViewSelector: () => () => fixture.view,
   selectDiffCommentView: () => ({ owner: null, comments: undefined }),
   diffCommentOwnerKey: () => ''
 }))
@@ -154,5 +158,40 @@ describe('file diff word-wrap lifecycle', () => {
       true
     )
     expect(mounted?.disposeUpdate).toHaveBeenCalledOnce()
+  })
+})
+
+describe('file diff review notes', () => {
+  it('saves a draft opened before a same-tab rename under the renamed path, on the captured copy', async () => {
+    const owner = { kind: 'worktree' as const, worktreeId: 'wt' }
+    fixture.view = { owner, comments: [] }
+    fixture.state.addDiffComment.mockResolvedValue({ id: 'saved' })
+    const viewer = (relativePath: string) => (
+      <DiffNavigationProvider>
+        <DiffViewer
+          modelKey="rename"
+          originalContent="original"
+          modifiedContent="modified"
+          language="typescript"
+          filePath={`/work/${relativePath}`}
+          relativePath={relativePath}
+          sideBySide
+          worktreeId="wt"
+        />
+      </DiffNavigationProvider>
+    )
+    const view = render(viewer('a.ts'))
+    // The open draft keeps the submit callback it captured when it opened.
+    const captured = vi.mocked(useDiffCommentDecorator).mock.calls.at(-1)?.[0].onCreateComment
+    view.rerender(viewer('b.ts'))
+
+    await act(async () => {
+      await captured?.({ lineNumber: 1, body: 'rename draft' })
+    })
+    expect(fixture.state.addDiffComment).toHaveBeenCalledExactlyOnceWith(
+      owner,
+      expect.objectContaining({ filePath: 'b.ts', body: 'rename draft' })
+    )
+    fixture.view = { owner: null }
   })
 })
