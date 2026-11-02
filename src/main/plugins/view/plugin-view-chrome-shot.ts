@@ -56,7 +56,12 @@ export async function shootPluginChrome(
         CHROME_TIMEOUT_MS
       )
       if (!reply.ok) {
-        throw new PluginCliError('invalid_argument', reply.message, { reason: reply.code })
+        throw new PluginCliError('invalid_argument', reply.message, {
+          reason: reply.code,
+          nextSteps: [
+            'Show the status bar from the View menu, or leave Settings, then run this again.'
+          ]
+        })
       }
       if (!reply.panel) {
         throw new Error(`Orca did not report where its ${region} is drawn.`)
