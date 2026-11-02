@@ -63,6 +63,8 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       return
     }
 
+    // Set only for a fresh launch so an unconsumed bypass cannot leak into a later background check.
+    this.ignoreUpdateDelayOnce = Boolean(options?.ignoreUpdateDelay)
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
     const launch = (): Promise<unknown> | undefined => {

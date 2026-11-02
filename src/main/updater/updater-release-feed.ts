@@ -4,6 +4,8 @@ import {
   fetchNewerReleaseTagsWithReadiness,
   getReleaseDownloadUrl
 } from '../updater-prerelease-feed'
+import { toDelayedUpdate } from '../updater-release-delay'
+import { updateDelayDaysToMs } from '../../shared/update-delay'
 import { isMissingUpdateManifestFailure, isPrereleaseVersion } from '../updater-fallback'
 import type { CheckFailureSource } from './updater-state'
 import type { UpdateCheckVariant } from './updater-types'
@@ -121,18 +123,25 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     const isPerfCheck = variant === 'perf'
     const includePrerelease =
       isPerfCheck || this.includePrereleaseActive || isPrereleaseVersion(currentVersion)
+    // Perf builds are explicit one-off opt-ins; "install now" consumes its bypass on this pin.
+    const delayDays = isPerfCheck || this.ignoreUpdateDelayOnce ? 0 : this.readUpdateDelayDays()
+    this.ignoreUpdateDelayOnce = false
+    const now = Date.now()
     const releaseTagsResult = await fetchNewerReleaseTagsWithReadiness(
       currentVersion,
       includePrerelease ? 2 : 1,
       {
         includePrerelease,
-        ...(isPerfCheck ? { releaseFilter: 'perf' as const } : {})
+        ...(isPerfCheck ? { releaseFilter: 'perf' as const } : {}),
+        ...(delayDays > 0 ? { minReleaseAgeMs: updateDelayDaysToMs(delayDays), now } : {})
       }
     )
     // Timed-out preflight must never replace a newer attempt's feed.
     if (attemptId === null || !this.isActiveUpdateCheckAttempt(attemptId)) {
       return 'not-available'
     }
+    const releaseDelay = releaseTagsResult.releaseDelay
+    this.delayedUpdate = toDelayedUpdate(releaseDelay?.heldRelease, delayDays)
     const newerTag = releaseTagsResult.tags[0] ?? null
     const fallbackTag = includePrerelease ? (releaseTagsResult.tags[1] ?? null) : null
     this.pendingPrereleaseFallback =
@@ -208,8 +217,19 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     }
     this.clearPrereleaseFallbackContext()
     this.clearPublishingWindowLastGoodCheck()
+    if (releaseDelay?.heldRelease) {
+      // Everything newer is still inside the delay; the stable fallback would offer it anyway.
+      console.info(
+        `[updater] release ${releaseDelay.heldRelease.tag} held by ${delayDays}-day update delay`
+      )
+      return 'not-available'
+    }
     const stableTag = await fetchLatestStableReleaseTag()
     if (!this.isActiveUpdateCheckAttempt(attemptId)) {
+      return 'not-available'
+    }
+    if (stableTag && releaseDelay && !releaseDelay.isTagOldEnough(stableTag)) {
+      console.info(`[updater] stable fallback ${stableTag} held by ${delayDays}-day update delay`)
       return 'not-available'
     }
     if (!stableTag) {
@@ -223,6 +243,15 @@ export abstract class UpdaterReleaseFeed extends UpdaterInstallExecution {
     console.info(`[updater] stable fallback feed pinned: current=${currentVersion} → ${url}`)
     autoUpdater.setFeedURL({ provider: 'generic', url })
     return 'ready'
+  }
+
+  private readUpdateDelayDays(): number {
+    try {
+      return this.getUpdateDelayDays?.() ?? 0
+    } catch {
+      // A settings read failure must not block updates entirely.
+      return 0
+    }
   }
 
   protected retryPrereleaseFallbackAfterMissingManifest(

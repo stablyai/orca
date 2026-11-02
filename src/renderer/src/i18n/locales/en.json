@@ -1063,6 +1063,24 @@
         "acrylic": "acrylic"
       },
       "windowsUnsupported": "Requires Windows 11 version 22H2 or later."
+    },
+    "updateDelay": {
+      "title": "Update Delay",
+      "description": "Wait this many days after a release is published before Orca offers it, giving time for broken or compromised releases to be pulled.",
+      "none": "None",
+      "availableSoon": "Available to you {{relative}}",
+      "availableOn": "Available to you {{date}} ({{relative}})",
+      "clearedTitle": "Orca {{version}} is ready",
+      "heldTitle": "Orca {{version}} is on hold",
+      "released": "Released {{released}}",
+      "progress": "Time until Orca {{version}} is available",
+      "skipDelayOnceHint": "Check for this release now. Your delay setting stays the same.",
+      "skipDelayOnce": "Skip Delay Once",
+      "upToDateWithHeld": "You’re up to date. A newer release is on hold until {{date}}.",
+      "heldReleaseReady": "A newer release is ready. Check for updates to get it.",
+      "keywordDelay": "delay",
+      "keywordCooldown": "cooldown",
+      "keywordSecurity": "security"
     }
   },
   "menu": {

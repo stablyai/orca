@@ -92,6 +92,13 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     return { ...status, activeNudgeId: this.activeUpdateNudgeId }
   }
 
+  private decorateStatusWithDelayedUpdate(status: UpdateStatus): UpdateStatus {
+    if (status.state !== 'not-available' || !this.delayedUpdate || status.delayedUpdate) {
+      return status
+    }
+    return { ...status, delayedUpdate: this.delayedUpdate }
+  }
+
   /** `force` re-delivers a status the renderer must not miss even when it repeats the current one. */
   protected sendStatus(status: UpdateStatus, options?: { force?: boolean }): void {
     const pendingUserInitiatedCheckVariant = this.pendingUserInitiatedCheckAfterInFlight
@@ -135,7 +142,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
 
     const sourcedStatus: UpdateStatus =
       this.activeUpdateSource === 'release'
-        ? status
+        ? this.decorateStatusWithDelayedUpdate(status)
         : { ...status, source: this.activeUpdateSource }
     const decoratedStatus = this.decorateStatusWithActiveNudge(sourcedStatus)
 

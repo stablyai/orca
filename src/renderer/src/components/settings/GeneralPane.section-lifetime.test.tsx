@@ -14,6 +14,7 @@ const fake = vi.hoisted(() => ({
 }))
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
     Object.entries(values ?? {}).reduce(
       (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),

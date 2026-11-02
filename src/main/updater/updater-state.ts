@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { ElectronAutoUpdater } from '../electron-updater-loader'
 import type { LocalBuildFeed } from '../local-builds/local-build-feed-server'
-import type { UpdateSource, UpdateStatus } from '../../shared/update-status-types'
+import type { DelayedUpdate, UpdateSource, UpdateStatus } from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 import type { PrimaryEventSuppression, UpdateCheckVariant } from './updater-types'
 
@@ -118,6 +118,11 @@ export abstract class UpdaterState {
   // Pinned release tags still represent deliberate downgrades; bypass newer-only gates.
   protected isPinnedBuildActive = false
   protected getReleaseChannelOverride: (() => ReleaseChannel | null) | null = null
+  protected getUpdateDelayDays: (() => number) | null = null
+  // Newest release the last release-feed check withheld for the user's delay.
+  protected delayedUpdate: DelayedUpdate | null = null
+  // One-off bypass for the next feed pin; cleared as soon as it is consumed.
+  protected ignoreUpdateDelayOnce = false
 
   protected consecutiveAutomaticRetrySchedules = 0
   protected readonly installFailureCauseMaxLength = 200
