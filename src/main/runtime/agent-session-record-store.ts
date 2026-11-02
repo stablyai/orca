@@ -1,4 +1,3 @@
-import { matchesPreparedLaunchGeneration } from '../../shared/prepared-agent-launch'
 import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -16,6 +15,7 @@ import {
   admitAndClaimAgentSessionOperationInto,
   type ClaimAfterAdmission,
   settleAgentSessionOperationInto,
+  retirePreparedAgentLaunchInto,
   type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
 } from './agent-session/ownership/agent-session-operation-admission'
@@ -286,24 +286,10 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       return { decision, claim: claimAgentSessionOperationInto(draft, args) }
     })
 
-  retirePreparedAgentLaunch = (args: {
-    operationId: string
-    daemonGeneration: string
-    reservationGeneration: string
-  }) =>
-    this.transact((draft) => {
-      for (const [key, row] of draft.operations) {
-        const descriptor = row.preparedLaunch
-        if (
-          row.operationId !== args.operationId ||
-          !matchesPreparedLaunchGeneration(descriptor, args)
-        ) {
-          continue
-        }
-        const { preparedLaunch: _retired, ...retained } = row
-        draft.operations.set(key, retained)
-      }
-    })
+  /** True only for the transaction that removed the descriptor; its final answer is kept for replay. */
+  retirePreparedAgentLaunch = (
+    args: Parameters<typeof retirePreparedAgentLaunchInto>[1]
+  ): Promise<boolean> => this.transact((draft) => retirePreparedAgentLaunchInto(draft, args))
 
   /** Durable CAS decides which pending replay may run its effect; reading pending alone cannot grant it. */
   claimOperation = (args: Parameters<typeof claimAgentSessionOperationInto>[1]) =>

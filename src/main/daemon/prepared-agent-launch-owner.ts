@@ -10,15 +10,9 @@ import {
 } from './prepared-agent-launch-payload'
 import {
   formatPreparedLaunchGeneration,
-  isPreparedLaunchIncarnationGone,
   readCurrentPreparedLaunchIncarnation
 } from './prepared-agent-launch-incarnation'
-import {
-  claimPreparedPrompt,
-  settlePreparedAttempt,
-  snapshotPreparedLaunch,
-  waitForPreparedLaunch
-} from './prepared-agent-launch-handoff'
+import { snapshotPreparedLaunch, waitForPreparedLaunch } from './prepared-agent-launch-handoff'
 import {
   agentSessionOperationKey,
   claimAgentSessionOperation,
@@ -47,14 +41,13 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
 
   get pending(): number {
     let count = 0
-    for (const { status, prompts } of this.work.values()) {
+    for (const { status } of this.work.values()) {
       if (
         status.retirement !== 'unused-retired' &&
         (status.execution === 'unknown' ||
           status.execution === 'not-dispatched' ||
           status.execution === 'dispatching' ||
-          !status.published ||
-          prompts !== undefined)
+          !status.published)
       ) {
         count++
       }
@@ -94,20 +87,10 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
         work.status.published = true
         this.notify(work)
         return this.snapshot(work)
-      case 'claimPrompt':
-        return claimPreparedPrompt(work, payload.consumer, payload.attempt, {
-          isGone: this.deps.isConsumerGone ?? isPreparedLaunchIncarnationGone,
-          notify: () => this.notify(work)
-        })
-      case 'settlePrompt':
-        if (settlePreparedAttempt(work, payload.attempt, payload.outcome)) {
-          this.notify(work)
-        }
-        return snapshotPreparedLaunch(work)
       case 'retireInput':
         if (
           work.status.retirement === 'unused-retired' ||
-          (work.status.physical && work.status.published && !work.prompts)
+          (work.status.physical && work.status.published)
         ) {
           work.status.retirement = 'unused-retired'
           this.clearLaunchPayload(work)
@@ -231,7 +214,6 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
     const setupPayload = payload.setup
       ? { ...payload.setup, spawn: copyPreparedAgentSpawn(payload.setup.spawn) }
       : undefined
-    const prompts = payload.prompts ? structuredClone(payload.prompts) : undefined
     const launchToken = launch.env?.ORCA_AGENT_LAUNCH_TOKEN
     const publication = {
       ...(payload.publication?.launchConfig
@@ -255,7 +237,6 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
     work.status.accepted = true
     work.launch = launch
     work.publication = publication
-    work.prompts = prompts
     work.releaseCapacity = capacity
     // Copy the complete accepted payload before starting either physical process.
     if (setupPayload) {

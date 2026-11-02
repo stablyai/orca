@@ -7,9 +7,7 @@ import type {
 import type { CreateOrAttachOptions } from './terminal-host-create-contract'
 import type {
   PreparedAgentLaunchIdentity,
-  PreparedLaunchInputOutcome,
-  PreparedLaunchPublication,
-  PreparedPromptConsumer
+  PreparedLaunchPublication
 } from '../../shared/prepared-agent-launch'
 export { isPreparedAgentLaunchStatus } from '../../shared/prepared-agent-launch'
 export type {
@@ -44,7 +42,6 @@ export type PreparedAgentLaunchRequest = {
         action: 'accept'
         identity: PreparedAgentLaunchIdentity
         launch: PreparedAgentSpawn
-        prompts?: PreparedTerminalPrompts
         publication?: Omit<PreparedLaunchPublication, 'launchToken'>
         setup?: { spawn: PreparedAgentSpawn; attemptId: string; deadline: number }
       }
@@ -57,19 +54,6 @@ export type PreparedAgentLaunchRequest = {
     | {
         action: 'cancel' | 'ackPublication' | 'retireInput'
         identity: PreparedAgentLaunchIdentity
-      }
-    | {
-        action: 'claimPrompt'
-        identity: PreparedAgentLaunchIdentity
-        consumer: PreparedPromptConsumer
-        /** Reading grants nothing; this request id asks for the operation's single write grant. */
-        attempt?: string
-      }
-    | {
-        action: 'settlePrompt'
-        identity: PreparedAgentLaunchIdentity
-        attempt: string
-        outcome: PreparedLaunchInputOutcome
       }
     | {
         action: 'wait'

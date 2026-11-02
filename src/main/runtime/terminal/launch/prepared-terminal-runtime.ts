@@ -2,12 +2,12 @@ import type { WorktreeSetupLaunch } from '../../../../shared/worktree/launch-typ
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import {
   type PreparedPublicationPorts,
-  preparedPromptUncertainText,
   readPreparedTerminalStatus,
   reconcilePreparedTerminalPublications,
   publishPreparedTerminal
 } from './prepared-terminal-publication'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session-operation-ledger'
 import type { PreparedTerminalPrompts } from '../../../daemon/prepared-agent-launch-protocol'
 import {
   isPreparedAgentLaunchDescriptor,
@@ -82,6 +82,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
           })
         },
         createTerminal: (target, options) => this.createTerminal(target, options, created),
+        deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this),
         onAgentPublished
       }
     })
@@ -109,7 +110,6 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
       setTabColor: (handle, color) =>
         this.getWorktreeTerminalProvisioningHost().setTabColor(handle, color),
       placePrimary: this.placePreparedPrimary.bind(this),
-      deliverPrompts: this.deliverPreparedTerminalPrompts.bind(this),
       notifyLaunchNotice: (notice) => this.notifier?.preparedAgentLaunchNotice?.(notice)
     }
   }
@@ -142,7 +142,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
         return terminal
       }
       status = await readPreparedTerminalStatus(controller, identity)
-      const published = this.publishedPreparedTerminal(status)
+      const published = this.publishedPreparedTerminal(status, row?.outcome)
       if (published) {
         return published
       }
@@ -157,7 +157,8 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
 
   /** An already published agent is read from this runtime's own records, never attached again. */
   private publishedPreparedTerminal(
-    status: PreparedAgentLaunchStatus
+    status: PreparedAgentLaunchStatus,
+    outcome: AgentSessionOperationOutcome | undefined
   ): dependencies.RuntimeTerminalCreate | null {
     const { physical, surface } = status
     if (!physical || !status.published || status.execution !== 'started') {
@@ -171,6 +172,14 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     ) {
       return null
     }
+    // The retiring observer recorded the launch's one final answer; a late caller replays its warning.
+    const answer = outcome?.status === 'succeeded' ? outcome.launch : undefined
+    const warning =
+      typeof answer === 'object' &&
+      answer !== null &&
+      Reflect.get(answer, 'incarnationId') === physical.incarnationId
+        ? Reflect.get(answer, 'warning')
+        : undefined
     return {
       handle: surface.terminalHandle,
       worktreeId: surface.worktreeId,
@@ -179,9 +188,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
       tabId: surface.tabId,
       paneKey: makePaneKey(surface.tabId, surface.leafId),
       title: null,
-      ...(status.input === 'uncertain'
-        ? { warning: preparedPromptUncertainText(status.claim.agent) }
-        : {})
+      ...(typeof warning === 'string' ? { warning } : {})
     }
   }
 

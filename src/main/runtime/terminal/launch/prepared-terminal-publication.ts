@@ -1,11 +1,10 @@
 import { createHash } from 'node:crypto'
 import {
-  deliverPreparedPrompts,
-  forgetPreparedPromptDelivery,
-  preparedPromptUncertainText
+  forgetPreparedPromptContinuation,
+  joinPreparedPromptContinuation,
+  preparedLaunchKey
 } from './prepared-terminal-prompt-delivery'
 import { provesPreparedLaunchOwnerGone } from './prepared-terminal-owner-demise'
-import type { PreparedTerminalPrompts } from '../../../daemon/prepared-agent-launch-protocol'
 export { preparedPromptUncertainText } from './prepared-terminal-prompt-delivery'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
 import {
@@ -33,11 +32,7 @@ export type PreparedPublicationPorts = {
   ) => Promise<RuntimeTerminalCreate>
   setTabColor: (handle: string, color: string) => Promise<void>
   placePrimary?: (descriptor: PreparedAgentLaunchDescriptor) => Promise<unknown>
-  deliverPrompts: (
-    terminal: RuntimeTerminalCreate,
-    prompts: PreparedTerminalPrompts
-  ) => Promise<boolean>
-  /** One short desktop notice for an outcome no surviving terminal shows, keyed by operation. */
+  /** One short desktop notice for an outcome no surviving terminal shows. */
   notifyLaunchNotice?: (notice: PreparedAgentLaunchNotice) => void
 }
 const publications = new WeakMap<
@@ -70,12 +65,7 @@ export function publishPreparedTerminal(
     publications.get(ports.controller) ?? new Map<string, Promise<RuntimeTerminalCreate | null>>()
   publications.set(ports.controller, pending)
   // Callers may pass a wider pending receipt; only the exact launch identity joins a publication.
-  const key = [
-    identity.operationId,
-    identity.fingerprint,
-    identity.daemonGeneration,
-    identity.reservationGeneration
-  ].join('\0')
+  const key = preparedLaunchKey(identity)
   const existing = pending.get(key)
   if (existing) {
     return existing
@@ -119,24 +109,21 @@ async function publish(
   if (!status.physical) {
     if (status.retirement === 'unused-retired') {
       // Failure and deadline already wrote into the surviving Setup terminal; never say it twice.
-      if (status.failure === 'setup-ended') {
-        ports.notifyLaunchNotice?.({
-          operationId: identity.operationId,
-          worktreeId: descriptor.surface.worktreeId,
-          agent: descriptor.claim.agent,
-          kind: 'setup-closed'
-        })
-      }
-      await retirePreparedDescriptor(ports, identity)
+      await retirePreparedDescriptor(
+        ports,
+        identity,
+        descriptor,
+        status.failure === 'setup-ended' ? { notice: 'setup-closed' } : {}
+      )
       return null
     }
     throw new Error('agent_session_ownership_unknown')
   }
   if (status.execution === 'settled') {
-    // The agent started and ended before publication; physical end already settled its input.
+    // The agent started and ended before publication; its unwritten prompt dies with the descriptor.
     const retired = await controller.preparedAgentLaunch({ action: 'retireInput', identity })
     if (isPreparedAgentLaunchStatus(retired) && retired.retirement === 'unused-retired') {
-      await retirePreparedDescriptor(ports, identity)
+      await retirePreparedDescriptor(ports, identity, descriptor)
     }
     return null
   }
@@ -183,24 +170,21 @@ async function publish(
     await ports.setTabColor(terminal.handle, descriptor.presentation.color)
   }
   await controller.preparedAgentLaunch({ action: 'ackPublication', identity })
-  await deliverPreparedPrompts(identity, terminal, ports)
-  const receipt = await readPreparedTerminalStatus(controller, identity)
-  // The daemon's receipt, not this attempt, says whether the first prompt is in doubt.
-  if (receipt.input === 'uncertain') {
-    ports.notifyLaunchNotice?.({
-      operationId: identity.operationId,
-      worktreeId: descriptor.surface.worktreeId,
-      agent: descriptor.claim.agent,
-      kind: 'prompt-uncertain'
-    })
-  }
-  const retirement = await controller.preparedAgentLaunch({ action: 'retireInput', identity })
-  if (isPreparedAgentLaunchStatus(retirement) && retirement.retirement === 'unused-retired') {
-    await retirePreparedDescriptor(ports, identity)
-  }
-  return receipt.input === 'uncertain'
-    ? { ...terminal, warning: preparedPromptUncertainText(descriptor.claim.agent) }
-    : terminal
+  // Any observer may publish; only the creator writes, and every observer returns its one answer.
+  const answer = await joinPreparedPromptContinuation(identity, descriptor, terminal)
+  // Recording is bookkeeping: a failed write keeps the answer for the next observation, never the input.
+  await controller
+    .preparedAgentLaunch({ action: 'retireInput', identity })
+    .then((retirement) =>
+      isPreparedAgentLaunchStatus(retirement) && retirement.retirement === 'unused-retired'
+        ? retirePreparedDescriptor(ports, identity, descriptor, {
+            answer,
+            ...(answer.warning ? { notice: 'prompt-uncertain' as const } : {})
+          })
+        : undefined
+    )
+    .catch(() => {})
+  return answer
 }
 
 async function readPreparedPublication(
@@ -230,13 +214,26 @@ async function readPreparedPublication(
 
 async function retirePreparedDescriptor(
   ports: PreparedPublicationPorts,
-  identity: PreparedAgentLaunchIdentity
+  identity: PreparedAgentLaunchIdentity,
+  descriptor: PreparedAgentLaunchDescriptor,
+  result: { answer?: RuntimeTerminalCreate; notice?: PreparedAgentLaunchNotice['kind'] } = {}
 ): Promise<void> {
-  await ports.store.retirePreparedAgentLaunch(identity)
-  forgetPreparedPromptDelivery(identity.operationId)
+  const removed = await ports.store.retirePreparedAgentLaunch({
+    ...identity,
+    ...(result.answer ? { answer: result.answer } : {})
+  })
+  forgetPreparedPromptContinuation(identity)
+  // Only the transaction that consumed the descriptor shows its outcome; observers and retries never repeat it.
+  if (removed && result.notice) {
+    ports.notifyLaunchNotice?.({
+      operationId: identity.operationId,
+      worktreeId: descriptor.surface.worktreeId,
+      agent: descriptor.claim.agent,
+      kind: result.notice
+    })
+  }
 }
 
-/** Retire only on positive owner demise: the exact generation's answer, another boot, or a gone process. */
 async function publishPreparedSetup(
   descriptor: PreparedAgentLaunchDescriptor,
   status: PreparedAgentLaunchStatus,
@@ -295,7 +292,7 @@ export async function reconcilePreparedTerminalPublications(
       } catch (error) {
         // Unreachable is not gone: retain the exact owner unless its demise is proven.
         if (await provesPreparedLaunchOwnerGone(error, descriptor, pass).catch(() => false)) {
-          await retirePreparedDescriptor(ports, identity).catch(() => {})
+          await retirePreparedDescriptor(ports, identity, descriptor).catch(() => {})
         }
       }
     })

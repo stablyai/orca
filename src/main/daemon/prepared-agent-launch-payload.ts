@@ -1,11 +1,10 @@
 import { createHash } from 'node:crypto'
-import type { PreparedAgentSpawn, PreparedTerminalPrompts } from './prepared-agent-launch-protocol'
+import type { PreparedAgentSpawn } from './prepared-agent-launch-protocol'
 import type { PreparedLaunchPublication } from '../../shared/prepared-agent-launch'
 
 export function fingerprintPreparedAgentLaunch(payload: {
   launch: PreparedAgentSpawn
   setup?: { spawn: PreparedAgentSpawn; attemptId: string; deadline: number }
-  prompts?: PreparedTerminalPrompts
   publication?: Omit<PreparedLaunchPublication, 'launchToken'>
 }): string {
   return createHash('sha256')
@@ -13,7 +12,6 @@ export function fingerprintPreparedAgentLaunch(payload: {
       JSON.stringify({
         launch: payload.launch,
         setup: payload.setup,
-        prompts: payload.prompts,
         publication: payload.publication
       })
     )

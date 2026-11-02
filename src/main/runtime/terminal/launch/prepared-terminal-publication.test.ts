@@ -1,10 +1,13 @@
 import type { InternalCreateOrAttachOptions } from '../../../daemon/terminal-host-agent-session-claim'
 import { spawnSync } from 'node:child_process'
 import type * as HostIdentity from '../../../agent-hooks/managed-hook-owner-identity'
+import { readBootIdentity } from '../../../agent-hooks/managed-hook-owner-identity'
+import type * as ProcessInspection from '../../../daemon/daemon-process-inspection'
 import {
-  readBootIdentity,
-  readManagedHookProcessIdentity
-} from '../../../agent-hooks/managed-hook-owner-identity'
+  queryWindowsProcess,
+  readLinuxStat,
+  readMacosProcessStartedAtMs
+} from '../../../daemon/daemon-process-inspection'
 import { createHash } from 'node:crypto'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
 import {
@@ -27,17 +30,31 @@ import {
   reconcilePreparedTerminalPublications,
   type PreparedPublicationPorts
 } from './prepared-terminal-publication'
+import { installPreparedPromptContinuation } from './prepared-terminal-prompt-delivery'
 
 vi.mock('../../../agent-hooks/managed-hook-owner-identity', async (importOriginal) => {
   const actual = await importOriginal<typeof HostIdentity>()
+  return { ...actual, readBootIdentity: vi.fn(actual.readBootIdentity) }
+})
+vi.mock('../../../daemon/daemon-process-inspection', async (importOriginal) => {
+  const actual = await importOriginal<typeof ProcessInspection>()
   return {
     ...actual,
-    readBootIdentity: vi.fn(actual.readBootIdentity),
-    readManagedHookProcessIdentity: vi.fn(actual.readManagedHookProcessIdentity)
+    queryWindowsProcess: vi.fn(actual.queryWindowsProcess),
+    readLinuxStat: vi.fn(actual.readLinuxStat),
+    readMacosProcessStartedAtMs: vi.fn(actual.readMacosProcessStartedAtMs)
   }
 })
+const processProbes = () =>
+  [queryWindowsProcess, readLinuxStat, readMacosProcessStartedAtMs].reduce(
+    (count, probe) => count + vi.mocked(probe).mock.calls.length,
+    0
+  )
 
 const NOW = 1_800_000_000_000
+const PROMPTS = { followup: { agent: 'codex' as const, prompt: 'full guarded prompt' } }
+const UNCERTAIN =
+  'Codex started, but its first prompt may not have been delivered. Check Codex before sending the prompt again.'
 afterEach(() => vi.useRealTimers())
 
 async function fixture(
@@ -46,7 +63,9 @@ async function fixture(
     env?: Record<string, string>
     publication?: { launchConfig?: SleepingAgentLaunchConfig; viewMode?: 'terminal' | 'chat' }
     launchTokenHash?: string
-  } = {}
+  } = {},
+  /** Who holds the post-start prompt: this main's creator flow, or a main that has since restarted. */
+  prompt: 'creator' | 'restarted' = 'creator'
 ) {
   vi.useFakeTimers({ now: NOW })
   const surfaces = {
@@ -83,7 +102,6 @@ async function fixture(
       command: 'cx',
       ...(accepted.env ? { env: accepted.env } : {})
     },
-    prompts: { followup: { agent: 'codex' as const, prompt: 'full guarded prompt' } },
     ...(accepted.publication ? { publication: accepted.publication } : {}),
     ...(withSetup
       ? {
@@ -97,7 +115,7 @@ async function fixture(
   }
   const prepared = await owner.handle({
     action: 'prepare',
-    operationId: `${NOW}-${'a'.repeat(32)}`,
+    operationId: `${NOW}-${randomUUID().replaceAll('-', '')}`,
     fingerprint: fingerprintPreparedAgentLaunch(payload),
     claim: {
       kind: 'fresh-launch',
@@ -112,6 +130,11 @@ async function fixture(
   if (!isPreparedAgentLaunchStatus(prepared)) {
     throw new Error('missing preparation')
   }
+  const deliver = vi.fn(async (): Promise<boolean> => true)
+  const promptOwnerRef =
+    prompt === 'creator'
+      ? installPreparedPromptContinuation(prepared, 'codex', PROMPTS, deliver)
+      : 'previous-main'
   const descriptor: PreparedAgentLaunchDescriptor = {
     daemonGeneration: prepared.daemonGeneration,
     reservationGeneration: prepared.reservationGeneration,
@@ -136,7 +159,8 @@ async function fixture(
             deadline: NOW + 7_200_000
           }
         }
-      : {})
+      : {}),
+    promptOwnerRef
   }
   const row = {
     ...pendingAgentSessionOperationRow({
@@ -147,9 +171,11 @@ async function fixture(
     }),
     preparedLaunch: descriptor
   }
-  const retire = vi.fn(async () => {
-    Reflect.deleteProperty(row, 'preparedLaunch')
-  })
+  // Like the store, only the call that removes the descriptor reports it.
+  const retire = vi.fn(
+    async (): Promise<boolean> =>
+      'preparedLaunch' in row && Reflect.deleteProperty(row, 'preparedLaunch')
+  )
   const createTerminal = vi.fn<PreparedPublicationPorts['createTerminal']>(
     async (_selector, options) => ({
       handle: options.sessionId === 'agent' ? 'term_agent' : 'term_setup',
@@ -180,7 +206,6 @@ async function fixture(
     createTerminal,
     placePrimary: vi.fn(async () => {}),
     setTabColor: vi.fn(async () => {}),
-    deliverPrompts: vi.fn(async () => true),
     notifyLaunchNotice: vi.fn()
   }
   await owner.handle({ action: 'accept', identity: prepared, ...payload })
@@ -193,6 +218,8 @@ async function fixture(
     create,
     createTerminal,
     retire,
+    deliver,
+    observer: () => observer!,
     zero: () => observer?.onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:0\n`)
   }
 }
@@ -221,9 +248,9 @@ describe('prepared terminal publication recovery', () => {
         env: undefined
       })
     )
-    expect(f.ports.deliverPrompts).toHaveBeenCalledExactlyOnceWith(
+    expect(f.deliver).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ handle: 'term_agent' }),
-      { followup: { agent: 'codex', prompt: 'full guarded prompt' } }
+      PROMPTS
     )
     expect(f.retire).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ operationId: f.identity.operationId })
@@ -279,139 +306,96 @@ describe('prepared terminal publication recovery', () => {
     })
   })
 
-  it('settles a refused guarded prompt as uncertain once and never resubmits it', async () => {
+  it('writes once across overlapping controllers and gives every observer the same final answer', async () => {
     const f = await fixture()
-    vi.mocked(f.ports.deliverPrompts).mockResolvedValue(false)
-    const terminal = await publishPreparedTerminal(f.identity, f.descriptor, f.ports)
-    await reconcilePreparedTerminalPublications(f.ports)
-    expect(f.ports.deliverPrompts).toHaveBeenCalledTimes(1)
-    expect(terminal?.warning).toContain(
-      'Codex started, but its first prompt may not have been delivered'
+    const delivery = Promise.withResolvers<boolean>()
+    f.deliver.mockReturnValueOnce(delivery.promise)
+    const handle = f.ports.controller.preparedAgentLaunch!
+    // An old and a new connection both publish the launch; neither may write or answer alone.
+    const old: PreparedPublicationPorts = {
+      ...f.ports,
+      controller: { ...f.ports.controller, preparedAgentLaunch: (request) => handle(request) }
+    }
+    const answers: unknown[] = []
+    const publications = [f.ports, old].map((ports) =>
+      publishPreparedTerminal(f.identity, f.descriptor, ports).then((answer) => {
+        answers.push(answer)
+        return answer
+      })
     )
-    expect(await f.owner.handle({ action: 'status', identity: f.identity })).toMatchObject({
-      input: 'uncertain'
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.createTerminal).toHaveBeenCalledTimes(2)
+    expect(f.deliver).toHaveBeenCalledOnce()
+    expect(answers).toEqual([])
+    // The first recording fails; the other observer's retirement is the one that consumes it.
+    f.retire.mockRejectedValueOnce(new Error('store write failed'))
+    // The draft may have pasted before the followup was refused: neither caller hears success.
+    delivery.resolve(false)
+    const [current, stale] = await Promise.all(publications)
+    expect(current?.warning).toBe(UNCERTAIN)
+    expect(stale).toEqual(current)
+    // A delayed observer of the retired launch neither writes nor shows the notice again.
+    expect(await publishPreparedTerminal(f.identity, f.descriptor, old)).toMatchObject({
+      warning: UNCERTAIN
     })
-    expect(f.retire).toHaveBeenCalledTimes(1)
+    await reconcilePreparedTerminalPublications(f.ports)
+    expect(f.deliver).toHaveBeenCalledOnce()
+    expect(f.retire).toHaveBeenCalledTimes(3)
+    expect(f.ports.notifyLaunchNotice).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ operationId: f.identity.operationId, kind: 'prompt-uncertain' })
+    )
     expect(f.owner.pending).toBe(0)
-    expect(f.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries only the recording of a written prompt whose answer could not be saved', async () => {
+    const f = await fixture()
+    f.retire.mockRejectedValueOnce(new Error('store write failed'))
+    // The user's terminal and answer do not wait for bookkeeping.
+    expect(await publishPreparedTerminal(f.identity, f.descriptor, f.ports)).toMatchObject({
+      handle: 'term_agent'
+    })
+    await reconcilePreparedTerminalPublications(f.ports)
+    await reconcilePreparedTerminalPublications(f.ports)
+    expect(f.deliver).toHaveBeenCalledOnce()
+    expect(f.retire).toHaveBeenCalledTimes(2)
+    expect(f.retire).toHaveBeenLastCalledWith(
+      expect.objectContaining({ answer: expect.not.objectContaining({ warning: UNCERTAIN }) })
+    )
+    expect(f.ports.notifyLaunchNotice).not.toHaveBeenCalled()
+  })
+
+  it('after a main restart, reports a prompt-bearing launch once as uncertain and never writes', async () => {
+    const f = await fixture(false, {}, 'restarted')
+    await reconcilePreparedTerminalPublications(f.ports)
+    await reconcilePreparedTerminalPublications(f.ports)
+    expect(f.createTerminal).toHaveBeenCalledOnce()
+    expect(f.deliver).not.toHaveBeenCalled()
+    expect(f.retire).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ answer: expect.objectContaining({ warning: UNCERTAIN }) })
+    )
     expect(f.ports.notifyLaunchNotice).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ operationId: f.identity.operationId, kind: 'prompt-uncertain' })
     )
   })
 
-  it('grants one write across overlapping old and new controllers, whatever order their replies arrive in', async () => {
-    const f = await fixture()
+  it('shows a closed Setup once however many observers saw it', async () => {
+    const f = await fixture(true)
     const handle = f.ports.controller.preparedAgentLaunch!
-    const held = Promise.withResolvers<void>()
-    // Controller B is the old connection: the daemon handles its attempt, but its reply is late.
-    const portsB: PreparedPublicationPorts = {
-      ...f.ports,
-      controller: {
-        ...f.ports.controller,
-        preparedAgentLaunch: async (request) => {
-          const reply = await handle(request)
-          if (request.action === 'claimPrompt' && request.attempt) {
-            await held.promise
-          }
-          return reply
-        }
-      }
-    }
-    const portsA: PreparedPublicationPorts = {
+    const old: PreparedPublicationPorts = {
       ...f.ports,
       controller: { ...f.ports.controller, preparedAgentLaunch: (request) => handle(request) }
     }
-    const publicationB = publishPreparedTerminal(f.identity, f.descriptor, portsB)
+    const publications = [f.ports, old].map((ports) =>
+      publishPreparedTerminal(f.identity, f.descriptor, ports)
+    )
     await vi.advanceTimersByTimeAsync(0)
-    // A runs its whole publication, delivery attempt, settlement and retirement while B's reply waits.
-    const terminalA = await publishPreparedTerminal(f.identity, f.descriptor, portsA)
-    held.resolve()
-    const terminalB = await publicationB
-    expect(f.ports.deliverPrompts).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ handle: 'term_agent' }),
-      { followup: { agent: 'codex', prompt: 'full guarded prompt' } }
-    )
-    expect(terminalA?.warning).toBeUndefined()
-    expect(terminalB?.warning).toBeUndefined()
-    expect(await f.owner.handle({ action: 'status', identity: f.identity })).toMatchObject({
-      input: 'written',
-      retirement: 'unused-retired'
-    })
-    // A later reader of either controller gets the same receipt, never the prompt.
-    for (const ports of [portsA, portsB]) {
-      expect(
-        await ports.controller.preparedAgentLaunch!({
-          action: 'claimPrompt',
-          identity: f.identity,
-          consumer: { id: 'later', pid: process.pid },
-          attempt: 'later'
-        })
-      ).toMatchObject({ input: 'written' })
-    }
-    expect(f.ports.notifyLaunchNotice).not.toHaveBeenCalled()
-  })
-
-  it.each(['attempt', 'settlement'] as const)(
-    'a lost %s reply never resends the prompt',
-    async (lost) => {
-      const f = await fixture()
-      const handle = f.ports.controller.preparedAgentLaunch!
-      let dropped = false
-      f.ports.controller.preparedAgentLaunch = async (request) => {
-        const reply = await handle(request)
-        const target =
-          lost === 'attempt'
-            ? request.action === 'claimPrompt' && request.attempt !== undefined
-            : request.action === 'settlePrompt'
-        if (target && !dropped) {
-          dropped = true
-          throw new Error('daemon connection closed')
-        }
-        return reply
-      }
-      await expect(publishPreparedTerminal(f.identity, f.descriptor, f.ports)).rejects.toThrow(
-        'daemon connection closed'
-      )
-      await reconcilePreparedTerminalPublications(f.ports)
-      await reconcilePreparedTerminalPublications(f.ports)
-      // A lost grant closes as uncertain unwritten; a lost settlement retries settlement only.
-      expect(f.ports.deliverPrompts).toHaveBeenCalledTimes(lost === 'attempt' ? 0 : 1)
-      expect(await f.owner.handle({ action: 'status', identity: f.identity })).toMatchObject({
-        input: lost === 'attempt' ? 'uncertain' : 'written',
-        retirement: 'unused-retired'
-      })
-      expect(f.retire).toHaveBeenCalledTimes(1)
-      expect(f.ports.notifyLaunchNotice).toHaveBeenCalledTimes(lost === 'attempt' ? 1 : 0)
-    }
-  )
-
-  it('recovers a prompt whose acquisition reply was lost and delivers it exactly once', async () => {
-    const f = await fixture()
-    const handle = f.ports.controller.preparedAgentLaunch!
-    let dropped = 0
-    f.ports.controller.preparedAgentLaunch = async (request) => {
-      const reply = await handle(request)
-      if (request.action === 'claimPrompt' && !request.attempt && dropped++ === 0) {
-        throw new Error('daemon connection closed')
-      }
-      return reply
-    }
-    await expect(publishPreparedTerminal(f.identity, f.descriptor, f.ports)).rejects.toThrow(
-      'daemon connection closed'
-    )
-    expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
+    f.observer().onExit()
+    expect(await Promise.all(publications)).toEqual([null, null])
     await reconcilePreparedTerminalPublications(f.ports)
-    await reconcilePreparedTerminalPublications(f.ports)
-    expect(f.ports.deliverPrompts).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ handle: 'term_agent' }),
-      { followup: { agent: 'codex', prompt: 'full guarded prompt' } }
+    expect(f.retire).toHaveBeenCalledTimes(2)
+    expect(f.ports.notifyLaunchNotice).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ operationId: f.identity.operationId, kind: 'setup-closed' })
     )
-    expect(await f.owner.handle({ action: 'status', identity: f.identity })).toMatchObject({
-      input: 'written'
-    })
-    expect(f.retire).toHaveBeenCalledTimes(1)
-    expect(f.owner.pending).toBe(0)
-    expect(f.create).toHaveBeenCalledTimes(1)
   })
 
   it('recovery after a main restart publishes the accepted recipe, view and authority', async () => {
@@ -448,10 +432,7 @@ describe('prepared terminal publication recovery', () => {
     async (count) => {
       // A daemon process that has exited, named the way a generation records its owner.
       const gone = spawnSync(process.execPath, ['-e', ''])
-      const generation = formatPreparedLaunchGeneration({
-        pid: gone.pid!,
-        process: `${process.platform}:exited-daemon`
-      })
+      const generation = formatPreparedLaunchGeneration({ pid: gone.pid!, start: 'exited-daemon' })
       const f = await fixture()
       const rows = Array.from({ length: count }, (_, index) => ({
         ...pendingAgentSessionOperationRow({
@@ -464,9 +445,7 @@ describe('prepared terminal publication recovery', () => {
       }))
       const retire = vi.fn(async (identity: { operationId: string }) => {
         const row = rows.find((row) => row.operationId === identity.operationId)
-        if (row) {
-          Reflect.deleteProperty(row, 'preparedLaunch')
-        }
+        return row ? Reflect.deleteProperty(row, 'preparedLaunch') : false
       })
       const probes = vi.fn(async () => {
         throw new Error('agent_session_ownership_unknown')
@@ -502,12 +481,12 @@ describe('prepared terminal publication recovery', () => {
         preparedLaunch: { ...f.descriptor, daemonGeneration: generation }
       }))
       const answered = rows[count].operationId
-      const retire = vi.fn(async (identity: { operationId: string }) => {
+      const retire = vi.fn(async (identity: { operationId: string }) =>
         Reflect.deleteProperty(
           rows.find((row) => row.operationId === identity.operationId)!,
           'preparedLaunch'
         )
-      })
+      )
       const ports: PreparedPublicationPorts = {
         ...f.ports,
         controller: {
@@ -523,12 +502,18 @@ describe('prepared terminal publication recovery', () => {
         store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
       }
       for (const pass of [1, 2]) {
-        vi.mocked(readBootIdentity).mockClear()
-        vi.mocked(readManagedHookProcessIdentity).mockClear()
+        for (const probe of [
+          readBootIdentity,
+          queryWindowsProcess,
+          readLinuxStat,
+          readMacosProcessStartedAtMs
+        ]) {
+          vi.mocked(probe).mockClear()
+        }
         await reconcilePreparedTerminalPublications(ports)
         // One boot read and one process probe per pass, however many descriptors share the owner.
         expect(readBootIdentity).toHaveBeenCalledTimes(live.boot ? 1 : 0)
-        expect(readManagedHookProcessIdentity).toHaveBeenCalledTimes(live.process ? 1 : 0)
+        expect(processProbes()).toBe(1)
         expect(retire, `pass ${pass}`).toHaveBeenCalledTimes(1)
       }
       // That generation's answer retired only its own operation; the live owner keeps the rest.
@@ -541,7 +526,8 @@ describe('prepared terminal publication recovery', () => {
 
   it("keeps a descriptor whose daemon is unreachable but alive, and retires on that generation's answer", async () => {
     const f = await fixture()
-    const live = await readCurrentPreparedLaunchIncarnation()
+    // Recorded while the daemon could not read its boot; reading it now is not another process.
+    const { boot: _unknownThen, ...live } = await readCurrentPreparedLaunchIncarnation()
     const descriptor = {
       ...f.descriptor,
       daemonGeneration: formatPreparedLaunchGeneration(live)
@@ -558,7 +544,7 @@ describe('prepared terminal publication recovery', () => {
       }
     ]
     const reply = { error: new Error('agent_session_ownership_unknown') }
-    const retire = vi.fn(async () => {})
+    const retire = vi.fn(async () => true)
     const ports: PreparedPublicationPorts = {
       ...f.ports,
       controller: {

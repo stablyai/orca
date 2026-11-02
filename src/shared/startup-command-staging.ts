@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hasControlByte, TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from './startup-line-prompt-carry'
 import { quoteStartupArg } from './tui-agent-startup-shell'
+import type { PreparedLaunchIncarnation } from './prepared-agent-launch'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 const OWNED_STAGING_PREFIX = 'orca-owned-launch-'
@@ -94,7 +95,7 @@ export function stageStartupCommand(args: {
   directory?: string
   owned?: true
   /** The daemon that owns the launch; a later boot, or its exit with no live reader, frees its files. */
-  owner?: { pid: number; process?: string; boot?: string }
+  owner?: PreparedLaunchIncarnation
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
   if (!shouldStageStartupCommand({ ...args, platform })) {
@@ -127,7 +128,11 @@ export function stageStartupCommand(args: {
       if (!bootTag && args.owner) {
         writeFileSync(
           join(directoryPath, OWNED_STAGING_WRITER_FILE),
-          JSON.stringify({ pid: args.owner.pid, process: args.owner.process }),
+          JSON.stringify({
+            pid: args.owner.pid,
+            namespace: args.owner.namespace,
+            start: args.owner.start
+          }),
           { mode: 0o600, flag: 'wx' }
         )
       }

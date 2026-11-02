@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
@@ -6,6 +5,7 @@ import { PreparedAgentLaunchOwner } from '../../../daemon/prepared-agent-launch-
 import type { InternalCreateOrAttachOptions } from '../../../daemon/terminal-host-agent-session-claim'
 import type { RawPtySpawnObserver } from '../../../daemon/pty-subprocess'
 import type { PreparedAgentLaunchDescriptor } from '../../../../shared/prepared-agent-launch'
+import type { AgentSessionOperationOutcome } from '../../../../shared/agent-session-operation-ledger'
 import { startPreparedWorktreeTerminals } from './prepared-worktree-terminal-start'
 import { OrcaRuntimeWithPreparedTerminals } from './prepared-terminal-runtime'
 
@@ -39,7 +39,12 @@ async function fixture() {
     notice
   })
   let row:
-    | { operationId: string; fingerprint: string; preparedLaunch?: PreparedAgentLaunchDescriptor }
+    | {
+        operationId: string
+        fingerprint: string
+        preparedLaunch?: PreparedAgentLaunchDescriptor
+        outcome?: AgentSessionOperationOutcome
+      }
     | undefined
   const ports = {
     controller: {
@@ -56,8 +61,15 @@ async function fixture() {
           return { claim: { claim: 'won' as const } }
         }
       ),
-      retirePreparedAgentLaunch: vi.fn(async () => {
-        delete row?.preparedLaunch
+      retirePreparedAgentLaunch: vi.fn(async (args: { answer?: unknown }) => {
+        if (!row?.preparedLaunch) {
+          return false
+        }
+        delete row.preparedLaunch
+        if (args.answer) {
+          row.outcome = { status: 'succeeded', sessionId: '', launch: args.answer }
+        }
+        return true
       }),
       listOperationRows: () => (row ? [row] : [])
     },
@@ -98,7 +110,7 @@ async function fixture() {
     })),
     setTabColor: vi.fn(async () => {}),
     placePrimary: vi.fn(async () => {}),
-    deliverPrompts: vi.fn(async () => true),
+    deliverPrompts: vi.fn(async (): Promise<boolean> => true),
     notifyLaunchNotice: vi.fn()
   }
   const notifier = { preparedAgentLaunchNotice: vi.fn() }
@@ -146,23 +158,10 @@ describe('late prepared agent waiter', () => {
     expect(f.ports.createTerminal).toHaveBeenCalledTimes(1)
   })
 
-  it("reports a dead writer's prompt as uncertain once to the waiter and the desktop, never resending it", async () => {
+  it("gives every waiter the creator's one refused-prompt answer and writes once", async () => {
     const f = await fixture()
-    // A previous main won the write grant, then exited before settling it.
-    const gone = spawnSync(process.execPath, ['-e', ''])
-    const handle = f.ports.controller.preparedAgentLaunch
-    f.ports.controller.preparedAgentLaunch = async (request) => {
-      const reply = await handle(request)
-      if (request.action === 'ackPublication') {
-        await handle({
-          action: 'claimPrompt',
-          identity: request.identity,
-          consumer: { id: 'previous-main', pid: gone.pid! },
-          attempt: 'previous-attempt'
-        })
-      }
-      return reply
-    }
+    const delivery = Promise.withResolvers<boolean>()
+    f.ports.deliverPrompts.mockReturnValueOnce(delivery.promise)
     const started = await startPreparedWorktreeTerminals({
       worktreeId: 'wt',
       targetKind: 'new-git',
@@ -171,11 +170,21 @@ describe('late prepared agent waiter', () => {
       ports: f.ports
     })
     vi.useRealTimers()
-    const terminal = await f.wait(started.pending)
+    // A caller waiting while the creator still delivers joins it instead of reporting success.
+    let answered = false
+    const waiting = f.wait(started.pending).finally(() => {
+      answered = true
+    })
+    await vi.waitFor(() => expect(f.ports.deliverPrompts).toHaveBeenCalledOnce())
+    expect(answered).toBe(false)
+    delivery.resolve(false)
+    const terminal = await waiting
     expect(terminal.warning).toBe(
       'Codex started, but its first prompt may not have been delivered. Check Codex before sending the prompt again.'
     )
-    expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
+    // A later waiter reads the recorded answer and never writes or notifies again.
+    await expect(f.wait(started.pending)).resolves.toMatchObject({ warning: terminal.warning })
+    expect(f.ports.deliverPrompts).toHaveBeenCalledOnce()
     const notices = [
       ...f.ports.notifyLaunchNotice.mock.calls,
       ...f.notifier.preparedAgentLaunchNotice.mock.calls
@@ -188,9 +197,6 @@ describe('late prepared agent waiter', () => {
         })
       ]
     ])
-    // A later waiter reads the same retained receipt and still never writes.
-    await expect(f.wait(started.pending)).resolves.toMatchObject({ warning: terminal.warning })
-    expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
   })
 
   it('reports a Setup timeout once in Setup and names the agent to an attached caller', async () => {

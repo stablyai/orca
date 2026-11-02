@@ -20,7 +20,7 @@ function noticeText({ kind, agent }: PreparedAgentLaunchNotice): string {
 
 export function showPreparedAgentLaunchNotice(notice: PreparedAgentLaunchNotice): void {
   // Why a toast: no surviving terminal shows this outcome (closed Setup, or a prompt in doubt).
-  // Why the operation id: every observer of one launch replaces the same notice instead of stacking.
+  // Main sends it once, from the transaction that retired the launch; the id only labels it.
   toast.info(noticeText(notice), { id: `prepared-agent-launch:${notice.operationId}` })
 }
 

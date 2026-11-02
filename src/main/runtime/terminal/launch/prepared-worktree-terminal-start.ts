@@ -27,6 +27,10 @@ import {
   publishPreparedTerminal,
   type PreparedPublicationPorts
 } from './prepared-terminal-publication'
+import {
+  forgetPreparedPromptContinuation,
+  installPreparedPromptContinuation
+} from './prepared-terminal-prompt-delivery'
 
 export type PreparedTerminalStart = {
   spawn: PreparedAgentSpawn
@@ -109,7 +113,6 @@ export async function startPreparedWorktreeTerminals(args: {
     const deadline = Date.now() + 2 * 60 * 60_000
     const payload = {
       launch: launch.spawn,
-      prompts: args.prompts,
       publication: {
         ...(launch.options.launchConfig ? { launchConfig: launch.options.launchConfig } : {}),
         ...(launch.options.viewMode ? { viewMode: launch.options.viewMode } : {})
@@ -133,6 +136,15 @@ export async function startPreparedWorktreeTerminals(args: {
       daemonGeneration: prepared.daemonGeneration,
       reservationGeneration: prepared.reservationGeneration
     }
+    // Draft and followup stay with this flow; the daemon holds only the accepted launch itself.
+    const promptOwnerRef = args.prompts
+      ? installPreparedPromptContinuation(
+          identity,
+          prepared.claim.agent,
+          args.prompts,
+          ports.deliverPrompts
+        )
+      : undefined
     const descriptor: PreparedAgentLaunchDescriptor = {
       daemonGeneration: identity.daemonGeneration,
       reservationGeneration: identity.reservationGeneration,
@@ -169,7 +181,8 @@ export async function startPreparedWorktreeTerminals(args: {
         ...(args.startupOptions.afterTabId
           ? { splitPlacement: { afterTabId: args.startupOptions.afterTabId } }
           : {})
-      }
+      },
+      ...(promptOwnerRef ? { promptOwnerRef } : {})
     }
     const recorded = await ports.store.recordPreparedAgentLaunch({
       callerKey: 'worktree-startup',
@@ -274,6 +287,7 @@ export async function startPreparedWorktreeTerminals(args: {
     if (!accepted) {
       let unused = !identity
       if (identity) {
+        forgetPreparedPromptContinuation(identity)
         const cancelled = await controller
           .preparedAgentLaunch({ action: 'cancel', identity })
           .catch(() => null)

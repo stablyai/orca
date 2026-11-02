@@ -1,4 +1,3 @@
-import type { PreparedTerminalPrompts } from './prepared-agent-launch-protocol'
 import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
 import {
   agentSessionOperationKey,
@@ -18,8 +17,7 @@ import type {
 import {
   preparedLaunchFailureText,
   type PreparedLaunchIncarnation,
-  type PreparedLaunchPublication,
-  type PreparedPromptConsumer
+  type PreparedLaunchPublication
 } from '../../shared/prepared-agent-launch'
 
 export const PREPARED_LAUNCH_CALLER_KEY = 'prepared-agent-launch-v1'
@@ -32,9 +30,6 @@ export type LaunchWork = {
   launch?: PreparedAgentSpawn
   /** Retained until input retirement so recovery publishes the accepted recipe, view and authority. */
   publication?: PreparedLaunchPublication
-  prompts?: PreparedTerminalPrompts
-  /** The one issued write grant; only its request's settlement or its writer's demise ends it. */
-  promptAttempt?: { request: string; consumer: PreparedPromptConsumer }
   stopSetupScan?: () => void
   cancelDeadline?: () => void
   releaseCapacity?: () => void
@@ -49,7 +44,6 @@ export type PreparedLaunchDependencies = {
   reserveCapacity: () => () => void
   /** Writes a final line into a still-running Setup's own output. */
   notice?: (sessionId: string, text: string) => void
-  isConsumerGone?: (consumer: PreparedPromptConsumer) => Promise<boolean>
   /** A host shutting down admits no new preparation or acceptance. */
   fenced?: () => boolean
   now?: () => number
@@ -253,12 +247,10 @@ export abstract class PreparedAgentLaunchExecution {
     this.notify(work)
   }
 
-  /** Command, env, prompts and authority die with the launch obligation; the status stays readable. */
+  /** Command, env and authority die with the launch obligation; the status stays readable. */
   protected clearLaunchPayload(work: LaunchWork): void {
     work.launch = undefined
     work.publication = undefined
-    work.prompts = undefined
-    work.promptAttempt = undefined
   }
 
   private settlePhysicalEnd(work: LaunchWork): void {

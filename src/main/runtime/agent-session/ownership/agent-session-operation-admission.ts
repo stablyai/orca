@@ -26,6 +26,7 @@ import {
 } from '../../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { matchesPreparedLaunchGeneration } from '../../../../shared/prepared-agent-launch'
 
 export type AgentSessionOperationAdmission = {
   callerKey: string
@@ -255,4 +256,34 @@ export function settleAgentSessionOperationInto(
   args: { callerKey?: string; operationId: string; outcome: AgentSessionOperationOutcome }
 ): void {
   state.operations = settleAgentSessionOperation(state.operations, args)
+}
+
+/** Removes the exact descriptor and, when given, records the launch's final answer in its place. */
+export function retirePreparedAgentLaunchInto(
+  state: { operations: Map<string, AgentSessionOperationRow> },
+  args: {
+    operationId: string
+    daemonGeneration: string
+    reservationGeneration: string
+    answer?: unknown
+  }
+): boolean {
+  let removed = false
+  for (const [key, row] of state.operations) {
+    if (
+      row.operationId !== args.operationId ||
+      !matchesPreparedLaunchGeneration(row.preparedLaunch, args)
+    ) {
+      continue
+    }
+    const { preparedLaunch: _retired, ...retained } = row
+    state.operations.set(
+      key,
+      args.answer === undefined
+        ? retained
+        : { ...retained, outcome: { status: 'succeeded', sessionId: '', launch: args.answer } }
+    )
+    removed = true
+  }
+  return removed
 }

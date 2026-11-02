@@ -9,9 +9,11 @@ import {
   ownedStagingBootTag,
   sweepPriorBootOwnedStaging
 } from '../../shared/startup-command-staging'
-import type { PreparedLaunchIncarnation } from '../../shared/prepared-agent-launch'
 import { inspectProcessSignal } from './daemon-process-inspection'
-import { isPreparedLaunchIncarnationGone } from './prepared-agent-launch-incarnation'
+import {
+  isPreparedLaunchIncarnationGone,
+  parsePreparedLaunchIncarnation
+} from './prepared-agent-launch-incarnation'
 
 const collecting = new Map<string, Promise<void>>()
 
@@ -70,20 +72,9 @@ async function readerGone(path: string): Promise<boolean> {
   return Number.isSafeInteger(pid) && pid > 0 && inspectProcessSignal(pid) === 'missing'
 }
 
-function parseWriter(text: string): PreparedLaunchIncarnation | null {
+function parseWriter(text: string) {
   try {
-    const value: unknown = JSON.parse(text)
-    if (typeof value !== 'object' || value === null || !('pid' in value)) {
-      return null
-    }
-    const pid = value.pid
-    if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) {
-      return null
-    }
-    return {
-      pid,
-      ...('process' in value && typeof value.process === 'string' ? { process: value.process } : {})
-    }
+    return parsePreparedLaunchIncarnation(JSON.parse(text))
   } catch {
     return null
   }

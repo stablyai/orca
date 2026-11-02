@@ -1,107 +1,81 @@
 import { randomUUID } from 'node:crypto'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { tuiAgentDisplayName } from '../../../../shared/tui-agent-display-names'
 import type { PreparedTerminalPrompts } from '../../../daemon/prepared-agent-launch-protocol'
 import type {
-  PreparedAgentLaunchIdentity,
-  PreparedLaunchInputOutcome,
-  PreparedPromptConsumer
+  PreparedAgentLaunchDescriptor,
+  PreparedAgentLaunchIdentity
 } from '../../../../shared/prepared-agent-launch'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 
 export function preparedPromptUncertainText(agent: string): string {
   const name = tuiAgentDisplayName(agent) ?? agent
   return `${name} started, but its first prompt may not have been delivered. Check ${name} before sending the prompt again.`
 }
 
-// One process is one prompt consumer; its PID lets the daemon prove a dead writer's attempt uncertain.
-const promptConsumer: PreparedPromptConsumer = { id: randomUUID(), pid: process.pid }
-// Settlements whose reply was lost, retried by the next publication. Losing this never permits a write.
-const unsettled = new Map<string, { attempt: string; outcome: PreparedLaunchInputOutcome }>()
+type PromptContinuation = {
+  publish: (terminal: RuntimeTerminalCreate) => void
+  answer: Promise<RuntimeTerminalCreate>
+}
+
+// Marks a prompt-bearing descriptor; a main that finds it without its continuation was restarted.
+const PROMPT_OWNER_REF = randomUUID()
+// Post-start input lives only with the main flow that created the launch, as for every startup.
+const continuations = new Map<string, PromptContinuation>()
+
+export function preparedLaunchKey(identity: PreparedAgentLaunchIdentity): string {
+  return [
+    identity.operationId,
+    identity.fingerprint,
+    identity.daemonGeneration,
+    identity.reservationGeneration
+  ].join('\0')
+}
 
 /**
- * The daemon grants the write once per operation; this only reads, asks, writes and settles.
- * Its outcome is read back from the daemon's receipt, never from this call.
+ * The creating flow installs the one input continuation before acceptance can expose the launch.
+ * It writes once, after the exact agent is published; refusal or failure ends it as uncertain.
  */
-export async function deliverPreparedPrompts(
+export function installPreparedPromptContinuation(
   identity: PreparedAgentLaunchIdentity,
-  terminal: RuntimeTerminalCreate,
-  ports: {
-    controller: RuntimePtyController
-    deliverPrompts: (
-      terminal: RuntimeTerminalCreate,
-      prompts: PreparedTerminalPrompts
-    ) => Promise<boolean>
+  agent: string,
+  prompts: PreparedTerminalPrompts,
+  deliver: (terminal: RuntimeTerminalCreate, prompts: PreparedTerminalPrompts) => Promise<boolean>
+): string {
+  const published = Promise.withResolvers<RuntimeTerminalCreate>()
+  let owed: PreparedTerminalPrompts | undefined = prompts
+  const answer = published.promise.then(async (terminal) => {
+    const bytes = owed
+    owed = undefined
+    // Boolean refusal does not prove nothing was written, so it never permits another attempt.
+    const written = bytes ? await deliver(terminal, bytes).catch(() => false) : false
+    return written ? terminal : { ...terminal, warning: preparedPromptUncertainText(agent) }
+  })
+  continuations.set(preparedLaunchKey(identity), { publish: published.resolve, answer })
+  return PROMPT_OWNER_REF
+}
+
+/**
+ * Publication hands the exact agent to its creator and joins the one answer; it never writes.
+ * Without a creator, a prompt-bearing launch may have been written before main restarted.
+ */
+export function joinPreparedPromptContinuation(
+  identity: PreparedAgentLaunchIdentity,
+  descriptor: PreparedAgentLaunchDescriptor,
+  terminal: RuntimeTerminalCreate
+): Promise<RuntimeTerminalCreate> {
+  const continuation = continuations.get(preparedLaunchKey(identity))
+  if (continuation) {
+    continuation.publish(terminal)
+    return continuation.answer
   }
-): Promise<void> {
-  const request = ports.controller.preparedAgentLaunch
-  if (!request) {
-    return
-  }
-  const settle = async (attempt: string, outcome: PreparedLaunchInputOutcome) => {
-    unsettled.set(identity.operationId, { attempt, outcome })
-    await request({ action: 'settlePrompt', identity, attempt, outcome })
-    unsettled.delete(identity.operationId)
-  }
-  const owed = unsettled.get(identity.operationId)
-  if (owed) {
-    await settle(owed.attempt, owed.outcome)
-    return
-  }
-  // A lost reply here consumed nothing: the next publication reads again.
-  if (
-    !grantedPrompts(await request({ action: 'claimPrompt', identity, consumer: promptConsumer }))
-  ) {
-    return
-  }
-  const attempt = randomUUID()
-  let granted: unknown
-  try {
-    granted = await request({ action: 'claimPrompt', identity, consumer: promptConsumer, attempt })
-  } catch (error) {
-    // This request ended without writing; if it won the grant, that grant closes as uncertain.
-    await settle(attempt, 'uncertain').catch(() => {})
-    throw error
-  }
-  const prompts = grantedPrompts(granted)
-  if (!prompts) {
-    return
-  }
-  // Boolean refusal does not prove nothing was written, so it settles as uncertain.
-  const outcome = await ports.deliverPrompts(terminal, prompts).then(
-    (written): PreparedLaunchInputOutcome => (written ? 'written' : 'uncertain'),
-    (): PreparedLaunchInputOutcome => 'uncertain'
+  return Promise.resolve(
+    typeof descriptor.promptOwnerRef === 'string'
+      ? { ...terminal, warning: preparedPromptUncertainText(descriptor.claim.agent) }
+      : terminal
   )
-  await settle(attempt, outcome)
 }
 
-export function forgetPreparedPromptDelivery(operationId: string): void {
-  unsettled.delete(operationId)
-}
-
-function grantedPrompts(value: unknown): PreparedTerminalPrompts | null {
-  if (typeof value !== 'object' || value === null || !('prompts' in value)) {
-    return null
-  }
-  return isPreparedTerminalPrompts(value.prompts) ? value.prompts : null
-}
-
-function isPreparedTerminalPrompts(value: unknown): value is PreparedTerminalPrompts {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  for (const key of ['draft', 'followup'] as const) {
-    if (!(key in value)) {
-      continue
-    }
-    const prompt = Reflect.get(value, key)
-    if (typeof prompt !== 'object' || prompt === null || !isTuiAgent(prompt.agent)) {
-      return false
-    }
-    if (typeof (key === 'draft' ? prompt.content : prompt.prompt) !== 'string') {
-      return false
-    }
-  }
-  return true
+/** Kept until its answer is recorded or the launch is gone, so a failed write retries recording only. */
+export function forgetPreparedPromptContinuation(identity: PreparedAgentLaunchIdentity): void {
+  continuations.delete(preparedLaunchKey(identity))
 }

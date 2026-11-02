@@ -47,6 +47,7 @@ export type PreparedAgentLaunchDescriptor = Pick<
     splitPlacement?: { afterTabId?: string }
   }
   extraTemplateIds?: string[]
+  /** The creating main process that holds this launch's post-start prompt; never its bytes. */
   promptOwnerRef?: string
 }
 
@@ -66,8 +67,6 @@ export type PreparedAgentLaunchStatus = PreparedAgentLaunchIdentity & {
     | 'cancelled'
     | 'expired'
   published: boolean
-  /** Settled first-prompt handoff; uncertain never authorizes a resend. */
-  input?: PreparedLaunchInputOutcome
 }
 
 /** An automatic launch outcome no surviving terminal shows; the window shows one short notice per operation. */
@@ -78,8 +77,6 @@ export type PreparedAgentLaunchNotice = {
   kind: 'setup-closed' | 'prompt-uncertain'
 }
 
-export type PreparedLaunchInputOutcome = 'written' | 'uncertain'
-
 /** Accepted presentation the daemon returns to the exact publication observer; never listed or saved. */
 export type PreparedLaunchPublication = {
   launchConfig?: WorktreeStartupLaunch['launchConfig']
@@ -87,11 +84,15 @@ export type PreparedLaunchPublication = {
   launchToken?: string
 }
 
-/** One main process; a replacement can only take over a prompt it proves was never attempted. */
-export type PreparedPromptConsumer = PreparedLaunchIncarnation & { id: string }
-
-/** A process incarnation precise enough that a vanished or reused PID, or another boot, proves its demise. */
-export type PreparedLaunchIncarnation = { pid: number; process?: string; boot?: string }
+/** Each process fact only when it was read; only facts known on both sides are ever compared. */
+export type PreparedLaunchIncarnation = {
+  pid: number
+  /** Linux PID namespace; start identities compare only within one. */
+  namespace?: string
+  /** Kernel process start (Linux start ticks, or start time elsewhere); never a command line. */
+  start?: string
+  boot?: string
+}
 
 /** The daemon is authenticated, but a reply still narrows before it reaches a terminal record. */
 export function parsePreparedLaunchPublication(

@@ -9,8 +9,10 @@ import {
   recordStagedStartupReader,
   stageStartupCommand
 } from '../../shared/startup-command-staging'
+import type { PreparedLaunchIncarnation } from '../../shared/prepared-agent-launch'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
+import { readCurrentPreparedLaunchIncarnation } from './prepared-agent-launch-incarnation'
 import { collectOwnedStartupStaging } from './prepared-agent-launch-staging-collector'
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
@@ -32,7 +34,7 @@ describePosix('owned launch staging collection', () => {
     rmSync(daemonDir, { recursive: true, force: true })
   })
 
-  function stage(owner: { pid: number; boot?: string }) {
+  function stage(owner: PreparedLaunchIncarnation) {
     return stageStartupCommand({
       command: `cx '${'x'.repeat(600)}'`,
       shellPath: '/bin/zsh',
@@ -76,5 +78,16 @@ describePosix('owned launch staging collection', () => {
       }
     }
     expect(readdirSync(staging)).toHaveLength(thisBoot ? 3 : 2)
+  })
+
+  it('keeps a live writer first seen without its boot until its start proves it gone', async () => {
+    // The writer could not read its boot when it staged; this sweep can, for the same live process.
+    const { boot: _unknownThen, ...live } = await readCurrentPreparedLaunchIncarnation()
+    const unhandedLive = stage(live)
+    // The same PID with a known different start is another process: the writer is gone.
+    const reusedPid = stage({ ...live, start: `${live.start}-earlier` })
+    await collectOwnedStartupStaging(staging)
+    expect(existsSync(unhandedLive.scriptPath!)).toBe(true)
+    expect(existsSync(reusedPid.directoryPath!)).toBe(live.start === undefined)
   })
 })
