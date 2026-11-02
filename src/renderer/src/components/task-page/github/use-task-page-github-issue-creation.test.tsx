@@ -314,9 +314,10 @@ describe('New Issue source-save dependency', () => {
         newIssueRepoAssignees: { data: [], loading: false, error: null }
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these fields cover every IssueDialog input; later provider/composer stages add no fields read by this dialog.
+      const model = fields as unknown as TaskPageComposerActionsModel
       return (
         <TooltipProvider>
-          <TaskPageGitHubIssueDialog model={fields as unknown as TaskPageComposerActionsModel} />
+          <TaskPageGitHubIssueDialog model={model} />
         </TooltipProvider>
       )
     }

@@ -163,10 +163,9 @@ function useMountedSourceDisplay(runRequests = false) {
     )
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pagination reads the stage-8 list state, source kind and store bindings present here; intervening provider stages add no GitHub pagination inputs.
-  const withKind = useTaskPageGitHubSearchPagination(
-    kindModel as unknown as typeof kindModel &
-      Parameters<typeof useTaskPageGitHubSearchPagination>[0]
-  )
+  const paginationInput = kindModel as unknown as typeof kindModel &
+    Parameters<typeof useTaskPageGitHubSearchPagination>[0]
+  const withKind = useTaskPageGitHubSearchPagination(paginationInput)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field the source display reads comes from stages 1-8 or the kind above; stages 9-20 add none of them.
   const sourceDisplayInput = withKind as unknown as typeof withKind &
     Parameters<typeof useTaskPageSourceDisplay>[0]

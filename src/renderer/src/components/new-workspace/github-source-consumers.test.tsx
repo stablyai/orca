@@ -107,9 +107,9 @@ it('settles an obsolete smart-search result held by no save without clearing or 
     setGithubLoading,
     setCrossRepoPrompt: vi.fn()
   }
-  // SAFETY: this hook consumes only these foundation fields; other providers are not involved in GitHub search.
   renderHook(() =>
     useSmartWorkspaceGithubSearch({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these foundation fields; the other providers' fields play no part in GitHub search.
       foundation: foundation as Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'],
       sourceQueryWithinLimit: true,
       shouldQueryGithub: true
@@ -164,9 +164,9 @@ it.each([false, true])(
       setGithubLoading: vi.fn(),
       setCrossRepoPrompt: vi.fn()
     }
-    // SAFETY: this hook consumes only these foundation fields; other providers are not involved in GitHub search.
     const { unmount } = renderHook(() =>
       useSmartWorkspaceGithubSearch({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these foundation fields; the other providers' fields play no part in GitHub search.
         foundation: foundation as Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'],
         sourceQueryWithinLimit: true,
         shouldQueryGithub: true

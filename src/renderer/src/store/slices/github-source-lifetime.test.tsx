@@ -12,6 +12,7 @@ import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-pa
 import { createCmdJTaskSearchRequests } from '@/components/cmd-j/task-search-requests'
 import { EMPTY_PALETTE_FILTER } from '@/components/cmd-j/palette-filter'
 import { githubTaskBinding } from '@/lib/github-task-observation'
+import { bindingKey } from '../github/task-record-model'
 import type { AppState } from '../types'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
@@ -297,11 +298,13 @@ describe('GitHub source collection lifetime', () => {
         .getState()
         .setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
       // Nothing may keep observing the held save once its searches are cancelled.
-      const [held] = (
-        store.getState().githubSourceCollections as unknown as {
-          writes: Map<string, { settled: Promise<boolean>; waiters?: Set<unknown> }>
-        }
-      ).writes.values()
+      const held = store
+        .getState()
+        .githubSourceCollections.catalogSnapshot()
+        .get(bindingKey(repo))?.write
+      if (!held) {
+        throw new Error('expected the held source save')
+      }
       const observe = vi.spyOn(held.settled, 'then')
       const search = () => {
         const controller = new AbortController()
@@ -328,7 +331,7 @@ describe('GitHub source collection lifetime', () => {
           await again.results
         }
         await results
-        expect([observe.mock.calls.length, held.waiters?.size]).toEqual([0, 0])
+        expect([observe.mock.calls.length, held.waiters.size]).toEqual([0, 0])
       }
       save.resolve({ ...repo, issueSourcePreference: 'origin' })
       await saving
