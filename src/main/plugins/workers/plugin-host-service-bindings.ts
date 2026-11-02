@@ -55,8 +55,9 @@ export function bindPluginHostServices(input: {
   /** The calling plugin's `contributes.settings`: defaults and value checks. */
   declaredSettings?: readonly PluginSettingContribution[]
   statusBar?: PluginStatusBarState | null
-  /** Ids of the calling plugin's `contributes.statusBarItems`. */
+  /** Ids of the calling plugin's `contributes.statusBarItems`, and its install's revision. */
   declaredStatusBarItemIds?: readonly string[]
+  statusBarRevision?: string
 }): PluginHostServices {
   const declared = new Map((input.declaredSettings ?? []).map((setting) => [setting.key, setting]))
   const { delegate, pluginsDataDir } = input
@@ -64,7 +65,7 @@ export function bindPluginHostServices(input: {
     desktop: input.desktop ?? null,
     panels: input.panels ?? null,
     statusBar: input.statusBar
-      ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds)
+      ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)
       : null,
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
@@ -130,7 +131,8 @@ export function bindPluginHostServices(input: {
 
 function statusBarServices(
   state: PluginStatusBarState,
-  declaredIds: readonly string[] = []
+  declaredIds: readonly string[] = [],
+  revision = ''
 ): NonNullable<PluginHostServices['statusBar']> {
   const declared = new Set(declaredIds)
   return {
@@ -138,7 +140,7 @@ function statusBarServices(
       if (!declared.has(itemId)) {
         return false
       }
-      state.update(pluginKey, itemId, patch)
+      state.update(pluginKey, revision, itemId, patch)
       return true
     }
   }
