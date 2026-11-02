@@ -1,4 +1,4 @@
-import React, { useId, useRef } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 import { DropdownMenuItem, useCloseDropdownMenu } from '@/components/ui/dropdown-menu'
 import { AgentSurfaceLaunchButton } from '@/components/agent/AgentSurfaceLaunchButton'
 import {
@@ -31,7 +31,9 @@ export function SurfaceChoiceRow({
 }): React.JSX.Element {
   const otherButton = useRef<HTMLButtonElement>(null)
   // Radix chooses the item a press-and-drag releases on; the button beside it does the same.
-  const pressed = useRef(false)
+  // Set while a press that began on the button is down; it removes its own window listeners.
+  const endPress = useRef<(() => void) | null>(null)
+  useEffect(() => () => endPress.current?.(), [])
   const closeMenu = useCloseDropdownMenu()
   const reasonId = useId()
   const title = rowTitle(row, label)
@@ -81,18 +83,21 @@ export function SurfaceChoiceRow({
         title={rowTitle(other, label)}
         className={`hover:bg-accent focus-visible:bg-accent ${LAUNCH_ROW_REVEAL}`}
         onPointerDown={() => {
-          pressed.current = true
-          // A press released anywhere else must not swallow the next drag release here.
-          window.addEventListener(
-            'pointerup',
-            () => {
-              pressed.current = false
-            },
-            { once: true }
-          )
+          endPress.current?.()
+          // Ends wherever the press is released or cancelled, so it can't swallow a later drag release.
+          const end = () => {
+            window.removeEventListener('pointerup', end)
+            window.removeEventListener('pointercancel', end)
+            if (endPress.current === end) {
+              endPress.current = null
+            }
+          }
+          endPress.current = end
+          window.addEventListener('pointerup', end)
+          window.addEventListener('pointercancel', end)
         }}
         onPointerUp={(event) => {
-          if (!pressed.current) {
+          if (!endPress.current) {
             event.currentTarget.click()
           }
         }}

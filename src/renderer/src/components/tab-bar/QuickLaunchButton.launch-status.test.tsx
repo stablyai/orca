@@ -283,6 +283,44 @@ it.each(['cli', 'chat'] as const)(
   }
 )
 
+it.each([1, 10])(
+  'leaves no window listeners from cancelled or unmounted presses on the row button (x%i)',
+  (scale) => {
+    const added = vi.spyOn(window, 'addEventListener')
+    const removed = vi.spyOn(window, 'removeEventListener')
+    const pressCalls = (spy: typeof added) =>
+      spy.mock.calls.filter(([type]) => type === 'pointerup' || type === 'pointercancel')
+    const live = () =>
+      pressCalls(added).filter(
+        ([type, listener]) =>
+          !pressCalls(removed).some(([other, gone]) => other === type && gone === listener)
+      )
+    let { button } = renderChoice('cli')
+    for (let press = 0; press < 5 * scale; press += 1) {
+      fireEvent.pointerDown(button, { pointerType: 'touch' })
+      fireEvent.pointerCancel(button, { pointerType: 'touch' })
+    }
+    expect(pressCalls(added)).toHaveLength(2 * 5 * scale)
+    expect(live()).toEqual([])
+    // Cancelled presses left nothing behind, so a drag released on the button still chooses it.
+    fireEvent.pointerUp(button, { pointerType: 'mouse' })
+    expectLaunch('chat')
+    cleanup()
+    ;({ button } = renderChoice('cli'))
+    fireEvent.pointerDown(button, { pointerType: 'mouse' })
+    expect(live()).toHaveLength(2)
+    cleanup()
+    expect(live()).toEqual([])
+    // A whole press on the button starts its surface once.
+    ;({ button } = renderChoice('cli'))
+    fireEvent.pointerDown(button, { pointerType: 'mouse' })
+    fireEvent.pointerUp(button, { pointerType: 'mouse' })
+    fireEvent.click(button)
+    expectLaunch('chat')
+    expect(live()).toEqual([])
+  }
+)
+
 it('keeps the chat beside a waiting terminal row usable while its host connects', () => {
   vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValue(choiceModel('cli', true))
   launchMock.mockReset().mockReturnValue({ surface: { kind: 'host-published' } })
