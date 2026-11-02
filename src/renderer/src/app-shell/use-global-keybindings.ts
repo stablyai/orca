@@ -1,4 +1,7 @@
-import { AGENTS_SHORTCUT_ACTION_IDS } from './agents-shortcut-handlers'
+import {
+  AGENTS_SHORTCUT_ACTION_IDS,
+  agentsScopeShortcutOwnsChord
+} from './agents-shortcut-handlers'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -193,7 +196,9 @@ export function useGlobalKeybindings(args: {
         return
       }
 
+      // Why: a scope chord owned by the focused Agents panel must run even when the search field would claim it (e.g. a Ctrl chord on macOS).
       if (
+        !agentsScopeShortcutOwnsChord(matchShortcut) &&
         globalShortcutTargetYields(input, shortcutPlatform, keybindings, {
           context,
           terminalShortcutPolicy
