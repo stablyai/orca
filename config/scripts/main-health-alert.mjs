@@ -14,9 +14,14 @@ export function health(conclusion) {
   return GREEN.has(conclusion) ? 'green' : undefined
 }
 
+const completedAt = (run) => Date.parse(run.updated_at ?? '') || 0
+
 /**
  * Decides what the completed run `current` reports, given main push runs of the same workflow.
- * Only the newest settled run speaks, so a slower older run cannot reopen a state a newer one reported.
+ * Main's state is the streak of same-health settled runs ending at the newest one; the streak's
+ * first-completed member announces it. Every handler computes the same announcer from the same
+ * history, so a burst of reds alerts once however their handlers interleave, and a slower older
+ * run outside the newest streak cannot reopen a state a newer run already reported.
  * A re-run compares with its own earlier attempt, so a flaky red that passes on retry still recovers.
  */
 export function decideTransition(current, runs, previousAttempt = undefined) {
@@ -24,35 +29,63 @@ export function decideTransition(current, runs, previousAttempt = undefined) {
   if (!now) {
     return { action: 'none', reason: `Run concluded ${current.conclusion}; health is unchanged.` }
   }
-  const settled = runs
-    .filter((run) => run.id !== current.id && run.status === 'completed' && health(run.conclusion))
-    .sort((left, right) => right.run_number - left.run_number)
-  const newer = settled.find((run) => run.run_number > current.run_number)
-  if (newer) {
+  const settled = [
+    ...runs.filter(
+      (run) => run.id !== current.id && run.status === 'completed' && health(run.conclusion)
+    ),
+    current
+  ].sort((left, right) => right.run_number - left.run_number)
+  const streakEnd = settled.findIndex(
+    (run) => health(run.conclusion) !== health(settled[0].conclusion)
+  )
+  const streak = streakEnd === -1 ? settled : settled.slice(0, streakEnd)
+  const previous = streakEnd === -1 ? undefined : settled[streakEnd]
+  if (!streak.includes(current)) {
     return {
       action: 'none',
-      reason: `Newer run #${newer.run_number} already reported main's health.`
+      reason: `Newer run #${settled[0].run_number} already settled main ${health(settled[0].conclusion)}.`
     }
   }
-  const previous = settled.find((run) => run.run_number < current.run_number)
+  const retried = health(previousAttempt?.conclusion)
+  if (retried === now) {
+    return { action: 'none', reason: `The re-run kept main ${now}.` }
+  }
+  if (retried && current === settled[0]) {
+    return { action: now === 'red' ? 'broken' : 'recovered', previous: previousAttempt }
+  }
+  const announcer = streak.reduce((first, run) =>
+    completedAt(run) < completedAt(first) ||
+    (completedAt(run) === completedAt(first) && run.run_number < first.run_number)
+      ? run
+      : first
+  )
+  if (announcer !== current) {
+    return { action: 'none', reason: `Run #${announcer.run_number} announces this ${now} streak.` }
+  }
   // With no history, assume main was green so the first failure is still announced.
-  const before =
-    health(previousAttempt?.conclusion) ?? (previous ? health(previous.conclusion) : 'green')
-  if (before === now) {
+  if ((previous ? health(previous.conclusion) : 'green') === now) {
     return { action: 'none', reason: `Main stays ${now}.` }
   }
   return { action: now === 'red' ? 'broken' : 'recovered', previous }
 }
 
-export function parseSlackUserIds(json) {
+// A malformed mapping only loses Slack mentions; the alert itself must still go out.
+export function parseSlackUserIds(json, warn = console.warn) {
   if (!json?.trim()) {
     return {}
   }
-  const parsed = JSON.parse(json)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('SLACK_USER_IDS must be a JSON object of GitHub login to Slack member ID.')
+  try {
+    const parsed = JSON.parse(json)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed
+    }
+  } catch {
+    // Reported below with the shape problem.
   }
-  return parsed
+  warn(
+    'SLACK_USER_IDS is not a JSON object of GitHub login to Slack member ID; mentions use GitHub links.'
+  )
+  return {}
 }
 
 // Without a Slack member ID, fall back to the GitHub profile link the release pings use.
