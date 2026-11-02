@@ -16,6 +16,7 @@ import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
+  WORK_ITEM_DETAILS_FRESH_MS,
   touchWorkItemDetailsCache,
   workItemDetailsCache,
   withWorkItemDetailsItem
@@ -78,6 +79,7 @@ type FetchAcceptance = {
   /** A user-started read reports its own failure, so it never installs an inline load error. */
   userAction?: boolean
   target?: GitHubWorkItemTarget | null
+  isCurrent?: () => boolean
   accepts?: (result: GitHubWorkItemDetails | null) => boolean
   onAccepted?: (result: GitHubWorkItemDetails) => void
 }
@@ -99,6 +101,10 @@ export async function settleWorkItemDetailsFetch(
   }
   const prev = workItemDetailsCache.get(detailsCacheKey)
   if (prev?.pending !== inflight) {
+    return { status: 'superseded' } as const
+  }
+  if (args.isCurrent?.() === false) {
+    touchWorkItemDetailsCache(detailsCacheKey, { ...prev, pending: undefined })
     return { status: 'superseded' } as const
   }
   try {
@@ -137,12 +143,35 @@ export async function settleWorkItemDetailsFetch(
   return { status: 'accepted', details: result } as const
 }
 
+export function ensureWorkItemDetailsFetch(
+  key: string,
+  load: () => Promise<GitHubWorkItemDetails | null>,
+  options: FetchAcceptance = {}
+): void {
+  if (options.isCurrent?.() === false) {
+    return
+  }
+  const cached = workItemDetailsCache.get(key)
+  if (cached?.pending) {
+    if (cached.pending.isCurrent?.() !== false) {
+      return
+    }
+  } else if (
+    cached?.details &&
+    (!options.target || matchesGitHubWorkItemTarget(cached.details.item, options.target)) &&
+    Date.now() - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
+  ) {
+    return
+  }
+  startWorkItemDetailsFetch(key, load, options)
+}
+
 export function startWorkItemDetailsFetch(
   key: string,
   load: () => Promise<GitHubWorkItemDetails | null>,
   options: FetchAcceptance = {}
 ) {
-  const inflight = Promise.resolve().then(load)
+  const inflight = Object.assign(Promise.resolve().then(load), { isCurrent: options.isCurrent })
   const previous = workItemDetailsCache.get(key)
   touchWorkItemDetailsCache(key, {
     details: previous?.details ?? null,

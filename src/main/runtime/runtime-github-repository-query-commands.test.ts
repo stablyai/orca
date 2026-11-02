@@ -98,7 +98,8 @@ describe('registered direct details transport', () => {
         'ssh-target',
         options,
         'upstream',
-        ...(canonical !== undefined ? [ownerRepo, canonical] : ownerRepo ? [ownerRepo] : [])
+        ownerRepo,
+        canonical === true
       )
     }
   )

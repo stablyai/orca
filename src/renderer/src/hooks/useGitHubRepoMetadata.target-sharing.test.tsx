@@ -678,6 +678,12 @@ it('in-flight account A→B→A publishes only its own details/options and dedup
   await change('B')
   expect(container.textContent).toBe('pending:')
   expect(pending.filter((entry) => entry.account === 'B')).toHaveLength(2)
+  await change('A')
+  expect(container.textContent).toBe('pending:')
+  expect(pending).toHaveLength(4)
+  await change('B')
+  expect(container.textContent).toBe('pending:')
+  expect(pending).toHaveLength(4)
   const finish = async (account: string) =>
     act(async () => {
       for (const entry of pending.filter((entry) => entry.account === account)) {

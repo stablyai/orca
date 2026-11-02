@@ -20,7 +20,7 @@ export const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for
 export type WorkItemDetailsCacheEntry = {
   details: GitHubWorkItemDetails | null
   fetchedAt: number
-  pending?: Promise<GitHubWorkItemDetails | null>
+  pending?: Promise<GitHubWorkItemDetails | null> & { isCurrent?: () => boolean }
   error?: string
   viewed?: { requests: Map<string, object>; paths: ReadonlySet<string> }
 }

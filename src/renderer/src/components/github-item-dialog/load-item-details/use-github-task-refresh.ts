@@ -186,7 +186,7 @@ export function useGitHubTaskRefresh({
           () => loadCanonicalGitHubTaskDetails(cache, binding, target, accepts),
           {
             userAction: true,
-            accepts,
+            isCurrent: accepts,
             onAccepted: (result) => {
               onAcceptedRef.current?.({ ...target.item, ...result.item })
               if (mounted.current) {

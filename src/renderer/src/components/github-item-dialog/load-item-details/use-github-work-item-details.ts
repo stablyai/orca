@@ -4,7 +4,7 @@ import {
   GitHubWorkItemTargetError,
   matchesGitHubWorkItemTarget
 } from '../../../../../shared/github/work-item-target'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
 import { addressedGitHubIssueItem } from '@/lib/github-task-target'
@@ -19,7 +19,6 @@ import type {
 } from '../../../../../shared/github/work-item-types'
 import type { GitHubWorkItemDetailsArgs } from './github-item-dialog-types'
 import {
-  WORK_ITEM_DETAILS_FRESH_MS,
   invalidateWorkItemDetailsCacheByMatch,
   invalidateWorkItemDetailsCacheForKey,
   subscribeWorkItemDetailsCache,
@@ -31,7 +30,7 @@ import {
 } from './work-item-details-cache'
 import {
   loadOrdinaryWorkItemDetails,
-  startWorkItemDetailsFetch,
+  ensureWorkItemDetailsFetch,
   getAcceptedWorkItemDetails
 } from './work-item-details-fetch-settle'
 import { syncPRFileViewedState } from './pr-file-viewed-change'
@@ -132,10 +131,6 @@ export function useGitHubWorkItemDetails({
         : null
   const detailsLoaded = Boolean(details)
 
-  const ordinaryLoadRef = useRef<{
-    attempt: ReturnType<typeof startWorkItemDetailsFetch>
-    binding: typeof binding
-  } | null>(null)
   // Invalidation can remove an open entry without changing fetch dependencies; a tick forces refetch.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
@@ -155,22 +150,7 @@ export function useGitHubWorkItemDetails({
     if (invalidOpenedItem) {
       return
     }
-    const cached = workItemDetailsCache.get(detailsCacheKey)
-    if (
-      !rejectedCache &&
-      cached?.details &&
-      Date.now() - cached.fetchedAt <= WORK_ITEM_DETAILS_FRESH_MS
-    ) {
-      return
-    }
-
-    // A load started on an earlier connection is cancelled and re-run; the entry keeps what it showed.
-    const own = ordinaryLoadRef.current
-    if (cached?.pending && (own?.attempt.pending !== cached.pending || own.binding === binding)) {
-      return
-    }
-    own?.attempt.cancel()
-    const attempt = startWorkItemDetailsFetch(
+    ensureWorkItemDetailsFetch(
       detailsCacheKey,
       () =>
         loadOrdinaryWorkItemDetails(
@@ -185,9 +165,8 @@ export function useGitHubWorkItemDetails({
           cache,
           binding
         ),
-      { target: resource, accepts: () => !binding || cache.current(binding) }
+      { target: resource, isCurrent: () => !binding || cache.current(binding) }
     )
-    ordinaryLoadRef.current = { attempt, binding }
   }, [
     canUseDetailsRepoContext,
     repoPath,

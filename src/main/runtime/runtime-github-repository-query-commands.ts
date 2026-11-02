@@ -116,11 +116,8 @@ export class RuntimeGitHubRepositoryQueryCommands {
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
       repo.issueSourcePreference,
-      ...(canonical !== undefined
-        ? ([ownerRepo, canonical] as const)
-        : ownerRepo
-          ? ([ownerRepo] as const)
-          : ([] as const))
+      ownerRepo,
+      canonical === true
     )
   }
 
