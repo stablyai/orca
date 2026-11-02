@@ -76,7 +76,7 @@ function replacementIdentity(manifest: PluginConsentSubject): string {
     .flatMap((command) =>
       isPluginJsonObject(command) && typeof command.replaces === 'string' ? [command.replaces] : []
     )
-    .toSorted()
+    .sort()
   return actions.length > 0 ? `\0replaces:${actions.join(',')}` : ''
 }
 

@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
+import { setPluginHookRunner } from '../plugins/hooks/plugin-hook-dispatch'
 
 const PTY = 'pty-default-path'
 const HANDLE = 'term_default_path'
@@ -71,6 +72,27 @@ describe('agent prompt writer: default path', () => {
   it("settles its receipt on main's microtask schedule", async () => {
     // Pin completion timing: adding an async layer increases this count.
     expect(await completionTicks()).toBe(5)
+  })
+
+  it('rejects synchronous plugin hook setup failures through the send promise', async () => {
+    const failure = new Error('hook setup failed')
+    setPluginHookRunner({
+      wants: () => {
+        throw failure
+      },
+      run: async (_event, payload) => ({ kind: 'continue', payload })
+    })
+    try {
+      const target = dispatchRuntime()
+      await expect(
+        target.sendTerminal(HANDLE, { text: 'hello' }, { inputKind: 'driving' })
+      ).rejects.toBe(failure)
+      await expect(
+        target.sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' })
+      ).rejects.toBe(failure)
+    } finally {
+      setPluginHookRunner(null)
+    }
   })
 
   it('writes a queued leaf prompt to the PTY the leaf names when its turn comes', async () => {

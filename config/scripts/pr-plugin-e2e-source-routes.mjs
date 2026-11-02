@@ -120,6 +120,7 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugins.isolated-frames',
     ['plugin-isolated-frame', 'plugin-panel-containment'],
     [
+      `${STORE}frame-isolation`,
       'src\\/main\\/plugins\\/panels\\/plugin-frame-',
       'src\\/shared\\/plugins\\/frames\\/plugin-(?:frame-guest|panel-shell)',
       'src\\/preload\\/plugin-frame-guest',
@@ -211,10 +212,10 @@ const SPECIFIC_PLUGIN_ROUTES = [
   // `orca plugin open` / `shot`: renderer reveal, draw wait and main's capture of the panel rect.
   pluginRoute(
     'plugins.view-shot',
-    ['plugin-shot'],
+    ['plugin-shot', 'plugin-shot-editor'],
     [
       `${UI}view\\/`,
-      `${STORE}view-capture`,
+      `${STORE}(?:view-capture|shot-replay)`,
       'src\\/(?:main|shared)\\/plugins\\/view\\/',
       'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
       'src\\/cli\\/(?:handlers|specs)\\/plugin-view',

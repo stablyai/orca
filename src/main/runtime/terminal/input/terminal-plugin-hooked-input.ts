@@ -20,52 +20,60 @@ type TerminalSendAction = { text?: string; enter?: boolean; interrupt?: boolean 
 export abstract class OrcaRuntimeWithPluginHookedTerminalInput extends OrcaRuntimeWithControllerKnowsPtyIsLive {
   protected readonly pluginHookOrder = new TerminalPluginHookOrder()
 
-  async sendTerminal(
+  sendTerminal(
     handle: string,
     action: TerminalSendAction,
     options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
-    const hooked = terminalSendHookApplies(action, options)
-    return this.pluginHookOrder.run(
-      handle,
-      terminalHookOrderKind(hooked, action, options),
-      action,
-      // Why recheck inputKind: it narrows the type; terminalSendHookApplies already refused replies.
-      (value) =>
-        options.inputKind === 'query-reply'
-          ? Promise.resolve(value)
-          : runTerminalSendPluginHook(handle, value, options.inputKind, (text) =>
-              this.assertRewrittenTerminalTextAllowed(text)
-            ),
-      (final) => this.sendTerminalAfterPluginHooks(handle, final, options)
-    )
+    try {
+      const hooked = terminalSendHookApplies(action, options)
+      return this.pluginHookOrder.run(
+        handle,
+        terminalHookOrderKind(hooked, action, options),
+        action,
+        // Why recheck inputKind: it narrows the type; terminalSendHookApplies already refused replies.
+        (value) =>
+          options.inputKind === 'query-reply'
+            ? Promise.resolve(value)
+            : runTerminalSendPluginHook(handle, value, options.inputKind, (text) =>
+                this.assertRewrittenTerminalTextAllowed(text)
+              ),
+        (final) => this.sendTerminalAfterPluginHooks(handle, final, options)
+      )
+    } catch (error) {
+      return Promise.reject(error)
+    }
   }
 
-  async sendTerminalAgentPrompt(
+  sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
-    const hooked = agentPromptHookApplies(options)
-    return this.pluginHookOrder.run(
-      handle,
-      terminalHookOrderKind(hooked, {}, options),
-      prompt,
-      (value) => {
-        const pty = this.getLivePtyForHandle(handle)?.pty
-        return runAgentPromptPluginHook(
-          {
-            handle,
-            prompt: value,
-            inputKind: options.inputKind,
-            agent: pty?.foregroundAgent ?? pty?.launchAgent ?? null
-          },
-          (text) => this.assertRewrittenTerminalTextAllowed(text)
-        )
-      },
-      // Why outside the order: a delivery may wait on a permission answer (`onPermission: 'wait'`).
-      (final) => this.sendAgentPromptAfterPluginHooks(handle, final, options)
-    )
+    try {
+      const hooked = agentPromptHookApplies(options)
+      return this.pluginHookOrder.run(
+        handle,
+        terminalHookOrderKind(hooked, {}, options),
+        prompt,
+        (value) => {
+          const pty = this.getLivePtyForHandle(handle)?.pty
+          return runAgentPromptPluginHook(
+            {
+              handle,
+              prompt: value,
+              inputKind: options.inputKind,
+              agent: pty?.foregroundAgent ?? pty?.launchAgent ?? null
+            },
+            (text) => this.assertRewrittenTerminalTextAllowed(text)
+          )
+        },
+        // Why outside the order: a delivery may wait on a permission answer (`onPermission: 'wait'`).
+        (final) => this.sendAgentPromptAfterPluginHooks(handle, final, options)
+      )
+    } catch (error) {
+      return Promise.reject(error)
+    }
   }
 
   /** The checks callers ran on the original text, run again on what a plugin wrote. */
