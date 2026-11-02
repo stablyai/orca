@@ -45,8 +45,8 @@ export function SurfaceChoiceRow({
       className="flex items-center rounded-[7px] pr-2 has-[[data-highlighted]]:bg-black/8 dark:has-[[data-highlighted]]:bg-white/14"
     >
       <DropdownMenuItem
-        variant="launch"
-        className="min-w-0 flex-1 focus:bg-transparent aria-disabled:opacity-40 dark:focus:bg-transparent"
+        variant="launch-row"
+        className="min-w-0 flex-1"
         disabled={disabled}
         // A waiting launch stays focusable so arrow keys still reach it and the other surface.
         aria-disabled={disabled || !!unavailable || undefined}

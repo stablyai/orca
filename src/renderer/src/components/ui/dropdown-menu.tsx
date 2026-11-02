@@ -90,8 +90,12 @@ function DropdownMenuItem({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
-  /** `launch`: the roomier rows of the tab bar's new tab menu. */
-  variant?: 'default' | 'destructive' | 'launch'
+  /**
+   * `launch`: the roomier rows of the tab bar's new tab menu. `launch-row`: the same, for a launch
+   * item with its own controls beside it; the row around them draws the highlight, and a launch
+   * marked aria-disabled dims while staying focusable.
+   */
+  variant?: 'default' | 'destructive' | 'launch' | 'launch-row'
 }) {
   return (
     <DropdownMenuPrimitive.Item
@@ -99,7 +103,7 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[inset]:pl-8 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:*:[svg]:text-destructive! data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:text-[12px] data-[variant=launch]:py-1.5 data-[variant=launch]:leading-5 data-[variant=launch]:font-medium",
+        "relative flex cursor-default items-center gap-2 rounded-md px-2.5 py-1 text-[13px] leading-4 font-normal outline-hidden select-none focus:bg-black/8 dark:focus:bg-white/14 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[inset]:pl-8 data-[current=true]:bg-accent data-[current=true]:data-[disabled]:opacity-100 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5 [&_svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:*:[svg]:text-destructive! data-[variant=launch]:rounded-[7px] data-[variant=launch]:px-2 data-[variant=launch]:text-[12px] data-[variant=launch]:py-1.5 data-[variant=launch]:leading-5 data-[variant=launch]:font-medium data-[variant=launch-row]:rounded-[7px] data-[variant=launch-row]:px-2 data-[variant=launch-row]:text-[12px] data-[variant=launch-row]:py-1.5 data-[variant=launch-row]:leading-5 data-[variant=launch-row]:font-medium data-[variant=launch-row]:focus:bg-transparent dark:data-[variant=launch-row]:focus:bg-transparent data-[variant=launch-row]:aria-disabled:opacity-40",
         className
       )}
       onPointerMove={keepFocusWhileMenuCloses(onPointerMove)}

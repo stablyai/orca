@@ -250,8 +250,8 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         >
           <DropdownMenuItem
             ref={item}
-            variant="launch"
-            className="min-w-0 flex-1 focus:bg-transparent aria-disabled:opacity-40 dark:focus:bg-transparent"
+            variant="launch-row"
+            className="min-w-0 flex-1"
             disabled={launchDisabled}
             // A waiting launch stays focusable so arrow keys still reach it and Configure.
             aria-disabled={launchDisabled || !!defaultUnavailable || undefined}
