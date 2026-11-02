@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { selectWslHostDistro, WslHostMark } from './WslHostMark'
 
@@ -50,13 +50,14 @@ describe('WslHostMark', () => {
     })
     expect(mark.querySelector('svg')).toBeTruthy()
     expect(view.queryByText('orca-demo (WSL)')).toBeNull()
-    await act(async () => {
+    act(() => {
       fireEvent.pointerMove(mark, { pointerType: 'mouse' })
       fireEvent.focus(mark)
-      await new Promise((resolve) => setTimeout(resolve, 20))
     })
-    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
-      'Runs on WSL: orca-demo (Linux)'
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+        'Runs on WSL: orca-demo (Linux)'
+      )
     )
   })
 

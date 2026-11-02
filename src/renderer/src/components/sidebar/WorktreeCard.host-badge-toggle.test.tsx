@@ -249,6 +249,7 @@ describe('WorktreeCard host badge toggle', () => {
       expect(markup).not.toContain('orca-demo (WSL)')
       expect(markup).toContain('aria-label="Runs on WSL: orca-demo (Linux)"')
     },
+    // A filtered run imports WorktreeCard cold here, which can outlast the default timeout.
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
 })

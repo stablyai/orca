@@ -102,12 +102,11 @@ describe('project header WSL host mark', () => {
     expect(container.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(
       'Runs on WSL: orca-demo (Linux)'
     )
-    await act(async () => {
-      container.querySelector<HTMLElement>('[role="button"]')?.focus()
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    })
-    expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
-      'app — Runs on WSL: orca-demo (Linux)'
+    act(() => container.querySelector<HTMLElement>('[role="button"]')?.focus())
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
+        'app — Runs on WSL: orca-demo (Linux)'
+      )
     )
   })
 })
