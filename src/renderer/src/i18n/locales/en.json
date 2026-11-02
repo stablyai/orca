@@ -463,12 +463,13 @@
     },
     "clearData": {
       "title": "Clear browsing data",
-      "scope": "Clear all time for the browser profile used by this page. Cookies and site data are shared by pages in this profile. Clearing them signs you out of sites.",
+      "scope": "Clear saved data for this browser profile, from all time.",
       "cookies": "Cookies and site data",
+      "cookiesDescription": "Signs you out of sites in this profile.",
       "cache": "Cached images and files",
       "history": "Browsing history",
-      "legacyHistory": "History recorded before profile tracking stays in the shared history list. Use Clear browsing history to manage those entries.",
-      "error": "Could not finish clearing data. Some data may already be cleared. Reopen the browser page and try again. This action requires a local desktop browser guest.",
+      "legacyHistory": "Older history entries are managed separately in History.",
+      "error": "Could not finish clearing data. Reopen this browser page and try again. Some data may already be cleared.",
       "clearing": "Clearing…",
       "clear": "Clear data"
     }

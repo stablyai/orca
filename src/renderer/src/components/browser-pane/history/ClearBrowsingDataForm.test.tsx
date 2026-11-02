@@ -53,3 +53,29 @@ it('keeps the form open on failure and does not clear history', async () => {
   expect(history).not.toHaveBeenCalled()
   expect(close).not.toHaveBeenCalled()
 })
+
+it('keeps the clearing dialog open while the request is pending', async () => {
+  seedGuest()
+  let finish: (partition: string) => void = () => {}
+  const clearBrowsingData = vi.fn(
+    () =>
+      new Promise<string>((resolve) => {
+        finish = resolve
+      })
+  )
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { browser: { clearBrowsingData } }
+  })
+  const close = vi.fn()
+  render(<ClearBrowsingDataForm pageId="page" onClearHistory={vi.fn()} onClose={close} />)
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Cookies and site data' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Clear data' }))
+  expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+  expect(close).not.toHaveBeenCalled()
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  finish('persist:test')
+  await waitFor(() => expect(close).toHaveBeenCalledOnce())
+})

@@ -137,6 +137,16 @@ function BrowserHistoryDialogContent({
     setCleared(removed)
   }
 
+  if (clearDataOpen) {
+    return (
+      <ClearBrowsingDataForm
+        pageId={pageId}
+        onClose={() => setClearDataOpen(false)}
+        onClearHistory={(partition) => clearBrowserHistory(undefined, partition)}
+      />
+    )
+  }
+
   const hasHistory = browserUrlHistory.length > 0 || workspaceDocHistory.length > 0
   return (
     <CommandDialog
@@ -174,22 +184,13 @@ function BrowserHistoryDialogContent({
         }
       }}
     >
-      {clearDataOpen && (
-        <ClearBrowsingDataForm
-          pageId={pageId}
-          onClose={() => setClearDataOpen(false)}
-          onClearHistory={(partition) => {
-            clearBrowserHistory(undefined, partition)
-          }}
-        />
-      )}
       <CommandInput
         placeholder={translate('browser.history.search', 'Search history')}
         value={query}
         onValueChange={setQuery}
         className="h-11 min-w-0 flex-1"
       />
-      <CommandList className={clearDataOpen ? 'max-h-32' : 'max-h-[min(560px,calc(100vh-14rem))]'}>
+      <CommandList className="max-h-[min(560px,calc(100vh-14rem))]">
         <CommandEmpty>
           {hasHistory
             ? translate('browser.history.noMatches', 'No pages match your search')
