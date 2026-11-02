@@ -11,6 +11,7 @@ import {
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
+import { agentSessionRowId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 /**
  * A paired client's switch of a terminal pane to chat: the chat lands where this client looks only
@@ -39,7 +40,7 @@ export function recordConversationSwitchFocus(args: {
     return () => {}
   }
   const owner = structuredAgentSessionFocusOwner(args.target)
-  const hostTabId = `agent-session:${args.chatSessionId}`
+  const hostTabId = agentSessionRowId(args.chatSessionId)
   recordWebSessionFocusIntent(
     owner,
     args.workspaceId,
@@ -67,7 +68,7 @@ export function uncapturedSwitchChat(
 ) {
   const { worktreeId } = intent
   const owner = structuredAgentSessionFocusOwner(intent.target)
-  const hostTabId = `agent-session:${intent.sessionId}`
+  const hostTabId = agentSessionRowId(intent.sessionId)
   const sourceTabId = sourceTab
     ? toHostSessionTabId(sourceTab).split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
     : undefined

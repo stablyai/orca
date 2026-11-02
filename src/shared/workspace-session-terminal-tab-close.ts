@@ -1,4 +1,10 @@
-import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
+import {
+  holdsTerminal,
+  type Tab,
+  type TabGroup,
+  type TabGroupLayoutNode,
+  type WorkspaceVisibleTabType
+} from './tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 export type WorkspaceSessionTerminalTabCloseResult = {
@@ -79,9 +85,7 @@ export function findUnifiedTerminalTabs(
   worktreeId: string,
   tabId: string
 ): Tab[] {
-  return (session.unifiedTabs?.[worktreeId] ?? []).filter(
-    (tab) => tab.contentType === 'terminal' && (tab.entityId === tabId || tab.id === tabId)
-  )
+  return (session.unifiedTabs?.[worktreeId] ?? []).filter((tab) => holdsTerminal(tab, tabId))
 }
 
 function deriveActiveSurface(

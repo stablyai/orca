@@ -1,4 +1,7 @@
-import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import {
+  agentSessionRowId,
+  isReopenedChatTabId
+} from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { randomUUID } from 'node:crypto'
 import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
@@ -15,8 +18,7 @@ export function newReopenedChatTabId(): string {
 }
 
 export function mobileChatTabId(sessionId: string): string {
-  const id = getStructuredAgentSessionHost()?.getSessionTabId(sessionId)
-  return id && isReopenedChatTabId(id) ? id : `agent-session:${sessionId}`
+  return agentSessionRowId(sessionId, getStructuredAgentSessionHost()?.getSessionTabId(sessionId))
 }
 
 export function resolveChatTabActivation(
@@ -24,8 +26,12 @@ export function resolveChatTabActivation(
   tabId: string
 ): string {
   return (
-    tabs.find((tab) => tab.type === 'agent-session' && `agent-session:${tab.sessionId}` === tabId)
-      ?.id ?? tabId
+    tabs.find(
+      (tab) =>
+        tab.type === 'agent-session' &&
+        tab.sessionId !== undefined &&
+        agentSessionRowId(tab.sessionId) === tabId
+    )?.id ?? tabId
   )
 }
 

@@ -32,6 +32,7 @@ import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
+import { agentSessionRowId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -77,7 +78,7 @@ export function createTabsCloseActions(
             clearWebSessionFocusIntentIfMatches(
               structuredAgentSessionFocusOwner(target),
               worktreeId,
-              `agent-session:${tab.entityId}`
+              agentSessionRowId(tab.entityId)
             )
           }
           beginStructuredAgentSessionTabClose({

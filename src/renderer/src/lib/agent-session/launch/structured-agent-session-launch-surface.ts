@@ -38,6 +38,7 @@ import {
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { agentSessionRowId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 type LaunchSurface = {
   sessionId: string
@@ -232,7 +233,7 @@ export function materializeStructuredLaunchSurface(launch: LaunchSurface, activa
   }
   const state = useAppStore.getState()
   const owner = structuredAgentSessionFocusOwner({ kind: 'local' })
-  const hostTabId = `agent-session:${launch.sessionId}`
+  const hostTabId = agentSessionRowId(launch.sessionId)
   const focus = peekWebSessionFocusIntent(owner, address.worktreeId)
   openStructuredAgentSessionProvisionalTab({
     ...launch,

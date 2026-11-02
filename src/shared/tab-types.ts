@@ -73,6 +73,16 @@ export type Tab = {
   lastFocusedAt?: number
 }
 
+/** Whether this tab shows the terminal. Ids from main, a paired client or a pane key name the
+ *  terminal itself, so they match its own id, never a tab id: a switch can leave a tab's id on
+ *  other content (the tab keeps its id while what it holds changes). */
+export function holdsTerminal(
+  tab: Pick<Tab, 'contentType' | 'entityId'>,
+  terminalId: string
+): boolean {
+  return tab.contentType === 'terminal' && tab.entityId === terminalId
+}
+
 export type TabGroup = {
   id: string
   worktreeId: string

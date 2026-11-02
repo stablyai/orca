@@ -34,6 +34,7 @@ import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
 import { switchChatSlot } from '../../session-tabs/switch-slot-anchors'
+import { agentSessionRowId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 type Prepared = Awaited<ReturnType<typeof prepareStructuredSessionSwitch>>
 
@@ -295,7 +296,7 @@ async function switchToChat(
   )
   await ctx.runtime.switchSlotAnchors.recordFor(
     record.location.workspaceId,
-    `agent-session:${sessionId}`,
+    agentSessionRowId(sessionId),
     slot.anchor,
     () =>
       ctx.runtime.publishStructuredAgentSessionTab({

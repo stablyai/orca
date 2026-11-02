@@ -10,6 +10,7 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { Tab } from '../../../../shared/tab-types'
+import { agentSessionRowId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export function findStructuredAgentSessionTab(
   unifiedTabsByWorktree: Readonly<Record<string, readonly Tab[]>>,
@@ -78,7 +79,7 @@ export function activateStructuredAgentSessionTabOnOwner(
     'session.tabs.activate',
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),
-      tabId: `agent-session:${sessionId}`,
+      tabId: agentSessionRowId(sessionId),
       // Why both: navigation scopes new hosts to this client; notifyClients:false protects old hosts.
       ...(options?.callerOnly ? { notifyClients: false, navigation: 'caller' as const } : {})
     }

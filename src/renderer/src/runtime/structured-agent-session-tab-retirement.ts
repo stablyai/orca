@@ -21,6 +21,7 @@ import { callRuntimeRpc } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { agentSessionRowId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 const inFlightRetirements = new Map<string, Promise<boolean>>()
 
@@ -45,7 +46,7 @@ export function retireStructuredAgentSessionTab(args: {
   if (existing) {
     return existing
   }
-  const hostTabId = `agent-session:${args.sessionId}`
+  const hostTabId = agentSessionRowId(args.sessionId)
   // Why: main echoes the host tab id it was asked to close, never this window's tab id.
   const closeHostTab = () =>
     withLocalSessionTabCloseOwner(args.worktreeId, hostTabId, () =>
@@ -131,7 +132,7 @@ export function retireReplacedStructuredAgentSessionTab(args: {
   recordWebSessionCloseIntent(
     intentOwner,
     args.worktreeId,
-    `agent-session:${args.sessionId}`,
+    agentSessionRowId(args.sessionId),
     Date.now()
   )
 }
@@ -170,7 +171,7 @@ export function beginStructuredAgentSessionTabClose(args: {
   const intentOwner = captureWebSessionIntentOwner(
     structuredAgentSessionFocusOwner(args.target).environmentId
   )
-  const hostTabId = `agent-session:${args.sessionId}`
+  const hostTabId = agentSessionRowId(args.sessionId)
   // Hold close intent until a host frame omits the chat; pre-close frames would otherwise reappend it.
   recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
   void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {

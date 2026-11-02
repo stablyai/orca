@@ -133,23 +133,22 @@ export function translateSetTabProps(
   })
 }
 
-/** Split-pane row closes remove the pane; other terminal rows close their tab and refuse pinned tabs. Preserve already-closed success (#10747); other content kinds close as requested. */
+/** Split-pane row closes remove the pane; other terminal rows close their tab and refuse pinned tabs. A row no tab holds is already closed (#10747): its id may now name a tab holding other content. */
 export function translateSessionTabClose(
   workspaceKey: string,
   workspace: WorkspaceLayout | undefined,
   params: { tabId: string }
 ): MethodTranslation {
   const target = workspace ? resolveSessionTabRow(workspace, params.tabId) : null
-  if (target?.tab.kind === 'terminal') {
+  if (!target) {
+    return to()
+  }
+  if (target.tab.kind === 'terminal') {
     return target.leafId
       ? translateTerminalClose(workspaceKey, { tab: target.tab, leafId: target.leafId })
       : translateTerminalCloseTab(workspaceKey, { tab: target.tab })
   }
-  return to({
-    type: 'closeTabs',
-    workspace: workspaceKey,
-    tabIds: [target?.tab.id ?? params.tabId]
-  })
+  return to({ type: 'closeTabs', workspace: workspaceKey, tabIds: [target.tab.id] })
 }
 
 /** Validate reorders against the client’s projected group and retain unseen tabs’ places, then translate to moves. */

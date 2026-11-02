@@ -28,6 +28,7 @@ import {
   validatePrecomputedTerminalCloseState,
   type PrecomputedTerminalCloseState
 } from './terminal-close-target'
+import { holdsTerminal } from '../../../../shared/tab-types'
 export type { PrecomputedTerminalCloseState } from './terminal-close-target'
 export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
 
@@ -191,9 +192,8 @@ export function closeTerminalTab(
   const terminalCountBeforeClose =
     precomputedCloseState?.terminalCountBeforeClose ?? currentTerminalTabIds!.length
   // closeUnifiedTab owns MRU/neighbor repair across all tab types; terminal-only preselection would overwrite it.
-  const hasUnifiedRow = (state.unifiedTabsByWorktree?.[owningWorktreeId] ?? []).some(
-    (tab) =>
-      tab.contentType === 'terminal' && (tab.entityId === terminalTabId || tab.id === terminalTabId)
+  const hasUnifiedRow = (state.unifiedTabsByWorktree?.[owningWorktreeId] ?? []).some((tab) =>
+    holdsTerminal(tab, terminalTabId)
   )
   if (
     !hasUnifiedRow &&

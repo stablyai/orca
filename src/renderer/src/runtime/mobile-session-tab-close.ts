@@ -1,4 +1,5 @@
 import type { AppState } from '../store/types'
+import { holdsTerminal } from '../../../shared/tab-types'
 
 const EDITOR_SESSION_CONTENT_TYPES = new Set(['editor', 'diff', 'conflict-review', 'check-details'])
 
@@ -7,8 +8,11 @@ export function closeMobileSessionTabInStore(
   worktreeId: string,
   tabId: string
 ): boolean {
-  const unifiedTab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (tab) => tab.id === tabId || tab.entityId === tabId
+  // A terminal is named by its terminal id; the tab it sits in may keep an earlier content's id.
+  const unifiedTab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find((tab) =>
+    tab.contentType === 'terminal'
+      ? holdsTerminal(tab, tabId)
+      : tab.id === tabId || tab.entityId === tabId
   )
   if (unifiedTab && EDITOR_SESSION_CONTENT_TYPES.has(unifiedTab.contentType)) {
     store.closeFile(unifiedTab.entityId)
@@ -24,5 +28,5 @@ export function closeMobileSessionTabInStore(
     return true
   }
 
-  return store.closeUnifiedTab(tabId) !== null
+  return store.closeUnifiedTab(unifiedTab?.id ?? tabId) !== null
 }

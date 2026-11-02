@@ -14,6 +14,7 @@ import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { replacedTabGroupInView, replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
+import { holdsTerminal } from '../../../../shared/tab-types'
 
 type RuntimeTerminalSplitRequest = SplitTerminalPaneDetail & { worktreeId?: string }
 
@@ -46,7 +47,7 @@ function collectTerminalOwnershipEvidence(
   for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
     let matches = 0
     for (const tab of tabs) {
-      if (tab.contentType === 'terminal' && (tab.entityId === tabId || tab.id === tabId)) {
+      if (holdsTerminal(tab, tabId)) {
         matches += 1
       }
     }

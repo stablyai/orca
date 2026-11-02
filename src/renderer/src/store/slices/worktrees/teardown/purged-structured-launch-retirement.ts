@@ -20,6 +20,7 @@ import {
   structuredAgentSessionTargetForTab,
   structuredAgentSessionTargetForHost
 } from '@/runtime/structured-agent-session-owner'
+import { agentSessionRowId } from '../../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 /** Settles launch waits and retires chat ownership for purged tabs of one workspace. */
 export function retirePurgedTabLaunches(
@@ -61,7 +62,7 @@ export function retirePurgedTabLaunches(
       clearWebSessionFocusIntentIfMatches(
         structuredAgentSessionFocusOwner(target),
         worktreeId,
-        `agent-session:${tab.entityId}`
+        agentSessionRowId(tab.entityId)
       )
     }
   }
@@ -90,7 +91,7 @@ export function cancelStructuredLaunchesForWorktrees(
       clearWebSessionFocusIntentIfMatches(
         structuredAgentSessionFocusOwner(launch.intent.target),
         worktreeId,
-        `agent-session:${launch.intent.sessionId}`
+        agentSessionRowId(launch.intent.sessionId)
       )
       cancelledSessionIds.add(launch.intent.sessionId)
     }

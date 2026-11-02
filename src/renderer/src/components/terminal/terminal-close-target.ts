@@ -1,5 +1,6 @@
 import type { AppState } from '@/store'
 import type { TerminalTabRetirementPlan } from '@/store/slices/terminal-tab-retirement'
+import { holdsTerminal } from '../../../../shared/tab-types'
 
 export type PrecomputedTerminalCloseState = {
   owningWorktreeId: string
@@ -37,9 +38,7 @@ export function resolveTerminalCloseTarget(
     }
   }
   for (const [worktreeId, unifiedTabs] of Object.entries(state.unifiedTabsByWorktree ?? {})) {
-    const unified = unifiedTabs.find(
-      (tab) => tab.contentType === 'terminal' && (tab.entityId === tabId || tab.id === tabId)
-    )
+    const unified = unifiedTabs.find((tab) => holdsTerminal(tab, tabId))
     if (unified) {
       return { worktreeId, terminalTabId: unified.entityId }
     }

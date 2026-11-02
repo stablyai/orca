@@ -179,7 +179,7 @@ export async function openTerminalForDeclinedChat(
     useAppStore.getState().setActiveTab(replacement.entityId)
     useAppStore.getState().activateTab(replacement.id)
     useAppStore.getState().setActiveTabType('terminal', worktreeId)
-    focusTerminalTabSurface(replacement.id)
+    focusTerminalTabSurface(replacement.entityId)
   }
   // Switch-on, main's close lands later and shows the group's active tab: make it the terminal.
   const showsFirst = foreground && ORCA_LAYOUT_OWNER_IS_MAIN

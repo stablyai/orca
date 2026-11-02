@@ -28,6 +28,7 @@ import {
   StructuredAgentSessionCreateUnknownOutcomeError,
   StructuredAgentSessionOwnerUnresolvedError
 } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import { agentSessionRowId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export {
   StructuredAgentSessionCreateRefusalError,
@@ -105,7 +106,7 @@ export function createStructuredAgentSessionLaunchIntent(
     recordWebSessionFocusIntent(
       structuredAgentSessionFocusOwner(owner.target),
       worktreeId,
-      `agent-session:${sessionId}`,
+      agentSessionRowId(sessionId),
       undefined,
       resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
     )
@@ -222,7 +223,7 @@ export function abandonStructuredAgentSessionLaunchIntent(
   clearWebSessionFocusIntentIfMatches(
     structuredAgentSessionFocusOwner(intent.target),
     intent.worktreeId,
-    `agent-session:${intent.sessionId}`
+    agentSessionRowId(intent.sessionId)
   )
 }
 

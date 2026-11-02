@@ -1,9 +1,6 @@
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
-import {
-  structuredAgentSessionHostTabId,
-  isReopenedChatTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { agentSessionRowId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   getActiveTabNavOrder,
   getGroupVisibleTabOrder,
@@ -189,18 +186,16 @@ export function buildMobileSessionGroupProjection(
     if (visibleOrder.length === 0) {
       continue
     }
-    // Publish chat session IDs like main’s rows; window tab IDs have no main position and sort chats last on mobile.
+    // Name each tab as its rows do, like main's projection: a chat by its row id (window tab ids
+    // have no main position and sort chats last on mobile), a terminal by its terminal id.
     const publishedIdByTabId = new Map(
       visibleOrder.map((item) => [
         item.tabId ?? item.id,
         item.type === 'agent-session'
-          ? (() => {
-              const actual = inputs.hostTabIds.get(item.tabId ?? item.id)
-              return actual && isReopenedChatTabId(actual)
-                ? actual
-                : structuredAgentSessionHostTabId(item.id)
-            })()
-          : (item.tabId ?? item.id)
+          ? agentSessionRowId(item.id, inputs.hostTabIds.get(item.tabId ?? item.id))
+          : item.type === 'terminal'
+            ? item.id
+            : (item.tabId ?? item.id)
       ])
     )
     for (const item of visibleOrder) {

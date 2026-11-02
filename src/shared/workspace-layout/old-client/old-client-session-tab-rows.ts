@@ -9,15 +9,13 @@ export { projectSessionTabs } from './old-client-session-tabs-projection'
 
 export type SessionTabRowTarget = { tab: LayoutTab; leafId?: string }
 
-/** terminal::pane names a pane, bare terminal names its tab; browser-workspace and chat row IDs name tabs. */
+/** terminal::pane names a pane and a bare terminal id its tab: both name content, so they match a
+ *  terminal's own id only, never a tab id that a switch left on other content. Chat rows name their
+ *  session (or a reopened chat's tab), browser rows their tab. */
 export function resolveSessionTabRow(
   workspace: WorkspaceLayout,
   rowId: string
 ): SessionTabRowTarget | null {
-  const byId = workspace.tabs.find((tab) => tab.id === rowId)
-  if (byId) {
-    return { tab: byId }
-  }
   const separator = rowId.indexOf(TERMINAL_ROW_SEPARATOR)
   if (separator > 0) {
     const entityId = rowId.slice(0, separator)
@@ -35,7 +33,9 @@ export function resolveSessionTabRow(
   const tab = workspace.tabs.find((entry) =>
     sessionId !== null
       ? entry.kind === 'agent-session' && entry.entityId === sessionId
-      : (entry.kind === 'terminal' || entry.kind === 'browser') && entry.entityId === rowId
+      : entry.kind === 'terminal'
+        ? entry.entityId === rowId
+        : entry.id === rowId || (entry.kind === 'browser' && entry.entityId === rowId)
   )
   return tab ? { tab } : null
 }

@@ -232,14 +232,19 @@ describe('session.tabs translations', () => {
     ])
   })
 
-  it('closes a row that is already gone as already closed', () => {
-    const { ctx, model } = setup()
-    const commands = commandsOf(
-      translateSessionTabClose(WS, model.workspaces[WS], { tabId: 'gone::leaf' })
-    )
-    expect(commands).toEqual([{ type: 'closeTabs', workspace: WS, tabIds: ['gone::leaf'] }])
-    const closed = applyLayoutCommand(model, commands[0]!, ctx)
-    expect(closed.ok && closed.result.closed).toEqual(['gone::leaf'])
+  it('answers a close no tab holds as already closed, even when its id is a switched tab', () => {
+    const { model, tabA, leafA } = setup()
+    const workspace = model.workspaces[WS]!
+    // A switch left tabA's tab holding another terminal: a late close of the old one is stale.
+    const switched = {
+      ...workspace,
+      tabs: workspace.tabs.map((tab) =>
+        tab.id === tabA ? { ...tab, entityId: 'terminal-2' } : tab
+      )
+    }
+    for (const tabId of ['gone::leaf', tabA, terminalRowId(tabA, leafA)]) {
+      expect(translateSessionTabClose(WS, switched, { tabId })).toEqual({ ok: true, commands: [] })
+    }
   })
 
   it('sets props on the tab a pane row names', () => {

@@ -13,6 +13,7 @@ import type { MobileTerminalCommand } from '../../terminal/launch/mobile-termina
 import { canonicalizeAgentSessionIdentity } from '../../agent-session/ownership/agent-session-claim-identity'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { agentSessionRowId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export type SwitchTerminalSpawn = {
   agent: TuiAgent
@@ -155,7 +156,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
         this.switchSlotAnchors.replaced(
           workspaceId,
           owner.surface.tabId,
-          `agent-session:${chatSessionId}`
+          agentSessionRowId(chatSessionId)
         )
       )
     )

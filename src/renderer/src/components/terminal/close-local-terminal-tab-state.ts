@@ -3,6 +3,7 @@ import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
 } from '@/store/slices/terminal-tab-retirement'
+import { holdsTerminal } from '../../../../shared/tab-types'
 
 export function closeLocalTerminalTabState(
   terminalTabId: string,
@@ -36,11 +37,7 @@ export function closeLocalTerminalTabState(
   }
 
   for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
-    const unified = tabs.find(
-      (tab) =>
-        tab.contentType === 'terminal' &&
-        (tab.entityId === terminalTabId || tab.id === terminalTabId)
-    )
+    const unified = tabs.find((tab) => holdsTerminal(tab, terminalTabId))
     if (unified) {
       state.closeTab(unified.entityId, options)
       return

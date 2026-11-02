@@ -5,6 +5,7 @@ import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspac
 import type { LayoutCommandRunOptions, WindowLayoutCommand } from '../runtime-layout-apply'
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { TerminalNotPlacedError } from './terminal-not-placed-error'
+import { agentSessionRowId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   abstract applyLayoutCommand(
@@ -39,7 +40,7 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
       throw new TerminalNotPlacedError('terminal_handle_stale')
     }
     const layoutTabId = chatTabId(args.chatSessionId)
-    const snapshotTabId = `agent-session:${args.chatSessionId}`
+    const snapshotTabId = agentSessionRowId(args.chatSessionId)
     // Before the layout write: a window frame can name the terminal before main's own write does.
     const recorded = this.switchSlotAnchors.record(workspaceId, tabId, {
       replaces: { tabId: snapshotTabId }
