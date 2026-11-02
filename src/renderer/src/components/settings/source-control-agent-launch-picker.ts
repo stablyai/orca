@@ -29,6 +29,7 @@ export function sourceControlPickerDraft(
       value.agentId === entry.agent && value.value === null ? [key] : []
     )
   ]
+  const argumentsText = sourceControlActionExecutionArgs(recipe, entry.agent)
   return {
     agent: entry.agent,
     surface,
@@ -38,9 +39,9 @@ export function sourceControlPickerDraft(
       ...(preferences?.options ? { options: preferences.options } : {}),
       ...(preferences?.permissionMode ? { permissionMode: preferences.permissionMode } : {})
     },
-    arguments: sourceControlActionExecutionArgs(recipe, entry.agent),
+    arguments: argumentsText,
     recipeEdits: { selection: bound, changed: false, argumentsAuthored: false },
-    argumentsOwner: entry.ownerKey
+    ...(argumentsText !== undefined ? { argumentsOwner: entry.ownerKey } : {})
   }
 }
 

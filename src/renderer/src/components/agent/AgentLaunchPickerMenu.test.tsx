@@ -1,4 +1,4 @@
-import { entry } from './agent-launch-picker-menu-test-fixture'
+import { entry, compilePickerTerminalLaunch } from './agent-launch-picker-menu-test-fixture'
 // @vitest-environment happy-dom
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import { act } from 'react'
@@ -695,11 +695,32 @@ it('retains authored Arguments on close/reopen and rebinds their acquisition aut
   )
   expect(launch).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
-      choices: { permissionMode: 'ask' },
-      arguments: '-a on-request -s read-only -c approvals_reviewer=user --add-dir old-owner',
+      arguments: '--add-dir old-owner',
       argumentsOwner: 'pair8/runtime2'
     })
   )
+  expect(
+    compilePickerTerminalLaunch(launch.mock.lastCall![0], {
+      ...own,
+      ownerKey: 'pair8/runtime2',
+      arguments: '--add-dir new-owner'
+    })
+  ).toMatchObject({
+    ok: true,
+    tokens: [
+      'codex',
+      '-c',
+      'disable_paste_burst=true',
+      '-a',
+      'on-request',
+      '-s',
+      'read-only',
+      '-c',
+      'approvals_reviewer=user',
+      '--add-dir',
+      'old-owner'
+    ]
+  })
 })
 
 it('retains the whole row draft after outside dismissal, menu remount and launch', async () => {

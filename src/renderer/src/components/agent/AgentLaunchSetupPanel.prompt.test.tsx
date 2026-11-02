@@ -1,4 +1,4 @@
-// @vitest-environment happy-dom
+import { compilePickerTerminalLaunch } from './agent-launch-picker-menu-test-fixture'
 import {
   agentPickerLaunchInputs,
   type AgentPickerEntry
@@ -350,12 +350,35 @@ it.each(['claude', 'codex'] as const)(
     launch.mockReturnValueOnce(false)
     fireEvent.keyDown(panel().querySelector('textarea')!, { key: 'Enter' })
     await waitFor(() => expect(launch).toHaveBeenCalledOnce())
-    expect(agentPickerLaunchInputs(launch.mock.lastCall![1], refreshed)).toMatchObject({
-      agentArgs:
-        agent === 'claude'
-          ? '--model selected --effort high --add-dir "authored exact path"'
-          : '-m selected -c model_reasoning_effort=high --add-dir "authored exact path"',
+    const inputs = agentPickerLaunchInputs(launch.mock.lastCall![1], refreshed)
+    expect(inputs).toMatchObject({
+      agentArgs: '--add-dir "authored exact path"',
       sessionOptions: { model: 'selected', effort: 'high' }
+    })
+    expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], refreshed)).toMatchObject({
+      ok: true,
+      tokens:
+        agent === 'claude'
+          ? [
+              'claude',
+              '--add-dir',
+              'authored exact path',
+              '--model',
+              'selected',
+              '--effort',
+              'high'
+            ]
+          : [
+              'codex',
+              '-c',
+              'disable_paste_burst=true',
+              '--add-dir',
+              'authored exact path',
+              '-m',
+              'selected',
+              '-c',
+              'model_reasoning_effort=high'
+            ]
     })
     await waitFor(() =>
       expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(refreshed)).text).toBe(

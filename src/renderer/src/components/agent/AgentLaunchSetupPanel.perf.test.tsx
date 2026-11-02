@@ -3,6 +3,7 @@ import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import {
   resolveAgentLaunchCommand,
   terminalSessionOptionInputs
@@ -148,6 +149,7 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
         expect(initial).toEqual(before)
         expect(initial.choices).toEqual({})
         act(() => root.render(null))
+        clearNativeChatComposerDraftsForTests()
         work.reset()
         await act(async () =>
           root.render(
@@ -267,6 +269,7 @@ it('bounds catalog projection independently of raw model operands and retains Co
           }
         }
         act(() => root.render(null))
+        clearNativeChatComposerDraftsForTests()
         act(() =>
           root.render(
             <TooltipProvider>
@@ -348,6 +351,7 @@ it('bounds catalog projection independently of raw model operands and retains Co
       catalog: { origin: 'unknown' }
     }
     act(() => root.render(null))
+    clearNativeChatComposerDraftsForTests()
     act(() =>
       root.render(
         <TooltipProvider>
