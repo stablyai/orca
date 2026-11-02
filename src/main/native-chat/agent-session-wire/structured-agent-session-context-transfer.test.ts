@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import * as storedAgentRecord from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import { persistRewindRecord } from './structured-rewind-recovery'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -331,6 +332,31 @@ describe('native saved-context recovery delivery', () => {
     )
   })
 
+  it('keeps an advertised recovery export when the terminal hand-off exports newer context', async () => {
+    const recovery = await fixture.recoverSavedChat(async () => ({ kind: 'unsupported' }))
+    fixture.dispatch.mockResolvedValueOnce({ state: 'unknown', reason: 'lost native reply' })
+    const p = await fixture.accept('UNCERTAIN input stays out of saved history')
+    await eventually(async () =>
+      expect((await fixture.submission(p))?.dispatchState).toBe('unknown')
+    )
+    const records = recovery.journal.contextTransfers.read()
+    const handoff = records.find((row) => row.kind === 'handoff')
+    const delivery = records.find((row) => row.kind === 'delivery' && row.mode === 'inline')
+    if (handoff?.kind !== 'handoff' || delivery?.kind !== 'delivery') {
+      throw new Error('Missing recovery delivery')
+    }
+    const exported = await recovery.journal.exportRecoveryContext(handoff)
+    expect(delivery.selection.coverageText).toContain(exported)
+    const frozen = await readFile(exported!, 'utf8')
+    const preview = await fixture.host.continuationContext({
+      sessionId: SESSION,
+      workspaceId: fixture.store.requireWritableRecord(SESSION).location.workspaceId,
+      expectedCursor: recovery.journal.cursor()
+    })
+    expect(preview).toMatchObject({ status: 'current', transcriptPath: expect.any(String) })
+    expect(preview.status === 'current' && preview.transcriptPath).not.toBe(exported)
+    expect(await readFile(exported!, 'utf8')).toBe(frozen)
+  })
   it('exports only an authentic frozen source and performs no transfer SQL for ordinary output', async () => {
     const db = openTestJournalHostDatabase(fixture.root).db
     const prepare = vi.spyOn(db, 'prepare')

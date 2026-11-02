@@ -31,5 +31,10 @@ export async function exportContextTransfer(
   ) {
     return undefined
   }
-  return writeAgentSessionContextSnapshot(database.stateDirectory, sessionId, source.text)
+  // Keyed by the frozen source so the terminal hand-off's chat snapshot cannot replace it.
+  return writeAgentSessionContextSnapshot(
+    database.stateDirectory,
+    `${sessionId}/${handoff.id}`,
+    source.text
+  )
 }
