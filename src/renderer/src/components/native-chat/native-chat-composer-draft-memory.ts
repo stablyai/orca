@@ -18,7 +18,10 @@ export type UnconfirmedDraftChange = {
 }
 
 export const records = new Map<string, DraftRecord>()
-export type NativeChatDraftPosition = { at: 'start' | 'end'; target?: string; pending: boolean }
+export type NativeChatDraftPosition = (
+  | { at: 'start' | 'end' }
+  | { at: 'selection'; from: number; to: number }
+) & { target?: string; pending: boolean }
 export const nativeChatDraftPositions = new WeakMap<
   NativeChatComposerDraft,
   NativeChatDraftPosition

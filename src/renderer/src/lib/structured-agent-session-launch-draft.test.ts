@@ -5,7 +5,9 @@ import {
   sends,
   composerDraft
 } from './structured-agent-session-launch.test-fixture'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { moveStructuredAgentLaunchDraft } from './agent-session/launch/structured-agent-session-launch-draft'
+import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
 import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
 import { hasStagedStructuredLaunchPrompt } from './agent-session/launch/structured-agent-session-launch-prompt'
 import {
@@ -123,5 +125,115 @@ describe('structured launch draft persistence', () => {
 
     expect(composerDraft(launch.sessionId)).toBe('and add a test')
     expect(readNativeChatComposerDraft('pending-chat').text).toBe('')
+  })
+})
+
+describe('launch draft moves', () => {
+  const destination = {
+    sessionId: 'move-session',
+    worktreeId: 'folder-workspace',
+    executionHostId: 'ssh:remote' as const
+  }
+  const source = 'pending-chat'
+  const target = structuredAgentSessionDraftScopeKey(destination.sessionId)
+
+  afterEach(() => vi.restoreAllMocks())
+
+  it('keeps the saved source after both destination storage and its journal refuse the move', async () => {
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    setNativeChatComposerDraftStorageForTests(storage)
+    await hydrateNativeChatComposerDrafts()
+    updateNativeChatComposerDraft(source, { text: 'Keep my draft' }, 'immediate')
+    await nativeChatComposerDraftWritesSettled()
+    storage.refuseWrites = true
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('refused', 'QuotaExceededError')
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await moveStructuredAgentLaunchDraft(destination, source)
+    await nativeChatComposerDraftWritesSettled()
+
+    expect(readNativeChatComposerDraft(source).text).toBe('Keep my draft')
+    expect(storage.drafts.get(source)?.text).toBe('Keep my draft')
+    expect(storage.drafts.has(target)).toBe(false)
+
+    storage.refuseWrites = false
+    await moveStructuredAgentLaunchDraft(destination, source)
+    await nativeChatComposerDraftWritesSettled()
+    expect(storage.drafts.get(target)?.text).toBe('Keep my draft')
+    expect(storage.drafts.has(source)).toBe(false)
+  })
+
+  it.each([false, true])(
+    'waits for a destination commit and preserves newer source edits: %s',
+    async (edit) => {
+      const storage = createMemoryNativeChatComposerDraftStorage()
+      setNativeChatComposerDraftStorageForTests(storage)
+      await hydrateNativeChatComposerDrafts()
+      updateNativeChatComposerDraft(source, { text: 'Move this' }, 'immediate')
+      await nativeChatComposerDraftWritesSettled()
+      vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+        throw new DOMException('refused', 'QuotaExceededError')
+      })
+      const committed = Promise.withResolvers<void>()
+      const write = storage.write
+      storage.write = async (scope, draft) => {
+        if (scope === target) {
+          await committed.promise
+        }
+        await write(scope, draft)
+      }
+
+      const moving = moveStructuredAgentLaunchDraft(destination, source)
+      expect(storage.drafts.get(source)?.text).toBe('Move this')
+      expect(readNativeChatComposerDraft(source).text).toBe('Move this')
+      if (edit) {
+        updateNativeChatComposerDraft(source, { text: 'Move this plus newer typing' }, 'immediate')
+      }
+      committed.resolve()
+      await moving
+      await nativeChatComposerDraftWritesSettled()
+
+      expect(storage.drafts.get(target)?.text).toBe('Move this')
+      expect(storage.drafts.get(source)?.text).toBe(
+        edit ? 'Move this plus newer typing' : undefined
+      )
+      expect(readNativeChatComposerDraft(source).text).toBe(
+        edit ? 'Move this plus newer typing' : ''
+      )
+    }
+  )
+
+  it('replays the moved rich draft over a destination read by delayed hydration', async () => {
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    storage.drafts.set(target, { text: 'Already saved', images: [], savedAt: 1 })
+    const loaded = Promise.withResolvers<ReadonlyMap<string, unknown>>()
+    setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: () => loaded.promise })
+    const hydration = hydrateNativeChatComposerDrafts()
+    const snapshot = new Map(storage.drafts)
+    const document = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Follow up' }] }]
+    }
+    const images = [{ id: 'image', path: '/remote/image.png', connectionId: 'remote' }]
+    updateNativeChatComposerDraft(source, { text: 'Follow up', document, images }, 'immediate')
+
+    await moveStructuredAgentLaunchDraft(destination, source, { from: 2, to: 5 })
+    loaded.resolve(snapshot)
+    await hydration
+    await nativeChatComposerDraftWritesSettled()
+
+    const merged = readNativeChatComposerDraft(target)
+    expect(merged.text).toBe('Already saved\n\nFollow up')
+    expect(merged.images).toEqual(images)
+    expect(merged.document?.content?.at(-1)).toEqual(document.content[0])
+    expect(nativeChatDraftPositions.get(merged)).toMatchObject({
+      at: 'selection',
+      from: 17,
+      to: 20
+    })
+    expect(storage.drafts.get(target)).toMatchObject({ text: merged.text, images })
+    expect(storage.drafts.has(source)).toBe(false)
   })
 })
