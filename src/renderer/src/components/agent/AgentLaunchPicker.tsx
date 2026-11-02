@@ -1,9 +1,11 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useCallback, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAppStore } from '@/store'
+import { AgentSettingsMenuItem } from './AgentSettingsMenuItem'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +65,12 @@ export const AgentLaunchPicker = memo(
   }) {
     useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
+    const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+    const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+    const openAgentSettings = useCallback(() => {
+      openSettingsTarget({ pane: 'agents', repoId: null })
+      openSettingsPage()
+    }, [openSettingsPage, openSettingsTarget])
     const [open, setOpen] = useState(false)
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const entries = useAgentLaunchPickerInventory(
@@ -146,6 +154,7 @@ export const AgentLaunchPicker = memo(
                 {translate('agentPicker.select', 'Select agent')}
               </DropdownMenuItem>
             )}
+            <AgentSettingsMenuItem onSelect={openAgentSettings} />
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
