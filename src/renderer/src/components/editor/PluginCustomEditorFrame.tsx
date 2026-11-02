@@ -20,11 +20,11 @@ import { editorShortcutMatches } from './editor-shortcuts'
 import { registerEditorFrameFlush } from './editor-pending-flush'
 import { useCustomEditorReloadFlush } from './use-custom-editor-reload-flush'
 import { PluginEditorNeedsDesktopNotice } from './PluginEditorNeedsDesktopNotice'
-import {
-  createCustomEditorHost,
-  type CustomEditorBinaryDocument,
-  type CustomEditorEditRefusal
-} from './plugin-custom-editor-host'
+import { createCustomEditorHost } from './plugin-custom-editor-host'
+import type {
+  CustomEditorBinaryDocument,
+  CustomEditorEditRefusal
+} from './plugin-custom-editor-host-types'
 
 type PluginCustomEditorFrameProps = {
   editor: ActivePluginCustomEditor

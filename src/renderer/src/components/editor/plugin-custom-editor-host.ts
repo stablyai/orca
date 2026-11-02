@@ -35,14 +35,6 @@ import type {
   CustomEditorUnappliedEdit
 } from './plugin-custom-editor-host-types'
 
-export type {
-  CustomEditorBinaryDocument,
-  CustomEditorEditRefusal,
-  CustomEditorHost,
-  CustomEditorHostOptions,
-  CustomEditorUnappliedEdit
-} from './plugin-custom-editor-host-types'
-
 /** The frame only ever holds the document: Orca owns the buffer, dirty state and save. */
 export function createCustomEditorHost(options: CustomEditorHostOptions): CustomEditorHost {
   const budget =
