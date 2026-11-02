@@ -2,6 +2,7 @@ import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-sn
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { resolveDetachedTerminalInput } from '../../store/terminals/detached-terminal-input'
+import { resolveTerminalDetachTarget } from '../../store/terminals/terminal-detachment'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -59,6 +60,29 @@ export function publishDetachedTerminalInputs(
   })
 }
 
+/** Re-docks a tab whose pane binds another PTY or splits; its window streams only the PTY it opened with. */
+export function closeStaleDetachedTerminals(): () => void {
+  return useAppStore.subscribe((state, previous) => {
+    if (
+      state.detachedTerminalByTabId === previous.detachedTerminalByTabId &&
+      state.tabsByWorktree === previous.tabsByWorktree &&
+      state.terminalLayoutsByTabId === previous.terminalLayoutsByTabId
+    ) {
+      return
+    }
+    for (const [tabId, { ptyId }] of Object.entries(state.detachedTerminalByTabId)) {
+      const target = resolveTerminalDetachTarget(state, tabId)
+      // Why: a reattach or agent restart binds the new PTY in the hidden pane; only the main window shows it.
+      if (
+        target &&
+        ((target.ptyId !== null && target.ptyId !== ptyId) || target.splitUnsupported)
+      ) {
+        state.closeDetachedTerminalWindow(tabId)
+      }
+    }
+  })
+}
+
 export function registerDetachedTerminalIpcBridge(unsubs: (() => void)[]): void {
   const subscribe = window.api.detachedTerminal?.onClosed
   if (typeof subscribe !== 'function') {
@@ -67,7 +91,8 @@ export function registerDetachedTerminalIpcBridge(unsubs: (() => void)[]): void 
   unsubs.push(
     subscribe((tabId) => {
       useAppStore.getState().redockDetachedTerminalTab(tabId)
-    })
+    }),
+    closeStaleDetachedTerminals()
   )
   const setTerminalInput = window.api.detachedTerminal.setTerminalInput
   if (typeof setTerminalInput === 'function') {

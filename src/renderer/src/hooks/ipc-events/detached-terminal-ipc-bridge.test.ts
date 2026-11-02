@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 type BridgeState = {
   detachedTerminalByTabId: Record<string, { ptyId: string }>
   agentStatusByPaneKey: Record<string, string>
+  tabsByWorktree: Record<string, { id: string; ptyId: string | null; title: string }[]>
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  closeDetachedTerminalWindow: (tabId: string) => void
   unrelated: number
 }
 
@@ -29,21 +33,27 @@ vi.mock('../../store/terminals/detached-terminal-input', () => ({
   resolveDetachedTerminalInput: resolveInput
 }))
 
-import { publishDetachedTerminalInputs } from './detached-terminal-ipc-bridge'
+import {
+  closeStaleDetachedTerminals,
+  publishDetachedTerminalInputs
+} from './detached-terminal-ipc-bridge'
 
 let appStore: BridgeStore
 
-describe('detached terminal input publishing', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    appStore = create<BridgeState>(() => ({
-      detachedTerminalByTabId: {},
-      agentStatusByPaneKey: {},
-      unrelated: 0
-    }))
-    store.current = appStore
-  })
+beforeEach(() => {
+  vi.clearAllMocks()
+  appStore = create<BridgeState>((set) => ({
+    detachedTerminalByTabId: {},
+    agentStatusByPaneKey: {},
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    closeDetachedTerminalWindow: vi.fn(() => set({ detachedTerminalByTabId: {} })),
+    unrelated: 0
+  }))
+  store.current = appStore
+})
 
+describe('detached terminal input publishing', () => {
   it('sends a companion its facts once, then only when they change', () => {
     const send = vi.fn()
     const stop = publishDetachedTerminalInputs(send)
@@ -73,6 +83,60 @@ describe('detached terminal input publishing', () => {
     setState({ detachedTerminalByTabId: { 'tab-1': { ptyId: 'pty-1' } } })
 
     expect(send).toHaveBeenCalledTimes(2)
+    stop()
+  })
+})
+
+function layoutWith(ptyIdsByLeafId: Record<string, string>): TerminalLayoutSnapshot {
+  return { root: null, activeLeafId: 'leaf-1', expandedLeafId: null, ptyIdsByLeafId }
+}
+
+describe('stale detached terminal windows', () => {
+  beforeEach(() => {
+    appStore.setState({
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', title: 'Terminal' }] },
+      terminalLayoutsByTabId: { 'tab-1': layoutWith({ 'leaf-1': 'pty-1' }) },
+      detachedTerminalByTabId: { 'tab-1': { ptyId: 'pty-1' } }
+    })
+  })
+
+  it('re-docks a tab once its pane binds another PTY', () => {
+    const stop = closeStaleDetachedTerminals()
+
+    appStore.setState({
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-2', title: 'Terminal' }] },
+      terminalLayoutsByTabId: { 'tab-1': layoutWith({ 'leaf-1': 'pty-2' }) }
+    })
+
+    expect(appStore.getState().closeDetachedTerminalWindow).toHaveBeenCalledExactlyOnceWith('tab-1')
+    expect(appStore.getState().detachedTerminalByTabId).toEqual({})
+    stop()
+  })
+
+  it('re-docks a tab that splits, since the window shows one pane', () => {
+    const stop = closeStaleDetachedTerminals()
+
+    appStore.setState({
+      terminalLayoutsByTabId: { 'tab-1': layoutWith({ 'leaf-1': 'pty-1', 'leaf-2': 'pty-3' }) }
+    })
+
+    expect(appStore.getState().closeDetachedTerminalWindow).toHaveBeenCalledExactlyOnceWith('tab-1')
+    stop()
+  })
+
+  it('keeps the window while its PTY stays bound or the pane has none yet', () => {
+    const stop = closeStaleDetachedTerminals()
+
+    appStore.setState({ unrelated: 1 })
+    appStore.setState({
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', title: 'Renamed' }] }
+    })
+    appStore.setState({
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, title: 'Renamed' }] },
+      terminalLayoutsByTabId: { 'tab-1': layoutWith({}) }
+    })
+
+    expect(appStore.getState().closeDetachedTerminalWindow).not.toHaveBeenCalled()
     stop()
   })
 })
