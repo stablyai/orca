@@ -37,6 +37,8 @@ function loadSources() {
     typeText: 'src/shared/plugins/workers/plugin-schema-type-text.ts',
     events: 'src/shared/plugins/events/plugin-events.ts',
     eventContribution: 'src/shared/plugins/contributions/plugin-event-contribution.ts',
+    hooks: 'src/shared/plugins/events/plugin-hook-payloads.ts',
+    hookContribution: 'src/shared/plugins/contributions/plugin-hook-contribution.ts',
     capabilities: 'src/shared/plugins/capabilities/plugin-capabilities.ts',
     schema: 'src/shared/plugins/manifest/plugin-json-schema.ts',
     fieldDocs: 'src/shared/plugins/manifest/plugin-schema-field-docs.ts',
@@ -183,6 +185,18 @@ function signature({ typeText }, spec) {
   return `(params${omittable ? '?' : ''}: ${zodTypeText(spec.params, 'input', REFERENCE_TYPE_TEXT)}) => ${zodTypeText(spec.result, 'output', REFERENCE_TYPE_TEXT)}`
 }
 
+/** Each hook's event, what `next` may change and what stops the chain. */
+function hookLines({ hooks, hookContribution, typeText }) {
+  const { REFERENCE_TYPE_TEXT, zodTypeText } = typeText
+  const type = (schema) => code(zodTypeText(schema, 'output', REFERENCE_TYPE_TEXT))
+  return hookContribution.PLUGIN_HOOK_NAMES.map((name) => {
+    const spec = hooks.PLUGIN_HOOK_SPECS[name]
+    const changes = spec.mutable.length > 0 ? spec.mutable.map(code).join(', ') : 'nothing'
+    const stops = spec.result === null ? 'nothing (observe only)' : type(spec.result)
+    return `- ${code(name)} (since ${hookContribution.PLUGIN_HOOK_SINCE[name]}): ${spec.summary}\n  event ${type(spec.payload)}; \`next\` may change ${changes}; stop with ${stops}`
+  })
+}
+
 function renderHostApi(sources, { frame, worker }) {
   const { hostApi, hostDoc, capabilities } = sources
   const names = hostApi.PLUGIN_HOST_METHOD_NAMES
@@ -230,6 +244,14 @@ function renderHostApi(sources, { frame, worker }) {
         ''
       ],
       ['## Methods', '', ...methods, ''],
+      [
+        '## Hooks',
+        '',
+        `List each in \`contributes.hooks\` (\`{ "event", "onError"? }\`; \`main\` and \`trusted-worker\`) and handle it with \`orca.hooks.on(event, (event, next) => ...)\`. Return \`next(event)\` (or nothing) to go on, or the stop result. Plugins run in turn, ${sources.hooks.PLUGIN_HOOK_DEFAULT_DEADLINE_MS / 1000} s each; a throw, timeout or crash passes unless the entry says \`"onError": "deny"\`. Decide first: an awaited call before you return (a notification, say) can fail or time out and turn your deny into a pass.`,
+        '',
+        ...hookLines(sources),
+        ''
+      ],
       [
         '## Capabilities',
         '',

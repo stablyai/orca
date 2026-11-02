@@ -21,7 +21,7 @@ export const PLUGIN_MANIFEST_POLICY_NOTES: readonly string[] = [
   '- **`terminal:send` needs `trusted-worker`.** Panels get no host method that types into a terminal, so Orca refuses the capability on any other profile instead of asking the user to grant something the plugin can never use.',
   '- **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.',
   '- **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.',
-  `- **Reserved contribution points.** ${reservedKeys.slice(0, -1).join(', ')} and ${reservedKeys.at(-1)} are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own \`Since\`, without a new manifest format. \`skills\`, \`mcpServers\` and \`hooks\` keep the meaning agent-plugin formats such as Claude Code's give them; \`agents\` stays unclaimed because those formats use it for subagent files.`,
+  `- **Reserved contribution points.** ${reservedKeys.slice(0, -1).join(', ')} and ${reservedKeys.at(-1)} are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own \`Since\`, without a new manifest format. \`skills\` and \`mcpServers\` keep the meaning agent-plugin formats such as Claude Code's give them; \`agents\` stays unclaimed because those formats use it for subagent files.`,
   '',
   '## Planned contribution points',
   '',
