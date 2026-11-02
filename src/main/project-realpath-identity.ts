@@ -30,7 +30,9 @@ export async function findProjectAtSameRealPath<T extends { path: string }>(
   const keys = await Promise.all(
     projects.map((project) => {
       const distro = parseWslUncPath(project.path)?.distro.toLowerCase()
-      return distro !== undefined && distro !== targetDistro ? null : realpathKey(project.path)
+      return distro !== undefined && distro !== targetDistro
+        ? Promise.resolve(null)
+        : realpathKey(project.path)
     })
   )
   const index = keys.indexOf(target)
