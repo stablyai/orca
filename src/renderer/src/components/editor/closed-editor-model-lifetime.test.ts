@@ -444,3 +444,22 @@ it('spares a check ID reopened before the pending flush', async () => {
   await Promise.resolve()
   expect(scrollTopCache.size).toBe(5)
 })
+
+it('releases tab-scoped diff models when their file closes', async () => {
+  const { store, attach } = createModelLifetimeFixture()
+  const file = modelLifetimeFile('scoped-diff', 'diff')
+  // Tab groups key diff views by `${file.id}::${tab.id}`; ownership must still follow the file.
+  const paths = getDiffViewerMonacoModelPaths({
+    modelKey: `${file.id}::tab-uuid`,
+    modelOwnerKey: file.id,
+    generationSuffix: ''
+  })
+  const original = modelLifetimeTextModel(paths.originalModelPath)
+  const modified = modelLifetimeTextModel(paths.modifiedModelPath)
+  store.setState({ openFiles: [file] })
+  attach()
+  store.getState().closeFile(file.id)
+  await Promise.resolve()
+  expect(original.isDisposed()).toBe(true)
+  expect(modified.isDisposed()).toBe(true)
+})

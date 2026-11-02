@@ -11,6 +11,7 @@ import {
 type DiffViewerLargeDiffLifecycleInput = {
   limited: boolean
   modelKey: string
+  modelOwnerKey?: string
   originalModelKey?: string
   modifiedModelKey?: string
   diffEditorRef: RefObject<editor.IStandaloneDiffEditor | null>
@@ -20,6 +21,7 @@ type DiffViewerLargeDiffLifecycleInput = {
 export function useDiffViewerLargeDiffLifecycle({
   limited,
   modelKey,
+  modelOwnerKey,
   originalModelKey,
   modifiedModelKey,
   diffEditorRef,
@@ -35,11 +37,12 @@ export function useDiffViewerLargeDiffLifecycle({
     () =>
       getDiffViewerMonacoModelPaths({
         modelKey,
+        modelOwnerKey,
         originalModelKey,
         modifiedModelKey,
         generationSuffix: largeDiffModelGenerationSuffix
       }),
-    [modelKey, originalModelKey, modifiedModelKey, largeDiffModelGenerationSuffix]
+    [modelKey, modelOwnerKey, originalModelKey, modifiedModelKey, largeDiffModelGenerationSuffix]
   )
   const currentDiffModelPathsRef = useRef(currentDiffModelPaths)
   currentDiffModelPathsRef.current = currentDiffModelPaths

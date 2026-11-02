@@ -2,6 +2,7 @@ import type { editor } from 'monaco-editor'
 
 type DiffViewerModelPathInput = {
   modelKey: string
+  modelOwnerKey?: string
   originalModelKey?: string
   modifiedModelKey?: string
   generationSuffix: string
@@ -42,6 +43,7 @@ export function getDiffViewerMonacoModelPathPrefixes(
 
 export function getDiffViewerMonacoModelPaths({
   modelKey,
+  modelOwnerKey = modelKey,
   originalModelKey,
   modifiedModelKey,
   generationSuffix
@@ -49,7 +51,7 @@ export function getDiffViewerMonacoModelPaths({
   originalModelPath: string
   modifiedModelPath: string
 } {
-  const prefixes = getDiffViewerMonacoModelPathPrefixes(modelKey)
+  const prefixes = getDiffViewerMonacoModelPathPrefixes(modelOwnerKey)
   const resolvedOriginalModelKey = encodeDiffViewerModelKey(originalModelKey ?? modelKey)
   const resolvedModifiedModelKey = encodeDiffViewerModelKey(modifiedModelKey ?? modelKey)
 
