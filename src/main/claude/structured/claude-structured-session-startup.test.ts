@@ -197,7 +197,7 @@ describe('Claude host-awaited open', () => {
   // Recorded result; the orderings are constructed. A start another failure ended reports that cause.
   it.each([
     ['initialize rejected', 1],
-    ['an exit with no stderr', 1],
+    ['an exit with no stderr', 0],
     ['an exit naming the missing conversation', 0],
     ['the same result', 0]
   ] as const)('a startup failure result after %s keeps %i rows', async (ended, rows) => {
@@ -220,9 +220,12 @@ describe('Claude host-awaited open', () => {
         claudeStreamJsonExitError(stderr, { code: 1, signal: null, processless: false })
       )
     }
-    // An exit declines at once, before the buffered result drains.
+    // An exit naming no cause leaves the start to the buffered result, so that result is its one failure.
     claudeFrame(connection, { ...MISSING, session_id: PROVIDER_SESSION_ID })
-    await open
+    const error = await open
+    if (ended === 'an exit with no stderr') {
+      expect(startupAcquisitionRefusal(error)?.reason).toBe('savedConversationMissing')
+    }
     expect(errorRows(appendItem)).toHaveLength(rows)
   })
 
