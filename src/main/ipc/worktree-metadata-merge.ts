@@ -5,6 +5,7 @@ import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
 import { createWorktreeIdentity } from '../../shared/worktree/identity'
+import { projectCheckoutMark } from '../project-realpath-identity'
 
 export function mergeWorktree(
   repoId: string,
@@ -103,6 +104,7 @@ export function mergeWorktree(
     ...(meta?.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta?.diffComments,
-    mobileDiffReview: meta?.mobileDiffReview
+    mobileDiffReview: meta?.mobileDiffReview,
+    ...projectCheckoutMark(git)
   }
 }

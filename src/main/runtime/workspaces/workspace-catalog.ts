@@ -42,6 +42,7 @@ import { preserveFolderUpgradeWorktreePath } from '../../folder-upgrade-worktree
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { resolveWorktreeScanCacheTtlMs } from '../runtime-worktree-scan-cache'
+import { deriveProjectCheckoutRoot } from '../../project-realpath-identity'
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
   protected abstract refreshRepoWorktreeScan(
@@ -191,6 +192,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       store,
       scanRepo: (repo, projectRuntimeByRepoId) =>
         this.listRepoWorktreesForListing(repo, projectRuntimeByRepoId),
+      scanCheckoutRoot: (repo) =>
+        this.worktreeScanInFlight.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
+          ?.checkoutRoot ?? null,
       listFolderWorkspaces: (repo, repoOwnerCount) =>
         listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
     }
@@ -278,7 +282,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     }
     const reusableCached =
       cached?.generation === generation && cached.runtimeKey === runtimeKey ? cached : null
-    const promise = this.refreshRepoWorktreeScan(repo, projectRuntime, reusableCached)
+    const checkoutRoot = deriveProjectCheckoutRoot(repo)
+    const promise = this.refreshRepoWorktreeScan(repo, projectRuntime, reusableCached, checkoutRoot)
       .then(async (refresh) => {
         if (this.worktreeScanInFlight.get(scanScopeKey)?.promise !== promise) {
           return { ...refresh, result: await retryCurrent() }
@@ -306,7 +311,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
           this.worktreeScanInFlight.delete(scanScopeKey)
         }
       })
-    this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
+    this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise, checkoutRoot })
     return (await promise).result
   }
 }

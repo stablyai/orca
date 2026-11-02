@@ -19,6 +19,8 @@ import {
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import type { RuntimeStore } from './runtime-store-contract'
 import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
+import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
+import { findProjectAtSameRealPath } from '../project-realpath-identity'
 
 type RuntimeNestedRepoImportDependencies = {
   getStore: () => RuntimeStore | null
@@ -97,13 +99,18 @@ export class RuntimeNestedRepoImport {
           continue
         }
         // Import native rows only; SSH may share the path string. Paired hosts stamp native rows runtime:<env>, which still match.
-        const existing = store
+        const candidates = store
           .getRepos()
-          .find(
-            (repo) =>
-              getRepoDialableSshTargetId(repo) === null &&
-              normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
-          )
+          .filter((repo) => getRepoDialableSshTargetId(repo) === null)
+        // Create and Clone store Git's resolved root, which a symlinked parent spells differently.
+        const existing =
+          candidates.find(
+            (repo) => normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
+          ) ??
+          (await findProjectAtSameRealPath(
+            candidates.filter((repo) => runtimeRepoIsRegistrationCandidate(repo)),
+            importRepoPath
+          ))
         const group = groupResolver.getGroupForRepo(repoPath)
         if (existing) {
           if (group) {

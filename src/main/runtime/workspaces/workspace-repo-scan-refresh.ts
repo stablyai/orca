@@ -43,7 +43,8 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
   protected async refreshRepoWorktreeScan(
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined,
-    cached: RuntimeWorktreeScanCache | null
+    cached: RuntimeWorktreeScanCache | null,
+    checkoutRoot: Promise<string | null> | null = null
   ): Promise<RuntimeWorktreeScanRefresh> {
     const scannedAt = Date.now()
     // E9: the admin reads below and the Git scan both boot a stopped distro; keep known rows until it runs.
@@ -105,7 +106,13 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
         warnFingerprintUnknownOnce(repo.id, 'probe expired')
         return (
           reuseCached() ??
-          (await this.scanRepoWorktreesForRefresh(repo, projectRuntime, null, scannedAt))
+          (await this.scanRepoWorktreesForRefresh(
+            repo,
+            projectRuntime,
+            null,
+            scannedAt,
+            checkoutRoot
+          ))
         )
       }
       // Only a known matching fingerprint proves no change.
@@ -122,7 +129,8 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
       repo,
       projectRuntime,
       probe === 'in-flight' ? null : probe,
-      scannedAt
+      scannedAt,
+      checkoutRoot
     )
   }
 
@@ -130,10 +138,11 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     repo: Repo,
     projectRuntime: ProjectExecutionRuntimeResolution | undefined,
     probe: Promise<string | null> | null,
-    scannedAt: number
+    scannedAt: number,
+    checkoutRoot: Promise<string | null> | null
   ): Promise<RuntimeWorktreeScanRefresh> {
     const result = dropRepeatedWorktreeRows(
-      await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
+      await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime, checkoutRoot)
     )
     return { result, adminFingerprint: null, adminFingerprintProbe: probe, scannedAt }
   }
@@ -155,14 +164,16 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
 
   protected async listRepoWorktreesForResolutionUncached(
     repo: Repo,
-    projectRuntime: ProjectExecutionRuntimeResolution | undefined
+    projectRuntime: ProjectExecutionRuntimeResolution | undefined,
+    checkoutRoot: Promise<string | null> | null = null
   ): Promise<RuntimeWorktreeScanResult> {
     // Resolve executionHostId-only SSH rows too; client scans of remote paths would lose all worktrees.
     const sshConnectionId = getRepoSshConnectionId(repo)
     if (!sshConnectionId) {
       return await scanLocalRepoWorktreesForResolution(
         repo.path,
-        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime),
+        checkoutRoot
       )
     }
     // Why: this process serves no SSH git, so an SSH repo answers from its stored rows.

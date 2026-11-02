@@ -29,6 +29,7 @@ import { mergeWorktree } from '../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
+import { markProjectCheckout } from '../project-realpath-identity'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 
 type RepoWorktreeRowStore = Pick<
@@ -65,6 +66,8 @@ export type RepoWorktreeRowDeps = {
     repo: Repo,
     projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ) => Promise<RuntimeWorktreeScanResult>
+  /** The checkout identity the scan attempt `scanRepo` joined or started; absent for cached reads. */
+  scanCheckoutRoot?: (repo: Repo) => Promise<string | null> | null
   /** Folder workspaces are stamped from runtime-owned identity helpers, so the caller supplies them. */
   listFolderWorkspaces: (repo: Repo, repoOwnerCount: number) => Worktree[]
 }
@@ -109,20 +112,31 @@ export type RepoWorktreeRowsScan = { ok: boolean; worktrees: GitWorktreeInfo[] }
 
 /** The scan half of `resolveRepoWorktreeRows`: slow, and the only part that awaits. */
 export async function scanRepoWorktreeRows(
-  deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo'>,
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo' | 'scanCheckoutRoot'>,
   repo: Repo,
   projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): Promise<RepoWorktreeRowsScan> {
   const { store } = deps
+  const scanning = deps.scanRepo(repo, projectRuntimeByRepoId)
+  // Read after scanRepo registers its attempt; the fallback never waits past the deadline for it.
+  let checkoutRoot: string | null = null
+  void deps.scanCheckoutRoot?.(repo)?.then((root) => {
+    checkoutRoot = root
+  })
   // Absorb rejection before withTimeout: rejection preserves shipped empty results, but timeout restores last-known rows.
   const scan: RuntimeWorktreeScanResult = (await withTimeout<RuntimeWorktreeScanResult | null>(
-    deps
-      .scanRepo(repo, projectRuntimeByRepoId)
-      .catch(() => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult),
+    scanning.catch(() => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult),
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
-  )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
+  )) ?? {
+    ok: false,
+    worktrees: markProjectCheckout(
+      repo.path,
+      listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount),
+      checkoutRoot
+    )
+  }
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
   if (scan.ok) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)

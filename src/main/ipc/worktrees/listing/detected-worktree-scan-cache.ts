@@ -26,6 +26,7 @@ import {
 } from '../../../local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
 import { assertWslUncPathRunning, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
+import { deriveProjectCheckoutRoot, markProjectCheckout } from '../../../project-realpath-identity'
 
 // Coalesce renderer polls while bounding external-change lag.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
@@ -177,9 +178,16 @@ export async function listDetectedGitWorktrees(
     hygieneDue && !localWorktreeGitOptions.wslDistro
       ? store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
       : undefined
+  const listing = listUnlessWslDistroStopped(repo, localWorktreeGitOptions)
+  // Start with Git so the scan's rows and checkout identity describe one moment.
+  const checkoutRoot = deriveProjectCheckoutRoot(repo)
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listUnlessWslDistroStopped(repo, localWorktreeGitOptions),
+    promise: checkoutRoot
+      ? Promise.all([listing, checkoutRoot]).then(([worktrees, root]) =>
+          markProjectCheckout(repo.path, worktrees, root)
+        )
+      : listing,
     sideEffectToken: { generation, authorizedRootsRevision, ...localWorktreeGitOptions },
     hygieneDue,
     ...(metadataPruneExpectation

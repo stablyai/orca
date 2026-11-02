@@ -36,6 +36,8 @@ export type RuntimeWorktreeScanInFlight = {
   generation: number
   runtimeKey: string
   promise: Promise<RuntimeWorktreeScanRefresh>
+  /** Started with the attempt so its stalled-scan fallback rows share the same identity. */
+  checkoutRoot: Promise<string | null> | null
 }
 
 export type RuntimeWorktreeScanRefresh = {

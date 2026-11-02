@@ -13,8 +13,9 @@ import {
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
+import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
@@ -92,13 +93,18 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             })
             continue
           }
-          const existing = store
+          const candidates = store
             .getRepos()
-            .find(
-              (repo) =>
-                (repo.connectionId ?? null) === (args.connectionId ?? null) &&
-                normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
-            )
+            .filter((repo) => (repo.connectionId ?? null) === (args.connectionId ?? null))
+          // Create and Clone store Git's resolved root, which a symlinked parent spells differently.
+          const existing =
+            candidates.find(
+              (repo) => normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
+            ) ??
+            (await findProjectAtSameRealPath(
+              candidates.filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID),
+              importRepoPath
+            ))
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
