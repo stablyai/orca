@@ -84,30 +84,27 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
         presentation: 'background',
         tabId: randomUUID(),
         leafId: randomUUID(),
-        ...(agentSessionClaim ? { agentSessionClaim } : {}),
+        ...(agentSessionClaim
+          ? {
+              agentSessionClaim,
+              // Checked on the owner the create adopts, before it commits anything to it: a holder
+              // that appeared during the stop and that another tab shows stays as it was.
+              admitAdoptedAgentSessionOwner: async (ptyId: string) =>
+                this.isOwnSwitchTerminal(workspace.id, ptyId, args.switchedTabId)
+            }
+          : {}),
         persistHostSessionBinding: true,
         deferMobileSessionPublish: true,
         signal: args.signal
       })
-    // A holder that took the claim during the stop: its refusal precedes any spawn.
-    const created = await create(claim).catch((error: unknown) => {
+    // A holder that took the claim during the stop, another worktree's or another tab's: the
+    // refusal comes before any spawn or commit, and this switch opens its own terminal.
+    return await create(claim).catch((error: unknown) => {
       if (claim && isClaimHeldElsewhere(error)) {
         return create(undefined)
       }
       throw error
     })
-    // The create's own adoption is the one point free of a holder appearing during the stop. An
-    // adopted owner another tab shows stays that tab's: the adoption only re-registered it under
-    // its own surface and kept its live size, and this switch opens its own terminal.
-    if (
-      claim &&
-      created.agentSessionDisposition === 'adopted' &&
-      created.ptyId &&
-      !this.isOwnSwitchTerminal(workspace.id, created.ptyId, args.switchedTabId)
-    ) {
-      return create(undefined)
-    }
-    return created
   }
 
   /**

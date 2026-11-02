@@ -159,6 +159,8 @@ export type RuntimePtySpawnArgs = {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
   }
+  /** Main's own check on an adopted owner, never sent to the execution owner. */
+  admitAdoptedAgentSessionOwner?: (ptyId: string) => Promise<boolean>
   agentSessionCreateOperationId?: string
   spawnIntent?: SpawnIntent
   signal?: AbortSignal

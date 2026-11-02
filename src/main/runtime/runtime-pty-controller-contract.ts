@@ -118,6 +118,7 @@ export type RuntimePtyController = {
       claim: AgentSessionExecutionClaim
       surface: AgentSessionSurfaceBinding
     }
+    admitAdoptedAgentSessionOwner?: (ptyId: string) => Promise<boolean>
     agentSessionCreateOperationId?: string
     spawnIntent?: SpawnIntent
     signal?: AbortSignal

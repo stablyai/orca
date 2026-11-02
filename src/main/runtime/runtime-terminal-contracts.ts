@@ -103,6 +103,9 @@ export type TerminalCreateOptions = {
   preAllocatedHandle?: string
   persistHostSessionBinding?: boolean
   agentSessionClaim?: AgentSessionExecutionClaim
+  /** Whether the claim's live owner may be adopted, asked before anything commits to it. A
+   *  refusal leaves that owner as it was and fails the create as a claim held elsewhere. */
+  admitAdoptedAgentSessionOwner?: (ptyId: string) => Promise<boolean>
   agentSessionCreateOperationId?: string
   /** The paired client's declared intent; the host's fork gate validates and may defer it. */
   spawnIntent?: SpawnIntent

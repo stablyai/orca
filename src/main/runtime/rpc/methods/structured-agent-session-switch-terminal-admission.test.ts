@@ -319,12 +319,11 @@ it('leaves another tab\u2019s terminal that took the claim during the stop, and 
   })
   const create = vi.spyOn(r.runtime, 'createTerminal')
   expect(await r.run('to-terminal-late-holder')).toMatchObject({ status: 'completed' })
-  // The create adopted that terminal, which stays its tab's; then it opened its own, unclaimed.
-  expect(
-    (await Promise.all(create.mock.results.map((call) => call.value))).map(
-      (created) => created.ptyId
-    )
-  ).toEqual(['other-pty', 'switch-pty-1'])
+  // The create refused that terminal before committing anything to it, which stays its tab's;
+  // then it opened its own, unclaimed.
+  const creates = await Promise.allSettled(create.mock.results.map((call) => call.value))
+  expect(creates.map((created) => created.status)).toEqual(['rejected', 'fulfilled'])
+  expect(creates[1]).toMatchObject({ value: { ptyId: 'switch-pty-1' } })
   expect(r.owners().map((listed) => listed.ptyId)).toEqual(['other-pty'])
   expect(r.started()).toBe(1)
   expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual(['switch-pty-1'])

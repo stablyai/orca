@@ -139,6 +139,14 @@ export function executionOwnerRig(
       isLive: isRegisteredAgentSessionOwnerLive
     })
     const ptyId = ensured.owner.ptyId
+    // spawn-execute's admission of an adopted owner, before anything commits to it.
+    if (
+      ensured.disposition === 'adopted' &&
+      args.admitAdoptedAgentSessionOwner &&
+      !(await args.admitAdoptedAgentSessionOwner(ptyId))
+    ) {
+      throw new Error('agent_session_conflict')
+    }
     return {
       id: ptyId,
       incarnationId: sessions.get(ptyId)?.incarnationId,

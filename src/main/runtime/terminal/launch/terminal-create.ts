@@ -148,7 +148,10 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
                       leafId,
                       terminalHandle: preAllocatedHandle
                     }
-                  }
+                  },
+                  ...(launchOpts.admitAdoptedAgentSessionOwner
+                    ? { admitAdoptedAgentSessionOwner: launchOpts.admitAdoptedAgentSessionOwner }
+                    : {})
                 }
               : {}),
             ...(launchOpts.agentSessionCreateOperationId

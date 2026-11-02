@@ -180,6 +180,16 @@ export async function executePtySpawn(
       if (ensured) {
         ctx.result.agentSessionEnsure = ensured
       }
+      // Asked once the adopted owner is known (listed here, joined, or the execution owner's
+      // reply) and before anything registers, sequences, sizes or seeds it: a refused owner is
+      // left as it was, and the failure below unwinds only this request's own reservations.
+      if (
+        ensured?.disposition === 'adopted' &&
+        args.admitAdoptedAgentSessionOwner &&
+        !(await args.admitAdoptedAgentSessionOwner(ensured.owner.ptyId))
+      ) {
+        throw new Error('agent_session_conflict')
+      }
     } else {
       if (!facts.attachOnlyView) {
         await chooseFresh()

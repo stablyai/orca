@@ -6,6 +6,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { clearPtyOwnershipForConnection, clearProviderPtyState } from './provider/state-cleanup'
 import { setPtyOwnership } from './provider/ownership-state'
 import { setLocalPtyProvider } from './provider/registry'
+import { ptySizes } from './delivery/visibility-state'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -283,6 +284,76 @@ describe('PTY controller ownership recovery', () => {
     recoveredAgentSurface,
     registerAgentClaimController
   } = setupPtyIpcSuite()
+
+  // A switch's claimed create may meet a holder another tab shows. Refused at adoption, that
+  // holder keeps its grid, headless screen and registration, whichever route adopted it.
+  it.each(['listed here', 'adopted by the execution owner'] as const)(
+    'leaves an adopted owner the create refuses as it was: %s',
+    async (route) => {
+      const claim = {
+        ...recoveredAgentClaim,
+        identityDigest: 'cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdc'
+      }
+      const holder: AgentSessionOwnerBinding = {
+        claim,
+        generation: 'generation-holder',
+        phase: 'live',
+        ptyId: 'pty-other-tab',
+        surface: recoveredAgentSurface
+      }
+      const listed = {
+        id: holder.ptyId,
+        incarnationId: 'incarnation-holder',
+        cwd: '/tmp/recovered-worktree',
+        title: 'Codex',
+        agentSessionOwners: [holder]
+      }
+      const sessions = route === 'listed here' ? [listed] : []
+      // The execution owner finds the holder itself, and lists it from then on.
+      const spawn = vi.fn(async () => {
+        sessions.push(listed)
+        return {
+          id: holder.ptyId,
+          incarnationId: 'incarnation-holder',
+          agentSessionEnsure: { disposition: 'adopted' as const, owner: holder }
+        }
+      })
+      setLocalPtyProvider(
+        createAgentClaimProvider({
+          sessions,
+          livePtyIds: new Set([holder.ptyId]),
+          spawn
+        }) as never
+      )
+      const runtime = {
+        reflowHeadlessTerminalToPtyGrid: vi.fn(),
+        seedHeadlessTerminal: vi.fn(),
+        registerPty: vi.fn()
+      }
+      const controller = registerAgentClaimController(runtime)
+      ptySizes.set(holder.ptyId, { cols: 211, rows: 57 })
+      try {
+        await expect(
+          controller.spawn({
+            cols: 120,
+            rows: 40,
+            cwd: '/tmp/recovered-worktree',
+            sessionId: 'switch-fresh-id',
+            agentSessionEnsure: { claim, surface: recoveredAgentSurface },
+            admitAdoptedAgentSessionOwner: async () => false
+          })
+        ).rejects.toThrow('agent_session_conflict')
+        expect(spawn).toHaveBeenCalledTimes(route === 'listed here' ? 0 : 1)
+        expect(ptySizes.get(holder.ptyId)).toEqual({ cols: 211, rows: 57 })
+        expect(runtime.reflowHeadlessTerminalToPtyGrid).not.toHaveBeenCalled()
+        expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+        expect(runtime.registerPty).not.toHaveBeenCalled()
+      } finally {
+        ptySizes.delete(holder.ptyId)
+        clearProviderPtyState(holder.ptyId)
+      }
+    }
+  )
 
   it('does not adopt a stale generation when its PTY id is reused without ownership', async () => {
     const claim = {
