@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { selectWslHostDistro, WslHostMark } from './WslHostMark'
@@ -50,10 +50,10 @@ describe('WslHostMark', () => {
     })
     expect(mark.querySelector('svg')).toBeTruthy()
     expect(view.queryByText('orca-demo (WSL)')).toBeNull()
-    act(() => {
-      fireEvent.pointerMove(mark, { pointerType: 'mouse' })
-      fireEvent.focus(mark)
-    })
+    // Keyboard users reach it with Tab; focus alone opens the tooltip.
+    expect(mark.tabIndex).toBe(0)
+    act(() => mark.focus())
+    expect(document.activeElement).toBe(mark)
     await vi.waitFor(() =>
       expect(document.querySelector('[data-slot="tooltip-content"]')?.textContent).toContain(
         'Runs on WSL: orca-demo (Linux)'
@@ -63,7 +63,9 @@ describe('WslHostMark', () => {
 
   it('leaves the tooltip to the row when asked', () => {
     const view = render(<WslHostMark distro="orca-demo" withTooltip={false} />)
-    expect(view.getByRole('img', { name: 'Runs on WSL: orca-demo (Linux)' })).toBeTruthy()
+    const mark = view.getByRole('img', { name: 'Runs on WSL: orca-demo (Linux)' })
+    // The row owns focus and the tooltip, so the mark adds no tab stop.
+    expect(mark.hasAttribute('tabindex')).toBe(false)
     expect(view.container.querySelector('[data-slot="tooltip-trigger"]')).toBeNull()
   })
 })

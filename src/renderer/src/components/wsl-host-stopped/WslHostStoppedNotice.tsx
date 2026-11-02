@@ -43,7 +43,10 @@ export function WslHostStoppedNotice({
       role="status"
       data-wsl-host-stopped-notice={environmentId}
     >
-      <LinuxPenguinIcon className="mb-1 size-7 opacity-50" data-wsl-host-stopped-icon="" />
+      <LinuxPenguinIcon
+        className="mb-1 size-7 text-muted-foreground"
+        data-wsl-host-stopped-icon=""
+      />
       <span>
         {translate('components.native-chat.hostOutage.stopped', '{{distro}} is stopped', {
           distro

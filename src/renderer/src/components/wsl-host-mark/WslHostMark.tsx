@@ -52,22 +52,35 @@ export function WslHostMark({
   withTooltip?: boolean
 }): React.JSX.Element {
   const label = wslHostRunsOnLabel(distro)
-  const mark = (
-    <span
-      role="img"
-      aria-label={label}
-      data-wsl-host-mark={distro}
-      className={cn('inline-flex shrink-0 items-center text-muted-foreground', className)}
-    >
-      <LinuxPenguinIcon className="size-3.5" />
-    </span>
-  )
   if (!withTooltip) {
-    return mark
+    return (
+      <span
+        role="img"
+        aria-label={label}
+        data-wsl-host-mark={distro}
+        className={cn('inline-flex shrink-0 items-center text-muted-foreground', className)}
+      >
+        <LinuxPenguinIcon className="size-3.5" />
+      </span>
+    )
   }
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{mark}</TooltipTrigger>
+      <TooltipTrigger asChild>
+        {/* Focusable so keyboard users can open the tooltip too. */}
+        <span
+          role="img"
+          aria-label={label}
+          tabIndex={0}
+          data-wsl-host-mark={distro}
+          className={cn(
+            'inline-flex shrink-0 items-center rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            className
+          )}
+        >
+          <LinuxPenguinIcon className="size-3.5" />
+        </span>
+      </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         {label}
       </TooltipContent>
