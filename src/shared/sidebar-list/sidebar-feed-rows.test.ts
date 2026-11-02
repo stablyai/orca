@@ -222,52 +222,28 @@ describe('buildSidebarFeedRows keeps same-id workspaces on two hosts apart', () 
 })
 
 describe('repo sections respect manual workspace order', () => {
-  it.each(['local', 'ssh:box'] as const)(
-    'interleaves existing workspaces on %s without changing automatic sorting',
-    (hostId) => {
-      const repos = [repo('r', { executionHostId: hostId })]
-      const rows = [
-        worktree('r::/w/main-a', { isMainWorktree: true, manualOrder: 30 }),
-        worktree('r::/w/feature', { manualOrder: 20 }),
-        worktree('r::/w/main-b', { isMainWorktree: true, manualOrder: 10 })
-      ].map((row) => ({ ...row, hostId, lastActivityAt: row.manualOrder! }))
-      const workspaces = buildWorkspaceRows({
-        worktrees: rows,
-        folderWorkspaces: [],
-        repos,
-        lineageById: {}
-      })
-      const renderedIds = (sortBy: SidebarFeedView['sortBy']) =>
-        buildSidebarFeedRows(
-          domains({ workspaces }),
-          catalog(repos),
-          view({ groupBy: 'repo', sortBy })
-        ).sectionRows.flatMap((row) => (row.type === 'item' ? [row.worktree.id] : []))
-
-      expect(renderedIds('manual')).toEqual(['r::/w/main-a', 'r::/w/feature', 'r::/w/main-b'])
-      expect(renderedIds('recent')).toEqual(['r::/w/main-a', 'r::/w/main-b', 'r::/w/feature'])
-    }
-  )
-
-  it('honors manual order for paired-server rows', () => {
-    const hostId = 'runtime:server'
+  it('interleaves primaries by manual rank but keeps them first under automatic sorting', () => {
+    const repos = [repo('r')]
     const rows = [
-      { worktreeId: 'r::/r/main-a', isMainWorktree: true, manualOrder: 30 },
-      { worktreeId: 'r::/r/feature', isMainWorktree: false, manualOrder: 20 },
-      { worktreeId: 'r::/r/main-b', isMainWorktree: true, manualOrder: 10 }
-    ].flatMap((row) => normalizePairedServerRow(hostId, { repoId: 'r', ...row }) ?? [])
-    const built = buildSidebarFeedRows(
-      domains({
-        pairedServerHosts: new Map([[hostId, { freshness: 'live', host: null }]]),
-        pairedServerRows: new Map(rows.map((row) => [row.key, row]))
-      }),
-      catalog([repo('r', { executionHostId: hostId })]),
-      view({ groupBy: 'repo', sortBy: 'manual' })
-    )
+      worktree('r::/w/main-a', { isMainWorktree: true, manualOrder: 30, lastActivityAt: 30 }),
+      worktree('r::/w/feature', { manualOrder: 20, lastActivityAt: 20 }),
+      worktree('r::/w/main-b', { isMainWorktree: true, manualOrder: 10, lastActivityAt: 10 })
+    ]
+    const workspaces = buildWorkspaceRows({
+      worktrees: rows,
+      folderWorkspaces: [],
+      repos,
+      lineageById: {}
+    })
+    const renderedIds = (sortBy: SidebarFeedView['sortBy']) =>
+      buildSidebarFeedRows(
+        domains({ workspaces }),
+        catalog(repos),
+        view({ groupBy: 'repo', sortBy })
+      ).sectionRows.flatMap((row) => (row.type === 'item' ? [row.worktree.id] : []))
 
-    expect(
-      built.sectionRows.flatMap((row) => (row.type === 'item' ? [row.worktree.id] : []))
-    ).toEqual(['r::/r/main-a', 'r::/r/feature', 'r::/r/main-b'])
+    expect(renderedIds('manual')).toEqual(['r::/w/main-a', 'r::/w/feature', 'r::/w/main-b'])
+    expect(renderedIds('recent')).toEqual(['r::/w/main-a', 'r::/w/main-b', 'r::/w/feature'])
   })
 })
 

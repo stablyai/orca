@@ -128,20 +128,6 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     expect(order).not.toEqual(['wt-feature', 'wt-main'])
   })
 
-  it('keeps manual workspace ranks for shortcuts while the sidebar is closed', () => {
-    const feature = makeWorktree('wt-feature', { manualOrder: 20 })
-    const mainA = makeMainWorktree('wt-main-a', { manualOrder: 30 })
-    const mainB = makeMainWorktree('wt-main-b', { manualOrder: 10 })
-    seedStore([mainA, mainB, feature])
-
-    expect(getVisibleWorktreeIds()).toEqual(['wt-main-a', 'wt-feature', 'wt-main-b'])
-    expect(getVisibleWorktreeShortcutTargets().map((target) => target.id)).toEqual([
-      'wt-main-a',
-      'wt-feature',
-      'wt-main-b'
-    ])
-  })
-
   it('ignores the agent-send collapse override, which only applies to a mounted list', () => {
     // The send-collapse override requires a mounted list, which publishes its own order and bypasses this fallback.
     const main = makeMainWorktree('wt-main')

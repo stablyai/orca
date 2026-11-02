@@ -164,26 +164,29 @@ describe('reordering same-id primaries on separate machines', () => {
     expect(renderedHosts(applied)).toEqual(['ssh:vm-b', 'ssh:vm-c', 'ssh:vm-a'])
   })
 
-  it.each([true, false])(
-    'interleaves an existing non-primary after a drop (ranked: %s)',
-    (ranked) => {
-      const feature = {
-        ...primary('ssh:vm-c', 50),
-        id: `${REPO_ID}::/home/dev/feature`,
-        path: '/home/dev/feature',
-        isMainWorktree: false
-      }
-      const rows = [...twins.slice(0, 2), feature].map((row) =>
-        ranked ? row : { ...row, manualOrder: undefined }
-      )
-      const { writes, applied } = dropCard(rows, 'ssh:vm-c', 1)
+  const feature = {
+    ...primary('ssh:vm-c', 50),
+    id: `${REPO_ID}::/home/dev/feature`,
+    path: '/home/dev/feature',
+    isMainWorktree: false
+  }
 
-      expect(writes.map((entry) => entry.executionHostId).sort()).toEqual(
-        ranked ? ['ssh:vm-c'] : [...HOSTS]
-      )
-      expect(renderedHosts(applied)).toEqual(['ssh:vm-a', 'ssh:vm-c', 'ssh:vm-b'])
-    }
-  )
+  it('drops a primary between a ranked non-primary and its twin, writing only that copy', () => {
+    const { writes, applied } = dropCard([...twins.slice(0, 2), feature], 'ssh:vm-c', 1)
+
+    expect(writes.map((entry) => entry.executionHostId)).toEqual(['ssh:vm-c'])
+    expect(renderedHosts(applied)).toEqual(['ssh:vm-a', 'ssh:vm-c', 'ssh:vm-b'])
+  })
+
+  it('keeps the dropped slot when unranked primaries and a non-primary materialize ranks', () => {
+    const unranked = [...twins.slice(0, 2), feature].map(
+      ({ manualOrder: _manualOrder, ...row }) => row
+    )
+    const { writes, applied } = dropCard(unranked, 'ssh:vm-c', 1)
+
+    expect(writes.map((entry) => entry.executionHostId).sort()).toEqual([...HOSTS])
+    expect(renderedHosts(applied)).toEqual(['ssh:vm-a', 'ssh:vm-c', 'ssh:vm-b'])
+  })
 
   it('materializes a rank for every copy when none has one yet', () => {
     const unranked = twins.map(({ manualOrder: _manualOrder, ...row }, index) => ({
