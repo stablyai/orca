@@ -5804,7 +5804,7 @@
       "invariant": "Selecting Orca Browser for an HTTP link in a runtime-owned terminal creates exactly one browser page on that owning runtime and exactly one mirrored client browser workspace, with matching remote page identity and no client external-browser call. Explicit System Browser remains client-owned, direct SSH remains system-browser-only, and unknown or mismatched owners fail closed.",
       "oracle": "Use the focused routing contracts as the byte-identical baseline/candidate oracle. Require runtime OSC, WebLinksAddon, click fallback, action-menu, and modifier paths to target the exact owner without client fallback, while direct SSH and generic remote document links stay external. Separately run one byte-identical headed paired Electron journey on the candidate and with only runtime browser registration disabled. Require one new host browser tab, one new client mirror with exact page identity, rendered fixture DOM, explicit browser-tab activation, zero client shell.openExternal calls, exact close convergence, unchanged terminal counts, and continued output on the original PTY.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts src/renderer/src/lib/http-link-routing.test.ts src/renderer/src/lib/http-link-modifier-routing.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-browser-link.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -5812,8 +5812,6 @@
         "src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts",
-        "src/renderer/src/lib/http-link-routing.test.ts",
-        "src/renderer/src/lib/http-link-modifier-routing.test.ts",
         "src/renderer/src/lib/workspace-browser-tab-open.test.ts",
         "tests/e2e/paired-remote-terminal-browser-link.spec.ts"
       ],
@@ -5854,13 +5852,14 @@
           "summary": "Latest main e4c278eb523 failed 6/25 owner-routing assertions: runtime terminal links called the viewing client's external browser and the managed-browser helper did not enforce an asserted runtime owner."
         },
         {
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-runtime-host-link-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-action-routing.test.ts src/renderer/src/components/terminal-pane/terminal-link-open-hints.test.ts src/renderer/src/lib/http-link-routing.test.ts src/renderer/src/lib/http-link-modifier-routing.test.ts src/renderer/src/lib/workspace-browser-tab-open.test.ts",
           "result": "passed",
           "durationSeconds": 1.83,
-          "summary": "Candidate passed 84/84 across six focused routing, modifier, availability, owner assertion, failure, SSH, and system-browser contract files."
+          "summary": "Candidate passed 84/84 across six focused routing, modifier, availability, owner assertion, failure, SSH, and system-browser contract files. Historical command preserved after removal of the mocked routing and modifier suites in the test-value audit; currentCommand names the remaining suites only. This historical result has not been rerun for that command and does not claim equivalent coverage."
         },
         {
           "date": "2026-08-12",

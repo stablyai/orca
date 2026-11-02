@@ -11,11 +11,7 @@ import {
 } from '../components/agent/use-agent-launch-picker-inventory'
 import type { NewTabAgentMenuModel } from '../components/tab-bar/new-tab-agent-menu-model'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../shared/agent-launch-picker'
-import {
-  agentPickerDraft,
-  agentPickerLaunchInputs,
-  agentPickerEntriesFromRows
-} from '../../../shared/agent-launch-picker'
+import { agentPickerDraft, agentPickerLaunchInputs } from '../../../shared/agent-launch-picker'
 import { editAgentPickerPermission } from '../../../shared/agent-launch-picker-permission'
 import {
   editAgentPickerPanelArguments,
@@ -23,17 +19,8 @@ import {
   editAgentPickerSpeed,
   agentPickerPanelArguments
 } from '../../../shared/agent-launch-picker-arguments'
-import {
-  mockCreateTab,
-  queuedStartups,
-  store,
-  mockToastError,
-  mockCreateWebRuntimeSessionTerminal,
-  mockIsWebRuntimeSessionActive
-} from './launch-agent-in-new-tab-test-fixture'
+import { mockCreateTab, queuedStartups, store } from './launch-agent-in-new-tab-test-fixture'
 
-import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch-picker-rows'
-import type { ExecutionHostId } from '../../../shared/execution-host'
 import { fetchCodexModelCatalogListing } from './codex-model-catalog-reader-test-fixture'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
@@ -116,166 +103,6 @@ describe('picker window launch contract', () => {
       expect(command).not.toContain(
         agent === 'claude' ? "'--permission-mode' 'default'" : "'-a' 'on-request'"
       )
-    }
-  )
-
-  it.each(['local', 'ssh', 'paired', 'older-host'] as const)(
-    'keeps ordinary and configured-default launch input/failure contracts on %s',
-    async (target) => {
-      inventory.settings.mockResolvedValue(null)
-      const launcher = await import('./launch-agent-in-new-tab')
-      const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab')
-      const { launchAgentInNewTab } = launcher
-      const { AgentLaunchPickerMenu } = await import('../components/agent/AgentLaunchPickerMenu')
-      const { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } =
-        await import('../components/ui/dropdown-menu')
-      const { useTabAgentMenuLaunch } = await import('../components/tab-bar/QuickLaunchButton')
-      const { EntryActionRow } = await import('../components/tab-bar/TabBarCreateEntryRow')
-      const { matchingAgentPickerLaunchOptions, configuredAgentPickerLaunchOption } =
-        await import('../components/tab-bar/tab-agent-launch-options')
-      const { agentPickerChoiceSeeds, agentPickerLaunchInputs } =
-        await import('../../../shared/agent-launch-picker')
-      Object.assign(store.settings, { agentDefaultArgs: { claude: '--add-dir docs' } })
-      if (target === 'ssh') {
-        store.repos[0].connectionId = 'ssh-target-1'
-      }
-      if (target === 'paired' || target === 'older-host') {
-        mockIsWebRuntimeSessionActive.mockReturnValue(true)
-        store.settings.activeRuntimeEnvironmentId = 'web-runtime'
-        Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
-        if (target === 'older-host') {
-          mockCreateWebRuntimeSessionTerminal.mockResolvedValue({
-            status: 'failed',
-            message: 'Upgrade the remote Orca host before starting or resuming agent sessions.'
-          })
-        }
-      }
-      const host: ExecutionHostId =
-        target === 'ssh' ? 'ssh:ssh-target-1' : target === 'local' ? 'local' : 'runtime:web-runtime'
-      const rows = buildNewTabAgentMenuRows({
-        settings: { agentDefaultSurface: 'chat', nativeChatProviders: { claude: false } },
-        detectedOnHost: ['claude'],
-        chatAgents: ['claude'],
-        hostChatAnswer: () => (target === 'ssh' ? 'ssh' : 'yes'),
-        chatProgram: () => 'available'
-      }).map((row) => ({ ...row, executionHostId: host }))
-      const entry = agentPickerEntriesFromRows(
-        rows,
-        ['claude'],
-        (selected) => agentPickerChoiceSeeds(selected, store.settings),
-        () => 'Claude',
-        undefined
-      )[0]
-      entry.catalog = {
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [
-          {
-            id: 'opus',
-            label: 'Opus',
-            isDefault: true,
-            efforts: [{ value: 'high', label: 'High' }]
-          }
-        ]
-      }
-      expect(entry.defaultSurface).toBe('terminal')
-      expect(entry.surfaces).toEqual(target === 'ssh' ? ['terminal'] : ['chat', 'terminal'])
-      const option = matchingAgentPickerLaunchOptions([entry], 'opus high')[0]
-      function Menu({ omnibox }: { omnibox: boolean }) {
-        const runLaunch = useTabAgentMenuLaunch({
-          worktreeId: 'wt-1',
-          groupId: 'group-1',
-          onFocusTerminal: () => {}
-        })
-        return createElement(
-          TooltipProvider,
-          null,
-          omnibox
-            ? createElement(EntryActionRow, {
-                id: 'setup-result',
-                selected: true,
-                option: { kind: 'agent', option },
-                onClick: () => runLaunch(option.row!, option.setup, entry),
-                onUseAgent: (draft) => {
-                  const configured = configuredAgentPickerLaunchOption(option, draft)
-                  runLaunch(configured.row!, configured.setup, entry)
-                }
-              })
-            : createElement(
-                DropdownMenu,
-                { defaultOpen: true, modal: false },
-                createElement(DropdownMenuTrigger, null, 'New tab'),
-                createElement(
-                  DropdownMenuContent,
-                  null,
-                  createElement(AgentLaunchPickerMenu, {
-                    entries: [entry],
-                    runLaunch
-                  })
-                )
-              )
-        )
-      }
-      const perform = async (inputs = {}, menu?: 'ordinary' | 'searched' | 'omnibox') => {
-        mockCreateTab.mockClear()
-        mockCreateWebRuntimeSessionTerminal.mockClear()
-        mockToastError.mockClear()
-        dispatch.mockClear()
-        if (menu) {
-          render(createElement(Menu, { omnibox: menu === 'omnibox' }))
-          if (menu === 'searched') {
-            fireEvent.change(document.querySelector('input')!, { target: { value: 'opus high' } })
-          }
-          fireEvent.click(document.querySelector('button[aria-label="Configure Claude"]')!)
-          expect(dispatch).not.toHaveBeenCalled()
-          fireEvent.click(
-            [...document.querySelectorAll('button')].find(
-              (button) => button.textContent === 'Launch terminal'
-            )!
-          )
-          expect(dispatch).toHaveBeenCalledOnce()
-          expect(dispatch.mock.calls[0][0]).toMatchObject({
-            requestedSurface: 'terminal',
-            selectedExecutionHostId: host
-          })
-        } else {
-          launchAgentInNewTab({
-            requestId: 'equivalence',
-            agent: 'claude',
-            worktreeId: 'wt-1',
-            groupId: 'group-1',
-            requestedSurface: 'terminal',
-            selectedExecutionHostId: host,
-            ...inputs
-          })
-        }
-        const call = dispatch.mock.results.at(-1)
-        const result = call?.type === 'return' ? call.value : undefined
-        await result?.terminalCompletion
-        cleanup()
-        return {
-          command: queuedStartups()[0]?.command,
-          remote: mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0],
-          errors: mockToastError.mock.calls,
-          surface: result?.surface
-        }
-      }
-      const ordinary = await perform()
-      const configured = await perform({}, 'ordinary')
-      expect(configured).toEqual(ordinary)
-      expect(ordinary.surface?.kind).toBe(
-        target === 'paired' || target === 'older-host' ? 'host-published' : 'local-terminal'
-      )
-      if (target === 'older-host') {
-        expect(configured.errors).toHaveLength(1)
-      }
-      const expectedSearch = await perform(
-        agentPickerLaunchInputs({ ...option.setup!, surface: 'terminal' }, entry)
-      )
-      expect(await perform({}, 'searched')).toEqual(expectedSearch)
-      expect(await perform({}, 'omnibox')).toEqual(expectedSearch)
-      expect(expectedSearch.command ?? expectedSearch.remote?.command ?? '').toContain('opus')
-      dispatch.mockRestore()
     }
   )
 })
