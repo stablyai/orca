@@ -100,6 +100,7 @@ it('mounted IME, caret and file checks follow a rich collision; ordinary deletio
     appendText: () => {},
     handlePasteEvent: () => {},
     pasteFromClipboard: () => {},
+    insertAgentReferences: () => false,
     insertTypedText: (text) => {
       source.result.current.setDraft(
         (previous) => previous.slice(0, caret) + text + previous.slice(caret)
