@@ -1,6 +1,7 @@
 import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { RawPtySpawnObserver } from './pty-subprocess'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { TerminalSpawnGate } from './terminal-spawn-gate'
@@ -24,6 +25,8 @@ export type TerminalHostOptions = {
     assertCreateAllowed?: () => void
     isCanceled?: () => boolean
     cancelSignal?: AbortSignal
+    rawSpawnObserver?: () => RawPtySpawnObserver
+    prepareStartupCommand?: (shellPath: string, deliveredInShellArgs: boolean) => void
   }) => SubprocessHandle | Promise<SubprocessHandle>
   // Login-session death detection needs exits even when no viewer is attached.
   onSessionReaped?: (sessionId: string) => void
