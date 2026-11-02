@@ -6,6 +6,7 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import type { PreparedLegacyImport } from '../agent-session-journal/journal-legacy-import-contract'
+import { legacyImportSessionId } from '../agent-session-journal/journal-legacy-identity'
 import { switchTranscriptNativeCoverage } from './structured-agent-session-switch-import-coverage'
 import type {
   SwitchStoppedCliTurn,
@@ -26,7 +27,7 @@ export type PreparedSwitchRead = Extract<PreparedLegacyImport, { ok: true }>
  */
 export function latestTurnUserKey(
   { items, latestTurnOpener, latestTurn }: PreparedSwitchRead,
-  source: Pick<SwitchTranscriptSource, 'agent' | 'sessionId'>
+  source: Pick<SwitchTranscriptSource, 'agent' | 'sessionId' | 'filePath'>
 ): string | undefined {
   if (latestTurnOpener === null) {
     return (
@@ -43,7 +44,7 @@ export function latestTurnUserKey(
 /** The rows a read holds that this chat doesn't, in transcript order, then the turn records. */
 export function planSwitchTranscriptAdditions(input: {
   journal: AgentSessionJournal
-  source: Pick<SwitchTranscriptSource, 'agent' | 'sessionId'>
+  source: Pick<SwitchTranscriptSource, 'agent' | 'sessionId' | 'filePath'>
   prepared: PreparedSwitchRead
   stopped?: SwitchStoppedCliTurn
   settleAbandoned?: boolean
@@ -54,7 +55,8 @@ export function planSwitchTranscriptAdditions(input: {
   const userKey = latestTurnUserKey(prepared, input.source)
   const latest = prepared.latestTurn
   const interrupted =
-    input.stopped?.sessionId === input.source.sessionId &&
+    input.stopped !== undefined &&
+    legacyImportSessionId(input.stopped) === legacyImportSessionId(input.source) &&
     input.stopped.userItemKey === userKey &&
     (!latest ||
       (latest.turnId === input.stopped.turnId &&
@@ -162,7 +164,7 @@ export function switchTranscriptMutations(
 }
 
 export function switchLifecycleRecord(
-  source: Pick<SwitchTranscriptSource, 'agent' | 'sessionId'>,
+  source: Pick<SwitchTranscriptSource, 'agent' | 'sessionId' | 'filePath'>,
   turnId: string,
   body?: Extract<AgentJournalItemBody, { kind: 'turn' }>
 ): JournalReplacementItem {
@@ -170,7 +172,7 @@ export function switchLifecycleRecord(
     identity: {
       provider: 'legacy',
       agent: source.agent,
-      sessionId: source.sessionId,
+      sessionId: legacyImportSessionId(source),
       recordId: `turn-lifecycle:${turnId}`
     },
     ownerFence: 0,

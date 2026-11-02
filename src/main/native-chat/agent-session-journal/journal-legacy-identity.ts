@@ -10,6 +10,15 @@ export type LegacyIdentityTracker = {
   identify(line: string, lineIndex: number): AgentJournalItemIdentity
 }
 
+/** The session an import keys its rows under: Pi's rows name their file, others the conversation. */
+export function legacyImportSessionId(input: {
+  agent: AgentType
+  sessionId: string
+  filePath: string
+}): string {
+  return input.agent === 'pi' ? input.filePath : input.sessionId
+}
+
 export function createLegacyIdentityTracker(input: {
   transcriptAgent: NativeChatTranscriptAgent
   agent: AgentType

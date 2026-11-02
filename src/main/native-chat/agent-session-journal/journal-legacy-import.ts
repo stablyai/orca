@@ -33,7 +33,7 @@ import {
 } from '../transcript-turn-lifecycle'
 import { readLegacyImportTranscript } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../transcript-opencode'
-import { createLegacyIdentityTracker } from './journal-legacy-identity'
+import { createLegacyIdentityTracker, legacyImportSessionId } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { readGrokTurnLifecycle } from '../transcript-grok-turn-lifecycle'
 import { createNewestItemWindow } from './journal-newest-item-window'
@@ -197,7 +197,7 @@ async function decodeReplacementItems(input: {
   const tracker = createLegacyIdentityTracker({
     transcriptAgent: input.transcriptAgent,
     agent: input.agent,
-    sessionId: input.agent === 'pi' ? input.filePath : input.sessionId
+    sessionId: legacyImportSessionId(input)
   })
   const toItem = (message: NativeChatMessage, identity: AgentJournalItemIdentity) =>
     replacementItem(message, identity, input.limits)

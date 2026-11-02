@@ -1,5 +1,5 @@
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { mkdir, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { z } from 'zod'
@@ -11,6 +11,8 @@ import {
   type RestTestRig
 } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { structuredAgentsDeclaringNothing } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { structuredAgentRuntimeRegistration } from '../../structured-agent-runtime-registrations'
 import {
   setupMainOwnedWorkspace,
   WORKTREE_ID,
@@ -34,12 +36,16 @@ type SwitchSource = NonNullable<
 >
 
 let rig: RestTestRig
-beforeEach(async () => {
+async function startRig(agents?: ReturnType<typeof structuredAgentsDeclaringNothing>) {
   rig = await createRestTestRig({
     idleSweep: { intervalMs: 60_000 },
+    ...(agents ? { agents } : {}),
     resolveWorkspacePath: async () => rig.root
   })
   setStructuredAgentSessionHost(rig.host)
+}
+beforeEach(async () => {
+  await startRig()
   vi.stubEnv('HOME', join(rig.root, 'home'))
   vi.stubEnv('USERPROFILE', join(rig.root, 'home'))
   vi.stubEnv('ORCA_USER_DATA_PATH', join(rig.root, 'user-data'))
@@ -51,12 +57,17 @@ afterEach(async () => {
   vi.unstubAllEnvs()
 })
 
-function switchParams(sessionId: string, source?: SwitchSource) {
+function switchParams(
+  sessionId: string,
+  source?: SwitchSource,
+  agent: 'codex' | 'pi' = 'codex',
+  providerSessionId = THREAD
+) {
   const fields = {
     worktree: `id:${WORKTREE_ID}`,
-    agent: 'codex' as const,
+    agent,
     resumeFrom: {
-      providerSessionId: THREAD,
+      providerSessionId,
       cliSource: { workspaceId: WORKTREE_ID, paneKey: PANE }
     }
   }
@@ -207,6 +218,86 @@ it('keeps a proven stop when the rollout moved during the stop, so a retry reads
   const turns = journal.snapshot().items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
   expect(turns).toEqual([
     expect.objectContaining({ turnId: 'cli-turn', state: 'interrupted', outcome: 'cancellation' })
+  ])
+})
+
+// Pi's handle names its transcript file while its hook rows name the conversation: the pane's
+// own named row still makes the switch the user's Stop, so the turn reads Interrupted.
+it('reads a Pi turn its switch stopped as the user\u2019s Stop', async () => {
+  await rig.dispose()
+  await startRig(
+    structuredAgentsDeclaringNothing([structuredAgentRuntimeRegistration('pi')!.definition])
+  )
+  const piDir = join(rig.root, 'home', '.pi', 'agent')
+  vi.stubEnv('PI_CODING_AGENT_DIR', piDir)
+  const recorded = (
+    await readFile(
+      join(
+        import.meta.dirname,
+        '../../../native-chat/agent-session-wire/__fixtures__/recorded-native-switch/pi/completed.jsonl'
+      ),
+      'utf8'
+    )
+  )
+    .trimEnd()
+    .split('\n')
+  const header = JSON.parse(recorded[0]!)
+  const transcriptPath = join(piDir, 'sessions', `2026-10-14T10-00-00-000Z_${header.id}.jsonl`)
+  await mkdir(dirname(transcriptPath), { recursive: true })
+  // The recording cut while its last turn is open.
+  await writeFile(
+    transcriptPath,
+    `${[JSON.stringify({ ...header, cwd: rig.root }), ...recorded.slice(1, 6)].join('\n')}\n`
+  )
+  const { runtime } = setupMainOwnedWorkspace()
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
+  const pane = runtime.resolveTerminalPane(PANE, WORKTREE_ID)
+  const row: AgentStatusIpcPayload = {
+    paneKey: PANE,
+    worktreeId: WORKTREE_ID,
+    agentType: 'pi',
+    connectionId: null,
+    receivedAt: 1,
+    stateStartedAt: 1,
+    state: 'blocked',
+    prompt: 'working prompt',
+    providerSession: { key: 'session_id', id: header.id, transcriptPath }
+  }
+  vi.spyOn(runtime, 'getAgentProviderSessionRows').mockReturnValue([row])
+  vi.spyOn(runtime.agentTransitions, 'latestRow').mockReturnValue(row)
+  vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({ supported: true })
+  vi.spyOn(runtime, 'assertStructuredAdoptionTerminalWritersExited').mockResolvedValue()
+  vi.spyOn(runtime, 'resolveRuntimeFileTarget').mockResolvedValue(worktreeTarget())
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    stopAndWait: async () => {
+      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
+      return true
+    },
+    getForegroundProcess: async () => 'pi'
+  })
+
+  const result = await executeStructuredSessionSwitch(
+    switchParams(
+      SESSION,
+      {
+        terminal: pane.handle,
+        expectedIncarnationId: incarnationId,
+        originalPresentation: pane.presentation!
+      },
+      'pi',
+      header.id
+    ),
+    { runtime },
+    'chat'
+  )
+  expect(result).toMatchObject({ status: 'completed' })
+  const { journal } = await rig.host.collaboratorsForTests().lifetime.conversation(SESSION)
+  const turns = journal.snapshot().items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
+  expect(turns).toEqual([
+    expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
   ])
 })
 
