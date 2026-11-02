@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 import {
   runClaudeBackgroundAttempts,
   runClaudeGenerationAttempts,
+  type ClaudeBackgroundFailedExit,
   type ClaudeGenerationAttempt
 } from './claude-background-run-isolation'
 
@@ -77,7 +78,11 @@ it('composes both steps once each, keeping whichever came first', async () => {
     stdout: '',
     stderr: `${ENTERPRISE}\n${DONT_ASK_REFUSAL}`
   })
-  for (const cli of [oldEnterpriseCli, alwaysRefusing]) {
+  const clis: ((attempt: ClaudeGenerationAttempt) => Promise<ClaudeBackgroundFailedExit>)[] = [
+    oldEnterpriseCli,
+    alwaysRefusing
+  ]
+  for (const cli of clis) {
     const run = vi.fn(cli)
     await runClaudeGenerationAttempts({ agentId: 'claude', run, failedExit: (outcome) => outcome })
     expect(run.mock.calls.map(([attempt]) => attempt)).toEqual(

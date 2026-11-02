@@ -206,6 +206,9 @@ it('keeps the picked model and a non-plan mode on an old CLI under enterprise MC
           timedOut: false
         }
       }
+    },
+    spawnAgent: () => {
+      throw new Error('A remote target spawns nothing locally')
     }
   })
   expect(result).toMatchObject({ success: true, message: 'Fix crash' })
