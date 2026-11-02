@@ -92,7 +92,15 @@ function addNote(
 }
 
 function folderNote(worktreeId: string, body: string): DiffComment {
-  return { id: body, worktreeId, filePath: 'README.md', lineNumber: 1, body, createdAt: 1 }
+  return {
+    id: body,
+    worktreeId,
+    filePath: 'README.md',
+    lineNumber: 1,
+    body,
+    createdAt: 1,
+    side: 'modified'
+  }
 }
 
 function savedServer(id: string): PublicKnownRuntimeEnvironment {

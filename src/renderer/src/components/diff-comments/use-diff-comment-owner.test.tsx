@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeProjectGroup } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
 import { makeOpenFile } from '@/store/slices/store-session-test-harness'
 import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -15,7 +16,6 @@ import { useCombinedDiffNotesActions } from '../editor/combined-diff/review-cont
 import { useMarkdownPreviewSourceFoundation } from '../editor/use-markdown-preview-source-foundation'
 import { useSourceControlDiffCommentNotes } from '../right-sidebar/source-control/notes/use-diff-comment-notes'
 import { useDiffCommentView, useOwnedDiffCommentTarget } from './use-diff-comment-owner'
-import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
 import { useVisibleWorktreeDiffComments } from './use-visible-worktree-diff-comments'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
@@ -58,7 +58,7 @@ function repoOn(id: string, executionHostId: ExecutionHostId): Repo {
 }
 
 function note(id: string, filePath = 'a.ts'): DiffComment {
-  return { id, worktreeId: WT, filePath, lineNumber: 1, body: id, createdAt: 1 }
+  return { id, worktreeId: WT, filePath, lineNumber: 1, body: id, createdAt: 1, side: 'modified' }
 }
 
 // Same worktree on this computer and on an SSH host, plus an unrelated worktree.
@@ -181,42 +181,113 @@ describe('note owner views', () => {
 
   it('do work linear in the catalog on listing and repo updates, none on unrelated writes', () => {
     function cost(size: number) {
-      let repoReads = 0
+      let reads = 0
+      const counted = <T extends { id: string }>(record: T): T => {
+        const { id } = record
+        return Object.defineProperty(record, 'id', {
+          enumerable: true,
+          get: () => {
+            reads += 1
+            return id
+          }
+        })
+      }
       const repos = [
         repoOn(REPO, 'local'),
         repoOn(REPO, 'runtime:hub'),
         ...Array.from({ length: size }, (_, index) => repoOn(`unrelated-${index}`, 'local'))
-      ].map((repo) => {
-        const { id } = repo
-        return Object.defineProperty(repo, 'id', {
-          enumerable: true,
-          get: () => {
-            repoReads += 1
-            return id
-          }
-        })
-      })
+      ].map(counted)
       const rows = Array.from({ length: size }, (_, index) =>
-        makeWorktree({ id: `${REPO}::/work/${index}`, repoId: REPO, diffComments: [note('n')] })
+        counted(
+          makeWorktree({ id: `${REPO}::/work/${index}`, repoId: REPO, diffComments: [note('n')] })
+        )
       )
       useAppStore.setState({ repos, worktreesByRepo: { [REPO]: rows } })
+      const ids = rows.map((row) => row.id)
       const { result, unmount } = renderHook(() =>
-        rows.map((row) => useDiffCommentView(row.id, NO_RESOURCE_EVIDENCE))
+        ids.map((id) => useDiffCommentView(id, { runtimeEnvironmentId: null }))
       )
       expect(result.current.every((view) => view.comments?.length === 1)).toBe(true)
 
-      repoReads = 0
+      reads = 0
       act(() => useAppStore.setState({ worktreesByRepo: { [REPO]: [...rows] } }))
       act(() => useAppStore.setState({ repos: [...repos] }))
-      const updateReads = repoReads
-      repoReads = 0
+      const updateReads = reads
+      reads = 0
       act(() => useAppStore.setState({ editorFontZoomLevel: size }))
-      expect(repoReads).toBe(0)
+      expect(reads).toBe(0)
+      act(() =>
+        useAppStore.setState({
+          worktreesByRepo: {
+            [REPO]: [{ ...rows[0], id: ids[0], diffComments: [] }, ...rows.slice(1)]
+          }
+        })
+      )
+      expect(result.current[0].comments).toEqual([])
       unmount()
       return updateReads
     }
 
-    // N views over N rows and N repos: linear growth is 10x, per-record catalog scans 100x.
+    // N views over N rows and N repos: linear growth is 10x, per-reader catalog scans 100x.
+    expect(cost(100)).toBeLessThanOrEqual(cost(10) * 20)
+  })
+
+  it('share folder qualification across readers: linear on catalog and server updates, none on unrelated writes', () => {
+    function cost(size: number) {
+      let reads = 0
+      const folders = Array.from({ length: size }, (_, index) => {
+        const id = `folder-${index}`
+        return Object.defineProperty(
+          makeFolderWorkspace({
+            id,
+            folderPath: `/f/${index}`,
+            executionHostId: 'local',
+            diffComments: [note('n')]
+          }),
+          'id',
+          {
+            enumerable: true,
+            get: () => {
+              reads += 1
+              return id
+            }
+          }
+        )
+      })
+      useAppStore.setState({
+        folderWorkspaces: folders,
+        projectGroups: [{ ...makeProjectGroup(), executionHostId: 'local' }]
+      })
+      // Every folder has a reader, and the first has five more.
+      const keys = [
+        ...folders.map((folder) => `folder:${folder.id}`),
+        ...Array(5).fill('folder:folder-0')
+      ]
+      const { result, unmount } = renderHook(() =>
+        keys.map((key) => useDiffCommentView(key, { runtimeEnvironmentId: null }))
+      )
+      expect(result.current.every((view) => view.comments?.length === 1)).toBe(true)
+
+      reads = 0
+      act(() => useAppStore.setState({ folderWorkspaces: [...folders] }))
+      act(() => useAppStore.setState({ runtimeEnvironments: [] }))
+      const updateReads = reads
+      reads = 0
+      act(() => useAppStore.setState({ editorFontZoomLevel: size }))
+      expect(reads).toBe(0)
+      act(() =>
+        useAppStore.setState({
+          folderWorkspaces: [
+            makeFolderWorkspace({ ...folders[0], id: 'folder-0', diffComments: [] }),
+            ...folders.slice(1)
+          ]
+        })
+      )
+      expect(result.current.at(-1)?.comments).toEqual([])
+      unmount()
+      return updateReads
+    }
+
     expect(cost(100)).toBeLessThanOrEqual(cost(10) * 20)
   })
 

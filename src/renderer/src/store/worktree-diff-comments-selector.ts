@@ -4,6 +4,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
 import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { resolveRecordOwner, resolveSourceCopy } from '@/lib/workspace-copy-owner'
+import { findIndexedWorktreeRows } from '@/lib/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { selectWorktreesByRepo } from './workspace-record-selectors'
@@ -37,10 +38,12 @@ export function findCopyRows(
   authority: HostAuthority
 ): Worktree[] {
   const key = authorityKey(authority)
-  return (selectWorktreesByRepo(state)[getRepoIdFromWorktreeId(worktreeId)] ?? []).filter((row) => {
-    if (row.id !== worktreeId) {
-      return false
-    }
+  const rows = findIndexedWorktreeRows(
+    selectWorktreesByRepo(state),
+    getRepoIdFromWorktreeId(worktreeId),
+    worktreeId
+  )
+  return rows.filter((row) => {
     const own = resolveRecordOwner(state, row)
     return own.kind === 'resolved' && authorityKey(own.owner) === key
   })

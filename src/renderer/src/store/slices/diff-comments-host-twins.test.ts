@@ -742,7 +742,15 @@ describe('captured note owners across delivery and selection', () => {
           repoId: REPO,
           authoritative: true,
           source: 'git',
-          worktrees: [{ ...worktree('ssh:box'), runtimeOwnerEnvironmentId: 'hub' }]
+          worktrees: [
+            {
+              ...worktree('ssh:box'),
+              runtimeOwnerEnvironmentId: 'hub',
+              ownership: 'orca-managed',
+              selectedCheckout: false,
+              visible: true
+            }
+          ]
         }
       }
     })
