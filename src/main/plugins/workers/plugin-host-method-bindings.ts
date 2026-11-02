@@ -22,6 +22,10 @@ import {
   PLUGIN_STATUS_BAR_HANDLERS,
   type PluginStatusBarServices
 } from './plugin-host-status-bar-method-bindings'
+import {
+  PLUGIN_WORKSPACE_ACTION_HANDLERS,
+  type PluginRuntimeRpc
+} from './plugin-host-workspace-method-bindings'
 
 export type { PluginHostCallScope } from './plugin-host-call-scope'
 
@@ -83,6 +87,8 @@ export type PluginHostServices = {
   panels?: PluginPanelBridgeServices | null
   /** Absent where no Orca window draws a status bar. */
   statusBar?: PluginStatusBarServices | null
+  /** The runtime methods the `orca` CLI calls, for workspace actions; absent without a runtime. */
+  runtimeRpc?: PluginRuntimeRpc | null
   settings: {
     getAll(pluginId: string): Record<string, PluginJsonValue>
     set(
@@ -198,7 +204,8 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     return { status: saved ? ('saved' as const) : ('cancelled' as const) }
   }),
   ...PLUGIN_PANEL_BRIDGE_HANDLERS,
-  ...PLUGIN_STATUS_BAR_HANDLERS
+  ...PLUGIN_STATUS_BAR_HANDLERS,
+  ...PLUGIN_WORKSPACE_ACTION_HANDLERS
 }
 
 function requireDesktop(services: PluginHostServices): PluginDesktopFrameServices {

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import {
   pluginFieldDoc,
+  PLUGIN_HOST_ACTIONS_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
@@ -11,8 +12,11 @@ import {
 
 export const PLUGIN_CAPABILITY_KINDS = [
   'workspace:read',
+  'workspace:write',
   'agent:read',
+  'agent:launch',
   'terminal:send',
+  'terminal:read',
   'notifications:show',
   'storage:own',
   'secrets:own',
@@ -24,8 +28,11 @@ export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
 /** The release each capability arrived in; engines.orca must cover every one a plugin asks for. */
 export const PLUGIN_CAPABILITY_SINCE: Record<PluginCapabilityKind, string> = {
   'workspace:read': PLUGIN_SCHEMA_SINCE_V1,
+  'workspace:write': PLUGIN_HOST_ACTIONS_SINCE,
   'agent:read': PLUGIN_MANIFEST_V2_SINCE,
+  'agent:launch': PLUGIN_HOST_ACTIONS_SINCE,
   'terminal:send': PLUGIN_SCHEMA_SINCE_V1,
+  'terminal:read': PLUGIN_HOST_ACTIONS_SINCE,
   'notifications:show': PLUGIN_SCHEMA_SINCE_V1,
   'storage:own': PLUGIN_MANIFEST_V2_SINCE,
   'secrets:own': PLUGIN_MANIFEST_V2_SINCE,
@@ -58,8 +65,11 @@ export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
 export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string> = {
   'workspace:read':
     'Read the name, branch, and terminal list of your focused workspace, and get notified when workspaces are created or removed',
+  'workspace:write': 'Open your workspaces in Orca',
   'agent:read': 'Get notified when agent status changes',
+  'agent:launch': 'Start agents in your workspaces, local and SSH',
   'terminal:send': 'Type and run commands in your terminals, local and SSH',
+  'terminal:read': 'Read the output of your terminals, local and SSH',
   'notifications:show': 'Show desktop notifications labeled with the plugin name',
   'storage:own': "Store data in the plugin's own storage folder",
   'secrets:own': "Store and read secrets in the plugin's own encrypted file",
