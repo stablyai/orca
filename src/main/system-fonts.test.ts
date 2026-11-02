@@ -67,16 +67,20 @@ describe('listSystemFontFamilies', () => {
     })
   })
 
-  it.each([
-    ['darwin' as NodeJS.Platform, 45_000],
-    ['linux' as NodeJS.Platform, 15_000]
-  ])('asks for the %s font command timeout of %dms', async (platform, timeoutMs) => {
-    await withPlatform(platform, async () => {
-      runProcessMock.mockResolvedValue(ok('Consolas\n'))
-      const { listSystemFontFamilies } = await import('./system-fonts')
-      await listSystemFontFamilies()
+  const platformTimeouts: [NodeJS.Platform, number][] = [
+    ['darwin', 45_000],
+    ['linux', 15_000]
+  ]
+  it.each(platformTimeouts)(
+    'asks for the %s font command timeout of %dms',
+    async (platform, timeoutMs) => {
+      await withPlatform(platform, async () => {
+        runProcessMock.mockResolvedValue(ok('Consolas\n'))
+        const { listSystemFontFamilies } = await import('./system-fonts')
+        await listSystemFontFamilies()
 
-      expect(runProcessMock.mock.calls[0]?.[0].timeoutMs).toBe(timeoutMs)
-    })
-  })
+        expect(runProcessMock.mock.calls[0]?.[0].timeoutMs).toBe(timeoutMs)
+      })
+    }
+  )
 })
