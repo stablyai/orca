@@ -3623,6 +3623,7 @@
             "commandNotFound": "无法启动 {{agent}}，因为在此计算机上找不到其命令。",
             "copyPrompt": "复制提示",
             "exitedDuringStart": "{{agent}} 在启动时退出了。",
+            "setupNotCompleted": "设置脚本未成功完成，因此未启动 {{agent}}。请修复或重新运行设置脚本，然后在此工作区中启动 {{agent}}。",
             "notStarted": "无法启动 {{agent}}。",
             "restoreWorkspace": "请恢复工作区文件夹或打开可用的工作区，然后重试。",
             "tryInTerminal": "请在此文件夹的终端中运行它以查看原因，然后重试。",

@@ -1,6 +1,8 @@
+import { awaitRequiredSetup } from '../runtime/setup/setup-run'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   listWorktreesMock,
+  loadHooksMock,
   getEffectiveHooksMock,
   getDefaultTabsLaunchMock,
   createSetupRunnerScriptMock,
@@ -115,6 +117,44 @@ describe('automation creates: main provisions setup and default tabs', () => {
     shouldRunSetupForCreateMock.mockReturnValue(true)
     getDefaultTabsLaunchMock.mockReturnValue(defaultTabs)
   })
+
+  it.each([false, true])(
+    'links desktop chat to the retained setup result with preparation failure=%s',
+    async (fails) => {
+      loadHooksMock.mockReturnValue({
+        scripts: { setup: 'pnpm worktree:setup' },
+        setupAgentStartupPolicy: 'wait-for-setup'
+      })
+      if (fails) {
+        createSetupRunnerScriptMock.mockRejectedValueOnce(new Error('write failed'))
+      }
+      const result = await handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        setupDecision: 'run',
+        promisedAgentChat: true
+      })
+      expect(result.chatAwaitsSetup).toBe(true)
+      expect(result).not.toHaveProperty('setup')
+      expect(result).not.toHaveProperty('defaultTabs')
+      const run = runtime.getSetupRun(result.worktree.id)
+      expect(run?.waitsForAgent).toBe(true)
+      if (fails) {
+        await expect(awaitRequiredSetup(run, 'claude')).rejects.toThrow('Claude was not started')
+      } else {
+        expect(provision).toHaveBeenCalledWith(
+          expect.objectContaining({
+            setupRun: run,
+            observeSetupCompletion: true,
+            callerProvidesSurface: true
+          }),
+          expect.anything()
+        )
+        run?.settle({ kind: 'succeeded' })
+        await expect(awaitRequiredSetup(run, 'claude')).resolves.toBeUndefined()
+      }
+    }
+  )
 
   it('provisions once in main and hands the window nothing to launch', async () => {
     const result = await handlers['worktrees:create'](null, {

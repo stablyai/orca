@@ -1,3 +1,4 @@
+import { createSetupRun } from '../../setup/setup-run'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -202,11 +203,114 @@ describe('a close that reaches main before its create', () => {
     expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
   })
 
-  it('switch off: a close before the create is not remembered', async () => {
+  it('a close fences pending creates with either layout owner', async () => {
     mocks.layoutOwnerIsMain = false
     await close()
     mocks.layoutOwnerIsMain = true
 
-    expect(await create()).toMatchObject({ ok: true, result: { ok: true } })
+    expect(await create()).toMatchObject(refusedAsClosed)
+  })
+})
+
+it.each(['succeeded', 'failed', 'closed', 'missing'] as const)(
+  'a linked chat consumes setup %s before committing its first message',
+  async (outcome) => {
+    const run = createSetupRun(true)
+    const entered = Promise.withResolvers<void>()
+    const linked = structuredAgentSessionCreateParams({
+      ...createParams(),
+      sessionId: SESSION,
+      worktree: 'id:workspace-1',
+      agent: 'codex',
+      afterWorktreeSetup: true,
+      firstMessage: {
+        clientMessageId: 'opening',
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Keep this message' }]
+        }
+      },
+      randomUuid: () => '00000000-0000-0000-0000-0000000000fa',
+      now: NOW
+    })
+    const creating = call('agentSession.create', linked, CLIENT, {
+      getSetupRun: () => {
+        entered.resolve()
+        return outcome === 'missing' ? undefined : run
+      }
+    })
+    await entered.promise
+    expect(rig.store.getRecord(SESSION)).toBeNull()
+    expect(rig.adapter.acquire).not.toHaveBeenCalled()
+    if (outcome === 'closed') {
+      await close()
+    }
+    run.settle(outcome === 'succeeded' ? { kind: 'succeeded' } : { kind: 'failed', exitCode: 1 })
+    if (outcome === 'succeeded') {
+      expect(await creating).toMatchObject({
+        ok: true,
+        result: { ok: true, value: { firstMessage: { clientMessageId: 'opening' } } }
+      })
+      expect(rig.store.getRecord(SESSION)).not.toBeNull()
+      // Once committed, replay is independent of an evicted/restarted setup observer.
+      expect(
+        await call('agentSession.create', linked, CLIENT, { getSetupRun: () => undefined })
+      ).toMatchObject({ ok: true, result: { ok: true, replayed: true } })
+    } else {
+      expect(await creating).toMatchObject({
+        ok: true,
+        result: {
+          ok: false,
+          refusal: {
+            code:
+              outcome === 'closed'
+                ? 'agent_session_operation_invalid'
+                : 'agent_session_setup_not_completed'
+          }
+        }
+      })
+      expect(rig.store.getRecord(SESSION)).toBeNull()
+      expect(rig.adapter.acquire).not.toHaveBeenCalled()
+      if (outcome !== 'closed') {
+        expect(await create()).toMatchObject({ ok: true, result: { ok: true } })
+      }
+    }
+  }
+)
+
+it('releases a disconnected linked-create waiter without losing Setup or its opening message', async () => {
+  const run = createSetupRun(true)
+  const entered = Promise.withResolvers<void>()
+  const controller = new AbortController()
+  const linked = structuredAgentSessionCreateParams({
+    sessionId: SESSION,
+    worktree: 'id:workspace-1',
+    agent: 'codex',
+    afterWorktreeSetup: true,
+    randomUuid: () => '00000000-0000-0000-0000-0000000000fa',
+    now: NOW
+  })
+  const runtime = {
+    getSetupRun: () => {
+      entered.resolve()
+      return run
+    }
+  }
+  const pending = call(
+    'agentSession.create',
+    linked,
+    { ...CLIENT, signal: controller.signal },
+    runtime
+  )
+  await entered.promise
+  controller.abort(new Error('disconnected'))
+  expect(await pending).toMatchObject({ ok: false })
+  expect(rig.store.getRecord(SESSION)).toBeNull()
+  expect(run.result).toBeUndefined()
+  run.settle({ kind: 'succeeded' })
+  expect(await call('agentSession.create', linked, CLIENT, runtime)).toMatchObject({
+    ok: true,
+    result: { ok: true }
   })
 })

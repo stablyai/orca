@@ -24,27 +24,14 @@ import {
   launchStructuredWorktreeSession,
   type WorktreeCreationStructuredSessionResult
 } from '@/lib/worktree-creation-structured-session'
-import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
+import {
+  completeWorktreeCreation,
+  isPendingCreationSurfaceVisible,
+  isCreatedWorkspaceInView
+} from '@/lib/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
-
-// The pending pointer can survive app-view changes; only terminal view actually displays creation UI.
-function isPendingCreationSurfaceVisible(creationId: string): boolean {
-  const state = useAppStore.getState()
-  return state.activeView === 'terminal' && state.activePendingCreationId === creationId
-}
-
-// Why: the created row is listed before completion, so a user may already have opened it.
-function isCreatedWorkspaceInView(creationId: string, worktreeId: string): boolean {
-  const state = useAppStore.getState()
-  return (
-    isPendingCreationSurfaceVisible(creationId) ||
-    (state.activeView === 'terminal' &&
-      state.activePendingCreationId === null &&
-      state.activeWorktreeId === worktreeId)
-  )
-}
 
 export async function executeWorktreeCreation(
   creationId: string,
@@ -101,6 +88,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
+          ...(structuredLaunch && !provisionedRoot ? { promisedAgentChat: true as const } : {}),
           setupOnly: preparedRequest.setupOnly,
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
@@ -287,6 +275,7 @@ export async function executeWorktreeCreation(
         request: preparedRequest,
         agentLaunchRoute,
         worktreeId: worktree.id,
+        afterWorktreeSetup: result.chatAwaitsSetup,
         shouldActivateOnCompletion,
         activation,
         primaryTabId

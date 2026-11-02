@@ -1,3 +1,4 @@
+import { awaitRequiredSetup, AgentLaunchSetupNotCompletedError } from '../runtime/setup/setup-run'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
@@ -122,6 +123,11 @@ export async function executeAgentLaunch(
       }
     }
 
+    if (placed.requiredSetup?.waitsForAgent) {
+      execution.onStage?.('setup_wait')
+    }
+    await awaitRequiredSetup(placed.requiredSetup, intent.agent, execution.signal)
+
     // Recover a created workspace on cancellation before an agent exists.
     recoverableWorktreeId = execution.signal?.aborted ? placed.worktreeId : undefined
     assertAgentPromptRequestActive(execution.signal)
@@ -180,7 +186,12 @@ export async function executeAgentLaunch(
     }
   } catch (error) {
     const createdWorktreeId = recoverableWorktreeId ?? launch?.createdWorktreeId()
-    if (!surfacePublished && intent.target.kind !== 'existing' && createdWorktreeId) {
+    if (
+      !surfacePublished &&
+      intent.target.kind !== 'existing' &&
+      createdWorktreeId &&
+      !(error instanceof AgentLaunchSetupNotCompletedError && error.outcome.kind === 'failed')
+    ) {
       await recoverCreatedWorkspace(execution.workspaces, createdWorktreeId)
     }
     throw error

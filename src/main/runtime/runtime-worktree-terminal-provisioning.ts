@@ -1,3 +1,5 @@
+import { mintPtySessionId } from '../daemon/pty-session-id'
+import { bindSetupRunToPty, type SetupRun } from './setup/setup-run'
 import { randomUUID } from 'node:crypto'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
@@ -9,6 +11,8 @@ import type { DefaultTerminalTab } from '../../shared/workspace-layout/workspace
 type TerminalResult = { handle: string }
 export type WorktreeProvisionTerminalOptions = {
   /** The pane main already wrote (layout-owner build): the terminal starts in it. */
+  sessionId?: string
+  isNewSession?: boolean
   tabId?: string
   leafId?: string
   title?: string
@@ -37,8 +41,9 @@ export type WorktreeTerminalProvisioningHost = {
     worktreeId: string,
     tabs: DefaultTerminalTab[]
   ) => Promise<readonly { tabId: string }[] | null>
+  subscribeToData?: (ptyId: string, listener: (data: string) => void) => () => void
+  subscribeToExit?: (ptyId: string, listener: () => void) => () => void
   getPtyId: (handle: string) => string | undefined
-  recordSetupCompletionToken: (ptyId: string, token: string) => void
 }
 
 // What every terminal of this create shares: who surfaces it, and whether the create was the user's act (E9).
@@ -58,6 +63,7 @@ export type WorktreeTerminalProvisioningArgs = {
   callerProvidesSurface?: boolean
   startupNeedsTerminal?: boolean
   setupCommandPlatform: 'windows' | 'posix'
+  setupRun?: SetupRun
   observeSetupCompletion?: boolean
   // Why: setup and startup must use the same wrapper when startup waits for setup.
   wrappedSetupCommand?: string
@@ -188,6 +194,7 @@ export async function provisionWorktreeTerminals(
   args: WorktreeTerminalProvisioningArgs
 ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
   if (!host.canSpawn()) {
+    args.setupRun?.settle({ kind: 'ended', reason: 'spawn_failed' })
     return { setupSpawned: false, setupTerminalHandle: null }
   }
   const surfacing: TerminalSurfacing = {
@@ -222,26 +229,39 @@ export async function provisionWorktreeTerminals(
       await host.createTerminal(args.worktreeSelector, surfacing)
     }
     if (args.setup) {
-      const completionToken =
-        args.observeSetupCompletion && !args.wrappedSetupCommand ? randomUUID() : null
+      const completionToken = args.setupRun || args.observeSetupCompletion ? randomUUID() : null
       const observed = completionToken
         ? buildObservedSetupCommand(
             args.setup.runnerScriptPath,
             args.setupCommandPlatform,
             completionToken,
-            args.setup.shell
+            args.setup.shell,
+            args.wrappedSetupCommand
           )
         : null
       const command =
-        args.wrappedSetupCommand ??
         observed?.command ??
+        args.wrappedSetupCommand ??
         buildSetupRunnerCommand(
           args.setup.runnerScriptPath,
           args.setupCommandPlatform,
           args.setup.shell
         )
       const env = { ...args.setup.envVars, ...observed?.env }
+      const sessionId =
+        args.setupRun && completionToken ? mintPtySessionId(args.worktreeId) : undefined
+      if (sessionId && completionToken && args.setupRun) {
+        if (host.subscribeToData && host.subscribeToExit) {
+          bindSetupRunToPty(args.setupRun, sessionId, completionToken, {
+            subscribeToData: host.subscribeToData,
+            subscribeToExit: host.subscribeToExit
+          })
+        } else {
+          args.setupRun.settle({ kind: 'ended', reason: 'observation_lost' })
+        }
+      }
       const setupTerminal = await host.createTerminal(args.worktreeSelector, {
+        ...(sessionId ? { sessionId, isNewSession: true } : {}),
         title: host.getSetupTerminalTitle?.() ?? 'Setup',
         command,
         env,
@@ -252,11 +272,12 @@ export async function provisionWorktreeTerminals(
       setupTerminalHandle = setupTerminal.handle
       setupSpawned = true
       const ptyId = host.getPtyId(setupTerminal.handle)
-      if (completionToken && ptyId) {
-        host.recordSetupCompletionToken(ptyId, completionToken)
+      if (sessionId && ptyId !== sessionId && !args.setupRun?.result) {
+        args.setupRun?.settle({ kind: 'ended', reason: 'observation_lost' })
       }
     }
   } catch (error) {
+    args.setupRun?.settle({ kind: 'ended', reason: 'spawn_failed' })
     const message = error instanceof Error ? error.message : String(error)
     console.warn(
       `[worktree-create] Failed to create setup/default terminals for ${args.worktreePath}: ${message}`

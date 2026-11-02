@@ -23,7 +23,7 @@ type AgentLaunchExecutionBase = {
   vocabulary?: AgentLaunchModeVocabulary
   /** False if the client cannot display this chat; host callers may omit it. */
   callerRendersStructured?: boolean
-  onStage?: (stage: 'worktree_create' | 'mode_settle' | 'surface_create') => void
+  onStage?: (stage: 'worktree_create' | 'setup_wait' | 'mode_settle' | 'surface_create') => void
   /** Runs after tab publication, before post-creation delivery; must not throw. */
   onSurfacePublished?: (surface: AgentLaunchPublishedSurface) => void
   /** Abort at the next boundary; return an existing agent and skip pending prompt delivery. */

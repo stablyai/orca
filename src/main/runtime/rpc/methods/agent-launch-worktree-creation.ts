@@ -4,7 +4,7 @@ import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-
 
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { SetupRun } from '../../setup/setup-run'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
@@ -25,8 +25,6 @@ type WorktreeCreateParams = Extract<
   AgentLaunchParams['target'],
   { kind: 'create-worktree' }
 >['create']
-
-const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
 export function agentLaunchWorkspaceFactory(
   context: RpcContext,
@@ -52,6 +50,7 @@ export function agentLaunchWorkspaceFactory(
     }) => {
       const startupLaunchPreferences =
         startupAgent && toAgentLaunchPreferences(options, startupAgent)
+      let requiredSetup: SetupRun | undefined
       let promptRodeLaunchCommand = false
       let startupTerminalCreation: RuntimeTerminalCreate | undefined
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
@@ -73,6 +72,9 @@ export function agentLaunchWorkspaceFactory(
       // Reserved before creation so a retry can recover; a failed attempt has to release it.
       try {
         const result = await runtime.createManagedWorktree({
+          onSetupRun: (run) => {
+            requiredSetup = run
+          },
           onStartupTerminalCreated: (terminal) => {
             startupTerminalCreation = terminal
           },
@@ -114,9 +116,6 @@ export function agentLaunchWorkspaceFactory(
           awaitTerminalProvisioning: true,
           observeSetupCompletion: true
         })
-        if (!startupAgent) {
-          await waitForStructuredSetup(runtime, result.setupReceipt)
-        }
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         const warning =
           result.warnings?.reduce(
@@ -124,6 +123,7 @@ export function agentLaunchWorkspaceFactory(
             result.warning
           ) ?? result.warning
         return {
+          requiredSetup,
           worktreeId: result.worktree.id,
           workspacePath: result.worktree.path,
           connectionId: repo.connectionId ?? null,
@@ -150,36 +150,5 @@ function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreatePara
     activate: false,
     runHooks: false,
     ...(params.runHooks === true ? { setupDecision: 'run' as const } : {})
-  }
-}
-
-async function waitForStructuredSetup(
-  runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>,
-  receipt: Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>['setupReceipt']
-): Promise<void> {
-  if (
-    !receipt ||
-    receipt.startupPolicy !== 'wait-for-setup' ||
-    receipt.state !== 'running' ||
-    !receipt.terminalHandle
-  ) {
-    return
-  }
-  const abort = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    await Promise.race([
-      runtime.waitForSetupTerminalCompletion(receipt.terminalHandle, abort.signal),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(() => {
-          abort.abort(new Error('structured_setup_wait_timeout'))
-          resolve()
-        }, STRUCTURED_SETUP_WAIT_TIMEOUT_MS)
-      })
-    ])
-  } catch {
-    // Setup completion is evidence, not a reason to strand a launch when the PTY disappears.
-  } finally {
-    clearTimeout(timer)
   }
 }

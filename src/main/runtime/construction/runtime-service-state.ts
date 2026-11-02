@@ -8,7 +8,7 @@ import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender
 import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
-import { OrcaRuntimeWithRuntimeId } from './runtime-identity-state'
+import { OrcaRuntimeWithSetupRuns } from './runtime-setup-state'
 import { RuntimeTerminalAgentPresence } from '../runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from '../runtime-notifier-contract'
 import { RuntimeClientEventBus } from '../runtime-client-event-bus'
@@ -49,7 +49,7 @@ import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../orca-runtime-postlude'
 import { screenClearsBlockedTail } from '../blocked-tail-screen-clear'
 
-export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
+export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithSetupRuns {
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -342,6 +342,4 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   // A fresh launch's pending composer watch; submits await it, and it is dropped once settled.
   protected launchComposerReadyByPtyId = new Map<string, Promise<boolean>>()
-
-  protected setupCompletionTokenByPtyId = new Map<string, string>()
 }

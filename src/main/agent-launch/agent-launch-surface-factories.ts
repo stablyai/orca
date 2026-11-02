@@ -1,3 +1,4 @@
+import type { SetupRun } from '../runtime/setup/setup-run'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 /**
  * The factories `executeAgentLaunch` is handed: how a surface and a workspace are BUILT once the
@@ -116,6 +117,7 @@ export type AgentLaunchWorkspaceFactory = {
     /** Null means local; absent means unresolved. */
     connectionId?: string | null
     startupTerminalHandle: string | undefined
+    requiredSetup?: SetupRun
     startupTerminalCreation?: RuntimeTerminalCreate
     startupTerminalPaneKey?: string
     warning?: string

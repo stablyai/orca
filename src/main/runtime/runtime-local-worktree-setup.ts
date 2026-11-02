@@ -4,6 +4,8 @@ import { getEffectiveHooks, loadHooks, runHook } from '../hooks'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import { getDefaultTabsLaunch, shouldRunSetupForCreate } from '../effective-hook-config'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
+import { createSetupRun, type SetupRun } from './setup/setup-run'
 import type { RuntimeStore } from './runtime-store-contract'
 
 /** Share setup decision between pre-add admission and post-add execution so allowed creates cannot fail after making the worktree. */
@@ -23,6 +25,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   warning?: string
 }): Promise<{
   setup?: CreateWorktreeResult['setup']
+  setupRun?: SetupRun
   defaultTabs?: CreateWorktreeResult['defaultTabs']
   warning?: string
   effectiveDecision: SetupDecision
@@ -53,6 +56,16 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
       // A new branch may introduce an unapproved hook; worktree already exists, so skip/warn below rather than fail the create.
     }
   }
+  const setupRun =
+    shouldRunSetup &&
+    (request.observeSetupCompletion || request.promisedAgentChat || args.shouldUseSetupRunner)
+      ? createSetupRun(
+          shouldWaitForSetupBeforeAgentStartup(
+            repo.hookSettings?.setupAgentStartupPolicy,
+            yamlHooks?.setupAgentStartupPolicy
+          )
+        )
+      : undefined
   let didStartInProcessSetupHook = false
   if (shouldRunSetup && hooks?.scripts.setup) {
     if (args.shouldUseSetupRunner) {
@@ -66,15 +79,23 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
           yamlHooks?.setupAgentStartupPolicy
         )
       } catch (error) {
+        setupRun?.settle({ kind: 'ended', reason: 'preparation_failed' })
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
       }
     } else {
       didStartInProcessSetupHook = true
-      void runHook('setup', worktreePath, repo, worktreePath, args.runtimeTarget).then((result) => {
-        if (!result.success) {
-          console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
-        }
-      })
+      void runHook('setup', worktreePath, repo, worktreePath, args.runtimeTarget)
+        .then((result) => {
+          setupRun?.settle(
+            result.success
+              ? { kind: 'succeeded' }
+              : { kind: 'failed', exitCode: result.exitCode ?? 1 }
+          )
+          if (!result.success) {
+            console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
+          }
+        })
+        .catch(() => setupRun?.settle({ kind: 'ended', reason: 'observation_lost' }))
     }
   } else if (hooks?.scripts.setup && effectiveDecision !== 'skip') {
     const skipped = `orca.yaml setup hook skipped for ${worktreePath}; pass --setup run to run it.`
@@ -82,6 +103,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     console.warn(`[hooks] ${skipped}`)
   }
   return {
+    ...(setupRun ? { setupRun } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(warning ? { warning } : {}),
@@ -89,5 +111,27 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,
     didStartInProcessSetupHook
+  }
+}
+
+export function runtimeWorktreeSetupReceipt(
+  preparation: Awaited<ReturnType<typeof prepareRuntimeLocalWorktreeSetup>>,
+  didSpawnSetup: boolean,
+  setupTerminalHandle: string | null
+): NonNullable<CreateWorktreeResult['setupReceipt']> {
+  const { effectiveDecision, hookFound, setupRun, shouldRunSetup, didStartInProcessSetupHook } =
+    preparation
+  return {
+    requested: effectiveDecision,
+    hookFound,
+    startupPolicy: setupRun?.waitsForAgent ? 'wait-for-setup' : 'start-immediately',
+    state: !hookFound
+      ? 'not_configured'
+      : effectiveDecision === 'skip' || !shouldRunSetup
+        ? 'skipped'
+        : didSpawnSetup || didStartInProcessSetupHook
+          ? 'running'
+          : 'spawn_failed',
+    ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
   }
 }

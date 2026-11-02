@@ -41,19 +41,12 @@ import {
   createAgentLaunchCallerEvidence,
   createOrchestrationCompatibilityEnvelope
 } from './orchestration-compatibility-envelope'
-import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
-import {
-  isWorkerStartTimeoutWithinTimerLimit,
-  resolveWorkerStartClientTimeoutMs,
-  resolveWorkerStartReadinessTimeoutMs
-} from '../../shared/orchestration-timing-budgets'
-import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { resolveRuntimeMethodTimeoutMs } from './runtime-request-timeout'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
 } from './orchestration-recovery-command'
 
-const LONG_POLL_CLIENT_GRACE_MS = 10_000
 // The host records the launched agent in the caller's chat; older hosts ignore the evidence.
 const AGENT_LAUNCH_METHODS: ReadonlySet<string> = new Set(['agent.launch', 'agent.launchReplay'])
 
@@ -100,7 +93,8 @@ export class RuntimeClient {
     params?: unknown,
     options?: RuntimeCallOptions
   ): Promise<RuntimeRpcSuccess<TResult>> {
-    const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
+    const effectiveTimeoutMs =
+      options?.timeoutMs ?? resolveRuntimeMethodTimeoutMs(method, params, this.requestTimeoutMs)
     const orchestrationMutation = isOrchestrationMutation(method, params)
     const terminalPromptMutation = isTerminalPromptMutation(method, params)
     const legacyTerminalPrompt = options?.legacyTerminalPrompt === true && terminalPromptMutation
@@ -195,36 +189,6 @@ export class RuntimeClient {
       throw recover(new RuntimeRpcFailureError(response), metadata.runtimeId ?? null)
     }
     return response
-  }
-
-  // Give server-side waits time to finish before the client transport times out.
-  private resolveMethodTimeoutMs(method: string, params?: unknown): number {
-    if (method === 'orchestration.workerStart') {
-      const requestedValue = getTimeoutMsParam(params)
-      const requested = typeof requestedValue === 'number' ? requestedValue : Number(requestedValue)
-      if (!isWorkerStartTimeoutWithinTimerLimit(requested)) {
-        throw new RuntimeClientError(
-          'invalid_argument',
-          `--timeout-ms is too large for worker-start transport grace; the derived timeout must be <= ${MAX_TIMER_DELAY_MS}ms.`
-        )
-      }
-      const readiness = resolveWorkerStartReadinessTimeoutMs(requested)
-      return Math.max(resolveWorkerStartClientTimeoutMs(readiness), this.requestTimeoutMs)
-    }
-    // A send to a finished worker starts its follow-up, which waits as worker-start does.
-    if (method === 'orchestration.send') {
-      return Math.max(resolveWorkerStartClientTimeoutMs(), this.requestTimeoutMs)
-    }
-    if (
-      (method === 'orchestration.check' && isWaitingCheck(params)) ||
-      method === 'terminal.wait'
-    ) {
-      const inner = Number(getTimeoutMsParam(params))
-      if (Number.isFinite(inner) && inner > 0) {
-        return Math.max(inner + LONG_POLL_CLIENT_GRACE_MS, this.requestTimeoutMs)
-      }
-    }
-    return this.requestTimeoutMs
   }
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {

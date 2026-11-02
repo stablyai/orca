@@ -184,15 +184,4 @@ describe('startup hosts retain current runtime capabilities', () => {
     expect(() => host.getForegroundProcess('startup-pty')).toThrow(TypeError)
     expect(() => hasChildProcesses('startup-pty')).toThrow(TypeError)
   })
-
-  it('writes the canonical setup-token map when invoked', () => {
-    const runtime = new OrcaRuntimeService(store)
-    const host = runtime['getWorktreeTerminalProvisioningHost']()
-    const original = runtime['setupCompletionTokenByPtyId']
-    const replacement = new Map<string, string>()
-    Object.defineProperty(runtime, 'setupCompletionTokenByPtyId', { value: replacement })
-    host.recordSetupCompletionToken?.('startup-pty', 'late-token')
-    expect(replacement.get('startup-pty')).toBe('late-token')
-    expect(original.has('startup-pty')).toBe(false)
-  })
 })

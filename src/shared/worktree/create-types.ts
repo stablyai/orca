@@ -84,6 +84,7 @@ export type SparsePreset = {
 }
 
 export type CreateWorktreeArgs = {
+  promisedAgentChat?: boolean
   repoId: string
   name: string
   /** Retire only generator-chosen names. User-typed pool names remain reusable; omitted callers retain legacy behavior. */
@@ -158,6 +159,7 @@ export type AdoptProvisionedRootArgs = CreateWorktreeArgs & {
 }
 
 export type CreateWorktreeResult = {
+  chatAwaitsSetup?: true
   /** The catalog this create produced; additive, older hosts omit it. */
   catalogVersion?: WorktreeCatalogVersion
   worktree: Worktree & {

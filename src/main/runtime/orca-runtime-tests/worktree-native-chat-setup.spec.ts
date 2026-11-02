@@ -1,3 +1,4 @@
+import { awaitRequiredSetup } from '../setup/setup-run'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { WorktreeCreate } from '../../../shared/rpc-contract/worktree-create-params'
@@ -13,7 +14,8 @@ import {
   ensurePathWithinWorkspaceMock,
   getDefaultTabsLaunch,
   getEffectiveHooks,
-  listWorktrees
+  listWorktrees,
+  loadHooks
 } from '../orca-runtime-test-mocks.spec'
 import {
   makeRuntimeStoreWithWorkspaceSession,
@@ -33,6 +35,9 @@ async function createFromRendererPayload(options: {
   withSetup?: boolean
   defaultTabs?: boolean
   startup?: boolean
+  promised?: true
+  completeDuringSpawn?: true
+  preparationFails?: true
 }) {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
   const runtime = new OrcaRuntimeService({
@@ -42,9 +47,19 @@ async function createFromRendererPayload(options: {
       ...(options.mode ? { setupScriptLaunchMode: options.mode } : {})
     })
   })
-  const spawn = vi.fn(async (_args: { command?: string; env?: Record<string, string> }) => ({
-    id: `pty-native-chat-${spawn.mock.calls.length}`
-  }))
+  const spawn = vi.fn(
+    async (args: { command?: string; env?: Record<string, string>; sessionId?: string }) => {
+      const id = args.sessionId ?? `pty-native-chat-${spawn.mock.calls.length}`
+      if (options.completeDuringSpawn) {
+        const token = args.command?.match(/__ORCA_SETUP_COMPLETE__:([^:]+):/)?.[1]
+        if (token) {
+          runtime.onPtyData(id, `__ORCA_SETUP_COMPLETE__:${token}:0\n`, Date.now())
+          runtime.onPtyExit(id, 0)
+        }
+      }
+      return { id }
+    }
+  )
   runtime.setPtyController({
     spawn,
     write: () => true,
@@ -67,6 +82,15 @@ async function createFromRendererPayload(options: {
     runnerScriptPath: RUNNER,
     envVars: SETUP_ENV
   })
+  if (options.promised) {
+    vi.mocked(loadHooks).mockReturnValue({
+      scripts: { setup: 'pnpm install' },
+      setupAgentStartupPolicy: 'wait-for-setup'
+    })
+    if (options.preparationFails) {
+      vi.mocked(createSetupRunnerScript).mockRejectedValue(new Error('write failed'))
+    }
+  }
   if (options.defaultTabs) {
     vi.mocked(getDefaultTabsLaunch).mockReturnValue({
       runCommands: true,
@@ -78,6 +102,7 @@ async function createFromRendererPayload(options: {
       {
         repoId: 'repo-1',
         name: 'native-chat-setup',
+        ...(options.promised ? { options: { promisedAgentChat: true } } : {}),
         setupDecision: options.withSetup === false ? 'skip' : 'run',
         ...(options.agent ? { createdWithAgent: options.agent } : {}),
         ...(options.startup ? { startup: { command: 'codex' } } : {})
@@ -93,7 +118,7 @@ async function createFromRendererPayload(options: {
   expect(args.activate).toBe(options.activate === true || options.startup === true)
   expect(args.runHooks).toBe(options.runHooks === true)
   const result = await runtime.createManagedWorktree({ ...args, awaitTerminalProvisioning: true })
-  return { result, spawn }
+  return { result, spawn, runtime }
 }
 
 describe('native-chat setup through renderer payload, RPC and execution host', () => {
@@ -155,4 +180,42 @@ describe('native-chat setup through renderer payload, RPC and execution host', (
     expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(['codex', `bash ${RUNNER}`])
     expect(result.startupTerminal).toMatchObject({ spawned: true })
   })
+})
+
+it.each([false, true])(
+  'preserves a promised chat dependency when runner preparation fails=%s',
+  async (fails) => {
+    const { result, spawn, runtime } = await createFromRendererPayload({
+      agent: 'codex',
+      promised: true,
+      ...(fails ? { preparationFails: true } : {})
+    })
+    expect(result.chatAwaitsSetup).toBe(true)
+    const run = runtime.getSetupRun(result.worktree.id)
+    expect(run?.waitsForAgent).toBe(true)
+    if (fails) {
+      await expect(awaitRequiredSetup(run, 'codex')).rejects.toThrow('Codex was not started')
+      expect(spawn).not.toHaveBeenCalled()
+    } else {
+      const args = spawn.mock.calls.find(([args]) =>
+        args.command?.includes('__ORCA_SETUP_COMPLETE__')
+      )?.[0]
+      expect(args?.sessionId).toEqual(expect.any(String))
+      const token = args?.command?.match(/__ORCA_SETUP_COMPLETE__:([^:]+):/)?.[1]
+      expect(token).toBeTruthy()
+      runtime.onPtyData(args?.sessionId ?? '', `__ORCA_SETUP_COMPLETE__:${token}:0\n`, Date.now())
+      await expect(awaitRequiredSetup(run, 'codex')).resolves.toBeUndefined()
+    }
+  }
+)
+
+it('retains completion emitted through runtime before the provider returns the new Setup PTY', async () => {
+  const { result, runtime } = await createFromRendererPayload({
+    agent: 'codex',
+    promised: true,
+    completeDuringSpawn: true
+  })
+  await expect(
+    awaitRequiredSetup(runtime.getSetupRun(result.worktree.id), 'codex')
+  ).resolves.toBeUndefined()
 })

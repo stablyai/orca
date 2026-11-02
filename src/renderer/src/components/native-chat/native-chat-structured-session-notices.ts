@@ -1,4 +1,5 @@
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
+import { requiredSetupLaunchFailureText } from '@/lib/required-setup-launch-failure'
 import { translate } from '@/i18n/i18n'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
@@ -44,14 +45,17 @@ function nativeChatLaunchNotice({
         )
   const cause =
     lifecycle === 'failed' && failure
-      ? (failure.causeText ??
-        agentSessionWriteNoticeText(
-          agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
-        ))
+      ? failure.code === 'agent_session_setup_not_completed' && agentLabel
+        ? requiredSetupLaunchFailureText(agentLabel)
+        : (failure.causeText ??
+          agentSessionWriteNoticeText(
+            agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
+          ))
       : ''
   // An argument problem already says the start failed; the generic lead would repeat it.
   const saysStartFailure =
-    failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
+    failure?.code === 'agent_session_setup_not_completed' ||
+    (failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem)
   const signInContent = nativeChatAntigravitySignInContent(failure?.details?.reason, agentLabel)
   return {
     content: signInContent,

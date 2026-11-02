@@ -4155,6 +4155,7 @@
             "commandNotFound": "{{agent}} konnte nicht gestartet werden, da sein Befehl auf diesem Computer nicht gefunden wurde.",
             "copyPrompt": "Prompt kopieren",
             "exitedDuringStart": "{{agent}} wurde während des Starts beendet.",
+            "setupNotCompleted": "Die Einrichtung wurde nicht erfolgreich abgeschlossen, daher wurde {{agent}} nicht gestartet. Behebe den Fehler oder führe die Einrichtung erneut aus und starte dann {{agent}} in diesem Arbeitsbereich.",
             "notStarted": "{{agent}} konnte nicht gestartet werden.",
             "restoreWorkspace": "Den Ordner des Arbeitsbereichs wiederherstellen oder einen verfügbaren Arbeitsbereich öffnen und anschließend erneut versuchen.",
             "tryInTerminal": "Zur Fehlersuche in einem Terminal in diesem Ordner ausführen und anschließend erneut versuchen.",

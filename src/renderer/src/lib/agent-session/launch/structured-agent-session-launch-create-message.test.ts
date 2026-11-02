@@ -91,6 +91,29 @@ describe('the first message owned by create', () => {
     }
   })
 
+  it('keeps the opening message when required Setup refuses and never sends a fallback', async () => {
+    mocks.call.mockResolvedValueOnce({
+      ok: false,
+      refusal: {
+        code: 'agent_session_setup_not_completed',
+        message:
+          'Setup failed, so Codex was not started. Fix setup, then start Codex in this workspace.'
+      }
+    })
+    const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
+      requestId: newAgentLaunchRequestId(),
+      executionHostId: 'local',
+      prompt: 'opening text',
+      afterWorktreeSetup: true
+    })
+    await expect(launch.launchResult).rejects.toBeInstanceOf(
+      StructuredAgentSessionCreateRefusalError
+    )
+    expect(createParams().afterWorktreeSetup).toBe(true)
+    await vi.waitFor(() => expect(draft(launch.sessionId)).toBe('opening text'))
+    expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual(['agentSession.create'])
+  })
+
   it('freezes the message and held options in create and publishes without another read or send', async () => {
     mocks.exactSupport.mockResolvedValue(true)
     recordHostModelCatalogSnapshot(target, 'codex', null, {

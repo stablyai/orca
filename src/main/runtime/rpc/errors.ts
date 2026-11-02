@@ -112,6 +112,7 @@ const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(CO
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_COLLISION_CODE,
+  'agent_launch_setup_not_completed',
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',
@@ -310,13 +311,4 @@ export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknow
 }
 
 // EmulatorError.code likewise uses its own namespace rather than generic runtime_error.
-export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string'
-  ) {
-    return errorResponse(id, meta, (error as { code: string }).code, error.message)
-  }
-  return mapRuntimeError(id, meta, error)
-}
+export const mapEmulatorError = mapBrowserError

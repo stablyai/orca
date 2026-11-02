@@ -15,8 +15,11 @@ import {
   resolveWorkerStartModeOnHost,
   type WorkerStartModeReceipt
 } from '../../orchestration-worker-start-mode'
-import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
-import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
+import {
+  EXISTING_WORKTREE_SETUP,
+  placeWorkerAgent,
+  WorkerSetupGateError
+} from './worker-start-agent-placement'
 import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'
 import { resolveWorkerWorktreeCreationTarget } from './worker-worktree-creation'
 import type { WorkerStartInput } from './worker-start-schema'
@@ -206,15 +209,9 @@ export async function startLocalWorker(args: {
 
     failedStage = 'agent_readiness'
     // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
-    const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
-    // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
+    const readinessDeadline = placed.readinessDeadline ?? Date.now() + (params.timeoutMs ?? 60_000)
     const wait = structuredSession
-      ? await awaitStructuredWorkerSetupGate({
-          runtime,
-          setup: setupReceipt,
-          effects,
-          timeoutMs: Math.max(0, readinessDeadline - Date.now())
-        })
+      ? null
       : workerChat
         ? // A chat takes its task as a queued send whatever it is doing, so nothing is waited on.
           null
@@ -284,9 +281,12 @@ export async function startLocalWorker(args: {
       runId: run.id,
       taskId: task.id,
       dispatchId: started.dispatch.id,
-      failedStage,
+      failedStage: error instanceof WorkerSetupGateError ? 'setup_wait' : failedStage,
       error,
-      setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
+      setup:
+        error instanceof WorkerSetupGateError
+          ? error.setup
+          : (placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP),
       launch: launch.receipt,
       mode
     })

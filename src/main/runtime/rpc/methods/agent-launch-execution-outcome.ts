@@ -1,3 +1,4 @@
+import { AgentLaunchSetupNotCompletedError } from '../../setup/setup-run'
 import {
   AGENT_LAUNCH_TAB_CLOSED_CODE,
   AgentLaunchTabClosedError
@@ -43,7 +44,13 @@ export async function withEarlyTab<T>(
     return result
   } catch (error) {
     early?.finish(
-      error instanceof AgentLaunchExecutionError ? error.failureCode : agentLaunchFailureCode(error)
+      error instanceof AgentLaunchExecutionError
+        ? error.cause instanceof AgentLaunchSetupNotCompletedError
+          ? error.cause.code
+          : error.failureCode
+        : error instanceof AgentLaunchSetupNotCompletedError
+          ? error.code
+          : agentLaunchFailureCode(error)
     )
     throw error
   }

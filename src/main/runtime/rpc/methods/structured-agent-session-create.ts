@@ -34,7 +34,6 @@ import {
 } from '../../../native-chat/structured-agent-cli-source'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
 
@@ -54,6 +53,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: string
+  afterWorktreeSetup?: true
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -66,6 +66,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
     fields: {
       worktree: params.worktree,
       agent: params.agent,
+      ...(params.afterWorktreeSetup ? { afterWorktreeSetup: true } : {}),
       resumeFrom: params.resumeFrom,
       tabId: params.tabId,
       firstMessage: params.firstMessage,
@@ -206,10 +207,7 @@ export async function commitStructuredAgentSessionCreate(args: {
               const tableId =
                 prepared.attachParams.surfaceTabId ?? structuredAgentSessionTabId(sessionId)
               args.capture?.({ tableId, presentation: { raw: null, saved: [] } })
-              if (
-                ORCA_LAYOUT_OWNER_IS_MAIN &&
-                structuredAgentSessionClosedBeforeCreate(sessionId)
-              ) {
+              if (structuredAgentSessionClosedBeforeCreate(sessionId)) {
                 return Promise.resolve()
               }
               return args.runtime.publishStructuredAgentSessionTab({
@@ -240,10 +238,7 @@ export async function commitStructuredAgentSessionCreate(args: {
     structuredAgentSessionTabId(result.value.sessionId)
   args.capture?.({ tableId: surfaceTabId, presentation: { raw: null, saved: [] } })
   // A chat closed while it was being made gets no tab to show before main closes it.
-  if (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    structuredAgentSessionClosedBeforeCreate(result.value.sessionId)
-  ) {
+  if (structuredAgentSessionClosedBeforeCreate(result.value.sessionId)) {
     return result
   }
   try {

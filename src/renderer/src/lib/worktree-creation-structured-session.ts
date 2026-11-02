@@ -23,6 +23,7 @@ export type WorktreeCreationStructuredSessionResult = {
 }
 
 type LaunchStructuredWorktreeSessionArgs = {
+  afterWorktreeSetup?: true
   creationId: string
   request: WorktreeCreationRequest
   /** Required: a non-structured route opens no session here, so the caller must have gated on it. */
@@ -93,6 +94,7 @@ export async function launchStructuredWorktreeSession(
   const request = withPendingChatInput(pending, args.request)
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
+    ...(args.afterWorktreeSetup ? { afterWorktreeSetup: true } : {}),
     route: args.agentLaunchRoute,
     // One create is one user action: a retry of it re-delivers the same request.
     requestId: args.creationId,

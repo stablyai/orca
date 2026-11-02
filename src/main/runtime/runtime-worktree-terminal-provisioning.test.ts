@@ -1,3 +1,5 @@
+import { createSetupRun, awaitRequiredSetup } from './setup/setup-run'
+import { publishPtyEndpointLoss } from './terminal/pty-endpoint-loss-signal'
 import { describe, expect, it, vi } from 'vitest'
 import {
   provisionWorktreeTerminals,
@@ -22,8 +24,7 @@ function fakeHost() {
     }),
     setTabTitle: vi.fn(async (_handle: string, _title: string) => {}),
     setTabColor: vi.fn(async (_handle: string, _color: string) => {}),
-    getPtyId: () => undefined,
-    recordSetupCompletionToken: vi.fn()
+    getPtyId: () => undefined
   } satisfies Partial<Record<keyof WorktreeTerminalProvisioningHost, unknown>>
 }
 
@@ -104,8 +105,7 @@ function createHost(): {
       createTerminal,
       setTabTitle: vi.fn(async () => {}),
       setTabColor: vi.fn(async () => {}),
-      getPtyId: () => undefined,
-      recordSetupCompletionToken: vi.fn()
+      getPtyId: () => undefined
     },
     titles: () => createTerminal.mock.calls.map(([, options]) => options.title)
   }
@@ -231,4 +231,99 @@ describe("a create's E9 origin", () => {
       expect(call[1]).not.toHaveProperty('wslUserAct')
     }
   })
+})
+
+describe('the setup execution owns its retained result', () => {
+  it.each([0, 7])(
+    'retains exact command status %s emitted before spawn returns',
+    async (exitCode) => {
+      const run = createSetupRun(true)
+      const data = new Map<string, (text: string) => void>()
+      const exits = new Map<string, () => void>()
+      const unsubData = vi.fn()
+      const unsubExit = vi.fn()
+      let ptyId = ''
+      const host: WorktreeTerminalProvisioningHost = {
+        ...fakeHost(),
+        subscribeToData: (id, callback) => {
+          data.set(id, callback)
+          return unsubData
+        },
+        subscribeToExit: (id, callback) => {
+          exits.set(id, callback)
+          return unsubExit
+        },
+        getPtyId: () => undefined,
+        createTerminal: async (_selector, options) => {
+          ptyId = options.sessionId ?? ''
+          expect(options.isNewSession).toBe(true)
+          const token = options.command?.match(/__ORCA_SETUP_COMPLETE__:([^:]+):/)?.[1]
+          expect(token).toBeTruthy()
+          data.get(ptyId)?.(`__ORCA_SETUP_COMPLETE__:${token}:${exitCode}\n`)
+          exits.get(ptyId)?.()
+          return { handle: 'already-exited' }
+        }
+      }
+      await provisionWorktreeTerminals(host, {
+        worktreeSelector: 'id:wt',
+        worktreeId: 'wt',
+        worktreePath: '/wt',
+        setup: { runnerScriptPath: '/setup.sh', envVars: {} },
+        setupRun: run,
+        setupOnly: true,
+        hasStartupTerminal: false,
+        setupCommandPlatform: 'posix'
+      })
+      await expect(run.outcome).resolves.toEqual(
+        exitCode === 0 ? { kind: 'succeeded' } : { kind: 'failed', exitCode }
+      )
+      expect(unsubData).toHaveBeenCalledOnce()
+      expect(unsubExit).toHaveBeenCalledOnce()
+      publishPtyEndpointLoss(ptyId)
+      await (exitCode === 0
+        ? expect(awaitRequiredSetup(run, 'codex')).resolves.toBeUndefined()
+        : expect(awaitRequiredSetup(run, 'codex')).rejects.toThrow('Codex was not started'))
+    }
+  )
+
+  it.each(['exit', 'endpoint', 'mismatch', 'spawn'] as const)(
+    'never grants startup on %s without command completion',
+    async (failure) => {
+      const run = createSetupRun(true)
+      let onExit: (() => void) | undefined
+      const host: WorktreeTerminalProvisioningHost = {
+        ...fakeHost(),
+        subscribeToData: () => () => {},
+        subscribeToExit: (_id, callback) => {
+          onExit = callback
+          return () => {}
+        },
+        getPtyId: () => 'unexpected-identity',
+        createTerminal: async (_selector, options) => {
+          if (failure === 'spawn') {
+            throw new Error('spawn failed')
+          }
+          if (failure === 'exit') {
+            onExit?.()
+          }
+          if (failure === 'endpoint' && options.sessionId) {
+            publishPtyEndpointLoss(options.sessionId)
+          }
+          return { handle: 'setup' }
+        }
+      }
+      await provisionWorktreeTerminals(host, {
+        worktreeSelector: 'id:wt',
+        worktreeId: 'wt',
+        worktreePath: '/wt',
+        setup: { runnerScriptPath: '/setup.sh', envVars: {} },
+        setupRun: run,
+        setupOnly: true,
+        hasStartupTerminal: false,
+        setupCommandPlatform: 'posix',
+        callerProvidesSurface: true
+      })
+      await expect(awaitRequiredSetup(run, 'claude')).rejects.toThrow('Claude was not started')
+    }
+  )
 })

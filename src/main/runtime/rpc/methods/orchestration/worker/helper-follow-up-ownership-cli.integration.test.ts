@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { getFollowUpDispatch } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { continueAllUnreadWorkerMail } from '../messaging/settled-worker-follow-through'
 import { z } from 'zod'
-import * as setupGate from './worker-start-structured-setup-gate'
+import * as placement from './worker-start-agent-placement'
+import { AgentLaunchSetupNotCompletedError } from '../../../../setup/setup-run'
 import { receipt, type Started, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
 import { traceDispatchProbes } from './helper-follow-up-sql-trace.test-support'
 
@@ -26,8 +27,7 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
     continues,
     otherRun,
     effects,
-    reopenOn,
-    placeNextWorkerInChat
+    reopenOn
   } = f
 
   /** A start whose agent never came up, so no Dispatch took custody of anything. */
@@ -35,10 +35,18 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
     if (failure === 'terminal create') {
       vi.mocked(h.runtime.createTerminal).mockRejectedValueOnce(new Error('spawn failed'))
     } else {
-      await placeNextWorkerInChat()
-      vi.spyOn(setupGate, 'awaitStructuredWorkerSetupGate').mockResolvedValueOnce({
-        satisfied: false,
-        status: 'exited'
+      vi.spyOn(placement, 'placeWorkerAgent').mockImplementationOnce(async (args) => {
+        args.db.recordWorkerStage({
+          dispatchId: args.dispatchId,
+          stage: 'worktree_created',
+          worktreeId: 'repo::worktree',
+          effects: args.effects
+        })
+        args.onStage('setup_wait')
+        throw new placement.WorkerSetupGateError(
+          { ...placement.EXISTING_WORKTREE_SETUP, state: 'failed' },
+          new AgentLaunchSetupNotCompletedError({ kind: 'failed', exitCode: 1 }, 'codex')
+        )
       })
     }
     const failed = failedReceipt.parse(

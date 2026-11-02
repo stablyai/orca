@@ -4130,6 +4130,7 @@
             "commandNotFound": "Komutu bu makinede bulunamadığı için {{agent}} başlatılamadı.",
             "copyPrompt": "İstemi kopyala",
             "exitedDuringStart": "{{agent}} başlatılırken sonlandı.",
+            "setupNotCompleted": "Kurulum başarıyla tamamlanmadığı için {{agent}} başlatılmadı. Kurulumu düzeltin veya yeniden çalıştırın, ardından bu çalışma alanında {{agent}} aracısını başlatın.",
             "notStarted": "{{agent}} başlatılamadı.",
             "restoreWorkspace": "Çalışma alanı klasörünü geri yükleyin veya kullanılabilir bir çalışma alanı açın, ardından tekrar deneyin.",
             "tryInTerminal": "Nedenini görmek için bu klasördeki bir terminalde çalıştırın, ardından tekrar deneyin.",

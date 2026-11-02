@@ -4,6 +4,7 @@ import React from 'react'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
+import { structuredSessionNotices } from '../native-chat/native-chat-structured-session-notices'
 import { AgentLaunchPaneNotice } from './AgentLaunchPaneNotice'
 import { TerminalErrorToast } from './TerminalErrorToast'
 import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
@@ -17,6 +18,8 @@ describe('localized startup failure surfaces', () => {
   it.each([
     {
       language: 'en',
+      setup:
+        'Setup did not finish successfully, so Codex was not started. Fix or rerun setup, then start Codex in this workspace.',
       exit: 'Codex exited while starting. Run it in a terminal in this folder to see why, then try again.',
       workspace:
         "Codex couldn't start because its workspace is no longer available. Restore the workspace folder or open an available workspace, then try again.",
@@ -24,6 +27,8 @@ describe('localized startup failure surfaces', () => {
     },
     {
       language: 'zh',
+      setup:
+        '设置脚本未成功完成，因此未启动 Codex。请修复或重新运行设置脚本，然后在此工作区中启动 Codex。',
       exit: 'Codex 在启动时退出了。 请在此文件夹的终端中运行它以查看原因，然后重试。',
       workspace:
         '无法启动 Codex，因为其工作区已不可用。 请恢复工作区文件夹或打开可用的工作区，然后重试。',
@@ -31,6 +36,17 @@ describe('localized startup failure surfaces', () => {
     }
   ] as const)('renders both real mappings with the shipped $language catalog', async (copy) => {
     await i18n.changeLanguage(await loadRendererUiLanguage(copy.language))
+    const nativeSetup = structuredSessionNotices({
+      launch: {
+        lifecycle: 'failed',
+        failure: { kind: 'refused', code: 'agent_session_setup_not_completed' },
+        retry: vi.fn()
+      },
+      agentLabel: 'Codex',
+      sessionError: null,
+      composerError: null
+    })
+    expect(nativeSetup[0]?.text).toBe(copy.setup)
     for (const [code, expected, refusal] of [
       [
         'agent_session_exited_during_start',
@@ -38,7 +54,12 @@ describe('localized startup failure surfaces', () => {
         { kind: 'not-started', code: 'agent_session_exited_during_start' }
       ],
       ['worktree_not_found', copy.workspace, { kind: 'not-started', code: 'worktree_not_found' }],
-      ['agent_session_operation_unknown', copy.unknown, { kind: 'unconfirmed' }]
+      ['agent_session_operation_unknown', copy.unknown, { kind: 'unconfirmed' }],
+      [
+        'agent_launch_setup_not_completed',
+        copy.setup,
+        { kind: 'not-started', code: 'agent_launch_setup_not_completed' }
+      ]
     ] as const) {
       const toast = render(
         React.createElement(TerminalErrorToast, {

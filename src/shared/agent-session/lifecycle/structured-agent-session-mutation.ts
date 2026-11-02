@@ -47,6 +47,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
   agent: StructuredAgentId
+  afterWorktreeSetup?: true
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -60,6 +61,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
       worktree: input.worktree,
       agent: input.agent,
       // Dropping undefined preserves blank-create digests; resume intent must not replay as blank create.
+      ...(input.afterWorktreeSetup ? { afterWorktreeSetup: true } : {}),
       resumeFrom: input.resumeFrom,
       // Include tabId in the host digest; retries replay its recorded host-owned ID.
       tabId: input.tabId,

@@ -1,3 +1,4 @@
+import { DEFAULT_WAIT_TIMEOUT_SECONDS } from '../../../src/shared/setup-agent-sequencing'
 import { translate } from '../i18n/mobile-i18n'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
@@ -194,12 +195,12 @@ function sendWorktreeCreateResilient(
                 ...agentLaunchCreateParams(launchAgent, params),
                 operationId: launchOperationId
               },
-              { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
+              { timeoutMs: DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + WORKTREE_CREATE_TIMEOUT_MS }
             )
           : agentLaunchRun.request(
               client,
               agentLaunchCreateParams(launchAgent, params, launchOperationId),
-              { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
+              { timeoutMs: DEFAULT_WAIT_TIMEOUT_SECONDS * 1000 + WORKTREE_CREATE_TIMEOUT_MS }
             )
         : worktreeCreateRun.request(client, params, {
             timeoutMs: WORKTREE_CREATE_TIMEOUT_MS

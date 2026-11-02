@@ -29,6 +29,7 @@ export const WorktreeCreate = z
       .pipe(z.string().min(1, 'Missing repo selector')),
     /** Scope same-ID repo copies by host; absent retains legacy selector lookup, which refuses ambiguous IDs. */
     repoHostId: OptionalExecutionHostId,
+    promisedAgentChat: z.literal(true).optional(),
     name: OptionalString,
     /** Generated names may skip/retire candidates; absent means user-typed and bypasses that policy. */
     nameWasGenerated: z.boolean().optional(),

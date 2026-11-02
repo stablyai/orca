@@ -7,7 +7,7 @@ import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-clien
 import { WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS } from './worktree-create-idempotency-policy'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
 
-type Attempt = { method: string; params: Record<string, unknown> }
+type Attempt = { method: string; params: Record<string, unknown>; timeoutMs?: number }
 
 const IDEMPOTENT_CREATE_SUPPORT = { dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS }
 
@@ -42,9 +42,13 @@ function scriptedLaunchClient(
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    sendRequest: async (method: string, params?: unknown) => {
+    sendRequest: async (method: string, params?: unknown, options?: { timeoutMs?: number }) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The port is untyped by construction; the suite asserts on what was sent, not on its declared shape.
-      attempts.push({ method, params: (params ?? {}) as Record<string, unknown> })
+      attempts.push({
+        method,
+        params: (params ?? {}) as Record<string, unknown>,
+        timeoutMs: options?.timeoutMs
+      })
       const outcome = outcomes[Math.min(call, outcomes.length - 1)]!
       call += 1
       if ('throws' in outcome) {
@@ -118,6 +122,19 @@ describe('agent.launch operation id', () => {
       mintLaunchOperationId: args.mintLaunchOperationId ?? (() => `op-${(minted += 1)}`)
     })
   }
+
+  it('shows required setup failure without relaunching or creating another workspace', async () => {
+    const attempts: Attempt[] = []
+    const message =
+      'Setup failed, so Claude was not started. Fix or rerun setup, then start Claude in this workspace.'
+    const client = scriptedLaunchClient(
+      [{ errorCode: 'agent_launch_setup_not_completed', errorMessage: message }],
+      attempts
+    )
+    await expect(launchRetry({ client, attempts })).resolves.toEqual({ error: message })
+    expect(attempts.map(({ method }) => method)).toEqual(['agent.launchReplay'])
+    expect(attempts[0]?.timeoutMs).toBeGreaterThan(2 * 60 * 60 * 1000)
+  })
 
   it('names the launch and reuses that name on an ambiguous replay of the same candidate', async () => {
     const attempts: Attempt[] = []

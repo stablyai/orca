@@ -1,3 +1,4 @@
+import type { SetupRun } from '../../../../setup/setup-run'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
@@ -100,12 +101,17 @@ export async function createWorkerWorktree(args: {
   terminalHandle: string | undefined
   terminalCreation?: RuntimeTerminalCreate
   setupReceipt: WorkerSetupReceipt
+  requiredSetup?: SetupRun
 }> {
   const { runtime, db, dispatchId, requestedWorktree, target, params, effects } = args
   const setupDecision = params.setup ?? 'run'
   let terminalCreation: RuntimeTerminalCreate | undefined
+  let requiredSetup: SetupRun | undefined
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
+    onSetupRun: (run) => {
+      requiredSetup = run
+    },
     onStartupTerminalCreated: (terminal) => {
       terminalCreation = terminal
     },
@@ -201,6 +207,7 @@ export async function createWorkerWorktree(args: {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
     terminalHandle,
     terminalCreation,
+    requiredSetup,
     setupReceipt
   }
 }

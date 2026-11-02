@@ -1,3 +1,9 @@
+import type {
+  RuntimeLocalWorktreeTerminalStartupPorts,
+  RuntimeLocalWorktreeTerminalStartupResult
+} from './runtime-local-worktree-terminal-startup-contracts'
+export type { RuntimeLocalWorktreeTerminalStartupResult } from './runtime-local-worktree-terminal-startup-contracts'
+import { AgentLaunchSetupNotCompletedError, type SetupRun } from './setup/setup-run'
 import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
@@ -11,8 +17,6 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
-import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
-import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type {
   WorktreeStartupDraftPaste,
@@ -23,50 +27,12 @@ import type {
   WorktreeTerminalProvisioningArgs
 } from './runtime-worktree-terminal-provisioning'
 
-type Ports = {
-  canSpawn: boolean
-  provisionInBackground?: () => boolean
-  createTerminal: (
-    selector: string,
-    options: TerminalCreateOptions
-  ) => Promise<RuntimeTerminalCreate>
-  pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
-  sendFollowup: (
-    handle: string,
-    followup: WorktreeStartupFollowup,
-    terminal: RuntimeTerminalCreate
-  ) => void
-  provision: (
-    options: WorktreeTerminalProvisioningArgs
-  ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
-  activate: (
-    repoId: string,
-    worktreeId: string,
-    startup?: WorktreeStartupLaunch,
-    // Only work main tried to start and failed; the host window retries it where the user sees it.
-    failedSetup?: CreateWorktreeResult['setup'],
-    failedDefaultTabs?: CreateWorktreeResult['defaultTabs'],
-    providesInitialSurface?: boolean
-  ) => void
-}
-
-export type RuntimeLocalWorktreeTerminalStartupResult = {
-  warning?: string
-  returnedSetup?: CreateWorktreeResult['setup']
-  didSpawnSetup: boolean
-  didSpawnStartup: boolean
-  setupTerminalHandle: string | null
-  startupTerminalHandle: string | null
-  startupTerminalTabId: string | null
-  startupTerminalPaneKey: string | null
-  startupTerminalPtyId: string | null
-}
-
 export async function startRuntimeLocalWorktreeTerminals(args: {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
+  setupRun?: SetupRun
   defaultTabs?: CreateWorktreeResult['defaultTabs']
   startup?: WorktreeStartupLaunch
   startupFollowup?: WorktreeStartupFollowup
@@ -76,7 +42,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   promisedAgentChat?: boolean
   draftPaste?: WorktreeStartupDraftPaste
   warning?: string
-  ports: Ports
+  ports: RuntimeLocalWorktreeTerminalStartupPorts
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, defaultTabs, startup, ports } = args
   let { setup } = args
@@ -91,6 +57,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalPtyId: string | null = null
   let sequencedStartup = startup
   let wrappedSetupCommand: string | undefined
+  if (startup && args.setupRun?.waitsForAgent && !setup) {
+    throw new AgentLaunchSetupNotCompletedError(
+      { kind: 'ended', reason: 'preparation_failed' },
+      args.createdWithAgent ?? request.startupAgent ?? 'the agent'
+    )
+  }
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
     const sequenced = createSequencedSetupAgentCommands({
@@ -270,7 +242,9 @@ function provisionArgs(
     callerProvidesSurface: callerProvidesInitialSurface(args),
     startupNeedsTerminal: args.startup !== undefined,
     setupCommandPlatform: setupPlatform(args.setup, 'posix'),
-    observeSetupCompletion: args.request.observeSetupCompletion,
+    observeSetupCompletion: args.request.observeSetupCompletion || args.promisedAgentChat,
+    setupRun:
+      args.request.observeSetupCompletion || args.promisedAgentChat ? args.setupRun : undefined,
     ...(wrappedSetupCommand ? { wrappedSetupCommand } : {})
   }
 }

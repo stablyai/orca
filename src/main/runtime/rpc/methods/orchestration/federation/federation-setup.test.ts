@@ -1,3 +1,4 @@
+import { createSetupRun } from '../../../../setup/setup-run'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
@@ -72,7 +73,9 @@ describe('orchestration federated setup evidence', () => {
       effects
     })
     db.markRemoteAttachmentReady(dispatchId)
-    vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockResolvedValue({ exitCode: 1 })
+    const run = createSetupRun(false)
+    run.settle({ kind: 'failed', exitCode: 1 })
+    runtime.registerSetupRun('repo::remote-worktree', run)
     const monitorArgs = {
       runtime,
       db,

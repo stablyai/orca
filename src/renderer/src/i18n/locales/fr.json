@@ -3915,6 +3915,7 @@
             "commandNotFound": "{{agent}} n’a pas pu démarrer car sa commande est introuvable sur cet ordinateur.",
             "copyPrompt": "Copier le prompt",
             "exitedDuringStart": "{{agent}} s’est arrêté pendant le démarrage.",
+            "setupNotCompleted": "La configuration ne s’est pas terminée correctement, donc {{agent}} n’a pas démarré. Corrigez ou relancez la configuration, puis démarrez {{agent}} dans cet espace de travail.",
             "notStarted": "{{agent}} n’a pas pu démarrer.",
             "restoreWorkspace": "Restaurez le dossier de l’espace de travail ou ouvrez un espace de travail disponible, puis réessayez.",
             "tryInTerminal": "Lancez-le dans un terminal dans ce dossier pour en connaître la raison, puis réessayez.",

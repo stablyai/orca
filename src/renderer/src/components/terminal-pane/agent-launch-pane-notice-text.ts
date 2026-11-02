@@ -1,3 +1,4 @@
+import { requiredSetupLaunchFailureText } from '@/lib/required-setup-launch-failure'
 import { translate } from '@/i18n/i18n'
 import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch-pane-verdict'
 import { stripClientEnvironmentFooter } from '../../../../shared/client-environment-info'
@@ -46,6 +47,9 @@ export function agentLaunchPaneNoticeText(
   const agent =
     tuiAgentDisplayName(agentId ?? '') ??
     translate('auto.components.terminal.pane.AgentLaunchPaneNotice.agent', 'The agent')
+  if (refusal.kind === 'not-started' && refusal.code === 'agent_launch_setup_not_completed') {
+    return requiredSetupLaunchFailureText(agent)
+  }
   if (refusal.initialOutputDiagnostic === 'git-bash-console-capacity') {
     const explanation = translate(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.gitBashConsoleCapacity',
@@ -111,7 +115,9 @@ export function agentLaunchErrorText(error: string, agentId?: string | null): st
       found = true
       // Only these producer contracts prove failure without an attempt's typed host outcome.
       const outcome: AgentLaunchPaneOutcome =
-        code === 'agent_session_exited_during_start' || code === 'worktree_not_found'
+        code === 'agent_session_exited_during_start' ||
+        code === 'worktree_not_found' ||
+        code === 'agent_launch_setup_not_completed'
           ? { kind: 'not-started', code }
           : { kind: 'unconfirmed' }
       return agentLaunchPaneNoticeText(outcome, agentId)

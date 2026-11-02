@@ -3691,6 +3691,7 @@
             "commandNotFound": "{{agent}} no pudo iniciarse porque no se encontró su comando en este equipo.",
             "copyPrompt": "Copiar prompt",
             "exitedDuringStart": "{{agent}} se cerró durante el inicio.",
+            "setupNotCompleted": "La configuración no terminó correctamente, por lo que {{agent}} no se inició. Corrige o vuelve a ejecutar la configuración y luego inicia {{agent}} en este espacio de trabajo.",
             "notStarted": "{{agent}} no pudo iniciarse.",
             "restoreWorkspace": "Restaura la carpeta del espacio de trabajo o abre un espacio de trabajo disponible y vuelve a intentarlo.",
             "tryInTerminal": "Ejecútalo en una terminal en esta carpeta para ver el motivo y vuelve a intentarlo.",

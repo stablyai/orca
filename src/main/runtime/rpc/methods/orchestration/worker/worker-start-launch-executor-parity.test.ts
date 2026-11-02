@@ -4,7 +4,8 @@ import {
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 /** Shared-executor starts must preserve durable effects/stage order, ask host support once and fail refused chats. */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSetupRun, type SetupRun } from '../../../../setup/setup-run'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import {
   downgradeAgentLaunchModeForHost,
@@ -45,7 +46,7 @@ const TERMINAL: AgentLaunchModeReceipt = {
 const CREATION_TARGET = { repoSelector: 'repo_1', parentWorktreeId: 'wt_coord' }
 const EXISTING = { id: 'wt_existing', repoId: 'repo_1' }
 
-function fakes() {
+function fakes(setupRun?: SetupRun) {
   const stages: string[] = []
   const creation: RuntimeTerminalCreate = {
     handle: 'term_startup',
@@ -59,14 +60,28 @@ function fakes() {
   const runtime = {
     createManagedWorktree: vi.fn(
       async (args: {
+        onSetupRun?: (run: SetupRun) => void
         startupAgent?: string
         onStartupTerminalCreated?: (terminal: RuntimeTerminalCreate) => void
       }) => {
+        if (setupRun) {
+          args.onSetupRun?.(setupRun)
+        }
         if (args.startupAgent) {
           args.onStartupTerminalCreated?.(creation)
         }
         return {
           worktree: { id: 'wt_new', repoId: 'repo_1' },
+          ...(setupRun
+            ? {
+                setupReceipt: {
+                  hookFound: true,
+                  startupPolicy: 'wait-for-setup',
+                  state: 'running',
+                  terminalHandle: 'term_setup'
+                }
+              }
+            : {}),
           ...(args.startupAgent ? { startupTerminal: { handle: creation.handle } } : {})
         }
       }
@@ -140,7 +155,58 @@ beforeEach(() => {
   installHost()
 })
 
+afterEach(() => vi.useRealTimers())
+
 describe('a fresh worker through the launch executor', () => {
+  it('holds structured creation until required Setup succeeds, sharing the readiness deadline', async () => {
+    const run = createSetupRun(true)
+    const f = fakes(run)
+    const pending = place(f, { mode: STRUCTURED })
+    await vi.waitFor(() => expect(f.failedStages.at(-1)).toBe('setup_wait'))
+    expect(f.stages).toEqual(['worktree_creating', 'worktree_created'])
+    expect(f.runtime.getStructuredAgentSessionCreateSupport).not.toHaveBeenCalled()
+    run.settle({ kind: 'succeeded' })
+    const placed = await pending
+    expect(placed.structuredSession).not.toBeNull()
+    expect(placed.setupReceipt.state).toBe('succeeded')
+    expect(placed.readinessDeadline).toBeGreaterThan(Date.now())
+    expect(placed.readinessDeadline).toBeLessThanOrEqual(Date.now() + 60_000)
+  })
+
+  it('refuses a failed required Setup before a worker session or fallback exists', async () => {
+    const run = createSetupRun(true)
+    const f = fakes(run)
+    const pending = place(f, { mode: STRUCTURED })
+    const refused = expect(pending).rejects.toMatchObject({
+      setup: { state: 'failed' },
+      cause: { code: 'agent_launch_setup_not_completed' }
+    })
+    await vi.waitFor(() => expect(f.failedStages.at(-1)).toBe('setup_wait'))
+    run.settle({ kind: 'failed', exitCode: 7 })
+    await refused
+    expect(f.runtime.createTerminal).not.toHaveBeenCalled()
+    expect(f.stages).toEqual(['worktree_creating', 'worktree_created'])
+    expect(structuredWorkerIdentities.list()).toEqual([])
+  })
+
+  it('ends the pending worker at its deadline while leaving the Setup run observable', async () => {
+    vi.useFakeTimers()
+    const run = createSetupRun(true)
+    const f = fakes(run)
+    const pending = place(f, { mode: STRUCTURED })
+    const refused = expect(pending).rejects.toMatchObject({
+      setup: { state: 'failed' },
+      cause: { outcome: { kind: 'ended', reason: 'deadline' } }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.failedStages.at(-1)).toBe('setup_wait')
+    await vi.advanceTimersByTimeAsync(60_000)
+    await refused
+    expect(structuredWorkerIdentities.list()).toEqual([])
+    expect(run.result).toBeUndefined()
+    run.settle({ kind: 'succeeded' })
+  })
+
   it('fails a refused structured worker in an existing worktree instead of starting a terminal', async () => {
     const f = fakes()
     sessionCreate.refusal = { code: 'structured_agent_session_unsupported' }

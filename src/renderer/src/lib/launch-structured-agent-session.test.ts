@@ -11,6 +11,11 @@ import {
   StructuredAgentSessionCreateUnknownOutcomeError,
   StructuredAgentSessionOwnerUnresolvedError
 } from './launch-structured-agent-session'
+import { structuredAgentLaunchRecordFor } from './agent-session/launch/structured-agent-session-launch-record'
+import { restorePersistedStructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-reload'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import { resetStructuredAgentLaunchRegistryForTests } from './agent-session/launch/structured-agent-session-launch-registry'
+import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { admitStructuredLaunchOnHost } from './agent-session/launch/structured-agent-session-host-admission'
 import {
   clearWebSessionFocusIntent,
@@ -30,6 +35,48 @@ vi.mock('@/runtime/structured-chat-host-permission', () => ({
 describe('structured agent session launch', () => {
   beforeEach(() => {
     vi.mocked(callStructuredAgentSession).mockReset()
+  })
+
+  it('keeps required setup through saving, reload and a fresh Retry', () => {
+    const intent = createStructuredAgentSessionLaunchIntent(
+      'setup-reload',
+      'codex',
+      'runtime:server-1',
+      undefined,
+      undefined,
+      false,
+      true
+    )
+    const record = structuredAgentLaunchRecordFor(intent, 'pending')
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) =>
+        key === 'orca:structuredAgentLaunches:v1' ? JSON.stringify([record]) : null
+    })
+    resetStructuredAgentLaunchPersistenceForTests()
+    resetStructuredAgentLaunchRegistryForTests()
+    try {
+      const restored = restorePersistedStructuredLaunchState(intent.worktreeId, intent.sessionId)!
+      expect(restored.intent.params.afterWorktreeSetup).toBe(true)
+      expect(
+        structuredAgentSessionCreateFingerprint({
+          sessionId: intent.sessionId,
+          ...restored.intent.params
+        })
+      ).toBe(record.payloadFingerprint)
+      const retried = retryStructuredAgentSessionLaunchIntent(restored.intent)
+      expect(retried.params.afterWorktreeSetup).toBe(true)
+      expect(retried.params.envelope.clientOperationId).not.toBe(record.clientOperationId)
+      expect(
+        structuredAgentSessionCreateFingerprint({
+          sessionId: intent.sessionId,
+          ...retried.params
+        })
+      ).toBe(record.payloadFingerprint)
+    } finally {
+      resetStructuredAgentLaunchRegistryForTests()
+      resetStructuredAgentLaunchPersistenceForTests()
+      vi.unstubAllGlobals()
+    }
   })
 
   it('only a fresh foreground launch grants publication permission to select its chat', () => {

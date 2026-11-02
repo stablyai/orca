@@ -3623,6 +3623,7 @@
             "commandNotFound": "이 컴퓨터에서 명령을 찾을 수 없어 {{agent}} 시작에 실패했습니다.",
             "copyPrompt": "프롬프트 복사",
             "exitedDuringStart": "{{agent}} 시작 중 종료되었습니다.",
+            "setupNotCompleted": "설정이 정상적으로 완료되지 않아 {{agent}}이(가) 시작되지 않았습니다. 설정을 수정하거나 다시 실행한 다음 이 작업 공간에서 {{agent}}을(를) 시작하세요.",
             "notStarted": "{{agent}} 시작에 실패했습니다.",
             "restoreWorkspace": "워크스페이스 폴더를 복원하거나 사용 가능한 워크스페이스를 연 다음 다시 시도하세요.",
             "tryInTerminal": "이 폴더의 터미널에서 실행하여 원인을 확인한 후 다시 시도하세요.",

@@ -15,6 +15,26 @@ import {
 const MAX_CLOSED_BEFORE_CREATE = 256
 const closedBeforeCreate = new Set<string>()
 const createsUnderWay = new Map<string, number>()
+const closeListeners = new Map<string, Set<() => void>>()
+
+export function subscribeStructuredAgentSessionClose(
+  sessionId: string,
+  listener: () => void
+): () => void {
+  if (closedBeforeCreate.has(sessionId)) {
+    listener()
+    return () => {}
+  }
+  const listeners = closeListeners.get(sessionId) ?? new Set<() => void>()
+  listeners.add(listener)
+  closeListeners.set(sessionId, listeners)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) {
+      closeListeners.delete(sessionId)
+    }
+  }
+}
 
 /** `hasRecord`: a create already committed, so this is an ordinary close unless one is under way. */
 export function noteStructuredAgentSessionClose(sessionId: string, hasRecord: boolean): void {
@@ -22,6 +42,9 @@ export function noteStructuredAgentSessionClose(sessionId: string, hasRecord: bo
     return
   }
   closedBeforeCreate.add(sessionId)
+  for (const listener of closeListeners.get(sessionId) ?? []) {
+    listener()
+  }
   for (const oldest of closedBeforeCreate) {
     if (closedBeforeCreate.size <= MAX_CLOSED_BEFORE_CREATE) {
       break
@@ -109,4 +132,5 @@ async function closeCreatedChat(
 export function resetStructuredAgentSessionClosesBeforeCreateForTests(): void {
   closedBeforeCreate.clear()
   createsUnderWay.clear()
+  closeListeners.clear()
 }

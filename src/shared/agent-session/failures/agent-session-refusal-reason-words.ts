@@ -193,6 +193,7 @@ const REASON_WORDS = {
     hostDisabled: causeWords('notAvailable', 'hostFinding'),
     hostUnsupported: causeWords('cannotRunHere', 'hostFinding')
   },
+  agent_session_setup_not_completed: {},
   agent_session_owner_restart_failed: {}
 } satisfies {
   [C in AgentSessionWireRefusalCode]: Record<

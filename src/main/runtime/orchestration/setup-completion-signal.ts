@@ -14,13 +14,14 @@ export function buildObservedSetupCommand(
   platform: SetupRunnerCommandPlatform,
   completionToken: string,
   // Preserve runner shell selection so WSL drive paths stay /mnt/c rather than Git Bash /c.
-  shell?: SetupRunnerShell
+  shell?: SetupRunnerShell,
+  preparedCommand?: string
 ): { command: string; env?: Record<string, string> } {
   const resolution = resolveSetupRunnerCommand(runnerScriptPath, platform, shell)
   if (resolution.shell === 'windows') {
     const script = [
       `$runner = $env:${WINDOWS_SETUP_RUNNER_ENV}`,
-      '& $runner',
+      preparedCommand ? `& { ${preparedCommand} }` : '& $runner',
       '$succeeded = $?',
       '$status = $LASTEXITCODE',
       'if ($null -eq $status) { $status = if ($succeeded) { 0 } else { 1 } }',
@@ -38,7 +39,7 @@ export function buildObservedSetupCommand(
 
   // Why no `( … )`: this is typed into the user's line editor, where autopair widgets corrupt it (#18059).
   const script = [
-    resolution.command,
+    preparedCommand ?? resolution.command,
     'status=$?',
     `printf '\\n${completionPrefix(completionToken)}%s\\n' "$status"`,
     'exit "$status"'

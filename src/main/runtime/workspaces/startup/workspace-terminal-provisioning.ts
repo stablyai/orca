@@ -72,9 +72,9 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
       getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
-      recordSetupCompletionToken: (ptyId, token) =>
-        this.setupCompletionTokenByPtyId.set(ptyId, token)
+      subscribeToData: (id, listener) => this.subscribeToTerminalData(id, listener),
+      subscribeToExit: (id, listener) => this.subscribeToPtyExit(id, listener),
+      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId
     }
   }
 
@@ -133,9 +133,9 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         })
         return applied(reply) && reply.ok ? (reply.result.createdTabs ?? []) : null
       },
-      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
-      recordSetupCompletionToken: (ptyId, token) =>
-        this.setupCompletionTokenByPtyId.set(ptyId, token)
+      subscribeToData: (id, listener) => this.subscribeToTerminalData(id, listener),
+      subscribeToExit: (id, listener) => this.subscribeToPtyExit(id, listener),
+      getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId
     }
   }
 

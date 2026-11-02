@@ -4074,6 +4074,7 @@
             "commandNotFound": "{{agent}} 無法啟動：這台電腦上找不到其命令。",
             "copyPrompt": "複製提示詞",
             "exitedDuringStart": "{{agent}} 在啟動過程中結束執行。",
+            "setupNotCompleted": "設定指令碼未成功完成，因此未啟動 {{agent}}。請修正或重新執行設定指令碼，然後在此工作區中啟動 {{agent}}。",
             "notStarted": "無法啟動 {{agent}}。",
             "restoreWorkspace": "請還原工作區資料夾，或開啟可用的工作區後再試。",
             "tryInTerminal": "請在此資料夾的終端機中執行代理程式，確認原因後再試。",

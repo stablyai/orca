@@ -1,3 +1,6 @@
+import { activeAgentLaunchesFor } from './agent-launch-in-flight'
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { AgentLaunchSetupNotCompletedError } from '../../setup/setup-run'
 /** Capability-gated surface routing; callers must inspect outcome.kind and receipt for fallback reasons.
  * Keep worktree.create's PTY/handle contract for older clients.
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
@@ -13,7 +16,6 @@ import {
 } from '../../../../shared/new-workspace/worktree-create-collision'
 import { executeAgentLaunch } from '../../../agent-launch/agent-launch-executor'
 import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 import {
   admitAgentLaunchOperation,
@@ -126,25 +128,6 @@ function runLegacyAgentLaunch(
     )
   }
   return execute()
-}
-
-type ActiveAgentLaunch = {
-  fingerprint: string
-  promise: Promise<AgentLaunchResult>
-}
-
-const activeAgentLaunchesByRuntime = new WeakMap<
-  OrcaRuntimeService,
-  Map<string, ActiveAgentLaunch>
->()
-
-function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, ActiveAgentLaunch> {
-  let active = activeAgentLaunchesByRuntime.get(runtime)
-  if (!active) {
-    active = new Map()
-    activeAgentLaunchesByRuntime.set(runtime, active)
-  }
-  return active
 }
 
 async function executeReplaySafeAgentLaunch(
@@ -272,10 +255,16 @@ export const AGENT_LAUNCH_METHODS = [
       }
       assertAgentLaunchTargetAuthorized(params.target, context)
       try {
-        return await runReplaySafeAgentLaunch(params, context)
+        return await waitForPromiseWithSignal(
+          runReplaySafeAgentLaunch(params, context),
+          context.signal
+        )
       } catch (error) {
         // Nested failures cannot authorize another workspace, regardless of their message or code.
         if (error instanceof AgentLaunchExecutionError) {
+          if (error.cause instanceof AgentLaunchSetupNotCompletedError) {
+            throw error.cause
+          }
           if (error.cause instanceof WorktreeCreateCollisionError) {
             throw Object.assign(new Error(error.cause.message, { cause: error.cause }), {
               code: WORKTREE_CREATE_COLLISION_CODE
@@ -298,7 +287,8 @@ export const AGENT_LAUNCH_METHODS = [
     requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
     params: AgentLaunch,
-    handler: (params, context) => launchAgentOnHost(params, context)
+    handler: (params, context) =>
+      waitForPromiseWithSignal(launchAgentOnHost(params, context), context.signal)
   })
 ]
 

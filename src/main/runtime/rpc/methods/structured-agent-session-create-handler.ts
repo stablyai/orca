@@ -1,3 +1,5 @@
+import { awaitRequiredSetup, AgentLaunchSetupNotCompletedError } from '../../setup/setup-run'
+import { refuseUnclassified } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import type { z } from 'zod'
@@ -19,9 +21,9 @@ import {
   structuredAgentSessionCreateIntentFingerprint
 } from './structured-agent-session-create'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   structuredAgentSessionClosedBeforeCreate,
+  subscribeStructuredAgentSessionClose,
   structuredAgentSessionClosedBeforeCreateRefusal
 } from './structured-agent-session-close-before-create'
 
@@ -105,11 +107,51 @@ export async function handleStructuredAgentSessionCreate(
     return { ok: false, refusal: prepared.refusal }
   }
   // Nothing is created yet, so a close that came first refuses the create outright.
-  if (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)
-  ) {
+  if (structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)) {
     return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+  }
+  if ('worktree' in params && params.afterWorktreeSetup && prepared.tab) {
+    const operation = prepared.host.deps.store.getOperationRow(
+      callerFor(ctx).callerKey,
+      params.envelope.clientOperationId
+    )
+    // Operation rows are admitted inside commit, after setup; its ledger owns every replay.
+    if (!operation) {
+      const closed = new AbortController()
+      const unsubscribe = subscribeStructuredAgentSessionClose(params.envelope.sessionId, () =>
+        closed.abort()
+      )
+      try {
+        const run = ctx.runtime.getSetupRun(prepared.tab.workspaceId)
+        if (!run) {
+          throw new AgentLaunchSetupNotCompletedError(
+            { kind: 'ended', reason: 'observation_lost' },
+            params.agent
+          )
+        }
+        await awaitRequiredSetup(
+          run,
+          params.agent,
+          ctx.signal ? AbortSignal.any([ctx.signal, closed.signal]) : closed.signal
+        )
+      } catch (error) {
+        if (closed.signal.aborted) {
+          return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+        }
+        if (!(error instanceof AgentLaunchSetupNotCompletedError)) {
+          throw error
+        }
+        return {
+          ok: false,
+          refusal: refuseUnclassified('agent_session_setup_not_completed', error.message)
+        }
+      } finally {
+        unsubscribe()
+      }
+    }
+    if (structuredAgentSessionClosedBeforeCreate(params.envelope.sessionId)) {
+      return { ok: false, refusal: structuredAgentSessionClosedBeforeCreateRefusal() }
+    }
   }
   return commitStructuredAgentSessionCreate({
     runtime: ctx.runtime,

@@ -31,6 +31,7 @@ export function classifyAgentLaunchReplayRefusal(
     return replayed ? 'unknown' : 'unsupported'
   }
   if (
+    error.code === 'agent_launch_setup_not_completed' ||
     error.code === 'agent_session_operation_unknown' ||
     error.code === 'agent_session_operation_expired'
   ) {

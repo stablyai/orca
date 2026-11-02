@@ -289,6 +289,9 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
   }
 
   protected emitWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
+    if (event.kind === 'removed') {
+      this.forgetSetupRun(event.worktreeId)
+    }
     this.worktreeLifecycleEvents.emit(event)
   }
 

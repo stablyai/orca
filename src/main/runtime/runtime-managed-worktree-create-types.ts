@@ -1,3 +1,4 @@
+import type { SetupRun } from './setup/setup-run'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
@@ -64,6 +65,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   /** Keys the host's in-progress creation; minted when the caller sends none. */
   creationId?: string
   /** Main-internal launch registration before catalog notification or activation. */
+  onSetupRun?: (run: SetupRun) => void
   onWorkspaceCreated?: (worktreeId: string) => void
   startupAgent?: TuiAgent
   terminalImageViewerSupported?: boolean

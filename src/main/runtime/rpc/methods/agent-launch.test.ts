@@ -1,3 +1,4 @@
+import { createSetupRun } from '../../setup/setup-run'
 /** Exercise RPC authorization, parsing and all surface factories; structured creates must omit startupAgent while legacy worktree.create retains its terminal contract. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -276,62 +277,38 @@ describe('the worktree factory', () => {
     expect(createStructuredSession).toHaveBeenCalledTimes(1)
   })
 
-  it('aborts the setup wait when its bounded timeout expires', async () => {
+  it('holds a structured launch past sixty seconds and releases only on successful setup', async () => {
     vi.useFakeTimers()
+    const setupRun = createSetupRun(true)
     try {
-      const runtime = runtimeStub({
-        setupReceipt: {
-          startupPolicy: 'wait-for-setup',
-          state: 'running',
-          terminalHandle: 'setup-1'
-        }
-      })
-      let setupSignal: AbortSignal | undefined
-      runtime.waitForSetupTerminalCompletion.mockImplementation(
-        (_handle, signal) =>
-          new Promise<{ exitCode: number | null }>((_resolve, reject) => {
-            setupSignal = signal
-            signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
-          })
-      )
-
-      const result = await (async () => {
-        const pending = launch(CREATE_LAUNCH, runtime)
-        await vi.runAllTimersAsync()
-        return pending
-      })()
-
-      expect(result.outcome.kind).toBe('structured')
-      expect(setupSignal?.aborted).toBe(true)
+      const runtime = runtimeStub({ setupRun })
+      const pending = launch(CREATE_LAUNCH, runtime)
+      await vi.advanceTimersByTimeAsync(61_000)
+      expect(createStructuredSession).not.toHaveBeenCalled()
+      setupRun.settle({ kind: 'succeeded' })
+      await expect(pending).resolves.toMatchObject({ outcome: { kind: 'structured' } })
+      expect(createStructuredSession).toHaveBeenCalledTimes(1)
     } finally {
+      setupRun.settle({ kind: 'ended', reason: 'closed' })
       vi.useRealTimers()
     }
   })
 
-  it('waits for a setup-gated structured workspace before creating its session', async () => {
-    const runtime = runtimeStub({
-      setupReceipt: {
-        startupPolicy: 'wait-for-setup',
-        state: 'running',
-        terminalHandle: 'setup-1'
-      }
+  it.each([
+    { kind: 'failed', exitCode: 1 },
+    { kind: 'ended', reason: 'preparation_failed' },
+    { kind: 'ended', reason: 'observation_lost' }
+  ] as const)('never starts a structured agent or fallback after setup $kind', async (outcome) => {
+    const setupRun = createSetupRun(true)
+    setupRun.settle(outcome)
+    const runtime = runtimeStub({ setupRun })
+    await expect(launch(CREATE_LAUNCH, runtime)).rejects.toMatchObject({
+      code: 'agent_launch_setup_not_completed'
     })
-    const order: string[] = []
-    runtime.waitForSetupTerminalCompletion.mockImplementation(async () => {
-      order.push('setup-complete')
-      return { exitCode: 0 }
-    })
-    createStructuredSession.mockImplementationOnce(async () => {
-      order.push('structured-create')
-      return { ok: true as const, value: { sessionId: 'sess-1' } }
-    })
-
-    await launch(CREATE_LAUNCH, runtime)
-
-    expect(order).toEqual(['setup-complete', 'structured-create'])
-    expect(runtime.waitForSetupTerminalCompletion).toHaveBeenCalledWith(
-      'setup-1',
-      expect.any(AbortSignal)
+    expect(createStructuredSession).not.toHaveBeenCalled()
+    // Only missing surfaces recover with an ordinary shell; none is an agent fallback.
+    expect(runtime.createTerminal.mock.calls.every(([, options]) => !options?.startupAgent)).toBe(
+      true
     )
   })
 

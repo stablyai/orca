@@ -1,3 +1,4 @@
+import type { SetupRun } from '../../setup/setup-run'
 /** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
 import { vi } from 'vitest'
@@ -24,6 +25,7 @@ export const STRUCTURED_PREFERENCE = {
 export type AgentLaunchRuntimeStubOptions = {
   settings?: Record<string, unknown>
   createSupport?: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }
+  setupRun?: SetupRun
   setupReceipt?: {
     startupPolicy: 'start-immediately' | 'wait-for-setup'
     state: 'running' | 'skipped' | 'not_configured' | 'spawn_failed'
@@ -73,11 +75,6 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
   const worktreeCreateResults = new Map<string, Promise<unknown>>()
   // Only the panes this runtime created or adopted, under the handle it issued them.
   const handlesByPaneKey = new Map(Object.entries(options.adoptedPanes ?? {}))
-  const waitForSetupTerminalCompletion = vi.fn(
-    async (_handle: string, _signal?: AbortSignal): Promise<{ exitCode: number | null }> => ({
-      exitCode: 0
-    })
-  )
   return {
     getClientSettings: vi.fn(() => options.settings ?? STRUCTURED_PREFERENCE),
     requireStore: vi.fn(() => ({
@@ -105,6 +102,9 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
     createFolderWorkspace: vi.fn(async (_input: Record<string, unknown>) => ({ id: 'fw-new' })),
     createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => {
+      if (options.setupRun && typeof args.onSetupRun === 'function') {
+        args.onSetupRun(options.setupRun)
+      }
       reportPromptCarry(options, args.onStartupPromptCarry, args.startupPrompt)
       if (args.startupAgent && options.startupTerminalPaneKey) {
         handlesByPaneKey.set(options.startupTerminalPaneKey, 'term_agent_first')
@@ -163,7 +163,6 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       }
       return launchRecordStore
     }),
-    waitForSetupTerminalCompletion,
     canPublishAgentLaunchTab: vi.fn(() => options.publishAgentLaunchTab !== undefined),
     publishAgentLaunchTab: vi.fn(
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>

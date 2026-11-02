@@ -158,10 +158,14 @@ export function monitorWorkerSetup(args: {
     return
   }
   // Why: setup is intentionally non-gating, but command completion remains durable evidence.
-  void args.runtime
-    .waitForSetupTerminalCompletion(setupTerminal.id)
+  const worktreeId = args.effects.find((effect) => effect.kind === 'worktree')?.id
+  const run = worktreeId ? args.runtime.getSetupRun(worktreeId) : undefined
+  if (!run) {
+    return
+  }
+  void run.outcome
     .then((completion) => {
-      const setupState = completion.exitCode === 0 ? 'succeeded' : 'failed'
+      const setupState = completion.kind === 'succeeded' ? 'succeeded' : 'failed'
       const evidence = args.db.updateWorkerSetupEvidence({
         dispatchId: args.dispatchId,
         setupState,

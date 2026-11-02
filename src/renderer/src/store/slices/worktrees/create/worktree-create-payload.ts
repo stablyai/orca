@@ -26,6 +26,7 @@ export type CreateWorktreeCallOptions = {
   startupDraft?: string
   /** A terminal agent the owning host may plan from its own settings; `startup` stays the fallback. */
   hostAgentLaunch?: HostAgentLaunch
+  promisedAgentChat?: true
   setupOnly?: boolean
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
@@ -69,6 +70,7 @@ function sharedCreateFields(
 ): Omit<CreateWorktreeArgs, 'repoId' | 'startup' | 'creationId'> {
   const { options } = request
   return {
+    ...(options?.promisedAgentChat ? { promisedAgentChat: true } : {}),
     name: attempt.name,
     ...(options?.nameWasGenerated ? { nameWasGenerated: true } : {}),
     baseBranch: request.baseBranch,

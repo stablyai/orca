@@ -18,6 +18,12 @@ export async function withCliAgentLaunchRecovery<T>(
   try {
     return await launch
   } catch (error) {
+    if (
+      error instanceof RuntimeRpcFailureError &&
+      error.code === 'agent_launch_setup_not_completed'
+    ) {
+      throw error
+    }
     // A replay method's ordinary refusal proves no effects; legacy errors may follow a spawn.
     if (
       recovery.operationId &&

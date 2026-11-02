@@ -122,6 +122,7 @@ import {
 } from '@/components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
+import { markStructuredAgentSessionLaunchCancelledSilently } from './structured-agent-session-launch-cancel'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
 
 function launchIntent(
@@ -185,6 +186,33 @@ describe('a close that races a structured launch', () => {
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
     })
+  })
+
+  it('closes a saved setup-dependent create on its captured host before restoring launch state', () => {
+    const sessionId = 'codex-saved-setup-close'
+    localStorage.setItem(
+      'orca:structuredAgentLaunches:v1',
+      JSON.stringify([
+        {
+          sessionId,
+          agent: 'codex',
+          executionHostId: 'runtime:server-1',
+          lifecycle: 'pending',
+          clientOperationId: 'saved-create',
+          payloadFingerprint: 'a'.repeat(64),
+          expectedRuntimeFence: null,
+          afterWorktreeSetup: true,
+          surfaceAddress: { worktreeId: 'saved-workspace', precedingTabIds: [] }
+        }
+      ])
+    )
+    markStructuredAgentSessionLaunchCancelledSilently('saved-workspace', sessionId, 'local')
+    expect(mocks.callStructuredAgentSession).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'server-1' },
+      'agentSession.close',
+      { sessionId }
+    )
+    expect(localStorage.getItem('orca:structuredAgentLaunches:v1')).toBeNull()
   })
 
   it('cancels a close-racing unknown launch without retrying or toasting', async () => {

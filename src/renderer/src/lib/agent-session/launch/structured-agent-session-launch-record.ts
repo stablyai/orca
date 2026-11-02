@@ -53,6 +53,7 @@ export type StructuredAgentLaunchPersistedRecord = {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  afterWorktreeSetup?: true
   firstMessage?: StructuredAgentSessionFirstMessage
   explicitLaunchOptions?: Readonly<Record<string, string>>
   optionsMode?: 'replace-model-selection'
@@ -68,7 +69,8 @@ export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle
 ): StructuredAgentLaunchPersistedRecord {
-  const { envelope, resumeFrom, firstMessage, optionsMode, options } = intent.params
+  const { envelope, resumeFrom, firstMessage, optionsMode, options, afterWorktreeSetup } =
+    intent.params
   // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
   return {
@@ -81,6 +83,7 @@ export function structuredAgentLaunchRecordFor(
     payloadFingerprint: envelope.payloadFingerprint,
     expectedRuntimeFence: envelope.expectedRuntimeFence,
     ...(resumeFrom ? { resumeFrom } : {}),
+    ...(afterWorktreeSetup ? { afterWorktreeSetup } : {}),
     ...(firstMessage ? { firstMessage } : {}),
     ...(optionsMode ? { optionsMode } : {}),
     ...(options ? { options } : {}),
@@ -124,6 +127,7 @@ export function validRecord(value: unknown): value is Omit<
   const resumeFrom = 'resumeFrom' in value ? value.resumeFrom : undefined
   const executionHostId = 'executionHostId' in value ? value.executionHostId : undefined
   const failedAt = 'failedAt' in value ? value.failedAt : undefined
+  const afterWorktreeSetup = 'afterWorktreeSetup' in value ? value.afterWorktreeSetup : undefined
   const firstMessage = 'firstMessage' in value ? value.firstMessage : undefined
   const optionsMode = 'optionsMode' in value ? value.optionsMode : undefined
   const options = 'options' in value ? value.options : undefined
@@ -140,6 +144,7 @@ export function validRecord(value: unknown): value is Omit<
     typeof payloadFingerprint === 'string' &&
     (expectedRuntimeFence === null || typeof expectedRuntimeFence === 'number') &&
     (failedAt === undefined || Number.isFinite(failedAt)) &&
+    (afterWorktreeSetup === undefined || afterWorktreeSetup === true) &&
     (firstMessage === undefined || validFirstMessage(firstMessage)) &&
     (optionsMode === undefined || optionsMode === 'replace-model-selection') &&
     (options === undefined || isAgentSessionOptions(options)) &&
