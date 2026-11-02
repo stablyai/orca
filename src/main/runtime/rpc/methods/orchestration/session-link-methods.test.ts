@@ -190,4 +190,60 @@ describe('session link caller authority', () => {
       store.events('link-1').filter((e) => e.actor === 'owner' && e.kind === 'owner-note')
     ).toHaveLength(2)
   })
+  it('keeps owner decisions answerable with a full peer queue and cannot clear them by changing the pause reason', async () => {
+    for (let i = 0; i < 11; i++) {
+      call(
+        'orchestration.linkSend',
+        { id: 'link-1', operationId: `status-${i}`, body: `Status ${i}`, kind: 'message' },
+        agent()
+      )
+    }
+    call(
+      'orchestration.linkSend',
+      { id: 'link-1', operationId: 'money', body: 'Need owner decision.', kind: 'owner-request' },
+      agent()
+    )
+    const context: RpcContext = { runtime, caller: { kind: 'desktop' } }
+    await call(
+      'orchestration.linkControl',
+      { id: 'link-1', operationId: 'stop', version: store.get('link-1').version, action: 'stop' },
+      context
+    )
+    await expect(
+      call(
+        'orchestration.linkControl',
+        {
+          id: 'link-1',
+          operationId: 'resume',
+          version: store.get('link-1').version,
+          action: 'resume'
+        },
+        context
+      )
+    ).rejects.toThrow('Answer the owner decision')
+    call(
+      'orchestration.linkSend',
+      {
+        id: 'link-1',
+        operationId: 'answer',
+        body: 'Only local checks. No spending.',
+        kind: 'owner-note'
+      },
+      context
+    )
+    await call(
+      'orchestration.linkControl',
+      {
+        id: 'link-1',
+        operationId: 'resume',
+        version: store.get('link-1').version,
+        action: 'resume'
+      },
+      context
+    )
+    expect(store.get('link-1').state).toBe('active')
+    expect(
+      store.events('link-1').filter((e) => e.actor === 'owner' && e.kind === 'owner-note')
+    ).toHaveLength(2)
+  })
 })

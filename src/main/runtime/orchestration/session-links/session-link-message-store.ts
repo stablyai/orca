@@ -46,10 +46,13 @@ export function appendSessionLinkMessage(
       throw new Error('This session link has ended.')
     }
     const events = store.events(link.id)
-    if (events.filter((e) => ['queued', 'blocked', 'dispatching'].includes(e.state)).length >= 12) {
+    const agent = !['owner', 'host'].includes(input.actor)
+    if (
+      agent &&
+      events.filter((e) => ['queued', 'blocked', 'dispatching'].includes(e.state)).length >= 12
+    ) {
       throw new Error('The link queue is full. Wait for delivery or ask the owner.')
     }
-    const agent = !['owner', 'host'].includes(input.actor)
     if (agent && !link.participants.some((p) => p.sessionId === input.actor)) {
       throw new Error('Not a link participant.')
     }

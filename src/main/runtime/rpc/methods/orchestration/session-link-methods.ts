@@ -257,7 +257,7 @@ export const SESSION_LINK_METHODS = [
           }
         })
       }
-      if (!replay && params.action === 'resume' && link.reason === 'owner-decision') {
+      if (!replay && params.action === 'resume') {
         const events = store.events(link.id)
         const requestIndex = events.findLastIndex((e) => e.kind === 'owner-request')
         if (

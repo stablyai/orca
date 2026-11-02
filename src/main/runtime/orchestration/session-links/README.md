@@ -6,7 +6,7 @@ The durable link and chronological journal live in the host orchestration SQLite
 
 ## Delivery and control
 
-- Introductions and peer messages enter a durable outbox. Idle chats wake through the existing structured send path. Busy chats finish their turn first. Pending human questions, approvals and queued human input block automatic admission.
+- Introductions and peer messages enter a durable outbox. Idle chats wake through the existing structured send path. Busy chats finish their turn first. Pending human questions, approvals and queued human input block automatic admission. Owner notes take priority over peer backlog and remain writable when the peer outbox is full.
 - Admission is rechecked under host serialization immediately before sending. Closing a chat, `/clear`, an unverified tab index or changing its captured workspace/context pauses the link. It never binds silently to a successor.
 - Questions/checkpoints have message IDs. The sender waits for an accepted reply naming that exact ID. Clarifying questions may still arrive; unrelated status does not release the checkpoint.
 - Pause retains mail and allows an already running turn to finish. Stop pauses immediately and requests cancellation only for a turn whose accepted submission is proved to belong to this link. An unrelated human turn keeps running. Cancellation identity is saved before the effect. An unconfirmed stop is shown in the journal; use the chat's normal Stop control if a provider has not yet published a provable turn.

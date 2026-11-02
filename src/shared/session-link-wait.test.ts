@@ -73,4 +73,22 @@ describe('checkpoint correlation', () => {
       )?.id
     ).toBe('new')
   })
+  it('prioritizes an owner instruction over peer backlog while retaining an in-flight operation for reconciliation', () => {
+    const peer = event('peer', {
+      recipient: testOrcaSessionId('codex-work'),
+      actor: 'claude-review',
+      kind: 'message',
+      state: 'queued'
+    })
+    const owner = event('owner', {
+      recipient: testOrcaSessionId('codex-work'),
+      actor: 'owner',
+      kind: 'owner-note',
+      state: 'queued'
+    })
+    expect(sessionLinkNextMessage([peer, owner], 'codex-work')?.id).toBe('owner')
+    expect(
+      sessionLinkNextMessage([{ ...peer, state: 'dispatching' }, owner], 'codex-work')?.id
+    ).toBe('peer')
+  })
 })

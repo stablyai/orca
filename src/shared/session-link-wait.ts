@@ -24,17 +24,26 @@ export function sessionLinkNextMessage(
   events: readonly SessionLinkEvent[],
   sessionId: string
 ): SessionLinkEvent | undefined {
-  const waiting = sessionLinkWaitingFor(events, sessionId)
-  return events.find(
+  const pending = events.filter(
     (e) =>
       e.kind !== 'control' &&
       e.recipient === sessionId &&
-      ['queued', 'dispatching', 'blocked'].includes(e.state) &&
-      (e.state !== 'queued' ||
-        !waiting ||
-        e.actor === 'owner' ||
-        e.kind === 'question' ||
-        e.kind === 'checkpoint' ||
-        (e.kind === 'reply' && e.replyTo === waiting.id))
+      ['queued', 'dispatching', 'blocked'].includes(e.state)
+  )
+  const unresolved = pending.find((e) => e.state === 'dispatching' || e.state === 'blocked')
+  if (unresolved) {
+    return unresolved
+  }
+  const owner = pending.find((e) => e.actor === 'owner')
+  if (owner) {
+    return owner
+  }
+  const waiting = sessionLinkWaitingFor(events, sessionId)
+  return pending.find(
+    (e) =>
+      !waiting ||
+      e.kind === 'question' ||
+      e.kind === 'checkpoint' ||
+      (e.kind === 'reply' && e.replyTo === waiting.id)
   )
 }
