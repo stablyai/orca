@@ -1,5 +1,5 @@
 import { Replace } from 'lucide-react'
-import { getKeybindingDefinition } from '../../../../../shared/keybindings'
+import { getKeybindingDefinition, isKeybindingActionId } from '../../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Switch } from '../../ui/switch'
@@ -7,7 +7,7 @@ import { DetailRow } from './PluginDetailSections'
 
 /** Orca's own name for a built-in action. */
 export function builtInActionTitle(actionId: string): string {
-  return getKeybindingDefinition(actionId)?.title ?? actionId
+  return (isKeybindingActionId(actionId) && getKeybindingDefinition(actionId)?.title) || actionId
 }
 
 /** A command that runs in place of a built-in action, with the switch that keeps Orca's own. */
