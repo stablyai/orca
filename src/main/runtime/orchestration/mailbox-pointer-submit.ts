@@ -26,6 +26,7 @@ type PointerSubmitDependencies = {
   lastUserInputAt?: (ptyId: string) => number | undefined
   isOrcaWindowFocused?: () => boolean
   now?: () => number
+  scheduleTypingQuietRetry?: (ptyId: string, mailboxHandle: string) => void
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -99,7 +100,8 @@ export function submitOrchestrationMailboxPointer(
           windowFocused: deps.isOrcaWindowFocused?.() ?? false
         })
       ) {
-        // Why: pointer is already on the prompt; Enter would submit the user's draft.
+        // Why: keep delivered_at and retry later unread; do not rewrite or submit the draft.
+        deps.scheduleTypingQuietRetry?.(input.ptyId, input.mailboxHandle)
       } else {
         preserveAmbiguousDelivery = true
         const db = deps.getDb()

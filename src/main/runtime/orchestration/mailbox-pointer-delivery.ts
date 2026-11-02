@@ -150,7 +150,19 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     stageOrchestrationMailboxPointer({
-      deps: this.deps,
+      deps: {
+        ...this.deps,
+        scheduleTypingQuietRetry: (ptyId, retryMailbox) => {
+          this.typingQuietRetry.defer(
+            {
+              lastUserInputAt: this.deps.lastUserInputAt?.(ptyId),
+              now: this.deps.now?.() ?? performance.now(),
+              windowFocused: this.deps.isOrcaWindowFocused?.() ?? false
+            },
+            retryMailbox
+          )
+        }
+      },
       state: this.state,
       terminal,
       mailboxHandle,
