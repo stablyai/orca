@@ -8,7 +8,7 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../../codex/codex-app-server-connection'
+import type { openCodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection'
 import { readCodexTurnId } from '../../codex/codex-structured-thread-facts'
 import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'

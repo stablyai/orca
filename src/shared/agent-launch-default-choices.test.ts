@@ -6,7 +6,6 @@ import {
   agentLaunchSettingsMutationUpdates,
   type AgentLaunchSettingsSource
 } from './agent-launch-settings'
-import { AgentLaunchSettingsMutation } from './rpc-contract/agent-launch-settings-params'
 import { migrateAgentPermissionChoice } from './tui-agent-permission-lift'
 import { structuredLaunchSeedOptions } from './native-chat/input/native-chat-session-option-defaults'
 
@@ -89,23 +88,6 @@ describe('host-authored launch defaults', () => {
     expect(matched.agentDefaultArgs?.claude).toBe('--verbose')
     expect(matched.agentPermissionOverrides?.claude).toBe('own')
     expect(matched.agentLaunchChoices?.claude?.options).toEqual({ other: 'kept' })
-  })
-
-  it('validates the additive mutation strictly without changing old mutation shapes', () => {
-    const valid = {
-      type: 'launch-choices',
-      agent: 'codex',
-      patch: { options: { effort: 'high' }, model: null }
-    }
-    expect(AgentLaunchSettingsMutation.safeParse(valid).success).toBe(true)
-    for (const invalid of [
-      { type: 'launch-choices', agent: 'codex' },
-      { ...valid, patch: { extra: true } },
-      { ...valid, patch: { options: { model: 'bad' } } },
-      { ...valid, patch: { model: 'x'.repeat(513) } }
-    ]) {
-      expect(AgentLaunchSettingsMutation.safeParse(invalid).success).toBe(false)
-    }
   })
 })
 

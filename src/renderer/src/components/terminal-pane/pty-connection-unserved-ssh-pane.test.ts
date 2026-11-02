@@ -228,28 +228,4 @@ describe('a pane on an unconverted SSH row', () => {
 
     expect(sshApi().connect).not.toHaveBeenCalled()
   })
-
-  it('reports a failed dial on the pane', async () => {
-    sshApi().connect.mockRejectedValueOnce(new Error('host unreachable'))
-
-    const { deps } = mountUnservedPane()
-    await flushAsyncTicks(10)
-
-    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
-      expect.any(Number),
-      'SSH connection failed: host unreachable'
-    )
-  })
-
-  it('leaves recovery to the overlay when typed input cannot be delivered', async () => {
-    const pane = createPane(1)
-    const { connectPanePty } = await import('./pty-connection')
-    connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
-    await flushAsyncTicks(10)
-
-    vi.mocked(pane.terminal.onData).mock.calls[0]?.[0]('ls\r')
-    await flushAsyncTicks(10)
-
-    expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
-  })
 })

@@ -36,7 +36,7 @@ class StatusRuntime extends OrcaRuntimeService {
       .materializePendingMobileSessionTerminal(worktreeId, tab, trigger)
       .then((created) => {
         if (this.startsNoTerminal && created.tab.ptyId) {
-          this.ptysById.delete(created.tab.ptyId)
+          this.terminalIdentity.removePty(created.tab.ptyId)
         }
         return created
       })
@@ -50,7 +50,7 @@ class StatusRuntime extends OrcaRuntimeService {
   loseContactWith(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
     if (pty) {
-      pty.connected = false
+      this.terminalIdentity.setPtyConnected(pty, false)
     }
     this.markPtyLivenessUnverifiable(ptyId, 'host out of contact')
   }

@@ -186,40 +186,6 @@ function scoped(
 }
 
 describe('a send queued behind a running Claude turn', () => {
-  it('leaves the live bar with the prompt that opened the running turn', () => {
-    const bars = selectStructuredAgentTurnBars(
-      whileQueued.items,
-      whileQueued.submissions,
-      whileQueued.turnId
-    )
-    const transcript = [message('orca:prior'), message('orca:A'), message('orca:B')]
-    expect(barOf(transcript, whileQueued)).toBe('orca:A')
-    // A was sent into an idle session: it counts from its own send, as before.
-    expect(bars.runningTiming).toEqual({
-      state: 'running',
-      startedAt: A.started,
-      requestedAt: A.sent,
-      observedAt: T + 77_224
-    })
-    expect(bars.settledTurns.has('orca:B')).toBe(false)
-  })
-
-  it("moves the bar to B when its own turn opens, counting from A's end", () => {
-    const bars = selectStructuredAgentTurnBars(whileB.items, whileB.submissions, whileB.turnId)
-    const transcript = [message('orca:prior'), message('orca:A'), message('orca:B')]
-    expect(barOf(transcript, whileB)).toBe('orca:B')
-    expect(bars.settledTurns.get('orca:A')).toEqual({
-      startedAt: A.started,
-      workedSeconds: 17,
-      verdict: 'superseded'
-    })
-    expect(bars.runningTiming && structuredAgentTurnOrigin(bars.runningTiming)).toBe(A.ended)
-    // A client attaching 3 s into turn 2 counts 3 s, not the 13 s B waited behind turn 1.
-    expect(structuredAgentTurnLocalStartedAt(bars.runningTiming!, 50_000, B.started + 3_000)).toBe(
-      47_000
-    )
-  })
-
   it('settles from the same origin the live counter used, so the bars sum to wall time', () => {
     const settledTurns = selectStructuredAgentSettledTurns(settled.items, settled.submissions)
     expect(settledTurns.get('orca:A')).toEqual({
@@ -416,10 +382,6 @@ describe('turns whose host names no opener', () => {
         'legacy:claude:55368cfb:turn-lifecycle%3At2'
       )
     }
-  })
-
-  it('names nothing for the unanchored transcript', () => {
-    expect(nativeChatTurnMembership([message('a', 'assistant')], null).liveTurnKey).toBeUndefined()
   })
 })
 

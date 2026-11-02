@@ -11,6 +11,7 @@ import {
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
+import type { ClaudeJournalTranslatorDeps } from './claude-journal-translator-contract'
 
 export type ClaudeResultJournalContext = Pick<
   ClaudeMessageJournalContext,
@@ -27,6 +28,20 @@ export type ClaudeResultJournalContext = Pick<
   prompts: ClaudeJournalPrompts
   context: ClaudeContextFacts
   goalBackgroundWork: () => ClaudeGoalBackgroundWork
+  acceptStartupFailure?: ClaudeJournalTranslatorDeps['acceptStartupFailure']
+}
+
+const namesClaudeInput = (value: unknown): boolean => typeof value === 'string' && value !== ''
+
+/** Input it answered (receipts, a resumed turn) or model round-trips mean the result is a turn's own. */
+function claudeResultShowsTurnWork(message: Record<string, unknown>): boolean {
+  return (
+    namesClaudeInput(message.user_message_uuid) ||
+    (Array.isArray(message.user_message_uuids) &&
+      message.user_message_uuids.some(namesClaudeInput)) ||
+    namesClaudeInput(message.resume_reason) ||
+    (typeof message.num_turns === 'number' && message.num_turns > 0)
+  )
 }
 
 export function journalClaudeResult(
@@ -42,7 +57,8 @@ export function journalClaudeResult(
     assistantFailures,
     usageLimits,
     threadGoal,
-    goalBackgroundWork
+    goalBackgroundWork,
+    acceptStartupFailure
   }: ClaudeResultJournalContext,
   message: Record<string, unknown>,
   observedAt: number
@@ -96,6 +112,18 @@ export function journalClaudeResult(
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)
+  // Only a still-starting acquisition that fails its open with this failure may take over its row.
+  if (
+    failure &&
+    settlesTurn &&
+    endedTurnIdentity === null &&
+    !usageLimit &&
+    !alreadyShown &&
+    !claudeResultShowsTurnWork(message) &&
+    acceptStartupFailure?.(message) === true
+  ) {
+    return
+  }
   if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {
     providerFallback.append(
       kind,

@@ -10,12 +10,10 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import type { CodexAppServerInvocation } from './codex-app-server-session'
+import type { CodexAppServerInvocation } from './app-server/codex-app-server-session'
 import { createCodexSessionBackfillAuditWriter } from './codex-session-backfill-audit'
 import { CODEX_SESSION_INDEX_HEAL_VERSION } from './codex-session-index-heal-state'
 import {
-  buildNativeHealInvocation,
-  buildWslHealInvocation,
   runCodexSessionIndexHeal,
   type CodexSessionIndexHealPaths
 } from './codex-session-index-heal'
@@ -790,29 +788,5 @@ describe('runCodexSessionIndexHeal', () => {
     })
     expect(warnSpy).toHaveBeenCalled()
     warnSpy.mockRestore()
-  })
-})
-
-describe('buildNativeHealInvocation', () => {
-  it('pins the app-server to the given home', () => {
-    const invocation = buildNativeHealInvocation('/codex-home', 1_000)
-
-    expect(invocation.env).toEqual({ CODEX_HOME: '/codex-home' })
-  })
-})
-
-describe('buildWslHealInvocation', () => {
-  it('runs the distro codex on the guest home with the short-lived read-only args', () => {
-    const invocation = buildWslHealInvocation('Ubuntu', '/home/alice/.orca-home', 2_000)
-
-    expect(invocation.cliPath).toBeNull()
-    expect(invocation.env).toBeUndefined()
-    expect(invocation.timeoutMs).toBe(2_000)
-    expect(invocation.command.toLowerCase()).toMatch(/wsl\.exe$/)
-    expect(invocation.args.slice(0, 4)).toEqual(['-d', 'Ubuntu', '--exec', 'sh'])
-    const guestCommand = invocation.args.at(-1) ?? ''
-    expect(guestCommand).toContain('/home/alice/.orca-home')
-    expect(guestCommand).toContain('features.plugins=false')
-    expect(guestCommand).toContain('app-server')
   })
 })

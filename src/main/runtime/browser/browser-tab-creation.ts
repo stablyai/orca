@@ -49,7 +49,11 @@ export class RuntimeBrowserTabCreation {
       split?: BrowserTabSplitDirection
       splitFromTabId?: string
     },
-    caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
+    caller?: {
+      pairedDeviceId?: string
+      clientKind?: 'mobile' | 'runtime'
+      opensPageLink?: boolean
+    }
   ): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const focus = resolveBrowserTabCreateFocus({
@@ -118,6 +122,7 @@ export class RuntimeBrowserTabCreation {
         worktreeId,
         focus,
         ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
+        ...(caller?.opensPageLink ? { opensPageLink: true } : {}),
         targetGroupId: params.targetGroupId
       })
       return { browserPageId: created.browserPageId }

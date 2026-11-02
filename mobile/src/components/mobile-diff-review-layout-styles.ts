@@ -68,6 +68,14 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
+  diffListFrame: {
+    flex: 1
+  },
+  threadRow: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.bgBase
+  },
   diffList: {
     paddingBottom: 140,
     backgroundColor: colors.editorSurface

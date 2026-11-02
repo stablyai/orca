@@ -14,7 +14,7 @@ import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible
 } from '@/runtime/runtime-rpc-client'
-import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { useAppStore } from '@/store'
 import { WorkspacePortScanner } from './WorkspacePortScanner'
 

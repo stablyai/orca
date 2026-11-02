@@ -200,6 +200,11 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     task: z.string()
   }),
   z.object({
+    kind: z.literal('agent-handoff'),
+    launchId: z.string().min(1),
+    task: z.string()
+  }),
+  z.object({
     kind: z.literal('tool-call'),
     ...ToolMetadata,
     name: z.string(),
