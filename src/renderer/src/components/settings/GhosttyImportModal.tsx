@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { SETTING_LABELS } from './setting-labels'
+import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import { translate } from '@/i18n/i18n'
 
 type GhosttyImportModalProps = {
@@ -44,7 +45,11 @@ function formatPreviewEntry(preview: GhosttyImportPreview, key: string, value: u
     return themeNames.light
   }
   if (key === 'terminalCustomThemes') {
-    return [...new Set([themeNames.dark, themeNames.light].filter(Boolean))].join(', ')
+    const names = new Set([themeNames.dark, themeNames.light])
+    return normalizeTerminalCustomThemes(value)
+      .filter((theme) => theme.source === 'ghostty' && names.has(theme.name))
+      .map((theme) => theme.name)
+      .join(', ')
   }
   return formatDiffValue(value)
 }

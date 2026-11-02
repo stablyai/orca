@@ -25,8 +25,10 @@ const THEME_COLOR_KEYS = new Set([
 ])
 
 function userThemeDirs(home: string, plat: NodeJS.Platform): string[] {
+  // Ghostty's XDG config lookup falls back to LOCALAPPDATA on Windows.
   if (plat === 'win32') {
-    return [path.win32.join(process.env.APPDATA || home, 'ghostty', 'themes')]
+    const configHome = process.env.XDG_CONFIG_HOME || process.env.LOCALAPPDATA || home
+    return [path.win32.join(configHome, 'ghostty', 'themes')]
   }
   const configHome = process.env.XDG_CONFIG_HOME || path.posix.join(home, '.config')
   return [path.posix.join(configHome, 'ghostty', 'themes')]
@@ -53,7 +55,12 @@ function resourceThemeDirs(home: string, plat: NodeJS.Platform): string[] {
     const dataDirs = (process.env.XDG_DATA_DIRS || '/usr/local/share:/usr/share')
       .split(':')
       .filter((dir) => path.posix.isAbsolute(dir))
-    return [...new Set(dataDirs)].map((dir) => path.posix.join(dir, 'ghostty', 'themes'))
+    const prefixes = [
+      ...dataDirs,
+      path.posix.join(home, '.local', 'share'),
+      '/snap/ghostty/current/share'
+    ]
+    return [...new Set(prefixes)].map((dir) => path.posix.join(dir, 'ghostty', 'themes'))
   }
   return []
 }

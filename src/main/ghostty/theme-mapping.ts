@@ -1,3 +1,4 @@
+import { platform } from 'node:os'
 import path from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
@@ -29,19 +30,27 @@ export type GhosttyThemeImport = {
   unsupportedKeys: string[]
 }
 
-const WINDOWS_DRIVE_PATH_RE = /^[a-zA-Z]:[\\/]/
+function unquote(value: string): string {
+  return value.length >= 2 && value.startsWith('"') && value.endsWith('"')
+    ? value.slice(1, -1)
+    : value
+}
 
-// Mirrors Ghostty's Theme.parseCLI: a comma, colon or `=` marks a light/dark pair, and both halves are required.
-export function parseGhosttyThemeValue(value: string): GhosttyThemePair | null {
+// Mirrors Ghostty's Theme.parseCLI: a comma, colon or `=` marks a light/dark pair written as `light:X,dark:Y`.
+export function parseGhosttyThemeValue(
+  value: string,
+  plat: NodeJS.Platform = platform()
+): GhosttyThemePair | null {
   const trimmed = value.trim()
-  if (!/[,:=]/.test(trimmed) || WINDOWS_DRIVE_PATH_RE.test(trimmed)) {
+  const isDrivePath = plat === 'win32' && /^[a-zA-Z]:/.test(trimmed) && !trimmed.includes(',')
+  if (!/[,:=]/.test(trimmed) || isDrivePath) {
     return trimmed ? { light: trimmed, dark: trimmed } : null
   }
   const pair: Partial<GhosttyThemePair> = {}
   for (const part of trimmed.split(',')) {
-    const separator = part.search(/[:=]/)
+    const separator = part.indexOf(':')
     const slot = part.slice(0, Math.max(separator, 0)).trim()
-    const name = part.slice(separator + 1).trim()
+    const name = unquote(part.slice(separator + 1).trim())
     if (separator === -1 || (slot !== 'light' && slot !== 'dark') || !name) {
       return null
     }
@@ -81,12 +90,13 @@ function ghosttyThemeTerminalColors(overrides: TerminalColorOverrides): Terminal
     selectionForeground: _selectionForeground,
     ...defaultPalette
   } = defaults
-  const terminal = normalizeTerminalColorOverrides({ ...defaultPalette, ...overrides })
-  return {
+  const terminal = { ...defaultPalette, ...overrides }
+  // Normalizing last keeps key order stable so unchanged re-imports compare equal.
+  return normalizeTerminalColorOverrides({
     ...terminal,
     cursor: terminal.cursor ?? terminal.foreground,
     cursorAccent: terminal.cursorAccent ?? terminal.background
-  }
+  })
 }
 
 type ResolvedTheme = { selection: string; name: string; custom?: TerminalCustomTheme }
@@ -150,6 +160,7 @@ export async function importGhosttyTheme(
   const themeNames: GhosttyThemeImport['themeNames'] = {}
   const unsupportedKeys: string[] = []
   const importedThemes = new Map<string, TerminalCustomTheme>()
+  let newThemeCount = 0
   for (const [slot, themeName] of requests) {
     const resolved = await resolveTheme(themeName, pickedConfigDir, existingThemes)
     if (resolved === null) {
@@ -157,20 +168,25 @@ export async function importGhosttyTheme(
       continue
     }
     if (resolved.custom) {
-      const isNew = !existingThemes.some((theme) => theme.id === resolved.custom?.id)
-      if (isNew && existingThemes.length + importedThemes.size >= MAX_TERMINAL_CUSTOM_THEMES) {
+      const isNew =
+        !importedThemes.has(resolved.custom.id) &&
+        !existingThemes.some((theme) => theme.id === resolved.custom?.id)
+      if (isNew && existingThemes.length + newThemeCount >= MAX_TERMINAL_CUSTOM_THEMES) {
         unsupportedKeys.push(`theme (${themeName}: custom terminal theme limit reached)`)
         continue
       }
+      newThemeCount += isNew ? 1 : 0
       importedThemes.set(resolved.custom.id, resolved.custom)
     }
     diff[slot === 'dark' ? 'terminalThemeDark' : 'terminalThemeLight'] = resolved.selection
     themeNames[slot] = resolved.name
   }
 
-  if (themeNames.dark !== undefined || themeNames.light !== undefined) {
-    // A single Ghostty theme paints both appearances, which Orca expresses as the dark slot alone.
-    diff.terminalUseSeparateLightTheme = isPair && themeNames.light !== undefined
+  // A single Ghostty theme paints both appearances, which Orca expresses as the dark slot alone.
+  if (!isPair && themeNames.dark !== undefined) {
+    diff.terminalUseSeparateLightTheme = false
+  } else if (isPair && themeNames.light !== undefined) {
+    diff.terminalUseSeparateLightTheme = true
   }
   if (importedThemes.size > 0) {
     // Updated themes keep their position so an unchanged re-import produces an identical list.

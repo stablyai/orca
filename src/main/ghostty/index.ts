@@ -7,6 +7,7 @@ import type {
   GhosttyImportSource,
   GlobalSettings
 } from '../../shared/global-settings-types'
+import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import type { Store } from '../persistence/loading-store/store'
 import { translateMain } from '../i18n/main-i18n'
 import { validateImportSource } from '../import-source-validation'
@@ -70,36 +71,43 @@ function mergeParsedConfig(
   }
 }
 
-// An imported theme defines its slots' palettes, so explicit config colors replace those slots' overrides.
-async function applyThemeReference(
+type ThemeReferencePatch = {
+  diff: Partial<GlobalSettings>
+  themeNames?: GhosttyImportPreview['terminalThemes']
+  unsupportedKeys: string[]
+}
+
+// A slot whose theme the import selects gets exactly the config's explicit colors; other slots keep merging them.
+async function themeReferencePatch(
   rawTheme: string | string[] | undefined,
-  diff: Partial<GlobalSettings>,
+  explicitColors: TerminalColorOverrides | undefined,
   pickedConfigDir: string | undefined,
   currentSettings: GlobalSettings
-): Promise<{ themeNames: GhosttyImportPreview['terminalThemes']; unsupportedKeys: string[] }> {
+): Promise<ThemeReferencePatch> {
   if (rawTheme === undefined) {
-    return { themeNames: undefined, unsupportedKeys: [] }
+    return { diff: {}, unsupportedKeys: [] }
   }
-  const themeImport = await importGhosttyTheme(
+  const { diff, themeNames, unsupportedKeys } = await importGhosttyTheme(
     Array.isArray(rawTheme) ? (rawTheme.at(-1) ?? '') : rawTheme,
     pickedConfigDir,
     currentSettings.terminalCustomThemes
   )
-  const { themeNames, unsupportedKeys } = themeImport
   if (themeNames.dark === undefined && themeNames.light === undefined) {
-    return { themeNames: undefined, unsupportedKeys }
+    return { diff: {}, unsupportedKeys }
   }
-  const overrides = diff.terminalColorOverrides ?? {}
-  if (themeNames.dark !== undefined) {
-    diff.terminalColorOverrides = overrides
-  } else {
-    delete diff.terminalColorOverrides
+  const colors = explicitColors ?? {}
+  return {
+    diff: {
+      ...diff,
+      terminalColorOverrides:
+        themeNames.dark !== undefined
+          ? colors
+          : { ...currentSettings.terminalColorOverrides, ...colors },
+      ...(themeNames.light !== undefined ? { terminalColorOverridesLight: colors } : {})
+    },
+    themeNames,
+    unsupportedKeys
   }
-  if (themeNames.light !== undefined) {
-    diff.terminalColorOverridesLight = overrides
-  }
-  Object.assign(diff, themeImport.diff)
-  return { themeNames, unsupportedKeys }
 }
 
 async function resolveConfigPaths(
@@ -177,12 +185,13 @@ export async function previewGhosttyImport(
     platform() === 'darwin'
   )
   const currentSettings = store.getSettings()
-  const theme = await applyThemeReference(
+  const theme = await themeReferencePatch(
     rawTheme,
-    rawDiff,
+    rawDiff.terminalColorOverrides,
     validatedSource.kind === 'chooseFile' ? path.dirname(readPaths[0]) : undefined,
     currentSettings
   )
+  Object.assign(rawDiff, theme.diff)
   const unsupportedKeys = [...mappedUnsupportedKeys, ...theme.unsupportedKeys]
 
   const actualDiff: Partial<typeof rawDiff> = {}
