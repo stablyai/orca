@@ -70,6 +70,10 @@ function causeParts(
   if (cause === 'notAvailable') {
     return write === 'read-history' ? [NOT_DONE[write]] : [cause]
   }
+  // Only a queued message's Send gives this cause; whatever kind of write that is, a message wasn't sent.
+  if (cause === 'mailOwnerUnconfirmed') {
+    return [cause, 'notDoneSend']
+  }
   const saysNotDone =
     (write === 'read-history' && AGENT_SESSION_HISTORY_UNREAD_CAUSES.has(cause)) ||
     (cause === 'questionChanged' && write === 'answer') ||

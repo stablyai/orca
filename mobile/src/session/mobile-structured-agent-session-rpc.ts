@@ -108,15 +108,13 @@ export function timeoutForDeadline(deadline: number | undefined): number | null 
   return timeoutMs >= MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS ? timeoutMs : null
 }
 
-/** A refused phone send goes back into the composer; there is no Retry control. A queued card's
- *  Send leaves its text on the card, so it says nothing about the composer. */
+/** A refused phone send goes back into the composer; there is no Retry control. */
 function phoneWriteKind(
   fingerprintMethod: string,
   fields: Record<string, unknown>
 ): AgentSessionWriteKind {
-  return fingerprintMethod === 'agentSession.send'
-    ? 'composer-send'
-    : agentSessionWriteKindForMethod(fingerprintMethod, fields)
+  const write = agentSessionWriteKindForMethod(fingerprintMethod, fields)
+  return write === 'send' ? 'composer-send' : write
 }
 
 export async function requestStructuredAgentSessionMutation<TValue>(args: {
