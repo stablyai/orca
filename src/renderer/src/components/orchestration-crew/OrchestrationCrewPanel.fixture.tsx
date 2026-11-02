@@ -332,3 +332,5 @@ export const nativeChatExpanded = expanded(fiveWorkers, nativeChat)
 // Short panes: ten workers scroll inside a card that stops above the composer or the CLI's prompt.
 export const tenWorkersShortPaneExpanded = expanded(tenWorkers, pane, 'h-80')
 export const tenWorkersShortChatExpanded = expanded(tenWorkers, nativeChat, 'h-80')
+// A terminal split dragged to its 50px minimum: no room for rows, but the collapse button stays reachable.
+export const twoWorkersMinimumPaneExpanded = expanded(twoWorkers, pane, 'h-[50px]')

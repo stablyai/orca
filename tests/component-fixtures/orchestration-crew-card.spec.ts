@@ -31,3 +31,21 @@ test('in a short terminal the card keeps the bottom quarter clear and scrolls', 
   expect(card.y + card.height).toBeLessThanOrEqual(limit + 0.5)
   expect(card.y + card.height).toBeGreaterThan(limit - 2)
 })
+
+test('in a terminal at its minimum split height the collapse button stays clickable', async ({
+  page
+}) => {
+  await page.goto(
+    '/fixtures.html?id=orchestration-crew/OrchestrationCrewPanel:twoWorkersMinimumPaneExpanded'
+  )
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+  const collapse = page.getByRole('button', { name: 'Collapse orchestration panel' })
+  const button = await collapse.boundingBox()
+  const pane = await page.locator('.pane').boundingBox()
+  // Aim at the part of the button the pane doesn't clip.
+  const x = button!.x + button!.width / 2
+  const y = (button!.y + Math.min(button!.y + button!.height, pane!.y + pane!.height)) / 2
+  expect(y).toBeLessThan(pane!.y + pane!.height)
+  await page.mouse.click(x, y)
+  await expect(page.getByRole('complementary', { name: 'Orchestration' })).toHaveCount(0)
+})
