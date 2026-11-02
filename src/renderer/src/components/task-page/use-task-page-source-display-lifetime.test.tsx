@@ -279,6 +279,32 @@ describe('mounted Tasks source lifetime', () => {
       await flush()
     })
     expect(screen.getByTestId('mounted-rows')).toHaveTextContent(replacement.owner)
+    // An older host's answer (origin absent) is checked on the candidate it does report.
+    const lifetime = () => [
+      useAppStore.getState().githubSourceCollections.context(useAppStore.getState().repos[0]),
+      useAppStore.getState().workItemsInvalidationNonce
+    ]
+    const oldHost = async (upstreamCandidate: GitHubOwnerRepo) => {
+      list.mockResolvedValueOnce({
+        items: [item(replacement.owner)],
+        sources: { issues: replacement, prs: replacement, upstreamCandidate }
+      })
+      await act(async () => {
+        await useAppStore
+          .getState()
+          .fetchWorkItems(repo.id, repo.path, view.githubPerRepoPageLimit, 'label:replacement', {
+            force: true
+          })
+        await flush()
+      })
+    }
+    const recorded = lifetime()
+    await oldHost(upstream)
+    expect(lifetime()).toEqual(recorded)
+    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(replacement.owner)
+    await oldHost({ owner: 'other-upstream', repo: 'project' })
+    expect(lifetime()[0]).not.toBe(recorded[0])
+    expect(lifetime()[1]).toBeGreaterThan(recorded[1])
   })
 
   it.each(['upstream', 'origin'] as const)(

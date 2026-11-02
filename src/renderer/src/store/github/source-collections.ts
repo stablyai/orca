@@ -7,6 +7,7 @@ import { githubRepoIdentityKey } from '../../../../shared/github/repository-iden
 import { bindingKey } from './task-record-model'
 import { nextProviderRequestId } from './request-coordination'
 import { withBoundedCacheEntry, evictStaleEntries } from './cache-policy'
+import { foldReportedCandidates } from './source-candidate-evidence'
 import { workItemsCacheKey } from './cache-identity'
 import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
 import {
@@ -154,8 +155,8 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
     const same = (a?: WorkItemsCacheSources['issues'], b?: WorkItemsCacheSources['issues']) =>
       a === b || (!!a && !!b && githubRepoIdentityKey(a) === githubRepoIdentityKey(b))
     // Why: older hosts omit the raw candidates. Absent is unavailable evidence, never a contradiction (present null is
-    // unresolved): the collection is admitted under the effective issue/PR sources it reports, and candidate knowledge
-    // is neither checked nor replaced by it.
+    // unresolved): the collection is admitted under the effective issue/PR sources it reports, and only the candidates
+    // it does report are checked against, or recorded over, the owner's.
     const unavailable =
       sources.originCandidate === undefined || sources.upstreamCandidate === undefined
     const preference = repo?.issueSourcePreference
@@ -177,14 +178,8 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
     if (repo && attempt.binding && attempt.owner) {
       const owner = attempt.owner
       const previous = owner.candidates
-      const candidateSources = {
-        issues: null,
-        prs: null,
-        originCandidate: sources.originCandidate,
-        upstreamCandidate: sources.upstreamCandidate
-      }
-      const mappingChanged =
-        !unavailable && previous && !structuralValuesEqual(previous.sources, candidateSources)
+      const candidates = foldReportedCandidates(previous?.sources, sources)
+      const mappingChanged = previous && candidates.contradicted
       const effectiveChanged = Object.values(this.evidence).some(
         (value) =>
           value.attempt.scope === attempt.scope &&
@@ -197,8 +192,8 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
       if (mappingChanged || effectiveChanged || !valid) {
         this.retireOwners([owner])
       }
-      if (!unavailable && (!previous || mappingChanged)) {
-        owner.candidates = { data: null, sources: candidateSources, fetchedAt: Date.now() }
+      if (!previous || !structuralValuesEqual(previous.sources, candidates.sources)) {
+        owner.candidates = { data: null, sources: candidates.sources, fetchedAt: Date.now() }
         this.notify()
       }
     }
