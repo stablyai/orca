@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubPullRequestStateUpdate } from '../../shared/issue-mutation-types'
 import type { GitHubReactionContent } from '../../shared/github/comment-types'
@@ -88,6 +89,7 @@ export class RuntimeGitHubReviewMutationCommands {
       pullRequestId: string
       path: string
       viewed: boolean
+      expectedGhAccount?: GhAccountBinding | null
     }
   ): Promise<Awaited<ReturnType<typeof setPRFileViewed>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
