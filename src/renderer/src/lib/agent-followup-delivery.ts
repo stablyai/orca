@@ -30,8 +30,9 @@ export async function sendFollowupPromptWhenAgentReady(args: {
       submit: true,
       forcePaste: true,
       timeoutMs: Math.max(0, deadline - Date.now()),
-      // An agent that exited during the readiness wait must not have its prompt pasted into the shell.
-      beforePaste: () => agentHoldsPty(ptyId, expectedProcess, true)
+      // Every frame needs this agent (or its wrapper with a child) still in front: one that exited
+      // or was replaced during the wait never gets its prompt.
+      requireConsumer: true
     })
   } catch {
     showGeneratedInputNotice({ agent, text: prompt, certainty: 'unconfirmed' })

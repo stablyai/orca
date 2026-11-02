@@ -20,6 +20,7 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
+import type { GeneratedInputLifetime } from '../../shared/generated-input-lifetime'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
@@ -300,6 +301,13 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   observedReady?: boolean
   /** startup waits for positive readiness; running (the default) refuses only on blocking evidence. */
   generatedIntent?: 'startup' | 'running'
+  /** The request's one lifetime from its acceptance (set by the public entry, in process only). */
+  generatedLifetime?: GeneratedInputLifetime
+  /** The definite input outcome once a frame may have been written, before optional retries
+   *  and turn observation. */
+  onGeneratedOutcome?: (outcome: 'delivered' | 'staged' | 'unconfirmed') => void
+  /** Every frame needs the expected consumer (or a wrapper with a child) in front. */
+  requireConsumer?: boolean
   /** See buildAgentPromptPasteBytes. */
   leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */

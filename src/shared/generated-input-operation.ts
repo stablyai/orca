@@ -14,11 +14,17 @@ import {
 } from './generated-input-observation'
 import {
   admissionScreen,
-  GENERATED_INPUT_BLIND_POLICY,
+  admitsWithoutGrid,
   gridShowsReadyComposer,
-  isBlindEvidence,
   type GeneratedInputEvidence
 } from './generated-input-readiness-evaluation'
+import {
+  GENERATED_INPUT_RETIRED as RETIRED,
+  GENERATED_INPUT_TURN_BUDGET_MS,
+  ownTurn,
+  type GeneratedInputLifetime,
+  type GeneratedInputOutcomeKind
+} from './generated-input-lifetime'
 
 /** Before each frame: `admit` rechecks the input region and the deadline; `dispatching` is called
  *  synchronously as the bytes are handed over and told whether the terminal took them ('unknown'
@@ -34,6 +40,9 @@ export type GeneratedInputSource = GeneratedInputObservationFeed & {
   /** This operation's turn in the terminal's input queue; on abort it rejects and gives up its
    *  place without running anything. Resolves the turn's release. */
   acquire: (signal: AbortSignal) => Promise<() => void>
+  /** After the turn opens: true when the source now targets a different terminal than it
+   *  observed (a default target re-resolved before any byte); its evidence starts over. */
+  takeRetarget?: () => boolean
   read: (signal: AbortSignal) => Promise<GeneratedInputEvidence>
   /** Writes the text as one frame or ordered chunks, each through the gate; false when a frame
    *  was refused or not taken. */
@@ -53,16 +62,18 @@ export type GeneratedInputOperationRequest = {
   agent: TuiAgent | null
   submit: boolean
   intent: GeneratedInputIntent
-  /** Absolute; fixed when the operation was accepted, so queueing spends it. */
-  deadline: number
-  signal?: AbortSignal
+  /** The request's one lifetime, created where it was accepted. */
+  lifetime: GeneratedInputLifetime
   /** A launch's own readiness wait already saw this composer; every veto still applies. */
   observedReady?: boolean
+  /** Every frame needs the expected consumer (or a wrapper with a child) in front, not just any
+   *  non-shell process; unknown still passes. */
+  requireConsumer?: boolean
   /** Runs after a written outcome, still in this operation's queue turn (turn observation). */
   afterWrite?: () => Promise<void>
 }
 
-export type GeneratedInputOperationOutcome = 'delivered' | 'staged' | 'unconfirmed' | 'not-sent'
+export type GeneratedInputOperationOutcome = GeneratedInputOutcomeKind
 
 export type GeneratedInputOperationResult = {
   outcome: GeneratedInputOperationOutcome
@@ -72,7 +83,6 @@ export type GeneratedInputOperationResult = {
   finished: Promise<void>
 }
 
-const RETIRED = Symbol('generated-input-retired')
 // The checks before Enter end early enough for Enter's own check and write to land in the budget.
 const ENTER_COMMIT_MARGIN_MS = 50
 const CHECK_INTERVAL_MS = 150
@@ -83,46 +93,19 @@ export function runGeneratedInputOperation(
   source: GeneratedInputSource,
   request: GeneratedInputOperationRequest
 ): Promise<GeneratedInputOperationResult> {
-  const { agent, submit, deadline } = request
-  const running = request.intent === 'running'
+  const { agent, submit, lifetime } = request
+  let running = request.intent === 'running'
   const readySignal = resolvePasteReadySignal(agent ? TUI_AGENT_CONFIG[agent] : null, submit)
   const permitsQuiet = signalAllowsCompatibilityEvidence(readySignal)
-  const life = new AbortController()
+  const acceptedAt = Date.now()
+  const enterReserveMs =
+    submit && !source.textCarriesEnter
+      ? source.enterReserveMs + AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + ENTER_COMMIT_MARGIN_MS
+      : 0
   let wake: (() => void) | null = null
-  const observation = new GeneratedInputObservation(readySignal, () => wake?.())
-  const progress = { pending: 0, accepted: 0, textDone: false, enter: false }
+  let observation = new GeneratedInputObservation(readySignal, () => wake?.())
   let error: unknown
-
-  const settleFromProgress = (): GeneratedInputOperationOutcome => {
-    if (progress.enter) {
-      return 'delivered'
-    }
-    if (progress.textDone && !submit) {
-      return 'staged'
-    }
-    return progress.accepted > 0 || progress.pending > 0 ? 'unconfirmed' : 'not-sent'
-  }
-  const within = <T>(promise: Promise<T>): Promise<T> =>
-    new Promise<T>((resolve, reject) => {
-      if (life.signal.aborted) {
-        // The work is already running; a retired operation only stops listening to it.
-        promise.catch(() => undefined)
-        reject(RETIRED)
-        return
-      }
-      const retire = (): void => reject(RETIRED)
-      life.signal.addEventListener('abort', retire, { once: true })
-      promise.then(
-        (value) => {
-          life.signal.removeEventListener('abort', retire)
-          resolve(value)
-        },
-        (reason: unknown) => {
-          life.signal.removeEventListener('abort', retire)
-          reject(reason)
-        }
-      )
-    })
+  const within = <T>(promise: Promise<T>): Promise<T> => lifetime.within(promise)
   const nextCheck = (): Promise<void> =>
     within(
       new Promise<void>((resolve) => {
@@ -141,14 +124,22 @@ export function runGeneratedInputOperation(
       })
     )
   const read = async () => {
-    const read = await within(source.read(life.signal))
+    const read = await within(source.read(lifetime.signal))
     // A model still catching up is no blocking evidence for an agent already reading input; what
     // was streamed meanwhile still is.
     const evidence: GeneratedInputEvidence =
       running && read.screen === null ? { ...read, screen: 'unknown' } : read
-    const tail = observation.tail
+    const tail = observation.tail || read.tail || ''
     return { evidence, tail, screen: admissionScreen(evidence, tail) }
   }
+  /** Quiet the no-grid lane needs: a normal quiet window, never more than the budget allows. */
+  const compatibilityQuietMs = (): number =>
+    lifetime.deadline === null
+      ? GENERATED_AGENT_INPUT_QUIET_MS
+      : Math.min(
+          GENERATED_AGENT_INPUT_QUIET_MS,
+          Math.max(0, lifetime.deadline - acceptedAt - enterReserveMs)
+        )
 
   /** Startup proves the agent reads input; running only waits out blocking evidence. */
   const admitted = async (): Promise<boolean> => {
@@ -158,17 +149,14 @@ export function runGeneratedInputOperation(
       const { evidence, tail, screen } = await read()
       const quietMs = Date.now() - observation.lastOutput
       let marker = running || request.observedReady === true || observation.signalled()
-      let current = false
-      if (!marker) {
-        // Blind: nothing can be observed and nothing arrived for a quiet window (not a boot in
-        // progress), so the decided policy applies; never the deadline.
-        current =
-          gridShowsReadyComposer(evidence, agent, readySignal, quietMs) ||
-          (GENERATED_INPUT_BLIND_POLICY === 'deliver' &&
-            isBlindEvidence(evidence, tail) &&
-            quietMs >= GENERATED_AGENT_INPUT_QUIET_MS)
-        marker = current
-      }
+      // Current evidence (a ready grid, or an older host's no-grid lane) is re-read each check;
+      // the no-grid lane needs the expected consumer (or an unknown one) in front.
+      const noGrid =
+        !marker &&
+        admitsWithoutGrid(evidence, tail, agent, readySignal, quietMs, compatibilityQuietMs())
+      const current =
+        noGrid || (!marker && gridShowsReadyComposer(evidence, agent, readySignal, quietMs))
+      marker ||= current
       const quiet =
         !marker &&
         permitsQuiet &&
@@ -181,7 +169,7 @@ export function runGeneratedInputOperation(
           agent,
           screen,
           process: evidence.process,
-          quiet: quiet && !marker
+          quiet: (quiet && !marker) || noGrid || request.requireConsumer === true
         })
         // Output during the read voids quiet; positive evidence survives a busy footer.
         if (accepted && (marker || observed === observation.sequence)) {
@@ -200,118 +188,88 @@ export function runGeneratedInputOperation(
 
   const gate = (enter: boolean): GeneratedInputFrameGate => ({
     admit: async (typedText) => {
-      if (life.signal.aborted) {
+      if (lifetime.retired) {
         return false
       }
       const { evidence, screen } = await read()
       return (
-        !life.signal.aborted &&
-        admitsGeneratedInput({ agent, screen, process: evidence.process, quiet: false, typedText })
+        !lifetime.retired &&
+        admitsGeneratedInput({
+          agent,
+          screen,
+          process: evidence.process,
+          quiet: request.requireConsumer === true,
+          typedText
+        })
       )
     },
-    dispatching: () => {
-      if (life.signal.aborted) {
-        throw RETIRED
-      }
-      progress.pending += 1
-      return (taken) => {
-        if (taken === 'unknown') {
-          return
-        }
-        progress.pending -= 1
-        if (taken) {
-          progress.accepted += 1
-          progress.enter ||= enter
-        }
-      }
-    }
+    dispatching: () => lifetime.dispatching(enter)
   })
   const textGate = gate(source.textCarriesEnter === true && submit)
   const enterGate = gate(true)
   // Text is refused when the budget left cannot also hold its settle wait and Enter.
   const textAdmit = textGate.admit
-  textGate.admit = async (typedText) => {
-    const reserve =
-      submit && !source.textCarriesEnter
-        ? source.enterReserveMs + AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS + ENTER_COMMIT_MARGIN_MS
-        : 0
-    return Date.now() + reserve < deadline && (await textAdmit(typedText))
-  }
-
-  let resolveOutcome!: (outcome: GeneratedInputOperationOutcome) => void
-  const outcome = new Promise<GeneratedInputOperationOutcome>((resolve) => {
-    resolveOutcome = resolve
-  })
-  const retire = (): void => {
-    life.abort()
-    // An abort raised inside a write is read after the writer records whether that write was taken.
-    queueMicrotask(() => resolveOutcome(settleFromProgress()))
-  }
-  const timer = setTimeout(retire, Math.max(0, deadline - Date.now()))
-  if (request.signal?.aborted) {
-    retire()
-  }
-  request.signal?.addEventListener('abort', retire, { once: true })
+  textGate.admit = async (typedText) =>
+    lifetime.deadline !== null &&
+    Date.now() + enterReserveMs < lifetime.deadline &&
+    (await textAdmit(typedText))
 
   const body = async (): Promise<void> => {
-    let release: (() => void) | undefined
+    // The turn is taken in call order and owned from its grant, whatever happens after.
+    const turn = ownTurn(source.acquire(lifetime.signal), lifetime)
     try {
-      // Observation starts with the operation, before its queue turn, and lasts until it ends;
-      // the turn is taken in call order.
-      const observing = within(observation.start(source))
-      const turn = source.acquire(life.signal)
-      turn.then(
-        (granted) => {
-          if (life.signal.aborted) {
-            granted()
-          }
-        },
-        () => undefined
-      )
-      await observing.catch((reason: unknown) => {
+      // Observation starts with the operation, before its queue turn, and lasts until it ends.
+      await within(observation.start(source)).catch((reason: unknown) => {
         if (reason === RETIRED) {
           throw reason
         }
       })
-      release = await within(turn)
-      if (!(await admitted())) {
-        return resolveOutcome(settleFromProgress())
+      await within(turn.granted)
+      // A request with no caller deadline gets its wait-through-dialog budget from here.
+      lifetime.arm(Date.now() + GENERATED_INPUT_TURN_BUDGET_MS)
+      if (source.takeRetarget?.()) {
+        // A replacement terminal is a fresh start: its own evidence, proved like a launch.
+        observation.close()
+        observation = new GeneratedInputObservation(readySignal, () => wake?.())
+        await within(observation.start(source)).catch(() => undefined)
+        running = false
       }
-      if (!(await within(source.writeText(textGate)))) {
-        return resolveOutcome(settleFromProgress())
+      if (!(await admitted()) || !(await within(source.writeText(textGate)))) {
+        return lifetime.settle()
       }
-      progress.textDone = true
-      if (!submit || source.textCarriesEnter) {
-        resolveOutcome(settleFromProgress())
-      } else {
+      lifetime.textDone()
+      if (submit && !source.textCarriesEnter) {
         await within(
-          raceUntil(source.settle(life.signal), deadline - ENTER_COMMIT_MARGIN_MS, life.signal)
+          raceUntil(
+            source.settle(lifetime.signal),
+            (lifetime.deadline ?? 0) - ENTER_COMMIT_MARGIN_MS,
+            lifetime.signal
+          )
         )
-        const entered = await within(source.writeEnter(enterGate))
-        resolveOutcome(settleFromProgress())
-        if (!entered) {
-          return
-        }
+        await within(source.writeEnter(enterGate))
       }
-      if (progress.enter && source.retry) {
-        await within(source.retry(enterGate, life.signal)).catch(() => undefined)
+      // The definite outcome does not wait for optional retries or turn observation.
+      lifetime.settle()
+      const settled = await lifetime.outcome
+      if (settled === 'delivered' && source.retry) {
+        await within(source.retry(enterGate, lifetime.signal)).catch(() => undefined)
       }
-      await request.afterWrite?.()
+      if (settled === 'delivered' || settled === 'staged') {
+        await request.afterWrite?.()
+      }
     } catch (reason) {
       if (reason !== RETIRED) {
         error = reason
       }
-      resolveOutcome(settleFromProgress())
+      lifetime.settle()
     } finally {
-      clearTimeout(timer)
-      request.signal?.removeEventListener('abort', retire)
-      life.abort()
+      lifetime.retire()
       observation.close()
-      release?.()
+      turn.release()
     }
   }
   const finished = body()
-  return outcome.then((settled) => ({ outcome: settled, error, finished }))
+  return lifetime.outcome.then((settled) => ({ outcome: settled, error, finished }))
 }
 
 /** Resolves when `promise` does or at `until`, whichever comes first. */

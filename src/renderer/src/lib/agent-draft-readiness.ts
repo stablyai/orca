@@ -75,6 +75,11 @@ async function readLegacyEvidence(ptyId: string): Promise<GeneratedInputEvidence
           bracketedPaste: null
         }
       }
+      // Only streamed text: never a grid, but a dialog it shows still refuses.
+      const tail = read.terminal.tail.join('\n')
+      if (tail.trim()) {
+        return { screen: 'unknown', process, bracketedPaste: null, tail }
+      }
     } catch {
       // An unanswered read is no observation.
     }

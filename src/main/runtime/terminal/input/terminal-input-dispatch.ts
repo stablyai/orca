@@ -21,7 +21,6 @@ import {
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../shared/generated-agent-input-readiness'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(
@@ -41,7 +40,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     generation: number,
     pastePayload: string,
     options: RuntimeAgentPromptWriteOptions,
-    atTurn?: () => void
+    atTurn?: (ptyId: string) => void,
+    retarget?: { resolve: () => string | null; payloadFor: (ptyId: string) => string }
   ): Promise<{ submits: number; prompt?: RuntimeTerminalPromptDelivery }>
   /** The opt-in path (`onPermission: 'wait'`, `expectedBinding`), pinned to `ptyId`. */
   protected abstract submitTerminalAgentPrompt(
@@ -222,11 +222,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     prompt: string,
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
-    // The deadline is fixed when the host accepts the prompt, so queue residency spends it too.
-    options = {
-      ...options,
-      inputDeadline: options.inputDeadline ?? Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
-    }
     // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
     const payloadFor = (ptyId: string): string => {
       if (options.framing === 'typed') {
@@ -245,7 +240,9 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? this.startRestoredHandlePane(handle, { signal: agentPromptObservationSignal(options) })
+      ? this.startRestoredHandlePane(handle, {
+          signal: options.generatedLifetime?.signal ?? agentPromptObservationSignal(options)
+        })
       : null
     if (starting) {
       const target = await starting
@@ -297,17 +294,16 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       return await this.submitTerminalAgentPrompt(handle, leaf.ptyId, prompt, payload, options)
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
-    const leafPtyId = leaf.ptyId
+    // A default leaf send writes to the PTY the leaf names when its turn opens (a replacement is
+    // admitted afresh); once a byte may have left it is pinned to that PTY.
     const delivery = await this.writeTerminalAgentPrompt(
       handle,
-      leafPtyId,
+      leaf.ptyId,
       generation,
       payload,
       { ...options, promptForSchedule: prompt },
-      () => {
-        this.assertLiveTerminalHandleTargetsPty(handle, leafPtyId)
-        this.assertAgentPromptGeneration(leafPtyId, generation)
-      }
+      (ptyId) => this.assertLiveTerminalHandleTargetsPty(handle, ptyId),
+      { resolve: () => leaf.ptyId, payloadFor }
     )
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
     return {

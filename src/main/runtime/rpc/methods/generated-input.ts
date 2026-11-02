@@ -25,7 +25,8 @@ export const GENERATED_INPUT_METHODS = [
         params.submit,
         params.agent,
         params.intent,
-        params.inputKind
+        params.inputKind,
+        params.requireConsumer
       ])
       const staged = parts.accept(connectionId ?? 'inproc', params, binding)
       if (staged.kind === 'pending') {
@@ -42,6 +43,7 @@ export const GENERATED_INPUT_METHODS = [
         timeoutMs: Math.max(0, staged.deadline - Date.now()),
         ...(params.inputKind ? { inputKind: params.inputKind } : {}),
         ...(params.intent ? { intent: params.intent } : {}),
+        ...(params.requireConsumer ? { requireConsumer: true } : {}),
         // A caller that went away no longer holds the text, so its queued write must not land later.
         ...(signal ? { signal } : {})
       })

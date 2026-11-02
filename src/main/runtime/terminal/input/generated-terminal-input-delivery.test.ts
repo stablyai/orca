@@ -157,12 +157,13 @@ describe('one host transaction for generated input', () => {
       composerReady: true,
       timeoutMs: 1_500
     })
+    // The definite outcome does not wait for the optional retry, which ends with the deadline.
     expect(outcome).toBe('delivered')
-    expect(Date.now() - started).toBeLessThan(1_700)
-    expect(stalledReads).toBeGreaterThan(0)
+    expect(Date.now() - started).toBeLessThan(1_500)
+    await vi.waitFor(() => expect(stalledReads).toBeGreaterThan(0), { timeout: 1_500 })
     const settledWrites = writes.length
     // ast-grep-ignore: test-no-real-time-wait -- the operation's own real timers must run out to show no later write.
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await new Promise((resolve) => setTimeout(resolve, 1_600))
     expect(writes).toHaveLength(settledWrites)
   })
 

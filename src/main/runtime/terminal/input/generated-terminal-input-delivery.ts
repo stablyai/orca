@@ -30,7 +30,15 @@ export async function deliverGeneratedTerminalInput(
 ): Promise<GeneratedInputOutcome> {
   const budget = Math.min(delivery.timeoutMs ?? Infinity, GENERATED_AGENT_INPUT_TIMEOUT_MS)
   const deadline = Date.now() + Math.max(0, budget)
-  return await deliver(runtime, handle, delivery, deadline, { pasted: false, submitted: false })
+  // The definite outcome answers at once; optional retries and turn observation finish behind it.
+  let definite!: (outcome: GeneratedInputOutcome) => void
+  const settled = new Promise<GeneratedInputOutcome>((resolve) => {
+    definite = resolve
+  })
+  return await Promise.race([
+    settled,
+    deliver(runtime, handle, delivery, deadline, { pasted: false, submitted: false }, definite)
+  ])
 }
 
 async function deliver(
@@ -38,7 +46,8 @@ async function deliver(
   handle: string,
   delivery: GeneratedInputDelivery,
   deadline: number,
-  progress: { pasted: boolean; submitted: boolean }
+  progress: { pasted: boolean; submitted: boolean },
+  definite: (outcome: GeneratedInputOutcome) => void
 ): Promise<GeneratedInputOutcome> {
   try {
     const sent = await runtime.sendTerminalAgentPrompt(handle, delivery.text, {
@@ -52,6 +61,8 @@ async function deliver(
       ...(delivery.composerReady !== undefined ? { composerReady: delivery.composerReady } : {}),
       ...(delivery.beforeWrite ? { beforeWrite: delivery.beforeWrite } : {}),
       ...(delivery.signal ? { signal: delivery.signal } : {}),
+      ...(delivery.requireConsumer ? { requireConsumer: true } : {}),
+      onGeneratedOutcome: definite,
       onPasteWritten: () => {
         progress.pasted = true
       },

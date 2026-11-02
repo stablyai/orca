@@ -12,6 +12,7 @@ import {
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { createLegacyGeneratedInputSource } from './agent-draft-readiness'
 import { runGeneratedInputOperation } from '../../../shared/generated-input-operation'
+import { GeneratedInputLifetime } from '../../../shared/generated-input-lifetime'
 import { showGeneratedInputNotice } from './launch-agent-paste-timeout-notice'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
@@ -83,6 +84,8 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   onUnconfirmedDelivery?: () => void
   /** Default startup: the agent was just launched. A running agent refuses only on blocking evidence. */
   intent?: 'startup' | 'running'
+  /** Every frame needs this agent (or a wrapper with a child) in front. */
+  requireConsumer?: boolean
 }): Promise<boolean> {
   const { ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
@@ -95,7 +98,8 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     agent,
     inputKind: 'launch',
     intent: args.intent ?? 'startup',
-    deadline: Date.now() + (timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS)
+    deadline: Date.now() + (timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS),
+    ...(args.requireConsumer ? { requireConsumer: true } : {})
   })
   return reportGeneratedPaste(outcome, { agent, content, onTimeout })
 }
@@ -155,18 +159,27 @@ export type GeneratedPaste = {
   /** startup waits for positive readiness; running (main's direct sends) refuses only on blocking evidence. */
   intent: 'startup' | 'running'
   deadline: number
+  /** Ends the request (a person took the terminal over); a lost answer reads as unconfirmed. */
+  signal?: AbortSignal
+  /** Every frame needs the expected agent (or a wrapper with a child) in front. */
+  requireConsumer?: boolean
 }
 
 /** A capable host admits and writes in one transaction; only an older host gets the client adapter. */
 export async function deliverGeneratedPaste(paste: GeneratedPaste): Promise<GeneratedInputOutcome> {
-  const hosted = await sendGeneratedTerminalInput(paste.ptyId, {
-    text: paste.content,
-    submit: paste.submit,
-    agent: paste.agent ?? null,
-    inputKind: paste.inputKind,
-    intent: paste.intent,
-    timeoutMs: Math.max(0, paste.deadline - Date.now())
-  })
+  const hosted = await sendGeneratedTerminalInput(
+    paste.ptyId,
+    {
+      text: paste.content,
+      submit: paste.submit,
+      agent: paste.agent ?? null,
+      inputKind: paste.inputKind,
+      intent: paste.intent,
+      timeoutMs: Math.max(0, paste.deadline - Date.now()),
+      ...(paste.requireConsumer ? { requireConsumer: true } : {})
+    },
+    paste.signal
+  )
   return hosted ?? (await pasteThroughLegacyHost(paste))
 }
 
@@ -183,7 +196,13 @@ async function pasteThroughLegacyHost(paste: GeneratedPaste): Promise<GeneratedI
       agent: paste.agent ?? null,
       submit: paste.submit,
       intent: paste.intent,
-      deadline: paste.deadline
+      requireConsumer: paste.requireConsumer,
+      // The request's lifetime starts at the producer's call.
+      lifetime: new GeneratedInputLifetime({
+        deadline: paste.deadline,
+        signal: paste.signal,
+        submit: paste.submit
+      })
     }
   )
   return result.outcome

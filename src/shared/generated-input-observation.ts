@@ -7,6 +7,9 @@ import type { DraftPasteReadySignal } from './tui-agent-config'
 const HANDOFF = /\x1b\[\?(?:2004|2031|1049)l/g
 const HANDOFF_CARRY_CHARS = 7
 const TAIL_CHARS = 8 * 1024
+const PENDING_CHARS = 4 * TAIL_CHARS
+// A sequence longer than this is not one an agent paints; it is decoded as it stands.
+const MAX_ESCAPE_CARRY = 4096
 // Cursor-forward (CUF) and column (CHA) moves: how agents paint the gaps between words.
 // oxlint-disable-next-line no-control-regex -- escape sequences.
 const HORIZONTAL_MOVE = /\x1b\[\d*[CG]/g
@@ -24,9 +27,12 @@ export type GeneratedInputObservationFeed = {
 export class GeneratedInputObservation {
   private scanner
   private carry = ''
+  // An escape sequence cut by a chunk boundary, finished by the next chunk before decoding.
+  private escapeCarry = ''
   private tailText = ''
   private replaying = true
-  private readonly pending: string[] = []
+  private pending = ''
+  private pendingTruncated = false
   private dispose: (() => void) | undefined
   private closed = false
   /** Output count; a startup signal refused once is asked again only after new output. */
@@ -46,10 +52,19 @@ export class GeneratedInputObservation {
   /** Starts observing; resolves once the replay is applied, rejects when observation is unavailable. */
   async start(feed: GeneratedInputObservationFeed): Promise<void> {
     const dispose = await feed.observe((data) => {
+      if (this.closed) {
+        return
+      }
       this.lastOutput = Date.now()
       this.sequence += 1
       if (this.replaying) {
-        this.pending.push(data)
+        // Kept in order and bounded while the replay is read; what overflows is older than
+        // any tail could keep, and losing it forfeits any readiness seen before it.
+        this.pending += data
+        if (this.pending.length > PENDING_CHARS) {
+          this.pending = this.pending.slice(-PENDING_CHARS)
+          this.pendingTruncated = true
+        }
         return
       }
       this.scan(data)
@@ -65,8 +80,12 @@ export class GeneratedInputObservation {
     if (replay) {
       this.scan(replay)
     }
-    for (const data of this.pending.splice(0)) {
-      this.scan(data)
+    if (this.pendingTruncated) {
+      this.forgetReadiness()
+    }
+    if (this.pending) {
+      this.scan(this.pending)
+      this.pending = ''
     }
     this.replaying = false
   }
@@ -87,22 +106,38 @@ export class GeneratedInputObservation {
     return this.ready || (this.graceAt !== null && now >= this.graceAt)
   }
 
+  private forgetReadiness(): void {
+    this.scanner = createDraftPasteReadyScanner(this.signal)
+    this.ready = false
+    this.quietArmed = false
+    this.graceAt = null
+  }
+
+  /** Decodes output into the tail incrementally: an escape sequence split across chunks is
+   *  completed by the next one, so a dialog's text never reaches the tail half-decoded. */
+  private appendTail(data: string): void {
+    let text = this.escapeCarry + data
+    const cut = incompleteEscapeStart(text)
+    this.escapeCarry = cut === -1 ? '' : text.slice(cut)
+    if (cut !== -1) {
+      text = text.slice(0, cut)
+    }
+    // Word gaps painted as cursor moves stay gaps, so prompts and key hints read as text.
+    const decoded = stripAnsiEscapeSequences(text.replace(HORIZONTAL_MOVE, ' '))
+    this.tailText = (this.tailText + decoded.replace(/\r\n?/g, '\n')).slice(-TAIL_CHARS)
+  }
+
   private scan(data: string): void {
     const combined = this.carry + data
     this.carry = combined.slice(-HANDOFF_CARRY_CHARS)
     const last = [...combined.matchAll(HANDOFF)].at(-1)
     if (last) {
-      this.scanner = createDraftPasteReadyScanner(this.signal)
-      this.ready = false
-      this.quietArmed = false
-      this.graceAt = null
+      this.forgetReadiness()
       this.tailText = ''
+      this.escapeCarry = ''
       data = combined.slice(last.index + last[0].length)
     }
-    // Word gaps painted as cursor moves stay gaps, so prompts and key hints read as text.
-    const spaced = data.replace(HORIZONTAL_MOVE, ' ')
-    const text = stripAnsiEscapeSequences(spaced).replace(/\r\n?/g, '\n')
-    this.tailText = (this.tailText + text).slice(-TAIL_CHARS)
+    this.appendTail(data)
     const result = this.scanner.observe(data)
     this.ready ||= result.ready
     this.quietArmed ||= result.armQuietTimer
@@ -112,4 +147,27 @@ export class GeneratedInputObservation {
       this.graceAt ??= Date.now() + result.readyAfterMs
     }
   }
+}
+
+/** Where an escape sequence at the end of `text` starts if it is not finished yet, else -1. */
+function incompleteEscapeStart(text: string): number {
+  const start = text.lastIndexOf('\x1b')
+  if (start === -1 || text.length - start > MAX_ESCAPE_CARRY) {
+    return -1
+  }
+  const kind = text[start + 1]
+  if (kind === undefined) {
+    return start
+  }
+  const body = text.slice(start + 2)
+  if (kind === '[') {
+    // CSI: parameter and intermediate bytes, then one final byte in @..~.
+    return /^[0-?]*[ -/]*[@-~]/.test(body) ? -1 : start
+  }
+  if (kind === ']' || kind === 'P' || kind === 'X' || kind === '^' || kind === '_') {
+    // OSC/DCS/SOS/PM/APC: until BEL or ST.
+    // oxlint-disable-next-line no-control-regex -- the terminators are control characters.
+    return /\x07|\x1b\\/.test(body) ? -1 : start
+  }
+  return -1
 }

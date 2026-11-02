@@ -53,6 +53,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
   let phase: DraftPhase = 'capturing'
   let draft = ''
   let observation: AbortController | null = null
+  let takeover: AbortController | null = null
   let liveInputSinceBind = false
   let agent: TuiAgent | null | undefined
 
@@ -88,6 +89,11 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     if (session.transport.getPtyId() !== null) {
       // Why always live: a trust or permission prompt on screen must take the user's keys.
       liveInputSinceBind ||= wasUserInput
+      // A person typing after the handoff takes the terminal over: the held keys' request is
+      // cancelled before this input is forwarded, and its outcome recovers them.
+      if (wasUserInput) {
+        takeover?.abort()
+      }
       if (phase === 'capturing') {
         // Capture only before first bind; later unbinds leave input holding/delivery to the host.
         phase = draft === '' ? 'closed' : 'delivering'
@@ -136,6 +142,8 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     draft = ''
     phase = 'closed'
     observation = null
+    const cancel = new AbortController()
+    takeover = cancel
     void deliverGeneratedPaste({
       ptyId,
       content,
@@ -144,10 +152,26 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       inputKind: 'driving',
       intent: 'startup',
       // The same deadline the pane's observation spent: no second, fresh budget.
-      deadline
+      deadline,
+      signal: cancel.signal
     }).then((outcome) => {
-      if (outcome === 'not-sent' || outcome === 'unconfirmed') {
-        showHeldKeysNotice(draftAgent, content, outcome)
+      if (takeover === cancel) {
+        takeover = null
+      }
+      // Exhaustive: every outcome either hands the keys over or recovers them exactly once.
+      switch (outcome) {
+        case 'staged':
+        case 'delivered':
+          return
+        case 'not-sent':
+        case 'target-gone':
+          return showHeldKeysNotice(draftAgent, content, 'not-sent')
+        case 'unconfirmed':
+          return showHeldKeysNotice(draftAgent, content, 'unconfirmed')
+        default: {
+          const unhandled: never = outcome
+          return unhandled
+        }
       }
     })
   }

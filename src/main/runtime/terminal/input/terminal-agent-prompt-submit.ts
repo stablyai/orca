@@ -78,7 +78,8 @@ export abstract class OrcaRuntimeWithSubmitTerminalAgentPrompt extends OrcaRunti
           }
         : {}),
       subscribeExit: (exited) => this.subscribeToPtyExit(ptyId, exited),
-      signal: agentPromptObservationSignal(options)
+      // The request's lifetime: no timeout of its own unless the caller set a deadline (main).
+      signal: options.generatedLifetime?.signal ?? agentPromptObservationSignal(options)
     })
   }
 }

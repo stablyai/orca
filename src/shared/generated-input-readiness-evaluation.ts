@@ -19,6 +19,8 @@ export type GeneratedInputEvidence = {
   process: GeneratedInputProcess
   /** The terminal's current bracketed-paste mode, null when the source cannot tell. */
   bracketedPaste: boolean | null
+  /** Text the source itself holds without a grid (an older host's stream read): veto evidence. */
+  tail?: string
 }
 
 /**
@@ -45,9 +47,31 @@ function tailScreen(tail: string): RuledScreen {
   return { lines: tail.split('\n'), alternateScreen: false }
 }
 
-/** Nothing about the input region can be observed at all. */
-export function isBlindEvidence(evidence: GeneratedInputEvidence, tail: string): boolean {
-  return evidence.screen === 'unknown' && !tail.trim()
+/**
+ * Startup with no grid (only an older host reports none): unknown input state is not a dialog.
+ * With nothing observable the decided blind policy admits at once; a dialog-free streamed tail
+ * admits on compatibility signals once quiet for the window the budget allows, as main's
+ * expected-process fallback did. Either way the caller still checks the observed tail for a
+ * dialog and the process for a shell or another agent; more dialog-free evidence never refuses
+ * what less would admit. Agents whose composer paints before it takes input stay on their marker.
+ */
+export function admitsWithoutGrid(
+  evidence: GeneratedInputEvidence,
+  tail: string,
+  agent: TuiAgent | null,
+  signal: DraftPasteReadySignal,
+  quietMs: number,
+  requiredQuietMs: number
+): boolean {
+  if (evidence.screen !== 'unknown') {
+    return false
+  }
+  if (!tail.trim()) {
+    return GENERATED_INPUT_BLIND_POLICY === 'deliver'
+  }
+  return (
+    agent !== 'codex' && signalAllowsCompatibilityEvidence(signal) && quietMs >= requiredQuietMs
+  )
 }
 
 /** Positive evidence on the current grid that the agent reads input now. Idle rules that settle

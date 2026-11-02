@@ -40,6 +40,7 @@ const f = vi.hoisted((): Facts => ({
   process: null,
   pasteMode: false,
   observers: [],
+  backlog: '',
   writes: [],
   runtime: null,
   handle: '',

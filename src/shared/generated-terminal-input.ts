@@ -21,6 +21,9 @@ export type GeneratedInputRequest = {
   inputKind?: 'launch' | 'driving'
   /** startup waits for positive readiness; running (default) refuses only on blocking evidence. */
   intent?: 'startup' | 'running'
+  /** Every frame needs the expected agent (or a wrapper with a child) in front: a follow-up whose
+   *  consumer exited or changed is not written. Older hosts ignore it. */
+  requireConsumer?: boolean
 }
 
 /** Text over one remote request's budget travels as ordered parts the host joins before admitting. */
