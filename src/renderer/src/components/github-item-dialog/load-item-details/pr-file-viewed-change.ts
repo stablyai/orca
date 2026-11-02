@@ -1,3 +1,5 @@
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
 import { toast } from 'sonner'
 import { setPRFileViewedForRepo } from '@/components/github/github-work-item-comment-mutations'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
@@ -16,6 +18,8 @@ export async function syncPRFileViewedState(args: {
   repoPath: string | null
   sourceContext?: TaskSourceContext | null
   projectOrigin?: GitHubItemDialogProjectOrigin
+  expectedGhAccount?: GhAccountBinding | null
+  target?: RuntimeClientTarget
   path: string
   viewed: boolean
 }): Promise<boolean> {
@@ -50,6 +54,8 @@ export async function syncPRFileViewedState(args: {
       sourceContext,
       prNumber: workItem.number,
       prRepo: resolvePullRequestRepo(workItem, projectOrigin),
+      expectedGhAccount: args.expectedGhAccount,
+      target: args.target,
       pullRequestId,
       path,
       viewed

@@ -785,6 +785,7 @@ it.each([
           timeoutMs: 15_000,
           expectedEnvironmentPairingRevision: revision,
           expectedEnvironmentRuntimeId: undefined,
+          paramsForStatus: expect.any(Function),
           beforeSend: expect.any(Function)
         }
       )

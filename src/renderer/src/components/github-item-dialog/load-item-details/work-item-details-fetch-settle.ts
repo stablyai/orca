@@ -38,6 +38,7 @@ export async function loadCanonicalGitHubTaskDetails(
       type: 'issue',
       number: target.item.number,
       ownerRepo: target.ownerRepo,
+      expectedGhAccount: target.expectedGhAccount,
       canonical: true,
       accepts: () => accepts() && owned(),
       rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)

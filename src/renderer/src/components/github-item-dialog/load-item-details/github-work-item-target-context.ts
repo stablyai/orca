@@ -88,7 +88,13 @@ export function useGitHubItemTargetIdentity({
     bindingKey
   ])
 
-  return { resource, detailsCacheKey, canUseDetailsRepoContext, operationTarget: owner.target }
+  return {
+    resource,
+    detailsCacheKey,
+    canUseDetailsRepoContext,
+    operationTarget: owner.target,
+    expectedGhAccount: owner.expectedGhAccount
+  }
 }
 
 export function useGitHubItemTargetContext({

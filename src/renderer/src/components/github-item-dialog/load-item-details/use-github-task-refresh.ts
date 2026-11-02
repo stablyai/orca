@@ -225,6 +225,7 @@ export function useGitHubTaskRefresh({
   return {
     binding,
     ...identity,
+    expectedGhAccount: target ? target.expectedGhAccount : identity.expectedGhAccount,
     refreshTask,
     refreshing,
     acceptedRefresh,

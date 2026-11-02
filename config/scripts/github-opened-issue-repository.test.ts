@@ -153,7 +153,11 @@ const unsupported = () =>
     error: { code: 'method_not_found', message: 'unsupported' }
   })
 
-type MetadataArgs = { repoPath: string; ownerRepo?: GitHubOwnerRepo }
+type MetadataArgs = {
+  repoPath: string
+  ownerRepo?: GitHubOwnerRepo
+  expectedGhAccount?: Parameters<typeof listLabels>[5]
+}
 
 beforeEach(() => {
   fixture.store = null
@@ -184,9 +188,23 @@ beforeEach(() => {
       gh: {
         updateIssue: fixture.apiUpdate,
         listLabels: (args: MetadataArgs) =>
-          listLabels(args.repoPath, fixture.preference, null, {}, args.ownerRepo),
+          listLabels(
+            args.repoPath,
+            fixture.preference,
+            null,
+            {},
+            args.ownerRepo,
+            args.expectedGhAccount
+          ),
         listAssignableUsers: (args: MetadataArgs) =>
-          listAssignableUsers(args.repoPath, fixture.preference, null, {}, args.ownerRepo)
+          listAssignableUsers(
+            args.repoPath,
+            fixture.preference,
+            null,
+            {},
+            args.ownerRepo,
+            args.expectedGhAccount
+          )
       }
     }
   })

@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { isWebClientLocation } from './web-client-location'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../shared/source-control-runtime-capabilities'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
@@ -12,6 +13,7 @@ import {
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/web-runtime-request-registry'
 import {
+  GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
 } from '../../../shared/task-source-runtime-capabilities'
@@ -20,9 +22,14 @@ import {
 export async function callGitHubTargetOperation<TResult>(args: {
   target: RuntimeClientTarget
   ownerRepo?: GitHubOwnerRepo | null
+  expectedGhAccount?: GhAccountBinding | null
   method: string
   params: Record<string, unknown>
-  local: (exact: { ownerRepo?: GitHubOwnerRepo; canonical?: boolean }) => Promise<TResult>
+  local: (exact: {
+    ownerRepo?: GitHubOwnerRepo
+    canonical?: boolean
+    expectedGhAccount?: GhAccountBinding | null
+  }) => Promise<TResult>
   read?: boolean
   canonical?: boolean
   rpcOptions?: Parameters<typeof callRuntimeRpc>[3]
@@ -36,7 +43,8 @@ export async function callGitHubTargetOperation<TResult>(args: {
   if (target.kind === 'local') {
     return args.local({
       ...(args.ownerRepo ? { ownerRepo: args.ownerRepo } : {}),
-      ...(args.canonical !== undefined ? { canonical: args.canonical } : {})
+      ...(args.canonical !== undefined ? { canonical: args.canonical } : {}),
+      ...(args.expectedGhAccount !== undefined ? { expectedGhAccount: args.expectedGhAccount } : {})
     })
   }
   const environmentId = target.environmentId
@@ -87,10 +95,24 @@ export async function callGitHubTargetOperation<TResult>(args: {
       (explicitIntent || (legacyCanonical ? args.canonical === true : supported))
         ? { ownerRepo: args.ownerRepo }
         : {}),
-      ...(explicitIntent && args.canonical !== undefined ? { canonical: args.canonical } : {})
+      ...(explicitIntent && args.canonical !== undefined ? { canonical: args.canonical } : {}),
+      ...(args.expectedGhAccount !== undefined &&
+      status?.capabilities?.includes(GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY)
+        ? { expectedGhAccount: args.expectedGhAccount }
+        : {})
     },
     {
       ...args.rpcOptions,
+      ...(status === null && args.expectedGhAccount !== undefined
+        ? {
+            paramsForStatus: (observed: RuntimeStatus | null) => ({
+              ...args.params,
+              ...(observed?.capabilities?.includes(GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY)
+                ? { expectedGhAccount: args.expectedGhAccount }
+                : {})
+            })
+          }
+        : {}),
       timeoutMs: args.timeoutMs ?? 30_000,
       expectedEnvironmentPairingRevision: revision,
       expectedEnvironmentRuntimeId:

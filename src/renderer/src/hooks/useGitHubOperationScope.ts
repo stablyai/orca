@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import { useShallow } from 'zustand/react/shallow'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { webRuntimeState } from '@/web/preload-api/web-runtime-session'
@@ -28,6 +29,10 @@ export function useGitHubOperationOwner(args: {
       const environmentId = target.kind === 'environment' ? target.environmentId : null
       return {
         environmentId,
+        hasRepo: repo !== null,
+        accountBound: repo?.ghAccount !== undefined,
+        accountHost: repo?.ghAccount?.host,
+        accountUser: repo?.ghAccount?.user,
         issueSourcePreference: repo?.issueSourcePreference,
         scope: JSON.stringify([
           target.kind,
@@ -50,6 +55,14 @@ export function useGitHubOperationOwner(args: {
   return useMemo(
     () => ({
       ...selected,
+      expectedGhAccount: !selected.hasRepo
+        ? undefined
+        : selected.accountBound
+          ? (normalizeGhAccountBinding({
+              host: selected.accountHost,
+              user: selected.accountUser
+            }) ?? undefined)
+          : null,
       target: selected.environmentId
         ? { kind: 'environment' as const, environmentId: selected.environmentId }
         : { kind: 'local' as const }

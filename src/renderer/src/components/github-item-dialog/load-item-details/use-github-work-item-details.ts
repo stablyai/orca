@@ -53,6 +53,7 @@ export function useGitHubWorkItemDetails({
     detailsCacheKey,
     canUseDetailsRepoContext,
     operationTarget,
+    expectedGhAccount,
     ...refresh
   } = useGitHubTaskRefresh({
     workItem,
@@ -160,6 +161,7 @@ export function useGitHubWorkItemDetails({
             sourceContext,
             ownerRepo: resource?.repository,
             target: operationTarget,
+            expectedGhAccount,
             item: workItem
           },
           cache,
@@ -176,6 +178,7 @@ export function useGitHubWorkItemDetails({
     detailsCacheKey,
     resource,
     operationTarget,
+    expectedGhAccount,
     rejectedCache,
     invalidOpenedItem,
     refetchTick,
@@ -260,6 +263,8 @@ export function useGitHubWorkItemDetails({
         repoPath,
         sourceContext,
         projectOrigin,
+        expectedGhAccount,
+        target: operationTarget,
         path,
         viewed
       })
@@ -269,6 +274,8 @@ export function useGitHubWorkItemDetails({
       details?.pullRequestId,
       detailsCacheKey,
       projectOrigin,
+      operationTarget,
+      expectedGhAccount,
       repoPath,
       sourceContext,
       displayWorkItem,

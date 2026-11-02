@@ -1,3 +1,7 @@
+import {
+  GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,
+  GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
+} from '../../../../shared/task-source-runtime-capabilities'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import {
   RUNTIME_PROTOCOL_VERSION,
@@ -31,11 +35,13 @@ vi.mock('./web-runtime-session', async () => {
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ repos: [] }) } }))
 const ownerRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }
 const effects: unknown[] = []
+let accountCap = false
 let afterProbe: (() => void) | undefined
 let onQueuedWrite: (() => void) | undefined
 beforeEach(() => {
   clearRuntimeCompatibilityCache()
   effects.length = 0
+  accountCap = false
   afterProbe = undefined
   onQueuedWrite = undefined
   network.environment.pairingRevision = 1
@@ -47,7 +53,15 @@ beforeEach(() => {
       const runtimeId = network.client.runtimeId
       const result = {
         runtimeId,
-        capabilities: [exact],
+        capabilities: [
+          exact,
+          ...(accountCap
+            ? [
+                GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,
+                GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
+              ]
+            : [])
+        ],
         runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
         minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
       }
@@ -159,3 +173,54 @@ it('retains a definitive mutation response when pairing changes after physical a
   answer({ id: 'ack', ok: true, result: { ok: true }, _meta: { runtimeId: 'a' } })
   await expect(pending).resolves.toMatchObject({ ok: true, result: { ok: true } })
 })
+
+it.each([false, true])(
+  'keeps all four browser request paths on the observed declaration without leaking an ignored expectation; capable=%s',
+  async (capable) => {
+    accountCap = capable
+    const expectedGhAccount = { host: 'github.corp', user: 'Alice' }
+    const terminal = network.client.call.getMockImplementation()!
+    network.client.call.mockImplementation(async (method, params) => {
+      const reply = await terminal(method, params)
+      if (method === 'status.get') {
+        return reply
+      }
+      if (method === 'github.workItemDetails') {
+        return {
+          ...reply,
+          result: {
+            item: { type: 'pr', number: 93, url: 'https://github.corp/fork/widgets/pull/93' },
+            body: 'existing result',
+            comments: []
+          }
+        }
+      }
+      return { ...reply, result: method === 'github.setPRFileViewed' ? true : [] }
+    })
+    const api = createGitHubApi()
+    const request = { repoId: 'clone', repoPath: '/clone', ownerRepo, expectedGhAccount }
+    expect((await api.workItemDetails({ ...request, type: 'pr', number: 93 }))?.body).toBe(
+      'existing result'
+    )
+    await expect(api.listLabels(request)).resolves.toEqual([])
+    await expect(api.listAssignableUsers(request)).resolves.toEqual([])
+    await expect(
+      api.setPRFileViewed({
+        ...request,
+        prRepo: ownerRepo,
+        pullRequestId: 'PR_93',
+        path: 'same.ts',
+        viewed: true
+      })
+    ).resolves.toBe(true)
+    expect(effects).toHaveLength(4)
+    for (const payload of effects) {
+      expect(payload).toMatchObject({ repo: 'id:clone' })
+      if (capable) {
+        expect(payload).toHaveProperty('expectedGhAccount', expectedGhAccount)
+      } else {
+        expect(payload).not.toHaveProperty('expectedGhAccount')
+      }
+    }
+  }
+)
