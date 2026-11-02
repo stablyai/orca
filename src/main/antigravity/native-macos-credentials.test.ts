@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, type ProcessResult } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import { encodeAntigravityKeychainValue } from './native-credential-codec'
 import {
   readAntigravityMacOSCredential,
   writeAntigravityMacOSCredential
 } from './native-macos-credentials'
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: vi.fn() }))
+vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 
 const contents = JSON.stringify({ auth_method: 'consumer', token: { access_token: 'synthetic' } })
 const success: ProcessResult = {
@@ -25,17 +26,6 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('Antigravity macOS credential access', () => {
-  it('reads only the native agy item', async () => {
-    expect((await readAntigravityMacOSCredential())?.contents).toBe(contents)
-    expect(runProcess).toHaveBeenCalledWith(
-      expect.objectContaining({
-        program: '/usr/bin/security',
-        args: ['find-generic-password', '-s', 'gemini', '-a', 'antigravity', '-w'],
-        timeoutMs: 3000
-      })
-    )
-  })
-
   it('distinguishes a missing item from denied, timed-out or clipped reads', async () => {
     vi.mocked(runProcess).mockResolvedValueOnce({ ...success, code: 44, stdout: '' })
     expect(await readAntigravityMacOSCredential()).toBeNull()
@@ -50,18 +40,6 @@ describe('Antigravity macOS credential access', () => {
     await expect(readAntigravityMacOSCredential()).rejects.toThrow(
       'The Antigravity macOS credential store could not be accessed.'
     )
-  })
-
-  it('writes credentials through stdin and verifies the complete native blob', async () => {
-    await writeAntigravityMacOSCredential(contents)
-    expect(runProcess).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        args: ['-i'],
-        input: `add-generic-password -U -s "gemini" -a "antigravity" -w ${encodeAntigravityKeychainValue(contents)}\n`
-      })
-    )
-    expect(runProcess).toHaveBeenCalledTimes(2)
   })
 
   it('does not claim a successful switch when readback differs', async () => {

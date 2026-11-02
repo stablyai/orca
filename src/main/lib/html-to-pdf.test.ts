@@ -25,7 +25,12 @@ vi.mock('electron', () => ({
       once: (event: string, listener: (...args: unknown[]) => void) => {
         fake.handlers.set(event, listener)
       },
-      executeJavaScript: fake.images,
+      removeListener: (event: string, listener: (...args: unknown[]) => void) => {
+        if (fake.handlers.get(event) === listener) {
+          fake.handlers.delete(event)
+        }
+      },
+      mainFrame: { executeJavaScript: fake.images },
       printToPDF: fake.print
     }
     loadFile = fake.load
@@ -67,6 +72,56 @@ afterEach(() => {
 })
 
 describe('htmlToPdf resource ownership', () => {
+  it('does not create a document for an already-aborted request', async () => {
+    const controller = new AbortController()
+    const error = new Error('request retired')
+    controller.abort(error)
+
+    await expect(htmlToPdf(HTML, controller.signal)).rejects.toBe(error)
+
+    expect(fake.write).not.toHaveBeenCalled()
+    expect(fake.construct).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(['success', 'failure', 'abort'] as const)(
+    'detaches conversion listeners after %s',
+    async (outcome) => {
+      const controller = new AbortController()
+      const added = vi.spyOn(controller.signal, 'addEventListener')
+      const removed = vi.spyOn(controller.signal, 'removeEventListener')
+      const images = Promise.withResolvers<void>()
+      fake.images.mockReturnValueOnce(images.promise)
+      const error = new Error('request retired or renderer failed')
+      const result = htmlToPdf(HTML, controller.signal)
+      const assertion =
+        outcome === 'success'
+          ? expect(result).resolves.toBe(PDF)
+          : expect(result).rejects.toBe(error)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(added).toHaveBeenCalledWith('abort', expect.any(Function), { once: true })
+
+      if (outcome === 'abort') {
+        controller.abort(error)
+      } else if (outcome === 'failure') {
+        images.reject(error)
+      } else {
+        images.resolve()
+      }
+      await assertion
+
+      const listener = added.mock.calls.find(([event]) => event === 'abort')?.[1]
+      expect(listener).toBeTypeOf('function')
+      expect(removed).toHaveBeenCalledWith('abort', listener)
+      expect(fake.handlers.size).toBe(0)
+      expect(fake.files.size).toBe(0)
+      expect(fake.destroy).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+      images.reject(new Error('late image failure'))
+      await Promise.resolve()
+    }
+  )
+
   it('removes the temporary document when window construction throws', async () => {
     const error = new Error('window construction failed')
     fake.construct.mockImplementation(() => {

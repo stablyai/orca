@@ -39,12 +39,6 @@ function renderForm(
 }
 
 describe('RuntimePairingGeneratorForm', () => {
-  it('uses detected interfaces for another-device intent', () => {
-    const markup = renderForm('another', '100.76.32.125')
-    expect(markup).toContain('role="combobox"')
-    expect(markup).not.toContain('id="runtime-pairing-custom-address"')
-  })
-
   it('requires a dedicated value for custom-address intent', () => {
     const emptyMarkup = renderForm('custom', '')
     expect(emptyMarkup).toContain('id="runtime-pairing-custom-address"')

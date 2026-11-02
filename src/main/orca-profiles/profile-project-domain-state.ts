@@ -26,7 +26,7 @@ export type ReadProfileProjectTransferResult = ReadProfileStateResult & {
   documents?: readonly ProfileStateParsedDocument[]
 }
 
-/** Keep checked domain values for transfer without joining and reparsing the complete profile. */
+/** Preserve checked domain values without reparsing the whole profile. */
 export function readProfileProjectTransferState(
   profileId: string,
   userDataPath: string

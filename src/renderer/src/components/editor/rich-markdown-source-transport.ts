@@ -33,8 +33,7 @@ export function isLegacyRichMarkdownTransportBody(value: string): boolean {
 }
 
 export function isReservedRichMarkdownTransportBody(value: string): boolean {
-  // Why: a foreign editor's valid keyed envelope is authored text here, not
-  // a document link whose target happens to resemble transport metadata.
+  // Foreign keyed envelopes are authored text here and must not become document links.
   return isLegacyRichMarkdownTransportBody(value) || TRANSPORT_BODY_PATTERN.test(value)
 }
 

@@ -24,10 +24,15 @@ import { AiVaultScannerServiceClient } from './session-scanner-service-client'
 import { getAiVaultServiceEntryPath } from './session-scanner-service-entry-path'
 import { lowerAiVaultServicePriority } from './session-scanner-service-priority'
 import type {
+  AiVaultServiceResultValue,
   AiVaultServiceScanOptions,
   AiVaultServiceSubagentRequest,
   AiVaultSessionSearchInit
 } from './session-scanner-service-protocol'
+import {
+  requestLocalAiVaultScan,
+  type LocalAiVaultScanProgressHandle
+} from './ai-vault-local-scan-progress'
 
 export function spawnAiVaultServiceProcess(): ChildProcess {
   const entryPath = getAiVaultServiceEntryPath()
@@ -46,6 +51,12 @@ export function spawnAiVaultServiceProcess(): ChildProcess {
 }
 
 let sharedClient: AiVaultScannerServiceClient | null = null
+let idleTimeoutMs: number | undefined
+
+/** Must run before the first request; the shared client reads it once. */
+export function setAiVaultServiceIdleTimeoutMs(timeoutMs: number): void {
+  idleTimeoutMs = timeoutMs
+}
 
 function getSharedClient(): AiVaultScannerServiceClient {
   sharedClient ??= new AiVaultScannerServiceClient({
@@ -55,20 +66,25 @@ function getSharedClient(): AiVaultScannerServiceClient {
       sessionParseCache: getSessionParseCachePersistenceOptions(),
       sessionSearch: sessionSearchServiceInit()
     }),
-    onStderr: (text) => console.error('[ai-vault-service]', text.trimEnd())
+    onStderr: (text) => console.error('[ai-vault-service]', text.trimEnd()),
+    idleTimeoutMs
   })
   return sharedClient
 }
 
 export function scanAiVaultSessionsInService(
   options: AiVaultServiceScanOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  progress?: LocalAiVaultScanProgressHandle
 ): Promise<AiVaultListResult> {
   return withSpan('aiVault.scan.service', async (span) => {
-    const value = await getSharedClient().request<{
-      result: AiVaultListResult
-      durationMs: number
-    }>({ type: 'request', operation: 'scan', options }, signal)
+    const value = await requestLocalAiVaultScan(
+      (listener) =>
+        getSharedClient().request<
+          Extract<AiVaultServiceResultValue, { operation: 'scan' }>['value']
+        >({ type: 'request', operation: 'scan', options }, signal, listener),
+      { progress }
+    )
     span.setAttribute('serviceDurationMs', value.durationMs)
     span.setAttribute('sessions', value.result.sessions.length)
     return value.result
@@ -109,18 +125,26 @@ export function searchSessionsInService(
 }
 
 export function sessionSearchStatusInService(): Promise<AiVaultSearchStatus> {
-  return getSharedClient().request({ type: 'request', operation: 'searchStatus' })
+  return getSharedClient().request({
+    type: 'request',
+    operation: 'searchStatus'
+  })
 }
 
 export function reconcileSessionSearchInService(): Promise<void> {
-  return getSharedClient().request({ type: 'request', operation: 'searchReconcile' })
+  return getSharedClient().request({
+    type: 'request',
+    operation: 'searchReconcile'
+  })
 }
 
 export function clearSessionSearchInService(): Promise<void> {
-  return getSharedClient().request({ type: 'request', operation: 'searchClear' })
+  return getSharedClient().request({
+    type: 'request',
+    operation: 'searchClear'
+  })
 }
 
-/** Boot and every settings change: push the policy and keep a child while the index runs. */
 export function updateSessionSearchInService(init: AiVaultSessionSearchInit): void {
   getSharedClient().updateSessionSearch(init)
 }
@@ -129,7 +153,6 @@ export function invalidateAiVaultServiceCache(paths: string[]): Promise<void> {
   return sharedClient?.invalidate(paths) ?? Promise.resolve()
 }
 
-/** A forced refresh is a deliberate user action, so it reopens the restart circuit. */
 export function clearAiVaultServiceRestartCircuit(): void {
   sharedClient?.clearRestartCircuit()
 }
@@ -137,4 +160,5 @@ export function clearAiVaultServiceRestartCircuit(): void {
 export function resetAiVaultScannerServiceForTests(): void {
   sharedClient?.dispose()
   sharedClient = null
+  idleTimeoutMs = undefined
 }

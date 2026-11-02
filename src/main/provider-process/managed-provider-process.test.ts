@@ -1,7 +1,10 @@
-import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 import { spawnManagedProviderProcess } from './managed-provider-process'
@@ -21,23 +24,22 @@ afterEach(() => {
 })
 
 function fakeChild(pid: number | null = 9_999_999) {
-  const child = Object.assign(new EventEmitter(), {
+  const child = Object.assign(createFakePipedChild(), {
     pid: pid ?? undefined,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  const spawn = vi.fn<typeof spawnProcess>(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The managed lifecycle reads only events, pid, streams and kill from this fixture.
-    return child as unknown as ReturnType<typeof spawnProcess>
+  const spawn = vi.fn<PipedProcessSpawner>(() => {
+    return child
   })
   return { child, spawn }
 }
 
 function launch(fixture: ReturnType<typeof fakeChild>, platform: NodeJS.Platform = 'win32') {
   return spawnManagedProviderProcess(
-    { command: 'fixture-provider', args: ['serve'], cwd: '/workspace' },
+    { command: 'fixture-provider', args: ['serve'], cwd: tmpdir() },
     {
       spawnImpl: fixture.spawn,
       platform,
@@ -194,7 +196,7 @@ describe('managed provider process', () => {
 
     const supervisedLaunch = (fixture: ReturnType<typeof fakeChild>) =>
       spawnManagedProviderProcess(
-        { command: 'fixture-provider', args: ['serve'], cwd: '/workspace' },
+        { command: 'fixture-provider', args: ['serve'], cwd: tmpdir() },
         {
           spawnImpl: fixture.spawn,
           platform: 'linux',
@@ -218,6 +220,58 @@ describe('managed provider process', () => {
     await new Promise((resolve) => setImmediate(resolve))
     denied.child.emit('exit', 127, null)
     expect(deniedManaged.executableMissing).toBe(false)
+  })
+
+  // Direct (Windows) and supervised (POSIX) spawns: Node names what it spawned, never the folder.
+  it.each(['win32', 'linux'] as const)(
+    'names a deleted working folder, not the CLI, when a real %s spawn fails there',
+    async (platform) => {
+      const parent = mkdtempSync(join(tmpdir(), 'orca-provider-cwd-'))
+      try {
+        // Found on PATH, so only the missing folder can fail the spawn.
+        const managed = spawnManagedProviderProcess(
+          { command: basename(process.execPath), args: ['-e', ''], cwd: join(parent, 'deleted') },
+          {
+            platform,
+            policy: () => ({ gracefulExitMs: PROVIDER_SUPERVISOR_MAX_STOP_MS, forcedExitMs: 50 }),
+            inheritedEnv: { PATH: dirname(process.execPath) },
+            site: 'fixture-provider-missing-cwd'
+          }
+        )
+        await managed.exitPromise
+        expect(managed.executableMissing).toBe(false)
+        expect(managed.spawnAbsence).toBe('launchFolder')
+      } finally {
+        rmSync(parent, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it("never blames the agent's CLI when the supervisor binary itself is gone", () => {
+    const execPath = process.execPath
+    // Orca's binary replaced mid-update: the supervisor spawn finds no such file.
+    const gone = join(tmpdir(), 'orca-updated-away', 'Orca')
+    Object.defineProperty(process, 'execPath', { configurable: true, value: gone })
+    try {
+      const fixture = fakeChild(null)
+      const managed = spawnManagedProviderProcess(
+        { command: 'fixture-provider', args: ['serve'], cwd: tmpdir() },
+        {
+          spawnImpl: fixture.spawn,
+          platform: 'linux',
+          site: 'fixture-provider-teardown',
+          policy: () => ({ gracefulExitMs: PROVIDER_SUPERVISOR_MAX_STOP_MS, forcedExitMs: 50 })
+        }
+      )
+      fixture.child.emit(
+        'error',
+        Object.assign(new Error(`spawn ${gone} ENOENT`), { code: 'ENOENT', path: gone })
+      )
+      expect(managed.spawnAbsence).toBeNull()
+      expect(managed.executableMissing).toBe(false)
+    } finally {
+      Object.defineProperty(process, 'execPath', { configurable: true, value: execPath })
+    }
   })
 
   it('does not turn a transport close with an existing pid into Claude exit proof', () => {

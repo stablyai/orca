@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
@@ -72,7 +72,7 @@ export function useGitStatusFileWatchRefresh({
   worktreePath
 }: UseGitStatusFileWatchRefreshParams): void {
   const activeRuntimeEnvironmentId = useAppStore((state) =>
-    getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
   )
   const fetchStatusRef = useRef(fetchStatus)
   fetchStatusRef.current = fetchStatus
@@ -103,11 +103,10 @@ export function useGitStatusFileWatchRefresh({
       if (!isWindowVisible()) {
         return
       }
+      // Nudge once per atomic-write burst; never delay an armed nudge or continuous agent writes could starve refresh.
       if (refreshTimer) {
-        clearTimeout(refreshTimer)
+        return
       }
-      // Why: file watchers deliver atomic writes as bursts, but git status is
-      // already coalesced and should only be nudged once per burst.
       refreshTimer = setTimeout(() => {
         refreshTimer = null
         if (!isWindowVisible()) {

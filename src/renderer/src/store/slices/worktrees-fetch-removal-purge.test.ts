@@ -13,7 +13,8 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory
+  resetWorktreeSliceModuleMemory,
+  worktreeListMock
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -54,7 +55,7 @@ describe('fetchWorktrees', () => {
       path: '/path/surviving'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([surviving])
+    worktreeListMock.mockResolvedValue([surviving])
     store.setState({
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
@@ -68,7 +69,38 @@ describe('fetchWorktrees', () => {
       }
     } as Partial<AppState>)
 
+    const paneKey = 'removed-tab:leaf'
+    const previous = {
+      paneKey,
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: [],
+      terminalResumeEligible: false as const
+    }
+    store.setState({
+      tabsByWorktree: {
+        [removed.id]: [
+          {
+            id: 'removed-tab',
+            worktreeId: removed.id,
+            ptyId: null,
+            title: '',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      agentStatusByPaneKey: { [paneKey]: previous }
+    })
+    const accepted = vi.fn()
+    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
     await store.getState().fetchWorktrees('repo1')
+    expect(accepted).toHaveBeenCalledExactlyOnceWith([{ paneKey, previous, current: undefined }])
+    dispose()
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([surviving])
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'checks' })
@@ -91,7 +123,7 @@ describe('fetchWorktrees', () => {
       path: '/path/surviving'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([surviving])
+    worktreeListMock.mockResolvedValue([surviving])
     store.setState({
       worktreesByRepo: { repo1: [removed, surviving] },
       sortEpoch: 7,
@@ -135,7 +167,7 @@ describe('fetchWorktrees', () => {
       path: '/path/surviving'
     })
 
-    mockApi.worktrees.list.mockResolvedValue([surviving])
+    worktreeListMock.mockResolvedValue([surviving])
     store.setState({ worktreesByRepo: { repo1: [removed, surviving] } } as Partial<AppState>)
     await store.getState().updateWorktreeMeta(removed.id, { linkedBitbucketPR: 101 })
     await store.getState().updateWorktreeMeta(surviving.id, { linkedAzureDevOpsPR: 202 })
@@ -469,7 +501,7 @@ describe('fetchWorktrees', () => {
   it('accepts an empty refresh when the repo had no cached worktrees', async () => {
     const store = createTestStore()
 
-    mockApi.worktrees.list.mockResolvedValue([])
+    worktreeListMock.mockResolvedValue([])
     store.setState({ worktreesByRepo: {}, sortEpoch: 7 } as Partial<AppState>)
 
     await store.getState().fetchWorktrees('repo1')

@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import type { RuntimeFileCommands } from './orca-runtime-files'
 import { resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
 
-/** Real on-disk artifacts outside the worktree, torn down after each test. */
 export function useTerminalArtifactTempFiles(): {
   tempDirs: string[]
   tempFile: (name: string, content: string) => Promise<string>

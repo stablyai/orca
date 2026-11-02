@@ -1,10 +1,4 @@
-/**
- * Deletes `git worktree remove` runs at once on this host.
- *
- * Why its own limit instead of general git admission: a large delete holds its child for 20-35 s,
- * and general admission can be as small as two slots, so two deletes there would stall every
- * status read. Two concurrent deletes already saturate one disk; more only slow each other.
- */
+// Use a separate two-delete queue: long disk-bound removals must not occupy general Git read slots.
 export const WORKTREE_DELETE_CONCURRENCY = 2
 
 let running = 0
@@ -21,7 +15,7 @@ export async function runUnderWorktreeDeleteLimit<T>(operation: () => Promise<T>
   } finally {
     const next = waiting.shift()
     if (next) {
-      // Why: hand the slot over directly so a new arrival cannot overtake a queued delete.
+      // Hand off directly so new arrivals cannot overtake queued deletes.
       next()
     } else {
       running -= 1

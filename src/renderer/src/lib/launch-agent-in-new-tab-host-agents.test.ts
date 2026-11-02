@@ -1,10 +1,11 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 const REGISTERED: RuntimeCapability[] = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -12,7 +13,7 @@ const REGISTERED: RuntimeCapability[] = [
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
 ]
 const SETTINGS = {
-  experimentalNativeChat: true
+  nativeChatProviders: EVERY_AGENT_CHAT
 }
 
 const mocks = vi.hoisted(() => {
@@ -30,7 +31,11 @@ vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => false }
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({}))
 
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import * as localCapabilities from '@/runtime/local-runtime-capabilities'
+import {
+  resetHostStructuredAgentsForTests,
+  loadHostStructuredAgents
+} from '@/runtime/host-structured-agents'
 import {
   refreshLocalRuntimeCapabilities,
   setLocalRuntimeCapabilitiesForTests
@@ -103,8 +108,9 @@ describe('a new tab whose chat route waits on the host agent list', () => {
       throw new Error('expected the launch to wait for the host agent list')
     }
     const relaunch = fakeRelaunch()
+    const focusIntent = { request: vi.fn(), cancel: vi.fn() }
 
-    const result = launchOnceHostAnswered(route, args, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, { ...args, focusIntent }, relaunch)
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(relaunch).not.toHaveBeenCalled()
@@ -114,8 +120,37 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     })
     expect(relaunch.mock.calls[0]?.[0]).toMatchObject({
       requestId: undefined,
+      focusIntent,
       agentSessionLaunchPlan: { route: 'structured-native-chat', requestId: 'request-1' }
     })
+  })
+
+  it('releases a timed-out capability waiter without starting host discovery', async () => {
+    vi.useFakeTimers()
+    setLocalRuntimeCapabilitiesForTests(null)
+    const waitForCapabilities = localCapabilities.awaitLocalRuntimeCapabilities
+    const stop = vi.fn()
+    vi.spyOn(localCapabilities, 'awaitLocalRuntimeCapabilities').mockImplementation(() => {
+      const wait = waitForCapabilities()
+      return {
+        known: wait.known,
+        stop: () => {
+          stop()
+          wait.stop()
+        }
+      }
+    })
+    const route = routeNewTabLaunch(storeWithSettings(SETTINGS), args, request)
+    if (!('awaited' in route)) {
+      throw new Error('expected bounded preparation')
+    }
+    await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS)
+    await route.awaited
+    setLocalRuntimeCapabilitiesForTests(REGISTERED)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(stop).toHaveBeenCalledOnce()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(console.warn).not.toHaveBeenCalled()
   })
 
   it('decides without the list once the bounded wait runs out', async () => {
@@ -128,11 +163,10 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     }
     const relaunch = vi.fn((_relaunched: LaunchAgentInNewTabArgs) => ({
       surface: { kind: 'local-terminal' as const, tabId: 'tab-1' },
-      startupPlan,
       pasteDraftAfterLaunch: false
     }))
 
-    const result = launchOnceHostAnswered(route, args, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, args, relaunch)
     await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS - 1)
     expect(relaunch).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -154,11 +188,7 @@ describe('a new tab whose chat route waits on the host agent list', () => {
       plan: { route: 'structured-native-chat' }
     })
     expect(
-      routeNewTabLaunch(
-        storeWithSettings({ ...SETTINGS, experimentalNativeChat: false }),
-        args,
-        request
-      )
+      routeNewTabLaunch(storeWithSettings({ ...SETTINGS, nativeChatProviders: {} }), args, request)
     ).toMatchObject({ plan: { route: 'terminal-tui' } })
   })
 })
@@ -193,12 +223,13 @@ describe("a new tab during startup, before this computer's runtime answered", ()
   it.each(['claude', 'opencode'] as const)(
     'opens the %s chat when the capabilities arrive within the wait, after a failed probe',
     async (agent) => {
+      vi.useFakeTimers()
       const route = awaitingRoute(agent)
       const relaunch = fakeRelaunch()
 
-      const result = launchOnceHostAnswered(route, { ...args, agent }, startupPlan, relaunch)
+      const result = launchOnceHostAnswered(route, { ...args, agent }, relaunch)
       // The failed probe has answered; the launch is still waiting for one that lands.
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      await vi.advanceTimersByTimeAsync(20)
       expect(relaunch).not.toHaveBeenCalled()
       await capabilitiesLand()
 
@@ -206,26 +237,28 @@ describe("a new tab during startup, before this computer's runtime answered", ()
         kind: 'structured',
         sessionId: 'session-1'
       })
+      expect(relaunch).toHaveBeenCalledOnce()
       expect(relaunch.mock.calls[0]?.[0]).toMatchObject({
         agentSessionLaunchPlan: { route: 'structured-native-chat' }
       })
     }
   )
 
-  it('opens the terminal chat after the cap when they never arrive, and says why', async () => {
+  it('keeps an awaited terminal refusal notified without claiming a surface opened', async () => {
     vi.useFakeTimers()
     const route = awaitingRoute('claude')
-    const relaunch = fakeRelaunch()
+    const refused = { delivered: false, failureNotified: true }
+    const relaunch = vi.fn((_next: LaunchAgentInNewTabArgs) => ({ refused }))
 
     const result = launchOnceHostAnswered(
       route,
-      { ...args, agent: 'claude' },
-      startupPlan,
+      { ...args, agent: 'claude', prompt: 'keep this prompt' },
       relaunch
     )
     await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS - 1)
     expect(relaunch).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
+    expect((await result?.promptDeliveryResult)?.failureNotified).toBe(true)
 
     await expect(result?.structuredSettlement).resolves.toEqual({
       kind: 'cancelled',
@@ -237,5 +270,22 @@ describe("a new tab during startup, before this computer's runtime answered", ()
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('claude opens terminal-tui: runtime-capability-unknown')
     )
+  })
+})
+
+it('keeps a selected CLI terminal when native discovery and the catalog later allow chat', async () => {
+  const store = storeWithSettings(SETTINGS)
+  mocks.state.current.localDetectedAgentIdsByContext = { host: [] }
+  setLocalRuntimeCapabilitiesForTests(null)
+  const route = routeNewTabLaunch(store, args, { ...request, requestedSurface: 'terminal' })
+  if (!('plan' in route)) {
+    throw new Error('explicit surface must not wait')
+  }
+  mocks.state.current.localDetectedAgentIdsByContext = { host: ['opencode'] }
+  setLocalRuntimeCapabilitiesForTests(REGISTERED)
+  await loadHostStructuredAgents('local', REGISTERED, null)
+  expect(route.plan?.route).toBe('terminal-tui')
+  expect(routeNewTabLaunch(store, args, request)).toMatchObject({
+    plan: { route: 'structured-native-chat' }
   })
 })

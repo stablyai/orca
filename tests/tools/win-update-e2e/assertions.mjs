@@ -1,13 +1,5 @@
-// Profile assertions and the final PASS/FAIL evidence table.
-//
-// Two profiles:
-//   cold-restore — TODAY's behavior. The installer's path sweep kills the
-//     in-dir daemon, so the old daemon PID must be DEAD, a fresh daemon must
-//     exist, scrollback is cold-restored (best-effort), a new terminal is
-//     interactive, and NO unexpected console/terminal windows appear.
-//   survival — Phase 1 target. The daemon PID is UNCHANGED across the update,
-//     the marker process is still alive, the pre-update session is still
-//     interactive (echo + Ctrl+C), and NO unexpected windows appear.
+// Update profiles: cold-restore requires old-daemon death/new daemon, best-effort scrollback, new-terminal input and no flashes.
+// survival requires unchanged daemon, live marker, original-session echo/Ctrl+C and no flashes.
 
 const CONSOLE_HOST_PROCESSES = new Set([
   'powershell',
@@ -21,13 +13,7 @@ const CONSOLE_HOST_PROCESSES = new Set([
 // The app's own windows are expected on relaunch and never count as a flash.
 const APP_OWNER_PROCESSES = new Set(['orca', 'electron'])
 
-/**
- * Split window-watch events into unexpected flashes vs benign. Unexpected =
- * (a) any window whose title contains the run's canary — a real flash of our
- * marker child, which must never get its own window — or (b) any new
- * console/terminal-host window that is not the app itself. Attribution is by
- * title + owner process only (never conhost command-line heuristics).
- */
+// Count canary-titled or new non-app console/terminal-host windows as flashes; attribute only by title/owner, not conhost command-line guesses.
 export function classifyWindowEvents(events, { canary }) {
   const unexpected = []
   for (const event of events) {
@@ -117,8 +103,7 @@ function coldRestoreAssertions(ctx) {
       'new daemon pid, alive',
       `post pid ${ctx.postDaemonPid} (alive: ${ctx.postDaemonAlive})`
     ),
-    // Best-effort: WebGL renderer may hide buffer text from DOM scraping, so a
-    // null result is reported as informational (pass=null), not a failure.
+    // Report null scraped buffer text as informational because WebGL may expose no DOM rows.
     assertion(
       'previous terminals show restored scrollback (best-effort)',
       ctx.scrollbackRestored === null ? null : ctx.scrollbackRestored,
@@ -141,9 +126,7 @@ function coldRestoreAssertions(ctx) {
 }
 
 function daemonLogAssertion(ctx) {
-  // The daemon has no file log today (stdio is suppressed in packaged forks).
-  // Treat "no log present" as informational; when a log IS present (Phase 0
-  // observability), assert it is free of ERROR lines.
+  // Missing daemon logs are informational; inspect available lifecycle records for fatal evidence.
   if (!ctx.daemonLog) {
     return assertion(
       'daemon log free of fatal records',
@@ -152,9 +135,7 @@ function daemonLogAssertion(ctx) {
       'no daemon log present (informational)'
     )
   }
-  // Only genuinely-bad records count (fatal uncaught exceptions, invalid-token
-  // hello rejections). Benign suppressed native-PTY exceptions are reported as
-  // context but never affect pass/fail.
+  // Fail fatal exceptions/invalid-token hello, retaining benign suppressed native-PTY exceptions as context.
   const errorLines = ctx.daemonLog.errorLines ?? []
   const suppressed = ctx.daemonLog.suppressedCount ?? 0
   const suppressedNote = suppressed > 0 ? ` (${suppressed} benign suppressed, ignored)` : ''

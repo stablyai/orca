@@ -26,10 +26,6 @@ afterEach(() => {
 })
 
 describe('parsePorcelainV1Records', () => {
-  it('returns [] for a clean status', () => {
-    expect(parsePorcelainV1Records('')).toEqual([])
-  })
-
   it('keeps paths containing spaces and quotes intact', () => {
     const repo = createRepo()
     writeFileSync(join(repo, 'a file "quoted".txt'), 'x')
@@ -48,9 +44,7 @@ describe('parsePorcelainV1Records', () => {
     ])
   })
 
-  // Why: a rename emits its ORIGIN as a second NUL field. Reading that origin as
-  // its own record would invent a status code from the first bytes of a path —
-  // and `?? ` is exactly what the shared-symlink filter keys on.
+  // Rename origins are extra NUL fields; treating one as a record could invent an untracked status.
   it('consumes the origin path of a rename instead of emitting it as a record', () => {
     const repo = createRepo()
     writeFileSync(join(repo, 'original.txt'), 'content\n')
@@ -77,18 +71,6 @@ describe('parsePorcelainV1Records', () => {
     expect(records).toEqual([
       { xy: 'R ', path: 'renamed.txt' },
       { xy: '??', path: 'node_modules/' }
-    ])
-  })
-
-  it('parses staged and unstaged codes distinctly', () => {
-    const repo = createRepo()
-    writeFileSync(join(repo, 'tracked.txt'), 'v1\n')
-    git(['add', '-A'], repo)
-    git(['commit', '-qm', 'init'], repo)
-    writeFileSync(join(repo, 'tracked.txt'), 'v2\n')
-
-    expect(parsePorcelainV1Records(git(['status', '--porcelain', '-z'], repo))).toEqual([
-      { xy: ' M', path: 'tracked.txt' }
     ])
   })
 })

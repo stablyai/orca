@@ -5,13 +5,8 @@ import { isOpenCodeLegacySharedConfigDir } from './legacy-shared-config-dir'
 const ORCA_ENV_PREFIXES = ['ORCA_OPENCODE_', 'ORCA_DATA_ACCOUNT_']
 const ACCOUNT_ENV_KEYS = ['XDG_DATA_HOME', 'XDG_STATE_HOME', 'OPENCODE_DB', 'OPENCODE_AUTH_CONTENT']
 
-/**
- * A structured chat's OpenCode reports through the chat, never through Orca's terminal status
- * plugin. Restores the user's own `OPENCODE_CONFIG_DIR` over the overlay a terminal pane would have
- * (dropping it when none was recorded, or when it is the retired shared plugin directory), and drops
- * every Orca OpenCode and data-account variable. Runs after the account is applied. Returns
- * the keys the child must not inherit.
- */
+/** Run after account setup: restore user config and remove terminal-hook/account inheritance.
+ * Return keys the child must not inherit; structured chats report status through chat. */
 export function scrubOpenCodeAcpEnvironment(
   env: Record<string, string>,
   inherited: NodeJS.ProcessEnv,
@@ -45,7 +40,7 @@ export function scrubOpenCodeAcpEnvironment(
   } else {
     env.OPENCODE_CONFIG_DIR = view.OPENCODE_CONFIG_DIR
   }
-  // The launch environment decides these; one it leaves unset must not come from Orca's overlay.
+  // Account keys left unset by the child environment must not leak from the terminal overlay.
   for (const key of ACCOUNT_ENV_KEYS) {
     if (env[key] === undefined) {
       removed.push(key)

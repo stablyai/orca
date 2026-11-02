@@ -13,14 +13,16 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
+import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 const repoRoot = resolve(import.meta.dirname, '../..')
 const BUILD_STAMP = join('out', '.terminal-layout-parity-build')
 
-// Bundled like script-child-process.mjs: importing the .ts directly makes Node warn MODULE_TYPELESS_PACKAGE_JSON.
+// Bundle TypeScript parity modules so plain Node does not need a loader.
 async function importParityModules() {
   const temporary = mkdtempSync(join(tmpdir(), 'orca-layout-parity-'))
   try {
@@ -87,16 +89,9 @@ function git(args) {
   return result.stdout.trim()
 }
 
-// npm_execpath is pnpm's JS entry (run under node), a native pnpm binary (corepack), or unset.
 function pnpm(args, cwd, env = process.env) {
-  const entry = process.env.npm_execpath
-  if (entry && /\.[cm]?js$/i.test(entry)) {
-    run(process.execPath, [entry, ...args], cwd, env)
-  } else if (entry && /pnpm/i.test(basename(entry)) && existsSync(entry)) {
-    run(entry, args, cwd, env)
-  } else {
-    run('pnpm', args, cwd, env)
-  }
+  const { command, prefixArgs } = resolvePnpmCliInvocation()
+  run(command, [...prefixArgs, ...args], cwd, env)
 }
 
 /** A detached worktree per commit, installed and built once; a failed build throws before stamping. */

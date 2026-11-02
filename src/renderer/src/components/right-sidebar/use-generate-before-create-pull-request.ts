@@ -1,6 +1,10 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
-import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
+import {
+  recordPullRequestGenerationEdits,
+  type PullRequestFieldRevisions,
+  type PullRequestGenerationFields
+} from '@/store/slices/pull-request-generation'
 import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PullRequestGenerationOutcome } from './create-pull-request-dialog-field-model'
@@ -8,15 +12,14 @@ import { hasConfiguredSourceControlTextGenerationDefaults } from './source-contr
 
 type CreatePullRequest = (stacked?: boolean, fields?: PullRequestGenerationFields) => Promise<void>
 
-/**
- * Create PR on a ready branch: when the composer still holds Orca's seeded placeholders and a PR
- * agent is configured, run the composer's own generation and create from its result, like the
- * prepare-branch path does.
- */
+/** Generate before ready-branch creation only for seeded placeholders with a configured PR agent. */
 export function useGenerateBeforeCreatePullRequest({
   aiGenerationEnabled,
   canCreate,
   createPullRequest,
+  fields,
+  fieldRevisions,
+  fieldsInitialized,
   fieldsAreSeedPlaceholders,
   generatePullRequestFields,
   generationKey,
@@ -26,6 +29,9 @@ export function useGenerateBeforeCreatePullRequest({
   aiGenerationEnabled: boolean
   canCreate: boolean
   createPullRequest: CreatePullRequest
+  fields: PullRequestGenerationFields
+  fieldRevisions: PullRequestFieldRevisions
+  fieldsInitialized: boolean
   fieldsAreSeedPlaceholders: boolean
   generatePullRequestFields: (
     overrides: undefined,
@@ -35,12 +41,22 @@ export function useGenerateBeforeCreatePullRequest({
   repo: Pick<Repo, 'sourceControlAi'> | null
   settings: AppState['settings']
 }) {
+  useLayoutEffect(() => {
+    if (generationKey && fieldsInitialized) {
+      useAppStore
+        .getState()
+        .updatePullRequestGenerationRecord(generationKey, (record) =>
+          recordPullRequestGenerationEdits(record, fields, fieldRevisions)
+        )
+    }
+  }, [generationKey, fields, fieldRevisions, fieldsInitialized])
+
   const handleCreatePullRequest = useCallback(
     async (stacked = false): Promise<void> => {
       const status = generationKey
         ? useAppStore.getState().pullRequestGenerationRecords[generationKey]?.status
         : undefined
-      // Why: the record is written before generation's first await, so repeated clicks see it.
+      // Generation publishes the running record before its first await, guarding repeated clicks.
       if (status === 'running') {
         return
       }
@@ -49,7 +65,7 @@ export function useGenerateBeforeCreatePullRequest({
         !canCreate ||
         !aiGenerationEnabled ||
         !fieldsAreSeedPlaceholders ||
-        // Why: after a failed or stopped run the next click submits as shown, so a broken agent never blocks Create PR.
+        // After failure/Stop, submit visible fields so a broken agent cannot block Create PR.
         status === 'failed' ||
         status === 'canceled' ||
         !hasConfiguredSourceControlTextGenerationDefaults({
@@ -69,8 +85,6 @@ export function useGenerateBeforeCreatePullRequest({
       if (!outcome.result) {
         return
       }
-      // Why: the click owns the run, so create through its closure wherever the user went; a later render can show another branch or cleared eligibility.
-      // The result is what the composer fills in, so the PR matches the form.
       await createPullRequest(stacked, outcome.result)
     },
     [

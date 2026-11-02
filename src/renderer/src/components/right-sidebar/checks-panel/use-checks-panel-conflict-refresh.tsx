@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useEffect } from 'react'
 
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
@@ -50,18 +51,19 @@ export function useChecksPanelConflictRefresh(model: ChecksPanelConflictRefreshI
       return
     }
 
-    // Why: stale conflict metadata is visibly wrong here; force-refresh conflicting PRs once to avoid stale cached summaries.
+    // Refresh conflicting PRs once to replace stale cached conflict summaries.
     conflictSummaryRefreshKeyRef.current = refreshKey
     setConflictDetailsRefreshing(true)
     void fetchPRForBranch(repo.path, branch, {
       force: true,
       repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
       worktreeId: activeWorktreeId ?? undefined,
       linkedPRNumber: linkedPR,
       fallbackPRNumber: fallbackGitHubPRNumber ?? pr.number,
       reason: 'active'
     }).finally(() => {
-      // Why: fetchPRForBranch can rerun this effect; only the current key clears the spinner so stale requests don't race newer branches.
+      // The fetch can rerun this effect; only the current key may clear the spinner.
       if (conflictSummaryRefreshKeyRef.current === refreshKey) {
         setConflictDetailsRefreshing(false)
       }

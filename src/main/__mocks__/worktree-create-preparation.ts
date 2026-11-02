@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import type * as WorktreeLogic from '../ipc/worktree-logic'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 
@@ -35,6 +35,7 @@ const mocks: {
 export { mocks }
 
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
+vi.mock('../orcad/orcad-data-root-locality', () => ({ orcadDataRootIsOnLocalDisk: () => true }))
 vi.mock('../git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
 vi.mock('../git/worktree-create-preparation', () => ({
   prepareWorktreeCreateCheckout: mocks.prepareCheckout,

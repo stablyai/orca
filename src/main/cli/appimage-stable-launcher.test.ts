@@ -4,10 +4,17 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
-const { filePublicationFailures } = vi.hoisted(() => ({
-  filePublicationFailures: { copy: 0, link: 0, replaceBeforeRename: '' }
+const { filePublicationFailures, launcherDescriptors } = vi.hoisted(() => ({
+  filePublicationFailures: {
+    copy: 0,
+    link: 0,
+    replaceBeforeRename: '',
+    closeAfterRename: false,
+    close: 0
+  },
+  launcherDescriptors: { opened: 0, closed: 0 }
 }))
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -33,7 +40,24 @@ vi.mock('node:fs', async (importOriginal) => {
         actual.writeFileSync(args[0], filePublicationFailures.replaceBeforeRename, { mode: 0o755 })
         filePublicationFailures.replaceBeforeRename = ''
       }
-      return actual.renameSync(...args)
+      actual.renameSync(...args)
+      if (filePublicationFailures.closeAfterRename) {
+        filePublicationFailures.closeAfterRename = false
+        filePublicationFailures.close = 1
+      }
+    },
+    openSync: (...args: Parameters<typeof actual.openSync>) => {
+      const fd = actual.openSync(...args)
+      launcherDescriptors.opened += 1
+      return fd
+    },
+    closeSync: (fd: number) => {
+      launcherDescriptors.closed += 1
+      actual.closeSync(fd)
+      if (filePublicationFailures.close > 0) {
+        filePublicationFailures.close -= 1
+        throw Object.assign(new Error('close failed'), { code: 'EIO' })
+      }
     }
   }
 })
@@ -49,6 +73,10 @@ afterEach(async () => {
   filePublicationFailures.copy = 0
   filePublicationFailures.link = 0
   filePublicationFailures.replaceBeforeRename = ''
+  filePublicationFailures.closeAfterRename = false
+  filePublicationFailures.close = 0
+  launcherDescriptors.opened = 0
+  launcherDescriptors.closed = 0
   await Promise.all(created.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
@@ -78,21 +106,6 @@ describe.skipIf(process.platform === 'win32')('AppImage stable launcher', () => 
     expect(await readFile(launcherPath, 'utf8')).not.toContain('/live')
   })
 
-  it('observes an endpoint published after the wrapper starts', async () => {
-    const cacheRootPath = await makeFixture()
-    const missingPath = join(cacheRootPath, 'payloads', 'missing')
-    const readyPath = join(cacheRootPath, 'payloads', 'ready')
-    const launcherPath = publishAppImageLauncherEndpoint(cacheRootPath, 'installed', missingPath)!
-    const invocation = runProcess({ program: launcherPath, args: [], timeoutMs: 3_000 })
-    setTimeout(() => {
-      void writeLauncher(readyPath, 'ready').then(() => {
-        publishAppImageLauncherEndpoint(cacheRootPath, 'installed', readyPath)
-      })
-    }, 100)
-
-    await expect(invocation).resolves.toMatchObject({ code: 0, stdout: 'ready' })
-  })
-
   it('atomically upgrades a stale marker-owned launcher', async () => {
     const cacheRootPath = await makeFixture()
     const targetPath = join(cacheRootPath, 'payloads', 'target')
@@ -104,6 +117,28 @@ describe.skipIf(process.platform === 'win32')('AppImage stable launcher', () => 
     expect(publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)).toBe(
       launcherPath
     )
+    expect(await readFile(launcherPath, 'utf8')).toContain('launcher_dir=')
+    await expect(
+      runProcess({ program: launcherPath, args: [], timeoutMs: 3_000 })
+    ).resolves.toMatchObject({ code: 0, stdout: 'target' })
+  })
+
+  it('upgrades a stale launcher when closing the displaced copy reports EIO', async () => {
+    const cacheRootPath = await makeFixture()
+    const targetPath = join(cacheRootPath, 'payloads', 'target')
+    await writeLauncher(targetPath, 'target')
+    const launcherPath = publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)!
+    const marker = (await readFile(launcherPath, 'utf8')).split('\n')[1]
+    await writeFile(launcherPath, `#!/usr/bin/env bash\n${marker}\nprintf stale`, { mode: 0o755 })
+    launcherDescriptors.opened = 0
+    launcherDescriptors.closed = 0
+    filePublicationFailures.closeAfterRename = true
+
+    expect(publishAppImageLauncherEndpoint(cacheRootPath, 'installed', targetPath)).toBe(
+      launcherPath
+    )
+    expect(filePublicationFailures.close).toBe(0)
+    expect(launcherDescriptors.closed).toBe(launcherDescriptors.opened)
     expect(await readFile(launcherPath, 'utf8')).toContain('launcher_dir=')
     await expect(
       runProcess({ program: launcherPath, args: [], timeoutMs: 3_000 })

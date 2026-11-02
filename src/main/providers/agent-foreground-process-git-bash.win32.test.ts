@@ -8,6 +8,7 @@ import { confirmPtyShellForeground } from '../daemon/pty-subprocess/pty-shell-fo
 import { createPtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
 import { spawnNativeDaemonPty } from '../daemon/pty-subprocess/native-pty-spawn'
 import { createDaemonPtyEnvironment } from '../daemon/pty-subprocess/spawn-environment'
+import { inspectSpawnFileWindowsChildProcesses } from '../daemon/pty-subprocess/spawn-file-child-processes'
 import type { PtyShellLaunchPlan } from '../daemon/pty-subprocess/shell-launch-plan'
 import type { PtySubprocessOptions } from '../daemon/pty-subprocess'
 import { isGitForWindowsBashLauncherPath, resolveGitBashPath } from '../git-bash'
@@ -29,7 +30,7 @@ async function proveIdlePromptCycle(
   expectedJobSize: number
 ): Promise<void> {
   const proc = spawned.process
-  let output = ''
+  let output = spawned.claimStartupEvents?.().data.join('') ?? ''
   let dead = false
   proc.onData((chunk) => {
     output += chunk
@@ -151,4 +152,50 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
       removeTreeSync(stagingRoot)
     }
   }, 60_000)
+
+  it('sets aside a detached ssh-agent for adoption, but not a background job', async () => {
+    const opts: PtySubprocessOptions = {
+      sessionId: 'git-bash-detached-daemon-proof',
+      cols: 120,
+      rows: 30,
+      cwd: tmpdir(),
+      shellOverride: WINDOWS_GIT_BASH_SHELL
+    }
+    const env = createDaemonPtyEnvironment(opts)
+    const spawned = await spawnPlannedPane(createPtyShellLaunchPlan(opts, env), env, opts)
+    const proc = spawned.process
+    let output = spawned.claimStartupEvents?.().data.join('') ?? ''
+    proc.onData((chunk) => {
+      output += chunk
+    })
+    let agentPid = 0
+    const inspect = (ignoreDetached: boolean) =>
+      inspectSpawnFileWindowsChildProcesses(proc, spawned.shellPath, true, ignoreDetached)
+    try {
+      await vi.waitFor(() => expect(output).toContain('$'), { timeout: 20_000 })
+      // ssh-agent forks, setsids off the console, and its Win32 parent exits.
+      proc.write('eval "$(ssh-agent -s)"; echo ORCA_AGENT_$SSH_AGENT_PID\r')
+      // Usually ~1s, but it exceeded 10s on a loaded runner; the bound only catches a hang.
+      await vi.waitFor(() => expect(output).toMatch(/ORCA_AGENT_\d+/), { timeout: 30_000 })
+      agentPid = Number(/ORCA_AGENT_(\d+)/.exec(output)?.[1])
+      await vi.waitFor(async () => expect(await inspect(true)).toBe('no-children'), {
+        timeout: 10_000
+      })
+      // Close checks keep the job census: the daemon still counts there.
+      expect(await inspect(false)).not.toBe('no-children')
+
+      // MSYS leaves the background sleep under an exited Win32 parent too, but on the console.
+      proc.write('sleep 60 &\r')
+      await vi.waitFor(async () => expect(await inspect(true)).toBe('children'), {
+        timeout: 10_000
+      })
+    } finally {
+      // From inside the pane: SSH_AGENT_PID is an MSYS pid, and it outlives the pane otherwise.
+      if (agentPid) {
+        proc.write(`kill %1; kill ${agentPid}\r`)
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
+      proc.kill()
+    }
+  }, 90_000)
 })

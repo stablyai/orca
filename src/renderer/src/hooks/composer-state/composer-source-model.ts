@@ -1,11 +1,10 @@
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 export type ComposerSourceModel = {
@@ -25,14 +24,16 @@ export type ComposerSourceModel = {
     nextBaseBranch: string,
     item: GitLabWorkItem,
     nextPushTarget?: GitPushTarget | undefined,
-    nextCompareBaseRef?: string | undefined
+    nextCompareBaseRef?: string | undefined,
+    options?: { sourceAlreadyLinked?: boolean }
   ) => void
   handleBaseBranchPrSelect: (
     nextBaseBranch: string,
     item: GitHubWorkItem,
     nextPushTarget?: GitPushTarget | undefined,
     nextBranchNameOverride?: string | undefined,
-    nextCompareBaseRef?: string | undefined
+    nextCompareBaseRef?: string | undefined,
+    options?: { sourceAlreadyLinked?: boolean }
   ) => void
   handleBranchNameOverrideChange: (value: string | undefined) => void
   handleClearSmartNameSelection: () => void
@@ -61,14 +62,16 @@ export type ComposerSourceModel = {
   onConnectSelectedRepo: () => Promise<void>
   prefetchSshConnectedGeneration: number
   resolvePendingSmartGitHubSubmit: () => Promise<PendingSmartGitHubSubmitResolution>
+  selectAddedProjectGroup: (groupId: string) => boolean
   selectAddedProjectRepo: (nextRepoId: string) => void
   showProjectRequiredError: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   uploadComposerPaths: (
     sourcePaths: string[],
-    targetSettings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+    targetEnvironmentId?: string | null,
     targetConnectionId?: string | null,
     targetRepoPath?: string | null,
+    targetWorktreeId?: string | null,
     canReportFailure?: () => boolean
   ) => Promise<{ filePaths: string[]; folderPaths: string[] } | null>
 }

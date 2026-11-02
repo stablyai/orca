@@ -19,17 +19,12 @@ export function shouldFocusMobileDriverAction(
     return true
   }
 
-  // Why: xterm owns keyboard input through a hidden textarea. When mobile takes
-  // that terminal over, focus should move to the recovery action, not stay in
-  // the now-paused terminal input. Scope this to the pane that owns the overlay
-  // so another active terminal pane keeps keyboard focus.
+  // Move focus from this pane’s paused xterm to recovery; other panes keep their input focus.
   if (active.classList?.contains?.('xterm-helper-textarea')) {
     return isFocusLike(focusScope) && focusScope.contains?.(active) === true
   }
 
-  // Why: focused Electron webviews represent guest-page keyboard focus; they
-  // are not editable DOM controls in the host document, but stealing focus from
-  // them still interrupts the user's typing in the page.
+  // A focused webview owns guest-page typing even though it is not a host-document editable control.
   if (active.tagName === 'WEBVIEW') {
     return false
   }

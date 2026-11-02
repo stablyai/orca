@@ -1,8 +1,6 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 
-// Why: one source for each dispatch refusal's code, message, and data, so the runtime emits and
-// the CLI test formats the identical envelope. Messages are supplied per call site because each
-// existing string is a published receipt an old consumer may match on.
+// Share refusal envelopes across runtime/CLI; retain call-site messages because older consumers may match published strings.
 
 export type DispatchRefusalReceipt = {
   code: 'task_not_found' | 'task_not_startable' | 'inject_rejected'
@@ -32,6 +30,8 @@ export type TaskNotStartableDetail = {
   status: string
   unmetDependencies: string[]
   retryOf?: string
+  /** Set when the Task's circuit breaker tripped; an older client ignores it. */
+  failureCount?: number
 }
 
 export function taskNotStartableRefusal(
@@ -46,6 +46,12 @@ export function taskNotStartableRefusal(
 }
 
 function taskNotStartableNextSteps(detail: TaskNotStartableDetail): string[] {
+  if (detail.retryOf && detail.failureCount !== undefined) {
+    return [
+      `Do not retry this Task or start a replacement for it: it failed ${detail.failureCount} times. Report the failure to the user.`,
+      `Read what the last attempt showed with orca orchestration worker-read --dispatch ${detail.retryOf} --json. If its terminal is still open, it stays for the user until orca orchestration worker-release --dispatch ${detail.retryOf} --json.`
+    ]
+  }
   if (detail.retryOf) {
     return [
       `--retry-of must name the latest settled Dispatch of a failed or blocked Task; check orca orchestration dispatch-show --task ${detail.taskId} --json and orca orchestration worker-show --dispatch ${detail.retryOf} --json.`
@@ -66,8 +72,8 @@ function taskNotStartableNextSteps(detail: TaskNotStartableDetail): string[] {
   ]
 }
 
-// Why: the old five-name example read as an allowlist (#15125); derive from the field detection keys on so it cannot drift.
-// Not filtered by `disabledTuiAgents` — that gates Orca's launchers, not detection, so a hand-started disabled agent still injects.
+// Derive from detection’s expectedProcess keys: a five-name example was mistaken for an allowlist (#15125).
+// Launcher disablement does not gate detection; hand-started disabled agents still inject.
 const RECOGNIZED_AGENT_PROCESS_NAMES = [
   ...new Set(Object.values(TUI_AGENT_CONFIG).map((config) => config.expectedProcess))
 ].sort()

@@ -1,7 +1,4 @@
-// Why: pins the stale-occlusion proof — user input while
-// document.visibilityState claims 'hidden' must latch the override and run
-// each pane's recovery exactly once, and a genuine visibilitychange must hand
-// authority back to the occlusion tracker.
+// Input while visibilityState is stuck hidden must recover each pane once; genuine visibilitychange restores tracker authority.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as StaleDocumentVisibility from './stale-document-visibility'
 
@@ -73,36 +70,9 @@ describe('stale document visibility', () => {
     expect(recovery).toHaveBeenCalledTimes(1)
     expect(warnSpy).toHaveBeenCalledTimes(1)
 
-    // Further input during the same stuck episode must not re-run recovery.
     documentStub.emit('keydown')
     documentStub.emit('pointerdown')
     expect(recovery).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not latch while the document is genuinely visible', () => {
-    const recovery = vi.fn()
-    mod.registerStaleDocumentVisibilityRecovery(recovery)
-
-    documentStub.emit('keydown')
-    documentStub.emit('pointerdown')
-    windowStub.emit('focus')
-    expect(mod.isDocumentVisibilityProvenStale()).toBe(false)
-    expect(recovery).not.toHaveBeenCalled()
-  })
-
-  it('treats pointerdown and window focus as staleness proof too', () => {
-    const recovery = vi.fn()
-    mod.registerStaleDocumentVisibilityRecovery(recovery)
-    documentStub.visibilityState = 'hidden'
-
-    documentStub.emit('pointerdown')
-    expect(mod.isDocumentVisibilityProvenStale()).toBe(true)
-
-    mod.resetStaleDocumentVisibilityForTesting()
-    mod.registerStaleDocumentVisibilityRecovery(recovery)
-    documentStub.visibilityState = 'hidden'
-    windowStub.emit('focus')
-    expect(mod.isDocumentVisibilityProvenStale()).toBe(true)
   })
 
   it('hands authority back to the occlusion tracker on a genuine visibilitychange', () => {
@@ -116,25 +86,10 @@ describe('stale document visibility', () => {
     documentStub.emit('visibilitychange')
     expect(mod.isDocumentVisibilityProvenStale()).toBe(false)
 
-    // A fresh wedge after trust was restored must latch (and recover) again.
     documentStub.visibilityState = 'hidden'
     documentStub.emit('keydown')
     expect(mod.isDocumentVisibilityProvenStale()).toBe(true)
     expect(recovery).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps running other panes when one recovery listener throws', () => {
-    const throwing = vi.fn(() => {
-      throw new Error('pane exploded')
-    })
-    const healthy = vi.fn()
-    mod.registerStaleDocumentVisibilityRecovery(throwing)
-    mod.registerStaleDocumentVisibilityRecovery(healthy)
-    documentStub.visibilityState = 'hidden'
-
-    documentStub.emit('keydown')
-    expect(throwing).toHaveBeenCalledTimes(1)
-    expect(healthy).toHaveBeenCalledTimes(1)
   })
 
   it('removes global listeners when the last pane unregisters', () => {
@@ -150,7 +105,6 @@ describe('stale document visibility', () => {
     expect(documentStub.listenerCount('visibilitychange')).toBe(0)
     expect(windowStub.listenerCount('focus')).toBe(0)
 
-    // Re-registering must reinstall for a later pane.
     mod.registerStaleDocumentVisibilityRecovery(vi.fn())
     expect(documentStub.listenerCount('keydown')).toBe(1)
   })

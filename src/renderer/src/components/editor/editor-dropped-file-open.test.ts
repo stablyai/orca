@@ -1,30 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import {
-  getEditorFileDropOperationContext,
-  getEditorFileDropSettingsForWorktree,
-  shouldUploadRemoteEditorFileDrop
-} from './editor-dropped-file-open'
+import { describe, expect, it, afterEach, vi } from 'vitest'
+import { getEditorFileDropOperationContext } from './editor-dropped-file-open'
+
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 
 describe('shouldUploadRemoteEditorFileDrop', () => {
-  it('does not upload editor drops for local workspaces', () => {
-    expect(shouldUploadRemoteEditorFileDrop({ activeRuntimeEnvironmentId: null }, null)).toBe(false)
-  })
-
-  it('uploads editor drops while a runtime environment is active', () => {
-    expect(shouldUploadRemoteEditorFileDrop({ activeRuntimeEnvironmentId: 'env-1' }, null)).toBe(
-      true
-    )
-  })
-
-  it('uploads editor drops for SSH workspaces', () => {
-    expect(shouldUploadRemoteEditorFileDrop({ activeRuntimeEnvironmentId: null }, 'ssh-1')).toBe(
-      true
-    )
-  })
-
   it('uses the worktree owner runtime instead of the focused runtime', () => {
     expect(
-      getEditorFileDropSettingsForWorktree(
+      getRuntimeTargetForWorktreeOwner(
         {
           settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
           repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'runtime:owner-runtime' }],
@@ -32,20 +14,7 @@ describe('shouldUploadRemoteEditorFileDrop', () => {
         },
         'wt-1'
       )
-    ).toEqual({ activeRuntimeEnvironmentId: 'owner-runtime' })
-  })
-
-  it('keeps explicit local worktree editor drops local while a runtime is focused', () => {
-    expect(
-      getEditorFileDropSettingsForWorktree(
-        {
-          settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
-          repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }],
-          worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
-        },
-        'wt-1'
-      )
-    ).toEqual({ activeRuntimeEnvironmentId: null })
+    ).toEqual({ kind: 'environment', environmentId: 'owner-runtime' })
   })
 
   it('builds file operation context from the worktree owner instead of global focus', () => {
@@ -61,7 +30,7 @@ describe('shouldUploadRemoteEditorFileDrop', () => {
         undefined
       )
     ).toEqual({
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/repos/repo-1',
       connectionId: undefined
@@ -81,10 +50,29 @@ describe('shouldUploadRemoteEditorFileDrop', () => {
         'ssh-1'
       )
     ).toEqual({
-      settings: { activeRuntimeEnvironmentId: null },
+      target: { kind: 'local' as const },
       worktreeId: 'wt-1',
       worktreePath: '/home/orca/repo-1',
       connectionId: 'ssh-1'
     })
   })
+})
+
+const { rejectAppStoreAccess } = vi.hoisted(() => ({
+  rejectAppStoreAccess: vi.fn(() => {
+    throw new Error('Pure helper tests must not access the app store')
+  })
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(rejectAppStoreAccess, {
+    getState: rejectAppStoreAccess,
+    getInitialState: rejectAppStoreAccess,
+    setState: rejectAppStoreAccess,
+    subscribe: rejectAppStoreAccess
+  })
+}))
+
+afterEach(() => {
+  expect(rejectAppStoreAccess).not.toHaveBeenCalled()
 })

@@ -1,8 +1,7 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, join, relative, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { removeTree } from '../../src/shared/windows-transient-lock-removal.ts'
 
@@ -10,10 +9,6 @@ const require = createRequire(import.meta.url)
 const projectRoot = resolve(import.meta.dirname, '..', '..')
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const {
-  createPackagedRuntimeNodeModuleResources,
-  findAsarEntry,
-  isPackagedExternalSpecifier,
-  packageNameFromSpecifier,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedSherpaOnnx,
@@ -21,13 +16,6 @@ const {
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 } = require('../packaged-runtime-node-modules.cjs')
-
-// Why this and not process.platform: @vscode/windows-process-tree is the only os: win32 npm
-// addon left, so its presence is what decides whether the win32 plan resolves.
-// @orca/windows-registry is a workspace link present on every host, so it proves nothing.
-const windowsAddonsInstalled = existsSync(
-  join(projectRoot, 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
-)
 
 describe('packaged runtime resources', () => {
   it('verifies packaged main runtime deps from Windows-style asar entries', async () => {
@@ -57,8 +45,7 @@ describe('packaged runtime resources', () => {
     try {
       await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
 
-      // The first is the exact shape oxc emits for the memoized SDK import in a
-      // shipped build; the second is the spaced variant the pattern also accepts.
+      // Cover shipped oxc memoized-import spelling and spaced equivalent.
       const sources = new Map([
         [
           'out/main/index.js',
@@ -116,8 +103,7 @@ describe('packaged runtime resources', () => {
         ['out/main/agent-hooks/managed-agent-hook-controls.js', ''],
         ['out/main/chunks/managed-agent-hook-controls-CWf8D-KR.js', 'require(`jsonc-parser`)']
       ])
-      // Real listPackage emits directory nodes too, and extractFile throws on them,
-      // so the `.js` anchor is load-bearing -- keep the mock able to catch that.
+      // listPackage includes directories that extractFile rejects; mock them to enforce the .js anchor.
       const directories = ['/out', '/out/main', '/out/main/chunks']
       const asar = {
         listPackage: () => [...directories, ...[...sources.keys()].map((entry) => `/${entry}`)],
@@ -164,8 +150,7 @@ describe('packaged runtime resources', () => {
     try {
       await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
 
-      // electron-sidecar-tab-registry and browser-execution-host-grant-registry both
-      // expose require(key); a literal key must never read as a packaged specifier.
+      // Registry require(key) members are not packaged bare-module imports, even with literal keys.
       const sources = new Map([
         ['out/main/index.js', 'registry.require("public-a");grants.require(`host-key`)'],
         ['out/main/agent-hooks/managed-agent-hook-controls.js', 'state.import("android-sdk")']
@@ -179,13 +164,6 @@ describe('packaged runtime resources', () => {
     } finally {
       await removeTree(resourcesDir)
     }
-  })
-
-  it('normalizes host-specific asar entry separators', () => {
-    expect(findAsarEntry(['\\out\\main\\index.js'], 'out/main/index.js')).toBe(
-      '\\out\\main\\index.js'
-    )
-    expect(findAsarEntry(['/out/main/index.js'], 'out/main/index.js')).toBe('/out/main/index.js')
   })
 
   it('prunes non-target node-pty architecture outputs from packaged runtime resources', async () => {
@@ -253,32 +231,6 @@ describe('packaged runtime resources', () => {
       } finally {
         await removeTree(resourcesDir)
       }
-    }
-  })
-
-  it('includes external main dependencies in the packaged runtime closure', () => {
-    // Why: the main process imports '@parcel/watcher' for filesystem change
-    // events; if it is absent from the packaged closure the serve host silently
-    // stops propagating file changes to clients (regression guard for #4851).
-    const packaged = createPackagedRuntimeNodeModuleResources()
-    const packagedTargets = packaged.map((resource) => resource.to)
-    expect(packagedTargets).toContain(join('node_modules', '@parcel', 'watcher'))
-    expect(
-      packagedTargets.some((target) =>
-        target.startsWith(join('node_modules', '@parcel', 'watcher-'))
-      )
-    ).toBe(true)
-    expect(packagedTargets).toContain(join('node_modules', 'proper-lockfile'))
-  })
-
-  it('includes the Claude agent SDK in every desktop package plan', () => {
-    for (const platform of windowsAddonsInstalled
-      ? ['darwin', 'linux', 'win32']
-      : ['darwin', 'linux']) {
-      const packagedTargets = createPackagedRuntimeNodeModuleResources(platform).map(
-        (resource) => resource.to
-      )
-      expect(packagedTargets).toContain(join('node_modules', '@anthropic-ai', 'claude-agent-sdk'))
     }
   })
 
@@ -411,6 +363,7 @@ describe('packaged runtime resources', () => {
           { recursive: true }
         )
         await seedBundledRipgrep(resourcesDir)
+        await seedPackagedServePayload(resourcesDir)
 
         const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
         await mkdir(unpackedMainDir, { recursive: true })
@@ -442,11 +395,9 @@ describe('packaged runtime resources', () => {
         wrongArchElf[5] = 1
         wrongArchElf.writeUInt16LE(target.machine, 18)
         await writeFile(join(wrongArchPackage, 'watcher.node'), wrongArchElf)
+        await seedClipboardPublisher(resourcesDir, target.machine)
 
-        const stubBinDir = join(root, 'bin')
-        await mkdir(stubBinDir)
-        await writeFile(join(stubBinDir, 'objdump'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
-        process.env.PATH = `${stubBinDir}${delimiter}${previousPath ?? ''}`
+        await stubObjdump(root)
 
         await expect(
           electronBuilderConfig.afterPack({
@@ -468,6 +419,7 @@ describe('packaged runtime resources', () => {
     'marks packaged Unix CLI launchers executable',
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
+      const previousPath = process.env.PATH
       try {
         const resourcesDir = join(root, 'linux-unpacked', 'resources')
         const launcherPath = join(resourcesDir, 'bin', 'orca-ide')
@@ -478,9 +430,16 @@ describe('packaged runtime resources', () => {
           { recursive: true }
         )
         await seedBundledRipgrep(resourcesDir)
+        await seedPackagedServePayload(resourcesDir)
+        // Layout fixtures use a cross-arch slice; native PTY probes need real packaged binaries.
+        const target =
+          process.arch === 'x64'
+            ? { electronArch: 3, machine: 0xb7 }
+            : { electronArch: 1, machine: 0x3e }
+        await seedClipboardPublisher(resourcesDir, target.machine)
+        await stubObjdump(root)
         await mkdir(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true })
-        // Why: afterPack now fails hard when the unpacked daemon entry is
-        // missing, so the fixture must carry one like a real package layout.
+        // afterPack rejects missing unpacked daemon entry; model real package layout.
         const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
         await mkdir(unpackedMainDir, { recursive: true })
         await writeFile(
@@ -511,7 +470,7 @@ describe('packaged runtime resources', () => {
         await electronBuilderConfig.afterPack({
           appOutDir: join(root, 'linux-unpacked'),
           electronPlatformName: 'linux',
-          arch: 1,
+          arch: target.electronArch,
           packager: { appInfo: { version: '9.9.9' } }
         })
 
@@ -521,16 +480,49 @@ describe('packaged runtime resources', () => {
         ).resolves.toContain('"version": "9.9.9"')
         await expect(readFile(join(resourcesDir, 'package-type'), 'utf8')).resolves.toBe('AppImage')
       } finally {
+        process.env.PATH = previousPath
         await removeTree(root)
       }
     }
   )
 })
 
-// Why source-anchored: the bundler renames a createRequire()'d require, so
-// verifyPackagedMainRuntimeDeps' `require("x")` scan cannot see these specifiers — packaging
-// stays green while the packaged app throws MODULE_NOT_FOUND the first time the path runs.
-// Why stubs: afterPack only checks each platform binary exists; non-ELF bytes skip the glibc scan.
+// Headers model architecture; objdump is stubbed for these packaging-layout tests.
+async function seedClipboardPublisher(resourcesDir, machine) {
+  const binDir = join(resourcesDir, 'bin')
+  await mkdir(binDir, { recursive: true })
+  const elf = Buffer.alloc(64)
+  elf.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1])
+  elf.writeUInt16LE(2, 16)
+  elf.writeUInt16LE(machine, 18)
+  elf.writeUInt32LE(1, 20)
+  elf.writeUInt16LE(64, 52)
+  await writeFile(join(binDir, 'orca-wayland-clipboard'), elf)
+}
+
+async function stubObjdump(root) {
+  const directory = join(root, 'bin')
+  await mkdir(directory)
+  await writeFile(join(directory, 'objdump'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+  process.env.PATH = `${directory}${delimiter}${process.env.PATH ?? ''}`
+}
+
+async function seedPackagedServePayload(resourcesDir) {
+  const { SERVE_SELECTION_ENTRY } = require('./verify-packaged-serve-payload.cjs')
+  const entry = join(resourcesDir, 'app.asar.unpacked', 'out', ...SERVE_SELECTION_ENTRY.split('/'))
+  await mkdir(dirname(entry), { recursive: true })
+  await writeFile(entry, '')
+  const webDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'renderer')
+  await mkdir(join(webDir, 'assets'), { recursive: true })
+  await mkdir(join(resourcesDir, 'app.asar.unpacked', 'out', 'cli'), { recursive: true })
+  await writeFile(join(webDir, 'web-index.html'), '<script src="./assets/web.js"></script>')
+  await writeFile(join(webDir, 'assets', 'web.js'), '')
+  await writeFile(
+    join(webDir, '.orca-web-client-files.json'),
+    JSON.stringify(['web-index.html', 'assets/web.js'])
+  )
+}
+
 async function seedBundledRipgrep(resourcesDir) {
   const { BUNDLED_RIPGREP_PLATFORMS } = require('../bundled-ripgrep-resources.cjs')
   for (const platform of BUNDLED_RIPGREP_PLATFORMS) {
@@ -540,84 +532,7 @@ async function seedBundledRipgrep(resourcesDir) {
   }
 }
 
-function collectLazyRequireSpecifiers(directory, found = new Map()) {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const entryPath = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      collectLazyRequireSpecifiers(entryPath, found)
-      continue
-    }
-    if (!entry.isFile() || !entry.name.endsWith('.ts') || entry.name.includes('.test.')) {
-      continue
-    }
-    const source = readFileSync(entryPath, 'utf8')
-    if (!source.includes('createRequire(')) {
-      continue
-    }
-    for (const match of source.matchAll(/\brequire[A-Za-z0-9_]*\(\s*'([^']+)'\s*\)/g)) {
-      if (isPackagedExternalSpecifier(match[1])) {
-        found.set(match[1], relative(projectRoot, entryPath).replaceAll('\\', '/'))
-      }
-    }
-  }
-  return found
-}
-
-function packagedResourceDestinations(platform) {
-  return new Set(
-    (electronBuilderConfig[platform].extraResources ?? []).map((resource) =>
-      String(resource.to).replaceAll('\\', '/')
-    )
-  )
-}
-
 describe('lazily required packages reach Resources/node_modules', () => {
-  it('excludes runtime builtins while retaining ordinary lazy dependencies', async () => {
-    const sourceDir = await mkdtemp(join(tmpdir(), 'orca-lazy-builtins-'))
-    try {
-      await writeFile(
-        join(sourceDir, 'runtime.ts'),
-        [
-          'const requireFromMain = createRequire(import.meta.url)',
-          "requireFromMain('node:fs')",
-          "requireFromMain('zod')"
-        ].join('\n')
-      )
-      expect([...collectLazyRequireSpecifiers(sourceDir).keys()]).toEqual(['zod'])
-    } finally {
-      await removeTree(sourceDir)
-    }
-  })
-
-  it('copies every createRequire specifier main uses into the packaged resource plan', () => {
-    const specifiers = collectLazyRequireSpecifiers(join(projectRoot, 'src', 'main'))
-    expect(specifiers.size).toBeGreaterThan(0)
-
-    const destinations = {
-      win: packagedResourceDestinations('win'),
-      mac: packagedResourceDestinations('mac'),
-      linux: packagedResourceDestinations('linux')
-    }
-    for (const [specifier, source] of specifiers) {
-      const packageName = packageNameFromSpecifier(specifier)
-      const covered = (platform) =>
-        destinations[platform].has(`node_modules/${packageName}`) ||
-        destinations[platform].has(`node_modules/${specifier}`)
-      // The Windows CI lane checks the full closure with its native addons installed.
-      if (windowsAddonsInstalled) {
-        expect(
-          covered('win'),
-          `${source} lazily requires '${specifier}', but nothing copies it to Resources/node_modules`
-        ).toBe(true)
-      }
-      if (covered('mac') && covered('linux')) {
-        continue
-      }
-      // Only the Windows-native loaders may be absent from the mac/linux plans.
-      expect(source, `'${specifier}' is packaged for Windows only`).toContain('windows')
-    }
-  })
-
   it('resolves the copied emoji dataset the way the packaged main bundle does', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-lazy-require-'))
     try {

@@ -1,4 +1,4 @@
-import { getChangedRanges } from '@tiptap/core'
+import { getChangedRanges, getExtensionField } from '@tiptap/core'
 import { CodeBlock } from '@tiptap/extension-code-block'
 import CodeBlockLowlight, {
   type CodeBlockLowlightOptions
@@ -40,8 +40,12 @@ function highlightBlock(
   defaultLanguage: string | null | undefined
 ): Decoration[] {
   const language = (block.node.attrs.language as string | null | undefined) || defaultLanguage
+  // Why: unlabeled fences show as Plain text, matching the preview's rehype-highlight.
+  if (!language) {
+    return []
+  }
   const highlighted =
-    language && (languages.has(language) || lowlight.registered(language))
+    languages.has(language) || lowlight.registered(language)
       ? lowlight.highlight(language, block.node.textContent)
       : lowlight.highlightAuto(block.node.textContent)
   const decorations: Decoration[] = []
@@ -147,8 +151,6 @@ function updateDecorations(
     return createDecorations(transaction.doc, name, lowlight, languages, defaultLanguage)
   }
 
-  // Why: mapped decorations stay valid outside code blocks touched by the transaction.
-  let next = decorationSet.map(transaction.mapping, transaction.doc)
   const oldBlocks = findCodeBlocksNearRanges(
     transaction.before,
     name,
@@ -156,15 +158,14 @@ function updateDecorations(
   )
   const staleDecorations = new Set<Decoration>()
   for (const block of oldBlocks) {
-    const from = transaction.mapping.map(block.pos, -1)
-    const to = transaction.mapping.map(block.pos + block.node.nodeSize, 1)
-    for (const decoration of next.find(Math.min(from, to), Math.max(from, to))) {
+    for (const decoration of decorationSet.find(block.pos, block.pos + block.node.nodeSize)) {
       staleDecorations.add(decoration)
     }
   }
-  if (staleDecorations.size > 0) {
-    next = next.remove([...staleDecorations])
-  }
+  const unchanged =
+    staleDecorations.size > 0 ? decorationSet.remove([...staleDecorations]) : decorationSet
+  // Why: mapped decorations stay valid outside code blocks touched by the transaction.
+  const next = unchanged.map(transaction.mapping, transaction.doc)
 
   const newBlocks = findCodeBlocksNearRanges(
     transaction.doc,
@@ -207,8 +208,12 @@ export const RichMarkdownCodeBlockLowlight = CodeBlock.extend<CodeBlockLowlightO
     return { ...CodeBlockLowlight.options }
   },
   addProseMirrorPlugins() {
+    // Why: Tiptap copies this method into child configs, so this.parent() would re-enter it and install a second plugin.
+    const basePlugins = getExtensionField<
+      NonNullable<typeof CodeBlock.config.addProseMirrorPlugins>
+    >(CodeBlock, 'addProseMirrorPlugins', this)
     return [
-      ...(this.parent?.() ?? []),
+      ...(basePlugins?.() ?? []),
       createRichMarkdownLowlightPlugin({
         name: this.name,
         lowlight: this.options.lowlight as Lowlight,

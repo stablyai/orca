@@ -5,7 +5,10 @@ import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-ty
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { listWorktreesStrict } from '../../../git/worktree'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
-import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
+import {
+  SshHostNotServedError,
+  SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
+} from '../../../providers/ssh-host-not-served-error'
 import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
 import {
   getNestedWorktreeRemovalPlan,
@@ -25,9 +28,13 @@ export async function previewNestedWorktreeRemoval(
     throw new Error('Nested worktree deletion is only available for Git workspaces.')
   }
   assertRemovalHostMatchesRepoRow(repo, repo.id, hostId)
-  const worktrees = repo.connectionId
-    ? await requireSshGitProvider(repo.connectionId).listWorktrees(repo.path)
-    : await listWorktreesStrict(repo.path, getLocalProjectWorktreeGitOptions(context.store, repo))
+  if (repo.connectionId) {
+    throw new SshHostNotServedError(repo.connectionId, SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE)
+  }
+  const worktrees = await listWorktreesStrict(
+    repo.path,
+    getLocalProjectWorktreeGitOptions(context.store, repo)
+  )
   return getNestedWorktreeRemovalPlan({
     repoPath: repo.path,
     worktreePath,

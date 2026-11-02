@@ -149,8 +149,6 @@ export function useMobileTasksProjectMetadataActions(model: ProjectThreadReplyAc
       }
       setProjectMutating(true)
       try {
-        // Clearing and setting a field are different methods with different params, so each arm
-        // sends its own operation rather than one call picking a method string.
         const written =
           value === null
             ? githubProjectFieldClear.interpret(

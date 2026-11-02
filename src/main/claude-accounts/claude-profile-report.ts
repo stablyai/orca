@@ -1,19 +1,5 @@
-import type { CLAUDE_PROFILE_HISTORY_DIRS } from './claude-profile-history'
-import type {
-  CLAUDE_PROFILE_RESOURCE_DIRS,
-  CLAUDE_PROFILE_RESOURCE_FILES
-} from './claude-profile-provisioning'
-
-export type ClaudeProfileSurface =
-  | 'profile'
-  | (typeof CLAUDE_PROFILE_HISTORY_DIRS)[number]
-  | 'history.jsonl'
-  | (typeof CLAUDE_PROFILE_RESOURCE_DIRS)[number]
-  | (typeof CLAUDE_PROFILE_RESOURCE_FILES)[number]
-  | 'settings.json'
-  | '.claude.json'
-  | 'ledger'
-  | 'hooks'
+/** A setup step or shared resource name, such as `hooks` or `settings.json`. */
+export type ClaudeProfileSurface = string
 
 export type ClaudeProfileSurfaceOutcome =
   | 'linked'
@@ -24,7 +10,6 @@ export type ClaudeProfileSurfaceOutcome =
   | 'absent'
   | 'failed'
 
-/** Closed so callers branch on a code, never on message text. */
 export type ClaudeProfileWarningCode =
   | 'invalid-profile'
   | 'unreadable'
@@ -71,7 +56,6 @@ export function warnClaudeProfile(
   })
 }
 
-/** One surface's failure is reported and never stops the surfaces after it. */
 export async function runClaudeProfileSurface(
   report: ClaudeProfileReport,
   surface: ClaudeProfileSurface,

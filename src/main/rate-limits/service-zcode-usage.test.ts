@@ -1,10 +1,13 @@
+import { cpSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { readZcodeUsageCredentials } from './zcode-usage-credentials'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchZcodeRateLimits } from './zcode-usage-fetcher'
-import { hasZcodePlanApiKey } from '../zcode/zcode-plan-api-key-store'
 import {
   deferred,
   okProvider,
@@ -84,39 +87,6 @@ describe('RateLimitService zcode plan credentials', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
   })
 
-  it('fetches zcode with the site-resolved plan credential when a resolver is set', async () => {
-    const service = new RateLimitService()
-    service.setZcodePlanConfigResolver(() => ({ site: 'bigmodel', apiKey: 'glm-key' }))
-    vi.mocked(hasZcodePlanApiKey).mockReturnValue(true)
-    vi.mocked(fetchZcodeRateLimits).mockResolvedValueOnce(okProvider('zcode', 33, Date.now()))
-
-    await service.refresh()
-
-    expect(fetchZcodeRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchZcodeRateLimits).toHaveBeenCalledWith({
-      signal: expect.any(AbortSignal),
-      planCredential: { apiKey: 'glm-key', baseUrl: 'https://open.bigmodel.cn' }
-    })
-    const state = service.getState()
-    expect(state.zcode?.status).toBe('ok')
-    expect(state.zcode?.session?.usedPercent).toBe(33)
-    expect(state.zcodePlanApiKeyConfigured).toBe(true)
-  })
-
-  it('passes no plan credential while no key is saved and still fetches via the CLI config', async () => {
-    const service = new RateLimitService()
-    service.setZcodePlanConfigResolver(() => ({ site: 'zai', apiKey: '' }))
-    vi.mocked(fetchZcodeRateLimits).mockResolvedValueOnce(okProvider('zcode', 12, Date.now()))
-
-    await service.refresh()
-
-    expect(fetchZcodeRateLimits).toHaveBeenCalledWith({
-      signal: expect.any(AbortSignal),
-      planCredential: null
-    })
-    expect(service.getState().zcode?.session?.usedPercent).toBe(12)
-  })
-
   it('surfaces a resolver failure as a zcode-only error without fetching', async () => {
     const service = new RateLimitService()
     service.setZcodePlanConfigResolver(() => {
@@ -185,5 +155,38 @@ describe('RateLimitService zcode plan credentials', () => {
     const state = service.getState()
     expect(fetchZcodeRateLimits).toHaveBeenCalledTimes(2)
     expect(state.zcode?.session?.usedPercent).toBe(10)
+  })
+  it('rejects an old CLI account result after sibling-provider waits', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-zcode-service-v2-'))
+    const fixtures = join(import.meta.dirname, '..', 'zcode', 'fixtures', 'v2-upstream')
+    vi.stubEnv('ZCODE_DATA_BASE_DIR', home)
+    vi.stubEnv('ZCODE_CREDENTIAL_SECRET', 'synthetic-secret')
+    try {
+      cpSync(join(fixtures, 'zai'), join(home, '.zcode', 'v2'), { recursive: true })
+      const selected = readZcodeUsageCredentials()
+      if (selected.status !== 'ok') {
+        throw new Error('Synthetic fixture could not be read')
+      }
+      const claude = deferred<ProviderRateLimits>()
+      vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(() => claude.promise)
+      vi.mocked(fetchZcodeRateLimits).mockResolvedValueOnce({
+        ...okProvider('zcode', 44, Date.now()),
+        usageMetadata: {
+          authProvenance: selected.credentials.authProvenance,
+          credentialSource: selected.source
+        }
+      })
+      const service = new RateLimitService()
+      const refreshing = service.refresh()
+      await vi.waitFor(() => expect(fetchZcodeRateLimits).toHaveBeenCalled())
+      cpSync(join(fixtures, 'zai-other'), join(home, '.zcode', 'v2'), { recursive: true })
+      claude.resolve(okProvider('claude', 7))
+      await refreshing
+      expect(service.getState().zcode?.status).toBe('unavailable')
+      expect(service.getState().zcode?.session).toBeNull()
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 })

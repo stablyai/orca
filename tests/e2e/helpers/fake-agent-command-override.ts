@@ -9,9 +9,7 @@ export function buildFakeAgentCommandOverride(
   platform: NodeJS.Platform = process.platform,
   terminalWindowsShell: string = FAKE_AGENT_WINDOWS_SHELL
 ): string {
-  // Why resolve rather than assume PowerShell on win32: the startup shell comes
-  // from the user's terminalWindowsShell setting, and a cmd/Git Bash/WSL host
-  // would silently fail to launch a PowerShell-quoted path.
+  // Quote for the configured Windows startup shell; PowerShell quoting fails when the user selects cmd/Git Bash/WSL.
   const shell = resolveStartupShell(
     platform,
     resolveLocalWindowsAgentStartupShell({ platform, isRemote: false, terminalWindowsShell })

@@ -31,10 +31,6 @@ function automation(overrides: Partial<Automation> = {}): Automation {
   }
 }
 
-// `orca automations run` sends users to `orca automations show` to find out where
-// an automation lives. The stored `executionTarget*` fields survive their host's
-// removal untouched, so printing only those renders a dead automation byte-for-byte
-// like a healthy one and the named recovery step cannot be completed.
 describe('formatAutomationShow reports the host the authority projects', () => {
   it('distinguishes a live SSH host from a replaced one by its incarnation', () => {
     const live = formatAutomationShow({
@@ -58,7 +54,7 @@ describe('formatAutomationShow reports the host the authority projects', () => {
     })
 
     expect(output).toContain('host: orphan (no host can run this automation)')
-    // The stored pin stays visible; it is the record's history, not its current owner.
+    // Keep the stored target as history, separately from current host ownership.
     expect(output).toContain('target: ssh:box-1')
   })
 
@@ -71,13 +67,31 @@ describe('formatAutomationShow reports the host the authority projects', () => {
     expect(output).toContain('host: self')
   })
 
-  // An older authority projects no owner; inventing one from the stored fields would
-  // report a removed host as healthy.
   it('omits the host line when the authority reports no owner', () => {
     const output = formatAutomationShow({ automation: automation() })
 
     expect(output).not.toContain('host:')
     expect(output).toContain('target: ssh:box-1')
+  })
+})
+
+describe('formatAutomationShow reports the saved setup choice', () => {
+  it.each([
+    ['run', 'setup: run'],
+    ['skip', 'setup: skip'],
+    [undefined, 'setup: not set']
+  ] as const)('shows saved %s as %s for new-per-run automations', (setupDecision, line) => {
+    const output = formatAutomationShow({ automation: automation({ setupDecision }) })
+
+    expect(output.split('\n')).toContain(line)
+  })
+
+  it('omits setup for existing-workspace automations', () => {
+    const output = formatAutomationShow({
+      automation: automation({ workspaceMode: 'existing', workspaceId: 'wt-1' })
+    })
+
+    expect(output).not.toContain('setup:')
   })
 })
 
@@ -87,23 +101,27 @@ describe('formatAutomationList reports each row host', () => {
       automations: [automation(), automation({ id: 'auto-2', name: 'Weekly' })],
       items: [
         {
-          automationId: 'auto-1',
-          selector: { kind: 'ssh', targetId: 'box-1', targetGeneration: 4 }
-        },
-        {
           automationId: 'auto-2',
           selector: { kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.targetMissing }
+        },
+        {
+          automationId: 'auto-1',
+          selector: { kind: 'ssh', targetId: 'box-1', targetGeneration: 4 }
         }
       ]
     })
 
-    expect(output).toContain('host: ssh:box-1 (generation 4)')
-    expect(output).toContain(`host: orphan — ${AUTOMATION_ORPHAN_ISSUES.targetMissing}`)
+    const [nightly, weekly] = output.split('\n\n')
+    expect(nightly).toContain('auto-1  Nightly')
+    expect(nightly).toContain('host: ssh:box-1 (generation 4)')
+    expect(weekly).toContain('auto-2  Weekly')
+    expect(weekly).toContain(`host: orphan — ${AUTOMATION_ORPHAN_ISSUES.targetMissing}`)
   })
 
   it('omits the host line for rows an older authority does not qualify', () => {
     const output = formatAutomationList({ automations: [automation()] })
 
+    expect(output).toContain('auto-1  Nightly')
     expect(output).not.toContain('host:')
   })
 })

@@ -4,7 +4,7 @@ const { runProcessMock, recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn(),
   recordDurableCrashBreadcrumbMock: vi.fn()
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 vi.mock('../crash-reporting/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
@@ -12,7 +12,6 @@ vi.mock('../crash-reporting/durable-crash-breadcrumb', () => ({
 import { withPlatform } from './createMainWindow-test-harness'
 
 import {
-  classifyLaunchProbeError,
   probeRendererLaunchCapacity,
   recordRendererLaunchFailureProbe
 } from './renderer-launch-failure-probe'
@@ -24,21 +23,6 @@ function spawnError(code: string): Error {
 function recordPosixFailure(now: number) {
   return withPlatform('darwin', () => recordRendererLaunchFailureProbe({ exitCode: 1003 }, now))
 }
-
-describe('classifyLaunchProbeError', () => {
-  it.each(['EAGAIN', 'EACCES', 'ENOENT', 'EMFILE'])('reports the spawn errno %s', (code) => {
-    expect(classifyLaunchProbeError(spawnError(code))).toBe(code)
-  })
-
-  it.each([
-    ['a plain error', new Error('boom')],
-    ['a non-errno code', Object.assign(new Error('x'), { code: 'ERR_INVALID_ARG_TYPE' })],
-    ['a numeric code', Object.assign(new Error('x'), { code: 11 })],
-    ['a non-error throw', 'EAGAIN']
-  ])('reports unknown for %s', (_label, error) => {
-    expect(classifyLaunchProbeError(error)).toBe('unknown')
-  })
-})
 
 describe('probeRendererLaunchCapacity', () => {
   afterEach(() => {

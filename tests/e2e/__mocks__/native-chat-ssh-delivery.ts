@@ -4,16 +4,15 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import type { sendMobileNativeChatPermissionResponse } from '../../../mobile/src/session/mobile-native-chat-permission-send'
-import { SshChannelMultiplexer } from '../../../src/main/ssh/ssh-channel-multiplexer'
-import { SshPtyProvider } from '../../../src/main/providers/ssh-pty-provider'
+import type { sendMobileNativeChatPermissionResponse } from '../../../mobile/src/session/native-chat/input/mobile-native-chat-permission-send'
 import {
-  HEADER_LENGTH,
-  MessageType,
-  parseJsonRpcMessage
-} from '../../../src/main/ssh/relay-protocol'
+  WRITE_ACCEPTED,
+  writeUnverifiable,
+  type WriteSettlement
+} from '../../../src/shared/pty-write-settlement'
+import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { createPtyWriteInput } from '../../../src/main/ipc/pty/ipc/write-input'
-import type { IPtyProvider } from '../../../src/main/providers/types'
+import type { IPtyProvider } from '../../../src/main/providers/pty-provider-contract'
 import type * as PtyProviderRegistry from '../../../src/main/ipc/pty/provider/registry'
 import { ptyOwnership } from '../../../src/main/ipc/pty/provider/ownership-state'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
@@ -36,57 +35,72 @@ vi.mock('../../../src/main/ipc/pty/provider/registry', async (importOriginal) =>
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ terminalLayoutsByTabId: {} }) } }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' }),
   callRuntimeRpc: (...args: unknown[]) => io.rpc(...args)
 }))
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
   getRemoteRuntimePtyEnvironmentId: (id: string) => (id.startsWith('remote:') ? 'owner' : null),
-  getRemoteRuntimeTerminalHandle: (id: string) => (id.startsWith('remote:') ? 'terminal' : null)
+  getRemoteRuntimeTerminalHandle: (id: string) => (id.startsWith('remote:') ? 'terminal' : null),
+  getRemoteRuntimePtyOwner: (id: string) =>
+    id.startsWith('remote:')
+      ? { target: { kind: 'environment', environmentId: 'owner' }, terminal: 'terminal' }
+      : null
 }))
+
+type SettlingPtyProvider = Omit<IPtyProvider, 'write'> & {
+  write: (id: string, data: string) => boolean
+  hasPty: (id: string) => boolean
+  dispose: () => void
+}
+
+/** A remote PTY owner whose write acknowledgments settle per `mode`, like a host transport. */
+function createSettlingProvider(
+  bytes: string[],
+  mode: 'accepted' | 'lost' | 'slow'
+): SettlingPtyProvider {
+  const timers = new Set<ReturnType<typeof setTimeout>>()
+  const settleAfter = (ms: number, settlement: WriteSettlement): Promise<WriteSettlement> =>
+    new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        timers.delete(timer)
+        resolve(settlement)
+      }, ms)
+      timers.add(timer)
+    })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the delivery paths under test touch only these members.
+  return {
+    hasPty: () => true,
+    write: (_id: string, data: string) => {
+      bytes.push(data)
+      return true
+    },
+    writeWithSettlement: (_id: string, data: string) => {
+      bytes.push(data)
+      if (mode === 'lost') {
+        return settleAfter(10, writeUnverifiable('transport_settlement_lost', true))
+      }
+      if (mode === 'slow' && (data.startsWith('X') || data.startsWith('\x1b[200~X'))) {
+        return settleAfter(1300, WRITE_ACCEPTED)
+      }
+      return Promise.resolve(WRITE_ACCEPTED)
+    },
+    dispose: () => {
+      for (const timer of timers) {
+        clearTimeout(timer)
+      }
+      timers.clear()
+    }
+  } as unknown as SettlingPtyProvider
+}
 
 export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted') {
   const bytes: string[] = []
-  const mux = new SshChannelMultiplexer({
-    supportsWriteSettlement: true,
-    onData: () => {},
-    onClose: () => {},
-    write: (frame, callback) => {
-      if (frame[0] !== MessageType.Regular) {
-        callback?.({ ok: true })
-        return true
-      }
-      const message = parseJsonRpcMessage(frame.subarray(HEADER_LENGTH))
-      if (
-        !('method' in message) ||
-        message.method !== 'pty.data' ||
-        typeof message.params?.data !== 'string'
-      ) {
-        throw new Error('unexpected transport frame')
-      }
-      bytes.push(message.params.data)
-      const settle = (): void =>
-        callback?.(
-          mode === 'lost'
-            ? { ok: false, error: new Error('lost write acknowledgment') }
-            : { ok: true }
-        )
-      if (mode === 'lost') {
-        setTimeout(settle, 10)
-      } else if (mode === 'slow' && message.params.data.startsWith('X')) {
-        setTimeout(settle, 1300)
-      } else {
-        settle()
-      }
-      return true
-    }
-  })
-  const provider = new SshPtyProvider('connection', mux)
+  const provider = createSettlingProvider(bytes, mode)
   vi.spyOn(provider, 'hasPty').mockReturnValue(true)
   const settlement = vi.spyOn(provider, 'writeWithSettlement')
   io.getProvider = () => provider
   const input = createPtyWriteInput({})
   const id = 'ssh:connection@@pty-1'
-  ptyOwnership.set(id, 'connection')
+  ptyOwnership.set(id, toSshExecutionHostId('connection'))
   vi.stubGlobal('window', {
     api: {
       pty: {
@@ -109,7 +123,6 @@ export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted
     close: () => {
       ptyOwnership.delete(id)
       provider.dispose()
-      mux.dispose()
     }
   }
 }
@@ -161,7 +174,7 @@ async function bundleMobilePermissionModule(): Promise<unknown> {
     entryPoints: [
       fileURLToPath(
         new URL(
-          '../../../mobile/src/session/mobile-native-chat-permission-send.ts',
+          '../../../mobile/src/session/native-chat/input/mobile-native-chat-permission-send.ts',
           import.meta.url
         )
       )

@@ -5,7 +5,7 @@ import {
   describeNativeChatTurnStatus,
   formatNativeChatDuration,
   NATIVE_CHAT_TURN_STATUS_COPY
-} from '../../../../shared/native-chat-turn-status'
+} from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import type { AgentTurnOutcome } from '../../../../shared/agent-turn-outcome'
 import { useNativeChatElapsedSeconds } from './use-native-chat-elapsed-seconds'
 
@@ -44,8 +44,7 @@ function turnStatusLabel(
   }
 }
 
-/** The turn bar under the user's message: a running clock while the turn works,
- *  then the settled duration, which toggles the turn's folded detail. */
+/** Run the clock beneath the prompt; after settlement its duration toggles turn details. */
 export function NativeChatWorkingStatus({
   startedAt,
   workedSeconds,
@@ -73,7 +72,10 @@ export function NativeChatWorkingStatus({
   const caret =
     workedSeconds != null && onToggleExpanded ? (
       <ChevronRight
-        className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
+        className={cn(
+          'size-3.5 transition-transform motion-reduce:transition-none',
+          expanded && 'rotate-90'
+        )}
         aria-hidden="true"
       />
     ) : null
@@ -84,7 +86,7 @@ export function NativeChatWorkingStatus({
         data-native-chat-turn-status="settled"
         className={cn(
           className,
-          'w-full text-left hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70'
+          'w-full text-left hover:text-chat-foreground-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
         )}
         aria-label={translate(
           'components.native-chat.status.toggleDetails',
@@ -99,14 +101,20 @@ export function NativeChatWorkingStatus({
     )
   }
 
+  const active = workedSeconds == null
   return (
     <div
       className={className}
-      data-native-chat-turn-status={workedSeconds == null ? 'active' : 'settled'}
-      aria-label={translate(
-        'components.native-chat.status.responding',
-        NATIVE_CHAT_TURN_STATUS_COPY.responding
-      )}
+      data-native-chat-turn-status={active ? 'active' : 'settled'}
+      // Once settled, screen readers read the visible "Worked for…" text instead.
+      aria-label={
+        active
+          ? translate(
+              'components.native-chat.status.responding',
+              NATIVE_CHAT_TURN_STATUS_COPY.responding
+            )
+          : undefined
+      }
     >
       <span>{label}</span>
       {caret}

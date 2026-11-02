@@ -1,15 +1,13 @@
-// The host harness's recovery capsule. A host a test replaced keeps its restart-offer lane running
-// (a withdrawal is fire-and-forget), and nothing else waits for it, so cleanup waits here before it
-// removes the directory whose lock that operation holds.
+// Drain replaced hosts’ fire-and-forget withdrawals before removing their lock directories.
 
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 
 type Capsule = AgentSessionRecoveryCapsule
 
 export class TrackedTestRecoveryCapsule extends AgentSessionRecoveryCapsule {
   private readonly running = new Set<Promise<unknown>>()
 
-  /** Until no operation runs, including one a finished operation's lane starts next. */
+  /** Include follow-up operations queued by finishing work. */
   async settled(): Promise<void> {
     do {
       await Promise.allSettled(this.running)

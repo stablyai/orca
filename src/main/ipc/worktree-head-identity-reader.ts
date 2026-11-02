@@ -8,26 +8,17 @@ import {
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
 
-// Why: the whole point of this reader is replacing `git worktree list` fanout
-// with bounded metadata-file reads, so head freshness never re-creates the
-// spawn pressure that stalled terminal input. Keep it spawn-free.
+// Keep refresh spawn-free: bounded metadata reads avoid Git subprocess pressure on terminal input.
 
 const MAX_SYMREF_DEPTH = 5
-// Head identity refreshes run on every git-common poll. Keep metadata reads
-// bounded while avoiding a serial round trip per linked worktree (especially
-// noticeable on WSL/UNC and network-backed worktrees).
+// Bound parallel metadata reads without serial WSL/UNC round trips per worktree.
 const HEAD_IDENTITY_READ_CONCURRENCY = 8
 
-/** Per-common-dir memo so a scoped refresh re-reads only the entries a watcher
- *  burst could have moved. Misses are never cached: an unresolvable read may be
- *  a transient fs error, so it must be retried rather than remembered. */
+/** Cache scoped identities; unresolved reads must retry rather than becoming permanent misses. */
 export type WorktreeHeadIdentityCache = {
-  /** admin entry dir name → last resolved identity. */
   entries: Map<string, WorktreeHeadIdentity>
-  /** Entries whose last read failed for a reason other than absence. The memo
-   *  keeps their last verified identity; the next pass must re-read them. */
+  /** Retain last verified identities for unreadable entries and retry them next pass. */
   unverified: Set<string>
-  /** last `worktrees/` listing, in readdir order; null before first enumeration. */
   entryNames: string[] | null
   primary: WorktreeHeadIdentity | null
   primaryUnverified: boolean
@@ -45,19 +36,14 @@ export function createWorktreeHeadIdentityCache(): WorktreeHeadIdentityCache {
 
 export type GitCommonHeadIdentityRead = {
   identities: WorktreeHeadIdentity[]
-  /** False when this pass did not fully observe the repo — `worktrees/` could
-   *  not be enumerated, or an entry's metadata could not be read. Callers that
-   *  treat a full read as a freshness checkpoint must not do so on false. */
+  /** Incomplete listing/metadata reads cannot establish a full freshness checkpoint. */
   complete: boolean
 }
 
 /** ref → oid resolved during one pass; null means the ref no longer resolves. */
 type ResolvedRefOids = Map<string, string | null>
 
-// Why: a read that failed for any reason other than absence is an UNKNOWN, not
-// an absence — the same distinction AGENTS.md draws for the SSH verdict
-// vocabulary. Collapsing the two evicts identities Orca still knows and turns a
-// single EMFILE into a full re-read of every worktree on the next pass.
+// Unreadable is unknown, not absent: retain proven identities rather than evicting them on transient errors.
 const UNREADABLE = Symbol('unreadable')
 type Unreadable = typeof UNREADABLE
 
@@ -69,14 +55,12 @@ async function readTrimmedFile(path: string): Promise<string | null | Unreadable
   }
 }
 
-// packed-refs lines are `<oid> <ref>`; `#` headers and `^` peel lines skipped.
 async function readPackedRefs(commonDirPath: string): Promise<Map<string, string> | Unreadable> {
   const refs = new Map<string, string>()
   const content = await readTrimmedFile(join(commonDirPath, 'packed-refs'))
   if (content === UNREADABLE) {
     return UNREADABLE
   }
-  // No packed-refs file at all is a fact: every ref is loose.
   if (content === null) {
     return refs
   }
@@ -93,9 +77,7 @@ async function readPackedRefs(commonDirPath: string): Promise<Map<string, string
   return refs
 }
 
-// Why: ref content comes from repo files an attacker can craft. Git forbids
-// `\` and `:` in ref names, and on Windows `join` also treats `\` as a
-// separator — both must be rejected before splicing the ref into a file path.
+// Repo-authored ref names must reject Windows separators/drive syntax before joining filesystem paths.
 function isSafeRefName(ref: string): boolean {
   if (ref.length === 0 || ref.includes('\\') || ref.includes(':')) {
     return false
@@ -103,8 +85,7 @@ function isSafeRefName(ref: string): boolean {
   return !ref.split('/').some((part) => part === '..' || part === '')
 }
 
-// SHA-1 (40) or SHA-256 (64) object id. Anything else read from disk is not a
-// head and must never be emitted — this also caps what any path escape could leak.
+// Only SHA-1/SHA-256 object IDs may leave this reader, bounding malformed-repo output.
 const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
 function asObjectId(value: string | null | undefined): string | null {
@@ -121,7 +102,6 @@ async function resolveRefToOid(
     if (!isSafeRefName(current)) {
       return null
     }
-    // Branch refs are shared repo state, so loose files live in the common dir.
     const loose = await readTrimmedFile(join(commonDirPath, ...current.split('/')))
     if (loose === UNREADABLE) {
       return UNREADABLE
@@ -156,8 +136,7 @@ async function readHeadIdentity(
   if (head.startsWith('ref: ')) {
     const ref = head.slice('ref: '.length).trim()
     const oid = await resolveRefToOid(commonDirPath, ref, packedRefs)
-    // Only definite outcomes are replayed onto siblings; an unknown must not
-    // evict every other worktree that shares this branch.
+    // Unknown branch reads must not evict cached siblings sharing the branch.
     if (oid === UNREADABLE) {
       return UNREADABLE
     }
@@ -198,9 +177,7 @@ async function readLinkedEntryIdentity(
   )
 }
 
-// Why: mirrors worktree-git-common-polling — a TRANSIENT readdir failure
-// (EIO/ESTALE/EMFILE, network hiccup) must not masquerade as "every worktree
-// removed" and drop the whole memo. Only a genuinely absent dir is empty.
+// Transient listing failure is unknown; only a genuinely absent directory proves an empty catalog.
 async function listLinkedEntryNames(commonDirPath: string): Promise<string[] | null> {
   try {
     const entries = await readdir(join(commonDirPath, 'worktrees'), { withFileTypes: true })
@@ -221,14 +198,7 @@ function knowsEveryScopedEntry(
   return [...scope.entryNames].every((key) => known.has(key))
 }
 
-// Why: `git worktree add --force` lets several worktrees share one branch, and
-// only the committing worktree's HEAD reflog is appended. Replaying every ref
-// resolved this pass onto the cached entries that point at it keeps the others
-// current without re-reading their metadata.
-// A ref that stopped resolving evicts every cached row on it, including rows
-// this pass never read: if the ref really is gone their oids are stale, and we
-// cannot tell that from a transient miss. Evicting costs a re-read next pass;
-// keeping would serve a head we can no longer justify.
+// Shared branches can move without sibling reflog events; replay resolved refs onto cached siblings, evicting unresolved ones.
 function retargetCachedIdentity(
   identity: WorktreeHeadIdentity,
   resolved: ResolvedRefOids
@@ -257,13 +227,7 @@ function applyResolvedRefOids(cache: WorktreeHeadIdentityCache, resolved: Resolv
   }
 }
 
-/** Reads head/branch for the primary checkout and every linked worktree of a
- *  Git common dir using only metadata-file reads (HEAD, gitdir, loose refs,
- *  packed-refs) — no Git subprocess. Unresolvable entries are skipped so
- *  callers never overwrite store state with partial reads.
- *
- *  Pass a `cache` plus a narrowed `scope` to re-read only the entries a watcher
- *  burst could have moved; the defaults re-read everything. */
+/** Read heads without Git subprocesses; cache plus scope narrows reads while incomplete results remain explicit. */
 export async function readGitCommonHeadIdentities(
   commonDirPath: string,
   cache: WorktreeHeadIdentityCache = createWorktreeHeadIdentityCache(),
@@ -274,8 +238,7 @@ export async function readGitCommonHeadIdentities(
     (packedRefsPromise ??= readPackedRefs(commonDirPath))
   const resolved: ResolvedRefOids = new Map()
 
-  // Only the standard `<checkout>/.git` layout maps a common dir back to its
-  // primary checkout path; bare/custom GIT_DIR layouts have no primary row.
+  // Bare/custom Git directories cannot infer a primary checkout from the standard .git parent.
   if (basename(commonDirPath) !== '.git') {
     cache.primary = null
   } else if (scope.all || scope.primary || cache.primary === null || cache.primaryUnverified) {
@@ -310,7 +273,6 @@ export async function readGitCommonHeadIdentities(
         cache.entries.delete(name)
       }
     }
-    // Failed entries may have no cached identity; retire their retry markers on the same evidence.
     for (const name of cache.unverified) {
       if (!present.has(name)) {
         cache.unverified.delete(name)
@@ -321,15 +283,12 @@ export async function readGitCommonHeadIdentities(
     await relist()
   }
   if (entryNames === null) {
-    // Unreadable on the very first pass: report only the primary and leave the
-    // memo unset so the next refresh re-enumerates.
+    // Failed initial listing must leave the memo unset for retry.
     return { identities: cache.primary ? [cache.primary] : [], complete: false }
   }
 
   let entryKeys = entryNames.map(headIdentityEntryKey)
-  // Why: a scope naming an entry the memoized listing does not know means the
-  // listing is behind, not that the entry may be skipped. Never let a named
-  // entry resolve to zero work.
+  // A named entry absent from the memo proves the listing stale, not that no work is needed.
   if (!relisted && !knowsEveryScopedEntry(entryKeys, scope)) {
     await relist()
     entryKeys = entryNames.map(headIdentityEntryKey)
@@ -339,19 +298,16 @@ export async function readGitCommonHeadIdentities(
     (name, index) =>
       scope.all ||
       !cache.entries.has(name) ||
-      // Retried promptly: an unknown from last pass is not evidence of anything.
       cache.unverified.has(name) ||
       scope.entryNames.has(entryKeys[index])
   )
-  // Bounded fan-out so a burst cannot flood the libuv threadpool; publication
-  // order comes from `entryNames` below, not from completion order.
+  // Bound libuv fanout; publish in listing order rather than completion order.
   const reads = await mapWithConcurrency(staleNames, HEAD_IDENTITY_READ_CONCURRENCY, (name) =>
     readLinkedEntryIdentity(commonDirPath, name, packedRefs, resolved)
   )
   staleNames.forEach((name, index) => {
     const identity = reads[index]
     if (identity === UNREADABLE) {
-      // Unknown, not absent: keep the last verified identity and retry next pass.
       cache.unverified.add(name)
       return
     }
@@ -364,9 +320,7 @@ export async function readGitCommonHeadIdentities(
   })
   applyResolvedRefOids(cache, resolved)
 
-  // A failed listing means the add/remove that triggered this burst is not in
-  // the candidate set yet, so forget the listing rather than wait for another
-  // listing event to arrive: the next refresh re-enumerates whatever its scope.
+  // Forget failed listings so the next scoped refresh still re-enumerates missed additions/removals.
   cache.entryNames = listingStale ? null : entryNames
   const identities: WorktreeHeadIdentity[] = cache.primary ? [cache.primary] : []
   for (const name of entryNames) {

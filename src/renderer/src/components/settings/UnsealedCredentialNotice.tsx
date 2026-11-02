@@ -2,17 +2,7 @@ import { TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
 
-/**
- * Warn that a saved credential is sitting on disk unencrypted.
- *
- * Why in Settings and not only the log: the app has always been able to describe this
- * and only ever wrote it to the main-process console, so the users it affects — a host
- * with no usable OS keyring — were told nothing where they could see it (#21827).
- *
- * Why keyed on the stored bytes and not on whether sealing works now: a credential saved
- * before a keyring existed stays plaintext until it is saved again, so capability would
- * report it protected while the file says otherwise.
- */
+/** Warn visibly about stored plaintext (#21827); current keyring capability cannot protect bytes saved before a keyring existed without resaving. */
 export function UnsealedCredentialNotice({
   protection,
   credentialName

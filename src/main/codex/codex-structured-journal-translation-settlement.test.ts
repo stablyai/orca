@@ -1,32 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
-import {
-  journalLifecycleBatchRowBuilder,
-  type JournalLifecycleMutationInput
-} from '../native-chat/agent-session-journal/journal-row-builders'
+import { JournalLifecycleBatchAppender } from '../native-chat/agent-session-journal/journal-lifecycle-batch-appender'
+import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
 import {
   journalRowByteLength,
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from '../native-chat/agent-session-journal/journal-row-schema'
-import {
-  createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventTarget
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
-import { withJournalQueueMembers } from '../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -62,7 +52,6 @@ function recorder() {
   }
 }
 
-/** Fires the coalescing window on demand instead of on wall time. */
 function manualWindow() {
   const pending: (() => void)[] = []
   return {
@@ -98,50 +87,6 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
     schedule: window.schedule
   })
   return { translator, tap, window }
-}
-
-function deferredTarget(
-  log: AgentJournalItemBody[],
-  publishes: string[] = []
-): StructuredAgentSessionEventTarget {
-  return {
-    fence: 7,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the journal members this path calls; the helper adds the in-order ones.
-    journal: withJournalQueueMembers({
-      appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-        log.push(body)
-        return { cursor: { epoch: 'e', sequence: log.length } }
-      }),
-      appendTombstone: vi.fn(async () => ({ epoch: 'e', sequence: log.length })),
-      appendLifecycleBatch: vi.fn(
-        async (input: { mutations: readonly JournalLifecycleMutationInput[] }) => {
-          for (const mutation of input.mutations) {
-            if (mutation.kind === 'item') {
-              log.push(mutation.body)
-            }
-          }
-          return { epoch: 'e', sequence: log.length }
-        }
-      )
-    }) as unknown as StructuredAgentSessionEventTarget['journal'],
-    publish: vi.fn(() => {
-      publishes.push('publish')
-    })
-  }
-}
-
-function hardWatermarkDeferred() {
-  return createDeferredStructuredAgentSessionEventSink({
-    ...testEventSinkLogging(),
-    watermarks: {
-      pauseQueuedBytes: 1,
-      maxQueuedBytes: 1,
-      lowQueuedBytes: 0,
-      pauseQueuedOperations: 1,
-      maxQueuedOperations: 0,
-      lowQueuedOperations: 0
-    }
-  })
 }
 
 function terminalExitBatches(count: number, outputBytes: number): LifecycleBatch[] {
@@ -182,103 +127,29 @@ function terminalExitBatches(count: number, outputBytes: number): LifecycleBatch
 }
 
 function expectLifecycleBatchBounds(batches: readonly LifecycleBatch[]): void {
-  for (const [index, batch] of batches.entries()) {
-    expect(batch.mutations.length).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS)
-    const state = createJournalReducerState(SESSION_ID, 'epoch-test')
-    const row = journalLifecycleBatchRowBuilder(() => state, batch.settlementId, batch.mutations, {
-      fence: 7
-    })(index + 1, index + 1)
-    expect(journalRowByteLength(row)).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
+  const state = createJournalReducerState(SESSION_ID, 'epoch-test')
+  const appender = new JournalLifecycleBatchAppender({
+    state: () => state,
+    cursor: () => ({ epoch: state.epoch, sequence: state.lastSequence }),
+    enqueueRows: async () => []
+  })
+  for (const batch of batches) {
+    const builders = appender.planResolved({
+      settlementId: batch.settlementId,
+      fence: 7,
+      resolve: () => batch.mutations
+    })
+    for (const [index, build] of builders.entries()) {
+      const row = build(index + 1, index + 1)
+      if (row.kind === 'lifecycle-batch') {
+        expect(row.mutations.length).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS)
+        expect(journalRowByteLength(row)).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
+      }
+    }
   }
 }
 
 describe('codex journal translation', () => {
-  it('admits turn start and turn settlement publications across the hard watermark', async () => {
-    const bodies: AgentJournalItemBody[] = []
-    const publishes: string[] = []
-    const deferred = hardWatermarkDeferred()
-    const translator = createCodexJournalTranslator({
-      sink: deferred.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    expect(translator.handle(TURN_STARTED)).toEqual({ accepted: true })
-    translator.handle(
-      notification('item/started', {
-        item: {
-          type: 'commandExecution',
-          id: 'exec-hard-settlement',
-          command: 'run',
-          status: 'inProgress'
-        }
-      })
-    )
-    expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
-      accepted: true
-    })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
-
-    deferred.bind(deferredTarget(bodies, publishes))
-    await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-
-    expect(bodies).toEqual([
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' }),
-      expect.objectContaining({ kind: 'tool-call', state: 'running' }),
-      expect.objectContaining({ kind: 'tool-call', state: 'failed' }),
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
-    ])
-    expect(publishes).toHaveLength(2)
-  })
-
-  it('admits terminal session settlement publication across the hard watermark', async () => {
-    const bodies: AgentJournalItemBody[] = []
-    const publishes: string[] = []
-    const deferred = hardWatermarkDeferred()
-    const translator = createCodexJournalTranslator({
-      sink: deferred.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-
-    translator.handle(TURN_STARTED)
-    translator.handle({
-      type: 'prompt',
-      sessionId: SESSION_ID,
-      threadId: THREAD_ID,
-      method: CODEX_COMMAND_APPROVAL_METHOD,
-      params: { availableDecisions: ['accept', 'decline'] },
-      codexItemId: 'exec-1',
-      promptKey: 'approval-before-exit'
-    })
-    expect(
-      translator.handle({
-        type: 'ended',
-        sessionId: SESSION_ID,
-        reason: 'lost child',
-        cause: 'unexpected-exit',
-        fence: 7,
-        acquisitionGeneration: 'generation-1'
-      })
-    ).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
-
-    deferred.bind(deferredTarget(bodies, publishes))
-    await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-
-    expect(bodies).toEqual([
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' }),
-      expect.objectContaining({
-        kind: 'approval',
-        resolution: expect.objectContaining({ state: 'pending' })
-      }),
-      expect.objectContaining({
-        kind: 'approval',
-        resolution: expect.objectContaining({ state: 'cancelled' })
-      }),
-      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
-    ])
-    expect(publishes).toHaveLength(2)
-  })
-
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {
     const batches: LifecycleBatch[] = []
     let rejected = false
@@ -336,7 +207,6 @@ describe('codex journal translation', () => {
     const mutations = batches.at(-1)?.mutations ?? []
     expect(mutations).toEqual(
       expect.arrayContaining([
-        // The host saw the child go, so the call it was running was cut short.
         expect.objectContaining({
           body: expect.objectContaining({
             kind: 'tool-call',
@@ -410,17 +280,12 @@ describe('codex journal translation', () => {
     expect(JSON.stringify(batches)).toContain('output truncated')
   })
 
-  it('splits many large terminal items before the lifecycle row byte boundary', () => {
+  it('hands many large terminal items to the journal in one settlement', () => {
     const batches = terminalExitBatches(120, 20_000)
     const flattened = batches.flatMap((batch) => batch.mutations)
 
-    expect(batches.length).toBeGreaterThan(1)
-    expect(batches.map((batch) => batch.settlementId)).toEqual(
-      batches.map(
-        (_batch, index) =>
-          `provider-exit:${SESSION_ID}:7:generation-1:${index + 1}/${batches.length}`
-      )
-    )
+    expect(batches).toHaveLength(1)
+    expect(batches[0]?.settlementId).toBe(`provider-exit:${SESSION_ID}:7:generation-1`)
     expect(flattened).toHaveLength(121)
     expect(flattened.at(-1)).toMatchObject({
       kind: 'item',
@@ -429,17 +294,14 @@ describe('codex journal translation', () => {
     expectLifecycleBatchBounds(batches)
   })
 
-  it('partitions large terminal settlements by both byte and mutation bounds', () => {
+  it('leaves partitioning by byte and mutation bounds to the journal', () => {
     const batches = terminalExitBatches(240, 20_000)
-    const mutationOnlyChunkCount = Math.ceil(
-      batches.flatMap((batch) => batch.mutations).length / MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
-    )
-
-    expect(batches.length).toBeGreaterThan(mutationOnlyChunkCount)
+    expect(batches).toHaveLength(1)
+    expect(batches[0]?.mutations).toHaveLength(241)
     expectLifecycleBatchBounds(batches)
   })
 
-  it('bounds one streamed assistant settlement before lifecycle batching', () => {
+  it('settles an oversized streamed reply whole, as its own row outside a lifecycle batch', () => {
     const tap = recorder()
     const batches: LifecycleBatch[] = []
     tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
@@ -483,13 +345,12 @@ describe('codex journal translation', () => {
         ? settled.body.blocks[0].text
         : ''
 
-    expect(checkpointText).toContain('output truncated')
-    expect(settledText).toContain('output truncated')
-    expect(Buffer.byteLength(settledText, 'utf8')).toBeLessThan(20 * 1024)
+    expect(oversized.startsWith(checkpointText)).toBe(true)
+    expect(settledText).toBe(oversized)
     expectLifecycleBatchBounds(batches)
   })
 
-  it('bounds authoritative completed assistant text before the journal append', () => {
+  it('saves authoritative completed assistant text whole', () => {
     const { translator, tap } = translatorWith()
     const oversized = 'b'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES + 1_024)
 
@@ -503,8 +364,7 @@ describe('codex journal translation', () => {
     const body = tap.rows[0]?.body
     const text =
       body?.kind === 'message' && body.blocks[0]?.type === 'text' ? body.blocks[0].text : ''
-    expect(text).toContain('output truncated')
-    expect(Buffer.byteLength(JSON.stringify(body), 'utf8')).toBeLessThan(20 * 1024)
+    expect(text).toBe(oversized)
   })
 
   it('terminalizes an active tool when its turn completes', () => {
@@ -566,7 +426,6 @@ describe('codex journal translation', () => {
         ]
       }
     ])
-    // A completed turn proves no interruption.
     expect(batches[0]?.mutations[0]).not.toHaveProperty('body.endedAs')
   })
 
@@ -652,14 +511,11 @@ describe('codex journal translation', () => {
     ask('approval-a')
     ask('approval-b')
 
-    // Two asks, two answerable rows — keying by the tool item would have made the
-    // second ask overwrite the first, leaving the turn blocked.
     const approvals = tap.rows.slice(-2)
     expect(approvals.map((row) => row.key)).toEqual([
       'orca:codex-prompt%3Athread-abc%3Aapproval-a',
       'orca:codex-prompt%3Athread-abc%3Aapproval-b'
     ])
-    // Both still name the command the shared item announced.
     expect(approvals.every((row) => (row.body as { detail?: string }).detail === 'ls')).toBe(true)
     expect(tap.bound.map(([, , promptKey]) => promptKey)).toEqual(['approval-a', 'approval-b'])
   })

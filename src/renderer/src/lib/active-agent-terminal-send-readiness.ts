@@ -1,8 +1,9 @@
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-types'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import type { ActiveAgentNotesSendFailureCode } from './active-agent-note-send-result'
-import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
-import type { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   runtimeFailureCode,
   TERMINAL_RUNTIME_FAILURE_CODES
@@ -24,7 +25,7 @@ export type TerminalAgentSendReadinessResult = {
 }
 
 export async function getTerminalAgentSendReadiness(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
   options: { allowLegacyFallback: boolean }
 ): Promise<TerminalAgentSendReadinessResult> {
@@ -45,12 +46,10 @@ export async function getTerminalAgentSendReadiness(
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       if (!options.allowLegacyFallback) {
-        // Why: selected-target sends are immediate; without terminal.agentStatus
-        // an older remote runtime cannot rule out permission/action prompts.
+        // Immediate selected-target sends require agentStatus to rule out permission/action prompts on older hosts.
         return { status: 'status-unavailable', supportsGuardedSend: false }
       }
-      // Why: active-focused sends still wait for tui-idle, preserving old
-      // runtime compatibility without immediate selected-target risk.
+      // Focused sends still wait for tui-idle, preserving older-runtime compatibility.
       return await getLegacyTerminalAgentSendStatus(runtimeTarget, terminalHandle)
     }
     if (isRuntimeTerminalUnavailable(error)) {
@@ -65,7 +64,7 @@ export async function getTerminalAgentSendReadiness(
 }
 
 async function getLegacyTerminalAgentSendStatus(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   terminalHandle: string
 ): Promise<TerminalAgentSendReadinessResult> {
   try {

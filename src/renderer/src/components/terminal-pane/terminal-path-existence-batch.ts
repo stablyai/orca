@@ -4,7 +4,6 @@ import {
 } from '../../../../shared/path-existence-batch'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-client-target'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 
 type PendingPath = {
@@ -29,13 +28,13 @@ export function createTerminalPathExistenceBatch(): (
   const groups = new Map<string, PathGroup>()
   let queued = false
   return (context, path, remote) => {
-    const target = getActiveRuntimeTarget(context.settings)
+    const target = context.target
     const pairingRevision =
       target.kind === 'environment'
         ? captureRuntimeEnvironmentRequestRevision(target.environmentId)
         : undefined
     const key = JSON.stringify([
-      context.settings?.activeRuntimeEnvironmentId,
+      target.kind === 'environment' ? target.environmentId : null,
       context.worktreeId,
       context.worktreePath,
       context.connectionId,
@@ -98,10 +97,19 @@ export function createTerminalPathExistenceBatch(): (
         const values = window.api.shell.pathsExist
           ? await window.api.shell.pathsExist(paths)
           : await Promise.all(paths.map((path) => window.api.shell.pathExists(path)))
-        if (values.length !== paths.length || values.some((value) => typeof value !== 'boolean')) {
+        if (values.length !== paths.length) {
           throw new Error('Invalid local path existence response')
         }
-        results = values.map((exists) => ({ exists }))
+        results = values.map((value): PathExistenceResult => {
+          if (typeof value === 'boolean') {
+            return { exists: value }
+          }
+          // A refused path (e.g. in a stopped WSL distro) is unverifiable, never missing.
+          if (value && typeof value === 'object' && typeof value.error === 'string') {
+            return { error: value.error }
+          }
+          throw new Error('Invalid local path existence response')
+        })
       }
       results.forEach((result, index) => {
         if ('exists' in result) {

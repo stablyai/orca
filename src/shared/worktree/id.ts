@@ -14,12 +14,14 @@ const FOLDER_WORKSPACE_INSTANCE_SUFFIX = new RegExp(
   `${FOLDER_WORKSPACE_INSTANCE_SEPARATOR.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[0-9a-f-]{36}$`
 )
 
-/**
- * Worktree id of the repo's own checkout. A bare repo id is never a valid worktree id —
- * runtimes reject it with `worktree_id_requires_full_path` (#16447).
- */
+/** Use the full repoId::path; runtimes reject bare repo IDs with worktree_id_requires_full_path (#16447). */
 export function getRepoMainWorktreeId(repo: Pick<Repo, 'id' | 'path'>): string {
-  return `${repo.id}${WORKTREE_ID_SEPARATOR}${repo.path}`
+  return composeWorktreeId(repo.id, repo.path)
+}
+
+/** Worktree id for a checkout, spelled exactly as given: ids are never reassigned by a fold. */
+export function composeWorktreeId(repoId: string, worktreePath: string): string {
+  return `${repoId}${WORKTREE_ID_SEPARATOR}${worktreePath}`
 }
 
 export function getRepoIdFromWorktreeId(worktreeId: string): string {
@@ -27,32 +29,20 @@ export function getRepoIdFromWorktreeId(worktreeId: string): string {
   return separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
 }
 
-/**
- * Canonical comparison form of a worktree id: the repoId is compared EXACT and only the path folds,
- * through the same `normalizeRuntimePathForComparison` a `path:` selector has always applied and
- * byte-exact id matching denied the renderer (#16243). Null for a malformed id, so callers keep
- * exact matching for it. Comparison only — never persist or return this key.
- */
-export function worktreeIdComparisonKey(worktreeId: string): string | null {
+/** Comparison only; never persist/return the key. Keep repo IDs exact, fold only path spelling as path: selectors do, and leave malformed IDs unchanged (#16243). */
+export function worktreeIdentityKey(worktreeId: string): string {
   const parsed = splitWorktreeId(worktreeId)
   if (!parsed || !parsed.repoId || !parsed.worktreePath) {
-    return null
+    return worktreeId
   }
   return `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${normalizeRuntimePathForComparison(
     parsed.worktreePath
   )}`
 }
 
-/**
- * Why: workspace identity is per *workspace*, not per checkout dir. Folder projects back several
- * independent workspaces with one directory, separated only by the `::workspace:<uuid>` suffix that
- * filesystem callers must strip; stripping it here instead lets one session steal a sibling's PTYs.
- * Normalize only path spelling, so Windows/WSL/SSH ids still match themselves across hosts, and
- * fall back to exact equality for a malformed id.
- */
+/** Preserve folder-workspace instance suffixes: several sessions share one directory and must not steal sibling PTYs. Normalize path spelling only. */
 export function worktreeIdsEqual(left: string, right: string): boolean {
-  const leftKey = worktreeIdComparisonKey(left)
-  return leftKey === null ? left === right : leftKey === worktreeIdComparisonKey(right)
+  return worktreeIdentityKey(left) === worktreeIdentityKey(right)
 }
 
 export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
@@ -66,6 +56,26 @@ export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
   }
 }
 
+/** `worktreeId` with its path mapped; the repo id and a folder workspace's instance suffix stay. */
+export function rewriteWorktreeIdPath(
+  worktreeId: string,
+  mapPath: (path: string) => string
+): string {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed || !parsed.repoId || !parsed.worktreePath) {
+    return worktreeId
+  }
+  const suffixAt = parsed.worktreePath.lastIndexOf(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+  const instanceId = parsed.worktreePath.slice(
+    suffixAt + FOLDER_WORKSPACE_INSTANCE_SEPARATOR.length
+  )
+  const suffix =
+    suffixAt > 0 && /^[0-9a-f-]{36}$/.test(instanceId) ? parsed.worktreePath.slice(suffixAt) : ''
+  const path = parsed.worktreePath.slice(0, parsed.worktreePath.length - suffix.length)
+  const mapped = mapPath(path)
+  return mapped === path ? worktreeId : `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${mapped}${suffix}`
+}
+
 export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktreeId | null {
   const parsed = splitWorktreeId(worktreeId)
   if (!parsed) {
@@ -73,9 +83,7 @@ export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktree
   }
   return {
     repoId: parsed.repoId,
-    // Why: folder projects can have multiple workspace sessions backed by the
-    // same directory. Their IDs carry a UUID suffix, but filesystem callers
-    // still need the real folder path as cwd/root.
+    // Filesystem callers need the folder path without its workspace-session UUID suffix.
     worktreePath: parsed.worktreePath.replace(FOLDER_WORKSPACE_INSTANCE_SUFFIX, '')
   }
 }

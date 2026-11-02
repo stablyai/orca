@@ -2,6 +2,8 @@ import { vi } from 'vitest'
 import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-delayed-delivery'
 import * as agentStatusStartupSnapshot from '@/hooks/ipc-events/agent-status-startup-snapshot'
 import { drainFakeTimerWork, flushAsyncTicks } from './pty-connection-test-async'
+import { takeTerminalTestPanes } from './pty-connection-test-pane-fixtures'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
@@ -68,6 +70,7 @@ export async function installTerminalTestGlobals(): Promise<void> {
         setHiddenRendererPty: vi.fn(),
         setPtyDeliveryInterest: vi.fn(),
         ackColdRestore: vi.fn(),
+        ackHiddenOutputRestoreApplied: vi.fn(),
         onClearBufferRequest: vi.fn(() => vi.fn()),
         onResetInputModesRequest: vi.fn(() => vi.fn()),
         resetInputModes: vi.fn(),
@@ -116,11 +119,14 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   // Drain deferred confirmation work before the next test replaces its store mock.
   await drainFakeTimerWork()
   vi.useRealTimers()
-  // Why: reattach/settle chains await a real promise and then touch `window.api`.
-  // Under fake timers those continuations cannot run, so they only become
-  // schedulable here — flush them while `window` still exists, or a late
-  // continuation throws `ReferenceError: window is not defined` and fails the
-  // whole file (orca#14728, CI-only because it needs a slow enough tick).
+  // Flush real-promise settle continuations while window still exists; fake timers postpone them beyond teardown (orca#14728).
+  await flushAsyncTicks(20)
+  const { cancelPendingSafeFitContinuations } =
+    await import('@/lib/pane-manager/pane-fit-continuation-registry')
+  for (const pane of takeTerminalTestPanes()) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture panes provide the fit and terminal members read during cancellation.
+    cancelPendingSafeFitContinuations(pane as unknown as ManagedPane)
+  }
   await flushAsyncTicks(20)
   statusSnapshot?.dispose()
   resetStatusSnapshot?.dispose()
@@ -144,11 +150,7 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   } else {
     delete (globalThis as { document?: Document }).document
   }
-  // Why: an in-flight reattach/settle chain can resolve after teardown and call
-  // `window.api.pty.*`. Deleting `window` turned that into a ReferenceError that
-  // failed the whole file (orca#14728). A real renderer never loses `window`, so
-  // swap in an inert stand-in instead: late calls become harmless no-ops, and the
-  // next test replaces it wholesale via installTerminalTestGlobals().
+  // Late reattach continuations can outlive teardown; keep an inert window like a real renderer until the next test installs its replacement (orca#14728).
   ;(globalThis as unknown as { window?: unknown }).window = { api: createInertApi() }
   delete (globalThis as Record<string, unknown>).__ptyConnectDiag
   resetAgentStartupDelayedDeliveryForTests()

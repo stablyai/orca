@@ -60,6 +60,10 @@ describe.skipIf(process.platform === 'win32')('static ELF and remote musl payloa
 
   it.each([
     ['missing program headers', 'Dynamic Section:\n'],
+    [
+      'version references without a dynamic segment',
+      `${STATIC_HEADERS}Version References:\n  required from libc.so.6:\n    0x0 0x00 02 GLIBC_2.17\n`
+    ],
     ['dynamic segment', `${STATIC_HEADERS} DYNAMIC off 0x0000000000001000\n`],
     ['interpreter segment', `${STATIC_HEADERS} INTERP off 0x0000000000001000\n`],
     ['dependency without a dynamic segment', `${STATIC_HEADERS}  NEEDED libc.so.6\n`]

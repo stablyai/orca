@@ -8,13 +8,7 @@ import {
   assertNoCarriageReturnsInSource
 } from './mobile-web-source-line-endings.mjs'
 
-/**
- * `core.autocrlf=true` ships in the Git-for-Windows system config, so without a pin a Windows
- * runner checks the page's source out as CRLF. Every text byte under these trees is hashed into an
- * asset digest and from there into the buildId, so the same commit would ship a different bundle
- * id from a Windows runner than from a Linux one, and a phone that had the Linux build cached
- * would fetch the whole page again.
- */
+// Git-for-Windows defaults autocrlf=true; pin LF or same commit produces different bundle IDs and forces phone redownload.
 const projectDir = resolve(import.meta.dirname, '../..')
 const PAGE_SOURCE_TREES = ['mobile/src', 'mobile/app', 'mobile/web-entry']
 
@@ -26,14 +20,12 @@ function git(args) {
   })
 }
 
-/** `git check-attr -z` emits NUL-separated path/attr/value triples. Paths go over stdin because
- *  the page's trees hold thousands of files, well past a single argv. */
+// Pass thousands of paths over stdin to avoid argv limit; check-attr -z returns NUL path/attr/value triples.
 function attributes(name, paths) {
   const output = execFileSync('git', ['check-attr', '-z', name, '--stdin'], {
     cwd: projectDir,
     encoding: 'utf8',
-    // NUL-separated on the way in as well: with -z that is what git parses, and a newline
-    // would make the whole list one path whose name carries the others.
+    // Input is NUL-separated too; with -z, newline list becomes one invalid compound path.
     input: `${paths.join('\0')}\0`,
     maxBuffer: 256 * 1024 * 1024
   })
@@ -70,8 +62,7 @@ describe('the page source line-ending pin', () => {
     )
   })
 
-  // The assertion above only sees files that exist today. These fix the pattern itself: broad
-  // enough to cover a file added tomorrow, narrow enough not to claim a neighbouring tree.
+  // Test future-path patterns as well as current files: cover intended tree without claiming neighbors.
   it.each([
     ['mobile/src/deep/nested/module.ts', 'eol', 'lf'],
     ['mobile/app/h/[hostId]/new-route.tsx', 'eol', 'lf'],

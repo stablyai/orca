@@ -2,20 +2,11 @@ import { createHash } from 'node:crypto'
 import type { DiscoveredSkill, SkillDiscoverySource, SkillSourceKind } from '../../shared/skills'
 import type { SkillScanRoot } from './skill-discovery-sources'
 
-/**
- * Classifying and ordering the skills a scan found.
- *
- * Split out of `skill-discovery-sources.ts`, which is about WHERE to scan; this is about
- * what a found file is and what order the results come back in.
- */
-
 export function stablePathId(pathValue: string): string {
   return createHash('sha1').update(pathValue).digest('hex').slice(0, 16)
 }
 
-// Skill classification and ordering are identical for native and WSL discovery;
-// only the path arithmetic differs (node:path vs pathPosix), so both callers
-// share these and pass the matching path adapter.
+// Native/WSL share classification/order; inject host-specific path arithmetic.
 type SkillRelativePathApi = { relative: (from: string, to: string) => string; sep: string }
 
 export function sourceKindForSkill(

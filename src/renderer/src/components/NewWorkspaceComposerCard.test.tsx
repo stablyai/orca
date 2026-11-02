@@ -57,8 +57,7 @@ vi.mock('@/components/agent/AgentCombobox', () => ({
   default: () => <button type="button">Agent picker</button>
 }))
 
-// Stub the host-add dialog to its `mode` — the composer's job is to open it with the right
-// mode; the dialog's own SSH/runtime IPC has separate coverage.
+// Assert the Add Host mode here; the dialog covers its own SSH/runtime behavior.
 vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({
   AddRemoteHostDialog: ({ mode }: { mode: 'ssh' | 'server' | null }) =>
     mode ? <div data-testid="add-remote-host-dialog" data-mode={mode} /> : null
@@ -307,7 +306,6 @@ function changeInputValue(input: HTMLInputElement, value: string): void {
 }
 
 function openRunTargetPicker(container: HTMLElement): void {
-  // The field is the search box; clicking its shell focuses it and opens the list.
   const runTargetShell = container.querySelector<HTMLElement>(
     'div[data-run-target-combobox-root="true"]'
   )
@@ -316,7 +314,6 @@ function openRunTargetPicker(container: HTMLElement): void {
 }
 
 function findRunTargetItem(label: string): HTMLElement | undefined {
-  // Rows are listbox options; "Add host" is the pinned footer row (also an option).
   return [
     ...document.body.querySelectorAll<HTMLElement>('[role="option"], [data-run-target-add-host]')
   ].find((item) => item.textContent?.includes(label))
@@ -441,11 +438,10 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
   })
 
   it('keeps the reuse-branch row collapsed until a local branch is reusable', () => {
-    // Why: the row stays mounted (for the smooth height transition) but is
-    // collapsed + aria-hidden when reuse isn't possible.
+    // Reuse stays mounted for height animation; unavailable rows are collapsed and aria-hidden.
     current = renderCard({ canReuseSelectedBranch: false })
     const collapsedReuse = [...current.container.querySelectorAll('[aria-hidden="true"]')].find(
-      (el) => el.textContent?.includes('Reuse branch')
+      (el) => el.textContent?.includes('Existing branch')
     )
     expect(collapsedReuse).toBeTruthy()
 
@@ -453,46 +449,41 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     current = renderCard({ canReuseSelectedBranch: true, reuseSelectedBranch: true })
     const reuseLabel = [...current.container.querySelectorAll('label')].find((label) =>
-      label.textContent?.includes('Reuse branch')
+      label.textContent?.includes('Existing branch')
     )
     expect(reuseLabel).toBeTruthy()
-    // Visible: not inside an aria-hidden (collapsed) wrapper.
     expect(reuseLabel?.closest('[aria-hidden="true"]')).toBeNull()
-    expect(current.container.textContent).toContain(
-      'Check out the existing branch instead of creating a new one from it.'
-    )
+    expect(current.container.textContent).toContain('New commits go on this branch.')
   })
 
-  it('emits the toggled value from the reuse checkbox in both directions', () => {
-    const clickReuseCheckbox = (): void => {
+  it('emits the selected branch choice in both directions', () => {
+    const chooseBranch = (labelText: string): void => {
       const reuseLabel = [...(current?.container.querySelectorAll('label') ?? [])].find((label) =>
-        label.textContent?.includes('Reuse branch')
+        label.textContent?.includes(labelText)
       )
-      const checkbox = reuseLabel?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+      const checkbox = reuseLabel?.querySelector<HTMLButtonElement>('[role="radio"]')
       expect(checkbox).toBeTruthy()
       act(() => checkbox?.click())
     }
 
-    // Checked -> unchecked (opting out of reuse).
     const offChanges: boolean[] = []
     current = renderCard({
       canReuseSelectedBranch: true,
       reuseSelectedBranch: true,
       onReuseSelectedBranchChange: (next) => offChanges.push(next)
     })
-    clickReuseCheckbox()
+    chooseBranch('New branch')
     expect(offChanges).toEqual([false])
 
     unmountCurrent()
 
-    // Unchecked -> checked (opting into reuse — the action that pins the branch).
     const onChanges: boolean[] = []
     current = renderCard({
       canReuseSelectedBranch: true,
       reuseSelectedBranch: false,
       onReuseSelectedBranchChange: (next) => onChanges.push(next)
     })
-    clickReuseCheckbox()
+    chooseBranch('Existing branch')
     expect(onChanges).toEqual([true])
   })
 
@@ -551,7 +542,6 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     const waitSwitch = findWaitSwitch(current.container)
     expect(waitSwitch?.disabled).toBe(true)
-    // Nothing to wait for when setup won't run — clicking is inert.
     act(() => waitSwitch?.click())
     expect(changes).toEqual([])
   })
@@ -587,9 +577,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
   })
 
   it('omits the branch name field when a tracked work item is the source', () => {
-    // Why: a PR/issue/MR/Linear source derives the branch itself (and a linked
-    // GitHub PR re-resolves it at submit), so a manual override would be a
-    // silently ignored control — the field is only for typed-name/base-branch.
+    // Artifact sources derive/re-resolve branch names; a manual field would be silently ignored.
     current = renderCard({
       advancedOpen: true,
       branchesEnabled: true,
@@ -602,7 +590,6 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
   })
 
   it('keeps the branch name field when creating from a base branch', () => {
-    // Why: choosing a base branch still lets the user name their new branch.
     current = renderCard({
       advancedOpen: true,
       branchesEnabled: true,
@@ -660,8 +647,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     const devboxItem = findRunTargetItem('Devbox')
     expect(devboxItem?.textContent).not.toContain('Project location not set')
     expect(devboxItem?.textContent).toContain('Set project location')
-    // Not-connected rows stay highlightable (never `disabled`) so they hover like
-    // the other rows; they're quieted visually instead.
+    // Unavailable rows still highlight on hover; quiet them visually without disabling.
     expect(devboxItem?.hasAttribute('data-disabled')).toBe(false)
     expect(devboxItem?.getAttribute('role')).toBe('option')
   })
@@ -715,7 +701,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     expect(apiMocks.sshConnect).toHaveBeenCalledWith({ targetId: 'devbox' })
     expect(hostChanges).toEqual([])
-    // The picker stays open so the connecting state is visible; the row is not auto-selected.
+    // Keep the connecting state visible without auto-selecting the host.
     expect(findRunTargetItem('Devbox')).toBeTruthy()
   })
 
@@ -738,8 +724,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       findConnectButton('Devbox')?.click()
     })
 
-    // The picker stays open through the connect, so the state is inspectable in place.
-    // Devbox is mid-connect: disabled, showing the connecting indicator; Bastion stays clickable.
+    // Show the first host’s pending connection while keeping other hosts clickable.
     const devboxButton = findConnectButton('Devbox')
     expect(devboxButton?.disabled).toBe(true)
     expect(devboxButton?.textContent).toContain('Connecting')
@@ -754,8 +739,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
   })
 
   it('stops the connecting indicator when the connect fails', async () => {
-    // A failed connect must clear the spinner and restore the Connect button so the user
-    // can retry — the row can't stay stuck on "Connecting" after the error.
+    // Failed connects must restore retry controls rather than leave a permanent spinner.
     apiMocks.sshConnect.mockRejectedValue(new Error('connection refused'))
     current = renderCard({
       projectHostSetupOptions: [localReadyHostOption, disconnectedDevboxNeedsSetupHostOption],
@@ -785,7 +769,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     const dialog = document.body.querySelector('[data-testid="add-remote-host-dialog"]')
     expect(dialog?.getAttribute('data-mode')).toBe('ssh')
-    // The composer stays put — no navigation that would discard the in-progress form.
+    // Preserve the in-progress composer instead of navigating away.
     expect(storeMocks.closeModal).not.toHaveBeenCalled()
     expect(storeMocks.openSettingsPage).not.toHaveBeenCalled()
     expect(storeMocks.openSettingsTarget).not.toHaveBeenCalled()
@@ -800,8 +784,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     openRunTargetPicker(current.container)
     const addHost = findRunTargetItem('Add host')
     expect(addHost).toBeTruthy()
-    // Hovering the row (no click) opens its submenu so it feels like a menu.
-    // Hover arms rows via mousemove, matching the project picker.
+    // Open on hover via mousemove, matching the project picker.
     act(() => {
       addHost?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
     })
@@ -899,14 +882,13 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(builderItem).toBeTruthy()
     act(() => builderItem?.click())
 
-    expect(hostChanges).toEqual(['setup-builder'])
+    expect(hostChanges).toEqual(['["setup-builder","ssh:builder"]'])
     expect(recipeChanges).toEqual([null])
   })
 })
 
 describe('NewWorkspaceComposerCard note sizing', () => {
-  // Sizing is layout-driven (field-sizing) rather than a JS measure pass, and happy-dom
-  // has no layout engine, so these assert the class contract that produces the growth.
+  // happy-dom has no layout; assert the CSS field-sizing contract instead of measured height.
   afterEach(() => {
     unmountCurrent()
     current = null
@@ -921,7 +903,7 @@ describe('NewWorkspaceComposerCard note sizing', () => {
     return textarea as HTMLTextAreaElement
   }
 
-  it('sizes from the note value, so a PR prefill written straight to state still shows in full', () => {
+  it('applies content sizing to a note prefilled through props', () => {
     // #10575: the prefill never fires an input event, so nothing but the value can drive height.
     current = renderCard({
       advancedOpen: true,
@@ -931,7 +913,7 @@ describe('NewWorkspaceComposerCard note sizing', () => {
     expect(findNoteTextarea(current.container).className).toContain('[field-sizing:content]')
   })
 
-  it('keeps a note past the height cap readable instead of clipping it', () => {
+  it('applies a height cap and scrolling classes to long notes', () => {
     current = renderCard({ advancedOpen: true, note: 'a'.repeat(4000) })
 
     const { className } = findNoteTextarea(current.container)

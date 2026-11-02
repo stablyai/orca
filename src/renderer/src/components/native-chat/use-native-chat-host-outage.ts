@@ -7,33 +7,34 @@ import {
   runtimeHostConnectionStateForEntry,
   type RuntimeHostConnectionState
 } from '@/runtime/runtime-host-connection-state'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-export type NativeChatHostOutageKind = 'reconnecting' | 'offline'
+/** `stopped`: a WSL host's distro stopped; only an explicit Start boots it (E9). */
+export type NativeChatHostOutageKind = 'reconnecting' | 'offline' | 'stopped'
 
 export type NativeChatHostOutage = {
   kind: NativeChatHostOutageKind
   environmentId: string
   hostLabel: string
-  /** False when the host refused us (auth, protocol): a reconnect is turned away the same way. */
+  /** Auth/protocol refusals would also reject reconnection. */
   canReconnect: boolean
 }
 
-/** A blip shorter than this says nothing; an offline host is said at once. */
+/** Suppress brief reconnect blips; show offline hosts immediately. */
 export const NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS = 2_000
 
 export function nativeChatHostOutageKind(
   state: RuntimeHostConnectionState
 ): NativeChatHostOutageKind | null {
-  // A closed workspace window still answers; only work that needs that window waits.
+  // A closed workspace window still answers requests that do not need that window.
   switch (state) {
     case 'connected':
     case 'workspace-window-closed':
       return null
-    // Refused, retired by Disconnect, or never reached: no transport is coming back on its own.
+    // These states have no automatic transport recovery.
     case 'disconnected':
       return 'offline'
-    // Still retrying; 'runtime-unavailable' is also published on every recovery, before the probe.
+    // runtime-unavailable also precedes the probe on every recovery.
     case 'checking':
     case 'reconnecting':
     case 'runtime-unavailable':
@@ -41,7 +42,7 @@ export function nativeChatHostOutageKind(
   }
 }
 
-/** The chat's host outage, read from the host's connection state and never the chat's own stream. */
+/** Use host connection state; the chat stream cannot establish host availability. */
 export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChatHostOutage | null {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const kind = useAppStore((s) =>
@@ -57,18 +58,22 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
       ? runtimeHostContactFromSnapshot(entry.snapshot, entry.status).verdict === 'refused'
       : false
   })
+  const stoppedDistro = useAppStore((s) => {
+    const wsl = environmentId === null ? undefined : s.wslHostStatuses[environmentId]
+    return wsl?.state === 'distro-stopped' ? wsl.distro : null
+  })
   const hostLabel = useAppStore((s) =>
     environmentId === null
       ? null
       : selectExecutionHostDisplayLabel(s, toRuntimeExecutionHostId(environmentId))
   )
-  // What this outage has earned so far; it ends with the outage or a change of host.
+  // Reset earned outage visibility when this outage or host changes.
   const [earned, setEarned] = useState<{
     environmentId: string
     kind: NativeChatHostOutageKind
   } | null>(null)
   const earnedHere = earned?.environmentId === environmentId ? earned.kind : null
-  // Held to the outage's end, so a retry's probe doesn't flip it to reconnecting and back.
+  // Latch offline until recovery so retry probes cannot flicker the notice.
   if (kind === 'offline' && environmentId !== null && earnedHere !== 'offline') {
     setEarned({ environmentId, kind: 'offline' })
   }
@@ -88,11 +93,16 @@ export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChat
     }
   }, [environmentId, inOutage])
   const shown = kind === 'offline' ? 'offline' : kind === null ? null : earnedHere
-  return useMemo(
-    () =>
-      environmentId === null || shown === null || hostLabel === null
-        ? null
-        : { kind: shown, environmentId, hostLabel, canReconnect: shown === 'offline' && !refused },
-    [environmentId, hostLabel, refused, shown]
-  )
+  return useMemo(() => {
+    if (environmentId === null) {
+      return null
+    }
+    // The host's own verdict outranks a transport guess: a plain reconnect can't boot the distro.
+    if (stoppedDistro !== null) {
+      return { kind: 'stopped', environmentId, hostLabel: stoppedDistro, canReconnect: true }
+    }
+    return shown === null || hostLabel === null
+      ? null
+      : { kind: shown, environmentId, hostLabel, canReconnect: shown === 'offline' && !refused }
+  }, [environmentId, hostLabel, refused, shown, stoppedDistro])
 }

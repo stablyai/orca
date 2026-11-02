@@ -1,16 +1,29 @@
+import { isSkillInstallProviderId } from '../../shared/skill-install-providers'
+import {
+  getTuiAgentDetectionProbeCommands,
+  KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+  resolveDetectedTuiAgentIds
+} from '../../shared/tui-agent-detection-commands'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { runWslProcess } from '../wsl/wsl-runner'
 
+const PROVIDER_DETECTION_COMMANDS = KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) =>
+  isSkillInstallProviderId(command.id)
+)
+
 const DETECTION_SCRIPT = [
-  'set -eu',
-  'command -v codex >/dev/null 2>&1 && printf "codex\\n" || true',
-  'command -v claude >/dev/null 2>&1 && printf "claude\\n" || true'
+  `for cmd in ${getTuiAgentDetectionProbeCommands(PROVIDER_DETECTION_COMMANDS, 'wsl')
+    .map(quotePosixShell)
+    .join(' ')}; do`,
+  'command -v "$cmd" >/dev/null 2>&1 && printf "%s\\n" "$cmd"',
+  'done',
+  'true'
 ].join('\n')
 
 export async function detectSkillProvidersInWsl(distro: string): Promise<string[]> {
   let result
   try {
-    // Why probe: a bare `sh -c` has no login shell, so a PATH built by nvm/mise
-    // rc files never applies and an installed codex/claude reads as absent.
+    // Resolve login PATH so nvm/mise-installed agents do not look absent.
     result = await runWslProcess({
       distro,
       loginPath: 'preferred',
@@ -25,15 +38,13 @@ export async function detectSkillProvidersInWsl(distro: string): Promise<string[
   if (result.code !== 0) {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
-  // Unconditional, not just on an empty list: the script ends in `|| true`, so
-  // without the login PATH each lookup independently reads absent. A `claude`
-  // on the default PATH via Windows interop plus an nvm-only `codex` returns a
-  // plausible-looking `['claude']`, and the caller then skips the ~/.codex
-  // skill roots for a provider that is installed (#9725).
+  // Require resolved PATH even for nonempty output: Windows interop may find Claude while hiding nvm-only Codex (#9725).
   if (!result.environmentResolved) {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
-  return result.stdout
-    .split(/\r?\n/u)
-    .filter((provider) => provider === 'codex' || provider === 'claude')
+  return resolveDetectedTuiAgentIds(
+    PROVIDER_DETECTION_COMMANDS,
+    new Set(result.stdout.split(/\r?\n/u)),
+    'wsl'
+  )
 }

@@ -57,7 +57,7 @@ const baseCtx = (overrides: Partial<MergeContext> = {}): MergeContext => ({
   workspaceSessionReady: true,
   repoDisplayNameById: new Map(),
   repoConnectionIdById: new Map(),
-  repoRuntimeScopedById: new Map(),
+  repoRuntimeHostIdById: new Map(),
   ...overrides
 })
 
@@ -167,8 +167,7 @@ describe('mergeSnapshotAndSessions', () => {
   })
 
   it('carries agent ownership onto the snapshot-derived row for the same session', () => {
-    // Why: only the daemon list reports ownership. A snapshot row describing the same session must
-    // not report `false` — that row is the one whose kill skips confirmation (#8459).
+    // Only daemon inventory proves ownership; copy it onto sampled rows before evaluating kill confirmation.
     const wt: WorktreeMemory = {
       worktreeId: 'orca::/Users/me/Triton',
       worktreeName: 'Triton',
@@ -197,8 +196,7 @@ describe('mergeSnapshotAndSessions', () => {
   })
 
   it('binds a deferred SSH row so its single-row kill cannot skip confirmation', () => {
-    // Why: the bulk selector already excluded these, but the rendered row took its own path.
-    // An unbound row with no agent skips the dialog entirely — the same #8459 defect, one click over.
+    // Deferred SSH bindings must protect single-row kills as well as bulk orphan selection.
     const sessionId = 'orca::/remote/Stingray@@deferred1'
     const out = mergeSnapshotAndSessions(
       null,
@@ -271,10 +269,7 @@ describe('mergeSnapshotAndSessions', () => {
   })
 
   it('warm-reattach local PTY: chip stays off when repo has no connectionId', () => {
-    // Why: regression coverage for the warm-reattach REMOTE mislabel.
-    // A live local daemon session whose registry entry the renderer hasn't
-    // re-spawned yet must NOT be flagged as remote. Under the old
-    // predicate (`!hasLocalSamples`) it was — that was the bug.
+    // Warm-reattached local sessions can lack samples; only execution-host evidence marks a row remote.
     const ds: DaemonSession[] = [
       {
         id: 'orca::/local/Triton@@deadbeef',
@@ -348,12 +343,7 @@ describe('mergeSnapshotAndSessions', () => {
   })
 
   it('repo aggregate sums only worktrees with numeric metrics; remote-by-connectionId flags chip', () => {
-    // Why: a single repo can be both reflected as a snapshot worktree
-    // (covered by the local collector) and a daemon-only session
-    // (not in the snapshot). Under the connectionId predicate, the
-    // chip flips for the *remote* repo case; the local repo keeps
-    // numeric aggregates and no chip. Each scenario is verified with
-    // its own single-repo input.
+    // Compare sampled local and daemon-only remote rows independently so one cannot mask the other’s aggregate or chip.
     const localWt: WorktreeMemory = {
       worktreeId: 'local-repo::/local/Triton',
       worktreeName: 'Triton',
@@ -432,10 +422,7 @@ describe('mergeSnapshotAndSessions', () => {
         ['runtime-repo', null],
         ['ssh-repo', 'ssh-target-1']
       ]),
-      repoRuntimeScopedById: new Map([
-        ['runtime-repo', true],
-        ['ssh-repo', false]
-      ])
+      repoRuntimeHostIdById: new Map([['runtime-repo', 'runtime:env-1']])
     })
 
     const out = mergeSnapshotAndSessions(makeSnapshot([runtimeWt]), sessions, ctx)
@@ -463,11 +450,70 @@ describe('mergeSnapshotAndSessions', () => {
     })
   })
 
+  it("lists a paired server's own samples under the projects it hosts, read-only", () => {
+    const serverWt: WorktreeMemory = {
+      worktreeId: 'runtime-repo::/srv/Wt',
+      worktreeName: 'Wt',
+      repoId: 'runtime-repo',
+      repoName: 'server-name',
+      cpu: 7,
+      memory: 700,
+      history: [600, 700],
+      sessions: [{ sessionId: 'server-pty', paneKey: null, pid: 9, cpu: 7, memory: 700 }]
+    }
+    const strangerWt: WorktreeMemory = {
+      ...serverWt,
+      worktreeId: 'local-repo::/srv/Other',
+      repoId: 'local-repo',
+      repoName: 'Other',
+      sessions: [{ sessionId: 'stranger-pty', paneKey: null, pid: 10, cpu: 1, memory: 10 }]
+    }
+    const localWt: WorktreeMemory = {
+      ...serverWt,
+      worktreeId: 'local-repo::/Users/me/Wt',
+      repoId: 'local-repo',
+      repoName: 'local',
+      sessions: [{ sessionId: 'local-pty', paneKey: null, pid: 11, cpu: 1, memory: 10 }]
+    }
+    const ctx = baseCtx({
+      repoDisplayNameById: new Map([['runtime-repo', 'Server Project']]),
+      repoRuntimeHostIdById: new Map([['runtime-repo', 'runtime:env-1']]),
+      runtimeHostResources: [
+        { hostId: 'runtime:env-1', hostLabel: 'Lab box', worktrees: [serverWt, strangerWt] }
+      ]
+    })
+
+    // Why: this machine's sweep of the same id must not render under the server's project.
+    const out = mergeSnapshotAndSessions(makeSnapshot([localWt, serverWt]), [], ctx)
+
+    const server = out.find((repo) => repo.repoId === 'runtime-repo')!
+    expect(server).toMatchObject({ repoName: 'Server Project', cpu: 7, memory: 700 })
+    expect(server.worktrees).toHaveLength(1)
+    expect(server.worktrees[0]).toMatchObject({
+      worktreeId: 'runtime-repo::/srv/Wt',
+      isRemote: true,
+      hostLabel: 'Lab box',
+      history: [600, 700]
+    })
+    expect(server.worktrees[0].sessions[0]).toMatchObject({
+      sessionId: 'server-pty',
+      readOnly: true
+    })
+
+    const local = out.find((repo) => repo.repoId === 'local-repo')!
+    expect(local.worktrees.map((wt) => wt.worktreeId)).toEqual(['local-repo::/Users/me/Wt'])
+    expect(local.worktrees[0].sessions[0].readOnly).toBeUndefined()
+
+    // A server row this client places elsewhere keeps its own host-qualified group.
+    const stranger = out.find((repo) => repo.repoId === 'runtime:env-1|local-repo')!
+    expect(stranger.worktrees[0]).toMatchObject({
+      worktreeId: 'runtime:env-1|local-repo::/srv/Other',
+      hostLabel: 'Lab box'
+    })
+  })
+
   it('unresolvable session falls into unattributed bucket without flagging remote', () => {
-    // Why: under the connectionId predicate, an unresolved session is
-    // not evidence of remoteness — we just don't know what it belongs
-    // to. The chip should stay off; the row still surfaces in the
-    // unattributed bucket with `—` cells because we have no sample.
+    // An unresolved workspace provides no host evidence; keep it unattributed and unsampled without a remote chip.
     const ds: DaemonSession[] = [
       { id: 'opaque-id-without-prefix', cwd: '', title: 'shell', agentOwnership: 'absent' as const }
     ]
@@ -632,8 +678,7 @@ it('does not scan accumulated worktree rows for unrelated daemon sessions', () =
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 
-// The tab index replaces `tabs.findIndex`, which resolves to the first match; a duplicated tab id
-// must not start resolving to the last one and relabel a session with a stranger's title.
+// Keep first-match behavior for duplicate tab IDs so indexing cannot substitute another tab’s title.
 it('resolves a duplicated tab id to the first tab, as the replaced scan did', () => {
   const first = makeTab('dup', 'First tab')
   const second = makeTab('dup', 'Second tab')
@@ -655,7 +700,6 @@ it('resolves a duplicated tab id to the first tab, as the replaced scan did', ()
   expect(out[0].worktrees[0].sessions[0].label).toBe('First tab')
 })
 
-// A tab id present in another worktree must not leak a label across worktrees.
 it('keeps tab labels scoped to their own worktree', () => {
   const wt: WorktreeMemory = {
     worktreeId: 'orca::/Users/me/Triton',
@@ -675,8 +719,7 @@ it('keeps tab labels scoped to their own worktree', () => {
   expect(out[0].worktrees[0].sessions[0].label).toBe('pid 5')
 })
 
-// findWorktreeRow replaces `repo.worktrees.find`, which returns the first row; a snapshot that
-// repeats a worktree must keep later daemon sessions landing on that same first row.
+// Duplicate sampled worktrees must retain first-match session attachment when replacing linear scans.
 it('attaches later daemon sessions to the first row of a duplicated worktree', () => {
   const wt = (name: string): WorktreeMemory => ({
     worktreeId: 'orca::/Users/me/Triton',

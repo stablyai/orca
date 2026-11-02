@@ -1,18 +1,5 @@
-// ─── The one identity/clock contract the fleet path reads ────────────────────
-// A hook row carries a pane key, a delivery timestamp and, from newer hosts, an
-// observation timestamp. A row may carry the runtime handle observed with OSC, but
-// fleet authority still resolves terminal identity from the runtime. The matcher needs both,
-// and every fact it needs used to be an OPTIONAL
-// field on `AgentStatusIpcPayload` — so an unenriched producer published a row the
-// matcher silently failed to identify (failure table L-1) and a missing observation
-// clock silently degraded to the delivery clock (W1-14 / RR-W-P1A).
-//
-// Here absence is an arm with a reason, never a missing property. The evidence type
-// deliberately exposes no `terminalHandle?`, no `evidenceObservedAt?` and no raw
-// payload, so a consumer cannot read an absent identity or clock by accident.
-//
-// This type never crosses IPC or the wire. `AgentStatusIpcPayload` remains what
-// `agentStatus:set` / `agentStatus:getSnapshot` publish.
+// Internal fleet evidence makes missing identity/clock explicit union arms; optional IPC fields previously silently lost binding or freshness.
+// Runtime resolves identity; wire AgentStatusIpcPayload stays unchanged (L-1, W1-14/RR-W-P1A).
 
 import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
 import type { AgentStatusState, AgentType } from './agent-status-types'
@@ -21,12 +8,9 @@ import type { AgentStatusState, AgentType } from './agent-status-types'
 export type FleetEvidenceBindingGap =
   /** The pane no longer resolves to a terminal on this runtime. */
   | 'pane_not_bound'
-  /** The pane resolves to a terminal whose process incarnation is not (yet) known — a
-   *  replayed row after a restart lands here rather than binding to whatever now owns the pane. */
+  /** Without a known incarnation, replay after restart cannot bind to the pane’s replacement terminal. */
   | 'incarnation_unbound'
-  /** The pane has moved on since the row was observed, so the process the evidence describes
-   *  has already exited. Reminting such a row against the pane's current identity is what let a
-   *  cached observation acquire a replacement worker's incarnation and dispatch. */
+  /** The observed incarnation exited; reminting cached evidence would give it a replacement worker’s identity. */
   | 'stale_incarnation'
 
 /** Terminal identity as the runtime resolves it at mint time. All three facts or none. */
@@ -42,8 +26,7 @@ export type FleetEvidenceBinding =
   | ({ kind: 'pane' } & FleetBoundTerminal)
   | { kind: 'unresolved'; reason: FleetEvidenceBindingGap }
 
-/** The staleness clock. `delivery` is the explicit arm for a host that reports no observation
- *  clock; it is not a fallback the reader has to remember to apply. */
+/** Use delivery only when the host explicitly lacks an observation clock; missing producer stamps cannot silently fall back. */
 export type FleetEvidenceClock = { kind: 'observed'; at: number } | { kind: 'delivery'; at: number }
 
 /** What the fleet projection reads about the agent itself. Carries no identity and no clock. */
@@ -61,15 +44,12 @@ export type FleetAgentActivity = {
 export type FleetAgentStatusEvidence = {
   binding: FleetEvidenceBinding
   clock: FleetEvidenceClock
-  /** Delivery order only, never a staleness input. A relay reconnect restamps this to stay
-   *  monotonic past the transient-clear watermark, which is exactly what makes it the right
-   *  key for ordering replays and the wrong one for measuring age. */
+  /** Replay restamps delivery past transient-clear watermarks: use it for order, never staleness. */
   deliveredAt: number
   activity: FleetAgentActivity
 }
 
-/** How a durable worker can be recognized in an evidence row. Absence is an arm, so the
- *  matcher cannot fall back to "the worker names no handle, so any handle matches". */
+/** Explicit unidentifiable workers prevent missing handles from matching every row. */
 export type FleetWorkerIdentity =
   | { kind: 'pane_and_terminal'; paneKey: string; terminalHandle: string }
   | { kind: 'terminal_only'; terminalHandle: string }
@@ -92,8 +72,7 @@ export function fleetWorkerIdentity(worker: {
     : { kind: 'terminal_only', terminalHandle: worker.agentTerminalHandle }
 }
 
-/** The only constructor. Identity is resolved by the caller that owns the runtime; the clock
- *  and the activity facts are derived here so every producer picks the same arms. */
+/** Runtime owners supply identity; this constructor derives clock/activity arms consistently for every producer. */
 export function mintFleetAgentStatusEvidence(
   status: AgentStatusIpcPayload,
   binding: FleetEvidenceBinding

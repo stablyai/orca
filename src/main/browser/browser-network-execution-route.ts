@@ -1,7 +1,13 @@
-import { connect } from 'node:net'
-import { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import { connect, type Socket } from 'node:net'
+import { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
+import { readNetworkProxySettings } from './browser-network-proxy-settings-source'
+import { selectBrowserNetworkTunnelProxy } from './browser-network-tunnel-proxy-selection'
+import {
+  connectThroughBrowserNetworkTunnelProxy,
+  type BrowserNetworkTunnelDialer
+} from './browser-network-tunnel-proxy-connect'
 
 export type BrowserNetworkExecutionRoute = {
   key: string
@@ -72,8 +78,49 @@ export function resolveNativeBrowserNetworkExecutionRoute(
   }
   return {
     key: browserNetworkExecutionHostKey(host),
-    connect: (target) => connect({ ...target, allowHalfOpen: true }),
+    connect: connectNativeBrowserNetworkTarget,
     isValid: () => true,
     close: () => {}
   }
+}
+
+const nativeDialer: BrowserNetworkTunnelDialer = {
+  connect: (target) => connect({ ...target, allowHalfOpen: true }),
+  openTransport: openConnectedSocket
+}
+
+// Settle on connect so an immediate dial error (emitted on nextTick) cannot outrun its listener.
+export function openConnectedSocket(
+  endpoint: BrowserNetworkTunnelOpen,
+  signal: AbortSignal
+): Promise<Socket> {
+  return new Promise((resolve, reject) => {
+    const socket = connect({ ...endpoint, allowHalfOpen: true })
+    const abandon = (): void => {
+      socket.destroy()
+      reject(new Error('browser_tunnel_proxy_connect_abandoned'))
+    }
+    const fail = (error: Error): void => {
+      signal.removeEventListener('abort', abandon)
+      reject(error)
+    }
+    signal.addEventListener('abort', abandon, { once: true })
+    socket.on('error', fail)
+    // Keep fail attached: an error between connect and the caller's listeners must not go uncaught.
+    socket.once('connect', () => {
+      signal.removeEventListener('abort', abandon)
+      resolve(socket)
+    })
+  })
+}
+
+export function connectNativeBrowserNetworkTarget(
+  target: BrowserNetworkTunnelOpen,
+  env: Record<string, string | undefined> = process.env
+): BrowserNetworkTunnelSocket {
+  return connectThroughBrowserNetworkTunnelProxy(
+    target,
+    selectBrowserNetworkTunnelProxy(target, readNetworkProxySettings(), env),
+    nativeDialer
+  )
 }

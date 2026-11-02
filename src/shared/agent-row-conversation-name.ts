@@ -1,11 +1,4 @@
-// Resolves the stable "conversation name" an agent row can show instead of the
-// live last-message preview. Sources, in the same precedence the tab bar uses
-// (tab-title-resolution.ts): manual rename → quick-command label → OpenCode's
-// semantic session title → provider session title → Orca's generated title →
-// the agent-set live title.
-// Live titles are accepted only when they carry a real name — pure status,
-// identity-echo, and spinner/cwd titles yield null so callers keep the
-// last-message label.
+// Follow tab-title-resolution precedence: manual, quick command, semantic, provider, generated, then live title. Reject status/identity/cwd live titles so rows retain message previews.
 import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
@@ -20,8 +13,7 @@ export type ConversationNameTab = Pick<
   'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
 >
 
-// Why: synthetic status titles ("Codex ready", "Cursor - action required") are
-// state, not names. Precomputed once; the profile table is a module constant.
+// Synthetic status labels describe state rather than a conversation name.
 const SYNTHETIC_STATUS_TITLES_LOWER: ReadonlySet<string> = new Set(
   Object.values(SYNTHETIC_AGENT_TITLE_PROFILES).flatMap((profile) => [
     profile.workingLabel.toLowerCase(),
@@ -30,8 +22,7 @@ const SYNTHETIC_STATUS_TITLES_LOWER: ReadonlySet<string> = new Set(
   ])
 )
 
-// Why: retained rows without a live tab synthesize `title: 'Agent'`
-// (worktree-agent-row-fallback-tab.ts); it is a placeholder, not a name.
+// Retained-tab fallback Agent is a placeholder, never a conversation name.
 const FALLBACK_TAB_TITLE_LOWER = 'agent'
 
 const AGENT_IDENTITY_ALIASES_LOWER: Readonly<Record<string, readonly string[]>> = {
@@ -71,8 +62,7 @@ function isAgentIdentityStatusTitle(
 }
 
 function isCwdLikeTitle(title: string): boolean {
-  // Hook-less agents over SSH surface spinner+cwd titles (#8711); once the
-  // spinner is stripped, what remains is a path, not a conversation name.
+  // Hookless SSH titles may contain only spinner+cwd, never a conversation name (#8711).
   if (/^(?:~|[\\/]|[A-Za-z]:[\\/])/.test(title)) {
     return true
   }
@@ -98,9 +88,7 @@ function conversationNameFromLiveTitle(
     STATUS_WITH_CONTEXT_RE.test(stripped) ||
     DEFAULT_TERMINAL_TITLE_RE.test(stripped) ||
     isClaudeManagementTitle(stripped) ||
-    // Why: jcode repaints `jcode <codename> · +N -M · last ~23s` every second. The
-    // tail is live status and the head is its own identity, so accepting it as a
-    // name pins a row to "jcode Puppy…" where every other agent shows the prompt.
+    // jcode repaints codename/diff/duration each second; accepting that identity hides the prompt preview.
     isJcodeIdentityTerminalTitle(stripped) ||
     isCwdLikeTitle(stripped)
   ) {
@@ -112,19 +100,12 @@ function conversationNameFromLiveTitle(
   return stripped
 }
 
-/**
- * The conversation name for an agent row, or null when no usable name exists
- * and the caller should keep its last-message label.
- */
+/** Return null without a usable name so the row retains its last-message label. */
 export function getAgentRowConversationName(
   tab: ConversationNameTab,
   agentType: AgentType | null | undefined,
   generatedTitlesEnabled: boolean,
-  // Why: `tab.title` carries only the FOCUSED pane's title, so in a split tab it
-  // names one pane and mislabels its siblings. Callers on a multi-pane tab pass
-  // this row's own pane title, or `null` when none resolves; `undefined` (a
-  // single-pane tab) keeps the tab title. Tab-owned names above are unaffected:
-  // the user gave those to the whole tab and they do not flip on focus.
+  // Tab live title names the focused pane; split callers supply their own title/null. Undefined retains single-pane behavior; tab-owned names still apply.
   paneLiveTitle?: string | null,
   providerSessionId?: string
 ): string | null {

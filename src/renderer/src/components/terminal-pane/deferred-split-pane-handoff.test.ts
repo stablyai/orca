@@ -122,16 +122,11 @@ describe('deferred split pane handoff', () => {
     expect(claimDeferredSplitPaneHandoff(key)).toBeNull()
   })
 
-  it('clears or discards only the current owner', () => {
+  it('clears the current owner', () => {
     const clearedKey = makePaneKey('tab-clear', LEAF_1)
     const cleared = beginDeferredSplitPaneHandoff(clearedKey, Promise.resolve('/clear'))
     clearDeferredSplitPaneHandoff(cleared)
     expect(claimDeferredSplitPaneHandoff(clearedKey)).toBeNull()
-
-    const discardedKey = makePaneKey('tab-discard', LEAF_1)
-    const discarded = beginDeferredSplitPaneHandoff(discardedKey, Promise.resolve('/discard'))
-    clearDeferredSplitPaneHandoff(discarded)
-    expect(claimDeferredSplitPaneHandoff(discardedKey)).toBeNull()
   })
 
   it('drops a stale record when an authoritative restored PTY wins the key', () => {
@@ -250,7 +245,8 @@ describe('deferred split pane handoff', () => {
     vi.useFakeTimers()
     try {
       const key = makePaneKey('tab-1', LEAF_1)
-      beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
+      const handle = beginDeferredSplitPaneHandoff(key, Promise.resolve('/source/cwd'))
+      releaseDeferredSplitPaneHandoff(handle)
       expect(getDeferredSplitPaneHandoffCountForTests()).toBe(1)
 
       vi.advanceTimersByTime(DEFERRED_SPLIT_PANE_HANDOFF_TTL_MS)

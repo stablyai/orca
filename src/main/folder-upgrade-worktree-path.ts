@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import type { Repo } from '../shared/repo-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
-import { areWorktreePathsEqual, dedupeWorktreesByPath } from './ipc/worktree-path-comparison'
+import { areWorktreePathsEqual, dedupeWorktreesByPath } from './git/worktree-path-comparison'
 
 function stillNamesRegisteredCheckout(repo: Repo, gitRoot: string): boolean {
   if (areWorktreePathsEqual(repo.path, gitRoot)) {

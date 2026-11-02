@@ -1,0 +1,222 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  useMobileNativeChatSendError,
+  type MobileNativeChatCommandRefusalCauses
+} from './use-mobile-native-chat-send-error'
+
+type HookApi = ReturnType<typeof useMobileNativeChatSendError>
+
+describe('useMobileNativeChatSendError', () => {
+  let renderer: ReactTestRenderer | null = null
+  const apiRef = { current: null as HookApi | null }
+
+  const showToast = vi.fn()
+
+  function Harness({
+    scopeKey,
+    bannerMounted = true,
+    causes = null
+  }: {
+    scopeKey: string | null
+    bannerMounted?: boolean
+    causes?: MobileNativeChatCommandRefusalCauses | null
+  }): null {
+    const api = useMobileNativeChatSendError({ scopeKey, showToast })
+    api.bannerMountedRef.current = bannerMounted
+    api.keepWhile(causes)
+    apiRef.current = api
+    return null
+  }
+
+  function api(): HookApi {
+    if (!apiRef.current) {
+      throw new Error('Harness was not rendered')
+    }
+    return apiRef.current
+  }
+
+  async function render(scopeKey: string | null = 'terminal-1'): Promise<void> {
+    await act(async () => {
+      renderer = create(createElement(Harness, { scopeKey }))
+    })
+  }
+
+  beforeEach(() => {
+    apiRef.current = null
+    showToast.mockClear()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  async function showing(causes: MobileNativeChatCommandRefusalCauses): Promise<void> {
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-1', causes }))
+    })
+  }
+
+  it('a /clear refused while the agent works goes when the agent stops, and stays gone', async () => {
+    const line = "The agent is still working. Run /clear when it's done."
+    await render()
+    await showing({ working: true, prompt: false })
+    await act(async () => api().show(line, { refusedWhile: 'working' }))
+    expect(api().message).toBe(line)
+    await showing({ working: true, prompt: false })
+    expect(api().message).toBe(line)
+
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBeNull()
+    await showing({ working: true, prompt: false })
+    expect(api().message).toBeNull()
+  })
+
+  it('a refusal behind a question goes once it is answered', async () => {
+    await render()
+    await showing({ working: false, prompt: true })
+    await act(async () =>
+      api().show("Answer the agent's question or approval, then run /clear.", {
+        refusedWhile: 'prompt'
+      })
+    )
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBeNull()
+  })
+
+  it('a failure naming nothing the phone shows, or background tasks it cannot see, stays', async () => {
+    await render()
+    await act(async () => api().show('Message not sent'))
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBe('Message not sent')
+    await act(async () =>
+      api().show('Background tasks are still running.', { refusedWhile: 'background' })
+    )
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBe('Background tasks are still running.')
+  })
+
+  it('holds a failure for four seconds, then drops it', async () => {
+    await render()
+    await act(async () => api().show('a'))
+    expect(api().message).toBe('a')
+
+    await act(async () => {
+      vi.advanceTimersByTime(3999)
+    })
+    expect(api().message).toBe('a')
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(api().message).toBeNull()
+  })
+
+  it('restarts the hold when a second failure lands mid-hold', async () => {
+    await render()
+    await act(async () => api().show('a'))
+    await act(async () => {
+      vi.advanceTimersByTime(3000)
+    })
+    await act(async () => api().show('b'))
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000)
+    })
+    expect(api().message).toBe('b')
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(api().message).toBeNull()
+  })
+
+  it('clears immediately and cancels the pending hold', async () => {
+    await render()
+    await act(async () => api().show('a'))
+    await act(async () => api().clear())
+    expect(api().message).toBeNull()
+
+    await act(async () => api().show('b'))
+    await act(async () => api().clear())
+    await act(async () => {
+      vi.advanceTimersByTime(10_000)
+    })
+    expect(api().message).toBeNull()
+  })
+
+  it('drops a held failure when the scope changes', async () => {
+    await render('terminal-1')
+    await act(async () => api().show('a'))
+    expect(api().message).toBe('a')
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-2' }))
+    })
+    expect(api().message).toBeNull()
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-1' }))
+    })
+    expect(api().message).toBeNull()
+  })
+
+  it('falls back to the toast when the banner is not mounted', async () => {
+    await act(async () => {
+      renderer = create(createElement(Harness, { scopeKey: 'terminal-1', bannerMounted: false }))
+    })
+    await act(async () => api().show('Delivery unconfirmed'))
+
+    expect(showToast).toHaveBeenCalledWith('Delivery unconfirmed', 1600)
+    expect(api().message).toBeNull()
+  })
+
+  it('toasts a deferred failure that resolves after the user switched tabs', async () => {
+    await render('terminal-1')
+    const showFromTabA = api().show
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-2' }))
+    })
+    await act(async () => showFromTabA('Message not sent'))
+
+    expect(api().message).toBeNull()
+    expect(showToast).toHaveBeenCalledWith('Message not sent', 1600)
+  })
+
+  it('does not let a stale scope clear the banner the live scope is showing', async () => {
+    await render('terminal-1')
+    const clearFromTabA = api().clear
+
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-2' }))
+    })
+    await act(async () => api().show('b'))
+    await act(async () => clearFromTabA())
+
+    expect(api().message).toBe('b')
+  })
+
+  it('toasts a failure that resolves after the route unmounted', async () => {
+    await render()
+    const showWhileMounted = api().show
+
+    act(() => renderer?.unmount())
+    renderer = null
+    // Unmount must clear the render-written mounted ref so late failures can fall back to toast.
+    await act(async () => showWhileMounted('Delivery unconfirmed'))
+
+    expect(showToast).toHaveBeenCalledWith('Delivery unconfirmed', 1600)
+  })
+
+  it('cancels the pending hold timer on unmount', async () => {
+    await render()
+    await act(async () => api().show('a'))
+    expect(vi.getTimerCount()).toBe(1)
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})

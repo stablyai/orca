@@ -1,9 +1,7 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { AUTHORITATIVE_REMOVAL_MEMORY_LIMIT } from './worktree-slice-constants'
 
-// Why: main retires the persisted SSH metadata a scan proved gone, but that IPC is async and the next fallback
-// read can already be in flight, so this session memory covers the window until the delete lands. It is not the
-// durable half: reloads start empty and rely on the metadata itself being gone.
+// Bridge async durable SSH-metadata deletion with session suppression; reloads rely on actual metadata retirement.
 const authoritativelyRemovedWorktreeIdsByHost = new Map<ExecutionHostId, Set<string>>()
 
 export function rememberAuthoritativelyRemovedWorktrees(
@@ -50,11 +48,7 @@ export function resetAuthoritativelyRemovedWorktreeMemoryForTests(): void {
   authoritativelyRemovedWorktreeIdsByHost.clear()
 }
 
-// Why: off-host WorktreeMeta is exempt from gcStaleWorktreeMeta -- it skips any row whose repo or hostId is
-// not local -- and outlives the remote worktree, so a scan-proven removal must retire the metadata itself.
-// Otherwise the next launch's fallback re-lists the deleted row before the host connects, and the in-memory
-// suppression above is already gone. Runtime hosts were excluded until #17776, which is why a paired client
-// accumulated a row per remote worktree it had ever seen and never dropped one.
+// Off-host metadata bypasses local GC; retire scan-proven removals durably or fallback resurrects them after reload. Include runtimes, formerly excluded (#17776).
 export function forgetPersistedWorktreeMetaForRemovals(
   repoId: string,
   hostId: ExecutionHostId,

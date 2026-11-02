@@ -30,7 +30,7 @@ export class CodexHookTrustEntryMap extends Map<string, CodexHookTrustState> {
 
 export function readHookTrustContent(content: string): Map<string, CodexHookTrustState> {
   const result = readHookTrustTables(content)
-  // Why: approvals written as dotted keys or inline tables have no [hooks.state."k"] header.
+  // Dotted-key and inline-table approvals have no hooks.state table header.
   for (const [key, state] of readParsedHookTrust(content)) {
     if (!result.has(key)) {
       result.set(key, state)
@@ -109,7 +109,6 @@ function readHookTrustBlockState(block: string): {
     const lineEnd = newlineIndex === -1 ? block.length : newlineIndex
     const line = block.slice(cursor, lineEnd).replace(/\r$/, '')
     if (isTomlStructuralLine(scanState)) {
-      // Why both forms: a literal-string hash must not read as "no approval".
       const hashMatch =
         /^[ \t]*trusted_hash[ \t]*=[ \t]*(?:"((?:[^"\\]|\\.)*)"|'([^'\r\n]*)')[ \t]*(?:#.*)?$/.exec(
           line

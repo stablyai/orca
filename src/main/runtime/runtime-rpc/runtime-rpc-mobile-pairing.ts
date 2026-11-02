@@ -6,6 +6,7 @@ import {
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../network-exposure-guidance'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
   pairingUnavailable,
@@ -14,6 +15,9 @@ import {
   type PairingOfferUnavailable
 } from './runtime-rpc-pairing-types'
 
+// How long an automatic mint waits for an on-demand Relay install before reporting it missing.
+const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
+
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   async createMobilePairingOffer(args: {
     address?: string | null
@@ -21,9 +25,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     name?: string
     rotate?: boolean
   }): Promise<MobilePairingOffer> {
-    // Why: STA-2370 — creating a mobile pairing offer is the user's explicit opt-in to LAN reach, so
-    // widen the loopback listener before advertising its LAN endpoint in the QR. If the widen fails the
-    // listener stays on loopback, so report unavailable rather than advertise a dead LAN endpoint.
+    // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
     try {
       await this.ensureNetworkExposure()
     } catch (error) {
@@ -83,16 +85,16 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     },
     generation: number
   ): Promise<MobilePairingOffer> {
-    // Why: the renderer is outside the trust boundary, so only an explicit local-only value may suppress Relay provisioning.
+    // Renderer input is untrusted; only explicit local-only may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
     const pending = this.deviceRegistry?.getPendingDevice('mobile')
-    // Why: connection policy is part of the credential, so rotate on any policy switch — an old-policy QR must not pair under the new one.
+    // Rotate when connection policy changes so old QR credentials retain no new-policy authority.
     const switchingPendingMode =
       pending != null &&
       this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
     if (args.rotate || switchingPendingMode) {
       if (pending?.relayBinding) {
-        // Why: record the durable cloud revoke before rotating the local token so an old relay invite can't outlive the QR.
+        // Durably enqueue cloud revocation before local rotation or old invites can outlive the QR.
         if (!this.queueRelayDeviceRevoke(pending.relayBinding)) {
           return pairingUnavailable(
             'device_registry_unavailable',
@@ -118,7 +120,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     } catch (error) {
       console.error('[runtime] Failed to persist the pairing connection mode:', error)
     }
-    // Why: the mode is part of the credential — a QR whose policy was never stored must not pair under the default one.
+    // Persist credential mode or refuse; a QR must never pair under an unstored default policy.
     if (!connectionModeStored) {
       if (createdNewPendingDevice) {
         this.discardPendingMobilePairingDevice(direct.deviceId)
@@ -129,8 +131,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     if (connectionMode === 'local-only') {
       return { ...direct, connectionMode: 'local-only' }
     }
-    // Why: Anywhere must not silently ship a LAN-only QR under the Relay label.
-    // Fail closed, drop the unused pending credential, and let the UI offer Use LAN.
+    // Anywhere cannot silently become LAN-only; remove unused pending credentials and let UI offer LAN explicitly.
     const refuseAutomaticWithoutRelay = (
       relayFailure: MobileRelayMintFailure
     ): PairingOfferUnavailable => {
@@ -145,6 +146,14 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
         relayFailure
       }
     }
+    if (!this.mobileRelayPairingProvider && this.mobileRelayPairingProviderInstaller) {
+      // Bounded: the install waits for the persisted proxy, which has no time limit of its own.
+      await withTimeout(
+        this.mobileRelayPairingProviderInstaller(),
+        RELAY_PROVIDER_INSTALL_WAIT_MS,
+        undefined
+      )
+    }
     const relayProvider = this.mobileRelayPairingProvider
     if (!relayProvider) {
       return refuseAutomaticWithoutRelay({
@@ -155,7 +164,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     }
     const device = this.deviceRegistry?.getDevice(direct.deviceId)
     const publicKeyB64 = this.getE2EEPublicKey()
-    if (!device || !publicKeyB64) {
+    if (!device?.token || !publicKeyB64) {
       return refuseAutomaticWithoutRelay({
         code: 'e2ee_key_unavailable',
         stage: 'e2ee_missing',
@@ -166,7 +175,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     try {
       relayPairing = await relayProvider.createPairingRelay(device.deviceId)
     } catch (error) {
-      // Why: the raw provider error can carry request metadata or credentials — log only the validated code.
+      // Provider errors may contain credentials/metadata; log validated codes only.
       const relayFailure = mobileRelayMintFailureFromUnknown({
         stage: 'create_pairing_relay',
         error,
@@ -253,8 +262,5 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     }
   }
 
-  /**
-   * Why: the outbox is the only durable cleanup record for a minted invite. When it can't be
-   * written, keep the binding on the device so cleanup keeps a reference instead of orphaning it.
-   */
+  /** If durable revoke enqueue fails, retain the device binding as the only remaining cleanup reference to the minted invite. */
 }

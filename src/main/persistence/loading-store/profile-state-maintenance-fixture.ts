@@ -66,7 +66,8 @@ function paths(profile?: ProfileFixtureLocation) {
 
 export async function createWorkerMaintenanceFixture(
   profile?: ProfileFixtureLocation,
-  onFailure?: (error: Error) => void
+  onFailure?: (error: Error) => void,
+  writerIdleStopMs?: number
 ) {
   const input = paths(profile)
   const bootstrap = new ProfileStateSqliteAuthority(input.databaseFile, input.profileId)
@@ -76,7 +77,8 @@ export async function createWorkerMaintenanceFixture(
   const state = bootstrap.readInitialState().takeParsedState?.()
   const authority = new ProfileStateWorkerAuthority(bootstrap.retireForWorker(), {
     ...workerOptions,
-    onFailure
+    onFailure,
+    writerIdleStopMs
   })
   await authority.ready
   const store = new Store({

@@ -19,8 +19,7 @@ function mockSubprocess(): SubprocessHandle {
   } as SubprocessHandle
 }
 
-// Why: without CR (Enter) the startup command sits typed at the prompt but
-// unexecuted (#23250). A caller-supplied terminator is replaced, not doubled.
+// Submit with one Enter CR so startup commands execute without a doubled terminator.
 describe('TerminalHost startup command terminator', () => {
   const origPlatform = process.platform
   afterEach(() => {
@@ -55,7 +54,6 @@ describe('TerminalHost startup command terminator', () => {
   })
 })
 
-// Why: a missing command and a lost one used to log identically.
 describe('TerminalHost startup command delivery logging', () => {
   let sub: SubprocessHandle
   let events: { event: string; details: Record<string, unknown> }[]

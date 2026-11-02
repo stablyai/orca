@@ -1,8 +1,3 @@
-/**
- * One windowed Orca under the layout oracle: launch, relaunch (optionally with a cold PTY daemon),
- * and a report of every finding per scenario.
- */
-
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
@@ -13,7 +8,10 @@ import { createRestartSession } from './orca-restart'
 import { bootstrapRestoredLaunch } from './terminal-restart-persistence'
 import { waitForPaneCount } from './terminal'
 import { LayoutOracle, type OracleFinding } from './workspace-layout-oracle'
-import { readRuntimePartitions } from './workspace-layout-oracle-views'
+import { LiveLayoutFeed } from './workspace-layout-oracle-feed'
+import { subscribeWindowLayout } from './workspace-layout-oracle-stream'
+import { readSavedPartitions } from './workspace-layout-oracle-views'
+import { summarizeEventLoopDelay, type EventLoopDelaySummary } from './event-loop-delay-report'
 
 export const ORACLE_REPORT_DIR_ENV = 'ORCA_LAYOUT_ORACLE_REPORT_DIR'
 
@@ -72,13 +70,20 @@ export async function runOracleScenario(
   const session = createRestartSession(testInfo)
   let app: ElectronApplication | null = null
   const worktreeIds: string[] = []
+  const started = Date.now()
   try {
     const first = await session.launch()
     app = first.app
+    const feed = new LiveLayoutFeed((current) => run.oracle.checkFrame(current))
     const target = (page: Page, client: RuntimeClient) => ({
       page,
       client,
-      readPartitions: () => readRuntimePartitions(page),
+      feed,
+      readSavedPartitions: async () => {
+        // Main debounces saves by up to 5 s; flushing makes the read the state main holds now.
+        await page.evaluate(() => window.api.session.flush())
+        return readSavedPartitions(session.userDataDir)
+      },
       worktreeIds: () => worktreeIds
     })
     const client = new RuntimeClient(session.userDataDir, 30_000)
@@ -86,11 +91,12 @@ export async function runOracleScenario(
       page: first.page,
       userDataDir: session.userDataDir,
       client,
-      oracle: new LayoutOracle(target(first.page, client)),
+      oracle: new LayoutOracle(target(first.page, client), scenarioId),
       worktreeIds,
       reloadWindow: async () => {
         await run.page.reload()
         await run.page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+        await subscribeWindowLayout(run.page, feed)
         await run.oracle.retarget(target(run.page, run.client))
       },
       relaunch: async (options) => {
@@ -109,9 +115,14 @@ export async function runOracleScenario(
         app = next.app
         run.page = next.page
         run.client = new RuntimeClient(session.userDataDir, 30_000)
+        await subscribeWindowLayout(next.page, feed)
         await run.oracle.retarget(target(next.page, run.client))
-        await (reopen ?? bootstrapRestoredLaunch)(next.page, worktreeId)
-        await waitForPaneCount(next.page, paneCount, 30_000).catch(() => {})
+        if (reopen) {
+          await reopen(next.page, worktreeId)
+          await waitForPaneCount(next.page, paneCount, 30_000).catch(() => {})
+        } else {
+          await bootstrapRestoredLaunch(next.page, worktreeId, paneCount)
+        }
         const restartsTerminals = coldDaemon || options.terminalsRestart
         const after = await run.oracle.step(
           coldDaemon ? 'after cold relaunch' : 'after relaunch',
@@ -125,33 +136,32 @@ export async function runOracleScenario(
         }
       }
     }
+    await subscribeWindowLayout(first.page, feed)
     await run.oracle.start()
-    try {
-      await body(run)
-    } finally {
-      await run.oracle.stop()
-    }
-    writeReport(testInfo, scenarioId, run.oracle.findings, run.oracle.viewCreations.at(-1) ?? {})
+    await body(run)
+    writeReport(testInfo, scenarioId, {
+      findings: run.oracle.findings,
+      viewCreations: run.oracle.viewCreations.at(-1) ?? {},
+      eventLoopDelay: summarizeEventLoopDelay(session.userDataDir, 'main', started, Date.now())
+    })
     return run.oracle.findings
   } finally {
-    if (app) {
-      await session.close(app)
-    }
-    await session.dispose()
+    await session.dispose(app ?? undefined)
   }
 }
 
 function writeReport(
   testInfo: TestInfo,
   scenarioId: string,
-  findings: OracleFinding[],
-  viewCreations: Record<string, number>
+  report: {
+    findings: OracleFinding[]
+    viewCreations: Record<string, number>
+    /** Main's event-loop delay over the scenario. */
+    eventLoopDelay: EventLoopDelaySummary
+  }
 ): void {
   const dir = process.env[ORACLE_REPORT_DIR_ENV] ?? testInfo.outputPath('layout-oracle')
   mkdirSync(dir, { recursive: true })
   const file = path.join(dir, `${scenarioId}-${Date.now()}.json`)
-  writeFileSync(
-    file,
-    `${JSON.stringify({ scenario: scenarioId, findings, viewCreations }, null, 2)}\n`
-  )
+  writeFileSync(file, `${JSON.stringify({ scenario: scenarioId, ...report }, null, 2)}\n`)
 }

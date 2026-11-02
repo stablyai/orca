@@ -115,6 +115,27 @@ describe('manual SSH host label fallback', () => {
     expect(outcome).toBe('saved')
     expect(savedTarget?.label).toBe('10.0.0.7')
   })
+
+  it.each([true, false])('saves the CLI control switch explicitly (%s)', async (allowed) => {
+    let savedTarget: SshTargetCreateInput | undefined
+    const ssh = {
+      listTargets: vi.fn().mockResolvedValue([]),
+      addTarget: vi.fn().mockImplementation(async ({ target }) => {
+        savedTarget = target
+        return { target: { ...target, id: 'ssh-1', source: 'manual' }, repoReadoptions: [] }
+      })
+    }
+
+    await saveNewSshHostFromForm({
+      form: { ...EMPTY_FORM, host: '10.0.0.7', allowRemoteCliControl: allowed },
+      ssh,
+      recordSshRepoReadoptions: vi.fn(),
+      setSshTargetsMetadata: vi.fn(),
+      recordFeatureInteraction: vi.fn()
+    })
+
+    expect(savedTarget).toHaveProperty('allowRemoteCliControl', allowed)
+  })
 })
 
 describe('bulk add of ~/.ssh/config hosts', () => {
@@ -122,8 +143,6 @@ describe('bulk add of ~/.ssh/config hosts', () => {
     vi.clearAllMocks()
   })
 
-  // The button counts (and promises) only the new hosts the picker listed; re-adopting
-  // would resurrect hosts the user deleted, which those counts deliberately omit.
   it('imports without re-adopting deleted aliases', async () => {
     const importConfig = vi.fn().mockResolvedValue({
       targets: [{ id: 'ssh-1', label: 'prod', host: 'prod', port: 22, username: '' }],

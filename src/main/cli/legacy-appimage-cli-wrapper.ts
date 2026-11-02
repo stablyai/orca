@@ -1,4 +1,4 @@
-import { quoteShell } from './cli-install-path-format'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 const APPIMAGE_CLI_SCRIPT = [
   '(async()=>{',
@@ -25,7 +25,7 @@ export function extractLegacyAppImageCliWrapperTarget(content: string): string |
 export function buildLegacyAppImageCliWrapper(appImagePath: string): string {
   return `#!/usr/bin/env bash
 set -euo pipefail
-APPIMAGE=${quoteShell(appImagePath)}
+APPIMAGE=${quotePosixShellDoubleQuotedApostrophe(appImagePath)}
 if [ ! -f "$APPIMAGE" ]; then
   echo "Orca AppImage not found at $APPIMAGE" >&2
   echo "If you moved the AppImage, re-run CLI registration from Orca Settings." >&2
@@ -36,7 +36,7 @@ export ORCA_NODE_REPL_EXTERNAL_MODULE="\${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 # Why: AppImage mount paths change on each launch; $APPDIR is the runtime mount.
-ELECTRON_RUN_AS_NODE=1 exec "$APPIMAGE" -e ${quoteShell(APPIMAGE_CLI_SCRIPT)} -- "$@"
+ELECTRON_RUN_AS_NODE=1 exec "$APPIMAGE" -e ${quotePosixShellDoubleQuotedApostrophe(APPIMAGE_CLI_SCRIPT)} -- "$@"
 `
 }
 
@@ -45,5 +45,5 @@ function unquoteShell(value: string): string | null {
     return null
   }
   const decoded = value.slice(1, -1).split(`'"'"'`).join("'")
-  return quoteShell(decoded) === value ? decoded : null
+  return quotePosixShellDoubleQuotedApostrophe(decoded) === value ? decoded : null
 }

@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises'
 import { createServer } from 'node:http'
+import { spawn } from 'node:child_process'
+import { createInterface } from 'node:readline'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
+import { runProcess } from '@orca/process-host'
 const piCli = process.argv[2] && resolve(process.argv[2])
 assert.ok(piCli, 'Pass the installed Pi CLI entrypoint')
 const scratch = await mkdtemp(join(tmpdir(), 'orca-pi-provider-'))
@@ -41,11 +44,14 @@ const server = createServer(async (req, res) => {
   res.end('data: [DONE]\n\n')
 })
 try {
-  const bundle = join(scratch, 'orca.cjs')
+  const bundleDir = join(scratch, 'bundle')
+  await mkdir(bundleDir)
+  // The bundle keeps packages external, so it must resolve them from the repo's node_modules.
+  await symlink(resolve('node_modules'), join(bundleDir, 'node_modules'), 'junction')
+  const bundle = join(bundleDir, 'orca.cjs')
   await build({
     stdin: {
-      contents:
-        "export {planCommitMessageGeneration} from './src/shared/commit-message-plan'; export {runProcess} from './src/shared/child-process/run-process';",
+      contents: "export {planCommitMessageGeneration} from './src/shared/commit-message-plan';",
       resolveDir: process.cwd()
     },
     bundle: true,
@@ -54,7 +60,7 @@ try {
     outfile: bundle,
     packages: 'external'
   })
-  const { planCommitMessageGeneration, runProcess } = createRequire(import.meta.url)(bundle)
+  const { planCommitMessageGeneration } = createRequire(import.meta.url)(bundle)
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const dir = join(scratch, 'agent')
@@ -111,6 +117,91 @@ try {
   assert.equal(results[1].code, 0, results[1].stderr)
   assert.match(results[1].stdout, /fixture-generated-commit/)
   assert.equal(results[1].requests, 1)
+  // Require Pi catch-up stable ids: since returns entries after that id or refuses an unknown id.
+  const sessionFile = join(scratch, 'catch-up.jsonl')
+  const rpc = spawn(process.execPath, [piCli, '--mode', 'rpc', '--session', sessionFile], {
+    cwd: scratch,
+    env: {
+      PATH: process.env.PATH,
+      SystemRoot: process.env.SystemRoot,
+      WINDIR: process.env.WINDIR,
+      HOME: scratch,
+      USERPROFILE: scratch,
+      ORCA_BACKGROUND_LAUNCH: '1',
+      PI_CODING_AGENT_DIR: dir
+    },
+    stdio: ['pipe', 'pipe', 'inherit']
+  })
+  const replies = new Map()
+  let settled
+  const settledOnce = new Promise((resolve) => (settled = resolve))
+  let fail
+  const failed = new Promise((_, reject) => (fail = reject))
+  const deadline = setTimeout(
+    () => fail(new Error('Pi RPC smoke timed out after 30 seconds')),
+    30000
+  )
+  rpc.on('error', fail)
+  rpc.on('close', (code, signal) =>
+    fail(new Error(`Pi RPC closed (code ${code}, signal ${signal})`))
+  )
+  rpc.stdin.on('error', fail)
+  rpc.stdout.on('error', fail)
+  const lines = createInterface({ input: rpc.stdout })
+  lines.on('line', (line) => {
+    try {
+      const record = JSON.parse(line)
+      if (record.type === 'response' && replies.has(record.id)) {
+        const reply = replies.get(record.id)
+        replies.delete(record.id)
+        reply(record, line)
+      } else if (record.type === 'agent_settled' || record.type === 'agent_end') {
+        settled()
+      }
+    } catch (error) {
+      fail(error)
+    }
+  })
+  let next = 0
+  const ask = (type, params = {}, id = `smoke-${++next}`) =>
+    new Promise((resolve) => {
+      replies.set(id, (record, line) => {
+        if (id === 'orca-optional-1') {
+          assert.ok(line.startsWith('{"id":"orca-optional-1","type":"response",'))
+          assert.equal(record.id, id)
+        }
+        resolve(record)
+      })
+      rpc.stdin.write(`${JSON.stringify({ ...params, type, id })}\n`)
+    })
+  try {
+    await Promise.race([
+      failed,
+      (async () => {
+        assert.equal((await ask('prompt', { message: 'hello' })).success, true)
+        await settledOnce
+        const all = await ask('get_entries', {}, 'orca-optional-1')
+        assert.equal((await ask('get_state')).success, true)
+        assert.equal(all.success, true, all.error)
+        const ids = all.data.entries.map((entry) => entry.id)
+        assert.ok(ids.length >= 2 && ids.every((id) => typeof id === 'string' && id.length > 0))
+        assert.equal(all.data.leafId, ids.at(-1))
+        const since = await ask('get_entries', { since: ids[0] })
+        assert.deepEqual(
+          since.data.entries.map((entry) => entry.id),
+          ids.slice(1)
+        )
+        const unknown = await ask('get_entries', { since: 'not-an-entry' })
+        assert.equal(unknown.success, false)
+        assert.match(unknown.error, /Entry not found/)
+        results.push({ variant: 'rpc-get-entries', entries: ids.length })
+      })()
+    ])
+  } finally {
+    clearTimeout(deadline)
+    lines.close()
+    rpc.kill()
+  }
   console.log(
     JSON.stringify(
       {

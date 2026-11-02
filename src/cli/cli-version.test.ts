@@ -16,7 +16,10 @@ describe('CLI version', () => {
     const runtimeDir = join(root, 'cli')
     temporaryDirectories.push(root)
     await mkdir(runtimeDir)
-    await writeFile(join(root, 'package.json'), JSON.stringify({ version: '1.4.178-rc.2' }))
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({ version: '1.4.178-rc.2', commit: 'b'.repeat(40) })
+    )
 
     expect(readOrcaCliVersion(runtimeDir)).toBe('1.4.178-rc.2')
   })

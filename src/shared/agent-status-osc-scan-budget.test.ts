@@ -62,7 +62,8 @@ describe('OSC 9999 scan budget', () => {
     expect(result).toEqual({
       cleanData: 'log'.repeat(count),
       payloads: statuses,
-      lastPayloadCleanOffset: count * 3
+      lastPayloadCleanOffset: count * 3,
+      payloadCleanOffsets: Array.from({ length: count }, (_, index) => (index + 1) * 3)
     })
     expect(searchedChars).toBeLessThanOrEqual(data.length * 2)
   })

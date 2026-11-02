@@ -9,7 +9,6 @@ export const TEST_WORKTREE_ORCA_YAML_PATH = join(TEST_WORKTREE_PATH, 'orca.yaml'
 export const TEST_ISSUE_COMMAND_PATH = join(TEST_REPO_PATH, '.orca', 'issue-command')
 export const TEST_GITIGNORE_PATH = join(TEST_REPO_PATH, '.gitignore')
 
-/** Minimal repo record the hooks module reads; hookSettings shape varies per suite. */
 export const makeHookTestRepo = (hookSettings?: unknown): Repo =>
   ({
     id: 'test-id',

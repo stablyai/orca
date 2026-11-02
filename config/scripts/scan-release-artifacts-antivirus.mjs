@@ -1,13 +1,6 @@
 #!/usr/bin/env node
-/**
- * Report the current antivirus detection state of built release artifacts, so an
- * RC can be checked before users meet the verdict in an issue report. See
- * docs/reference/antivirus-prerelease-clearance.md.
- *
- * Hash lookup only by default: nothing leaves the machine but a SHA-256. The
- * `--upload` flag transmits the artifact itself, which distributes it to partner
- * vendors — intended for clearance work, never for an automated path.
- */
+// Report release artifact antivirus verdicts (docs/reference/antivirus-prerelease-clearance.md). Default sends SHA-256 only.
+// Explicit --upload sends artifact to partner vendors for manual clearance; never automate uploads.
 
 import { createHash } from 'node:crypto'
 import { createReadStream, openAsBlob } from 'node:fs'
@@ -25,11 +18,7 @@ export async function hashFile(filePath) {
   return hash.digest('hex')
 }
 
-/**
- * The engines that call an artifact malicious or suspicious. Every other
- * category (undetected, type-unsupported, timeout, failure) is silence, not a
- * clean bill of health, so it is counted but never reported as a verdict.
- */
+// Only malicious/suspicious count as verdicts; undetected/unsupported/timeout/failure are silence, not a clean bill of health.
 export function summarizeEngineVerdicts(analysisResults) {
   const flagged = []
   let scanned = 0
@@ -84,8 +73,7 @@ async function fetchExistingReport(sha256, apiKey) {
   return body?.data?.attributes?.last_analysis_results ?? {}
 }
 
-// Why a separate upload URL above 32MB: the direct endpoint rejects larger
-// files, and every Orca installer is far past that.
+// Use separate upload URL above 32MB; Orca installers exceed direct endpoint limit.
 async function uploadArtifact(filePath, apiKey) {
   const { size } = await stat(filePath)
   let endpoint = VIRUSTOTAL_FILES_ENDPOINT
@@ -143,8 +131,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   const apiKey = process.env.VIRUSTOTAL_API_KEY
   if (!apiKey) {
-    // Why not a failure: this runs alongside release steps that must not break
-    // before the secret is provisioned.
+    // Missing secret must not fail parallel release steps before provisioning.
     console.log('VIRUSTOTAL_API_KEY is not set; skipping the antivirus detection report.')
     process.exit(0)
   }
@@ -154,8 +141,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(formatArtifactReport(report))
   }
   if (hasAnyDetection(reports)) {
-    // Why a warning and not an exit code: these are third-party ML classifiers,
-    // so a hard gate hands them the power to fail our releases. A human decides.
+    // Warn for human review: third-party classifiers must not control release success.
     console.log(
       '\nAt least one engine flags a shipped artifact. Decide before publishing, and submit ' +
         'for clearance per docs/reference/antivirus-prerelease-clearance.md.'

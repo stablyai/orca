@@ -14,6 +14,7 @@ import {
   resetFloatingWorkspaceUnreadSelectorCacheForTest,
   selectKnownWorktreeById,
   selectRepoByIdForActiveWorkspace,
+  selectReviewRepositoryForWorkspace,
   selectFloatingVisibleTabCount,
   selectFloatingWorkspaceHasUnread
 } from './selectors'
@@ -66,6 +67,46 @@ function makeTerminalTab(args: { id: string; worktreeId: string; title: string }
 describe('store selectors', () => {
   beforeEach(() => {
     resetFloatingVisibleTabCountSelectorCacheForTest()
+  })
+
+  it('keeps review reads on the workspace owner when direct SSH and server copies overlap', () => {
+    const direct = makeRepo({
+      id: 'repo',
+      path: '/direct',
+      displayName: 'Direct',
+      executionHostId: 'ssh:builder'
+    })
+    const server = {
+      ...direct,
+      path: '/server',
+      executionHostId: 'runtime:server' as const,
+      connectionId: 'builder'
+    }
+    const workspace = {
+      repoId: direct.id,
+      hostId: 'ssh:builder' as const,
+      runtimeOwnerEnvironmentId: 'server'
+    }
+    const state = {
+      repos: [direct, server],
+      activeRepoId: direct.id,
+      activeWorkspaceExecutionHostId: 'ssh:builder' as const
+    }
+
+    expect(selectReviewRepositoryForWorkspace(state, workspace)).toBe(server)
+    expect(selectReviewRepositoryForWorkspace({ ...state, repos: [direct] }, workspace)).toBeNull()
+    expect(
+      selectReviewRepositoryForWorkspace(state, {
+        ...workspace,
+        runtimeOwnerEnvironmentId: undefined
+      })
+    ).toBe(direct)
+    expect(
+      selectReviewRepositoryForWorkspace(
+        { ...state, activeWorkspaceExecutionHostId: 'runtime:server' },
+        { ...workspace, runtimeOwnerEnvironmentId: undefined }
+      )
+    ).toBe(server)
   })
 
   it('deduplicates cached worktree snapshots without changing reference reuse', () => {
@@ -713,8 +754,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
   })
 
   it('does not light for a stale unread entry whose floating tab no longer exists', () => {
-    // Mirrors closing a floating tab: the tab is gone from tabsByWorktree, so even
-    // a lingering map entry (there should be none — closeTab purges) cannot show.
+    // Removed floating tabs must not show attention through lingering unread-map entries.
     const state = makeState({
       tabsByWorktree: { [FLOATING]: [floatingTab('ft-live')] },
       unreadTerminalTabs: { 'ft-closed': true },

@@ -4,6 +4,7 @@ import {
   githubAssignableUserListRead,
   githubRepoLabelListRead
 } from './mobile-task-item-detail-operations'
+import { detailPayloadBody } from './mobile-tasks-provider-detail-types'
 
 export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffectsModel) {
   const {
@@ -24,9 +25,7 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
       setItemBodyDraft('')
       return
     }
-    setItemBodyDraft(
-      detailPayload.provider === 'linear' ? detailPayload.description : detailPayload.body
-    )
+    setItemBodyDraft(detailPayloadBody(detailPayload))
   }, [detailPayload])
 
   useEffect(() => {

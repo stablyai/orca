@@ -9,13 +9,7 @@ import {
   type ResumeFailureAction
 } from './native-chat-resume-failure-guidance'
 
-// The resume tree's shared state: which nodes are open, how deep a chat row sits, and how a chat
-// is read by its key.
-
-/**
- * Which nodes are open. Everything starts expanded; the state is this mount's own, so a dialog that
- * unmounts its tree on close reopens it fully expanded. Never persisted.
- */
+/** Start expanded per mount; closing/unmounting resets the tree rather than persisting expansion. */
 export function useResumeTreeExpansion(): {
   isExpanded: (key: string) => boolean
   setExpanded: (key: string, expanded: boolean) => void
@@ -36,8 +30,10 @@ export function useResumeTreeExpansion(): {
   }
 }
 
-/** The tree depth a chat row renders at; the enclosing workspace node provides it. */
 export const ResumeTreeDepthContext = createContext(0)
+
+/** False once no chat is selectable: the tree drops its checkbox column. */
+export const ResumeTreeSelectingContext = createContext(true)
 
 /** Lets a row that an earlier resume could not carry on show what went wrong and what to do. */
 export type FailureProps = {
@@ -48,7 +44,6 @@ export type FailureProps = {
   selectableIds?: ReadonlySet<string>
 }
 
-/** What every node needs from the tree as a whole. */
 export type TreeProps = {
   listedAt: number
   busy: boolean
@@ -60,10 +55,6 @@ export type TreeProps = {
   ancestorsOf: (group: ResumeWorkspaceGroup) => readonly string[]
 } & FailureProps
 
-/**
- * The one place a chat's key is read: its row's tick, toggle and failure, and every group's
- * coverage all go through here, so a change of key stays in this function.
- */
 export function chatState(candidate: ResumeCandidate, tree: TreeProps) {
   const key = candidate.sessionId
   const failure = tree.failureFor?.(key)

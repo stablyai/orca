@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   SHOW_MOBILE_PROJECT_METADATA_EDITORS,
   projectRowType
@@ -10,10 +11,12 @@ import {
   colors,
   Pressable,
   Check,
-  TextInput,
+  MessageBox,
+  TextField,
   MobileMarkdown
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentationModel) {
   const {
@@ -31,23 +34,29 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
   return SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
     <View style={styles.detailSection}>
       <View style={styles.detailSectionHeader}>
-        <Text style={styles.detailSectionTitle}>Labels</Text>
+        <Text style={styles.detailSectionTitle}>
+          {translate('tasks.projectMetadataEditors.labels', 'Labels')}
+        </Text>
         <Text style={styles.detailSectionMeta}>
           {(projectRowDetail?.provider === 'github'
             ? projectRowDetail.labels
             : projectRowItem.content.labels.map((label) => label.name)
-          ).length || 'None'}
+          ).length || translate('tasks.projectMetadataEditors.none', 'None')}
         </Text>
       </View>
       {projectLabelsLoading ? (
         <View style={styles.detailLoadingInline}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.detailMuted}>Loading labels...</Text>
+          <Text style={styles.detailMuted}>
+            {translate('tasks.projectMetadataEditors.loadingLabels', 'Loading labels...')}
+          </Text>
         </View>
       ) : projectLabelsError ? (
         <Text style={styles.detailError}>{projectLabelsError}</Text>
       ) : projectAvailableLabels.length === 0 ? (
-        <Text style={styles.detailMuted}>No labels in this repository.</Text>
+        <Text style={styles.detailMuted}>
+          {translate('tasks.projectMetadataEditors.noLabels', 'No labels in this repository.')}
+        </Text>
       ) : (
         <View style={styles.chipRow}>
           {[
@@ -66,7 +75,11 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
             return (
               <Pressable
                 key={label}
-                style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                style={({ pressed }) => [
+                  styles.detailChip,
+                  selected ? styles.detailChipSelected : undefined,
+                  pressed && pressedStyle
+                ]}
                 disabled={projectMutating}
                 onPress={() =>
                   void mutateProjectRowMetadata(
@@ -104,23 +117,32 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
   return SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
     <View style={styles.detailSection}>
       <View style={styles.detailSectionHeader}>
-        <Text style={styles.detailSectionTitle}>Assignees</Text>
+        <Text style={styles.detailSectionTitle}>
+          {translate('tasks.projectMetadataEditors.assignees', 'Assignees')}
+        </Text>
         <Text style={styles.detailSectionMeta}>
           {(projectRowDetail?.provider === 'github'
             ? projectRowDetail.assignees
             : projectRowItem.content.assignees.map((assignee) => assignee.login)
-          ).length || 'None'}
+          ).length || translate('tasks.projectMetadataEditors.none', 'None')}
         </Text>
       </View>
       {projectAssignableUsersLoading ? (
         <View style={styles.detailLoadingInline}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.detailMuted}>Loading assignees...</Text>
+          <Text style={styles.detailMuted}>
+            {translate('tasks.projectMetadataEditors.loadingAssignees', 'Loading assignees...')}
+          </Text>
         </View>
       ) : projectAssignableUsersError ? (
         <Text style={styles.detailError}>{projectAssignableUsersError}</Text>
       ) : projectAssignableUsers.length === 0 ? (
-        <Text style={styles.detailMuted}>No assignable users found for this repository.</Text>
+        <Text style={styles.detailMuted}>
+          {translate(
+            'tasks.projectMetadataEditors.noAssignableUsers',
+            'No assignable users found for this repository.'
+          )}
+        </Text>
       ) : (
         <View style={styles.chipRow}>
           {[
@@ -146,7 +168,11 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
             return (
               <Pressable
                 key={user.login}
-                style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                style={({ pressed }) => [
+                  styles.detailChip,
+                  selected ? styles.detailChipSelected : undefined,
+                  pressed && pressedStyle
+                ]}
                 disabled={projectMutating}
                 onPress={() =>
                   void mutateProjectRowMetadata(
@@ -185,16 +211,16 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
   return SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
     <>
       <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>Title</Text>
-        <TextInput
-          style={styles.input}
+        <Text style={styles.detailSectionTitle}>
+          {translate('tasks.projectMetadataEditors.title', 'Title')}
+        </Text>
+        <TextField
           value={projectTitleDraft}
           onChangeText={setProjectTitleDraft}
-          placeholder="Title"
-          placeholderTextColor={colors.textMuted}
+          placeholder={translate('tasks.projectMetadataEditors.title', 'Title')}
         />
         <Pressable
-          style={styles.inlineSaveButton}
+          style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
           disabled={projectMutating || projectTitleDraft.trim() === projectRowItem.content.title}
           onPress={() =>
             void mutateProjectRowIssueOrPr(projectRowItem, {
@@ -202,49 +228,58 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
             })
           }
         >
-          <Text style={styles.inlineSaveText}>Save title</Text>
+          <Text style={styles.inlineSaveText}>
+            {translate('tasks.projectMetadataEditors.saveTitle', 'Save title')}
+          </Text>
         </Pressable>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>Description</Text>
-        <TextInput
-          style={[styles.input, styles.bodyInput]}
+        <Text style={styles.detailSectionTitle}>
+          {translate('tasks.projectMetadataEditors.description', 'Description')}
+        </Text>
+        <MessageBox
           value={projectBodyDraft}
           onChangeText={setProjectBodyDraft}
-          placeholder="Description"
-          placeholderTextColor={colors.textMuted}
-          multiline
-          textAlignVertical="top"
-        />
-        <Pressable
-          style={styles.inlineSaveButton}
-          disabled={
-            projectMutating ||
-            projectBodyDraft ===
+          placeholder={translate('tasks.projectMetadataEditors.description', 'Description')}
+          canSend={
+            !projectMutating &&
+            projectBodyDraft !==
               (projectRowDetail?.provider === 'github'
                 ? projectRowDetail.body
                 : (projectRowItem.content.body ?? ''))
           }
-          onPress={() =>
+          sendAccessibilityLabel={translate(
+            'tasks.projectMetadataEditors.saveDescription',
+            'Save description'
+          )}
+          onSend={() =>
             void mutateProjectRowIssueOrPr(projectRowItem, {
               body: projectBodyDraft
             })
           }
-        >
-          <Text style={styles.inlineSaveText}>Save description</Text>
-        </Pressable>
-        <MobileMarkdown content={projectBodyDraft} fallback="No description." />
+        />
+        <MobileMarkdown
+          content={projectBodyDraft}
+          fallback={translate('tasks.projectMetadataEditors.noDescription', 'No description.')}
+        />
       </View>
     </>
   ) : (
     <>
       <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>Title</Text>
+        <Text style={styles.detailSectionTitle}>
+          {translate('tasks.projectMetadataEditors.title', 'Title')}
+        </Text>
         <Text style={styles.detailLine}>{projectRowItem.content.title}</Text>
       </View>
       <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>Description</Text>
-        <MobileMarkdown content={projectBodyDraft} fallback="No description." />
+        <Text style={styles.detailSectionTitle}>
+          {translate('tasks.projectMetadataEditors.description', 'Description')}
+        </Text>
+        <MobileMarkdown
+          content={projectBodyDraft}
+          fallback={translate('tasks.projectMetadataEditors.noDescription', 'No description.')}
+        />
       </View>
     </>
   )

@@ -54,8 +54,7 @@ import {
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
-// Why: removal argv carries core.longpaths on Windows, so pin a non-Windows default or the
-// exact-argv assertions below fail for a maintainer running vitest on Windows.
+// Pin non-Windows argv; Windows removal also sets core.longpaths.
 let platformSpy: MockInstance<() => NodeJS.Platform>
 
 beforeEach(() => {
@@ -249,11 +248,11 @@ branch refs/heads/main
 
     await removeWorktree('/repo', '/repo-feature')
 
-    // A large checkout takes Git 30 s or more to delete; any timeout here would cut that short.
-    // Exempt from general admission: deletes queue under their own limit instead.
+    // Large deletions must finish without a deadline; their own queue bounds admission.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'remove', '/repo-feature'], {
       cwd: '/repo',
-      admissionExempt: true
+      admissionExempt: true,
+      ...(process.platform === 'darwin' ? { spawnOnWorkerThread: true } : {})
     })
     expect(getGitCalls()).not.toContain('git worktree prune')
     expect(getGitCalls()).toContain('git branch -d -- feature/test')
@@ -535,7 +534,6 @@ branch refs/heads/feature/test
       'git worktree remove failed'
     )
     expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
-    // An unrelated failure must not re-prove cleanliness.
     expect(getGitCalls()).not.toContain('git status --porcelain --untracked-files=all')
   })
 
@@ -645,9 +643,7 @@ branch refs/heads/feature/test
 
     await removeWorktree('/repo', '/repo-feature', false, { deleteBranch: false })
 
-    // Why not assert size 0: the pre-removal `listWorktrees` lookup inside `performRemoveWorktree`
-    // re-annotates every row it saw (including the untouched main worktree), caching a fresh entry
-    // for `/repo`. Only the removed path's own entry must be gone, proven by a fresh stat call below.
+    // Other rows may be re-cached during removal; only the removed path must require a fresh stat.
     const statCallsBefore = statMock.mock.calls.length
     expect(await detectSparseCheckoutCached('/repo', '/repo-feature')).toBe(false)
     expect(statMock.mock.calls.length).toBeGreaterThan(statCallsBefore)

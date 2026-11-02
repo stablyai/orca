@@ -35,3 +35,28 @@ export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<strin
     return null
   }
 }
+
+/** Branch a remote's `refs/remotes/<remote>/HEAD` points at, or null when git never recorded it. */
+export async function resolveRemoteHeadBranchViaExec(
+  exec: GitExec,
+  remoteName: string
+): Promise<string | null> {
+  const headRef = `refs/remotes/${remoteName}/HEAD`
+  const branchPrefix = `refs/remotes/${remoteName}/`
+  try {
+    const { stdout } = await exec([
+      'for-each-ref',
+      '--format=%(refname)%00%(symref)',
+      `${headRef.slice(0, -1)}[${headRef.slice(-1)}]`
+    ])
+    for (const line of iterateProcessOutputLines(stdout)) {
+      const [ref, target] = line.split('\0')
+      if (ref === headRef && target?.startsWith(branchPrefix)) {
+        return target.slice(branchPrefix.length)
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}

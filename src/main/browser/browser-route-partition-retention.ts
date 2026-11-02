@@ -1,10 +1,4 @@
-/**
- * Retention probes for route partitions. Two independent owners exist — the
- * paired-route session registry and the local direct-SSH partition set — and
- * binding-store eviction or a storage sweep initiated by either must never
- * destroy a partition the other is serving. Each owner registers a probe; all
- * destruction paths ask the union.
- */
+// Paired routes and direct SSH share storage; eviction and sweeps must check every owner's retention.
 const probes = new Set<(partition: string) => boolean>()
 
 export function registerBrowserRoutePartitionRetentionProbe(

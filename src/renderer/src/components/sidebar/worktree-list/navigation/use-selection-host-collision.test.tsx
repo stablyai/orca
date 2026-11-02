@@ -4,7 +4,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { HostSectionRow } from '../../host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { useSidebarWorktreeSelection } from './use-selection'
 import { getVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
 
@@ -21,7 +21,6 @@ function row(worktree: Worktree): HostSectionRow {
     repo: undefined,
     depth: 0,
     groupDepth: 0,
-    lineageTrail: [],
     isLastLineageChild: false,
     lineageChildCount: 0
   }

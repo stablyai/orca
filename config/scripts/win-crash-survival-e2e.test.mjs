@@ -25,6 +25,23 @@ describe('win-crash-survival-e2e proof contracts', () => {
       reattachProven: true
     }
     expect(buildCrashAssertions(base).every((entry) => entry.pass)).toBe(true)
+    for (const field of [
+      'mainDied',
+      'daemonAliveAfterCrash',
+      'shellAliveAfterCrash',
+      'postDaemonAlive'
+    ]) {
+      expect(
+        buildCrashAssertions({ ...base, [field]: false }).every((entry) => entry.pass),
+        field
+      ).toBe(false)
+    }
+    expect(
+      buildCrashAssertions({
+        ...base,
+        failFastEvents: [{ provider: '.NET Runtime', id: 1026, timeCreated: '2026-01-01' }]
+      }).every((entry) => entry.pass)
+    ).toBe(false)
     expect(
       buildCrashAssertions({ ...base, postDaemonPid: 202 }).find((entry) =>
         entry.name.startsWith('relaunch adopts')

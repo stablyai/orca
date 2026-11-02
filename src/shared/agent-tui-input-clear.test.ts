@@ -16,9 +16,7 @@ const countCtrlK = (bytes: string): number =>
   bytes.split('').filter((char) => char === AGENT_TUI_CLEAR_INPUT_FORWARD).length
 
 describe('buildAgentTuiClearInput', () => {
-  // The measured law: N kills + (N-1) joins. A constant here silently under-clears
-  // (5 clears 3 lines but leaves residue at 4), which is what glues onto the next
-  // message — so pin every small N, not just one.
+  // Pin N kills + N-1 joins for every small N; constant bursts under-clear multiline drafts and glue residue onto the next message.
   it.each([
     [1, 1],
     [2, 3],
@@ -32,9 +30,7 @@ describe('buildAgentTuiClearInput', () => {
   })
 
   it('clears before the cursor before clearing the suffix after it', () => {
-    expect(buildAgentTuiClearInput(4)).toBe(
-      AGENT_TUI_CLEAR_INPUT_LINE.repeat(7) + AGENT_TUI_CLEAR_INPUT_FORWARD.repeat(7)
-    )
+    expect(buildAgentTuiClearInput(4)).toBe('\x15'.repeat(7) + '\x0b'.repeat(7))
   })
 
   it('still clears one line for a zero or negative count', () => {
@@ -45,6 +41,11 @@ describe('buildAgentTuiClearInput', () => {
   it('caps the burst so a pathological draft cannot emit an unbounded write', () => {
     expect(countCtrlU(buildAgentTuiClearInput(10_000))).toBe(2 * AGENT_TUI_CLEAR_MAX_LINES - 1)
     expect(AGENT_TUI_CLEAR_INPUT_MAX).toBe(buildAgentTuiClearInput(AGENT_TUI_CLEAR_MAX_LINES))
+  })
+
+  it('keeps the widest burst under the 64-byte chunk Claude Code reads as a paste', () => {
+    // Claude Code 2.1.314 dropped a 64-byte burst and kept a 63-byte one.
+    expect(AGENT_TUI_CLEAR_INPUT_MAX.length).toBeLessThan(64)
   })
 })
 

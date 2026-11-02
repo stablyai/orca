@@ -433,8 +433,7 @@ describe('file explorer deletion owner provenance', () => {
     })
 
     await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
-    // Why: unresolved deletes throw before any confirm, so the batch must not
-    // pop a destructive prompt for operations that provably cannot succeed.
+    // Unresolved deletes fail before confirmation; impossible batches must not show destructive prompts.
     expect(confirm).not.toHaveBeenCalled()
     expect(fsDeletePath).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()

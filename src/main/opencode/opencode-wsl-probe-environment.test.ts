@@ -3,7 +3,7 @@ import { prepareOpenCodePtyLaunch } from './opencode-pty-launch'
 import { seedWslGuestEnvironmentForTests } from '../wsl/wsl-guest-environment'
 
 const run = vi.hoisted(() => vi.fn())
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: run }))
+vi.mock('@orca/process-host', () => ({ runProcess: run }))
 vi.mock('../wsl/wsl-executable-path', () => ({ resolveWslExecutablePath: () => 'wsl.exe' }))
 vi.mock('../agent-hooks/server', () => ({ agentHookServer: { endpointFilePath: null } }))
 

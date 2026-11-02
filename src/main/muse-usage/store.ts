@@ -10,8 +10,9 @@ import type {
   MuseUsageSnapshot,
   MuseUsageSummary
 } from '../../shared/muse-usage-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
 import { filterUsageDaily, filterUsageSessions } from '../usage/usage-scope-filters'
 import { museUsageProvider } from './muse-usage-provider'
 import { getDefaultMuseUsageState, normalizeMuseUsageState } from './persisted-state-normalization'
@@ -47,7 +48,8 @@ export class MuseUsageStore extends UsageProviderStoreLifecycle<
       normalizeState: normalizeMuseUsageState,
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyMuseData',
-      scan: museUsageProvider.scan
+      scan: museUsageProvider.scan,
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 

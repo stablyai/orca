@@ -1,4 +1,4 @@
-import type { PtyProcessInfo } from '../providers/types'
+import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 import type { TmuxManagedPty } from '../../shared/tmux-agent-hook-owner'
 
 /** Reuse the daemon's authenticated inventory; never resolve an SSH pane from the client. */

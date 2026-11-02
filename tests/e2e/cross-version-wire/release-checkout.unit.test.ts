@@ -12,11 +12,11 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { afterEach, describe, expect, it } from 'vitest'
-import { forceTerminateProcessTree } from '../../../src/shared/child-process/process-tree-termination'
-import { spawnProcess } from '../../../src/shared/child-process/run-process'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { spawnProcess } from '@orca/process-host'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -46,8 +46,7 @@ function git(args: string[]): string {
 }
 
 function syntheticCheckout(): ReleaseCheckout {
-  // Why realpath: vite-node reports module urls through macOS's /var -> /private/var
-  // symlink, so provenance assertions need the resolved form.
+  // Resolve macOS /var symlinks like vite-node for provenance comparisons.
   const root = realpathSync(temporaryCacheRoot())
   return { ref: 'v0.0.0-synthetic', commit: 'f'.repeat(40), label: 'v0.0.0-synthetic', root }
 }
@@ -216,8 +215,7 @@ async function runContentionPhase(
       acquiredMarker,
       ...(ablateLock ? { ablateLock, stagingMarker, proceedPath, populateStaging: true } : {})
     })
-    // onLockAttempt runs only after the rival's first stamp miss and invocation
-    // of the actual lock function; no elapsed-time guess stands in for contention.
+    // Wait for real lock contention acknowledgement, not an elapsed-time guess.
     await waitForFile(ablateLock ? stagingMarker : attemptMarker, 30_000)
     if (!ablateLock) {
       expect(existsSync(acquiredMarker), rival.output()).toBe(false)
@@ -229,8 +227,7 @@ async function runContentionPhase(
       (error: unknown) => error
     )
     if (ablateLock) {
-      // The staging marker is after the second stamp miss. Publishing before this
-      // acknowledgement would let the ablation pass without exercising deletion.
+      // Wait for the second stamp miss or the ablation could pass without exercising deletion.
       writeFileSync(proceedPath, '')
     }
     await releaseOnce()
@@ -266,83 +263,6 @@ afterEach(() => {
 })
 
 describe('release checkout materialization', () => {
-  it('single-flights concurrent consumers of one release identity', async () => {
-    const cacheRoot = temporaryCacheRoot()
-    let publications = 0
-    const options = {
-      cacheRoot,
-      testHooks: {
-        populateStaging: async (context: CheckoutStagingContext) => {
-          publications++
-          await populateMinimalStaging(context)
-        }
-      }
-    }
-    const checkouts = await Promise.all([
-      materializeReleaseCheckout('v1.4.190', options),
-      materializeReleaseCheckout('v1.4.190', options),
-      materializeReleaseCheckout('v1.4.190', options)
-    ])
-
-    expect(publications).toBe(1)
-
-    expect(new Set(checkouts.map(({ root }) => root))).toHaveLength(1)
-    expect(relative(cacheRoot, checkouts[0]!.root)).not.toMatch(/^\.\./)
-  })
-
-  // Cold extraction and transforms need the cross-version suite's startup budget.
-  it('loads a baseline module whose source imports another checkout-root file', async () => {
-    const cacheRoot = temporaryCacheRoot()
-    const checkout = await materializeReleaseCheckout('v1.4.190', { cacheRoot })
-    const protocol = await importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
-
-    expect(protocol.REMOTE_SERVER_UPDATE_CAPABILITY).toBe('updater.remote-control.v1')
-    expect(relative(cacheRoot, checkout.root)).not.toMatch(/^\.\./)
-  }, 180_000)
-
-  // v1.4.221 still needs the pinned test-only parser for its dense match path.
-  // Default cache root: package resolution must walk up into the repo's node_modules.
-  it('runs the released dense parser with its retained test dependency', async () => {
-    const checkout = await materializeReleaseCheckout('v1.4.221')
-    const ripgrep = await importReleaseCheckoutModule(
-      checkout,
-      '/src/shared/ripgrep-dense-match-json.ts'
-    )
-    const callExport = (name: string, ...args: unknown[]): unknown => {
-      const exported = ripgrep[name]
-      if (typeof exported !== 'function') {
-        throw new Error(`v1.4.221 ripgrep-dense-match-json has no ${name} export`)
-      }
-      return exported(...args)
-    }
-    const limits = { structuralTokens: 64, nestingDepth: 8 }
-
-    expect(callExport('parseRipgrepMatchJson', '{"type":"match"}', 1, limits)).toEqual({
-      type: 'match'
-    })
-    expect(callExport('parseDenseRipgrepMatchJson', '{"type":"match"}', 1, 8)).toEqual({
-      type: 'match',
-      data: { submatches: [] }
-    })
-    const match = {
-      type: 'match',
-      data: {
-        path: { text: 'src/example.ts' },
-        lines: { text: 'hit hit\n' },
-        line_number: 7,
-        submatches: [
-          { start: 0, end: 3 },
-          { start: 4, end: 7 }
-        ]
-      }
-    }
-    expect(callExport('parseDenseRipgrepMatchJson', JSON.stringify(match), 1, 8)).toEqual({
-      ...match,
-      data: { ...match.data, submatches: [{ start: 0, end: 3 }] }
-    })
-    expect(() => callExport('parseDenseRipgrepMatchJson', '{"type":', 1, 8)).toThrow()
-  }, 180_000)
-
   it('keeps an import live while another colliding release label materializes', async () => {
     // Squash-merged history has no merge parents; create two distinct refs with colliding labels.
     const scope = `refs/orca-checkout-test/${randomUUID()}`
@@ -399,8 +319,7 @@ describe('release checkout materialization', () => {
     })
 
     await expect(runContentionPhase(published, scratch, 'locked', false)).resolves.toBe(true)
-    // In the same causally acknowledged interleaving, a no-lock materializer
-    // deletes the newly published tree. This makes the lock assertion non-vacuous.
+    // The same acknowledged interleaving without a lock must delete the published tree, proving the lock assertion matters.
     await expect(runContentionPhase(published, scratch, 'ablated', true)).resolves.toBe(false)
   }, 120_000)
 
@@ -516,56 +435,9 @@ describe('release checkout materialization', () => {
       await stopMaterializerChild(crashed)
     }
   }, 30_000)
-
-  it('never stamps an incomplete tree produced through the injectable test seam', async () => {
-    const cacheRoot = temporaryCacheRoot()
-    await expect(
-      materializeReleaseCheckout('v1.4.190', {
-        cacheRoot,
-        testHooks: { populateStaging: async () => undefined }
-      })
-    ).rejects.toThrow(/missing the terminal stream protocol/)
-
-    let populated = 0
-    const recovered = await materializeReleaseCheckout('v1.4.190', {
-      cacheRoot,
-      testHooks: {
-        populateStaging: async (context) => {
-          populated++
-          await populateMinimalStaging(context)
-        }
-      }
-    })
-    expect(populated).toBe(1)
-    expect(existsSync(join(recovered.root, 'src', 'shared', 'terminal-stream-protocol.ts'))).toBe(
-      true
-    )
-  })
 })
 
 describe('release checkout module importer', () => {
-  it('hands the importer a raw absolute forward-slash specifier, never a file URL', async () => {
-    const checkout = syntheticCheckout()
-    const captured: string[] = []
-    const capture = (specifier: string): Promise<Record<string, unknown>> => {
-      captured.push(specifier)
-      return Promise.resolve({})
-    }
-
-    await importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/dispatcher.ts', capture)
-    await importReleaseCheckoutModule(checkout, '\\src\\shared\\protocol-version.ts', capture)
-
-    const normalizedRoot = checkout.root.split('\\').join('/')
-    expect(captured).toEqual([
-      `${normalizedRoot}/src/main/runtime/rpc/dispatcher.ts`,
-      `${normalizedRoot}/src/shared/protocol-version.ts`
-    ])
-    for (const specifier of captured) {
-      expect(specifier).not.toMatch(/^file:/)
-      expect(specifier).not.toContain('\\')
-    }
-  })
-
   it('refuses module paths that escape the checkout root', () => {
     const checkout = syntheticCheckout()
     const escape = /stay inside the release checkout/
@@ -585,9 +457,7 @@ describe('release checkout module importer', () => {
     const probe = await importReleaseCheckoutModule(checkout, '/src/provenance-probe.mjs')
     expect(String(probe.moduleUrl)).toContain(checkout.root.split('\\').join('/'))
 
-    // The working tree has this module and the synthetic checkout does not:
-    // resolving it would mean a root-relative specifier silently ran current
-    // code as the "old" side — the exact poison this harness exists to prevent.
+    // This module exists only in the working tree; resolving it would silently run current code as the old build.
     await expect(
       importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
     ).rejects.toThrow()

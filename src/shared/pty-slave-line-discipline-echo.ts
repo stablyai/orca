@@ -1,11 +1,7 @@
 import { execFile, type ExecFileException } from 'node:child_process'
 
-// Reads the slave's line-discipline state for shell-prompt readiness detection.
-//
-// Orca deliberately does NOT read the ECHO bit to decide when to write a terminal reply.
-// It used to, and withholding the write until the bit was clear is what made the write
-// asynchronous and let replies overtake each other (#15559). Reply echoes are handled
-// on the output side instead — see pty-startup-reply-echo-shapes.ts.
+// Probe line discipline for prompt readiness only. Never defer replies awaiting ECHO-clear: asynchronous writes reordered
+// replies into later programs’ stdin (#15559). Suppress echoes on output via pty-startup-reply-echo-shapes.ts.
 
 /** `unknown` means "could not be determined", never "assume quiet". */
 export type PtySlaveLineDisciplineEcho = 'echoing' | 'quiet' | 'unknown'
@@ -41,12 +37,7 @@ function parseLineEditorState(sttyOutput: string): PtySlaveLineEditorState {
 
 type SttyProbeResult = { stdout: string | null; permanent: boolean }
 
-/**
- * A spawn that never ran (`stty` absent) or a device that answered non-zero (reaped,
- * not a tty) will answer the same way forever. A kill by the timeout, or a fork that
- * failed for want of a resource, is contention — the very thing a multi-pane restore
- * produces — and must not condemn the pty to guessing for the rest of its life.
- */
+/** Missing stty/reaped/non-TTY devices fail permanently; timeout/resource contention during restore must remain retryable. */
 function isPermanentSttyFailure(error: ExecFileException): boolean {
   if (error.killed || error.signal) {
     return false
@@ -71,10 +62,7 @@ function runStty(ptsName: string, platform: NodeJS.Platform): Promise<SttyProbeR
   })
 }
 
-/**
- * node-pty's UnixTerminal carries the slave device path, but its public typings do not
- * declare it and the Windows terminal has no such field — so read it defensively.
- */
+/** node-pty exposes Unix ptsName outside public typings; Windows omits it, so read defensively. */
 export function readPtySlavePath(pty: unknown): string | undefined {
   const candidate = (pty as { ptsName?: unknown } | null | undefined)?.ptsName
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
@@ -95,10 +83,8 @@ function createSttyProbe<T extends string>(
   if (platform === 'win32' || !ptsName) {
     return undefined
   }
-  // Why latch: `stty` missing or the slave already reaped is a permanent condition for
-  // this pty, and the caller polls — without this a dead probe respawns a process per
-  // attempt. A successful probe is never cached, because the bit is what changes, and a
-  // transient failure is not latched at all (see isPermanentSttyFailure).
+  // Latch only permanent missing/reaped failures to avoid repeated dead subprocesses. Success and resource contention
+  // must be re-probed because line discipline changes.
   let unavailable = false
   let inFlight: Promise<SttyProbeResult> | null = null
   return async () => {

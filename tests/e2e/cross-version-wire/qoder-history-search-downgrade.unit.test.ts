@@ -20,7 +20,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 const PRE_QODER_HOSTS = ['v1.4.211', 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c']
 const QODER_HOST = 'f97ca2a49d9c711dab54a656a7f8a47ae6c6749c'
 const LEGACY_AGENTS = AI_VAULT_AGENTS.filter(
-  (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode'].includes(agent)
+  (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'kiro'].includes(agent)
 )
 afterEach(() => setSessionSearchService(null))
 
@@ -47,44 +47,6 @@ function releaseParser(schema: unknown) {
     safeParse: (value: unknown) => safeParse.call(schema, value)
   }
 }
-
-test.each(['qoder', 'jcode'] as const)(
-  'a pre-agent release can read current %s search pages without losing other agents',
-  async (agent) => {
-    const baseline = await releaseSearchSchemas('v1.4.211')
-    const responseParser = releaseParser(baseline.AiVaultSearchResponseSchema)
-    const newHit = { ...searchHit(), agent }
-    expect(responseParser.safeParse({ ...searchResults(), hits: [newHit] })).toHaveProperty(
-      'success',
-      false
-    )
-    const service = fakeSearchService()
-    service.search.mockImplementation(async (request) => ({
-      ...searchResults(),
-      hits:
-        !request.filters?.agents || request.filters.agents.includes(agent)
-          ? [newHit]
-          : searchResults().hits
-    }))
-    setSessionSearchService(service)
-    const oldResponse = await searchSessionService({ query: 'proof' }, 'relay')
-    expect(responseParser.safeParse(oldResponse)).toHaveProperty('success', true)
-    expect(oldResponse).toMatchObject({ hits: [{ agent: 'codex' }] })
-    const client = createSessionSearchClient(
-      (_method, request) => searchSessionService(request, 'relay'),
-      'relay'
-    )
-    expect(await client.searchSessions({ query: 'proof' })).toMatchObject({ hits: [{ agent }] })
-    expect(
-      releaseParser(baseline.AiVaultSearchRequestSchema).safeParse({
-        query: 'proof',
-        supportedAgents: [...AI_VAULT_AGENTS],
-        supportsQoderHistory: true,
-        supportsJcodeHistory: true
-      })
-    ).toHaveProperty('success', true)
-  }
-)
 
 test.each(PRE_QODER_HOSTS)(
   'the actual %s response parser accepts complete current-host legacy pages',
@@ -250,7 +212,7 @@ test('the shipped Qoder capability proves its historical trio while withholding 
   expect(call).toHaveBeenLastCalledWith(
     'aiVault.searchSessions',
     expect.objectContaining({
-      filters: { agents: AI_VAULT_AGENTS.filter((agent) => agent !== 'jcode') }
+      filters: { agents: AI_VAULT_AGENTS.filter((agent) => !['jcode', 'kiro'].includes(agent)) }
     })
   )
 })

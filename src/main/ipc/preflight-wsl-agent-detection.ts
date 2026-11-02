@@ -1,3 +1,4 @@
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import path from 'node:path'
 import { buildPosixFallbackPathPrelude } from '../../shared/posix-version-manager-bin-dirs'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
@@ -19,21 +20,15 @@ export async function detectWslCommandsOnPath(
     return new Set()
   }
 
-  const commandList = uniqueCommands.map(shellQuote).join(' ')
+  const commandList = uniqueCommands.map(quotePosixShell).join(' ')
   const lookupScript = buildPosixCommandPathLookupScript(
     { kind: 'shell-variable', name: 'cmd' },
-    // Skip Windows mounts DURING the walk, not after it: WSL appends the
-    // Windows PATH, so a Windows `claude` can shadow a real guest install, and
-    // discarding the result afterwards reports "not installed" for a user who
-    // has both -- the #9725 population the fallback dirs exist to serve.
+    // Skip Windows mounts while walking so an interop binary cannot hide a later guest install (#9725).
     { skipWindowsMountDirs: true }
   )
   // Newlines keep the loop valid in every POSIX shell used here.
   const script = [
-    // The same fallback the preflight command runner uses: append the
-    // version-manager dirs to PATH and let the ordinary lookup find them. A
-    // second bespoke `[ -x ]` walk here duplicated the lookup script's own
-    // `! -d` guard, which is how a directory once read as an installed CLI.
+    // Reuse the common version-manager fallback and executable lookup, including directory rejection.
     buildPosixFallbackPathPrelude(),
     `for cmd in ${commandList}; do`,
     lookupScript,
@@ -44,8 +39,7 @@ export async function detectWslCommandsOnPath(
   ].join('\n')
 
   try {
-    // Why probe: the cached login PATH gives the user's real nvm/mise/asdf PATH
-    // with no shell in the loop, so there is no rc/motd banner to land in stdout.
+    // Use cached login PATH without shell startup banners.
     const result = await runWslProcess({
       distro: wslTarget.distro,
       loginPath: 'preferred',
@@ -54,8 +48,7 @@ export async function detectWslCommandsOnPath(
       shell: 'sh',
       timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
     })
-    // runProcess resolves on a timeout and on a non-zero exit, so partial
-    // stdout would otherwise read as a complete answer.
+    // Timeout/nonzero results may contain partial stdout, not a complete inventory.
     if (result.timedOut || result.code !== 0) {
       return new Set()
     }
@@ -63,10 +56,6 @@ export async function detectWslCommandsOnPath(
   } catch {
     return new Set()
   }
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
 }
 
 function parseWslDetectedCommands(stdout: string): Set<string> {
@@ -83,8 +72,7 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
     }
     const command = payload.slice(0, separatorIndex)
     const resolvedPath = payload.slice(separatorIndex + 1)
-    // Why: a real guest executable always resolves to a POSIX-absolute path, so
-    // a Windows-style C:\ path here is spoofed/non-guest output, not an install.
+    // Guest executables resolve to POSIX-absolute paths; reject Windows-style output.
     if (path.posix.isAbsolute(resolvedPath)) {
       found.add(command)
     }

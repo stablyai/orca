@@ -1,5 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 
 export type CapturedTerminalDropTarget = {
   paneId: number

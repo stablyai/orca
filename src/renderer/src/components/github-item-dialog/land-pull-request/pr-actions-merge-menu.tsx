@@ -14,6 +14,8 @@ import type { presentGitHubPRMergeState } from '@/components/github-pr-merge-sta
 import type { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
+import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function PRActionsMergeMenu({
   itemUrl,
@@ -54,7 +56,7 @@ export function PRActionsMergeMenu({
               )}
               {mergePresentation.autoMergeAction?.label ??
                 (mergePresentation.directMergeAvailable
-                  ? mergeMethods.defaultLabel
+                  ? getPullRequestMergeMethodLabel(mergeMethods.defaultMethod)
                   : mergePresentation.label)}
               <ChevronDown className="size-3 opacity-60" />
             </Button>
@@ -80,13 +82,13 @@ export function PRActionsMergeMenu({
           </DropdownMenuItem>
         )}
         {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
-        {mergeMethods.methods.map(({ method, label }) => (
+        {mergeMethods.methods.map((method) => (
           <DropdownMenuItem key={method} disabled={mergeDisabled} onSelect={() => onMerge(method)}>
             <GitMerge className="size-4" />
-            {label}
+            {getPullRequestMergeMethodLabel(method)}
           </DropdownMenuItem>
         ))}
-        <DropdownMenuItem onSelect={() => window.api.shell.openUrl(itemUrl)}>
+        <DropdownMenuItem onSelect={() => openAppHttpLink(itemUrl)}>
           <ExternalLink className="size-4" />
           {translate('auto.components.GitHubItemDialog.53fe19aefc', 'Open GitHub merge box')}
         </DropdownMenuItem>

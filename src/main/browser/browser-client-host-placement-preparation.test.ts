@@ -4,7 +4,8 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
@@ -35,15 +36,32 @@ describe('browser client host placement preparation', () => {
     expect(harness.closeHost).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['explicit server placement', { preference: 'server' as const, enabled: true }],
-    ['disabled new-page switch', { preference: 'auto' as const, enabled: false }]
-  ])('keeps %s on the server without probing or starting a client host', async (_label, input) => {
+  it('keeps explicit server placement on the server without probing or starting a client host', async () => {
     const harness = createHarness()
 
-    await expect(harness.prepare(input)).resolves.toEqual({ kind: 'server' })
+    await expect(harness.prepare({ preference: 'server' })).resolves.toEqual({ kind: 'server' })
     expect(harness.getStatus).not.toHaveBeenCalled()
     expect(harness.startHost).not.toHaveBeenCalled()
+  })
+
+  it('renders on the server when the setting asks for it and the server can stream', async () => {
+    const harness = createHarness({
+      status: runtimeStatus({
+        capabilities: [...REQUIRED_CAPABILITIES, BROWSER_SCREENCAST_RUNTIME_CAPABILITY]
+      })
+    })
+
+    await expect(harness.prepare({ enabled: false })).resolves.toEqual({ kind: 'server' })
+    expect(harness.startHost).not.toHaveBeenCalled()
+  })
+
+  it('hosts on this desktop when the setting asks for the server but the server cannot stream', async () => {
+    const harness = createHarness()
+
+    await expect(harness.prepare({ enabled: false })).resolves.toEqual({
+      kind: 'client',
+      browserHostClientId: 'browser-client-a'
+    })
   })
 
   it('keeps an older host on the server when any required capability is absent', async () => {
@@ -110,9 +128,6 @@ describe('browser client host placement preparation', () => {
     )
   })
 
-  // Why this replaced a throw: the probe used to run only behind a cached "host can client-host"
-  // verdict, so a failed one meant a real problem for a pairing that wanted client hosting. Every
-  // create probes now, and a create that would have succeeded on the server must not die with it.
   it.each([
     ['an offline host', 'runtime_unavailable', 'offline'],
     ['a timed-out probe', 'timeout', 'status.get timed out']

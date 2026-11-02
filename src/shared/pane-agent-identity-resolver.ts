@@ -5,40 +5,12 @@ import type { TerminalAgent } from './terminal-agent'
 export { PANE_AGENT_EVIDENCE_SOURCES } from './pane-agent-evidence-sources'
 export type { PaneAgentEvidenceSource } from './pane-agent-evidence-sources'
 
-/**
- * One place that answers "which agent is in this pane".
- *
- * Today four ladders answer it independently — the tab icon, the open-tab/search occupant, the
- * sidebar title rows, and the sidebar hook-row fallback — and they disagree. Two of them consult
- * the terminal title before the launch record, so a string Orca parsed outranks a fact Orca owns.
- *
- * Two rules make this resolvable where reordering alone could not:
- *
- * 1. Evidence is ranked by how directly it observes the process, and a display title is last.
- * 2. Every observation carries the `runId` of the agent run it belongs to. Evidence from a run
- *    that has since been replaced is INELIGIBLE rather than merely outranked.
- *
- * Rule 2 is what separates two situations that are otherwise identical. A completed hook naming
- * A plus a title naming B is either a bug (the hook is right, the title is stale) or a legitimate
- * reclaim (the pane was reused and B really is there). Same signals, opposite answers. With run
- * ids they are different facts: in the bug both belong to the current run, and in the reclaim the
- * hook belongs to a previous one.
- *
- * A run is advanced only on positive evidence that a new agent started in the pane — an accepted
- * launch, a recognized command at a shell prompt, a host-confirmed foreground change, a new
- * provider session. Never by a title changing, and never by transport loss.
- */
-/**
- * Which agent run a piece of evidence belongs to.
- *
- * Why the authority and not a bare number: `incarnation` is only a total order WITHIN one
- * `authorityId` (see agent-status-observation.ts). The id is regenerated per authority instance,
- * so a restarted main, a second machine, and a renderer that parsed bytes itself each count from
- * their own floor. Comparing bare numbers across them silently equates unrelated runs — a
- * restarted host reporting `incarnation: 1` would match a live run 1 from before the restart.
- *
- * Runs from different authorities are INCOMPARABLE, not different.
- */
+/** Rank identity by direct process evidence, with titles last. Discard superseded runs rather than merely ranking them lower:
+ * completed-hook A/title B means stale title in the current run, but legitimate reclaim when A belongs to a replaced run.
+ * Advance runs only on positive start evidence (accepted launch/command, host-confirmed foreground change or provider session),
+ * never title changes or transport loss. */
+/** Incarnations are ordered only within one authorityId. Authorities restart/reseed independently; different authorities
+ * are incomparable, never proof of a superseded run (agent-status-observation.ts). */
 export type PaneAgentRunKey = {
   authorityId: string
   incarnation: number
@@ -47,11 +19,7 @@ export type PaneAgentRunKey = {
 export type PaneAgentEvidence<A extends string = TerminalAgent> = {
   source: PaneAgentEvidenceSource
   agent: A
-  /**
-   * The agent run this evidence describes. Evidence proven to belong to a SUPERSEDED run is
-   * ineligible. Undefined means unknown — from an old peer that does not publish run keys, or an
-   * ingress not yet stamped — and is treated as eligible, so a missing field never blanks a row.
-   */
+  /** Discard proven superseded runs; missing keys from old peers or unstamped ingress stay eligible to avoid blank rows. */
   run?: PaneAgentRunKey
 }
 
@@ -59,16 +27,9 @@ export type PaneAgentIdentityInput<A extends string = TerminalAgent> = {
   evidence: readonly PaneAgentEvidence<A>[]
   /** The pane's current run. Undefined disables run filtering entirely (old peer, mixed version). */
   currentRun?: PaneAgentRunKey
-  /**
-   * Refuse to answer from evidence weaker than this rank. Consumers that AUTHORIZE AN ACTION —
-   * message routing, mailbox delivery, agent-scoped timers — pass `'launch'` so a parsed title or
-   * a neighbouring pane can never name the target of a write. Display surfaces omit it.
-   */
+  /** Write-routing consumers set launch as the minimum so titles/sibling panes cannot choose mutation targets; displays may omit it. */
   minimumSource?: PaneAgentEvidenceSource
-  /**
-   * Pane-scoped consumers must not inherit another pane's agent. Sibling evidence is dropped
-   * unless the caller is a tab-level surface that opted in.
-   */
+  /** Pane-scoped consumers cannot inherit sibling identity; only tab-level surfaces may opt in. */
   allowSibling?: boolean
 }
 
@@ -82,17 +43,8 @@ export type PaneAgentIdentity<A extends string = TerminalAgent> = {
   supersededSources: readonly PaneAgentEvidenceSource[]
 }
 
-/**
- * Resolves one pane's agent from ranked evidence.
- *
- * Generic over the agent vocabulary: the sidebar speaks the widened `AgentType` and the tab speaks
- * the strict `TerminalAgent`. Ranking evidence does not depend on which, and a cast at that boundary
- * would only hide the mismatch.
- *
- * Returns null rather than guessing. A pane with no eligible evidence shows no agent, which is
- * recoverable; showing the wrong agent is not, and at the action surfaces (orchestration routing,
- * mailbox delivery, prompt-cache timers) it is a misdelivery rather than a cosmetic slip.
- */
+/** Generic agent vocabularies share ranking without casts. Return null instead of guessing: incorrect identity can misroute
+ * mail, orchestration or prompt-cache actions, not just display the wrong icon. */
 export function resolvePaneAgentIdentity<A extends string = TerminalAgent>(
   input: PaneAgentIdentityInput<A>
 ): PaneAgentIdentity<A> {

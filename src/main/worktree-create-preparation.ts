@@ -1,7 +1,7 @@
 import { worktreePreparationGit } from './git/worktree-create-git-executor'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import type { Store } from './persistence'
+import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
 import type { Repo } from '../shared/repo-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
@@ -47,14 +47,13 @@ export {
   WORKTREE_CREATE_PREPARATION_LIMIT,
   WORKTREE_CREATE_PREPARATION_TTL_MS
 } from './worktree-create-preparation-pool'
+import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
-/** A prepared checkout is a create that is either in flight or imminent. */
 export function hasPendingWorktreeCreatePreparations(): boolean {
   return hasPendingPreparations()
 }
 
-/** Carries the consumed slot's pending re-arm to the create's outermost `finally`, which fires it
- *  once — after startup on success, and on any failure that follows the consume. */
+/** Fire once in the create's outermost finally, after startup or any post-consume failure. */
 export type PreparationRearmHolder = { fire: () => void }
 
 export type PreparedWorktreeCreateAttempt =
@@ -93,8 +92,16 @@ function timePhase<T>(
   return args.timing ? args.timing.time(phase, operation) : operation()
 }
 
+export type WorktreePreparationStore = Omit<ProjectRuntimeResolutionStore, 'getSettings'> & {
+  getSettings(): Pick<
+    Parameters<typeof getWorktreePathSettings>[1],
+    'workspaceDir' | 'nestWorkspaces'
+  > &
+    ReturnType<NonNullable<ProjectRuntimeResolutionStore['getSettings']>>
+}
+
 export function prepareWorktreeCreateForRepo(
-  store: Store,
+  store: WorktreePreparationStore,
   repo: Repo,
   baseBranch: string,
   beforeMaterialization?: Promise<void>
@@ -105,19 +112,17 @@ export function prepareWorktreeCreateForRepo(
 }
 
 async function prepareWorktreeCreateInBackground(
-  store: Store,
+  store: WorktreePreparationStore,
   repo: Repo,
   baseBranch: string,
   beforeMaterialization?: Promise<void>
 ): Promise<void> {
-  if (repo.connectionId || isFolderRepo(repo)) {
+  if (getRepoRoutingConnectionId(repo) || isFolderRepo(repo)) {
     return
   }
   const options = getLocalProjectWorktreeGitOptions(store, repo)
-  // Resolving a WSL repo's root spawns `wsl.exe`, and this runs while the create composer is open,
-  // so it must not block the main thread. Key lookup and insert stay in one sync run after the await.
-  // The mirror distro must be threaded exactly as createLocalWorktree threads it, or the two sides
-  // key on different roots and every prepared checkout is discarded.
+  // Resolve WSL homes asynchronously to avoid freezing the composer while wsl.exe runs.
+  // Match createLocalWorktree's mirror distro so preparation and consume use the same root key.
   const workspaceRoot = await computeWorkspaceRootAsync(
     repo.path,
     getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
@@ -141,7 +146,7 @@ async function claimPreparedWorktree(
   args: ConsumePreparedWorktreeArgs,
   options: AddWorktreeOptions
 ): Promise<ClaimedPreparation> {
-  // Timed on its own so a miss's probes and drift check are not read as the plain add's cost.
+  // Separate claim probes and drift checks from the plain-add duration on misses.
   const reserved = await timePhase(args, 'prepared_checkout_claim', () =>
     reservePreparation(args, options)
   )
@@ -173,16 +178,7 @@ function releaseClaimAfterCreate(reservation: PreparationClaim): () => void {
   }
 }
 
-/** Replaces a just-consumed preparation, re-armed on the base the create actually used so the
- *  next one hits exactly — but only once the user has shown they are creating in a burst. A
- *  replacement costs a full checkout and ~5 minutes of disk until its TTL, so arming one after an
- *  isolated create spends that on nobody.
- *
- *  Returns a thunk rather than launching: the replacement is a full `reset --hard`, which on a
- *  large repo holds a general admission slot for tens of seconds. Started mid-create it competes
- *  with the create's own git, so the caller runs it after materialization/startup completes. The burst
- *  bookkeeping still happens here so a later create is recognized as part of a burst. An explicit
- *  prefetch during this create takes precedence over the burst replacement at release. */
+/** Defer burst replacement until startup finishes so its disk work does not compete with this create. */
 function deferRearmPreparation(
   entry: PreparationEntry,
   reservation: PreparationClaim,
@@ -251,8 +247,7 @@ async function attemptPreparedWorktreeCreate(
   }
   const { entry, reservation } = claim
   try {
-    // Finalize resolves the requested base itself and resets the prepared checkout onto that
-    // commit, so a retargeted claim is handed over at the requested commit or not at all.
+    // Finalize resets to the requested commit before handing over a retargeted preparation.
     const { preparedHeadReset, ...result } = await timePhase(
       args,
       'prepared_checkout_finalize',
@@ -273,8 +268,6 @@ async function attemptPreparedWorktreeCreate(
         )
       }
     )
-    // Consuming the only prepared checkout leaves the next create cold. Re-arm for a user who is
-    // creating in a burst; the TTL and the preparation limit still bound an unused replacement.
     const rearm = deferRearmPreparation(entry, reservation, args.baseBranch, claim.canonicalBase)
     return {
       status: 'hit',

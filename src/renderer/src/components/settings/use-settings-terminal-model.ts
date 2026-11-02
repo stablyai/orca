@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities,
@@ -11,41 +10,43 @@ import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
 import { getSettingsEntryHostSelection, getSettingsProjectHostRepo } from './settings-project-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 
 export function useSettingsTerminalModel(
   model: SettingsStoreModel,
   navigation: SettingsNavigationModel
 ) {
-  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
-    model.settings?.activeRuntimeEnvironmentId
-  )
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(model.settings), [model.settings])
+  const scopeEnvironmentId = runtimeTargetEnvironmentId(model.settingsHostScope.target)
+  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(scopeEnvironmentId)
+  const runtimeTarget = model.settingsHostScope.target
   const capabilityLoadTarget = useMemo(
     () => (model.isWebClient ? { kind: 'local' as const } : runtimeTarget),
     [model.isWebClient, runtimeTarget]
   )
-  const hasActiveRuntimeEnvironment = Boolean(model.settings?.activeRuntimeEnvironmentId?.trim())
+  const hasActiveRuntimeEnvironment = scopeEnvironmentId !== null
   const needsRepoWindowsRuntimeCapabilities = [...navigation.neededSectionIds].some((sectionId) =>
     sectionId.startsWith('repo-')
   )
   const needsLocalWindowsRuntimeCapabilities =
     (model.isWindows || model.isWebClient) &&
     (navigation.neededSectionIds.has('agents') || navigation.neededSectionIds.has('general'))
+  // Removed servers have no capabilities to load; never probe a substitute host.
   const shouldLoadWindowsTerminalCapabilities =
-    hasActiveRuntimeEnvironment ||
-    ((model.isWindows || model.isWebClient) &&
-      (navigation.neededSectionIds.has('terminal') ||
-        navigation.neededSectionIds.has('accounts') ||
-        needsRepoWindowsRuntimeCapabilities ||
-        (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities)))
-  // Why: terminal, account, and repository settings describe the active execution host.
+    model.settingsHostScope.available &&
+    (hasActiveRuntimeEnvironment ||
+      ((model.isWindows || model.isWebClient) &&
+        (navigation.neededSectionIds.has('terminal') ||
+          navigation.neededSectionIds.has('accounts') ||
+          needsRepoWindowsRuntimeCapabilities ||
+          (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities))))
+  // Capabilities describe the host selected in Settings.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
     true,
     windowsTerminalCapabilityOwnerKey,
     capabilityLoadTarget
   )
-  // Why: global agent and project defaults belong to the desktop, not its active remote.
+  // Global agent/project defaults belong to the desktop despite the active remote.
   const remoteViewLocalWindowsRuntimeCapabilities = useLocalWindowsTerminalCapabilities(
     needsLocalWindowsRuntimeCapabilities &&
       runtimeTarget.kind === 'environment' &&
@@ -57,7 +58,7 @@ export function useSettingsTerminalModel(
     runtimeTarget.kind === 'local' || model.isWebClient
       ? windowsTerminalCapabilities
       : remoteViewLocalWindowsRuntimeCapabilities
-  // Why: only supported-but-unavailable WSL (Windows) should render disabled controls, not unsupported WSL (macOS/Linux).
+  // Only Windows can show unavailable WSL controls; unsupported platforms must hide them.
   const runtimeWslSupportedPlatform = isWindowsTerminalCapabilityHost({
     isWindowsRenderer: model.isWindows,
     isWebClient: model.isWebClient,
@@ -73,11 +74,11 @@ export function useSettingsTerminalModel(
   const isWindowsTerminalHost = runtimeWslSupportedPlatform
 
   if ([...navigation.neededSectionIds].some((id) => !model.mountedSectionIds.has(id))) {
-    // Why: record newly needed sections during render so panes don't wait for a follow-up Effect.
+    // Record needed sections during render to avoid a blank pass before an effect.
     model.setMountedSectionIds(navigation.neededSectionIds)
   }
 
-  // Why: load hooks for the selected host's repo id, not the representative id (they differ for non-default hosts).
+  // Load hooks from the selected host’s repo ID, which may differ from the representative.
   const neededRepos = useMemo(() => {
     const reposByHostIdentity = new Map<string, Repo>()
     for (const settingsProject of model.settingsProjectList) {

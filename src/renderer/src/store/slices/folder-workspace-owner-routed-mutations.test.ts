@@ -75,6 +75,56 @@ beforeEach(() => {
 })
 
 describe('folder workspace owner-routed mutations', () => {
+  it('updates inherited folder metadata and batches on the qualified physical row', async () => {
+    const inherited = makeFolderWorkspace({ projectGroupId: 'inherited', folderPath: '/remote' })
+    const local = makeFolderWorkspace({ executionHostId: 'local', folderPath: '/local' })
+    const store = createTestStore()
+    store.setState({
+      repos: [],
+      activeWorktreeId: folderWorkspaceKey(inherited.id),
+      activeWorkspaceExecutionHostId: 'runtime:env-owner',
+      projectGroups: [
+        {
+          ...projectGroup,
+          id: 'inherited',
+          executionHostId: 'runtime:env-owner',
+          connectionId: 'box'
+        }
+      ],
+      folderWorkspaces: [local, inherited]
+    })
+    let remote = inherited
+    runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
+      const updates = args.params?.updates
+      if (!updates || typeof updates !== 'object') {
+        throw new Error('Missing update payload')
+      }
+      remote = { ...remote, ...updates }
+      return { id: 'write', ok: true, result: { folderWorkspace: remote } }
+    })
+    await expect(
+      store
+        .getState()
+        .updateWorktreeMeta(
+          folderWorkspaceKey(inherited.id),
+          { comment: 'kept on server' },
+          { executionHostId: 'runtime:env-owner' }
+        )
+    ).resolves.toEqual({ ok: true })
+    await store
+      .getState()
+      .updateWorktreesMeta([
+        { worktreeId: folderWorkspaceKey(inherited.id), updates: { manualOrder: 9 } }
+      ])
+    expect(
+      runtimeEnvironmentCall.mock.calls.filter(([args]) => args.method === 'folderWorkspace.update')
+        .length
+    ).toBe(2)
+    expect(store.getState().folderWorkspaces.find((row) => row.folderPath === '/local')).toBe(local)
+    expect(
+      store.getState().folderWorkspaces.find((row) => row.folderPath === '/remote')
+    ).toMatchObject({ comment: 'kept on server', manualOrder: 9 })
+  })
   it.each([true, false])(
     'keeps legacy folder task link=%s compatible with an older host',
     async (link) => {
@@ -308,7 +358,7 @@ describe('folder workspace owner-routed mutations', () => {
     const pendingUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { isUnread: true })
-    await store.getState().fetchFolderWorkspaces()
+    await store.getState().fetchFolderWorkspaces(catalogOwner(store))
     resolveUpdate({ ...folderWorkspace, isUnread: true, updatedAt: 2 })
     await pendingUpdate
 
@@ -335,7 +385,7 @@ describe('folder workspace owner-routed mutations', () => {
     const pendingUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { isUnread: true })
-    await store.getState().fetchFolderWorkspaces()
+    await store.getState().fetchFolderWorkspaces(catalogOwner(store))
     resolveUpdate({ ...folderWorkspace, isUnread: true, updatedAt: 2 })
     await pendingUpdate
 
@@ -619,8 +669,109 @@ describe('folder workspace owner-routed mutations', () => {
       settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'env-old' })
     })
     await expect(
-      store.getState().createFolderWorkspace({ projectGroupId: projectGroup.id, linkedItems: [] })
+      store
+        .getState()
+        .createFolderWorkspace(
+          { projectGroupId: projectGroup.id, linkedItems: [] },
+          { runtimeEnvironmentId: 'env-old' }
+        )
     ).rejects.toThrow('Update the remote runtime')
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 })
+
+// The catalog these tests read is the one the focused host would have shown.
+function catalogOwner(store: {
+  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
+}): { runtimeEnvironmentId: string | null } {
+  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
+}
+
+import * as composerDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { records } from '@/components/native-chat/native-chat-composer-draft-memory'
+import {
+  addNativeChatPendingAttachment,
+  nativeChatPendingAttachmentSnapshot,
+  settleNativeChatPendingAttachment,
+  clearNativeChatPendingAttachmentsForTests
+} from '@/components/native-chat/native-chat-pending-attachment-cache'
+
+it.each([10, 100])(
+  'retires launch submissions through %i real folder removals, including intermediate twins',
+  async (count) => {
+    composerDrafts.clearNativeChatComposerDraftsForTests()
+    clearNativeChatPendingAttachmentsForTests()
+    const store = createTestStore()
+    const folders = Array.from({ length: count }, (_, i) =>
+      makeFolderWorkspace({ id: `retired-${i}`, executionHostId: 'local' })
+    )
+    const twin = { ...folders[0], executionHostId: 'runtime:env-owner' as const }
+    const live = makeFolderWorkspace({ id: 'live', executionHostId: 'local' })
+    const shutdown = vi.fn(async () => {})
+    store.setState({
+      projectGroups: [projectGroup],
+      folderWorkspaces: [...folders, twin, live],
+      shutdownWorktreeBrowsers: shutdown,
+      deleteManagedBrowserSessionProfile: vi.fn(),
+      purgeWorktreeTerminalState: vi.fn()
+    })
+    const scope = (id: string, host = 'local') =>
+      composerDrafts.nativeChatLaunchPromptDraftScopeKey(folderWorkspaceKey(id), 'claude', host)
+    const liveScopes = [scope('live'), scope(twin.id, 'runtime:env-owner')]
+    for (const key of liveScopes) {
+      composerDrafts.updateNativeChatComposerDraft(key, { text: 'keep' }, 'immediate')
+    }
+    const attempts = folders.map((folder, i) => {
+      const key = scope(folder.id)
+      composerDrafts.updateNativeChatComposerDraft(key, { text: `task ${i}` }, 'immediate')
+      addNativeChatPendingAttachment(key, { id: key, path: '', pending: true })
+      const submission = composerDrafts.captureNativeChatComposerSubmission(key)
+      if (i % 2 === 0) {
+        composerDrafts.updateNativeChatComposerDraft(key, { text: '' }, 'immediate')
+      }
+      return submission
+    })
+    folderWorkspacesDelete.mockResolvedValue(false)
+    expect(
+      await store.getState().deleteFolderWorkspace(folders[0].id, { executionHostId: 'local' })
+    ).toBe(false)
+    expect(attempts[0].draft?.text).toBe('task 0')
+    expect(nativeChatPendingAttachmentSnapshot(scope(folders[0].id))).toHaveLength(1)
+    folderWorkspacesDelete.mockResolvedValue(true)
+    const reads = vi.spyOn(records, 'get')
+    for (const [i, folder] of folders.entries()) {
+      expect(
+        await store.getState().deleteFolderWorkspace(folder.id, { executionHostId: 'local' })
+      ).toBe(true)
+      expect(attempts[i].draft).toBeUndefined()
+      if (i === 0) {
+        expect(shutdown).not.toHaveBeenCalled()
+      }
+    }
+    const cleanupReads = reads.mock.calls.length
+    reads.mockRestore()
+    expect(cleanupReads).toBeGreaterThanOrEqual(count)
+    expect(cleanupReads).toBeLessThanOrEqual(count * (count + 2))
+    expect(records.size).toBe(2)
+    expect(shutdown).toHaveBeenCalledTimes(count - 1)
+    for (const key of liveScopes) {
+      expect(composerDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+    }
+    store.setState((s) => ({ folderWorkspaces: [...s.folderWorkspaces, folders[0]] }))
+    const recreated = scope(folders[0].id)
+    composerDrafts.updateNativeChatComposerDraft(recreated, { text: 'new lifetime' }, 'immediate')
+    folders.forEach((folder, i) => {
+      const key = scope(folder.id)
+      // A same-ID survivor skips ordinary cleanup as on main, so only that folder's chip stays.
+      expect(nativeChatPendingAttachmentSnapshot(key)).toHaveLength(i === 0 ? 1 : 0)
+      if (i > 0) {
+        expect(settleNativeChatPendingAttachment(key, key, '/late.png')).toBe(false)
+      }
+      composerDrafts.finishNativeChatComposerSubmission(key, attempts[i], true)
+    })
+    expect(composerDrafts.readNativeChatComposerDraft(recreated).text).toBe('new lifetime')
+    expect(records.size).toBe(3)
+    composerDrafts.clearNativeChatComposerDraftsForTests()
+    clearNativeChatPendingAttachmentsForTests()
+  }
+)

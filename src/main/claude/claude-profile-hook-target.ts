@@ -9,17 +9,16 @@ function sameFile(left: string, right: string): boolean {
     return true
   }
   try {
-    // Why: file identity, not spelling, so links and case-only aliases both compare equal.
+    // Compare file identity to catch symlinks and case aliases.
     const leftStats = statSync(left, { bigint: true })
     const rightStats = statSync(right, { bigint: true })
     return leftStats.dev === rightStats.dev && leftStats.ino === rightStats.ino
   } catch (error) {
-    // Why: only a definitive absence proves they differ; any other failure refuses.
+    // Treat uncertain filesystem errors as aliases to avoid editing default-home hooks.
     return !isDefinitiveAbsence(error)
   }
 }
 
-/** A profile destination that is, or links into, the default home would edit System Default's hooks. */
 export function refuseProfileAtDefaultHome(
   service: { agent: AgentHookInstallStatus['agent']; settings: ClaudeCompatibleHookSettings },
   configDir: string | undefined

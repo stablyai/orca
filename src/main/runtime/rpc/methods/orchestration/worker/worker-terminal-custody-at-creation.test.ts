@@ -1,12 +1,4 @@
-/**
- * Custody for an agent terminal this start created is written when the terminal is created, not
- * after the agent boot wait.
- *
- * A worker pane is visible on desktop and phone the moment it exists. While the row was written
- * only after `tui-idle` (up to 60 s later), a keystroke into the booting pane found no `owned` row,
- * `markWorkerTerminalUserOwned` returned 0, and the takeover was lost — so a later `worker-release`
- * closed the pane the user had claimed.
- */
+/** Write custody at terminal creation so boot-time user input can revoke ownership; waiting for TUI idle lost takeover and later release closed claimed panes. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db'
@@ -96,25 +88,20 @@ describe('worker terminal custody is recorded at terminal creation', () => {
     })
   })
 
-  it('lets a keystroke during the boot wait take the pane, and release then retains it', async () => {
+  it('lets Keep open during the boot wait keep the pane, and release then retains it', async () => {
     h.setup()
     const held = await startHeldAtBootWait()
 
     await expect(
-      h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
-    ).resolves.toEqual({ changed: 1 })
+      h.call('orchestration.workerKeepOpen', { paneKey: h.workerPaneKey, keep: true })
+    ).resolves.toEqual({ autoClose: { kept: true } })
 
     held.finish()
     await expect(held.start).resolves.toMatchObject({ state: 'ready' })
-    expect(h.db.getWorkerTerminalResourceByOwner(held.dispatchId)).toMatchObject({
-      ownership_state: 'user_owned',
-      retained_reason: 'user_takeover'
-    })
-
     h.settle(held.taskId, held.dispatchId, 'succeeded')
     await expect(
       h.call('orchestration.workerRelease', { dispatch: held.dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', reason: 'user_takeover', processAction: 'none' })
+    ).resolves.toMatchObject({ state: 'retained', reason: 'user_kept', processAction: 'none' })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })
 

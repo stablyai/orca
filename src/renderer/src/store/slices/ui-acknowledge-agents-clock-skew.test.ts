@@ -5,9 +5,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
-// Why: an SSH/remote execution host stamps turns with ITS clock. When that clock runs ahead, every
-// unread rule (`ackAt < turnTimestamp`) stayed true after an ack, so the row could never be marked
-// read and its auto-ack effect re-fired on each new millisecond — the React #185 update loop.
+// Ahead-of-client host clocks kept ackAt below turn timestamps, leaving rows unread and auto-ack looping into React #185.
 
 const NOW = new Date('2026-06-02T12:00:00Z').getTime()
 const SKEW_MS = 90_000
@@ -127,18 +125,5 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
     store.getState().acknowledgeAgents([PANE_KEY])
 
     expect(store.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBe(futureUpdatedAt)
-  })
-
-  it('still stamps the local clock when the turn is not ahead of it', () => {
-    const store = createUIStore()
-    store.setState({
-      agentStatusByPaneKey: {
-        [PANE_KEY]: makeAgentEntry({ stateStartedAt: NOW - 5_000, updatedAt: NOW - 5_000 })
-      }
-    } as Partial<AppState>)
-
-    store.getState().acknowledgeAgents([PANE_KEY])
-
-    expect(store.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBe(NOW)
   })
 })

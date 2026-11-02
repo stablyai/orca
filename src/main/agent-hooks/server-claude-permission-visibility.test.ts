@@ -27,7 +27,7 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
-  it('keeps Claude permission visible when another subagent reports tool activity', async () => {
+  it('keeps Claude permission visible across unattributed activity from another tool', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {

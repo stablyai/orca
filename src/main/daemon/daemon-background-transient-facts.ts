@@ -1,20 +1,4 @@
-/**
- * Daemon-side transient-fact scanning for backgrounded sessions.
- *
- * While a session is backgrounded (its pane hidden in the renderer), the
- * daemon→main stream copy may be keep-tail thinned under backlog — but the
- * notification-bearing facts inside those bytes must never be lost. This
- * relay runs the SAME shared scanners main uses (terminal-side-effect
- * authority doc: semantics must not drift) over every raw chunk BEFORE any
- * drop decision, and emits compact transientFact stream events in byte order.
- * Main suppresses its own copies of these four scanners between the
- * sessionBackgroundMarker handoffs, so no fact double-fires or goes missing.
- *
- * Title/agent-status facts are deliberately NOT relayed: they converge from
- * the delivered kept tail (stale-working-title timer, snapshot-restores-title
- * -state) and main fuses them with synthetic spinner frames the daemon never
- * sees.
- */
+// Scan raw bytes before background thinning; handoff markers keep main from emitting duplicate facts.
 import {
   createTerminalTitleTracker,
   type TerminalTitleTracker
@@ -26,13 +10,11 @@ import {
 } from '../../shared/terminal-color-scheme-protocol'
 import type { DaemonTransientFact } from './types'
 
-// Kill switch for the whole background keep-tail mechanism (thinning +
-// daemon-side fact authority): ORCA_DAEMON_BACKGROUND_STREAM_DROP=0.
 export const BACKGROUND_STREAM_DROP_ENABLED = process.env.ORCA_DAEMON_BACKGROUND_STREAM_DROP !== '0'
 
 export class BackgroundTransientFactRelay {
   private trackersBySessionId = new Map<string, TerminalTitleTracker>()
-  // Why: shadow foreground bytes so a provisional subscribe survives either scan-authority handoff.
+  // Shadow foreground bytes so provisional subscriptions survive either scan-authority handoff.
   private mode2031ReplyScanStateBySessionId = new Map<string, Mode2031ReplyScanState>()
   private emitFact: (sessionId: string, fact: DaemonTransientFact) => void
 
@@ -48,9 +30,7 @@ export class BackgroundTransientFactRelay {
     return Array.from(this.trackersBySessionId.keys(), (id) => id.slice(-10))
   }
 
-  /** Returns false when this was a no-op (already in the requested state) so
-   *  the caller can skip a duplicate handoff marker — resyncs after adoption
-   *  re-send the whole background set. */
+  /** Return false for unchanged state so adoption resyncs do not emit duplicate handoff markers. */
   setSessionBackground(sessionId: string, background: boolean): boolean {
     if (background === this.isBackgrounded(sessionId)) {
       return false
@@ -62,9 +42,7 @@ export class BackgroundTransientFactRelay {
           onBell: () => this.emitFact(sessionId, { kind: 'bell' }),
           onCommandFinished: (exitCode) =>
             this.emitFact(sessionId, { kind: 'command-finished', exitCode }),
-          // Note: recreating the tracker on each background toggle resets the
-          // PR-link dedup memory, so a link re-printed across toggles can
-          // re-fire — consumers treat pr-link as a latest-association update.
+          // Background toggles reset PR-link dedupe; consumers accept links as association updates.
           onPrLink: (link) => this.emitFact(sessionId, { kind: 'pr-link', link }),
           onMode2031Subscribe: () => this.emitFact(sessionId, { kind: '2031-subscribe' }),
           onMode2031Unsubscribe: () => this.emitFact(sessionId, { kind: '2031-unsubscribe' })
@@ -76,10 +54,7 @@ export class BackgroundTransientFactRelay {
     return true
   }
 
-  /** Prime a fresh tracker's cross-chunk carry with the emulator's dangling
-   *  incomplete escape at handoff time, so a sequence split across the
-   *  background toggle neither mints a phantom bell nor loses its fact. A
-   *  partial tail contains no complete sequence, so this can never fire. */
+  /** Seed incomplete escapes at handoff so split sequences neither lose facts nor emit phantom bells. */
   seedSessionScanState(sessionId: string, partialEscapeTailAnsi: string): void {
     let mode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
     if (!mode2031State && partialEscapeTailAnsi.length > 0) {
@@ -101,8 +76,7 @@ export class BackgroundTransientFactRelay {
     }
   }
 
-  /** Feed one raw chunk, in byte order, BEFORE it is enqueued for delivery —
-   *  facts must be captured even when the chunk is later keep-tail dropped. */
+  /** Scan in byte order before enqueueing: later thinning may discard the raw chunk. */
   onSessionData(sessionId: string, data: string): void {
     const previousMode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
     if (previousMode2031State || data.includes('\x1b') || data.includes('\x9b')) {
@@ -116,9 +90,7 @@ export class BackgroundTransientFactRelay {
         this.mode2031ReplyScanStateBySessionId.delete(sessionId)
       }
     }
-    // titleScanData:'' skips title extraction (titles stay main-authoritative)
-    // and keeps the stale-working-title timer permanently unarmed — only the
-    // four transient scanners consume the chunk.
+    // Keep titles and their stale timers main-authoritative; scan transient facts only.
     this.trackersBySessionId.get(sessionId)?.handleChunk(data, { titleScanData: '' })
   }
 

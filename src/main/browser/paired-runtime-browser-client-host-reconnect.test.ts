@@ -1,16 +1,17 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
-} from '../../shared/remote-runtime-client'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../shared/remote-runtime-client', () => ({
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
@@ -35,7 +36,7 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
     const attempts = mockAttempts()
     let state: 'active' | 'outcomeUnknown' = 'active'
     const host = new PairedRuntimeBrowserClientHost({
-      pairing,
+      connection: pairedRuntimeConnectionFromOffer(pairing),
       authorityRuntimeId: 'runtime-a',
       browserHostClientId: 'host-a',
       hostCapabilities: ['webview'],
@@ -71,7 +72,7 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
     const handler = vi.fn(() => ({ status: 'completed' as const }))
     const onError = vi.fn()
     const host = new PairedRuntimeBrowserClientHost({
-      pairing,
+      connection: pairedRuntimeConnectionFromOffer(pairing),
       authorityRuntimeId: 'runtime-a',
       browserHostClientId: 'host-a',
       hostCapabilities: ['webview'],

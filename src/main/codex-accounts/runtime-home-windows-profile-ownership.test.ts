@@ -6,7 +6,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { __resetPowerShellProfileEnvCache } from '../pty/powershell-profile-env'
 import { CodexRuntimeHomeService } from './runtime-home-service'
 
-// Why: keep the host's own registry-named Documents folder out of the probe.
+// Keep the host's registry-named Documents directory outside the sandbox probe.
 vi.mock('../windows-native-registry', () => ({
   loadWindowsNativeRegistry: () => {
     throw new Error('no registry in tests')
@@ -75,7 +75,7 @@ function createWindowsService(): CodexRuntimeHomeService {
 function createUserProfile(): string {
   const userProfile = mkdtempSync(join(tmpdir(), 'orca-win-profile-'))
   temporaryProfiles.push(userProfile)
-  // Why: all-users profiles and the process-wide checks must read this sandbox too.
+  // Sandbox all-user profiles and process-wide path checks too.
   vi.stubEnv('USERPROFILE', userProfile)
   vi.stubEnv('SystemRoot', join(userProfile, 'Windows'))
   vi.stubEnv('ProgramFiles', join(userProfile, 'Program Files'))

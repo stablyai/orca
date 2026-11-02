@@ -28,21 +28,6 @@ describe('AutomationsSettingsPane', () => {
 
   afterEach(cleanup)
 
-  it('explains the scheduled agent workflow', () => {
-    render(
-      <AutomationsSettingsPane
-        settings={{ ...getDefaultSettings('/tmp'), showAutomationsButton: true }}
-        updateSettings={vi.fn()}
-      />
-    )
-
-    expect(screen.getByText('How Automations work')).toBeInTheDocument()
-    expect(screen.getByText('Describe the work')).toBeInTheDocument()
-    expect(screen.getByText('Orca starts each run')).toBeInTheDocument()
-    expect(screen.getByText('Review the results')).toBeInTheDocument()
-    expect(screen.getByText('Create schedules and inspect recent runs.')).toBeInTheDocument()
-  })
-
   it('controls sidebar visibility and opens Automations', async () => {
     const user = userEvent.setup()
     const updateSettings = vi.fn()

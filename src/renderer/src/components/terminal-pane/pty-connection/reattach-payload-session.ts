@@ -2,6 +2,9 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export type ReattachPayloadSession = Pick<
   ConnectPanePtySession,
+  | 'cacheKey'
+  | 'paneStartup'
+  | 'registerEffectiveLaunchConfig'
   | 'applyColdRestoreAgentResumeStartup'
   | 'applySnapshotKittyKeyboardModes'
   | 'buildColdRestoreAgentResumeStartup'
@@ -9,6 +12,7 @@ export type ReattachPayloadSession = Pick<
   | 'clearSleepingRecordAfterColdRestoreSpawn'
   | 'consumeRestoredViewportBlankingMarker'
   | 'createReattachGridPush'
+  | 'deps'
   | 'isPaneOnAlternateScreen'
   | 'kittyKeyboardModes'
   | 'markHiddenOutputRestoreNeeded'
@@ -17,6 +21,7 @@ export type ReattachPayloadSession = Pick<
   | 'recordRendererOrderedSeq'
   | 'rememberReattachPayloadAgentSignal'
   | 'schedulePendingStartupCommandDelivery'
+  | 'cancelSavedResumeStartup'
   | 'sendFocusedReattachFocusInAfterReplay'
   | 'setRestoredSnapshotBaseline'
   | 'shouldPreserveAgentReattachModes'

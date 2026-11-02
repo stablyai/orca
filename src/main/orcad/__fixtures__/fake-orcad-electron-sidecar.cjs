@@ -1,15 +1,6 @@
-/**
- * Stands in for an installed Orca app running `--serve`, so the orcad Electron
- * provider can be driven over a real socket by a real child process.
- *
- * Contract with the provider under test: read `--user-data-dir=` from argv,
- * listen on a local transport, then publish `orca-runtime.json` there.
- *
- * Test-only channels (injected by the spawn wrapper, never by production code):
- *   ORCA_FAKE_SIDECAR_LOG      JSONL of every request received.
- *   ORCA_FAKE_SIDECAR_CONTROL  JSON re-read per request: { capabilities, errors }.
- *   ORCA_FAKE_SIDECAR_MODE     'exit-before-ready' to die without publishing.
- */
+// Simulate installed-app --serve: read --user-data-dir, listen locally and publish orca-runtime.json.
+// Test controls: ORCA_FAKE_SIDECAR_LOG records requests; _CONTROL supplies capabilities/errors;
+// _MODE=exit-before-ready exits without publishing metadata.
 'use strict'
 
 const { createServer } = require('node:net')
@@ -94,7 +85,7 @@ function handle(method, params) {
     }
     return { browserPageId: params.page, url: params.url, title: 'Fake page' }
   }
-  return { browserPageId: params.page ?? undefined, method }
+  return control().results?.[method] ?? { browserPageId: params.page ?? undefined, method }
 }
 
 const endpoint =
@@ -107,8 +98,7 @@ const server = createServer((socket) => {
   socket.on('error', () => undefined)
   let buffer = ''
   socket.on('data', (chunk) => {
-    // Why String(): setEncoding('utf8') above makes this a string at runtime, but the
-    // declared type stays string | Buffer and the type-aware lint rejects the concat.
+    // setEncoding makes chunks strings, but declared types retain Buffer; normalize for typed lint.
     buffer += String(chunk)
     let newline = buffer.indexOf('\n')
     while (newline !== -1) {
@@ -150,8 +140,7 @@ const server = createServer((socket) => {
 
 server.listen(endpoint, () => {
   const metadataPath = join(userDataDir, 'orca-runtime.json')
-  // Publish atomically: the provider polls with existsSync + readFileSync and would
-  // otherwise parse a half-written file.
+  // Publish atomically so polling cannot parse partial metadata.
   writeFileSync(
     `${metadataPath}.staging`,
     JSON.stringify({

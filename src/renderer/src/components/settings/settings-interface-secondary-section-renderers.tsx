@@ -29,7 +29,7 @@ export function renderAppearanceSettingsSection(context: SettingsRenderContext):
           terminalFontSuggestions={model.terminalFontSuggestions}
           onRequestFontSuggestions={interactions.requestFontSuggestions}
           systemPrefersDark={model.systemPrefersDark}
-          ghostty={model.ghostty}
+          terminalConfigImport={model.terminalConfigImport}
           warpThemes={model.warpThemes}
         />
       ) : null}
@@ -41,13 +41,17 @@ export type ChatSettingsRenderContext = {
   model: Pick<
     SettingsRenderContext['model'],
     | 'settings'
+    | 'fontSuggestions'
     | 'updateSettings'
     | 'setHasUnsavedChatPromptChanges'
     | 'sourceControlAiPromptDiscardSignal'
     | 'hasUnsavedChatPromptChanges'
     | 'showDesktopOnlySettings'
   >
-  interactions: Pick<SettingsRenderContext['interactions'], 'writeSourceControlAiSettingsOrThrow'>
+  interactions: Pick<
+    SettingsRenderContext['interactions'],
+    'writeSourceControlAiSettingsOrThrow' | 'requestFontSuggestions'
+  >
   navigation: Pick<SettingsRenderContext['navigation'], 'getSectionSearchEntries'>
   view: Pick<SettingsRenderContext['view'], 'isSectionMounted'>
 }
@@ -57,6 +61,8 @@ export function renderChatSettingsSection(context: ChatSettingsRenderContext): R
   return (
     <ChatSettingsSection
       settings={model.settings}
+      fontSuggestions={model.fontSuggestions}
+      onRequestFontSuggestions={interactions.requestFontSuggestions}
       updateSettings={model.updateSettings}
       writeSourceControlAiSettings={interactions.writeSourceControlAiSettingsOrThrow}
       onChatPromptDirtyChange={model.setHasUnsavedChatPromptChanges}

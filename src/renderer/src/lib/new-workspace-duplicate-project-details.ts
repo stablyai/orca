@@ -129,8 +129,7 @@ export function getDuplicateProjectDetailsById(
       if (repeatedPathOnlyDetails.has(pathOnlyDetail)) {
         detail = hostLabelDetailsById.get(option.id) ?? pathOnlyDetail
         if (repeatedHostLabelDetails.has(detail)) {
-          // Why: user-renamed hosts can share a label, so fall back to the
-          // stable host id only when the final visible detail still repeats.
+          // Host labels can collide after renaming; append stable IDs only while visible details still duplicate.
           detail =
             getProjectDirectoryDetail(
               setupDirectoriesByProjectId.get(option.projectId) ?? [],

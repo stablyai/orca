@@ -1,0 +1,13 @@
+diff --git a/dist/chunks/cli-api.De07GUeT.js b/dist/chunks/cli-api.De07GUeT.js
+index ff6e63043ff8fa0b821d4b0b382d1fd998d85dbb..9f3a379f41d96aa75dc745b601397501eeaa2eed 100644
+--- a/dist/chunks/cli-api.De07GUeT.js
++++ b/dist/chunks/cli-api.De07GUeT.js
+@@ -11817,7 +11817,7 @@ class TestRun {
+ 				else error.stacks = parseErrorStacktrace(error, {
+ 					frameFilter: project.config.onStackTrace,
+ 					getSourceMap(file) {
+-						if (!project.vite.moduleGraph.getModuleById(file)?.transformResult && existsSync(file)) {
++						if (!project.vite.moduleGraph.getModuleById(file)?.transformResult && existsSync(file) && statSync(file).isFile()) {
+ 							const code = readFileSync(file, "utf-8");
+ 							return extractSourcemapFromFile(code, file)?.map;
+ 						}

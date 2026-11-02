@@ -1,4 +1,4 @@
-import { Check, Terminal } from 'lucide-react'
+import { Check } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -41,10 +41,13 @@ export function AgentDefaultSetting({
   enabledDetectedAgents,
   catalog,
   description,
-  onSetDefault
+  onSetDefault,
+  defaultOpensAsChat = false
 }: {
   defaultAgent: TuiAgent | 'blank' | null
   detectedIds: Set<string> | null
+  /** The saved default opens as a chat on this host without its CLI. */
+  defaultOpensAsChat?: boolean
   enabledDetectedAgents: AgentCatalogEntry[]
   catalog: AgentCatalogEntry[]
   description: string
@@ -66,23 +69,22 @@ export function AgentDefaultSetting({
         description={description}
       />
       <div className="flex flex-wrap gap-2">
-        <DefaultAgentPill active={defaultAgent === null} onClick={() => onSetDefault(null)}>
+        <DefaultAgentPill
+          active={defaultAgent === null}
+          onClick={() => onSetDefault(defaultAgent === null ? 'blank' : null)}
+        >
           {defaultAgent === null && <Check className="size-3.5" />}
           {translate('auto.components.settings.AgentsPane.92033495ff', 'Auto')}
         </DefaultAgentPill>
-        <DefaultAgentPill active={defaultAgent === 'blank'} onClick={() => onSetDefault('blank')}>
-          <Terminal className="size-3.5" />
-          {translate('auto.components.settings.AgentsPane.110b74b022', 'No agent (blank terminal)')}
-          {defaultAgent === 'blank' && <Check className="size-3.5" />}
-        </DefaultAgentPill>
         {defaultAgentPills.map((agent) => {
           const isActive = defaultAgent === agent.id
-          const isUndetected = detectedIds !== null && !detectedIds.has(agent.id)
+          const isUndetected =
+            detectedIds !== null && !detectedIds.has(agent.id) && !(isActive && defaultOpensAsChat)
           return (
             <DefaultAgentPill
               key={agent.id}
               active={isActive}
-              onClick={() => onSetDefault(agent.id)}
+              onClick={() => onSetDefault(isActive ? 'blank' : agent.id)}
               title={
                 isUndetected
                   ? translate(

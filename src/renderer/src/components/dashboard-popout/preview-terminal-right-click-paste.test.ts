@@ -9,12 +9,13 @@ describe('installPreviewTerminalRightClickPaste', () => {
   let container: HTMLElement
   let selection: string
   let clearSelection: ReturnType<typeof vi.fn<() => void>>
+  let focus: ReturnType<typeof vi.fn<() => void>>
   let rightClickToPaste: boolean
 
   const install = (): (() => void) =>
     installPreviewTerminalRightClickPaste({
       container,
-      getTerminal: () => ({ getSelection: () => selection, clearSelection }),
+      getTerminal: () => ({ getSelection: () => selection, clearSelection, focus }),
       isRightClickToPasteEnabled: () => rightClickToPaste,
       pasteClipboardText
     })
@@ -32,6 +33,7 @@ describe('installPreviewTerminalRightClickPaste', () => {
     document.body.appendChild(container)
     selection = ''
     clearSelection = vi.fn<() => void>()
+    focus = vi.fn<() => void>()
     rightClickToPaste = true
     Object.assign(window, { api: { ui: { writeTerminalClipboardText } } })
   })
@@ -76,6 +78,42 @@ describe('installPreviewTerminalRightClickPaste', () => {
     const event = rightClick()
     expect(event.defaultPrevented).toBe(false)
     expect(pasteClipboardText).not.toHaveBeenCalled()
+  })
+
+  // Consume right press before xterm: mouse-tracking TUIs such as Codex may paste on the report themselves.
+  const pressTerminalElement = (
+    init: MouseEventInit
+  ): { reachedXterm: boolean; event: MouseEvent } => {
+    const xtermElement = document.createElement('div')
+    container.appendChild(xtermElement)
+    let reachedXterm = false
+    xtermElement.addEventListener('mousedown', () => {
+      reachedXterm = true
+    })
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true, ...init })
+    xtermElement.dispatchEvent(event)
+    return { reachedXterm, event }
+  }
+
+  it('claims a right press before xterm sees it and keeps the terminal focused', () => {
+    install()
+    const { reachedXterm, event } = pressTerminalElement({ button: 2 })
+    expect(reachedXterm).toBe(false)
+    expect(event.defaultPrevented).toBe(true)
+    expect(focus).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['Ctrl+right press', { button: 2, ctrlKey: true }, true],
+    ['left press', { button: 0 }, true],
+    ['right press with the setting off', { button: 2 }, false]
+  ])('lets a %s reach xterm', (_name, init, enabled) => {
+    rightClickToPaste = enabled
+    install()
+    const { reachedXterm, event } = pressTerminalElement(init)
+    expect(reachedXterm).toBe(true)
+    expect(event.defaultPrevented).toBe(false)
+    expect(focus).not.toHaveBeenCalled()
   })
 
   it('falls through before the terminal exists and stops listening once disposed', () => {

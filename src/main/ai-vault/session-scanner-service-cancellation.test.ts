@@ -32,7 +32,7 @@ const disconnect = vi.fn()
 let restoreProcess = (): void => undefined
 
 function emit(message: AiVaultServiceParentMessage): void {
-  process.emit('message', message)
+  process.emit('message', message, undefined)
 }
 
 function scan(id: number): void {

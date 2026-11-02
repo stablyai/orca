@@ -1,4 +1,4 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: GitLab item dialogs reset draft/provider state and hydrate details from GitLab IPC when the selected item identity changes. */
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useEffect } from 'react'
 import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
@@ -21,7 +21,7 @@ export function useGitLabItemDetailsEffect(
     let stale = false
     setLoading(true)
     setError(null)
-    void window.api.gl
+    void gitLabApiFor(repoSelector)
       .workItemDetails({ ...repoSelector, iid: item.number, type: item.type })
       .then((data) => {
         if (stale) {
@@ -72,8 +72,7 @@ export function useGitLabItemScopeResetEffect(
     setReviewerUpdating,
     setTitleDraft
   } = state
-  // Why: clear item-scoped dialog state when the sheet target changes. The
-  // top-level comment draft is reconciled during render so it cannot flash stale.
+  // Reset item-scoped provider state here; render already resets the top-level draft before paint.
   useEffect(() => {
     setEditingDetails(false)
     setTitleDraft('')

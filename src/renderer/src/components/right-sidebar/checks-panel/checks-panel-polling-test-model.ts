@@ -37,10 +37,11 @@ export function createModel(overrides: Partial<PollingInput> = {}): PollingInput
       badgeColor: '',
       addedAt: 1
     },
-    settings: null,
     setChecks: vi.fn(),
+    setChecksError: vi.fn(),
     setChecksLoading: vi.fn(),
     setComments: vi.fn(),
+    setCommentsError: vi.fn(),
     setCommentsLoading: vi.fn(),
     gitLabProjectRefRef: { current: null },
     ...overrides

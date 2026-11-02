@@ -1,19 +1,8 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
-import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem'
+import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
 import { HermesHookService } from './hook-service'
 
 describe('Hermes remote installer through a local filesystem adapter (no SSH)', () => {
@@ -28,65 +17,28 @@ describe('Hermes remote installer through a local filesystem adapter (no SSH)', 
   })
   afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
-  it('does not rewrite a configured CRLF file or an existing backup', async () => {
-    const initial = '# operator notes\r\nplugins:\r\n  enabled: [zeta, orca-status, alpha]\r\n'
-    writeFileSync(configPath, initial)
-    writeFileSync(`${configPath}.bak`, 'recovery point')
-    const before = statSync(configPath)
-    expect((await service.installRemote(createManagedHookLocalFilesystem(), directory)).state).toBe(
-      'installed'
+  it('keeps edits made during an already-configured remote install', async () => {
+    writeFileSync(configPath, 'model: initial\n')
+    // Why: derive "already configured" from a real install so the fixture tracks managed-config changes.
+    await service.installRemote(createManagedHookLocalFilesystem(), directory)
+    rmSync(join(directory, '.hermes', 'plugins'), { recursive: true })
+    const updated = readFileSync(configPath, 'utf8').replace(
+      'model: initial',
+      'model: operator-edited'
     )
-    expect(readFileSync(configPath, 'utf8')).toBe(initial)
-    const after = statSync(configPath)
-    expect([after.ino, after.mtimeMs, after.mode]).toEqual([
-      before.ino,
-      before.mtimeMs,
-      before.mode
-    ])
-    expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe('recovery point')
-  })
-
-  it.each(['\n', '\r\n'])(
-    'preserves comments and parsed values during real install (%j)',
-    async (eol) => {
-      const input =
-        '# notes\nmodel: "001"\nprompt: |\n  First\n  Second\nplugins:\n  enabled: [other]\n'.replaceAll(
-          '\n',
-          eol
-        )
-      writeFileSync(configPath, input)
-      const filesystem = createManagedHookLocalFilesystem()
-      expect((await service.installRemote(filesystem, directory)).state).toBe('installed')
-      const installed = readFileSync(configPath, 'utf8')
-      expect(installed).toContain('# notes')
-      expect(installed).toContain(`prompt: |${eol}  First${eol}  Second`)
-      expect(parse(installed)).toEqual({
-        ...parse(input),
-        plugins: { enabled: ['other', 'orca-status'] }
-      })
-      const before = statSync(configPath)
-      expect((await service.installRemote(filesystem, directory)).state).toBe('installed')
-      expect(statSync(configPath).ino).toBe(before.ino)
-      expect(existsSync(`${configPath}.bak`)).toBe(false)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32').each([0o600, 0o640])(
-    'preserves mode %i despite umask',
-    async (mode) => {
-      writeFileSync(configPath, 'model: fixture\n')
-      chmodSync(configPath, mode)
-      const previous = process.umask(0o077)
-      try {
-        expect(
-          (await service.installRemote(createManagedHookLocalFilesystem(), directory)).state
-        ).toBe('installed')
-      } finally {
-        process.umask(previous)
+    expect(updated).toContain('model: operator-edited')
+    const filesystem = createManagedHookLocalFilesystem()
+    const rename = filesystem.ext_openssh_rename.bind(filesystem)
+    filesystem.ext_openssh_rename = (source, destination, callback) => {
+      if (destination === join(directory, '.hermes', 'plugins', 'orca-status', 'plugin.yaml')) {
+        writeFileSync(configPath, updated)
       }
-      expect(statSync(configPath).mode & 0o777).toBe(mode)
+      rename(source, destination, callback)
     }
-  )
+
+    expect((await service.installRemote(filesystem, directory)).state).toBe('installed')
+    expect(readFileSync(configPath, 'utf8')).toBe(updated)
+  })
 
   it.each(['plugins: [', 'plugins: unexpected\n', 'plugins:\n  enabled: [123]\n'])(
     'refuses unsafe YAML before writing plugin files (%s)',

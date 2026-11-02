@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
+
 import { Terminal } from '@xterm/headless'
 
 function writeChunk(term: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))
 }
 
-// Pins the xterm contract the alternate-screen atlas recovery relies on: by the
-// time a chunk's write callback runs, buffer.active.type reflects any
-// alternate-screen enter/exit parsed from that chunk — even when the sequence
-// splits across PTY chunk boundaries.
+// Write callbacks must observe parsed alternate-screen transitions, including escapes split across PTY chunks.
 describe('alternate-screen buffer state at write-callback time', () => {
   it('reflects an enter sequence split across two chunks', async () => {
     const term = new Terminal({ cols: 120, rows: 34, allowProposedApi: true })

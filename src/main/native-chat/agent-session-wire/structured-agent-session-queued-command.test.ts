@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -10,6 +14,7 @@ import {
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
+  hostTestAttachParams,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 
@@ -49,8 +54,6 @@ async function queuedId(
 }
 
 describe('a /compact in flight', () => {
-  /** A /compact the provider took: a queued message, then its own turn, running until the
-   *  provider ends it (`finishCompact`). */
   async function compactRunning(): Promise<void> {
     expect(await command('compact')).toMatchObject({ ok: true, value: { command: 'compact' } })
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
@@ -60,7 +63,6 @@ describe('a /compact in flight', () => {
     await compactRunning()
     const draftId = await queuedId(rig.send('sent while compacting', 'queue-if-active').result)
     expect(await rig.drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
-    // The compaction's turn owes work, so the drain waits behind it like any turn.
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect(await rig.handoff(draftId)).toBeUndefined()
     rig.finishCompact()
@@ -73,7 +75,6 @@ describe('a /compact in flight', () => {
     const deletedId = await queuedId(rig.send('deleted while compacting', 'queue-if-active').result)
     const sentId = await queuedId(rig.send('sent now while compacting', 'queue-if-active').result)
     const hung = new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 2_000))
-    // Nothing holds the session's lane for the compaction's length any more.
     expect(await Promise.race([rig.deleteQueued(deletedId), hung])).toMatchObject({
       ok: true,
       value: { deleted: true }
@@ -82,7 +83,6 @@ describe('a /compact in flight', () => {
       ok: true,
       value: { submission: { queuedMessageId: sentId } }
     })
-    // Accepted, then handed over only once the compaction ends — the order every send keeps.
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect(rig.dispatch).toHaveBeenCalledTimes(0)
     rig.finishCompact()
@@ -194,4 +194,134 @@ describe('/clear', () => {
     ).toHaveLength(1)
     expect(journal.submission(sent.clientMessageId)?.dispatchState).toBe('accepted')
   })
+})
+
+it('replays /compact across callers with one submission and one provider command', async () => {
+  const id = hostTestOperationId()
+  const fields = { command: 'compact' as const }
+  const params = {
+    ...fields,
+    envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+  }
+  const admit = vi
+    .spyOn(rig.store, 'admitMutationOperation')
+    .mockRejectedValue(new Error('ledger unavailable'))
+  const original = await rig.host.conversationCommand(CALLER, params)
+  expect(original).toMatchObject({ ok: true, replayed: false })
+  await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+  const replay = await rig.host.conversationCommand({ callerKey: 'second-caller' }, params)
+  expect(replay).toMatchObject({ ok: true, replayed: true })
+  if (!original.ok || !replay.ok) {
+    throw new Error('expected accepted commands')
+  }
+  expect(replay.value).toEqual(original.value)
+  expect((await rig.host.journalSnapshot(params.envelope.sessionId)).submissions).toHaveLength(1)
+  expect(rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)).toEqual({
+    verdict: 'absent'
+  })
+  expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
+    verdict: 'readable',
+    receipt: { callerKey: CALLER.callerKey }
+  })
+  expect(admit).not.toHaveBeenCalled()
+  expect(rig.compact).toHaveBeenCalledOnce()
+})
+
+it('refuses another caller reusing a send id for /compact as a receipt conflict', async () => {
+  const { id, result } = rig.send('a different request')
+  await result
+  const fields = { command: 'compact' as const }
+  await expect(
+    rig.host.conversationCommand(
+      { callerKey: 'second-caller' },
+      {
+        ...fields,
+        envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+      }
+    )
+  ).resolves.toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
+  })
+  expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect(rig.compact).not.toHaveBeenCalled()
+})
+
+it("refuses /compact reusing another caller's id for a different conversation", async () => {
+  const id = hostTestOperationId()
+  const fields = { command: 'compact' as const }
+  await expect(
+    rig.host.conversationCommand(CALLER, {
+      ...fields,
+      envelope: rig.envelope(fields, 'agentSession.conversationCommand', id)
+    })
+  ).resolves.toMatchObject({ ok: true })
+  const otherSessionId = 'session-beta'
+  const caller = { callerKey: 'second-caller' }
+  const attach = hostTestAttachParams(null)
+  await expect(
+    rig.host.attach(
+      caller,
+      hostTestAttachParams(null, {
+        envelope: { ...attach.envelope, sessionId: otherSessionId },
+        providerHandle: { kind: 'codex', threadId: '019fd532-7c11-7a90-b6de-4e1a2c3d5f61' }
+      })
+    )
+  ).resolves.toMatchObject({ ok: true })
+  await expect(
+    rig.host.conversationCommand(caller, {
+      ...fields,
+      envelope: rig.envelope(fields, 'agentSession.conversationCommand', id, otherSessionId)
+    })
+  ).resolves.toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_conflict', details: { reason: 'operationIdReused' } }
+  })
+  expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect((await rig.host.journalSnapshot(otherSessionId)).submissions).toHaveLength(0)
+  expect(rig.compact).toHaveBeenCalledOnce()
+})
+
+it('replays a completed compact after reopening an unreadable writer without compacting again', async () => {
+  const fields = { command: 'compact' as const }
+  const params = {
+    ...fields,
+    envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
+  }
+  expect(await rig.host.conversationCommand(CALLER, params)).toMatchObject({ ok: true })
+  await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+  rig.finishCompact()
+  const { command } = rig.compact.mock.calls[0]![0]
+  await eventually(async () =>
+    expect(
+      (await rig.host.journalSnapshot(SESSION)).items.find(
+        ({ itemId }) => itemId === agentJournalItemKey(command.identity)
+      )?.body
+    ).toMatchObject({ ...command.running, state: 'completed', outcome: 'success' })
+  )
+  expect(await rig.host.conversationCommand(CALLER, params)).toMatchObject({
+    ok: true,
+    replayed: true
+  })
+  expect(rig.compact).toHaveBeenCalledOnce()
+  rig.host.stopDelivery()
+  await rig.host.flushAllStreamedEvents()
+  openTestJournalHostDatabase(rig.root)
+    .db.prepare(
+      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+    )
+    .run(SESSION)
+  const store = await openTestAgentSessionRecordStore(rig.root)
+  const restored = new StructuredAgentSessionHost({ ...rig.host.deps, store })
+  try {
+    expect(store.getRecord(SESSION)).toBeNull()
+    expect(await restored.conversationCommand(CALLER, params)).toMatchObject({
+      ok: true,
+      replayed: true
+    })
+    expect(rig.compact).toHaveBeenCalledOnce()
+  } finally {
+    restored.stopDelivery()
+    await restored.flushAllStreamedEvents()
+  }
 })

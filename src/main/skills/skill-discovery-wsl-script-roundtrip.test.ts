@@ -9,16 +9,7 @@ import { buildWslSkillDiscoveryCommand, parseWslSkillDiscoveryOutput } from './s
 
 const run = promisify(execFile)
 
-// Why: the WSL scan is a positional NUL-delimited protocol whose producer is a bash
-// script and whose consumer is a parser in the same file. Every other test hand-encodes
-// the record, so a field added to or removed from one side is only caught by whoever
-// remembers to edit the fixture — the two can drift together with the bug. This runs
-// the real generated script and feeds its real stdout to the real parser, so the field
-// count is checked by execution rather than by memory.
-//
-// The script is Linux-shaped but portable enough to run here: `stat -c` is GNU-only and
-// fails on macOS, which is why `updatedAt` is not asserted — an absent timestamp is
-// already the parser's documented degradation, not this test's subject.
+// Run the generated Bash producer through the real parser so hand-built fixtures cannot hide protocol drift. macOS lacks GNU stat -c; missing mtime is allowed here.
 function root(id: string, path: string): SkillScanRoot {
   return { id, label: id, path, sourceKind: 'home', providers: ['claude'], owner: 'claude' }
 }
@@ -45,8 +36,6 @@ describe.skipIf(process.platform === 'win32')('WSL skill discovery script round-
     })
     const result = parseWslSkillDiscoveryOutput(stdout, roots, 42)
 
-    // A desynced field count surfaces here as a wrong name/description, a thrown
-    // 'unknown source', or a skill silently dropped — never as a passing test.
     expect(result.skills.map((skill) => skill.name).sort()).toEqual(['code-review', 'planner'])
     expect(result.skills.map((skill) => skill.description).sort()).toEqual([
       'Plan the work.',

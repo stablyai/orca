@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { applyTerminalAppearance } from './terminal-appearance'
+import { useThemeBackgroundStore } from '@/store/theme-background'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import {
   applyTerminalScrollbackRowsToMountedPanes,
@@ -15,32 +16,8 @@ import {
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import { useTerminalPaneMountLifecycle } from './use-terminal-pane-mount-lifecycle'
 import { useTerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
+import { listenForHibernatedAgentWake } from './hibernated-agent-wake-listener'
 
-export {
-  applyTerminalScrollbackRowsToMountedPanes,
-  clearQueuedInitialCwdAfterFirstPane,
-  createQueuedStartupConsumer,
-  getPreviousVisibleForTerminalPane,
-  isTerminalPaneVisibilityResume,
-  mapRestoredPaneTitlesByPaneId,
-  paneOwnsQueuedStartup,
-  replayLayoutWithOneShotParkIntent,
-  resolvePaneLinkCwd,
-  resolvePaneSeedCwd,
-  resolveQueuedInitialCwd,
-  recordRuntimeCreatedTerminalPaneSplit,
-  shouldDetachPaneTransportOnUnmount,
-  terminalSelectionExceedsPrimaryLimit,
-  splitPaneWithOneShotStartup
-} from './terminal-pane-lifecycle-primitives'
-export {
-  applyTerminalPaneCloseRequest,
-  retireMountedTerminalPaneSurface,
-  suppressIntentionalPaneCloseExit
-} from './terminal-pane-lifecycle-close'
-export type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
-
-/** Coordinates mount, visibility, and live appearance effects for terminal panes. */
 export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): void {
   const refs = useTerminalPaneLifecycleRefs()
   useTerminalPaneMountLifecycle(deps, refs)
@@ -51,26 +28,11 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
   const systemPrefersDarkRef = refs.systemPrefersDarkRef
   systemPrefersDarkRef.current = deps.systemPrefersDark
 
-  useEffect(() => {
-    const onWakeHibernatedAgents = (event: Event): void => {
-      const detail = (event as CustomEvent<{ worktreeId: string; wokenClaimKeys?: Set<string> }>)
-        .detail
-      if (!detail || detail.worktreeId !== deps.worktreeId) {
-        return
-      }
-      for (const panePtyBinding of deps.panePtyBindingsRef.current.values()) {
-        const claimKey = (panePtyBinding as IDisposableWithWake).wakeHibernatedAgentIfArmed?.(
-          detail.wokenClaimKeys
-        )
-        if (claimKey) {
-          detail.wokenClaimKeys?.add(claimKey)
-        }
-      }
-    }
-    window.addEventListener('orca:wake-hibernated-agents-worktree', onWakeHibernatedAgents)
-    return () =>
-      window.removeEventListener('orca:wake-hibernated-agents-worktree', onWakeHibernatedAgents)
-  }, [deps.worktreeId, deps.panePtyBindingsRef])
+  useEffect(
+    () =>
+      listenForHibernatedAgentWake(deps.worktreeId, () => deps.panePtyBindingsRef.current.values()),
+    [deps.worktreeId, deps.panePtyBindingsRef]
+  )
 
   useEffect(() => {
     const previousIsVisible = getPreviousVisibleForTerminalPane({
@@ -128,6 +90,8 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     return () => window.removeEventListener('focus', onWindowFocus)
   }, [deps.isActive, deps.isVisible, deps.managerRef, deps.panePtyBindingsRef])
 
+  // Why: a theme image arrives after plugin themes load, so the single-paint switch must re-run then.
+  const themeBackgroundActive = useThemeBackgroundStore((state) => state.active)
   useEffect(() => {
     const manager = deps.managerRef.current
     const currentSettings = deps.settingsRef.current
@@ -146,6 +110,7 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     )
   }, [
     deps.settings,
+    themeBackgroundActive,
     deps.systemPrefersDark,
     deps.effectiveMacOptionAsAlt,
     deps.managerRef,
@@ -191,10 +156,6 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
       }
     }
   }, [deps.settings?.terminalMouseHideWhileTyping, deps.managerRef, refs.mouseHideDisposablesRef])
-}
-
-type IDisposableWithWake = IDisposable & {
-  wakeHibernatedAgentIfArmed?: (claimedProviderSessions?: Set<string>) => string | null
 }
 
 type IDisposableWithVisibility = IDisposable & {

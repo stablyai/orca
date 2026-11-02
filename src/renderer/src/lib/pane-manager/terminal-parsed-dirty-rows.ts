@@ -1,25 +1,9 @@
-/**
- * The viewport row span xterm itself marked dirty while parsing the writes made
- * since the last reset.
- *
- * Why: xterm's InputHandler already tracks exactly which viewport rows a parse
- * touched and asks the terminal to repaint them (`onRequestRefreshRows`). Orca's
- * foreground settle re-issues that repaint so an in-place agent redraw is painted
- * now instead of a frame later. Re-issuing it as `0..rows-1` widened every
- * repaint to the whole grid — xterm's render debouncer unions ranges, so one
- * full-grid request turns a five-row frame into a whole-viewport `_updateModel`
- * pass over every cell. Observing the parse's own dirty span keeps the repair
- * and drops the widening.
- */
+/** Track xterm’s own parse-dirty viewport spans for immediate foreground repair. Full-grid repair widens the render debouncer’s union, turning narrow TUI redraws into whole-grid cell scans. */
 export type ParsedDirtyRowSpan = { start: number; end: number }
 
 type RequestRefreshRowsEvent = { start: number; end: number } | undefined
 
-/**
- * A terminal instance, used as the span cache's identity. Not `ParsedDirtyRowSource`: callers hold
- * their own partial structural views of the same xterm terminal, so the internals below stay a
- * defensive probe rather than a requirement on the caller's type.
- */
+/** Key by terminal identity while accepting callers’ partial views; private parse signals remain defensive probes, never type requirements. */
 export type ParsedDirtyRowTerminal = WeakKey
 
 type ParsedDirtyRowSource = {
@@ -40,8 +24,7 @@ type ParsedDirtyRowTracker = {
   dispose: () => void
 }
 
-// `null` marks a terminal whose parse spans cannot be observed, so callers keep
-// the full-grid behavior instead of narrowing on an absent signal.
+// Null preserves full-grid repair when parse spans are unobservable.
 const trackersByTerminal = new WeakMap<ParsedDirtyRowTerminal, ParsedDirtyRowTracker | null>()
 
 function attachTracker(terminal: ParsedDirtyRowTerminal): ParsedDirtyRowTracker | null {
@@ -100,11 +83,7 @@ export function resetParsedDirtyRows(terminal: ParsedDirtyRowTerminal): void {
   tracker.end = 0
 }
 
-/**
- * The union of parse spans since the last reset, or `null` when the span is
- * unknown (unobservable terminal, no parse seen, or an xterm full-refresh
- * request) and the caller must repaint the whole viewport.
- */
+/** Union since reset, or null for absent/unobservable spans or xterm full-refresh requests; callers must then repaint everything. */
 export function readParsedDirtyRowSpan(
   terminal: ParsedDirtyRowTerminal
 ): ParsedDirtyRowSpan | null {

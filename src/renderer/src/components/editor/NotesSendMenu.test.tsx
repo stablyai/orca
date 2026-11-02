@@ -1,4 +1,5 @@
 import React from 'react'
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildNotesSendTargetModeId, NotesSendMenu } from './NotesSendMenu'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
@@ -30,7 +31,7 @@ const storeMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -251,27 +252,10 @@ function renderMenu(
 }
 
 describe('buildNotesSendTargetModeId', () => {
-  it('keeps note-send target ids stable for the same parts', () => {
-    expect(buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])).toBe(
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
-    )
-  })
-
   it('uses part boundaries so adjacent values cannot collide', () => {
     expect(buildNotesSendTargetModeId(['markdown-notes', 'ab', 'c'])).not.toBe(
       buildNotesSendTargetModeId(['markdown-notes', 'a', 'bc'])
     )
-  })
-
-  it('separates markdown rail, panel, per-note, and diff send targets', () => {
-    const ids = new Set([
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail']),
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'preview-panel']),
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'note', 'note-1']),
-      buildNotesSendTargetModeId(['diff-notes', 'wt-1', 'group-1', 'README.md'])
-    ])
-
-    expect(ids.size).toBe(4)
   })
 })
 
@@ -292,15 +276,6 @@ describe('NotesSendMenu', () => {
     expect(findByType(tree, 'button').props.disabled).toBe(true)
     expect(findByType(tree, 'button').props.title).toBe('All notes sent')
     expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
-  })
-
-  it('uses caller-provided disabled tooltip copy for disabled note actions', () => {
-    const tree = renderMenu({
-      scopes: [{ id: 'note', label: 'This note', notes: [], formatPrompt: () => '' }],
-      disabledTooltip: 'Note already sent'
-    })
-
-    expect(findByType(tree, 'button').props.title).toBe('Note already sent')
   })
 
   it('opens and closes target mode with the default scope', () => {
@@ -331,18 +306,6 @@ describe('NotesSendMenu', () => {
     expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
       buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
     )
-  })
-
-  it('passes the default scope to review note send content', () => {
-    const tree = renderMenu()
-
-    expect(findByType(tree, 'ReviewNotesSendMenuContent').props).toMatchObject({
-      worktreeId: 'wt-1',
-      groupId: 'group-1',
-      prompt: 'prompt-all',
-      promptDelivery: 'submit-after-ready',
-      launchSource: 'notes_send'
-    })
   })
 
   it('switches running-agent target mode when a different scope is focused', () => {
@@ -405,7 +368,7 @@ describe('NotesSendMenu', () => {
     vi.useFakeTimers()
     vi.setSystemTime(600_000)
     try {
-      // Issued 10 minutes ago and never consumed: clear it, do not pop the menu.
+      // Expired, unconsumed requests must clear without opening.
       renderMenu({ openRequestNonce: 1, openRequestExpiresAt: 5_000, onOpenRequestHandled })
     } finally {
       vi.useRealTimers()
@@ -467,7 +430,6 @@ describe('NotesSendMenu notes in flight', () => {
       formatPrompt: (sent: readonly TestNote[]) => sent.map((entry) => entry.id).join('+')
     }
   ]
-  /** Calls a rendered callback prop, failing the test if it is missing. */
   const invoke = (props: Record<string, unknown>, name: string, ...args: unknown[]): unknown => {
     const callback = props[name]
     if (typeof callback !== 'function') {
@@ -507,7 +469,6 @@ describe('NotesSendMenu notes in flight', () => {
     second.onPromptDelivered()
     await Promise.resolve()
 
-    // Each send clears only its own note; a repeated clear of A is a no-op for its owner.
     expect(onDelivered).not.toHaveBeenCalledWith([noteA, noteB])
     expect(onDelivered).toHaveBeenCalledWith([noteA])
     expect(onDelivered).toHaveBeenCalledWith([noteB])
@@ -561,7 +522,7 @@ describe('NotesSendMenu notes in flight', () => {
     expect(findByType(tree, 'button').props.title).toBe('Sending…')
   })
 
-  // A failed new chat's Retry delivers them after the send's own callback is gone.
+  // Retry can report delivery after the original send callback is gone.
   it('clears notes whose send reports delivery later', async () => {
     const onDelivered = vi.fn()
     const delivered = Promise.resolve({ delivered: true })

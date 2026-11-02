@@ -93,6 +93,12 @@ export function RemoteServerUpdateStatus({
 }
 
 export function getRemoteServerManualUpdateHelp(entry: RemoteServerUpdateEntry): string {
+  if (entry.managedOverSsh) {
+    return translate(
+      'auto.components.settings.RemoteServerUpdateStatus.managedOverSshHelp',
+      'This desktop updates this server over SSH. Use Update on its row in Remote Orca Servers.'
+    )
+  }
   if (entry.support?.reason === 'manual-service-update-required') {
     return translate(
       'auto.components.settings.RemoteServerUpdateStatus.serviceManagerHelp',
@@ -107,6 +113,6 @@ export function getRemoteServerManualUpdateHelp(entry: RemoteServerUpdateEntry):
   }
   return translate(
     'auto.components.settings.RemoteServerUpdateStatus.legacyHelp',
-    'Update this server manually once to enable remote updates.'
+    'Remote updates are unavailable for this server. Update Orca on the server host.'
   )
 }

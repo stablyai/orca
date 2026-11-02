@@ -1,10 +1,8 @@
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
-import { spawnProcess, type ChildProcessHandle } from './child-process/run-process'
-import { abortSignalReason, throwIfSignalAborted } from './abort-signal-reason'
+import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 
 const RIPGREP_CWD_CHECK_TIMEOUT_MS = 1000
-const RIPGREP_FAILURE_PROBE_TIMEOUT_MS = 5000
 
 export class RipgrepUnavailableError extends Error {
   constructor() {
@@ -78,108 +76,7 @@ export async function isRipgrepSpawnCwdUsable(cwd: string): Promise<boolean> {
   }
 }
 
-function probeRipgrepVersion(
-  command: string,
-  env: NodeJS.ProcessEnv,
-  signal?: AbortSignal
-): Promise<boolean> {
-  if (signal?.aborted) {
-    return Promise.reject(abortSignalReason(signal))
-  }
-  return new Promise((resolve, reject) => {
-    let child: ChildProcessHandle
-    try {
-      // windowsHide: a probe must never flash a console window on Windows.
-      child = spawnProcess({ program: command, args: ['--version'], env, stdio: 'ignore' })
-    } catch {
-      resolve(false)
-      return
-    }
-    let settled = false
-    // Why kill on timeout: a `rg --version` that hangs -- a stalled network mount, or antivirus
-    // holding a just-installed rg.exe -- would otherwise leave a live process and a ref'd handle
-    // behind for the relay's lifetime, once per launch failure.
-    const settle = (available: boolean, kill = false, error?: Error): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      signal?.removeEventListener('abort', onAbort)
-      child.off('close', onClose)
-      child.off('error', onError)
-      // A queued spawn error or synchronous kill failure can arrive after cleanup.
-      child.once('error', ignoreRipgrepSpawnError)
-      if (kill) {
-        try {
-          killSpawnedRipgrepProcess(child)
-        } catch {
-          // A refused kill must not strand the probe's settlement.
-        }
-      }
-      if (error) {
-        reject(error)
-      } else {
-        resolve(available)
-      }
-    }
-    const onAbort = (): void => {
-      if (signal) {
-        settle(false, true, abortSignalReason(signal))
-      }
-    }
-    const onError = (): void => settle(false)
-    const onClose = (code: number | null): void => settle(code === 0)
-    child.once('error', onError)
-    child.once('close', onClose)
-    const timeout = setTimeout(() => settle(false, true), RIPGREP_FAILURE_PROBE_TIMEOUT_MS)
-    timeout.unref?.()
-    signal?.addEventListener('abort', onAbort, { once: true })
-    if (signal?.aborted) {
-      onAbort()
-    }
-  })
-}
-
-/**
- * Why a launch failure needs classifying: spawn reports an unreachable cwd as ENOENT, the same as
- * a missing binary. Telling a user to install ripgrep because their workspace moved sends them
- * down the wrong path, and resolving an empty result hides the move entirely.
- *
- * `candidates` are the ripgreps worth asking about, in order -- the command that actually failed
- * first, then the host's PATH one. Probing only PATH would misclassify the normal remote setup,
- * where Orca uploaded a bundled binary precisely because the host has no `rg` of its own: the
- * probe would fail and a moved workspace would be reported as a missing ripgrep. Nulls are
- * skipped, and a host with no working ripgrep at all keeps 'ripgrep-unavailable', because only
- * that verdict engages the git/readdir fallback chain.
- */
-export async function classifyRipgrepLaunchFailure(
-  cwd: string,
-  candidates: readonly (string | null)[],
-  env: NodeJS.ProcessEnv,
-  signal?: AbortSignal
-): Promise<'cwd-unreachable' | 'ripgrep-unavailable'> {
-  throwIfSignalAborted(signal)
-  const usable = await isRipgrepSpawnCwdUsable(cwd)
-  throwIfSignalAborted(signal)
-  if (usable) {
-    return 'ripgrep-unavailable'
-  }
-  for (const command of new Set(candidates.filter((entry) => entry !== null))) {
-    throwIfSignalAborted(signal)
-    if (await probeRipgrepVersion(command, env, signal)) {
-      return 'cwd-unreachable'
-    }
-  }
-  return 'ripgrep-unavailable'
-}
-
-/**
- * Exit code the WSL wrapper uses when it cannot enter the search root. Why a dedicated code:
- * ripgrep exits 1 for "no matches", so without this an unreachable workspace would report an
- * empty listing as a successful scan. Picked above ripgrep's own 0/1/2 and clear of the shell's
- * 126/127 and 128+signal range.
- */
+/** WSL cwd failures must differ from rg’s “no matches” (1); 97 also avoids shell error/signal ranges. */
 export const RIPGREP_MISSING_CWD_EXIT_CODE = 97
 
 export function isRipgrepMissingCwdExit(code: number | null): boolean {
@@ -195,8 +92,7 @@ export async function classifySynchronousRipgrepSpawnFailure(
   error: unknown,
   cwd: string
 ): Promise<Error> {
-  // Why pass an already-classified error straight through: this only diagnoses raw spawn errnos.
-  // A caller that threw a verdict of its own has more context than a cwd probe does.
+  // Preserve caller diagnoses; cwd probing only interprets raw spawn errnos.
   if (error instanceof RipgrepUnavailableError || error instanceof RipgrepLaunchFailureError) {
     return error
   }

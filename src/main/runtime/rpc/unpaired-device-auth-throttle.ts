@@ -1,7 +1,4 @@
-// Why: a desktop that lost its device registry (pre-v1.4.106 pairing-path bug)
-// rejects previously-paired phones with 4001 forever while both ends stay
-// silent. This gate turns that repeated failure pattern into ONE user-facing
-// signal per runtime session, without firing on a single stray probe.
+// Registry loss (pre-v1.4.106 pairing-path bug) caused silent repeated 4001 refusals; signal once per runtime only after a burst, not stray probes.
 
 const DEFAULT_FAILURE_THRESHOLD = 3
 const DEFAULT_WINDOW_MS = 60_000

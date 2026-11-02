@@ -1,17 +1,14 @@
-/**
- * The connect that converts a relay-era SSH host, and the source's retention then retirement,
- * shared by the runtime relay-era cell and the upgraded-profile cell.
- */
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import { readPersistedProfileState } from './persisted-profile-state'
 import { findOrcadMigrationSourceCutoverForTarget } from '../../../src/main/ssh/orcad-migration-cutover-journal'
+import { RuntimeClient } from '../../../src/cli/runtime/client'
 
 const CONVERT_TIMEOUT_MS = 8 * 60_000
 
 const RECONNECT_STEP_TIMEOUT_MS = 6 * 60_000
 
-/** Returns what the connect itself resolved to; a step that hangs fails naming itself. */
+// Bound each connect/disconnect step so a hang identifies its phase.
 export async function reconnect(page: Page, targetId: string): Promise<string> {
   for (const step of ['disconnect', 'connect'] as const) {
     const run = page.evaluate(
@@ -71,7 +68,6 @@ function isManaged(server: unknown): boolean {
   )
 }
 
-/** The relay-era catalog rows this profile still holds for the host. */
 function sourceRows(
   userData: string,
   targetId: string
@@ -82,7 +78,7 @@ function sourceRows(
   return { repos: count(state.repos), folderWorkspaces: count(state.folderWorkspaces) }
 }
 
-export function targetLeases(userData: string, targetId: string): { state?: unknown }[] {
+function targetLeases(userData: string, targetId: string): { state?: unknown }[] {
   const leases = readPersistedProfileState(userData).sshRemotePtyLeases
   return (Array.isArray(leases) ? leases : []).filter((lease) => lease?.targetId === targetId)
 }
@@ -120,7 +116,6 @@ export type ConvertedHost = {
   sessionFilePath: string
 }
 
-/** Connects with the template in place, then proves conversion, retention and retirement. */
 export async function convertAndRetain(
   page: Page,
   userData: string,
@@ -153,15 +148,15 @@ export async function convertAndRetain(
     )
     .toBe('managed')
   const environments = await page.evaluate(() => window.api.runtimeEnvironments.list())
-  const environment = environments.find(
-    (entry) => entry.orcadDeployment?.sshTargetId === host.targetId
-  )
+  const environment = environments.find((entry) => {
+    const deployment = entry.orcadDeployment
+    return deployment && deployment.kind !== 'wsl' && deployment.sshTargetId === host.targetId
+  })
   expect(environment, 'a managed server registered for the host').toBeTruthy()
   expect(await serverCall(page, environment!.id, 'repo.list')).toContain(jsonText(host.repoPath))
   expect(await serverCall(page, environment!.id, 'folderWorkspace.list')).toContain(
     jsonText(host.folderPath)
   )
-  // The relay-era editor tab moved with the session; the server lists it for every client.
   await expect
     .poll(
       async () =>
@@ -176,7 +171,7 @@ export async function convertAndRetain(
     jsonText(host.sessionFilePath)
   )
 
-  // 3. Source retained for a downgrade: kept and hidden, and still so after another connect.
+  // Keep source state for downgrade, hidden across repeated connects.
   const expectRetained = async (): Promise<void> => {
     expect(findOrcadMigrationSourceCutoverForTarget(userData, host.targetId)).toMatchObject({
       phase: 'destination-committed',
@@ -188,6 +183,45 @@ export async function convertAndRetain(
       return repos.filter((repo) => repo.connectionId === id).length
     }, host.targetId)
     expect(listed, 'retained source rows stay hidden').toBe(0)
+    // The CLI, the phone and paired clients list through this desktop's runtime, not the renderer.
+    const persisted = readPersistedProfileState(userData).repos
+    const sourceRepoIds = new Set(
+      (Array.isArray(persisted) ? persisted : [])
+        .filter((repo) => repo?.connectionId === host.targetId)
+        .map((repo) => repo.id)
+    )
+    const runtime = new RuntimeClient(userData, 30_000, null, null)
+    const repos = (await runtime.call<{ repos: { id: string }[] }>('repo.list')).result.repos
+    const folders = (
+      await runtime.call<{ folderWorkspaces: { connectionId?: string | null }[] }>(
+        'folderWorkspace.list'
+      )
+    ).result.folderWorkspaces
+    const ps = (
+      await runtime.call<{
+        worktrees: { repoId: string }[]
+        hostScope?: { hostIds: string[]; omittedHostIds: string[] }
+      }>('worktree.ps')
+    ).result
+    const worktrees = ps.worktrees
+    // The old code named the converted host as "not covered", sending a user to a hidden host.
+    expect(ps.hostScope, 'runtime worktree.ps reports its host scope').toBeTruthy()
+    expect(
+      [...ps.hostScope!.hostIds, ...ps.hostScope!.omittedHostIds],
+      'runtime worktree.ps never names the converted host'
+    ).not.toContain(`ssh:${encodeURIComponent(host.targetId)}`)
+    expect(
+      repos.filter((repo) => sourceRepoIds.has(repo.id)),
+      'runtime repo.list'
+    ).toEqual([])
+    expect(
+      folders.filter((folder) => folder.connectionId === host.targetId),
+      'runtime folderWorkspace.list'
+    ).toEqual([])
+    expect(
+      worktrees.filter((worktree) => sourceRepoIds.has(worktree.repoId)),
+      'runtime worktree.ps'
+    ).toEqual([])
   }
   await expectRetained()
   await reconnect(page, host.targetId)

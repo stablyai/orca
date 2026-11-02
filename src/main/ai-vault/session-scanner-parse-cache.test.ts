@@ -2,6 +2,8 @@ import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
+import { getSessionParseCacheEntry } from './session-parse-cache-store'
 import {
   parseAgentSessionFileCached,
   resetSessionParseCacheForTests,
@@ -9,6 +11,11 @@ import {
 } from './session-scanner-parse-cache'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
+import {
+  registerTranscriptConsumer,
+  resetTranscriptConsumersForTests,
+  type TranscriptReadOutcome
+} from './session-transcript-consumers'
 
 let tempRoots: string[] = []
 
@@ -17,6 +24,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  resetTranscriptConsumersForTests()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
@@ -63,7 +71,6 @@ function assistantRecord(index: number, text: string): string {
   })
 }
 
-// Ground truth: what a cold one-shot parse of the current file contents yields.
 async function freshParse(path: string) {
   const candidate = await claudeCandidate(path)
   return parseClaudeSessionFile(candidate.file)
@@ -128,11 +135,10 @@ describe('parseAgentSessionFileCached', () => {
     expect(incremental?.totalTokens).toBe(420)
   })
 
-  it('parses an oversized record without quadratic carry copying', async () => {
+  it('parses a multi-chunk record without quadratic carry copying', async () => {
     const root = await makeTempDir()
     const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
-    // One tool result far larger than a stream chunk. Re-joining the held-over
-    // partial line per chunk copies O(record^2); the piece list joins once.
+    // Span many chunks to expose quadratic copying from repeatedly joining the carried record prefix.
     const recordBytes = 4 * 1024 * 1024
     await writeFile(
       path,
@@ -157,27 +163,28 @@ describe('parseAgentSessionFileCached', () => {
         process.platform,
         stats
       )
-      expect(parsed).not.toBeNull()
+      expect(parsed?.messageCount).toBe(3)
+      expect(parsed?.previewMessages.map((message) => message.text)).toEqual([
+        'question',
+        expect.stringMatching(/^x+\.\.\.$/),
+        'tail answer'
+      ])
     } finally {
       Buffer.concat = originalConcat
     }
 
-    // Linear joins the record about once; the quadratic form copied many times
-    // that, growing with the square of the record size.
     expect(concatenatedBytes).toBeLessThan(recordBytes * 4)
   })
 
   it('shows a trailing unterminated line without double-counting it later', async () => {
     const root = await makeTempDir()
     const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
-    // Final record has no trailing newline (mid-write file).
     await writeFile(path, `${userRecord(0, 'question')}\n${assistantRecord(1, 'partial answer')}`)
 
     const first = await cachedParse(path)
     expect(first?.messageCount).toBe(2)
     expect(first).toEqual(await freshParse(path))
 
-    // The writer finishes the line and appends one more record.
     await appendFile(path, `\n${userRecord(2, 'follow-up')}\n`)
     const second = await cachedParse(path)
     expect(second?.messageCount).toBe(3)
@@ -213,7 +220,6 @@ describe('parseAgentSessionFileCached', () => {
     await writeFile(path, original)
     await cachedParse(path)
 
-    // Larger file whose byte at the old resume point is mid-line, not '\n'.
     const rewritten = `${userRecord(0, 'a much longer rewritten question than before')}\n${assistantRecord(1, 'answer')}\n`
     expect(rewritten.length).toBeGreaterThan(original.length)
     expect(rewritten[original.length - 1]).not.toBe('\n')
@@ -284,5 +290,117 @@ describe('parseAgentSessionFileCached', () => {
     expect(second).toBe(first)
     expect(stats.fullParses).toBe(1)
     expect(stats.reused).toBe(1)
+  })
+
+  it('stores nothing for a parse cancelled before it reads', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(path, `${[userRecord(0, 'q'), assistantRecord(1, 'a')].join('\n')}\n`)
+    const candidate = await claudeCandidate(path)
+
+    await expect(
+      parseAgentSessionFileCached(
+        candidate,
+        process.platform,
+        undefined,
+        undefined,
+        AbortSignal.abort()
+      )
+    ).rejects.toSatisfy(isAiVaultScanCancelledError)
+    expect(getSessionParseCacheEntry(path)).toBeUndefined()
+
+    expect(await cachedParse(path)).toEqual(await freshParse(path))
+  })
+
+  it('keeps the earlier resume point when an append read is cancelled part way', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(path, `${[userRecord(0, 'q'), assistantRecord(1, 'a')].join('\n')}\n`)
+    await cachedParse(path)
+    const before = getSessionParseCacheEntry(path)
+    const beforeOffset = before?.resume?.byteOffset
+
+    // Several stream chunks, so the cancel lands with most of the append unread.
+    const filler = 'x'.repeat(2_000)
+    await appendFile(
+      path,
+      `${Array.from({ length: 200 }, (_, index) => userRecord(index + 2, `${index} ${filler}`)).join('\n')}\n`
+    )
+    const controller = new AbortController()
+    const outcomes: TranscriptReadOutcome[] = []
+    let messages = 0
+    const unregister = registerTranscriptConsumer({
+      beginRead: () => ({
+        message: () => {
+          messages += 1
+          controller.abort()
+        },
+        finish: (outcome) => outcomes.push(outcome)
+      })
+    })
+    await expect(
+      parseAgentSessionFileCached(
+        await claudeCandidate(path),
+        process.platform,
+        undefined,
+        undefined,
+        controller.signal
+      )
+    ).rejects.toSatisfy(isAiVaultScanCancelledError)
+    unregister()
+
+    expect(messages).toBeLessThan(200)
+    expect(outcomes).toEqual([
+      expect.objectContaining({ incomplete: true, cancelled: true, session: null })
+    ])
+    expect(getSessionParseCacheEntry(path)).toBe(before)
+    expect(getSessionParseCacheEntry(path)?.resume?.byteOffset).toBe(beforeOffset)
+
+    const stats = createSessionParseStats()
+    const resumed = await parseAgentSessionFileCached(
+      await claudeCandidate(path),
+      process.platform,
+      stats
+    )
+    expect(stats.incremental).toBe(1)
+    expect(resumed).toEqual(await freshParse(path))
+    expect(resumed?.messageCount).toBe(202)
+  })
+
+  it('keeps one row each when Pi and OMP list the same transcript', async () => {
+    const root = await makeTempDir()
+    const path = join(root, '2026-04-20T00-00-00-000Z_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(
+      path,
+      [
+        JSON.stringify({
+          type: 'session',
+          id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          timestamp: '2026-04-20T00:00:00.000Z',
+          cwd: '/repo/app'
+        }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-04-20T00:01:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'shared dir prompt' }] }
+        }),
+        ''
+      ].join('\n')
+    )
+    const { file } = await claudeCandidate(path)
+    const stats = createSessionParseStats()
+    const scan = (): Promise<(string | undefined)[]> =>
+      Promise.all(
+        (['omp', 'pi'] as const).map(
+          async (agent) =>
+            (await parseAgentSessionFileCached({ agent, file, codexHome: null }, 'linux', stats))
+              ?.agent
+        )
+      )
+
+    expect(await scan()).toEqual(['omp', 'pi'])
+    expect(await scan()).toEqual(['omp', 'pi'])
+    expect(stats.fullParses).toBe(2)
+    expect(stats.reused).toBe(2)
   })
 })

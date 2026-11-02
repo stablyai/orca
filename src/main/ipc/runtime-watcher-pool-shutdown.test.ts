@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
-import type { WatcherProcessHooks } from './parcel-watcher-process-subscription'
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import type { WatcherProcessHooks } from './filesystem/watcher-process/parcel-watcher-process-subscription'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 
 function supervisor() {
   const pending = Promise.withResolvers<void>()

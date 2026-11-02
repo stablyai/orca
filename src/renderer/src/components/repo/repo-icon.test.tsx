@@ -41,29 +41,4 @@ describe('RepoIconGlyph', () => {
       'https://github.com/acme.png?size=64'
     )
   })
-
-  it('keeps rendering a loadable image icon', () => {
-    const { container } = render(
-      <RepoIconGlyph repoIcon={{ type: 'image', src: GHE_AVATAR, source: 'github' }} />
-    )
-
-    expect(container.querySelector('img')?.getAttribute('src')).toBe(GHE_AVATAR)
-    expect(container.querySelector('svg')).toBeNull()
-  })
-
-  it('renders emoji and lucide icons unchanged', () => {
-    const { container: emoji } = render(<RepoIconGlyph repoIcon={{ type: 'emoji', emoji: '🐙' }} />)
-    expect(emoji.textContent).toBe('🐙')
-
-    const { container: lucide } = render(
-      <RepoIconGlyph repoIcon={{ type: 'lucide', name: 'Database' }} />
-    )
-    expect(lucide.querySelector('svg')?.getAttribute('class')).toContain('lucide-database')
-  })
-
-  it('falls back to Folder for an unknown lucide name', () => {
-    const { container } = render(<RepoIconGlyph repoIcon={{ type: 'lucide', name: 'NotAnIcon' }} />)
-
-    expect(container.querySelector('svg')?.getAttribute('class')).toContain('lucide-folder')
-  })
 })

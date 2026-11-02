@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { chromium } from 'playwright'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 import {
   BrowserSessionUaCdpCollector,
@@ -18,10 +18,21 @@ import {
   type WireProbeReceipt
 } from './browser-session-ua-wire-probe-server'
 
-// This file is deliberately independent from the broad identity test.  Its two arms make the
-// pre-ready fallback itself the control variable for the cross-site and dedicated-worker probes.
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
+let processIdentityModulePath: string
+let exceptionModulePath: string
+
+beforeAll(async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-wire-identity-modules-'))
+  fixtureRoots.push(root)
+  processIdentityModulePath = join(root, 'browser-process-user-agent.cjs')
+  exceptionModulePath = join(root, 'browser-session-ua.cjs')
+  await Promise.all([
+    buildModule('src/main/browser/browser-process-user-agent.ts', processIdentityModulePath),
+    buildModule('src/main/browser/browser-session-ua.ts', exceptionModulePath)
+  ])
+})
 
 afterAll(() => {
   for (const root of fixtureRoots) {
@@ -40,7 +51,6 @@ type ProbeResult = Readonly<{
   identities: readonly WireProbeJavaScriptIdentity[]
   cdpRequests: readonly BrowserSessionUaCdpRequest[]
   cdpDiagnostics: readonly string[]
-  /** Why carried: a CI-only capture failure is undiagnosable without the fixture's own output. */
   fixtureResult: string
   fixtureStderr: string
 }>
@@ -60,8 +70,6 @@ describe('browser session wire identity in cross-site frames and dedicated worke
   it('turns every new clean-identity check red when the process fallback is removed', async () => {
     const result = await runProbe('fallback-disabled')
     assertCapturedContexts(result)
-    // These are explicit ablation controls: each predicate is the assertion used by the clean arm,
-    // and must be false when app.userAgentFallback is never assigned.
     const checks = identityChecks(result)
     expect(checks.crossSiteDocument).toBe(false)
     expect(checks.crossSiteFetch).toBe(false)
@@ -74,12 +82,6 @@ describe('browser session wire identity in cross-site frames and dedicated worke
 async function runProbe(arm: ProbeArm): Promise<ProbeResult> {
   const root = mkdtempSync(join(tmpdir(), `orca-wire-cross-context-${arm}-`))
   fixtureRoots.push(root)
-  const processIdentityModulePath = join(root, 'browser-process-user-agent.cjs')
-  const exceptionModulePath = join(root, 'browser-session-ua.cjs')
-  await Promise.all([
-    buildModule('src/main/browser/browser-process-user-agent.ts', processIdentityModulePath),
-    buildModule('src/main/browser/browser-session-ua.ts', exceptionModulePath)
-  ])
   const server = await startBrowserSessionUaWireProbeServer()
   const resultPath = join(root, 'result.json')
   const barrierPath = join(root, 'continue')
@@ -234,8 +236,7 @@ async function run() {
     window.webContents.executeJavaScript('navigator.userAgent'),
     window.webContents.executeJavaScript('window.probePromise')
   ])
-  // Let Target.attachedToTarget and its Network events flush for the isolated frame before the
-  // fixture exits; the frame's own report/fetch receipts are the request-level proof.
+  // Allow isolated-frame CDP events to flush before the fixture exits.
   await new Promise(resolve => setTimeout(resolve, 1500))
   clearTimeout(timeout)
   writeFileSync(${JSON.stringify(options.resultPath)}, JSON.stringify({ arm, rawUserAgent, cleanUserAgent: cleanElectronUserAgent(rawUserAgent), navigatorUserAgent }))
@@ -294,9 +295,7 @@ function identityChecks(result: ProbeResult): Readonly<Record<string, boolean>> 
   const frameReceipt = receiptForPath(result.receipts, '/cross-site-frame-fetch')
   const workerScriptReceipt = receiptForPath(result.receipts, '/dedicated-worker.js')
   const workerFetchReceipt = receiptForPath(result.receipts, '/dedicated-worker-fetch')
-  // Chromium omits client hints on the initial navigation but sends them on the document's
-  // subsequent fetch; use that captured wire request to compare sec-ch-ua with the same document's
-  // navigator.userAgentData.
+  // Compare hints on a subsequent fetch because initial navigation may omit them.
   const rootReceipt = receiptForPath(result.receipts, '/report/document')
   return {
     crossSiteDocument: frameIdentity.userAgent === result.cleanUserAgent,
@@ -318,9 +317,7 @@ function clientHintIdentityIsClean(
   identity: WireProbeJavaScriptIdentity,
   cleanUserAgent: string
 ): boolean {
-  // Electron's stock UA-CH remains Chromium-shaped even when the fallback is disabled.  Compare
-  // its brands exactly, but require the same wire request to carry the clean legacy UA too; this is
-  // the strongest true one-identity invariant and makes the ablation red on the Electron token.
+  // Native UA-CH can remain Chromium-shaped; require a clean legacy UA on the same request.
   const secChUa = receipt.clientHints['sec-ch-ua']
   const wireBrands = parseSecChUa(secChUa)
   const navigatorBrands = readNavigatorBrands(identity.userAgentData)

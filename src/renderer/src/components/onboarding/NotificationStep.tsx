@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
+import { sendNotificationSettingsTestNotification } from '@/components/settings/notification-settings-copy'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import {
   MacNotificationPermissionCard,
@@ -33,8 +33,7 @@ export function NotificationStep({
 }: NotificationStepProps): React.JSX.Element {
   const notificationSettings = settings?.notifications
   const notificationSettingsRef = useRef(notificationSettings)
-  // Why: undefined settings are still loading — assume enabled (the default)
-  // so the fresh-install permission flow starts without waiting.
+  // Unloaded settings use enabled’s default so fresh-install permission checks can start immediately.
   const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
     notificationSettings?.enabled !== false
   )
@@ -45,14 +44,12 @@ export function NotificationStep({
 
   if (syncedNotificationSettingsRef.current !== notificationSettings) {
     syncedNotificationSettingsRef.current = notificationSettings
-    // Why: handlers optimistically update the ref before persisted settings
-    // flow back through props, so local re-renders must not overwrite it.
+    // Preserve optimistic handler writes until persisted props change; local rerenders must not overwrite them.
     notificationSettingsRef.current = notificationSettings
   }
 
   const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
-    // Why: onboarding sits above body-level portals, so the select menu must
-    // portal into the overlay to stay clickable.
+    // Portal inside onboarding so its overlay cannot block the menu.
     setSelectPortalRoot(node?.closest<HTMLElement>('[data-onboarding-overlay]') ?? node)
   }, [])
 
@@ -147,8 +144,7 @@ export function NotificationStep({
     if (!mountedRef.current || !showsMacPermissionCard) {
       return
     }
-    // Why: the test doubles as a permission re-check — its confirmed outcome
-    // is fresher than whatever the mount-time probe reported.
+    // The test outcome is fresher permission evidence than the mount-time probe.
     if (outcome === 'delivered') {
       setMacPermissionState('enabled')
     } else if (outcome === 'not-displayed') {

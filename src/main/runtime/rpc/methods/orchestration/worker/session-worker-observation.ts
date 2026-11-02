@@ -21,10 +21,7 @@ export type SessionWorkerObservation = {
   terminalHandle: null
 }
 
-/**
- * A worker that is an agent session, a structured worker or a chat, observed off the session
- * records instead of a terminal; null for a PTY worker.
- */
+/** Read session records for structured/chat workers; null selects the PTY path. */
 export async function inspectSessionWorker(
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
   db: OrchestrationDb,
@@ -33,8 +30,7 @@ export async function inspectSessionWorker(
 ): Promise<SessionWorkerObservation | null> {
   const chat = chatAssigneeSessionId(terminalHandle)
   if (chat) {
-    // The address is the chat's whole identity, so it is always exact. After a restart nothing
-    // has installed the host yet, and its records are what this reads.
+    // Chat address is its exact identity; ensure host records are installed after restart.
     await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
     const observed = observeChatAssignee(chat, db)
     return {
@@ -49,13 +45,8 @@ export async function inspectSessionWorker(
   if (!structured) {
     return null
   }
-  // Exactness is the recorded pane and lineage, which the runtime getters answer from the
-  // structured registry; there is no terminal to show.
-  //
-  // `agentWait` is deliberately ABSENT rather than null. Null is the contract's "Orca looked and
-  // found no wait", and nothing here looks: a structured worker parks on a journal question item,
-  // which no terminal prompt scan can see. Reporting null would tell a coordinator the worker is
-  // not waiting, which is the one thing the field's own documentation forbids inferring.
+  // Structured registry proves pane/lineage identity without a PTY.
+  // Omit agentWait: terminal scans cannot see journal questions, and null falsely claims no wait.
   const exact = db.isDispatchProcessCurrent({
     dispatchId,
     paneKey: structured.paneKey,

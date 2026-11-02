@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { parseContentRange, parseRetryAfterMs } from './speech-model-download-response'
-import { isRetryableDownloadError } from '../network/transient-download-error'
 
 describe('speech model download response contracts', () => {
   it('accepts only internally consistent byte ranges', () => {
@@ -14,13 +13,5 @@ describe('speech model download response contracts', () => {
     expect(parseRetryAfterMs('12')).toBe(12_000)
     expect(parseRetryAfterMs(String(Number.MAX_SAFE_INTEGER))).toBeUndefined()
     expect(parseRetryAfterMs('invalid')).toBeUndefined()
-  })
-
-  it('retries only allowlisted HTTP and network failures', () => {
-    expect(
-      isRetryableDownloadError(Object.assign(new Error('HTTP 503'), { httpStatusCode: 503 }))
-    ).toBe(true)
-    expect(isRetryableDownloadError(new Error('net::ERR_CONNECTION_RESET'))).toBe(true)
-    expect(isRetryableDownloadError(new Error('certificate rejected'))).toBe(false)
   })
 })

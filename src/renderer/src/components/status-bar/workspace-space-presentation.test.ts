@@ -15,8 +15,7 @@ import {
   isWorkspaceSpaceRowReadyToDelete,
   pruneWorkspaceSpaceSelectedIds,
   resolveWorkspaceSpaceInspectedWorktreeId,
-  resolveWorkspaceSpaceTreemapZoomWorktreeId,
-  sortWorkspaceSpaceRows
+  resolveWorkspaceSpaceTreemapZoomWorktreeId
 } from './workspace-space-presentation'
 import { getWorkspaceSpaceGitStatusRefreshCandidates } from './workspace-space-git-status-order'
 import { getWorkspaceDecisionDetails } from './workspace-space-decision-details'
@@ -115,6 +114,7 @@ function worktreeRecord(overrides: Partial<Worktree> = {}): Worktree {
     head: 'abc123',
     isBare: false,
     isMainWorktree: false,
+    hostId: 'local',
     comment: '',
     linkedIssue: null,
     linkedPR: null,
@@ -171,7 +171,7 @@ describe('workspace space presentation helpers', () => {
     )
     const ssh = getWorkspaceDecisionDetails(
       row({ worktreeId: 'wt', executionHostId: 'ssh:builder' }),
-      inputs
+      { ...inputs, worktreeRecord: worktreeRecord({ hostId: 'ssh:builder' }) }
     )
 
     expect(local.isActive).toBe(true)
@@ -225,37 +225,6 @@ describe('workspace space presentation helpers', () => {
     expect(ssh.changedFileCount).toBe(1)
     expect(isWorkspaceSpaceRowReadyToDelete(localRow, local)).toBe(true)
     expect(isWorkspaceSpaceRowReadyToDelete(sshRow, ssh)).toBe(false)
-  })
-
-  it('sorts rows by the selected key and direction', () => {
-    const rows = [
-      row({ worktreeId: 'small', displayName: 'Small', sizeBytes: 10 }),
-      row({ worktreeId: 'large', displayName: 'Large', sizeBytes: 100 }),
-      row({ worktreeId: 'mid', displayName: 'Mid', sizeBytes: 50 })
-    ]
-
-    expect(sortWorkspaceSpaceRows(rows, 'size', 'desc').map((item) => item.worktreeId)).toEqual([
-      'large',
-      'mid',
-      'small'
-    ])
-    expect(sortWorkspaceSpaceRows(rows, 'name', 'asc').map((item) => item.worktreeId)).toEqual([
-      'large',
-      'mid',
-      'small'
-    ])
-  })
-
-  it('filters by search text and deletable status', () => {
-    const rows = [
-      row({ worktreeId: 'a', displayName: 'Frontend Cache', repoDisplayName: 'app' }),
-      row({ worktreeId: 'b', displayName: 'Main', repoDisplayName: 'api', canDelete: false })
-    ]
-
-    expect(filterWorkspaceSpaceRows(rows, 'cache', false).map((item) => item.worktreeId)).toEqual([
-      'a'
-    ])
-    expect(filterWorkspaceSpaceRows(rows, '', true).map((item) => item.worktreeId)).toEqual(['a'])
   })
 
   it('rejects oversized pasted filters before reading workspace rows', () => {
@@ -336,6 +305,9 @@ describe('workspace space presentation helpers', () => {
     const workspace = row({ worktreeId: 'with-browser', canDelete: true, status: 'ok' })
 
     expect(isWorkspaceSpaceRowReadyToDelete(workspace, ready())).toBe(true)
+    expect(isWorkspaceSpaceRowReadyToDelete(workspace, ready({ canOpenWorkspace: false }))).toBe(
+      false
+    )
     expect(isWorkspaceSpaceRowReadyToDelete(workspace, ready({ browserTabCount: 1 }))).toBe(false)
   })
 
@@ -450,117 +422,6 @@ describe('workspace space presentation helpers', () => {
     )
 
     expect(details.reviewLabel).toBeNull()
-  })
-
-  it('hides only a matching suppressed GitHub review from workspace decisions', () => {
-    const matching = getWorkspaceDecisionDetails(
-      row({ branch: 'refs/heads/feature/local' }),
-      decisionInputs({
-        hostedReviewCache: {
-          'local::repo::feature/local': {
-            data: {
-              provider: 'github',
-              number: 12,
-              state: 'open',
-              status: 'success',
-              title: 'Suppressed PR'
-            }
-          }
-        },
-        worktreeMap: new Map([
-          [
-            'wt',
-            worktreeRecord({
-              branch: 'refs/heads/feature/local',
-              linkedPR: null,
-              suppressedGitHubPR: 12
-            })
-          ]
-        ])
-      })
-    )
-    const different = getWorkspaceDecisionDetails(
-      row({ branch: 'refs/heads/feature/local' }),
-      decisionInputs({
-        hostedReviewCache: {
-          'local::repo::feature/local': {
-            data: {
-              provider: 'github',
-              number: 13,
-              state: 'open',
-              status: 'success',
-              title: 'Different PR'
-            }
-          }
-        },
-        worktreeMap: new Map([
-          [
-            'wt',
-            worktreeRecord({
-              branch: 'refs/heads/feature/local',
-              linkedPR: null,
-              suppressedGitHubPR: 12
-            })
-          ]
-        ])
-      })
-    )
-
-    expect(matching.reviewLabel).toBeNull()
-    expect(different.reviewLabel).toBe('PR #13 Open, success')
-  })
-
-  it('preserves explicit links and non-GitHub reviews in workspace decisions', () => {
-    const cachedReview = {
-      number: 12,
-      state: 'open',
-      status: 'success',
-      title: 'Review'
-    }
-    const explicit = getWorkspaceDecisionDetails(
-      row({ branch: 'refs/heads/feature/local' }),
-      decisionInputs({
-        hostedReviewCache: {
-          'local::repo::feature/local': {
-            data: { ...cachedReview, provider: 'github' }
-          }
-        },
-        worktreeMap: new Map([
-          [
-            'wt',
-            worktreeRecord({
-              branch: 'refs/heads/feature/local',
-              linkedPR: 12,
-              suppressedGitHubPR: 12
-            })
-          ]
-        ])
-      })
-    )
-    const gitLab = getWorkspaceDecisionDetails(
-      row({ branch: 'refs/heads/feature/local' }),
-      decisionInputs({
-        hostedReviewCache: {
-          'local::repo::feature/local': {
-            data: { ...cachedReview, provider: 'gitlab' }
-          }
-        },
-        worktreeMap: new Map([
-          [
-            'wt',
-            worktreeRecord({
-              branch: 'refs/heads/feature/local',
-              linkedPR: null,
-              suppressedGitHubPR: 12,
-              linkedGitLabMR: 12
-            })
-          ]
-        ])
-      })
-    )
-
-    expect(explicit.reviewLabel).toBe('PR #12 Open, success')
-    expect(gitLab.reviewLabel).toBe('PR #12 Open, success')
   })
 
   it('counts migration-unsupported agent entries by worktree id', () => {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainHttpClient } from '../network/http-client'
 
-const netFetchMock = vi.hoisted(() => vi.fn())
-vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
+const fetchMock = vi.fn()
 vi.mock('./grok-auth', () => ({
   readGrokAuthSession: () => {
     throw new Error('Tests must supply synthetic auth')
@@ -10,6 +10,8 @@ vi.mock('./grok-auth', () => ({
 }))
 
 import { fetchGrokRateLimits } from './grok-fetcher'
+
+setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
 
 const START = '2026-09-13T16:33:14.392197+00:00'
 const END = '2026-09-20T16:33:14.392197+00:00'
@@ -44,14 +46,14 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 async function fetchConfig(config: Record<string, unknown>, flat = false) {
-  netFetchMock
+  fetchMock
     .mockResolvedValueOnce(jsonResponse(flat ? config : { config }))
     .mockResolvedValueOnce(jsonResponse({ config: {} }))
   return fetchGrokRateLimits({ authReadResult: AUTH })
 }
 
 describe('Grok weekly zero evidence', () => {
-  beforeEach(() => netFetchMock.mockReset())
+  beforeEach(() => fetchMock.mockReset())
 
   it.each([false, true])('maps the reporter payload with flat=%s', async (flat) => {
     const result = await fetchConfig(REPORTER_CONFIG, flat)
@@ -62,7 +64,7 @@ describe('Grok weekly zero evidence', () => {
       resetsAt: Date.parse(END)
     })
     expect(result.monthly).toBeUndefined()
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([0, '0', '0.00'])('accepts money zero encoded as %s', async (val) => {
@@ -73,7 +75,7 @@ describe('Grok weekly zero evidence', () => {
       prepaidBalance: { val }
     })
     expect(result.weekly?.usedPercent).toBe(0)
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -88,14 +90,14 @@ describe('Grok weekly zero evidence', () => {
     const result = await fetchConfig({ ...REPORTER_CONFIG, onDemandCap: cap })
     expect(result.status).toBe('unavailable')
     expect(result.weekly).toBeNull()
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it.each(['onDemandUsed', 'used'])('does not infer zero beside positive %s', async (field) => {
     const result = await fetchConfig({ ...REPORTER_CONFIG, [field]: { val: '37.5' } })
     expect(result.status).toBe('unavailable')
     expect(result.weekly).toBeNull()
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it.each([
@@ -105,7 +107,7 @@ describe('Grok weekly zero evidence', () => {
   ])('preserves $name zero inference', async ({ config }) => {
     const result = await fetchConfig(config)
     expect(result.weekly?.usedPercent).toBe(0)
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([0, 23, -10, 150])(
@@ -121,7 +123,7 @@ describe('Grok weekly zero evidence', () => {
       })
       expect(result.weekly?.usedPercent).toBe(Math.min(100, Math.max(0, percent)))
       expect(result.monthly).toBeUndefined()
-      expect(netFetchMock).toHaveBeenCalledTimes(1)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
     }
   )
 
@@ -131,7 +133,7 @@ describe('Grok weekly zero evidence', () => {
       const result = await fetchConfig({ ...REPORTER_CONFIG, creditUsagePercent: percent })
       expect(result.status).toBe('unavailable')
       expect(result.weekly).toBeNull()
-      expect(netFetchMock).toHaveBeenCalledTimes(2)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
     }
   )
 
@@ -150,7 +152,7 @@ describe('Grok weekly zero evidence', () => {
     const result = await fetchConfig({ ...REPORTER_CONFIG, ...period })
     expect(result.status).toBe('unavailable')
     expect(result.weekly).toBeNull()
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it.each([0, 25])('keeps a computable monthly pair with used=%s monthly', async (used) => {
@@ -162,13 +164,13 @@ describe('Grok weekly zero evidence', () => {
     expect(result.status).toBe('ok')
     expect(result.weekly).toBeNull()
     expect(result.monthly).toMatchObject({ usedPercent: used, windowMinutes: 43_200 })
-    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([0, '0', -1, 'invalid', null, Infinity, Number.NaN])(
     'rejects invalid monthly denominator %s',
     async (val) => {
-      netFetchMock
+      fetchMock
         .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Fixture' } }))
         .mockResolvedValueOnce(
           jsonResponse({ config: { monthlyLimit: { val }, used: { val: 12 } } })
@@ -177,13 +179,13 @@ describe('Grok weekly zero evidence', () => {
       expect(result.status).toBe('unavailable')
       expect(result.weekly).toBeNull()
       expect(result.monthly).toBeUndefined()
-      expect(netFetchMock).toHaveBeenCalledTimes(2)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
     }
   )
 
   it.each([false, true])('preserves monthly fallback with flat=%s', async (flat) => {
     const config = { monthlyLimit: { val: 200 }, used: { val: 50 }, billingPeriodEnd: END }
-    netFetchMock
+    fetchMock
       .mockResolvedValueOnce(
         jsonResponse({ config: { ...REPORTER_CONFIG, onDemandCap: { val: 250 } } })
       )
@@ -192,23 +194,23 @@ describe('Grok weekly zero evidence', () => {
     expect(result.status).toBe('ok')
     expect(result.weekly).toBeNull()
     expect(result.monthly).toMatchObject({ usedPercent: 25, resetsAt: Date.parse(END) })
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it.each([401, 403, 500])('preserves fallback HTTP %s errors', async (status) => {
-    netFetchMock
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Fixture' } }))
       .mockResolvedValueOnce(jsonResponse({}, status))
     const result = await fetchGrokRateLimits({ authReadResult: AUTH })
     expect(result.status).toBe('error')
     expect(result.error).toContain(`HTTP ${status}`)
-    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('aborts the default billing fallback with the caller signal', async () => {
     const controller = new AbortController()
     let signal: AbortSignal | null | undefined
-    netFetchMock
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Fixture' } }))
       .mockImplementationOnce((_url, init: RequestInit) => {
         signal = init.signal
@@ -217,7 +219,7 @@ describe('Grok weekly zero evidence', () => {
         })
       })
     const pending = fetchGrokRateLimits({ authReadResult: AUTH, signal: controller.signal })
-    await vi.waitFor(() => expect(netFetchMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     controller.abort()
     expect(signal?.aborted).toBe(true)
     expect(await pending).toMatchObject({ status: 'error', error: 'aborted' })

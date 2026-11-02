@@ -29,16 +29,12 @@ export function useRightSidebarTabRouting({
   const rightSidebarRouteRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
+  const setRightSidebarEffectiveTab = useAppStore((s) => s.setRightSidebarEffectiveTab)
 
   const rememberedFolderTabByWorkspaceKeyRef = useRef<Record<string, ActiveRightSidebarTab>>({})
   const lastRightSidebarRouteRequestIdRef = useRef(rightSidebarRouteRequestId)
 
-  // If the active tab is hidden (e.g. switched from a folder workspace to a git
-  // worktree), render a visible fallback without overwriting the stored route.
-  // Folder workspaces keep a session-local effective-tab memory so a PR Checks
-  // row can open a child Checks tab without erasing the parent's overview tab.
-  // Why: pass the installed-panel set so a persisted tab for an UNINSTALLED
-  // plugin drops to Explorer instead of surviving as a dead route.
+  // Preserve stored routes when hidden; folder effective-tab memory keeps parent overviews, while authoritative installed-panel keys discard uninstalled plugin routes.
   const normalizedActiveTab = normalizeRightSidebarRoute(rightSidebarTab, undefined, {
     installedPluginTabKeys:
       pluginSystemEnabled && pluginFetchStatus === 'ready' ? installedPluginTabKeys : undefined
@@ -65,6 +61,12 @@ export function useRightSidebarTabRouting({
     normalizedTab: normalizedActiveTab,
     setStoredTab: setRightSidebarTab
   })
+
+  // Watch the displayed panel, including fallbacks for hidden stored tabs.
+  useEffect(() => {
+    setRightSidebarEffectiveTab(effectiveTab)
+  }, [effectiveTab, setRightSidebarEffectiveTab])
+  useEffect(() => () => setRightSidebarEffectiveTab(null), [setRightSidebarEffectiveTab])
 
   useEffect(() => {
     lastRightSidebarRouteRequestIdRef.current = rightSidebarRouteRequestId

@@ -1,6 +1,6 @@
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { readFile, realpath, stat } from 'node:fs/promises'
-import { join, posix } from 'node:path'
+import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../shared/gitdir-marker-payload'
@@ -59,16 +59,12 @@ export async function listWorktreesUnshared(
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
-    // Why: don't swallow git-compat/repo-state failures — else they resurface as opaque "created but not found in listing" errors.
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
 }
 
-/**
- * The two failures where an empty listing is the repo's true answer, not a broken scan: the repo
- * path is gone, or it is not a Git repo. Every other failure means the scan could not read Git.
- */
+/** Only a missing path or confirmed non-repo permits an authoritative empty listing. */
 async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
   if (getErrorCode(err) === 'ENOENT') {
     try {
@@ -97,14 +93,7 @@ export async function listWorktreesStrict(
   return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
 }
 
-/**
- * Strict except for the two true empties above.
- *
- * Why: a Git or host failure (dead WSL distro, hung mount) softened to `[]` reaches the detected
- * listing as an *authoritative* empty scan, which then permanently prunes the repo's worktrees and
- * the agent tabs attached to them. Rejecting keeps that listing non-authoritative, while a deleted
- * repo still reports empty so real removals prune.
- */
+/** Reject scan failures to prevent pruning valid worktrees and tabs; confirmed missing/non-repos return []. */
 export async function listWorktreesStrictAllowingTrueEmpty(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
@@ -144,7 +133,6 @@ export async function annotateSparseCheckoutStatus(
     }
   }
 
-  // Why: cap concurrency so status-poll refreshes don't fan out many sparse-checkout filesystem probes at once.
   const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
   await waitForPromiseWithSignal(
     Promise.all(Array.from({ length: workerCount }, () => detectNext())),
@@ -154,14 +142,7 @@ export async function annotateSparseCheckoutStatus(
   return annotated
 }
 
-/**
- * The repo's common dir from the filesystem, as a second opinion on Git's own reading.
- *
- * Deadlined because a `.git` on a hung mount (dead NFS/SSHFS, stalled WSL 9p) never rejects, and an
- * unbounded read here would leave the whole create IPC pending instead of failing like it used to.
- *
- * A missing `.git` is a real "no candidate"; every other read failure is unverifiable and rejects.
- */
+/** Bound the disk witness on hung mounts; absent .git returns undefined, other read failures reject. */
 async function readRepoCommonDirFromDisk(
   repoPath: string,
   timeoutMs: number
@@ -201,17 +182,13 @@ async function resolveRepoCommonDirFromDisk(
   return readCommonDirMarker(gitDir)
 }
 
-/**
- * A marker target that is missing or is not a directory is unverifiable, not an absent `.git`:
- * without this, `commondir`'s own ENOENT/ENOTDIR would pass as absence and hand the caller the
- * pointer target as a common dir it never proved exists.
- */
+/** Reject unreadable marker targets before commondir absence can be mistaken for a bare repo. */
 async function assertGitDirIsDirectory(gitDir: string): Promise<void> {
   let gitDirStats
   try {
     gitDirStats = await stat(gitDir)
   } catch (error) {
-    // Rewrapped so the outer absence check cannot read this errno as a bare repo's missing `.git`.
+    // Hide this errno from the outer missing-.git check.
     throw new Error(`gitdir marker target unreadable: ${gitDir}`, { cause: error })
   }
   if (!gitDirStats.isDirectory()) {
@@ -249,58 +226,27 @@ async function canonicalizeLocalPath(pathValue: string): Promise<string> {
   try {
     return await realpath(pathValue)
   } catch {
-    // A path Git reported from another execution space (WSL, SSH) has no local inode.
+    // Paths from another execution space may have no local inode.
     return pathValue
   }
 }
 
-/**
- * Whether the created worktree's common dir names the same object store as the repo.
- *
- * Why accept any candidate: the readings come from different spaces — Git resolves symlinks and,
- * under WSL, answers in Linux paths, while the filesystem walk keeps the caller's (possibly UNC)
- * spelling. Comparing only one rejected every symlinked-root, WSL, and bare-repo create (#16520).
- */
+/** Git and disk witnesses may differ through symlinks or WSL path spelling; accept any matching candidate. */
 async function isSameRepoCommonDir(
   createdCommonDir: string,
   candidates: readonly (string | undefined)[]
 ): Promise<boolean> {
   const present = candidates.filter((candidate): candidate is string => Boolean(candidate))
-  if (present.some((candidate) => isSameCommonDirPath(createdCommonDir, candidate))) {
+  if (present.some((candidate) => areWorktreePathsEqual(createdCommonDir, candidate))) {
     return true
   }
   const [canonicalCreated, ...canonicalCandidates] = await Promise.all(
     [createdCommonDir, ...present].map(canonicalizeLocalPath)
   )
-  return canonicalCandidates.some((candidate) => isSameCommonDirPath(canonicalCreated, candidate))
+  return canonicalCandidates.some((candidate) => areWorktreePathsEqual(canonicalCreated, candidate))
 }
 
-/**
- * Why not areWorktreePathsEqual alone: it folds case for every path once the host is Windows, so on
- * a Windows desktop two WSL repos differing only in case would be accepted as the same object store.
- */
-export function isSameCommonDirPath(
-  left: string,
-  right: string,
-  platform = process.platform
-): boolean {
-  const leftIsPosix = isPosixAbsolutePath(left)
-  if (leftIsPosix || isPosixAbsolutePath(right)) {
-    return leftIsPosix && isPosixAbsolutePath(right) && posix.resolve(left) === posix.resolve(right)
-  }
-  return areWorktreePathsEqual(left, right, platform)
-}
-
-function isPosixAbsolutePath(pathValue: string): boolean {
-  return pathValue.startsWith('/') && !pathValue.startsWith('//')
-}
-
-/**
- * Reconstruct the listing row for a worktree `git worktree add` just created, by asking Git about
- * the worktree itself. Used when the listing fails or omits it, so a create does not abandon a
- * worktree Git already wrote to disk (#16520). Returns undefined unless Git resolves the path into
- * this repo's object store with the expected branch checked out.
- */
+/** Recover an omitted listing row only when Git confirms the expected branch, HEAD and repo object store. */
 export async function describeCreatedWorktree(
   repoPath: string,
   worktreePath: string,
@@ -308,7 +254,7 @@ export async function describeCreatedWorktree(
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo | undefined> {
   const expectedRef = `refs/heads/${normalizeLocalBranchRef(branch)}`
-  // Bound Git recovery after the bounded listing failed; filesystem canonicalization stays best effort.
+  // Bound Git recovery separately; filesystem canonicalization remains best effort.
   const deadlined: GitWorktreeExecOptions = {
     ...options,
     timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
@@ -319,13 +265,11 @@ export async function describeCreatedWorktree(
     readCheckedOutBranchRef(worktreePath, deadlined),
     readWorktreeHeadOid(worktreePath, deadlined)
   ])
-  // An unreadable HEAD means Git could not confirm the worktree, so report nothing rather than a blank OID.
   if (!created || checkedOutRef !== expectedRef || !head) {
     return undefined
   }
   if (!(await isSameRepoCommonDir(created.commonDir, [repoGitCommonDir]))) {
-    // Only now read the second opinion from disk: a `.git` on a hung mount pins a threadpool thread
-    // that no deadline can reclaim, so never pay that on the path where Git already agreed.
+    // Defer disk witnesses: a hung mount can pin a threadpool thread even after the deadline.
     const repoDiskCommonDir = await readRepoCommonDirFromDisk(
       repoPath,
       deadlined.timeout ?? WORKTREE_LIST_TIMEOUT_MS
@@ -342,7 +286,6 @@ export async function describeCreatedWorktree(
         head,
         branch: expectedRef,
         isBare: false,
-        // `git worktree add` only ever produces a linked worktree.
         isMainWorktree: false
       }
     ],

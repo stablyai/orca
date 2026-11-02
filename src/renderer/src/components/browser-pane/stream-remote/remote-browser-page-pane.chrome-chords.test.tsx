@@ -9,8 +9,7 @@ import {
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
 
-// Everything the streamed pane wraps is inert here; this suite is about which chords the pane
-// answers itself instead of forwarding to the remote page as raw keystrokes.
+// Keep runtime effects inert to isolate pane-owned chords from forwarded keystrokes.
 const mocks = vi.hoisted(() => ({
   runRemoteNavigation: vi.fn(async () => {}),
   handleRemoteScreenshotKeyDown: vi.fn(),
@@ -103,8 +102,7 @@ vi.mock('./use-remote-browser-page-navigation', () => ({
   })
 }))
 
-// The real viewport hands the screencast <img> the key handler that forwards keystrokes to the
-// host; keeping that wiring is what makes "no longer forwarded" a real assertion.
+// Retain the viewport’s real forwarding hook so assertions detect chords reaching the host.
 vi.mock('./remote-browser-page-viewport', () => ({
   RemoteBrowserPageViewport: ({
     remoteViewportRef,
@@ -136,8 +134,7 @@ vi.mock('./remote-browser-page-viewport', () => ({
 import { RemoteBrowserPagePane } from './remote-browser-page-pane'
 
 beforeEach(() => {
-  // Why: the chords are Cmd on macOS and Ctrl everywhere else, so the platform cannot be left to
-  // whatever the test runner reports.
+  // Pin macOS to exercise Cmd chords independently of the runner.
   Object.defineProperty(navigator, 'userAgent', {
     configurable: true,
     value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
@@ -147,12 +144,13 @@ beforeEach(() => {
   mocks.viewportRenders.current = 0
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { ui: { onFocusBrowserAddressBar: () => () => {} } }
+    value: {
+      ui: { onFocusBrowserAddressBar: () => () => {}, onShowBrowserHistory: () => () => {} }
+    }
   })
 })
 
-// isActive stays true for the active tab of every split group, so the scope is what separates the
-// focused pane from a background one (#11348).
+// Every split has an active tab; shortcut scope identifies the focused pane.
 function renderPane(chromeShortcutScope: BrowserChromeShortcutScope = 'focused'): HTMLElement {
   return render(
     <TooltipProvider>
@@ -183,8 +181,7 @@ describe('streamed browser pane chrome chords', () => {
     })
 
     expect(mocks.runRemoteNavigation).toHaveBeenCalledWith('browser.reload')
-    // Why: browser.keypress dispatches into the page, which cannot drive Chrome's reload — the
-    // forwarded chord was a silent no-op.
+    // Forwarded CDP key events cannot drive Chrome’s reload control.
     expect(mocks.handleRemoteScreenshotKeyDown).not.toHaveBeenCalled()
   })
 
@@ -234,8 +231,7 @@ describe('streamed browser pane chrome chords', () => {
     expect(mocks.runRemoteNavigation).not.toHaveBeenCalled()
   })
 
-  // Why: #11348 — a streamed pane in a background split is still isActive, so gating on isActive
-  // would swallow the chord out from under a focused terminal in the sibling split.
+  // isActive also holds in background splits; only the focused split may consume chords.
   it('leaves find to the focused split when this pane is not the focused one', () => {
     renderPane('inactive')
     const event = new KeyboardEvent('keydown', {
@@ -298,6 +294,24 @@ describe('streamed browser pane chrome chords', () => {
 
     expect(event.defaultPrevented).toBe(false)
     expect(mocks.runRemoteNavigation).not.toHaveBeenCalled()
+  })
+
+  it('walks remote history with the mouse side buttons and keeps the outer browser from following', () => {
+    renderPane()
+    const press = (type: 'mousedown' | 'mouseup', button: number): MouseEvent => {
+      const event = new MouseEvent(type, { button, bubbles: true, cancelable: true })
+      act(() => {
+        screen.getByTestId('frame').dispatchEvent(event)
+      })
+      return event
+    }
+
+    expect(press('mousedown', 3).defaultPrevented).toBe(true)
+    expect(press('mouseup', 3).defaultPrevented).toBe(true)
+    press('mouseup', 4)
+    press('mouseup', 0)
+
+    expect(mocks.runRemoteNavigation.mock.calls).toEqual([['browser.back'], ['browser.forward']])
   })
 
   it('walks remote history from the address bar only inside its own overlay when no split is focused', () => {
@@ -373,8 +387,7 @@ describe('streamed browser pane chrome chords', () => {
     }
   })
 
-  // Why: OS key repeat fires keydown per repeat, and re-setting the notice would re-render the
-  // screencast image each time.
+  // Repeated find notices would re-render the screencast on every OS key repeat.
   it('does not re-render the viewport while the find chord is held down', () => {
     renderPane()
     act(() => {

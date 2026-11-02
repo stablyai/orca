@@ -14,8 +14,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Duplex } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
-import type { SshConnection } from './ssh-connection'
+import { spawnProcess } from '@orca/process-host'
+import type { SshConnection } from './connection/ssh-connection'
 import {
   EXEC_STDIN_WRITE_DONE,
   makeExecStdinWriteFileCommand,
@@ -24,7 +24,7 @@ import {
   writeStringViaExecStdin
 } from './ssh-exec-stdin-file-transfer'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import { makePosixWriteFileCommand } from './system-ssh-file-binary-transfer'
+import { makePosixWriteFileCommand } from './system-transport/system-ssh-file-binary-transfer'
 
 const directories: string[] = []
 afterEach(() => {
@@ -48,8 +48,7 @@ function localShellConnection(rewrite: (command: string) => string = (c) => c): 
         autoDestroy: false,
         emitClose: false,
         read() {},
-        // Why no error is forwarded: ssh2 silently drops writes once the remote side stops reading,
-        // so EPIPE here would race the exit code and fail the upload for the wrong reason.
+        // Model ssh2 dropping writes after remote stdin closes; local EPIPE must not mask the host exit failure.
         write(chunk, encoding, callback) {
           if (child.stdin.destroyed) {
             callback()

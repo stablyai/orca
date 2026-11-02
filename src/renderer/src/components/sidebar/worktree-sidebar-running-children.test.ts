@@ -1,5 +1,4 @@
-// The worktree sidebar and the chat's strip list running children only, by one rule, whichever
-// source they read them from, an older host's own task roster included.
+// Require sidebar and chat-strip running-child parity, including legacy host rosters.
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -88,9 +87,7 @@ describe('the worktree sidebar lists running children only', () => {
     expect(row?.childRow?.displayState).toBe('monitoring')
   })
 
-  // A terminal agent's hook roster holds live children only: its finished child left the roster on
-  // its own stop, so the sidebar has none to list. Every child it does hold runs, and all of them
-  // show, a teammate between turns and a child gone quiet included.
+  // Legacy terminal hook rosters remove finished children; every retained child remains listed even between turns.
   it("lists every child a terminal agent's hook roster holds", () => {
     const subagents: AgentSubagentSnapshot[] = [
       { id: 'working', state: 'working', startedAt: NOW, description: 'Working child' },

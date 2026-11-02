@@ -1,12 +1,10 @@
-// Launch/install plumbing for the guest-resident WSL agent-hook relay:
-// bundle resolution on the Windows side, the guest launch/install scripts,
-// and the sentinel wait that turns a wsl.exe child's stdio into a
-// MultiplexerTransport. Kept separate from the manager so the state machine
-// stays readable. See docs/agent-status-over-wsl.md (STA-1515).
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
+import { withWslGuestLauncherRevision } from '../wsl/wsl-guest-launcher-revision'
+import { orcadPosixNodeRuntimeGlobs } from '../managed-server/install/orcad-node-runtime-globs'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
@@ -16,8 +14,9 @@ import {
 } from './wsl-hook-relay-sentinel'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
-import { listRunningWslDistrosAsync } from '../wsl'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
   WSL_HOOK_RELAY_DIR,
@@ -38,37 +37,32 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
     const versionPath = join(dir, WSL_HOOK_RELAY_VERSION_FILE)
     if (existsSync(jsPath) && existsSync(versionPath)) {
       const version = readFileSync(versionPath, 'utf8').trim()
-      // Why: the version lands inside single-quoted guest shell text and in
-      // a guest path segment — refuse anything outside the safe alphabet.
+      // Versions become shell literals and path segments; accept only a safe alphabet.
       if (/^[A-Za-z0-9+.-]+$/.test(version)) {
-        return { jsPath, version }
+        return { jsPath, version: withWslGuestLauncherRevision(version, buildGuestLaunchScript) }
       }
     }
   }
   return null
 }
 
-// Why: the install dir is namespaced by bundle version so concurrent Orca
-// instances with different bundles (dev + prod) never reinstall over each
-// other; each instance launches exactly the version it shipped.
+// Versioned directories keep parallel Orca builds from overwriting each other.
 function guestRelayDirExpr(version: string): string {
   return `$HOME/${WSL_HOOK_RELAY_DIR}/${version}`
 }
 
-/** Guest launcher, installed alongside the bundle. The `.version` marker is
- *  written last by the installer, so the check rejects partial installs;
- *  node resolution probes each candidate's version because `sh -c` does not
- *  source interactive profiles (an apt node 12 on PATH must not shadow an
- *  nvm node 20 off PATH). */
+/** Probe candidate Node versions: noninteractive sh may miss a newer nvm installation. */
 export function buildGuestLaunchScript(version: string): string {
   const dir = guestRelayDirExpr(version)
+  // A WSL host distro may have no system node but usually has orcad's pinned runtime.
+  const [orcadRuntime, orcadMachineRuntimes] = orcadPosixNodeRuntimeGlobs()
   return [
     '#!/bin/sh',
     `d="${dir}"`,
     `v="$(cat "$d/${WSL_HOOK_RELAY_VERSION_FILE}" 2>/dev/null || true)"`,
     `[ -n "$${WSL_HOOK_RELAY_VERSION_ENV}" ] && [ "$v" = "$${WSL_HOOK_RELAY_VERSION_ENV}" ] || exit ${WSL_HOOK_RELAY_STALE_EXIT_CODE}`,
     'n=""',
-    'for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node"; do',
+    `for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node" ${orcadRuntime} ${orcadMachineRuntimes}; do`,
     '  [ -n "$c" ] && [ -x "$c" ] || continue',
     `  if "$c" -e 'process.exit(Number(process.versions.node.split(".")[0])>=18?0:1)' 2>/dev/null; then`,
     '    n="$c"',
@@ -81,10 +75,7 @@ export function buildGuestLaunchScript(version: string): string {
   ].join('\n')
 }
 
-/** Idempotent install script, piped to `sh -s` over stdin. Heredocs with
- *  quoted delimiters carry the bundle (base64) and launcher verbatim, so no
- *  argv quoting crosses the wsl.exe boundary. Tmp names carry the guest PID
- *  so same-version concurrent installs cannot corrupt each other. */
+/** Quoted heredocs avoid cross-boundary argv quoting; PID temp names isolate concurrent installs. */
 export function buildGuestInstallScript(bundleJs: Buffer, version: string): string {
   const b64 = bundleJs.toString('base64').replace(/(.{1,120})/g, '$1\n')
   return [
@@ -101,7 +92,7 @@ export function buildGuestInstallScript(bundleJs: Buffer, version: string): stri
     'ORCA_EOF_LAUNCH',
     'mv "$d/launch.$$.tmp" "$d/launch.sh"',
     'chmod 700 "$d/launch.sh"',
-    // Version marker last: a partial install stays "stale" and reinstalls.
+    // Publish the version marker after the bundle and launcher are ready.
     `printf '%s' '${version}' > "$d/${WSL_HOOK_RELAY_VERSION_FILE}"`,
     ''
   ].join('\n')
@@ -111,57 +102,33 @@ export function spawnWslRelayProcess(
   distro: string,
   env: NodeJS.ProcessEnv,
   version: string
-): ChildProcessWithoutNullStreams {
-  // Why: --exec bypasses the distro's default login shell — a bare `--`
-  // routes through it (a fish/nushell chsh could mangle the command) and
-  // triggers wsl.exe's `$`-preprocessing of Windows argv. --exec passes argv
-  // verbatim (same form as the Codex WSL login spawn), so `$HOME` reaches
-  // sh unescaped and expands guest-side.
+): PipedChildProcess {
+  // --exec bypasses login-shell rewriting and passes $HOME verbatim for guest-side expansion.
   const command = `exec sh "${guestRelayDirExpr(version)}/launch.sh"`
-  return spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-c', command], {
+  return spawnProcess({
+    program: resolveWslExecutablePath(),
+    args: buildWslExecArgs(distro, ['sh', '-c', command]),
     env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
-    // Why explicit (#16463): the guest path is in `command`, so the Windows cwd
-    // only decides whether CreateProcessW succeeds -- and an inherited one is a
-    // worktree the user can delete, which kills every later relay launch.
+    stdio: 'pipe',
+    // Use a stable Windows cwd so deleting the current worktree cannot break later relay launches.
     cwd: resolveWslInteropSpawnCwd()
   })
-}
-
-/** True when the distro shows in `wsl --list --running`. Listing does NOT
- *  boot anything — unlike `wsl -d`, which starts a stopped distro. The
- *  restart timer must check this so relay recovery never resurrects a VM the
- *  user shut down with `wsl --shutdown`. Fails CLOSED (false) on probe
- *  errors: booting a VM the user shut down is worse than a skipped restart
- *  (the next WSL PTY spawn re-ensures), and a wsl.exe too wedged to list
- *  distros would not have launched the relay anyway. */
-export function isWslDistroRunning(distro: string): Promise<boolean> {
-  const wanted = distro.trim().toLowerCase()
-  return listRunningWslDistrosAsync().then((running) =>
-    running.some((candidate) => candidate.toLowerCase() === wanted)
-  )
 }
 
 export async function runWslInstallProcess(
   distro: string,
   script: string,
-  // Unused: the install script embeds its own version/paths and reads
-  // nothing from the crossed guest environment.
+  // Guest paths and version are embedded in the script rather than crossed through env.
   _env: NodeJS.ProcessEnv
 ): Promise<{ code: number | null; stderr: string }> {
   const result = await runWslProcess({
     distro,
     loginPath: 'none',
     script,
-    // Declared because the payload is opaque here: it is POSIX plus a heredoc.
     shell: 'sh',
     timeoutMs: INSTALL_TIMEOUT_MS
-    // No maxOutputBytes: the default cap holds the whole stream so the slice
-    // below can take the end of it.
   })
-  // Tail, not head: the operative error ("mv: Read-only file system") lands
-  // after whatever apt and base64 already printed.
+  // Keep the tail, where install failures follow startup output.
   const stderr = result.stderr.slice(-MAX_STARTUP_BUFFER_BYTES)
   return result.timedOut
     ? { code: null, stderr: `${stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }
@@ -178,11 +145,7 @@ export type WslRelayLaunchIo = {
   transientRetryDelayMs: number
 }
 
-/** Spawn → sentinel → connect, with the guest-install/retry policy: stale or
- *  missing installs get exactly one streamed reinstall, wsl.exe's transient
- *  "Catastrophic failure (E_UNEXPECTED)" gets a bounded retry, a distro
- *  without node >= 18 reports through `onNoNode`. Terminal failures report
- *  through `onFailure`; non-startup errors propagate to the caller. */
+/** Reinstall once on startup failure, retry transient WSL failures, and report missing Node separately. */
 export async function launchWslRelayWithInstall(options: {
   distro: string
   env: NodeJS.ProcessEnv
@@ -190,10 +153,10 @@ export async function launchWslRelayWithInstall(options: {
   version: string
   io: WslRelayLaunchIo
   isDisposed: () => boolean
-  onChild: (child: ChildProcessWithoutNullStreams) => void
+  onChild: (child: PipedChildProcess) => void
   onNoNode: () => void
   onFailure: (message: string) => void
-  connect: (transport: MultiplexerTransport, child: ChildProcessWithoutNullStreams) => Promise<void>
+  connect: (transport: MultiplexerTransport, child: PipedChildProcess) => Promise<void>
 }): Promise<void> {
   const { distro, env, bundleJsPath, version, io } = options
   let installTried = false
@@ -209,8 +172,7 @@ export async function launchWslRelayWithInstall(options: {
       await options.connect(transport, child)
       return
     } catch (err) {
-      // Why before the failure triage: once disposed, the guest install and retries below are
-      // work the caller no longer wants — the "failure" is usually our own teardown kill.
+      // Teardown failures must not trigger unwanted guest installs or retries.
       if (options.isDisposed()) {
         return
       }
@@ -253,10 +215,7 @@ export function formatWslRelayFailure(failure: WslRelayStartupFailure): string {
   return `startup failed (${failure.kind}, code ${failure.code ?? 'unknown'})${detail ? `: ${detail}` : ''}`
 }
 
-/** Env for the relay's wsl.exe spawn: the live hook coordinates, the
- *  host-expected bundle version, and the stable instance key, all crossed
- *  via WSLENV. WSL_UTF8 keeps wsl.exe's own error text (e.g. "Catastrophic
- *  failure") UTF-8 so stderr matching and breadcrumbs stay readable. */
+/** WSLENV carries coordinates and instance/version identity; WSL_UTF8 keeps failure text readable. */
 export function buildWslRelaySpawnEnv(
   coords: Record<string, string>,
   bundleVersion: string,
@@ -272,8 +231,7 @@ export function buildWslRelaySpawnEnv(
     [WSL_HOOK_RELAY_VERSION_ENV]: bundleVersion,
     [WSL_HOOK_RELAY_INSTANCE_ENV]: instanceKey
   }
-  // Why: the relay derives its own guest endpoint path; a /p-translated
-  // Windows endpoint here would only add WSLENV noise.
+  // The guest derives its endpoint path; do not translate the Windows endpoint through WSLENV.
   delete env.ORCA_AGENT_HOOK_ENDPOINT
   addOrcaWslInteropEnv(env as Record<string, string>)
   return env

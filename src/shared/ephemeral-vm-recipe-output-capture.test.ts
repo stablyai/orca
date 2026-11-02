@@ -7,7 +7,7 @@ import {
   DEFAULT_MAX_CAPTURE_BYTES,
   runRecipeCommand
 } from './ephemeral-vm-recipe-process'
-import { GrowingByteBuffer } from './growing-byte-buffer'
+import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -97,10 +97,7 @@ function fakeCommand(maxCaptureBytes?: number, signal?: AbortSignal) {
   return { child, result, stdoutChunks, stderrChunks }
 }
 
-/**
- * Counts the bytes the capture moves, scoped to our own buffer class: a spy on Buffer itself would
- * also see unrelated allocations in the same tick and make the budget assertions flaky.
- */
+/** Count only our buffer’s moves; global Buffer spies capture unrelated same-tick allocations and destabilize budgets. */
 function countCaptureWork() {
   const appendedValues: (Buffer | Uint8Array)[] = []
   const counts = { appendedBytes: 0, decodedBytes: 0, decodeCalls: 0 }
@@ -198,8 +195,7 @@ describe('recipe output capture', () => {
     // Callbacks still see exactly what setEncoding('utf8') produced, split character by character.
     expect(fixture.stdoutChunks.join('')).toBe(`${stdoutBytes.toString()}��(�`)
     expect(fixture.stderrChunks.join('')).toBe(stderrBytes.toString())
-    // The tail is now the last 9 raw bytes rather than the last 9 bytes of re-encoded replacement
-    // characters, so malformed output keeps more of what the recipe actually wrote.
+    // Keep raw tail bytes instead of re-encoded replacement characters, retaining more actual malformed output.
     expect(result).toEqual({
       stdout: rawByteTail(Buffer.concat([stdoutBytes, malformed]), 9),
       stderr: rawByteTail(stderrBytes, 9),

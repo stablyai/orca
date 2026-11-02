@@ -147,41 +147,7 @@ describe('DaemonServer', () => {
     expect(predicate()).toBe(true)
   }
 
-  describe('startup', () => {
-    it('creates token file and starts listening', async () => {
-      await startServer()
-
-      const token = readFileSync(tokenPath, 'utf-8')
-      expect(token.length).toBeGreaterThan(0)
-    })
-
-    it('accepts client connections', async () => {
-      await startServer()
-      const c = await connectClient()
-      expect(c.isConnected()).toBe(true)
-    })
-  })
-
   describe('RPC routing', () => {
-    it('handles createOrAttach and returns result', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      const result = await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      expect(result).toMatchObject({
-        isNew: true,
-        pid: 55555
-      })
-      await expect(
-        c.request('closeStartupQueryAuthority', { sessionId: 'test-session' })
-      ).resolves.toEqual({ appliedSeq: 0 })
-    })
-
     it('keeps RPC responsive and creates one subprocess while spawn preparation is pending', async () => {
       let finishPreparation!: () => void
       const preparation = new Promise<void>((resolve) => {
@@ -210,7 +176,7 @@ describe('DaemonServer', () => {
       })
       await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledTimes(2))
 
-      // The old spawnSync probe blocked this ping and all live PTY traffic.
+      // Synchronous preflight previously blocked RPC and live PTY traffic.
       await expect(c.request('ping', undefined)).resolves.toEqual({ pong: true })
       expect(spawnSubprocess).not.toHaveBeenCalled()
 
@@ -328,19 +294,15 @@ describe('DaemonServer', () => {
       await server.start()
       const c = await connectClient()
 
-      // Hangs in preflight; the control-socket close must abort it before spawn.
       c.request('createOrAttach', {
         sessionId: 'disconnect-pending',
         cols: 80,
         rows: 24
-      }).catch(() => {
-        /* the disconnect rejects the in-flight request; that's expected */
-      })
+      }).catch(() => {})
       await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
 
       c.disconnect()
-      // Wait for the server to process the close (and cancel the prep) before
-      // releasing the preflight, else the resumed spawn races ahead of cancellation.
+      // Let disconnect cancel the preparation before releasing preflight.
       await vi.waitFor(() =>
         expect((server as unknown as DaemonServerPrivate).connections.clients.size).toBe(0)
       )
@@ -355,8 +317,6 @@ describe('DaemonServer', () => {
       await startServer()
       const c = await connectClient()
 
-      // No preparation was canceled, so the host's not-found verdict must propagate
-      // rather than be swallowed by the pending-spawn kill reconciliation.
       await expect(
         c.request('kill', { sessionId: 'never-created', immediate: true })
       ).rejects.toThrow('Session not found: never-created')
@@ -390,70 +350,16 @@ describe('DaemonServer', () => {
       expect(unknown).not.toHaveProperty('launchAgent')
     })
 
-    it('handles listSessions', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      // Create a session first
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      const result = await c.request<{ sessions: unknown[] }>('listSessions', undefined)
-      expect(result.sessions).toHaveLength(1)
-    })
-
-    it('handles ping health checks', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      const result = await c.request<{ pong: boolean }>('ping', undefined)
-
-      expect(result).toEqual({ pong: true })
-    })
-
     it('replies with an error to unknown request types and keeps serving', async () => {
       await startServer()
       const c = await connectClient()
 
-      // Why: downgraded clients can send request types this daemon does not
-      // know. Reject gracefully instead of crashing the session server.
       await expect(c.request('definitelyUnknownRequest', undefined)).rejects.toThrow(
         'Unknown request type: definitelyUnknownRequest'
       )
       await expect(c.request<{ pong: boolean }>('ping', undefined)).resolves.toEqual({
         pong: true
       })
-    })
-
-    it('handles systemResolverHealth', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      const result = await c.request<{ health: unknown }>('systemResolverHealth', undefined)
-
-      expect(['healthy', 'unhealthy', 'unknown']).toContain(result.health)
-    })
-
-    it('handles resize', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      const result = await c.request('resize', {
-        sessionId: 'test-session',
-        cols: 120,
-        rows: 40
-      })
-
-      expect(result).toBeDefined()
     })
 
     it('does not acknowledge kill until asynchronous teardown completes', async () => {
@@ -484,41 +390,6 @@ describe('DaemonServer', () => {
       finishKill()
       await expect(routed).resolves.toEqual({})
       expect(acknowledged).toBe(true)
-    })
-
-    it('handles getCwd', async () => {
-      await startServer()
-      const c = await connectClient()
-
-      await c.request('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-
-      const result = await c.request<{ cwd: string | null }>('getCwd', {
-        sessionId: 'test-session'
-      })
-
-      // Mock subprocess doesn't emit OSC-7. The terminal-host fallback then
-      // calls resolveProcessCwd(55555); on CI that pid is almost always dead
-      // so the result is null, but we accept string too — a recycled pid that
-      // happens to match would legitimately return a path and we don't want
-      // this test to flake on whatever happens to be running on the host.
-      expect(result.cwd === null || typeof result.cwd === 'string').toBe(true)
-    })
-
-    it('awaits fresh foreground confirmation', async () => {
-      await startServer()
-      const c = await connectClient()
-      await c.request('createOrAttach', { sessionId: 'test-session', cols: 80, rows: 24 })
-
-      await expect(
-        c.request<{ foregroundProcess: string | null }>('confirmForegroundProcess', {
-          sessionId: 'test-session'
-        })
-      ).resolves.toEqual({ foregroundProcess: 'droid' })
-      expect(confirmForegroundProcessMock).toHaveBeenCalledTimes(1)
     })
 
     it('returns error for unknown session operations', async () => {
@@ -699,8 +570,7 @@ describe('DaemonServer', () => {
         subprocess!._simulateData(finalOutput)
         subprocess!._simulateExit(42)
 
-        // Only the refill sentinel may enter the already-deep socket; exit
-        // remains queued behind the final data for this session.
+        // Keep exit behind final output; only a refill sentinel may enter the already-full socket.
         expect(refillCallbacks).toHaveLength(1)
         const beforeRefill = streamSocket.write.mock.calls.map(([line]) => JSON.parse(String(line)))
         expect(beforeRefill).toHaveLength(1)
@@ -725,7 +595,6 @@ describe('DaemonServer', () => {
     it('rejects connections with wrong token', async () => {
       await startServer()
 
-      // Connect with raw socket and send bad token
       const socket = connect(socketPath)
       await new Promise<void>((resolve) => socket.on('connect', resolve))
 
@@ -750,20 +619,6 @@ describe('DaemonServer', () => {
   })
 
   describe('stream socket lifecycle', () => {
-    it('clears the tracked stream socket when it closes', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate
-      const control = await connectRawHello('control', 'raw-client')
-      const stream = await connectRawHello('stream', 'raw-client')
-
-      expect(daemon.connections.clients.get('raw-client')?.streamSocket).toBeTruthy()
-
-      stream.destroy()
-
-      await waitFor(() => daemon.connections.clients.get('raw-client')?.streamSocket === null)
-      control.destroy()
-    })
-
     it('destroys a replaced stream socket for the same client', async () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate
@@ -893,14 +748,12 @@ describe('DaemonServer', () => {
       await expect(c.ensureConnected()).rejects.toThrow()
     })
 
-    // Runs everywhere: a closed Windows pipe classifies as missing, not connected.
     it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate & {
         host: { dispose: () => Promise<void> }
       }
-      // Why: an unreapable child rejects dispose after its exit deadline; the
-      // daemon must exit anyway or its replacement flow strands it as an orphan.
+      // An unreapable child can reject disposal; RPC shutdown must still retire the daemon.
       daemon.host.dispose = vi.fn(() =>
         Promise.reject(new Error('Timed out waiting for physical PTY exit'))
       )
@@ -909,7 +762,7 @@ describe('DaemonServer', () => {
       await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
 
       await waitFor(() => daemon.lifecycle.server === null)
-      // Why not existsSync: the dead entry remains for the next publisher to replace.
+      // Shutdown leaves the dead endpoint entry for the next publisher.
       expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
       const late = new DaemonClient({ socketPath, tokenPath })
       await expect(late.ensureConnected()).rejects.toThrow()

@@ -7,6 +7,7 @@ import {
   createBrowserClientPageRetainedRoot,
   createBrowserClientPageWebview,
   hasBrowserClientPageAttachedGuest,
+  hideRetainedHostWhileGuestIsBlank,
   readBrowserClientPageAttachedGuestId
 } from './browser-client-page-retained-elements'
 import { browserClientPageRetainedKey } from './browser-client-page-retained-key'
@@ -162,7 +163,7 @@ export class BrowserClientPageRetainedRegistry {
     const webview = createBrowserClientPageWebview({
       createWebview: this.options.createWebview,
       document: this.options.document,
-      partition: identity.partition
+      identity
     })
 
     let resolveMount!: RetainedPage['resolveMount']
@@ -196,13 +197,15 @@ export class BrowserClientPageRetainedRegistry {
       onAttached,
       onReady,
       onDestroyed,
-      onRendererGone
+      onRendererGone,
+      onLoadCommit: hideRetainedHostWhileGuestIsBlank(host)
     })
     page.releaseDragPassthroughSurface = enrolRetainedHostDragPassthrough(page)
     webview.addEventListener('did-attach', onAttached)
     webview.addEventListener('dom-ready', onReady)
     webview.addEventListener('destroyed', onDestroyed)
     webview.addEventListener('render-process-gone', onRendererGone)
+    webview.addEventListener('load-commit', page.onLoadCommit)
     this.pages.set(key, page)
     this.partitionCounts.set(
       identity.partition,
@@ -286,6 +289,7 @@ export class BrowserClientPageRetainedRegistry {
     page.webview.removeEventListener('dom-ready', page.onReady)
     page.webview.removeEventListener('destroyed', page.onDestroyed)
     page.webview.removeEventListener('render-process-gone', page.onRendererGone)
+    page.webview.removeEventListener('load-commit', page.onLoadCommit)
     page.visibleAttachment = null
     page.webview.remove()
     page.host.remove()
@@ -308,8 +312,7 @@ export class BrowserClientPageRetainedRegistry {
   }
 
   private disconnectPage(page: RetainedPage): void {
-    // Why: the pane's own detach may never run (registry dispose, guest loss), and the sync
-    // would otherwise keep re-reading a container for a host that is no longer in the document.
+    // Registry disposal or guest loss may precede pane detach; stop rect reads for the disconnected host now.
     page.visibleAttachment?.stopTrackingViewport()
     page.visibleAttachment = null
     page.webview.remove()

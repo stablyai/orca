@@ -244,7 +244,6 @@ describe('PushGatewayClient', () => {
       ok: false,
       reason: 'unreachable'
     })
-    // Exactly one forced re-auth, not a handshake loop.
     expect(gateway.calls.filter((call) => call.url.endsWith('/v1/host/challenge'))).toHaveLength(2)
   })
 

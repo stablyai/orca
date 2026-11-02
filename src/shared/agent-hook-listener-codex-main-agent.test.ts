@@ -41,15 +41,28 @@ describe('the Codex root record seeded from a durable row', () => {
   })
 
   it("republishes a relayed row with the mainAgent fact main holds, not the relay's", () => {
+    seedCodexStateFromSnapshot(state, PANE_KEY, {
+      state: 'done',
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 42 }
+    })
     const reconciled = reconcileRemoteCodexState(
       state,
       PANE_KEY,
       'Stop',
       undefined,
-      { state: 'done', prompt: 'ship', agentType: 'codex' },
+      {
+        state: 'done',
+        prompt: 'ship',
+        agentType: 'codex',
+        mainAgent: { state: 'working', stateStartedAt: 99 }
+      },
       undefined
     )
-    expect(reconciled.mainAgent).toEqual({ state: 'done', stateStartedAt: expect.any(Number) })
+    expect(reconciled.mainAgent).toEqual({
+      state: 'done',
+      outcome: 'cancellation',
+      stateStartedAt: 42
+    })
   })
 
   it('carries the cancellation Orca inferred into a late relayed Stop', () => {

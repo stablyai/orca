@@ -2,10 +2,10 @@ import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const route: {
     current: {
-      settings: { activeRuntimeEnvironmentId: string | null }
+      target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
       connectionId: string | undefined
     }
-  } = { current: { settings: { activeRuntimeEnvironmentId: null }, connectionId: undefined } }
+  } = { current: { target: { kind: 'local' }, connectionId: undefined } }
   return {
     stat: vi.fn(),
     authorize: vi.fn(),
@@ -26,11 +26,13 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-metadata-client', () => ({
   statRuntimePath: mocks.stat,
-  isRemoteRuntimeFileOperation: (context: { connectionId?: string }) =>
-    Boolean(context.connectionId),
   isMissingRuntimePathError: (error: Error) => error.message.includes('ENOENT')
+}))
+vi.mock('@/runtime/runtime-file-routing', () => ({
+  isRemoteRuntimeFileOperation: (context: { connectionId?: string }) =>
+    Boolean(context.connectionId)
 }))
 vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => ({}),
@@ -40,20 +42,20 @@ vi.mock('./right-sidebar/file-explorer-operation-owner', () => ({
   })
 }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: (settings: { activeRuntimeEnvironmentId: string | null }) =>
-    settings.activeRuntimeEnvironmentId
-      ? { kind: 'environment', environmentId: settings.activeRuntimeEnvironmentId }
-      : { kind: 'local' },
-  callRuntimeRpc: mocks.rpc
+  callRuntimeRpc: mocks.rpc,
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
 }))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({
   scheduleEditorLineReveal: mocks.reveal
 }))
 import { openQuickOpenFile } from './quick-open-file-navigation'
 
+// Opening a path is a user act, so its stat may start a stopped WSL distro.
+const USER_ACT = { wakeWslDistro: true }
+
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.route.current = { settings: { activeRuntimeEnvironmentId: null }, connectionId: undefined }
+  mocks.route.current = { target: { kind: 'local' }, connectionId: undefined }
   mocks.stat.mockResolvedValue({ isDirectory: false })
   mocks.assertCurrent.mockReset()
   vi.stubGlobal('window', { api: { fs: { authorizeExternalPath: mocks.authorize } } })
@@ -65,9 +67,12 @@ it('validates pasted local paths with user-named access and uses the owner-quali
     line: 12,
     column: 3
   })
-  expect(mocks.stat).toHaveBeenCalledWith(expect.anything(), '/external/guide.md', {
-    kind: 'user-file'
-  })
+  expect(mocks.stat).toHaveBeenCalledWith(
+    expect.anything(),
+    '/external/guide.md',
+    { kind: 'user-file' },
+    USER_ACT
+  )
   expect(mocks.open).toHaveBeenCalledWith(
     expect.objectContaining({
       filePath: '/external/guide.md',
@@ -123,13 +128,14 @@ it('probes SSH paths only on their owning host', async () => {
   expect(mocks.stat).toHaveBeenCalledWith(
     expect.objectContaining({ connectionId: 'ssh-a' }),
     '/external/file.ts',
-    { kind: 'user-file' }
+    { kind: 'user-file' },
+    USER_ACT
   )
   expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ externalSshTargetId: 'ssh-a' }))
 })
 
 it('resolves paired paths on the host and never falls back to client filesystem access', async () => {
-  mocks.route.current.settings.activeRuntimeEnvironmentId = 'env-a'
+  mocks.route.current.target = { kind: 'environment', environmentId: 'env-a' }
   mocks.rpc.mockResolvedValue({
     exists: true,
     isDirectory: false,
@@ -142,15 +148,42 @@ it('resolves paired paths on the host and never falls back to client filesystem 
   expect(mocks.open).toHaveBeenCalledWith(
     expect.objectContaining({ runtimeEnvironmentId: 'env-a', relativePath: 'file.ts' })
   )
+})
+
+it('opens a paired path outside every workspace through the grant its host issued', async () => {
+  mocks.route.current.target = { kind: 'environment', environmentId: 'env-a' }
   mocks.rpc.mockResolvedValue({
     exists: true,
     isDirectory: false,
-    absolutePath: '/outside/file.ts',
+    absolutePath: '/private/tmp/handoff.md',
+    relativePath: null,
+    openTarget: {
+      kind: 'absolute-file',
+      provider: 'local',
+      absolutePath: '/private/tmp/handoff.md',
+      grantId: 'grant-1'
+    }
+  })
+  await openQuickOpenFile('/tmp/handoff.md', 'wt', '/repo', { pathQuery: '/tmp/handoff.md' })
+  expect(mocks.stat).not.toHaveBeenCalled()
+  expect(mocks.open).toHaveBeenCalledWith(
+    expect.objectContaining({
+      filePath: '/private/tmp/handoff.md',
+      relativePath: '/private/tmp/handoff.md',
+      runtimeEnvironmentId: 'env-a',
+      terminalArtifactGrantId: 'grant-1'
+    })
+  )
+  expect(mocks.open).not.toHaveBeenLastCalledWith(expect.objectContaining({ readOnly: true }))
+  mocks.rpc.mockResolvedValue({
+    exists: false,
+    isDirectory: false,
+    absolutePath: '/tmp/gone.md',
     relativePath: null
   })
   await expect(
-    openQuickOpenFile('/outside/file.ts', 'wt', '/repo', { pathQuery: '/outside/file.ts' })
-  ).rejects.toThrow('outside the workspace')
+    openQuickOpenFile('/tmp/gone.md', 'wt', '/repo', { pathQuery: '/tmp/gone.md' })
+  ).rejects.toThrow('File not found on its host: /tmp/gone.md')
 })
 
 it('keeps directories, denied files, missing files and replaced owners out of the editor', async () => {
@@ -181,7 +214,8 @@ it.each(['C:\\repo\\file.ts', '\\\\server\\share\\file.ts'])(
     expect(mocks.stat).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-windows' }),
       path,
-      { kind: 'user-file' }
+      { kind: 'user-file' },
+      USER_ACT
     )
     expect(mocks.authorize).not.toHaveBeenCalled()
     expect(mocks.reveal).toHaveBeenCalledWith(expect.any(Function), path, 3, 4, 'owner-file-id')
@@ -189,7 +223,7 @@ it.each(['C:\\repo\\file.ts', '\\\\server\\share\\file.ts'])(
 )
 
 it('resolves literal colon names on a paired host before treating the suffix as navigation', async () => {
-  mocks.route.current.settings.activeRuntimeEnvironmentId = 'env-a'
+  mocks.route.current.target = { kind: 'environment', environmentId: 'env-a' }
   mocks.rpc.mockResolvedValueOnce({
     exists: true,
     isDirectory: false,
@@ -222,7 +256,9 @@ it('keeps a pasted POSIX file on the local workspace WSL distro before any files
   })
   expect(mocks.stat).toHaveBeenCalledWith(
     expect.anything(),
-    '\\\\wsl.localhost\\Ubuntu\\home\\repo\\file.ts'
+    '\\\\wsl.localhost\\Ubuntu\\home\\repo\\file.ts',
+    undefined,
+    USER_ACT
   )
   expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ relativePath: 'file.ts' }))
   mocks.route.current.connectionId = 'ssh-a'
@@ -232,7 +268,8 @@ it('keeps a pasted POSIX file on the local workspace WSL distro before any files
   expect(mocks.stat).toHaveBeenLastCalledWith(
     expect.objectContaining({ connectionId: 'ssh-a' }),
     '/home/repo/file.ts',
-    { kind: 'user-file' }
+    { kind: 'user-file' },
+    USER_ACT
   )
 })
 

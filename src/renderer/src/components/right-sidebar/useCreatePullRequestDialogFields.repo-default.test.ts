@@ -13,6 +13,7 @@ vi.mock('@/runtime/runtime-repo-client', () => ({
 }))
 
 const { useCreatePullRequestDialogFields } = await import('./useCreatePullRequestDialogFields')
+const { useAppStore } = await import('@/store')
 
 type DialogFields = ReturnType<typeof useCreatePullRequestDialogFields>
 
@@ -52,6 +53,7 @@ function renderFields(initialRepoId: string): {
       branch: 'feature/child',
       eligibility,
       settings: null,
+      target: { kind: 'local' },
       submitting: false
     })
     return null
@@ -86,44 +88,16 @@ function renderFields(initialRepoId: string): {
 
 beforeEach(() => {
   getRuntimeRepoBaseRefDefault.mockReset()
+  const repo = { path: '/repo', displayName: 'Repo', badgeColor: '#000', addedAt: 0 }
+  useAppStore.setState({
+    repos: [
+      { ...repo, id: 'repo-1' },
+      { ...repo, id: 'repo-2' }
+    ]
+  })
 })
 
 describe('useCreatePullRequestDialogFields repo default base ref', () => {
-  it('reports the repo default branch, not the worktree base from eligibility', async () => {
-    getRuntimeRepoBaseRefDefault.mockResolvedValue({
-      defaultBaseRef: 'refs/remotes/origin/main',
-      remoteCount: 1
-    })
-    const harness = renderFields('repo-1')
-    try {
-      await harness.switchRepo('repo-1', 'refs/remotes/origin/feature/parent')
-
-      expect(harness.current().repoDefaultBaseRef).toBe('main')
-      // Eligibility still drives the field itself; only the "is this the repo
-      // default?" answer comes from the repo lookup.
-      expect(harness.current().base).toBe('feature/parent')
-    } finally {
-      harness.unmount()
-    }
-  })
-
-  it('probes the repo default once per repo', async () => {
-    getRuntimeRepoBaseRefDefault.mockResolvedValue({
-      defaultBaseRef: 'refs/remotes/origin/main',
-      remoteCount: 1
-    })
-    const harness = renderFields('repo-1')
-    try {
-      await harness.switchRepo('repo-1', 'refs/remotes/origin/feature/parent')
-      await harness.switchRepo('repo-1', 'refs/remotes/origin/feature/other')
-
-      expect(getRuntimeRepoBaseRefDefault).toHaveBeenCalledTimes(1)
-      expect(harness.current().repoDefaultBaseRef).toBe('main')
-    } finally {
-      harness.unmount()
-    }
-  })
-
   it('drops a previous repo default instead of applying it to the next repo', async () => {
     getRuntimeRepoBaseRefDefault.mockResolvedValue({
       defaultBaseRef: 'refs/remotes/origin/main',

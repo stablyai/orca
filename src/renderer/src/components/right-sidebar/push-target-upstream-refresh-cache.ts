@@ -1,5 +1,5 @@
 import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 const AUTOMATIC_PUSH_TARGET_UPSTREAM_REFRESH_TTL_MS = 60_000
@@ -16,10 +16,8 @@ const automaticPushTargetUpstreamRefreshCache = new Map<
   PushTargetUpstreamRefreshCacheEntry
 >()
 
-function getRuntimeEnvironmentKey(
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
-): string | null {
-  return settings?.activeRuntimeEnvironmentId ?? null
+function getRuntimeEnvironmentKey(target?: RuntimeClientTarget | null): string | null {
+  return target?.kind === 'environment' ? target.environmentId : null
 }
 
 function getPushTargetKey(pushTarget: GitPushTarget): readonly unknown[] {
@@ -36,13 +34,13 @@ function getStatusIdentityKey(status: GitStatusResult): readonly unknown[] {
 }
 
 function getCacheScopeKey({
-  settings,
+  target,
   worktreeId,
   worktreePath,
   connectionId,
   pushTarget
 }: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  target?: RuntimeClientTarget | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
@@ -52,20 +50,20 @@ function getCacheScopeKey({
     worktreeId,
     worktreePath,
     connectionId ?? null,
-    getRuntimeEnvironmentKey(settings),
+    getRuntimeEnvironmentKey(target),
     getPushTargetKey(pushTarget)
   ])
 }
 
 function getCacheKey({
-  settings,
+  target,
   worktreeId,
   worktreePath,
   connectionId,
   pushTarget,
   status
 }: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  target?: RuntimeClientTarget | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
@@ -73,7 +71,7 @@ function getCacheKey({
   status: GitStatusResult
 }): string {
   return JSON.stringify([
-    getCacheScopeKey({ settings, worktreeId, worktreePath, connectionId, pushTarget }),
+    getCacheScopeKey({ target, worktreeId, worktreePath, connectionId, pushTarget }),
     getStatusIdentityKey(status)
   ])
 }
@@ -91,7 +89,7 @@ function trimAutomaticPushTargetUpstreamRefreshCache(): void {
 }
 
 export function getCachedAutomaticPushTargetUpstreamStatus(input: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  target?: RuntimeClientTarget | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
@@ -112,7 +110,7 @@ export function getCachedAutomaticPushTargetUpstreamStatus(input: {
 
 export function storeCachedAutomaticPushTargetUpstreamStatus(
   input: {
-    settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+    target?: RuntimeClientTarget | null
     worktreeId: string
     worktreePath: string
     connectionId?: string
@@ -130,7 +128,7 @@ export function storeCachedAutomaticPushTargetUpstreamStatus(
 }
 
 export function invalidateAutomaticPushTargetUpstreamStatusCache(input: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  target?: RuntimeClientTarget | null
   worktreeId: string
   worktreePath: string
   connectionId?: string

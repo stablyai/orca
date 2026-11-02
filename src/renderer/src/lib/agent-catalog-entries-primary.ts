@@ -4,9 +4,7 @@ import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-
 import { translate } from '@/i18n/i18n'
 import type { AgentCatalogEntry } from './agent-catalog'
 
-/** The agents Orca drives first-party. Split from the community tail so adding an agent
- *  does not push either module past its line budget; the two are concatenated in order
- *  by `buildAgentCatalogEntries`. */
+/** Keep first-party entries separate from the community tail to stay within module budgets; buildAgentCatalogEntries preserves their order. */
 export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
   return [
     {
@@ -25,8 +23,7 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       id: 'openclaude',
       label: translate('auto.lib.agent.catalog.a5fc0cb622', 'OpenClaude'),
       cmd: 'openclaude',
-      // Why: OpenClaude's published favicon has a padded 500px canvas; Orca
-      // uses a cropped derivative of that official asset so 12px tab icons stay legible.
+      // Crop OpenClaude’s official padded favicon so the mark remains legible at 12px.
       iconUrl: openClaudeLogoUrl,
       homepageUrl: 'https://openclaude.gitlawb.com/'
     },
@@ -40,7 +37,6 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       id: 'grok',
       label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
       cmd: 'grok',
-      faviconDomain: 'x.ai',
       homepageUrl: 'https://x.ai/cli'
     },
     {
@@ -65,14 +61,12 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       id: 'mimo-code',
       label: translate('auto.lib.agent.catalog.mimo_code_label', 'MiMo Code'),
       cmd: 'mimo',
-      faviconDomain: 'mimo.xiaomi.com',
       homepageUrl: 'https://mimo.xiaomi.com/coder'
     },
     {
       id: 'ante',
       label: translate('auto.lib.agent.catalog.da41abbdd4', 'Ante'),
       cmd: 'ante',
-      faviconDomain: 'antigma.ai',
       homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
     },
     {
@@ -81,14 +75,12 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       // Why: matches TUI_AGENT_CONFIG.trae.detectCmd, not the ambiguous `trae-cli` — see the Why there.
       cmd: 'traecli',
       // Why: bare `trae.cn` 404s on Google's favicon service.
-      faviconDomain: 'www.trae.cn',
       homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
     },
     {
       id: 'muse',
       label: translate('auto.lib.agent.catalog.muse_label', 'Muse'),
       cmd: 'muse',
-      faviconDomain: 'dev.meta.ai',
       homepageUrl: 'https://dev.meta.ai/docs/muse-code'
     },
     {
@@ -102,21 +94,18 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       id: 'qoder',
       label: translate('auto.lib.agent.catalog.qoder_label', 'Qoder CLI'),
       cmd: 'qodercli',
-      faviconDomain: 'qoder.com',
       homepageUrl: 'https://docs.qoder.com/cli/overview'
     },
     {
       id: 'qoder-cn',
       label: translate('auto.lib.agent.catalog.qoder_cn_label', 'Qoder CLI China'),
       cmd: 'qoderclicn',
-      faviconDomain: 'qoder.cn',
       homepageUrl: 'https://docs.qoder.cn/cli/overview'
     },
     {
       id: 'zcode',
       label: translate('auto.lib.agent.catalog.zcode_label', 'ZCode'),
       cmd: 'zcode',
-      faviconDomain: 'zcode.z.ai',
       homepageUrl: 'https://zcode.z.ai/en/docs'
     },
     {
@@ -130,29 +119,25 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.09973b4d84', 'OMP'),
       cmd: 'omp',
       searchAliases: ['oh-my-pi', 'oh my pi'],
-      // Why: no faviconDomain — omp renders the hand-authored OmpIcon glyph, so a
-      // favicon fallback would never be reached.
+      // OmpIcon supplies the glyph, so no favicon fallback is needed.
       homepageUrl: 'https://omp.sh'
     },
     {
       id: 'prime-agent',
       label: translate('auto.lib.agent.catalog.d443a47995', 'Prime Agent'),
       cmd: 'prime-agent',
-      faviconDomain: 'primeintellect.ai',
       homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
     },
     {
       id: 'gemini',
       label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
       cmd: 'gemini',
-      faviconDomain: 'gemini.google.com',
       homepageUrl: 'https://github.com/google-gemini/gemini-cli'
     },
     {
       id: 'antigravity',
       label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
       cmd: 'agy',
-      faviconDomain: 'antigravity.google',
       homepageUrl: 'https://antigravity.google/docs/cli-overview'
     }
   ]

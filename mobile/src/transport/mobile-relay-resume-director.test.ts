@@ -13,7 +13,7 @@ const relay = {
 describe('mobile relay resume director', () => {
   it('uses a bounded POST body and never puts the bearer in the URL', async () => {
     const fetchImpl = vi.fn(
-      async () =>
+      async (_url: string, _init: RequestInit) =>
         new Response(
           JSON.stringify({
             v: 1,
@@ -32,7 +32,7 @@ describe('mobile relay resume director', () => {
     expect(url).toBe('https://relay.onorca.dev/v1/resolve')
     expect(url).not.toContain('A'.repeat(43))
     expect(init).toMatchObject({ method: 'POST' })
-    expect(JSON.parse(init!.body as string)).toEqual({
+    expect(JSON.parse(String(init.body))).toEqual({
       v: 1,
       relayHostId: relay.relayHostId,
       resumeToken: 'A'.repeat(43)
@@ -53,7 +53,7 @@ describe('mobile relay resume director', () => {
     )
     await expect(
       resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: badTarget })
-    ).rejects.toThrow()
+    ).rejects.toThrow(/cellUrl/)
 
     const oversized = vi.fn(
       async () =>
@@ -62,6 +62,24 @@ describe('mobile relay resume director', () => {
     await expect(
       resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: oversized })
     ).rejects.toThrow(/too large/)
+
+    const oversizedBody =
+      ' '.repeat(16 * 1024) +
+      JSON.stringify({
+        v: 1,
+        cellUrl: 'https://relay-c2.onorca.dev',
+        assignmentEpoch: 8,
+        leaseExpiresAt: 1
+      })
+    for (const headers of [new Headers(), new Headers({ 'content-length': '1' })]) {
+      await expect(
+        resolveMobileRelayEndpoint({
+          relay,
+          resumeToken: 'A'.repeat(43),
+          fetchImpl: async () => new Response(oversizedBody, { headers })
+        })
+      ).rejects.toThrow(/too large/)
+    }
   })
 
   it('carries the bounded-overload Retry-After off a rejected resolve', async () => {

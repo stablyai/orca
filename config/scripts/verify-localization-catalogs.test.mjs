@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { main as verifyTogether } from './verify-localization-catalogs.mjs'
 import { main as verifyCatalog } from './verify-localization-catalog.mjs'
 import { main as verifyRuntimeCatalog } from './generate-runtime-required-english-catalog.mjs'
@@ -24,6 +24,11 @@ async function fixture() {
     JSON.stringify({ hello: 'Hello', ready: 'Ready', dynamic: 'Required' })
   )
   await writeFile(join(root, runtimePath), JSON.stringify({ dynamic: 'Required' }))
+  await mkdir(join(root, 'src/shared/plugins/languages'), { recursive: true })
+  await writeFile(
+    join(root, 'src/shared/plugins/languages/protected-copy-keys.json'),
+    `${JSON.stringify({ keys: [], prefixes: [] }, null, 2)}\n`
+  )
   return root
 }
 

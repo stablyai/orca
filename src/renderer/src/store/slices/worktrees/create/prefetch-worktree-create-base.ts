@@ -1,7 +1,7 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
-import { settingsForRepoOwner } from '../listing/worktree-owner-settings'
+import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 
 export function createPrefetchWorktreeCreateBase(
   _set: WorktreeSliceSet,
@@ -9,7 +9,10 @@ export function createPrefetchWorktreeCreateBase(
 ): WorktreeSlice['prefetchWorktreeCreateBase'] {
   return async (repoId, baseBranch) => {
     try {
-      const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+      const target = runtimeTargetForRepoOwner(get(), repoId)
+      if (!target) {
+        return
+      }
       if (target.kind === 'local') {
         await window.api.worktrees.prefetchCreateBase({
           repoId,

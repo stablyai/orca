@@ -1,11 +1,11 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
 import { ORCAD_FOREIGN_SQLITE_READER_ENTRY } from '../../src/shared/orcad-artifacts.ts'
 
-// Why a child process: the read must run under the runtime orcad ships, which may not be
-// the Node running the build. The verdict is the exit code, never matched output.
+// Run reads in child under the runtime orcad ships, which may differ from build Node; trust exit status, not output.
 const PROBE = `
 const { Worker } = require('node:worker_threads')
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite')

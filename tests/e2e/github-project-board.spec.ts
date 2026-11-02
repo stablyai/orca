@@ -173,6 +173,8 @@ test('board drops cross preload, settle optimistically, and roll back failures',
       }
     ])
   await done.getByRole('listitem').dragTo(done)
+  // Scrolling the board after mouse-down moves the card off the press point, so no drag starts.
+  await empty.scrollIntoViewIfNeeded()
   await done.getByRole('listitem').dragTo(empty)
   await expect(empty.getByRole('button', { name: title })).toBeVisible()
   await expect(orcaPage.getByText('Board verification: offline', { exact: true })).toBeVisible()

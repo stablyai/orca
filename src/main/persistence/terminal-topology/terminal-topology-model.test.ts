@@ -3,12 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mulberry32 } from '../../../shared/agent-tui-ansi-fuzz-stream'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from '../../runtime/mobile-session-terminal-persistence-retirement'
-import { projectTerminalTopologySlice } from '../../runtime/terminal-topology-projection'
 import type { Store } from '../loading-store/store'
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
@@ -19,7 +18,7 @@ import {
   type WorkspaceLayoutPartition,
   type WorkspaceLayoutRule,
   type WorkspaceLayoutViolation
-} from './workspace-layout-rules'
+} from '../../../shared/workspace-layout/workspace-layout-rules'
 import { closeLeafOrTab } from './terminal-topology-commit'
 import {
   emptyTerminalSessionProfile,
@@ -30,18 +29,12 @@ import {
 } from './terminal-topology-profile-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
 
-/**
- * Model test for terminal layout as main holds it. Seeded gesture sequences run against main's
- * real Store, written the way today's desktop window writes them; a plain reference model says
- * what main must hold after each one. Making the window a mirror of main changes who writes, not
- * this outcome, so every seed must stay green through that refactor.
- * Replay one seed: FUZZ_SEED=<n> FUZZ_ITERATIONS=1 pnpm test <this file>.
- */
+// Compare seeded gestures on real persistence with an independent model; replay with FUZZ_SEED and FUZZ_ITERATIONS=1.
 
 const WORKTREES = [
   FIXTURE_GIT_WORKTREE_ID,
@@ -53,7 +46,6 @@ const ITERATIONS = Number(process.env.FUZZ_ITERATIONS ?? 6)
 const OPS_PER_SEED = 40
 
 type ModelPane = { ptyId: string | undefined; sleeping: boolean }
-/** What main must hold: tab → leaf → binding, per worktree, in tab order. */
 type Model = Map<string, { worktreeId: string; leaves: Map<string, ModelPane> }>
 
 const directories: string[] = []
@@ -97,7 +89,6 @@ function layoutViolations(
   return checkWorkspaceLayoutRules(partition(session), previous ? partition(previous) : undefined)
 }
 
-/** Fails on any structural breach in main's layout, or an id that changed since the last step. */
 function expectLayoutRules(
   session: WorkspaceSessionState,
   previous: WorkspaceSessionState | null,
@@ -106,13 +97,11 @@ function expectLayoutRules(
   expect(layoutViolations(session, previous), context).toEqual([])
 }
 
-/** Main's projected slices, reduced to what the model states. */
 function projectedTopology(session: WorkspaceSessionState) {
   return Object.fromEntries(
     WORKTREES.map((worktreeId) => {
-      const slice = projectTerminalTopologySlice(session, LOCAL_EXECUTION_HOST_ID, worktreeId)
-      const tabs = slice.tabs.map((tab) => {
-        const layout = slice.layouts[tab.id]
+      const tabs = (session.tabsByWorktree?.[worktreeId] ?? []).map((tab) => {
+        const layout = session.terminalLayoutsByTabId?.[tab.id]
         return {
           tabId: tab.id,
           leaves: Object.fromEntries(
@@ -120,7 +109,11 @@ function projectedTopology(session: WorkspaceSessionState) {
           )
         }
       })
-      return [worktreeId, { tabs, sleeping: Object.keys(slice.sleeping).sort() }]
+      const sleeping = Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})
+        .filter(([, record]) => record.worktreeId === worktreeId)
+        .map(([paneKey]) => paneKey)
+        .sort()
+      return [worktreeId, { tabs, sleeping }]
     })
   )
 }
@@ -180,7 +173,6 @@ const OPS: readonly Op[] = [
   'exit_retire'
 ]
 
-/** Who made a workspace-session write, so a breach names its writer. */
 type Writer =
   | 'load'
   | 'window save'
@@ -193,11 +185,7 @@ type Writer =
   | 'host split'
   | 'exit retire'
 
-/**
- * Mid-step breaches main has today by design; each must heal by the step's end, where nothing is
- * exempt. Main mints a terminal tab row (a spawn that beats the window's save, a pane drag-out) but
- * only the window writes the tab bar, so the row lacks a tab-bar entry until the window's next save.
- */
+/** Two-writer intermediate tab rows may lack bar entries; all exemptions must heal by step end. */
 const TWO_WRITER_TRANSIENTS: readonly { rule: WorkspaceLayoutRule; op: Op; writer: Writer }[] = [
   { rule: 'tab_bar_missing', op: 'new_tab', writer: 'spawn bind' },
   { rule: 'tab_lists_disagree', op: 'new_tab', writer: 'spawn bind' },
@@ -210,7 +198,7 @@ function isTwoWriterTransient(violation: WorkspaceLayoutViolation, op: Op, write
   )
 }
 
-/** Main's PTY-exit retirement (`stageTerminalSurfaceRetirements`): in memory now, durable after. */
+/** Exit retirement updates memory before durability. */
 async function retireExitedPane(
   store: Store,
   surface: { worktreeId: string; parentTabId: string; leafId: string; ptyId: string }
@@ -236,12 +224,12 @@ async function runSeed(seed: number): Promise<string[]> {
   let previous: WorkspaceSessionState | null = null
   let op: Op = OPS[0]!
   let writer: Writer = 'load'
-  // Every in-memory session write, not only each step's end, must hold the rules.
+  // Observe every write so transient breaches cannot hide between gesture boundaries.
   const writeBreaches: string[] = []
   let lastWritten = structuredClone(store.getWorkspaceSession())
   const watchWrites = (): (() => void) =>
     store.onWorkspaceSessionWritten(() => {
-      // Why try: a throw here would break main's write path instead of failing the seed.
+      // Observer exceptions would break persistence rather than fail the seed.
       try {
         const session = store.getWorkspaceSession()
         for (const violation of layoutViolations(session, lastWritten)) {
@@ -259,7 +247,7 @@ async function runSeed(seed: number): Promise<string[]> {
     writer = 'window save'
     store.setWorkspaceSession(window.snapshot())
   }
-  /** A save the window built before it learned of a concurrent change, landing `ticks` turns later. */
+  /** Deliver a pre-change snapshot after ticks event-loop turns. */
   const staleSave = async (stale: WorkspaceSessionState, ticks: number): Promise<void> => {
     for (let tick = 0; tick < ticks; tick++) {
       await new Promise((resolve) => setImmediate(resolve))
@@ -302,13 +290,12 @@ async function runSeed(seed: number): Promise<string[]> {
       options,
       requestedSession: store.getWorkspaceSession(),
       ownerMatches: () => true,
-      hostId: () => LOCAL_EXECUTION_HOST_ID,
+      hostIds: () => [LOCAL_EXECUTION_HOST_ID],
       getSession: (hostId) => store.getWorkspaceSession(hostId),
       setSession: (session, hostId) => store.setWorkspaceSession(session, hostId),
       onClosed: () => {}
     })
 
-  /** `closeTerminalSurfaceFromRenderer`: the window removed the surface; main commits the close. */
   const commitClose = async (worktreeId: string, target: TerminalSurfaceCloseTarget) => {
     const refusal = await store.runDurableMutation(
       labeled(
@@ -324,7 +311,6 @@ async function runSeed(seed: number): Promise<string[]> {
     expect(refusal).toBeUndefined()
   }
 
-  /** Drops a pane from the window's copy, with its sleeping record. */
   const windowDropsPane = (tabId: string, leafId: string): void => {
     const layout = window.session.terminalLayoutsByTabId[tabId]!
     const { [leafId]: _closed, ...bindings } = layout.ptyIdsByLeafId ?? {}
@@ -446,7 +432,6 @@ async function runSeed(seed: number): Promise<string[]> {
             ptyId: pane.ptyId ?? null
           })
         ).resolves.toEqual({ status: 'moved', ptyId: pane.ptyId ?? null })
-        // The window then shows what main moved, as the drag-out does today.
         const layout = window.session.terminalLayoutsByTabId[sourceTabId]!
         const { [leafId]: movedPty, ...bindings } = layout.ptyIdsByLeafId ?? {}
         window.setLayout(sourceTabId, withoutLeaf(layout.root!, leafId)!, bindings)
@@ -524,8 +509,7 @@ async function runSeed(seed: number): Promise<string[]> {
         const ticks = Math.floor(random() * 4)
         log.push(`${op} ${tabId} stale-save+${ticks}`)
         const { worktreeId } = model.get(tabId)!
-        // A paired client's close (`closeTerminalSurface`, not the layout owner's) races a window
-        // save built while it still showed the tab.
+        // Race paired-client close against a renderer snapshot that still contains the tab.
         const [refusal] = await Promise.all([
           store.runDurableMutation(
             labeled(
@@ -551,28 +535,35 @@ async function runSeed(seed: number): Promise<string[]> {
         const ptyId = ids.pty(worktreeId)
         const ticks = Math.floor(random() * 4)
         log.push(`${op} ${target.tabId}:${target.leafId} → ${leafId} ${ptyId} stale-save+${ticks}`)
-        // `terminal.split` from a client or the CLI: main mints the pane while the window's
-        // in-flight save lacks it.
+        // Race runtime split admission/binding against a renderer save that lacks the new pane.
+        writer = 'host split'
         const [bound] = await Promise.all([
-          store.persistPtyBinding(() => {
-            writer = 'host split'
-            return {
-              worktreeId,
+          store
+            .admitTerminalPane({
+              type: 'splitPane',
+              workspace: worktreeId,
               tabId: target.tabId,
-              leafId,
-              ptyId,
-              hostAdmittedMembership: true,
-              expectedSourceBinding: {
+              leafId: target.leafId,
+              direction: 'vertical',
+              newLeafId: leafId
+            })
+            .then(() =>
+              store.persistPtyBinding({
+                worktreeId,
                 tabId: target.tabId,
-                leafId: target.leafId,
-                ptyId: target.pane.ptyId!
-              }
-            }
-          }),
+                leafId,
+                ptyId,
+                mayCreate: false,
+                expectedSourceBinding: {
+                  tabId: target.tabId,
+                  leafId: target.leafId,
+                  ptyId: target.pane.ptyId!
+                }
+              })
+            ),
           staleSave(window.snapshot(), ticks)
         ])
         expect(bound).toBe(true)
-        // The window then shows the pane main created.
         const layout = store.getWorkspaceSession().terminalLayoutsByTabId[target.tabId]!
         window.setLayout(target.tabId, layout.root!, layout.ptyIdsByLeafId ?? {})
         target.tab.leaves.set(leafId, { ptyId, sleeping: false })
@@ -597,7 +588,6 @@ async function runSeed(seed: number): Promise<string[]> {
           }),
           staleSave(window.snapshot(), ticks)
         ])
-        // The window then drops the exited pane, and its tab with its last pane.
         target.tab.leaves.delete(target.leafId)
         if (target.tab.leaves.size === 0) {
           window.removeTab(target.tabId)
@@ -623,7 +613,6 @@ async function runSeed(seed: number): Promise<string[]> {
     expect(projectedTopology(session), context).toEqual(expectedTopology(model))
   }
 
-  // The saved profile, read back cold, holds the same layout.
   await reopen(false)
   const context = `seed ${seed}, after reopen:\n${log.join('\n')}`
   expectLayoutRules(store.getWorkspaceSession(), previous, context)
@@ -649,7 +638,7 @@ describe('terminal layout model (main session)', () => {
         ranOps.add(entry.split(' ')[0]!)
       }
     }
-    // Precondition: the seeds reached every gesture, so a green run is not a quiet one.
+    // Require all gestures so a passing seed set cannot quietly omit operations.
     if (ITERATIONS >= 6) {
       expect([...ranOps].sort()).toEqual([...new Set(OPS)].sort())
     }

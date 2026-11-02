@@ -1,23 +1,41 @@
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import {
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForTab
+} from '@/runtime/structured-agent-session-owner'
+import { useAppStore } from '@/store'
 import type { DashboardRevealAgentArgs } from '../../../../shared/dashboard-snapshot'
 
-/**
- * Click-to-focus from either Agent Dashboard surface (pop-out relay or in-window drawer).
- *
- * Why the workspace dispatcher rather than a bare `setActiveWorktree`: only the shared
- * sequence switches the view back to terminal, resumes sleeping agent sessions, and seeds a
- * terminal surface. A parked SSH workspace has no resident tab until those run, so the bare
- * call revealed a workspace with nothing in it (#16731).
- */
 export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
-  const activated = activateAndRevealWorkspace(
-    args.worktreeId,
-    args.executionHostId ? { executionHostId: args.executionHostId } : undefined
+  const state = useAppStore.getState()
+  const tab = state.unifiedTabsByWorktree[args.worktreeId]?.find(
+    (candidate) =>
+      candidate.id === args.tabId &&
+      candidate.worktreeId === args.worktreeId &&
+      candidate.contentType === 'agent-session'
   )
-  if (activated === false) {
-    return false
+  if (tab) {
+    const owner = structuredAgentSessionOwnerForTab(state, tab)
+    const target = structuredAgentSessionTargetForTab(state, tab)
+    if (!target) {
+      return false
+    }
+    if (
+      activateAndRevealWorkspace(
+        args.worktreeId,
+        owner ? { executionHostId: owner } : undefined
+      ) === false
+    ) {
+      return false
+    }
+    return activateStructuredAgentSessionTab({ worktreeId: args.worktreeId, tabId: tab.id, target })
   }
-  activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
-  return true
+  return revealTerminalPane({
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    leafId: args.leafId,
+    executionHostId: args.executionHostId ?? null
+  })
 }

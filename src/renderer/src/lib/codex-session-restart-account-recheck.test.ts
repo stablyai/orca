@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { defaultScopeHost } from '@/lib/default-creation-host'
+
+// Why: these cases model a switch made on the focused host, as the status bar does.
+const focusedOwner = () => defaultScopeHost(useAppStore.getState().settings)
 import { markLiveCodexSessionsForRestart } from './codex-session-restart'
 
 const ACCOUNT_A = 'account-a@example.com'
@@ -29,7 +33,7 @@ describe('Codex account switch recheck against main', () => {
         ]
       },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
-      pendingCodexPaneRestartIds: {},
+      pendingPaneAccountRestarts: {},
       codexRestartNoticeByPtyId: {}
     })
     vi.stubGlobal('window', {
@@ -62,9 +66,10 @@ describe('Codex account switch recheck against main', () => {
         nextAccountId: 'account-b'
       }
     ])
-    useAppStore.getState().queueCodexPaneRestarts(['pty-1'])
+    useAppStore.getState().queuePaneAccountRestarts(['pty-1'], 'codex')
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_B,
       nextAccountLabel: ACCOUNT_C,
       previousAccountId: 'account-b',
@@ -73,13 +78,14 @@ describe('Codex account switch recheck against main', () => {
 
     expect(listStalePanes).toHaveBeenCalledWith({ ptyIds: ['pty-1'] })
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-    expect(useAppStore.getState().pendingCodexPaneRestartIds).toEqual({})
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   })
 
   it('falls back to the switch it was given when main cannot answer', async () => {
     listStalePanes.mockRejectedValue(new Error('ipc failed'))
 
     await markLiveCodexSessionsForRestart({
+      owner: focusedOwner(),
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B,
       previousAccountId: 'account-a',

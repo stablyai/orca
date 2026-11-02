@@ -4,7 +4,7 @@ import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
 import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
@@ -56,13 +56,6 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
   useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
 }))
 
-vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (
-    command: string,
-    _runtime: { runtime: string; wslDistro?: string | null }
-  ) => command
-}))
-
 vi.mock('../settings/AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (props: Record<string, unknown> & { children?: ReactNode }) => {
     mocks.panelProps.push(props)
@@ -70,7 +63,7 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
       <section data-testid="linear-skill-inline-panel">
         <h2>{String(props.title)}</h2>
         <p>{String(props.description)}</p>
-        <code>{String(props.command)}</code>
+        <code>{String(props.skillNames)}</code>
         <button
           type="button"
           onClick={() => {
@@ -349,12 +342,11 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
     await settleRender()
 
-    expect(document.body.textContent).toContain('npx skills add')
+    expect(document.body.textContent).toContain('orca-linear')
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
-        installedCommand: 'npx skills update orca-linear --global',
-        terminalShellOverride: 'powershell.exe',
-        terminalRuntime: expect.objectContaining({ runtime: 'wsl', wslDistro: 'Fedora' })
+        skillNames: ['orca-linear'],
+        installedSkillNames: ['orca-linear']
       })
     )
     expect(mocks.panelProps.at(-1)?.getPrerequisiteStatus).toBeUndefined()
@@ -454,12 +446,9 @@ describe('LinearAgentSkillSetupPrompt', () => {
     )
     expect(document.body.textContent).toContain('Linear agent skill is missing.')
     expect(document.body.textContent).toContain('Mock install')
-    // Why: the permanent opt-out is an EyeOff icon (no visible text); the casual
-    // dismiss is the dialog ×. Neither "Not now" nor any dismiss label shows as text.
     expect(document.body.textContent).not.toContain('Not now')
     expect(mocks.panelProps.at(-1)?.preInstallNotice).toBeUndefined()
 
-    // Why: the × must snooze for the session, not persist a permanent dismissal.
     const closeButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === 'Close'
     )
@@ -576,7 +565,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       recheckButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    // Why: the real skill hook re-renders on refresh; this mock only mutates a shared object.
+    // Re-render manually because this mock mutates state without the real hook’s subscription.
     await updatePrompt({ linked: true, remote: false })
 
     expect(mocks.skillState.refresh).toHaveBeenCalled()
@@ -640,7 +629,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
     expect(mocks.panelProps.at(-1)).toEqual(expect.objectContaining({ loading: true }))
 
-    // The skill hook owns loading for the new target, independently of the old request.
+    // The new target’s hook owns loading independently of the prior request.
     mocks.skillState.loading = false
     await updatePrompt(wslPromptProps('Ubuntu', 'modal'))
     expect(mocks.panelProps.at(-1)).toEqual(expect.objectContaining({ loading: false }))
@@ -717,10 +706,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await settleRender()
-    expect(mocks.panelProps.at(-1)?.command).toContain('npx skills add')
-    expect(mocks.panelProps.at(-1)?.terminalRuntime).toEqual(
-      expect.objectContaining({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    )
+    expect(mocks.panelProps.at(-1)?.skillNames).toEqual(['orca-linear'])
   })
 
   it('uses remote-safe success copy for remote workspaces', async () => {
@@ -743,7 +729,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
   it('permanently dismisses the modal-only prompt when requested', async () => {
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
-    // Why: permanent dismiss is now an EyeOff icon button (aria-label, no text).
     const dismissButton = document.body.querySelector<HTMLButtonElement>(
       'button[aria-label="Don\'t show again"]'
     )

@@ -1,8 +1,6 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
-/** Why: a bare-shell OMP launch runs inside a pi-kind pane, so every extension that has to
- *  defer to OMP's own approval events needs this check — not just the status extension it
- *  was first written for. */
+/** Bare-shell OMP can run inside a Pi-kind pane; every approval-aware extension needs runtime detection. */
 export function getPiOmpRuntimeDetectionSourceLines(configuredHookPath: string): string[] {
   return [
     'function processName(value: unknown): string {',
@@ -51,7 +49,7 @@ export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): 
     ...getPiOmpRuntimeDetectionSourceLines(`/hook/${kind}`),
     '',
     'function resolveHookPath(ompRuntime: boolean): string {',
-    '  // Why: runtime detection keeps a bare-shell OMP launch from reporting as Pi.',
+    '  // Bare-shell OMP may run inside a configured Pi pane.',
     "  if (ompRuntime) return '/hook/omp'",
     '  return CONFIGURED_HOOK_PATH',
     '}'

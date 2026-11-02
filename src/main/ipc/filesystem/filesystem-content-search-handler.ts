@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron'
 import type { SearchOptions, SearchResult } from '../../../shared/code-search-types'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { parseWslPath } from '../../wsl'
-import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
+import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
+import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveDesktopAuthorizedPath } from '../local-file-access-resolution'
 import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
 import { stopBundledRipgrep } from '../../ripgrep/bundled-ripgrep-stop'
@@ -29,8 +29,7 @@ export function registerFilesystemContentSearchHandler(context: FilesystemHandle
       try {
         throwIfSignalAborted(signal)
         if (args.connectionId) {
-          const provider = requireSshFilesystemProvider(args.connectionId)
-          return await provider.search(options, { signal })
+          throw new SshHostNotServedError(args.connectionId)
         }
         const rootPath = await waitForPromiseWithSignal(
           resolveDesktopAuthorizedPath(args.rootPath, store),
@@ -43,7 +42,10 @@ export function registerFilesystemContentSearchHandler(context: FilesystemHandle
           rootPath
         )
         const searchKey = `${event.sender.id}:${rootPath}`
-        const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
+        const { wslDistro, wslDistroForOutput } = resolveBundledRipgrepWslRouting(
+          rootPath,
+          localGitOptions.wslDistro
+        )
 
         const previousChild = activeTextSearches.get(searchKey)
         if (previousChild) {
@@ -53,7 +55,7 @@ export function registerFilesystemContentSearchHandler(context: FilesystemHandle
           options,
           rootPath,
           resultRootPath: args.rootPath,
-          wslDistro: localGitOptions.wslDistro,
+          wslDistro,
           wslDistroForOutput,
           signal,
           onSpawn: (child) => {

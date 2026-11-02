@@ -1,16 +1,11 @@
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as LineMutations from '../../../session/github-pr-review-line-mutations'
 
 const WORKTREE = 'repo-9::/w'
 const PR_NUMBER = 12
 const FORK_REPO = { owner: 'fork-owner', repo: 'fork-repo', host: 'github.enterprise.test' }
 
-/**
- * The PR sidebar's `github.*` surface: seven reads and twelve mutations, all exported async
- * functions taking a client, so no React host is needed and the recorded state is each wrapper's
- * own `{ ok }` outcome. `fork` picks the arm that forwards a `prRepo` slug, which only the
- * allow-listed methods accept.
- */
 export function githubPrMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -71,6 +66,8 @@ export function githubPrMountAdapters(
       const mutations = modules.load<typeof import('../../../session/github-pr-mutations')>(
         'mobile/src/session/github-pr-mutations.ts'
       )
+      const lineMutations = () =>
+        modules.load<typeof LineMutations>('mobile/src/session/github-pr-review-line-mutations.ts')
       const results: Record<string, unknown> = {}
       function send(name: string, args: Record<string, unknown>): Promise<unknown> {
         const prRepo = args.fork === true ? FORK_REPO : null
@@ -136,6 +133,25 @@ export function githubPrMountAdapters(
             prRepo
           })
         }
+        if (name === 'line-comment') {
+          return lineMutations().fetchAddPRReviewComment(client, WORKTREE, {
+            prNumber: PR_NUMBER,
+            commitId: 'head-sha-1',
+            path: 'src/app.ts',
+            startLine: 3,
+            line: 5,
+            body: 'recorded line comment',
+            prRepo
+          })
+        }
+        if (name === 'file-viewed') {
+          return lineMutations().fetchSetPRFileViewed(client, WORKTREE, {
+            pullRequestId: 'PR_kwDO',
+            path: 'src/app.ts',
+            viewed: true,
+            prRepo
+          })
+        }
         if (name === 'resolve-thread') {
           return mutations.fetchResolveReviewThread(client, WORKTREE, {
             threadId: 'thread-1',
@@ -177,7 +193,6 @@ export function githubPrMountAdapters(
         action: (_name, args) =>
           launch({
             client,
-            // A host older than the launch capabilities advertises neither.
             hostCapabilities:
               args.legacyHost === true
                 ? []

@@ -62,7 +62,7 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
     expect(state.workItemsInvalidationNonce).toBe(5)
   })
 
-  it('preserves runtime and explicit-source-prefixed entries during repo eviction', () => {
+  it('evicts runtime and explicit-source-prefixed entries of a repo no row still owns', () => {
     const store = createTestStore()
     const sourceContext = githubSourceContext('runtime:source-env', 'source-repo')
     const runtimeKey = workItemsCacheKey('repo-1', 20, '', 'runtime:owner-env')
@@ -77,41 +77,38 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
 
     store.getState().evictGitHubRepoCaches('repo-1', '/repo/one')
 
-    expect(store.getState().workItemsCache).toEqual({
-      [runtimeKey]: { data: [], fetchedAt: 1 },
-      [sourceKey]: { data: [], fetchedAt: 1 }
-    })
-    expect(store.getState().workItemsInvalidationNonce).toBe(4)
+    expect(store.getState().workItemsCache).toEqual({})
+    expect(store.getState().workItemsInvalidationNonce).toBe(5)
   })
 
-  it('preference invalidation removes local keys but preserves prefixed host/source keys', async () => {
+  it('preference invalidation removes every host bucket of a repo with one row', async () => {
     const store = createTestStore()
+    const updateRepo = vi.fn().mockResolvedValue(true)
     const sourceContext = githubSourceContext('runtime:source-env', 'source-repo')
     const localKey = workItemsCacheKey('repo-1', 20, '')
     const runtimeKey = workItemsCacheKey('repo-1', 20, '', 'runtime:owner-env')
     const sourceKey = workItemsCacheKey('repo-1', 20, '', getTaskSourceCacheScope(sourceContext))
     store.setState({
-      repos: [{ id: 'repo-1', path: '/repo/one', name: 'one', kind: 'git' }],
+      repos: [
+        { id: 'repo-1', path: '/repo/one', displayName: 'one', badgeColor: '#000', addedAt: 1 }
+      ],
+      updateRepo,
       workItemsInvalidationNonce: 4,
       workItemsCache: {
         [localKey]: { data: [], fetchedAt: 1 },
         [runtimeKey]: { data: [], fetchedAt: 1 },
         [sourceKey]: { data: [], fetchedAt: 1 }
       }
-    } as unknown as Partial<AppState>)
-    mockApi.repos.update.mockResolvedValueOnce(undefined)
-
-    await store.getState().setIssueSourcePreference('repo-1', '/repo/one', 'origin')
-
-    expect(store.getState().workItemsCache).toEqual({
-      [runtimeKey]: { data: [], fetchedAt: 1 },
-      [sourceKey]: { data: [], fetchedAt: 1 }
     })
+    await store.getState().setIssueSourcePreference('repo-1', '/repo/one', 'origin', 'local')
+
+    expect(store.getState().workItemsCache).toEqual({})
     expect(store.getState().workItemsInvalidationNonce).toBe(5)
-    expect(mockApi.repos.update).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      updates: { issueSourcePreference: 'origin' }
-    })
+    expect(updateRepo).toHaveBeenCalledWith(
+      'repo-1',
+      { issueSourcePreference: 'origin' },
+      { hostId: 'local' }
+    )
   })
 
   it('does not bump the work-item invalidation nonce when no work-item entries are evicted', () => {
@@ -214,7 +211,8 @@ describe('createGitHubSlice cache bounds', () => {
     vi.useRealTimers()
   })
 
-  it('bounds restored PR and issue caches', async () => {
+  it('bounds restored PR and issue caches, and tells main', async () => {
+    vi.useFakeTimers()
     const store = createTestStore()
     const pr = Object.fromEntries(
       Array.from({ length: 505 }, (_, index) => [
@@ -236,6 +234,10 @@ describe('createGitHubSlice cache bounds', () => {
     expect(Object.keys(store.getState().issueCache)).toHaveLength(500)
     expect(store.getState().prCache['repo-id::branch-0']).toBeUndefined()
     expect(store.getState().issueCache['repo-id::0']).toBeUndefined()
+    vi.advanceTimersByTime(1000)
+    expect(mockApi.cache.setGitHub).toHaveBeenLastCalledWith({
+      cache: { pr: store.getState().prCache, issue: store.getState().issueCache }
+    })
   })
 
   it('bounds PR and issue caches as fetches add entries', async () => {

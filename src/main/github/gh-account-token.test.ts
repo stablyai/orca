@@ -89,7 +89,8 @@ describe('gh-account-token', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['auth', 'token', '--user', 'Alice', '--hostname', 'github.com'],
-      expect.objectContaining({ timeout: 10_000 })
+      expect.objectContaining({ timeout: 10_000 }),
+      undefined
     )
   })
 
@@ -131,4 +132,26 @@ describe('gh-account-token', () => {
     expect(error.message).not.toContain('gho_')
     expect(error.message).toContain('Alice@github.com')
   })
+  it.each([true, false, undefined, 'true'])(
+    'preserves only boolean capture overflow through bound-token replacement: %j',
+    async (outputTruncated) => {
+      ghExecFileAsyncMock.mockRejectedValueOnce(
+        Object.assign(new Error('capture failed'), {
+          code: 1,
+          outputTruncated,
+          stderr: 'unknown flag: --allow-escape-sequences'
+        })
+      )
+      const error: unknown = await resolveGhAccountToken({
+        host: 'github.com',
+        user: 'Alice'
+      }).catch((failure: unknown) => failure)
+      expect(error).toMatchObject({ code: 'gh_bound_account_unavailable' })
+      if (typeof outputTruncated === 'boolean') {
+        expect(error).toHaveProperty('outputTruncated', outputTruncated)
+      } else {
+        expect(error).not.toHaveProperty('outputTruncated')
+      }
+    }
+  )
 })

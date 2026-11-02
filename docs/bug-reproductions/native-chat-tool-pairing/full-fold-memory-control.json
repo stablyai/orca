@@ -1,0 +1,25 @@
+{
+  "arraySlots": 1000000,
+  "samples": [
+    {
+      "transientHeapDeltaBytes": 8003528,
+      "retainedHeapDeltaBytes": 7995080
+    },
+    {
+      "transientHeapDeltaBytes": 8004232,
+      "retainedHeapDeltaBytes": 8000144
+    },
+    {
+      "transientHeapDeltaBytes": 8004232,
+      "retainedHeapDeltaBytes": 8000016
+    },
+    {
+      "transientHeapDeltaBytes": 8001976,
+      "retainedHeapDeltaBytes": 8000680
+    },
+    {
+      "transientHeapDeltaBytes": 8003912,
+      "retainedHeapDeltaBytes": 8000224
+    }
+  ]
+}

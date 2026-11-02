@@ -136,10 +136,7 @@ describe('palette live status', () => {
     })
   }
 
-  // Why: Orca injects its own "<Agent> - action required" OSC title on a blocked/waiting hook and
-  // classifies that title back as evidence. Once the pane's row aged out it stopped registering its
-  // identity, so the self-authored title outranked the pane's own `done` row and the palette dot
-  // claimed a question nobody was asking.
+  // Stale pane rows must still suppress Orca-authored permission titles after the pane reports done.
   it.each(['worktree', 'recent'] as const)(
     'does not paint a stale self-authored title as a live %s question',
     async (surface) => {
@@ -253,12 +250,12 @@ describe('palette live status', () => {
     await render()
 
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
-    expect(testContainer.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
+    expect(testContainer.querySelector('.lucide-activity')?.classList).toContain(
+      'text-agent-working'
+    )
     expect(dotLabels()).toEqual(['Monitoring background tasks'])
   })
 
-  // Why this is the whole point: the palette body no longer subscribes to agent status, so if the
-  // dot didn't hold its own subscription it would freeze at whatever it showed when you opened.
   it('re-renders the dot without re-rendering the frozen body around it', async () => {
     setAgentState('working')
     await render()
@@ -272,8 +269,6 @@ describe('palette live status', () => {
     expect(bodyRenderCount).toBe(rendersAfterMount)
   })
 
-  // Why: unread writes are app-wide chatter. The pip owns them here so the palette body can read
-  // its unread from the open-time snapshot instead of re-rendering the whole list on every bell.
   it('re-renders the unread pip without re-rendering the frozen body around it', async () => {
     await act(async () => {
       testRoot.render(
@@ -306,8 +301,7 @@ describe('palette live status', () => {
   it('goes inert while the palette is closed', async () => {
     setAgentState('working')
     await render(false)
-    // No live maps flow through, so the dot falls back to the no-tabs state rather than
-    // reporting a worktree it isn't watching.
+    // Without live maps, fall back to no-tabs status rather than reporting an unwatched worktree.
     expect(dotLabels()).toEqual(['Inactive'])
   })
 
@@ -357,7 +351,6 @@ describe('palette live status', () => {
     await act(async () => {
       setAgentState('working')
     })
-    // Why: A2 — category identity stays on the content icon; only high-signal agent states get a pip.
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(testContainer.querySelector('[data-spinner]')).not.toBeNull()
     expect(dotLabels()).toEqual(['Working'])
@@ -392,7 +385,9 @@ describe('palette live status', () => {
     })
 
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
-    expect(testContainer.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
+    expect(testContainer.querySelector('.lucide-activity')?.classList).toContain(
+      'text-agent-working'
+    )
     expect(dotLabels()).toEqual(['Monitoring background tasks'])
     expectStyledStatusTooltip('Monitoring background tasks')
   })
@@ -496,7 +491,6 @@ describe('palette live status', () => {
     expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
     expect(dotLabels()).toEqual(['Done'])
     expectStyledStatusTooltip('Done')
-    // lucide CircleCheck class marker
     expect(testContainer.innerHTML).toContain('lucide-circle-check')
   })
 

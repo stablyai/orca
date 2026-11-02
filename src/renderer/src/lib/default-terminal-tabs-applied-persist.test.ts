@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../../../main/persistence/runtime-authored-workspace-session-fields'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { useAppStore, type AppState } from '@/store'
 import { applyDefaultTerminalTabs } from './worktree-default-terminal-tabs'
@@ -15,23 +16,6 @@ const WORKTREE_ID = 'repo1::/wt-1'
 const DEFAULT_TABS = {
   runCommands: false,
   tabs: [{ title: 'Claude' }]
-}
-
-function preserveRuntimeAuthoredWorkspaceSessionFields<T extends Record<string, unknown>>(
-  next: T,
-  prior: T
-): T {
-  const marks = prior.defaultTerminalTabsAppliedByWorktreeId
-  if (!marks || typeof marks !== 'object') {
-    return next
-  }
-  return {
-    ...next,
-    defaultTerminalTabsAppliedByWorktreeId: {
-      ...marks,
-      ...(next.defaultTerminalTabsAppliedByWorktreeId as Record<string, boolean> | undefined)
-    }
-  }
 }
 
 describe('defaultTerminalTabsAppliedByWorktreeId persist round-trip', () => {

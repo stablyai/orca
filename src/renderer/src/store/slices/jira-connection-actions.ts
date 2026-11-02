@@ -22,6 +22,7 @@ import {
   jiraStatusUpdate,
   nextJiraStatusReadGeneration
 } from './jira-read-coordination'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 type JiraConnectionActions = Pick<
   JiraSlice,
@@ -41,6 +42,7 @@ function hasJiraStatusChanged(
     previous.connected !== next.connected ||
     previous.credentialError !== next.credentialError ||
     previous.credentialProtection !== next.credentialProtection ||
+    previous.supportsScopedTokens !== next.supportsScopedTokens ||
     previous.activeSiteId !== next.activeSiteId ||
     !shallow(previous.viewer, next.viewer) ||
     getSelectedJiraSiteId(previous) !== getSelectedJiraSiteId(next) ||
@@ -62,7 +64,7 @@ export function createJiraConnectionActions(
         set({ jiraStatusChecked: false })
       }
       try {
-        const status = await jiraStatus(get().settings)
+        const status = await jiraStatus(defaultScopeSource(get().settings))
         if (
           mutationGeneration !== currentJiraMutationGeneration() ||
           !isCurrentJiraStatusRead(statusReadGeneration) ||
@@ -84,12 +86,10 @@ export function createJiraConnectionActions(
         ) {
           return
         }
-        if (get().jiraStatus.connected) {
+        if (get().jiraStatusContextKey !== contextKey || get().jiraStatus.connected) {
           set((state) => jiraStatusUpdate(state, contextKey, { connected: false, viewer: null }))
         } else if (!get().jiraStatusChecked) {
           set({ jiraStatusChecked: true, jiraStatusContextKey: contextKey })
-        } else if (get().jiraStatusContextKey !== contextKey) {
-          set({ jiraStatusContextKey: contextKey })
         }
       }
     },
@@ -100,7 +100,7 @@ export function createJiraConnectionActions(
       const requestGeneration = beginJiraMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
       try {
-        const result = await jiraConnect(get().settings, args)
+        const result = await jiraConnect(defaultScopeSource(get().settings), args)
         if (
           result.ok &&
           isCurrentJiraMutation(requestGeneration) &&
@@ -132,14 +132,14 @@ export function createJiraConnectionActions(
       const requestGeneration = beginJiraMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
       try {
-        const result = await jiraTestConnection(get().settings, siteId)
+        const result = await jiraTestConnection(defaultScopeSource(get().settings), siteId)
         if (
           !isCurrentJiraMutation(requestGeneration) ||
           !isCurrentJiraRuntimeContext(contextKey, get().settings)
         ) {
           return result
         }
-        const status = await jiraStatus(get().settings)
+        const status = await jiraStatus(defaultScopeSource(get().settings))
         if (
           isCurrentJiraMutation(requestGeneration) &&
           isCurrentJiraRuntimeContext(contextKey, get().settings)
@@ -155,7 +155,7 @@ export function createJiraConnectionActions(
     selectJiraSite: async (siteId) => {
       const requestGeneration = beginJiraMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
-      const status = await jiraSelectSite(get().settings, siteId)
+      const status = await jiraSelectSite(defaultScopeSource(get().settings), siteId)
       if (
         !isCurrentJiraMutation(requestGeneration) ||
         getProviderRuntimeContextKey(get().settings) !== contextKey
@@ -169,7 +169,7 @@ export function createJiraConnectionActions(
     disconnectJira: async (siteId) => {
       const requestGeneration = beginJiraMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
-      await jiraDisconnect(get().settings, siteId)
+      await jiraDisconnect(defaultScopeSource(get().settings), siteId)
       if (
         !isCurrentJiraMutation(requestGeneration) ||
         !isCurrentJiraRuntimeContext(contextKey, get().settings)
@@ -177,7 +177,7 @@ export function createJiraConnectionActions(
         return
       }
       clearJiraInflightRequests()
-      const status = await jiraStatus(get().settings)
+      const status = await jiraStatus(defaultScopeSource(get().settings))
       if (
         !isCurrentJiraMutation(requestGeneration) ||
         !isCurrentJiraRuntimeContext(contextKey, get().settings)

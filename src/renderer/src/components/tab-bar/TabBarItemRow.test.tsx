@@ -11,6 +11,7 @@ import {
 import { i18n } from '@/i18n/i18n'
 import type { TabBarItem } from './tab-bar-item-model'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   renderTabBarItems,
   type TabBarItemSurfaceProps,
@@ -22,6 +23,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 type TabProps = {
   tab?: { id: string; title: string }
+  agent?: string | null
+  nativeChat?: { sessionId: string; agent: string | undefined }
   isActive: boolean
   isPinned: boolean
   onActivate: (id: string) => void
@@ -29,7 +32,6 @@ type TabProps = {
   gitStatus?: string | null
 }
 
-// Every render of every tab, in order, keyed by the id the strip shows it under.
 const tabRenders: { id: string; props: TabProps }[] = []
 
 vi.mock('./SortableTab', () => ({
@@ -53,7 +55,17 @@ vi.mock('./EditorFileTab', () => ({
 }))
 
 /** Rebuilt on every call, like the strip's projections: equal content, never the same objects. */
-function buildItems({ terminalPinned = false, browserTitle = 'Example' } = {}): TabBarItem[] {
+function buildItems({
+  terminalPinned = false,
+  browserTitle = 'Example',
+  sessionLabel = 'Session',
+  sessionAgent
+}: {
+  terminalPinned?: boolean
+  browserTitle?: string
+  sessionLabel?: string
+  sessionAgent?: AgentType
+} = {}): TabBarItem[] {
   return [
     {
       type: 'terminal',
@@ -117,7 +129,8 @@ function buildItems({ terminalPinned = false, browserTitle = 'Example' } = {}): 
         groupId: 'group-1',
         worktreeId: 'wt-1',
         contentType: 'agent-session',
-        label: 'Session',
+        ...(sessionAgent ? { agentSessionAgent: sessionAgent } : {}),
+        label: sessionLabel,
         customLabel: null,
         color: null,
         sortOrder: 3,
@@ -133,6 +146,8 @@ type StripInputs = {
   managedBrowserCreationEnabled?: boolean
   terminalPinned?: boolean
   browserTitle?: string
+  sessionLabel?: string
+  sessionAgent?: AgentType
   activeTabType?: WorkspaceVisibleTabType
   activeClientHostedBrowserRowId?: string | null
   statusByRelativePath?: TabBarItemSurfaceRuntime['statusByRelativePath']
@@ -144,6 +159,8 @@ function Strip({
   managedBrowserCreationEnabled = false,
   terminalPinned,
   browserTitle,
+  sessionLabel,
+  sessionAgent,
   activeTabType = 'terminal',
   activeClientHostedBrowserRowId = null,
   statusByRelativePath = STATUS_BY_RELATIVE_PATH
@@ -169,6 +186,7 @@ function Strip({
   }
   const actions = useTabBarItemActions({
     props: {
+      worktreeId: 'wt-1',
       onActivate,
       onActivateFile: onActivate,
       onActivateBrowserTab: onActivate,
@@ -187,7 +205,7 @@ function Strip({
   return (
     <>
       {renderTabBarItems({
-        items: buildItems({ terminalPinned, browserTitle }),
+        items: buildItems({ terminalPinned, browserTitle, sessionLabel, sessionAgent }),
         props,
         runtime,
         actions,
@@ -338,6 +356,25 @@ describe('tab strip rows', () => {
     expect(tabRenders).toHaveLength(TAB_IDS.length + 1)
   })
 
+  it.each([
+    'Hermes automation deprecation',
+    'Claude Code review',
+    'Review Grok usage',
+    'OpenCode launch-flow design'
+  ])('shows a native chat with its own provider when its name is "%s"', (sessionLabel) => {
+    renderStrip({ sessionLabel, sessionAgent: 'codex' })
+
+    expect(lastRender('session-1').tab?.title).toBe(sessionLabel)
+    expect(lastRender('session-1').agent).toBe('codex')
+    expect(lastRender('session-1').nativeChat).toEqual({ sessionId: 'session-1', agent: 'codex' })
+  })
+
+  it('shows no agent for a native chat whose provider is not recorded', () => {
+    renderStrip({ sessionLabel: 'Hermes automation deprecation' })
+
+    expect(lastRender('session-1').agent).toBeNull()
+  })
+
   it.each(TAB_IDS)('retires a client-hosted row selection when %s is activated', (tabId) => {
     renderStrip()
     selectClientHostedBrowserRow({
@@ -353,10 +390,7 @@ describe('tab strip rows', () => {
   })
 })
 
-/**
- * A client-hosted row covers the pane without moving the group's `activeTabId`, so the strip's two
- * halves would each keep painting an underline — the reported double highlight.
- */
+/** Client-hosted rows overlay panes without changing activeTabId; suppress real-tab underlines while they are selected. */
 describe('real tabs while a client-hosted row is selected', () => {
   const activeFlags = (): boolean[] => TAB_IDS.map((tabId) => lastRender(tabId).isActive)
 

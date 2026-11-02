@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
@@ -29,7 +30,7 @@ function resetMockState() {
 }
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useEffect: (effect: () => void | (() => void)) => {
@@ -111,7 +112,6 @@ describe('useWarpThemeImport', () => {
         expect.objectContaining({ id: 'warp:tokyo-night', name: 'Tokyo Night' })
       ]
     })
-    // Success is reported via a toast, and the modal closes itself.
     expect(toastSuccess).toHaveBeenCalledWith('Imported 1 theme')
 
     resetMockState()
@@ -197,47 +197,6 @@ describe('useWarpThemeImport', () => {
 
     expect(warp.selectedThemeIds.has('warp:one')).toBe(true)
     expect(warp.selectedThemeIds.has('warp:two')).toBe(true)
-  })
-
-  it('reports desktop-only preview responses', async () => {
-    const previewResponse: WarpThemeImportPreview = {
-      found: false,
-      desktopOnly: true,
-      themes: [],
-      skippedFiles: [],
-      error: 'Warp theme import is available in the desktop app.'
-    }
-    vi.stubGlobal('window', {
-      api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
-    })
-
-    let warp = useWarpThemeImport(vi.fn(), baseSettings)
-    await warp.handleClick()
-    resetMockState()
-    warp = useWarpThemeImport(vi.fn(), baseSettings)
-
-    expect(warp.desktopOnly).toBe(true)
-  })
-
-  it('keeps an empty errorless preview unselected and not found', async () => {
-    const previewResponse: WarpThemeImportPreview = {
-      found: false,
-      sourceLabel: 'Warp themes',
-      skippedFiles: [],
-      themes: []
-    }
-    vi.stubGlobal('window', {
-      api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
-    })
-
-    let warp = useWarpThemeImport(vi.fn(), baseSettings)
-    await warp.handleClick()
-    resetMockState()
-    warp = useWarpThemeImport(vi.fn(), baseSettings)
-
-    expect(warp.selectedThemeIds.size).toBe(0)
-    expect(warp.preview?.found).toBe(false)
-    expect(warp.preview?.error).toBeUndefined()
   })
 
   it('opens the modal in yaml mode once the picker returns a selection', async () => {

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
-import { selectWorktreeHostConnectionPhase } from './worktree-host-connection-phase'
+import {
+  resolveWorktreeHostConnection,
+  selectWorktreeHostConnectionPhase
+} from './worktree-host-connection-phase'
 
 function makeState(overrides: Record<string, unknown>): AppState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the phase selector reads only the repo, worktree, runtime, and SSH fields set here.
@@ -51,6 +54,19 @@ function makeSshState(
 }
 
 describe('selectWorktreeHostConnectionPhase', () => {
+  it('reads the local deployment tunnel for a managed browser route', () => {
+    const state = makeSshState('connected', {
+      repos: [{ id: 'repo-ssh', executionHostId: 'runtime:env-a' }]
+    })
+    expect(resolveWorktreeHostConnection(state, 'wt-ssh', 'ssh-a').phase).toBe('unverifiable')
+    expect(resolveWorktreeHostConnection(state, 'wt-ssh', 'ssh-a', null)).toEqual({
+      phase: 'connected',
+      targetId: 'ssh-a',
+      environmentId: null,
+      publishedStatus: 'connected',
+      connectedEpoch: 'ssh-a:7'
+    })
+  })
   it('reports a local workspace, and no worktree, as local', () => {
     const state = makeState({
       repos: [{ id: 'repo-local' }],
@@ -178,6 +194,38 @@ describe('selectWorktreeHostConnectionPhase', () => {
       environmentId: 'env-a',
       publishedStatus: 'connected',
       connectedEpoch: 'ssh-nested:3'
+    })
+  })
+
+  it("reads a paired server's folder workspace on its nested target like a project there", () => {
+    const state = makeState({
+      // As fetched from the server: its own SSH target, stamped with the server's host.
+      folderWorkspaces: [
+        {
+          id: 'fw-runtime',
+          projectGroupId: 'group-runtime',
+          folderPath: '/srv/notes',
+          connectionId: 'ssh-nested',
+          executionHostId: 'runtime:env-a'
+        }
+      ],
+      projectGroups: [
+        {
+          id: 'group-runtime',
+          kind: 'folder',
+          connectionId: 'ssh-nested',
+          executionHostId: 'runtime:env-a'
+        }
+      ],
+      runtimeStatusByEnvironmentId: new Map([
+        ['env-a', { status: { runtimeId: 'runtime-a' }, checkedAt: 1 }]
+      ])
+    })
+
+    expect(selectWorktreeHostConnectionPhase(state, 'folder:fw-runtime')).toMatchObject({
+      phase: 'unverifiable',
+      targetId: 'ssh-nested',
+      environmentId: 'env-a'
     })
   })
 

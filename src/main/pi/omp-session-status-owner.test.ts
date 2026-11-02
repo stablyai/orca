@@ -202,3 +202,56 @@ describe('OMP runtime session provenance', () => {
     )
   })
 })
+
+const payloadsOf = (harness: ReturnType<typeof createAgentStatusExtensionHarness>) =>
+  harness.fetchMock.mock.calls.map((call) => JSON.parse(call[1].body).payload)
+
+describe('Pi in-process subagent sessions', () => {
+  // Pi caches the extension factory per cwd, so pi-subagents children share module state with the lead.
+  it('keeps the lead pane identity and completion while a child session runs', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi', existsSync: () => true })
+    const session = (id: string) => ({
+      sessionManager: { getSessionId: () => id, getSessionFile: () => `/sessions/${id}.jsonl` }
+    })
+    const lead = session('lead')
+    await harness.callHook('session_start', { reason: 'startup' }, lead)
+    await harness.callHook('agent_start', {}, lead)
+    await settle()
+    const leadHandlers = { ...harness.handlers }
+    harness.reload()
+    const child = {
+      sessionManager: {
+        ...session('child').sessionManager,
+        getHeader: () => ({ parentSession: '/sessions/lead.jsonl' })
+      }
+    }
+    for (const name of ['session_start', 'agent_start', 'message_end', 'agent_end']) {
+      await harness.callHook(
+        name,
+        { reason: 'startup', message: { role: 'assistant', content: 'child done' } },
+        child
+      )
+      await settle()
+    }
+    await leadHandlers.message_end({ message: { role: 'assistant', content: 'lead done' } }, lead)
+    await settle()
+    await leadHandlers.agent_end({}, lead)
+    await settle()
+
+    const payloads = payloadsOf(harness)
+    expect(payloads.map((payload) => payload.session_id).filter(Boolean)).not.toContain('child')
+    expect(payloads.at(-1)).toMatchObject({ hook_event_name: 'agent_end', session_id: 'lead' })
+
+    harness.reload()
+    await harness.callHook(
+      'session_start',
+      { reason: 'new', previousSessionFile: '/sessions/lead.jsonl' },
+      session('next')
+    )
+    await settle()
+    expect(payloadsOf(harness).at(-1)).toMatchObject({
+      hook_event_name: 'session_start',
+      session_id: 'next'
+    })
+  })
+})

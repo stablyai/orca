@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshGitProvider } from '../providers/ssh-git-provider'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
@@ -28,12 +27,10 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
   it('fetches a GitLab MR head into its remote-scoped Orca ref for local repos', async () => {
     const localRef = await fetchGitLabMergeRequestHeadRef(
       { path: '/repo', connectionId: null },
-      null,
       'origin',
       42
     )
 
-    // The fetch is bounded so a stalled remote can't hang MR resolution.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',
@@ -56,7 +53,7 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
     })
 
     await expect(
-      fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: null }, null, 'origin', 42)
+      fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: null }, 'origin', 42)
     ).rejects.toThrow('Remote "origin" is not configured.')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       expect.arrayContaining(['fetch']),
@@ -65,15 +62,9 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
   })
 
   it('keeps WSL routing while bounding the MR-head fetch', async () => {
-    await fetchGitLabMergeRequestHeadRef(
-      { path: '/repo', connectionId: null },
-      null,
-      'origin',
-      42,
-      {
-        localGitExecOptions: { cwd: '/repo', wslDistro: 'Ubuntu' }
-      }
-    )
+    await fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: null }, 'origin', 42, {
+      localGitExecOptions: { cwd: '/repo', wslDistro: 'Ubuntu' }
+    })
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo',
@@ -90,40 +81,19 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
     )
   })
 
-  it('uses the SSH GitLab MR-head RPC and never runs git directly', async () => {
-    const expectedRef = `refs/orca/merge-requests/${ORIGIN_COMPONENT}/77`
-    const fetchGitLabMergeRequestHead = vi.fn(async () => expectedRef)
-
-    const localRef = await fetchGitLabMergeRequestHeadRef(
-      { path: '/repo', connectionId: 'conn-1' },
-      { fetchGitLabMergeRequestHead } as unknown as SshGitProvider,
-      'origin',
-      77
-    )
-
-    expect(fetchGitLabMergeRequestHead).toHaveBeenCalledWith('/repo', 'origin', 77)
-    expect(localRef).toBe(expectedRef)
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects a connected GitLab MR-head fetch without an SSH provider', async () => {
+  it('rejects a GitLab MR-head fetch for an SSH repo', async () => {
     await expect(
-      fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: 'conn-1' }, null, 'origin', 77)
+      fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: 'conn-1' }, 'origin', 77)
     ).rejects.toThrow('SSH Git provider is not available')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('rejects invalid MR iids and option-shaped remotes before running git', async () => {
     await expect(
-      fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: null }, null, 'origin', 0)
+      fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: null }, 'origin', 0)
     ).rejects.toThrow('Invalid merge request iid')
     await expect(
-      fetchGitLabMergeRequestHeadRef(
-        { path: '/repo', connectionId: null },
-        null,
-        '--upload-pack=x',
-        42
-      )
+      fetchGitLabMergeRequestHeadRef({ path: '/repo', connectionId: null }, '--upload-pack=x', 42)
     ).rejects.toThrow('must not start with "-"')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })

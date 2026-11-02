@@ -19,8 +19,7 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
   const setOverlayRef = useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null
     if (node) {
-      // Why: take-back can resolve after the overlay renders null; a later
-      // mobile session must not inherit the stale disabled state.
+      // Reset when the overlay returns; a late prior reclaim must not leave the next session disabled.
       setPending(false)
       setTakeBackFailed(false)
     }
@@ -39,8 +38,7 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
     try {
       await onTakeBack()
     } catch {
-      // Why: the reclaim RPC can fail (runtime gone, phone still holding the lock).
-      // Surface it and leave the button enabled instead of silently re-locking.
+      // Show reclaim failure and permit retry when the runtime is gone or the phone still holds the lock.
       if (mountedRef.current) {
         setTakeBackFailed(true)
       }

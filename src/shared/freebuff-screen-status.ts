@@ -22,7 +22,7 @@ export function splitFreebuffScreenUpdates(data: string, pendingEscape: string):
 }
 
 function cleanBoxLine(line: string): string {
-  return line.replace(/^[│┃\s]+|[│┃\s]+$/g, '').trim()
+  return line.replace(/^[\u2502\u2503\s]+|[\u2502\u2503\s]+$/g, '').trim()
 }
 
 /** Reads the live composer area, never status words in the conversation above it. */
@@ -47,16 +47,20 @@ export function readFreebuffScreenStatus(
   if (footer === -1) {
     return null
   }
-  const dialog = lines.findLastIndex((line) => /[╭─].*Some questions for you.*[─╮]/.test(line))
+  const dialog = lines.findLastIndex((line) =>
+    /[\u256D\u2500].*Some questions for you.*[\u2500\u256E]/.test(line)
+  )
   if (
     dialog !== -1 &&
     dialog < footer &&
-    /↑↓ navigate/.test(lines.slice(dialog, footer).join('\n'))
+    /\u2191\u2193 navigate/.test(lines.slice(dialog, footer).join('\n'))
   ) {
     const body = lines.slice(dialog + 1, footer).map(cleanBoxLine)
-    const question = body.find((line) => /^[▼▶▸▾►]/.test(line))?.replace(/^[▼▶▸▾►]\s*/, '')
+    const question = body
+      .find((line) => /^[\u25BC\u25B6\u25B8\u25BE\u25BA]/.test(line))
+      ?.replace(/^[\u25BC\u25B6\u25B8\u25BE\u25BA]\s*/, '')
     const options = body.flatMap((line) => {
-      const match = /^[○●]\s+(.+)$/.exec(line)
+      const match = /^[\u25CB\u25CF]\s+(.+)$/.exec(line)
       return match ? [{ label: match[1], description: '' }] : []
     })
     return {
@@ -69,7 +73,7 @@ export function readFreebuffScreenStatus(
     }
   }
   const composerTop = lines.findLastIndex(
-    (line, index) => index < footer && /^\s*╭─+╮\s*$/.test(line)
+    (line, index) => index < footer && /^\s*\u256D\u2500+\u256E\s*$/.test(line)
   )
   if (composerTop === -1 || footer - composerTop > 12) {
     return null

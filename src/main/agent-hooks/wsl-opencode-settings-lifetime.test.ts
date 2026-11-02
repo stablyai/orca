@@ -4,9 +4,9 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RelayDispatcher } from '../../relay/dispatcher'
-import { PluginOverlayManager } from '../../relay/plugin-overlay'
-import { createInstallPluginsHandler } from '../../relay/wsl-install-plugins-handler'
+import { RelayDispatcher } from '../../wsl-guest/dispatcher'
+import { PluginOverlayManager } from '../../wsl-guest/plugin-overlay'
+import { createInstallPluginsHandler } from '../../wsl-guest/wsl-install-plugins-handler'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { REINSTALL_MIN_INTERVAL_MS } from './wsl-hook-relay-deps'
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
@@ -155,7 +155,10 @@ describe.skipIf(process.platform === 'win32')('WSL public-manager settings lifet
       managedHookSettings: () => settings,
       pluginSources: () => sources,
       warn: vi.fn(),
-      transientRetryDelayMs: 1
+      transientRetryDelayMs: 1,
+      // A bridge terminal stays open, so no relay idles out mid-test.
+      bridgePtyPresence: { count: () => 1, onChange: () => () => {} },
+      daemonBridgeSessions: async () => 'none' as const
     })
   })
   afterEach(() => {

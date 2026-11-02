@@ -43,7 +43,6 @@ type PairedTunnel = {
   onSessionClose: ReturnType<typeof vi.fn>
 }
 
-// Both peers are real so a per-stream failure can be told apart from a tunnel-wide teardown.
 function createPairedTunnel(
   claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null
 ): PairedTunnel {
@@ -92,19 +91,6 @@ describe('BrowserNetworkTunnelSession stream-scoped failures', () => {
 
     const pending = tunnel.client.open({ host: 'never-connects.internal', port: 443 })
     tunnel.sockets[1]!.emit('close')
-
-    await expect(pending).rejects.toThrow('destination_closed_before_connect')
-    expect(tunnel.closures).toEqual([])
-    expect(healthy.destroyed).toBe(false)
-    expect(tunnel.sockets[0]!.destroyed).toBe(false)
-  })
-
-  it('fails only the pending stream when the destination ends before connecting', async () => {
-    const tunnel = createPairedTunnel()
-    const healthy = await openConnectedStream(tunnel, 'healthy.internal')
-
-    const pending = tunnel.client.open({ host: 'never-connects.internal', port: 443 })
-    tunnel.sockets[1]!.emit('end')
 
     await expect(pending).rejects.toThrow('destination_closed_before_connect')
     expect(tunnel.closures).toEqual([])

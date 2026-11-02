@@ -1,3 +1,4 @@
+// COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react'
 import { track } from '@/lib/telemetry'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
@@ -63,8 +64,7 @@ export function FeatureSetupInlineTerminal({
       if (isContinueShortcut) {
         return
       }
-      // Why: auto-insert focuses the terminal programmatically; only count
-      // direct terminal activity, not the global continue shortcut.
+      // Why: auto-insert focuses programmatically; count only direct terminal activity.
       terminalInteractedTrackedRef.current = true
       track('onboarding_feature_setup_terminal_interacted', {
         ...selectionTelemetry,

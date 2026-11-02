@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as LocalCommandResolver from './command-path-resolver'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 
@@ -16,7 +16,7 @@ const {
   runProcessMock: vi.fn()
 }))
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 vi.mock('./preflight-local-env', () => ({ buildLocalPreflightEnv: () => undefined }))
 
@@ -30,8 +30,7 @@ vi.mock('./command-path-resolver', async (importOriginal) => ({
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
 
-// Why: `findRunnableLocalCommand` decides what to spawn next from the error
-// `execFile` puts on a failed probe, so the shapes below have to be its own.
+// Probe recovery branches on promisified execFile errors; retain their real shape.
 vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
@@ -344,6 +343,8 @@ describe('findRunnableLocalCommand', () => {
   })
 
   it('gives an explicit binary the full timeout without trying another copy', async () => {
+    // Freeze the clock so remaining deadline budget is deterministic.
+    vi.spyOn(Date, 'now').mockReturnValue(1000)
     execFileAsyncMock.mockRejectedValue(
       Object.assign(new Error('Timed out'), { code: 'ETIMEDOUT' })
     )

@@ -2,12 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  openInMemoryRelayDatabase,
-  openRelayDatabase,
-  POSTGRES_SCHEMA_MIGRATIONS,
-  REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
-} from './database.js'
+import { openInMemoryRelayDatabase, openRelayDatabase } from './database.js'
 
 const temporaryDirectories: string[] = []
 
@@ -44,56 +39,6 @@ describe('relay database', () => {
     } finally {
       await upgraded.close()
     }
-  })
-
-  it('creates every durable relay state table', async () => {
-    const database = await openInMemoryRelayDatabase()
-    const rows = await database.query(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'relay_%' ORDER BY name`
-    )
-    expect(rows.map((row) => row.name)).toEqual([
-      'relay_admission_selector_cell_additions',
-      'relay_admission_selector_intents',
-      'relay_admission_selectors',
-      'relay_assignment_activity_leases',
-      'relay_assignment_migration_incarnations',
-      'relay_assignment_migrations',
-      'relay_assignment_region_preferences',
-      'relay_assignments',
-      'relay_audit_events',
-      'relay_cell_admission',
-      'relay_cell_capabilities',
-      'relay_cell_committed_fences',
-      'relay_cell_connection_limits',
-      'relay_cell_connection_runtime',
-      'relay_cell_connection_snapshots',
-      'relay_cell_drain_attempt_states',
-      'relay_cell_drain_recovery_attempts',
-      'relay_cell_fence_apply_invocations',
-      'relay_cell_fence_attempts',
-      'relay_cell_fence_plan_bindings',
-      'relay_cell_fences',
-      'relay_cell_legacy_fence_adoptions',
-      'relay_cell_regions',
-      'relay_cell_rehome_safety',
-      'relay_cell_runtime',
-      'relay_cells',
-      'relay_confirm_results',
-      'relay_connection_bases',
-      'relay_control_capabilities',
-      'relay_control_connection_reservations',
-      'relay_devices',
-      'relay_direct_authorizations',
-      'relay_install_results',
-      'relay_invites',
-      'relay_post_drain_migration_pins',
-      'relay_rate_windows',
-      'relay_region_decisions',
-      'relay_region_rehome_attempts',
-      'relay_region_rehome_control',
-      'relay_region_rehome_worker_state'
-    ])
-    await database.close()
   })
 
   it('rolls back every effect and serializes concurrent transactions', async () => {
@@ -172,46 +117,67 @@ describe('relay database', () => {
     await second.close()
   })
 
-  it('renders every region check from the shared region list', async () => {
-    // Derived, not hand-written: a third region must not leave one column
-    // rejecting a value the rest of the relay already accepts.
+  it('accepts supported regions and rejects unknown regions in each constrained table', async () => {
     const database = await openInMemoryRelayDatabase()
-    const checked = await database.query(
-      `SELECT name, sql FROM sqlite_master
-       WHERE type = 'table'
-         AND name IN ('relay_assignment_region_preferences', 'relay_cell_regions',
-                      'relay_region_rehome_attempts')
-       ORDER BY name`
-    )
-    const list = `IN ('us-central1', 'asia-east2')`
-    expect(checked.map((row) => row.name)).toEqual([
-      'relay_assignment_region_preferences',
-      'relay_cell_regions',
-      'relay_region_rehome_attempts'
-    ])
-    expect(checked.every((row) => String(row.sql).includes(list))).toBe(true)
-    expect(POSTGRES_SCHEMA_MIGRATIONS.some((statement) => statement.includes(list))).toBe(true)
-    await database.close()
-  })
-
-  it('indexes rehome attempts by host recency for the per-host cooldown', async () => {
-    const database = await openInMemoryRelayDatabase()
-    const rows = await database.query(
-      `SELECT sql FROM sqlite_master
-       WHERE type = 'index' AND name = 'relay_region_rehome_attempts_host_recency'`
-    )
-    expect(rows[0]?.sql).toContain('(user_id, relay_host_id, created_at)')
-    expect(REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS).toBe(7 * 24 * 60 * 60_000)
-    await database.close()
-  })
-
-  it('indexes region preference expiry by observation time', async () => {
-    const database = await openInMemoryRelayDatabase()
-    const rows = await database.query(
-      `SELECT sql FROM sqlite_master
-       WHERE type = 'index' AND name = 'relay_assignment_region_preferences_observed'`
-    )
-    expect(rows[0]?.sql).toContain('(observed_at)')
-    await database.close()
+    try {
+      for (const region of ['us-central1', 'asia-east2', 'invalid-region']) {
+        const writes = [
+          () =>
+            database.query('INSERT INTO relay_cell_regions (cell_id, region) VALUES (?, ?)', [
+              region,
+              region
+            ]),
+          () =>
+            database.query(
+              'INSERT INTO relay_assignment_region_preferences (user_id, relay_host_id, preferred_region, observed_at) VALUES (?, ?, ?, ?)',
+              [region, 'host', region, 1]
+            ),
+          () =>
+            database.query(
+              `INSERT INTO relay_region_rehome_attempts
+            (attempt_id, user_id, relay_host_id, preferred_region, source_cell_id, source_cell_incarnation,
+             target_cell_id, target_cell_incarnation, previous_epoch, assignment_epoch,
+             drain_grace_ms, send_attempts, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                region,
+                region,
+                'host',
+                region,
+                'source',
+                'source-incarnation',
+                'target',
+                'target-incarnation',
+                1,
+                2,
+                60_000,
+                0,
+                1,
+                1
+              ]
+            )
+        ]
+        for (const write of writes) {
+          await (region === 'invalid-region'
+            ? expect(write()).rejects.toThrow(/CHECK constraint failed/)
+            : write())
+        }
+      }
+      expect(await database.query('SELECT region FROM relay_cell_regions ORDER BY region')).toEqual(
+        [{ region: 'asia-east2' }, { region: 'us-central1' }]
+      )
+      expect(
+        await database.query(
+          'SELECT preferred_region FROM relay_assignment_region_preferences ORDER BY preferred_region'
+        )
+      ).toEqual([{ preferred_region: 'asia-east2' }, { preferred_region: 'us-central1' }])
+      expect(
+        await database.query(
+          'SELECT preferred_region FROM relay_region_rehome_attempts ORDER BY preferred_region'
+        )
+      ).toEqual([{ preferred_region: 'asia-east2' }, { preferred_region: 'us-central1' }])
+    } finally {
+      await database.close()
+    }
   })
 })

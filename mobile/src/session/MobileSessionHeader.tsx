@@ -1,227 +1,187 @@
-import { View, Text, ScrollView, Pressable } from 'react-native'
+import { useRef, useState } from 'react'
+import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import {
-  ChevronLeft,
-  Folder,
-  File,
-  FileText,
-  GitBranch,
-  Globe,
-  MoreHorizontal,
-  Plus
-} from 'lucide-react-native'
-import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
-import { triggerMediumImpact } from '../platform/haptics'
-import { StatusDot } from '../components/StatusDot'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import {
-  getMobileSessionTabTitle,
-  resolveMobileTerminalTabAgentId
-} from './mobile-terminal-tab-agent'
-import { colors } from '../theme/mobile-theme'
-import { QuickCommandsTabButton } from './QuickCommandsTabButton'
+import { ChevronLeft, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
+import { MobileSessionTabStrip } from './MobileSessionTabStrip'
+import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
+import type { SessionTitleCard } from './use-session-title-card'
 import { styles } from './mobile-session-styles'
-import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
+import { spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
+import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useTopChromeSpace } from '../layout/use-top-chrome-space'
+import { useShellSideRail } from '../layout/use-shell-side-rail'
 
-export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
+export function MobileSessionHeader({
+  controller,
+  details
+}: {
+  controller: MobileSessionController
+  details: SessionTitleCard
+}) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     hostId,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
-    connState,
+    presentedConnState,
     forceReconnectHost,
     worktreeName,
     activePanel,
-    activeSessionTabId,
-    activeSessionTabIdRef,
-    tabStripRef,
-    tabStripOffsetRef,
-    tabStripViewportWidthRef,
-    tabStripContentWidthRef,
-    tabLayoutsRef,
-    creating,
-    creatingBrowser,
-    creatingMarkdown,
-    setCreateError,
-    setShowCreateTabDrawer,
-    setShowQuickCommands,
     setShowHeaderMoreActions,
-    quickCommandsSupported,
-    showToast,
     requestLeaveSession,
-    scrollActiveTabIntoView,
-    switchSessionTab,
-    openSessionTabActionSheetAfterKeyboardDismiss,
     visibleTabs,
     showConnectionRetry,
+    connectionEscalated,
     terminalSummary,
-    handlePanelTap,
-    showHeaderMoreButton
+    handlePanelTap
   } = controller
-  const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
+  const layout = useResponsiveLayout()
+  const [headerWidth, setHeaderWidth] = useState<number | null>(null)
+  const moreRef = useRef<View>(null)
+  const revealSidebar = useHostSidebarReveal()
+  const topChrome = useTopChromeSpace()
+  const sideRail = useShellSideRail()
+  // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
+  const hasTabs = visibleTabs.length > 0
+  const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
+  // Bar buttons otherwise leave less than two readable tabs on a narrow header.
+  const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
+  const sourceControlInBar =
+    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && !actionsCollapsed
+  const tabStrip = hasTabs ? (
+    <MobileSessionTabStrip
+      controller={controller}
+      inTopBar={tabsInTopBar}
+      details={details.tabDetails}
+      actionsCollapsed={actionsCollapsed}
+    />
+  ) : null
+  const leading = (
+    <>
+      {revealSidebar ? (
+        <NavBarButton
+          accessibilityLabel={t('session.header.showSidebar', 'Show sidebar')}
+          icon={PanelLeftOpen}
+          onPress={revealSidebar}
+        />
+      ) : null}
+      <NavBarButton
+        accessibilityLabel={t('session.header.backToWorktrees', 'Back to worktrees')}
+        icon={ChevronLeft}
+        ref={details.backRef}
+        onPress={() => {
+          if (!details.closeFirst()) {
+            requestLeaveSession()
+          }
+        }}
+      />
+    </>
+  )
+  const titleBlock =
+    !sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
+      <MobileSessionTitleBlock
+        title={worktreeName || t('session.header.terminalTitle', 'Terminal')}
+        connState={presentedConnState}
+        details={details}
+        meta={terminalSummary}
+        centered={!tabsInTopBar}
+        showConnectionRetry={showConnectionRetry}
+        onRetry={() => {
+          if (hostId && forceReconnectHost) {
+            void forceReconnectHost(hostId)
+          }
+        }}
+      />
+    ) : null
+  const trailing = (
+    <>
+      {sourceControlInBar ? (
+        <NavBarButton
+          active={activePanel === 'sourceControl'}
+          accessibilityLabel={t('session.header.openSourceControl', 'Open source control')}
+          icon={GitBranch}
+          onPress={() => handlePanelTap('sourceControl')}
+        />
+      ) : null}
+      <NavBarButton
+        ref={moreRef}
+        active={activePanel !== null && !(sourceControlInBar && activePanel === 'sourceControl')}
+        accessibilityLabel={t('session.header.moreActions', 'More session actions')}
+        icon={MoreHorizontal}
+        onPress={() => setShowHeaderMoreActions(true)}
+      />
+    </>
+  )
   return (
-    <SafeAreaView style={styles.sessionChrome} edges={['top']}>
-      <View style={styles.sessionTopBar}>
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={requestLeaveSession}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Back to worktrees"
+    <View ref={topChrome.ref} onLayout={topChrome.onLayout}>
+      <SafeAreaView
+        style={[
+          styles.sessionChrome,
+          topChrome.space && {
+            paddingLeft: topChrome.space.left,
+            paddingRight: topChrome.space.right,
+            minHeight: topChrome.space.minHeight
+          }
+        ]}
+        edges={topChrome.space ? [] : ['top']}
+      >
+        <View
+          // Sideways the row is a different bar, so rotating measures a fresh one.
+          key={tabsInTopBar ? 'tab-row' : 'nav-bar'}
+          ref={details.barRef}
+          style={tabsInTopBar ? styles.sessionTopBar : undefined}
+          onLayout={(event) => {
+            details.onAnchorLayout()
+            const width = event.nativeEvent.layout.width
+            setHeaderWidth((previous) => (previous === width ? previous : width))
+          }}
         >
-          <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
-
-        <View style={styles.sessionTitleBlock}>
-          <Text style={styles.sessionTitle} numberOfLines={1}>
-            {worktreeName || 'Terminal'}
-          </Text>
-          <Pressable
-            style={styles.sessionMetaRow}
-            disabled={!showConnectionRetry}
-            onPress={() => {
-              if (hostId && forceReconnectHost) {
-                void forceReconnectHost(hostId)
-              }
-            }}
-            accessibilityRole={showConnectionRetry ? 'button' : undefined}
-            accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
-          >
-            <StatusDot state={connState} />
-            <Text style={styles.sessionMetaText} numberOfLines={1}>
-              {terminalSummary}
-            </Text>
-          </Pressable>
+          {tabsInTopBar ? (
+            // NavBar centres its title; sideways, the tabs take the row's spare width instead.
+            <>
+              <View style={barStyles.group}>{leading}</View>
+              {titleBlock}
+              {tabStrip}
+              <View style={barStyles.group}>{trailing}</View>
+            </>
+          ) : (
+            <NavBar
+              leading={leading}
+              center={titleBlock}
+              trailing={trailing}
+              style={barStyles.inChrome}
+            />
+          )}
         </View>
-        {!isFloatingWorkspaceRoute && (
-          <MobileSessionHeaderIconButton
-            active={activePanel === 'files'}
-            accessibilityLabel="Open file explorer"
-            icon={Folder}
-            onPress={() => handlePanelTap('files')}
-          />
-        )}
-        {!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && (
-          <MobileSessionHeaderIconButton
-            active={activePanel === 'sourceControl'}
-            accessibilityLabel="Open source control"
-            icon={GitBranch}
-            onPress={() => handlePanelTap('sourceControl')}
-          />
-        )}
-        {showHeaderMoreButton ? (
-          <MobileSessionHeaderIconButton
-            active={activePanel === 'pr'}
-            accessibilityLabel="More session actions"
-            icon={MoreHorizontal}
-            onPress={() => setShowHeaderMoreActions(true)}
-          />
-        ) : null}
-      </View>
-
-      {visibleTabs.length > 0 && (
-        <View ref={tabBarKeepsKeyboard} style={styles.tabBar}>
-          {/* Why: tab taps must register on first press with the keyboard open instead of being eaten by dismissal (#5106). */}
-          <ScrollView
-            ref={tabStripRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.tabScroll}
-            contentContainerStyle={styles.tabContent}
-            keyboardShouldPersistTaps="handled"
-            scrollEventThrottle={16}
-            onScroll={(e) => {
-              tabStripOffsetRef.current = e.nativeEvent.contentOffset.x
-            }}
-            onLayout={(e) => {
-              tabStripViewportWidthRef.current = e.nativeEvent.layout.width
-              scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
-            }}
-            onContentSizeChange={(width) => {
-              tabStripContentWidthRef.current = width
-              scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
-            }}
-          >
-            {visibleTabs.map((t) => (
-              <Pressable
-                key={t.id}
-                style={[styles.tab, t.id === activeSessionTabId && styles.tabActive]}
-                onLayout={(e) => {
-                  const { x, width } = e.nativeEvent.layout
-                  tabLayoutsRef.current.set(t.id, { x, width })
-                  if (t.id === activeSessionTabIdRef.current) {
-                    scrollActiveTabIntoView(t.id, false)
-                  }
-                }}
-                onPress={() => switchSessionTab(t)}
-                onLongPress={() => {
-                  triggerMediumImpact()
-                  openSessionTabActionSheetAfterKeyboardDismiss(t)
-                }}
-                delayLongPress={400}
-              >
-                <View style={styles.tabLabelRow}>
-                  {t.type === 'browser' && (
-                    <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                  )}
-                  {t.type === 'markdown' && (
-                    <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                  )}
-                  {t.type === 'file' && (
-                    <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                  )}
-                  {t.type === 'agent-session' && <MobileAgentIcon agentId={t.agent} size={13} />}
-                  {t.type === 'terminal' &&
-                    (() => {
-                      const agentId = resolveMobileTerminalTabAgentId(t)
-                      return agentId ? <MobileAgentIcon agentId={agentId} size={13} /> : null
-                    })()}
-                  <Text
-                    style={[styles.tabText, t.id === activeSessionTabId && styles.tabTextActive]}
-                    numberOfLines={1}
-                  >
-                    {getMobileSessionTabTitle(t)}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
-          {/* Why: pinned outside the scroll strip so the new-agent button stays reachable however far the tabs scroll. */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.newTerminalButton,
-              pressed && styles.newTerminalButtonPressed,
-              (creating || creatingBrowser || creatingMarkdown || connState !== 'connected') &&
-                styles.newTerminalButtonDisabled
-            ]}
-            disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
-            onPress={() => {
-              setCreateError('')
-              setShowCreateTabDrawer(true)
-            }}
-            accessibilityLabel="New tab"
-          >
-            <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-          {/* Why: stable placement matters, while old hosts must stay gated because they strip agentPrompt. */}
-          <QuickCommandsTabButton
-            disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
-            onPress={() => {
-              if (quickCommandsSupported === true) {
-                setShowQuickCommands(true)
-                return
-              }
-              showToast(
-                quickCommandsSupported === false
-                  ? 'Desktop update required for quick commands'
-                  : 'Checking desktop capabilities — try again in a moment',
-                1600
-              )
-            }}
-          />
-        </View>
-      )}
-    </SafeAreaView>
+        {tabsInTopBar ? null : tabStrip}
+      </SafeAreaView>
+      <MobileSessionHeaderMoreMenu
+        controller={controller}
+        anchorRef={moreRef}
+        actionsCollapsed={actionsCollapsed}
+      />
+    </View>
   )
 }
+
+const barStyles = StyleSheet.create({
+  group: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.xs
+  },
+  // The session chrome already draws the background and the line under the tabs.
+  inChrome: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 0
+  }
+})

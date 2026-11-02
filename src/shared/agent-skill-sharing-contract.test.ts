@@ -14,6 +14,12 @@ describe('agent skill sharing contract', () => {
 
   it('rejects arbitrary source paths and more than 512 explicit selectors', () => {
     expect(
+      AgentSkillShareRequestSchema.parse({
+        skillSelectors: Array.from({ length: 512 }, (_, index) => `skill-${index}`),
+        bundleName: 'team-skills'
+      }).skillSelectors
+    ).toHaveLength(512)
+    expect(
       AgentSkillShareRequestSchema.safeParse({
         skillSelectors: ['alpha'],
         bundleName: 'team-skills',

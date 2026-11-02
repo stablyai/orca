@@ -47,15 +47,7 @@ type HostWalk = {
   truncated: Truncation
 }
 
-/**
- * Fans one query out to every execution host and merges the pages into one.
- *
- * Relevance scores come from independent indexes and are not comparable, so the
- * two orders are the only two that mean anything across hosts: recency, which
- * every host can be asked for directly, and round-robin over each host's own
- * ranking. Legs are walked page by page, so a hit that lost the cut on one page
- * is emitted on the next instead of being dropped.
- */
+/** Independent relevance scores cannot be compared: merge by recency or host round-robin, retaining page overflow. */
 export async function searchAllExecutionHosts(
   request: AiVaultSearchRequest,
   legs: readonly SessionSearchHostLeg[]
@@ -76,8 +68,7 @@ export async function searchAllExecutionHosts(
       return { kind: 'malformed-cursor' }
     }
   }
-  // A host absent from the cursor either finished or joined mid-walk; either way
-  // it contributes nothing to this page. Host-id order fixes every tiebreak.
+  // Finished or newly joined hosts contribute nothing to resumed walks; host ID fixes ties.
   const walks = legs
     .filter((leg) => !resumed || resumed.hosts[leg.executionHostId] !== undefined)
     .map((leg) => newHostWalk(leg, legRequest(request, sort)))
@@ -139,14 +130,12 @@ async function fetchHostPage(walk: HostWalk, entry: MergedSearchCursorEntry | nu
     endHostWalk(walk, response.reason, false)
     return
   }
-  // A cursor this merge minted can only be refused because the host's index
-  // moved, so both refusals mean the same thing: this host is done for now.
+  // A refused minted cursor means the host index moved; retire its leg.
   if (response.kind !== 'results') {
     endHostWalk(walk, 'stale', false)
     return
   }
-  // `e` is an offset into one generation's ranked page, so it is only
-  // meaningful while that generation stands. Nothing emitted, nothing to fence.
+  // Emitted offsets are generation-specific; fence only after emitting hits.
   if (walk.emitted > 0 && walk.generation !== response.generation) {
     endHostWalk(walk, 'stale', false)
     return

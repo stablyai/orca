@@ -1,0 +1,28 @@
+import type MarkdownIt from 'markdown-it'
+import { findProseUrlEnd, splitAtProseUrlTerminators } from '../../../src/shared/prose-url-boundary'
+
+type Linkify = MarkdownIt['linkify']
+
+// Split at prose punctuation before linkify; otherwise non-ASCII suffixes like ）。 remain in URL path.
+export function endLinkifyUrlsAtProsePunctuation(linkify: Linkify): void {
+  const match = linkify.match.bind(linkify)
+  const matchAtStart = linkify.matchAtStart.bind(linkify)
+
+  linkify.match = (text) => {
+    const links: NonNullable<ReturnType<Linkify['match']>> = []
+    let offset = 0
+    splitAtProseUrlTerminators(text).forEach((piece, index) => {
+      if (index % 2 === 0) {
+        for (const link of match(piece) ?? []) {
+          links.push({ ...link, index: link.index + offset, lastIndex: link.lastIndex + offset })
+        }
+      }
+      offset += piece.length
+    })
+    return links
+  }
+  linkify.matchAtStart = (text) => {
+    const end = findProseUrlEnd(text)
+    return matchAtStart(end === -1 ? text : text.slice(0, end))
+  }
+}

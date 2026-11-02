@@ -1,33 +1,8 @@
 #!/usr/bin/env node
-/**
- * Build one node-pty prebuilt for the CURRENT platform/arch/libc and file it in orcad's
- * prebuilds matrix, so a deployment target needs no C/C++ toolchain.
- *
- * node-pty is the only ABI-sensitive native module every slot builds; a compat slot also
- * builds the addons in COMPAT_SLOT_ADDONS (orcad-prebuild-compat-addons.mjs). node-pty is PATCHED in
- * this repo (config/patches/node-pty@1.1.0.patch), and that patch is the glibc-floor fix:
- * `.symver` pins on openpty/forkpty/pthread_sigmask plus the `--no-as-needed` ldflags that
- * keep libutil/libpthread in DT_NEEDED. An upstream prebuilt has none of it and reproduces
- * #9902. So the matrix is compiled from patched sources here, and this script refuses to
- * run if the patch is not in the tree it is about to compile.
- *
- * Compiled against the pinned Node's hash-verified headers (src/shared/node-runtime-pin.ts)
- * at N-API 8, so the matrix varies only platform/arch/libc (design D2):
- *   linux-{x64,arm64}-{glibc,musl}, darwin-{x64,arm64}, win32-{x64,arm64}
- *
- * CI runs this once per slot, each on the runner or container that owns that libc/arch, and
- * merges the resulting `out/orcad-prebuilds` trees. `--slot=<name>` forces the label so
- * the glibc/musl distinction is recorded from the container rather than detected.
- * glibc slots are built on glibc 2.28 and gated there, not at the desktop's 2.31 (design D6);
- * the opt-in `linux-x64-glibc217` compat slot (COMPAT_SLOTS) is built on glibc 2.17.
- *
- * Usage:
- *   node config/scripts/build-orcad-prebuilds.mjs [--slot=linux-x64-musl]
- *   node config/scripts/build-orcad-prebuilds.mjs --require-slots [slot,slot]  # release gate
- *   node config/scripts/build-orcad-prebuilds.mjs [--slot=...] --smoke  # load + spawn under the pinned Node
- *   node config/scripts/build-orcad-prebuilds.mjs --print-slot
- *   node config/scripts/build-orcad-prebuilds.mjs [--slot=...] --print-runtime  # fetch + print the slot's pinned Node
- */
+// Build patched node-pty for current platform/arch/libc so deployment needs no compiler; compat slots also build COMPAT_SLOT_ADDONS.
+// Require repo patch: GLIBC symbol pins plus no-as-needed retain libutil/libpthread and prevent #9902.
+// Use pinned, hash-verified Node headers at N-API 8; glibc slots target 2.28, optional compat 2.17, musl stays separate.
+// CI merges per-slot outputs; --slot overrides detection. Options: --require-slots [a,b], --smoke, --print-slot, --print-runtime.
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -72,10 +47,7 @@ export const MATRIX_SLOTS = [
   'win32-arm64'
 ]
 
-/**
- * Why the report header and not `ldd`: `glibcVersionRuntime` is present only when the
- * process is linked against glibc, and musl images have no `ldd` worth parsing.
- */
+// glibcVersionRuntime identifies glibc linkage; musl has no dependable ldd output.
 export function detectLibc(platform = process.platform, header = readReportHeader()) {
   if (platform !== 'linux') {
     return 'none'
@@ -115,11 +87,7 @@ export function requestedSlots(argv = process.argv) {
   return slots.length > 0 ? slots : MATRIX_SLOTS
 }
 
-/**
- * The patch is what holds the Ubuntu 20.04 floor. Compiling without it produces a binary
- * that loads fine on the build host and dies on the target — the exact failure the matrix
- * exists to prevent, now baked into a shipped artifact instead of a first-connect error.
- */
+// Reject missing patch or build-host success can hide target GLIBC load failures in shipped prebuilts.
 export function assertNodePtyPatchApplied(nodePtyDir) {
   const bindingGyp = readFileSync(join(nodePtyDir, 'binding.gyp'), 'utf8')
   const ptySource = readFileSync(join(nodePtyDir, 'src', 'unix', 'pty.cc'), 'utf8')
@@ -135,8 +103,8 @@ export function assertNodePtyPatchApplied(nodePtyDir) {
       [
         '[orcad-prebuilds] refusing to build: config/patches/node-pty@1.1.0.patch is not applied.',
         ...missing.map((line) => `  - ${line}`),
-        'A prebuilt compiled without it will not load on Ubuntu 20.04 (see',
-        'docs/reference/linux-glibc-compatibility.md and #9902). Run `pnpm install` to apply patches.'
+        'A prebuilt compiled without it will not load on Ubuntu 20.04 (#9902).',
+        'Run `pnpm install` to apply patches.'
       ].join('\n')
     )
   }
@@ -144,10 +112,7 @@ export function assertNodePtyPatchApplied(nodePtyDir) {
 
 const GLIBC_DT_NEEDED_LDFLAG = "'-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0,--as-needed'"
 
-/**
- * musl has no libutil.so.1 (openpty/forkpty live in libc and libutil is an empty static stub),
- * so the patch's glibc DT_NEEDED ldflag cannot link there.
- */
+// musl has openpty/forkpty in libc and only a static libutil stub; omit glibc DT_NEEDED flags.
 export function bindingGypForLibc(bindingGyp, libc) {
   if (libc !== 'musl') {
     return bindingGyp
@@ -163,10 +128,7 @@ export function bindingGypForLibc(bindingGyp, libc) {
 const GLIBC_SYMVER_GUARD =
   '#if defined(__linux__)\n#  if defined(__x86_64__)\n#    define ORCA_GLIBC_COMPAT_VERSION'
 
-/**
- * The patch's `.symver` pins bind openpty/forkpty/pthread_sigmask to `@GLIBC_*` versions, which
- * musl's unversioned libc cannot satisfy at link time; musl never defines __GLIBC__.
- */
+// Guard GLIBC symbol pins: musl has no versioned GLIBC symbols and never defines __GLIBC__.
 export function ptySourceForLibc(ptySource, libc) {
   if (libc !== 'musl') {
     return ptySource
@@ -186,10 +148,7 @@ function nodePtyDir() {
   return dirname(require.resolve('node-pty/package.json'))
 }
 
-/**
- * Compile in a scratch copy, never in node_modules/node-pty: that tree holds the Electron
- * build the desktop loads, and a Node-headers rebuild there would break the app.
- */
+// Build in scratch or Node-header compilation overwrites desktop’s Electron addon.
 async function compileNodePty(sourceDir, slot) {
   const workDir = join(WORK_DIR, slot)
   const stagedDir = join(workDir, 'node-pty')
@@ -245,10 +204,7 @@ function requireSlots(slots) {
   console.log(`[orcad-prebuilds] verified ${slots.length} slot(s): ${slots.join(', ')}`)
 }
 
-/**
- * Linux-only gates: architecture always; the slot's glibc/libstdc++ floor and the recorded
- * glibc need only for glibc slots, since a musl slot never meets glibc's libraries.
- */
+// Always gate Linux architecture; apply glibc/libstdc++ floors only to glibc slots.
 function linuxSlotRecord(slot, slotDir, libc) {
   const floor = require('./verify-linux-glibc-floor.cjs')
   if (libc !== 'glibc') {

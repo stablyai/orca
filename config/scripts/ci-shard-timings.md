@@ -1,6 +1,6 @@
 # Timing-based CI shards
 
-The eight unit shards and fourteen general E2E shards use longest-processing-time
+Unit shards and general E2E shards use longest-processing-time
 assignment of whole files to the currently lightest shard. Ties use file path and
 then shard index, independent of filesystem enumeration and locale. Unknown,
 zero, or invalid durations use the baseline's positive median (1 second when no
@@ -46,7 +46,80 @@ age as specs change. Full CI runs on the existing runner classes are required to
 measure elapsed-time and occupancy improvements, including discovery overhead.
 No retries, assertions, coverage exclusions, runner classes or shard counts changed.
 
-## Current unit refresh: September 27, 2026
+## Current unit refresh: November 2, 2026
+
+The baseline averages each file over five complete, successful twelve-shard full runs on
+`blacksmith-4vcpu-ubuntu-2404` with four workers, Node 24.22.2 and Bun 1.4.4:
+[41403569437](https://github.com/stablyai/orca/actions/runs/41403569437),
+[41406098648](https://github.com/stablyai/orca/actions/runs/41406098648),
+[41406030210](https://github.com/stablyai/orca/actions/runs/41406030210),
+[41405874918](https://github.com/stablyai/orca/actions/runs/41405874918) and
+[41405380104](https://github.com/stablyai/orca/actions/runs/41405380104), all attempt 1 and
+all after the November 1 test-time fixes. The October 25 baseline came from five eight-worker
+shards, lacked 1,595 measured files and kept 374 deleted ones.
+
+One run is not enough: per-file durations vary between runs, and a baseline taken from
+41403569437 alone left PR run 41406120225 at 1,244–1,515 worker-seconds (21.8%). Assigning the
+held-out run 41406120225 with the averaged baseline and evaluating it with that run's own
+measurements projects 1,336–1,387 worker-seconds per shard (3.8%), against 1,297–1,430
+(10.2%) for the October 25 baseline. Leaving out each of six post-fix runs in turn, the
+average of the other five projects 1.9–8.6% spread, against 8.8–21.2% for the October 25
+baseline. Runs from before the fixes are not comparable, because their `pty-subprocess-*`
+files still carried 5-second waits.
+
+```sh
+node config/scripts/ci-unit-timing-import.mjs RUN_DIR... config/scripts/ci-shard-timings.json
+```
+
+Each directory holds one run's twelve `unit-shard-node-*` artifacts. Every run is validated
+as before, the runs must be distinct and share one runtime version, and a single directory
+keeps the previous single-run output.
+
+## Historical unit refresh: October 25, 2026
+
+The baseline imports all five successful unit shards from
+[run 40276310369, attempt 1](https://github.com/stablyai/orca/actions/runs/40276310369/attempts/1),
+the runner class PR shards use: `blacksmith-8vcpu-ubuntu-2404`, eight workers, Node
+24.22.1, Bun 1.4.4, source `085cfad2cb3b883c975d5630d94fb2900d0bed05`. The previous ARM
+four-worker baseline lacked 1,976 current files and left PR shards 13–44% apart.
+Balancing two later full runs (40276227094, 40275768715) with each baseline, the fresh one
+cut the heaviest shard from 2,129 to 2,008 and from 2,564 to 2,134 worker-seconds, with a
+spread of 3–4% instead of 13–44%.
+
+| Shard | Job ID       | Measured worker-seconds | Job seconds |
+| ----- | ------------ | ----------------------: | ----------: |
+| 1     | 121420433743 |               2,476.887 |         381 |
+| 2     | 121420433755 |               2,069.007 |         329 |
+| 3     | 121420433825 |               2,144.439 |         339 |
+| 4     | 121420433749 |               2,050.086 |         322 |
+| 5     | 121420433831 |               2,151.221 |         338 |
+
+## Historical unit refresh: October 14, 2026
+
+The baseline imports all five successful ARM unit shards from
+[run 38646706136, attempt 1](https://github.com/stablyai/orca/actions/runs/38646706136/attempts/1).
+The tested merge was `8d7f46198b99432efd104ac7803174173b367c66`, using Node
+24.21.0, Bun 1.4.3, `ubuntu-24.04-arm`, and four workers per shard. All 12,314
+files appear exactly once: 12,163 passed and 151 skipped, with zero unhandled
+errors. Artifact digests, all 20 report hashes, source/runtime provenance, full
+discovery, and each saved assignment were checked before importing. The E2E
+weights remain unchanged.
+
+| Shard | Job ID       | Measured worker-seconds | Job seconds |
+| ----- | ------------ | ----------------------: | ----------: |
+| 1     | 116137259336 |               1,966.470 |         568 |
+| 2     | 116137259460 |               2,080.624 |         604 |
+| 3     | 116137259318 |               2,121.495 |         611 |
+| 4     | 116137259783 |               2,094.487 |         614 |
+| 5     | 116137259540 |               2,190.636 |         641 |
+
+Retrospectively assigning those measurements projects 2,090.726–2,090.747
+worker-seconds per shard, instead of 1,966.470–2,190.636. That is a scheduling
+projection, not a hosted speedup: module times overlap across workers, and total
+runner occupancy was 50.63 minutes. Runner capacity, selection, workers, and the
+assignment algorithm are unchanged. Later source changes need fresh validation.
+
+## Historical unit refresh: September 27, 2026
 
 The baseline imports every successful Node 24 shard from
 [run 36294142683, attempt 1](https://github.com/stablyai/orca/actions/runs/36294142683/attempts/1).

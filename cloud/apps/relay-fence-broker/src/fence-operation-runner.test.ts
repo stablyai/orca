@@ -37,21 +37,19 @@ describe('fence operation runner', () => {
 
   it('binds a source fence to deterministic targets and the production var file', () => {
     const args = sourceFenceArguments(config, '/tmp/topology.json', [
-      'production-gce-c12',
-      'production-gce-c7'
+      'production-gce-c7',
+      'production-gce-c12'
     ])
 
-    expect(args).toEqual(
-      expect.arrayContaining([
-        '--source-cell-id',
-        'production-gce-c3',
-        '--target-cell-ids',
-        'production-gce-c12,production-gce-c7',
-        '--terraform-var-file',
-        'environments/production.tfvars',
-        '--mode',
-        'fence-source'
-      ])
-    )
+    for (const [flag, value] of [
+      ['--source-cell-id', 'production-gce-c3'],
+      ['--target-cell-ids', 'production-gce-c12,production-gce-c7'],
+      ['--terraform-var-file', 'environments/production.tfvars'],
+      ['--mode', 'fence-source']
+    ] as const) {
+      const index = args.indexOf(flag)
+      expect(index).toBeGreaterThanOrEqual(0)
+      expect(args[index + 1]).toBe(value)
+    }
   })
 })

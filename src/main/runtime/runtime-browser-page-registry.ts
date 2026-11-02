@@ -12,10 +12,7 @@ export type RuntimeBrowserClientPage = Readonly<{
   browserProfileId: string
   executionHostKey: string
   placement: RuntimeBrowserClientPlacement
-  /**
-   * The paired device that asked for this page. Survives the lease, which the placement does not:
-   * a retained page has no lease left to look its host's name up through.
-   */
+  /** Retain paired-device identity after lease loss so returning hosts can authenticate page recovery. */
   pairedDeviceId?: string
   url: string
   title: string
@@ -159,18 +156,21 @@ export class RuntimeBrowserPageRegistry {
     expected: RuntimeBrowserClientPlacement,
     placement: RuntimeBrowserClientPlacement,
     /** The route key the replacing host was actually placed under; keys do not survive a restart. */
-    executionHostKey?: string
+    executionHostKey?: string,
+    browserProfileId?: string
   ): RuntimeBrowserClientPage {
     const current = this.requireExactPage(browserPageId, expected)
     if (executionHostKey !== undefined) {
       assertIdentity(executionHostKey)
     }
-    // Why the revision restarts: it is the replacing host's own counter, and a host that just took
-    // this placement over counts from zero. Keeping the old high-water mark deafens the page to
-    // that host until it catches up.
+    if (browserProfileId !== undefined) {
+      assertIdentity(browserProfileId)
+    }
+    // Replacement hosts count revisions from zero; old high-water would suppress their first publishes.
     const next = freezePage({
       ...current,
       ...(executionHostKey === undefined ? {} : { executionHostKey }),
+      ...(browserProfileId === undefined ? {} : { browserProfileId }),
       metadataRevision: 0,
       placement: Object.freeze({ ...placement })
     })
@@ -226,8 +226,7 @@ export class RuntimeBrowserPageRegistry {
   }
 }
 
-/** Keyed by runtime identity alone; this module never reads from the runtime, and the callers'
- *  declared host types share no member. */
+/** Key by runtime object identity only; host types need no common member and this module reads no runtime state. */
 const registries = new WeakMap<WeakKey, RuntimeBrowserPageRegistry>()
 
 export function getRuntimeBrowserPageRegistry(runtime: WeakKey): RuntimeBrowserPageRegistry {

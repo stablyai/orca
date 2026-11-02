@@ -59,8 +59,7 @@ import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-p
 
 describe('registerOrcaProfileHandlers auth channels', () => {
   beforeEach(() => {
-    // Why the port and per-test: userData resolves through AppEnvironment now, and
-    // the global setup's beforeEach reinstates its own fake before this runs.
+    // Reinstall AppEnvironment per test after global beforeEach resets its fake.
     installFakeAppEnvironment({ getPath: () => '/tmp/orca-user-data' })
     handlers.clear()
     createCloudLinkedOrcaProfileMock.mockReset()

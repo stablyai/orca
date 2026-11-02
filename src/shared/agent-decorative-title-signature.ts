@@ -3,8 +3,7 @@ import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from './agent-detecti
 export const DECORATIVE_AGENT_TITLE_SIGNATURE_SOURCE_SCAN_LIMIT = MAX_OSC_TITLE_CHARS
 
 export function getDecorativeAgentTitleSignature(title: string): string | null {
-  // Why: this runs on renderer state/session hot paths; oversized titles are
-  // treated as ordinary changes instead of synchronously normalized.
+  // Bound synchronous normalization on renderer hot paths; oversized titles remain ordinary changes.
   if (title.length > DECORATIVE_AGENT_TITLE_SIGNATURE_SOURCE_SCAN_LIMIT) {
     return null
   }
@@ -12,8 +11,7 @@ export function getDecorativeAgentTitleSignature(title: string): string | null {
   if (!status) {
     return null
   }
-  // Why: agent spinners can emit OSC title frames many times per second; the
-  // spinner glyph is live decoration, not meaningful tab or sort state.
+  // Spinner OSC frames can arrive many times a second without changing semantic title/sort state.
   return `${status}:${normalizeDecorativeAgentTitleText(title)}`
 }
 
@@ -34,15 +32,24 @@ export function isDecorativeAgentTitleFrameChange(prevTitle: string, nextTitle: 
 function normalizeDecorativeAgentTitleText(title: string): string {
   let normalized = ''
   let pendingWhitespace = false
+  let leadingFrame = -1
   for (let index = 0; index < title.length; index += 1) {
     const code = title.charCodeAt(index)
     if (
       normalized.length === 0 &&
       (isDecorativeTitleWhitespace(code) || isSpinnerFrameGlyph(code))
     ) {
+      if (leadingFrame === -1 && isSpinnerFrameGlyph(code)) {
+        leadingFrame = code
+      }
       continue
     }
-    if (isDecorativeTitleWhitespace(code)) {
+    // Why: Codex repeats its leading frame as a word inside the title (`⠙ renaming... ⠙ |
+    // scratch`), so that copy folds like whitespace too; other braille stays title text.
+    if (
+      isDecorativeTitleWhitespace(code) ||
+      (code === leadingFrame && isStandaloneGlyph(title, index))
+    ) {
       pendingWhitespace = normalized.length > 0
       continue
     }
@@ -53,6 +60,14 @@ function normalizeDecorativeAgentTitleText(title: string): string {
     normalized += title.charAt(index)
   }
   return normalized
+}
+
+function isStandaloneGlyph(title: string, index: number): boolean {
+  const next = index + 1 < title.length ? title.charCodeAt(index + 1) : null
+  return (
+    isDecorativeTitleWhitespace(title.charCodeAt(index - 1)) &&
+    (next === null || isDecorativeTitleWhitespace(next))
+  )
 }
 
 // Why: braille (most agents) plus quarter circles (Claude Code 2.1.228+, #13889).

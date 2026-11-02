@@ -2,10 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
 
-// The OpenCode 1.17.x schema, as the app itself creates it. Written out in full
-// rather than trimmed to the columns a reader names, because every read probes
-// for its columns and a trimmed fixture would pass a probe the real database
-// fails (or the reverse) without the test being able to tell.
+// Mirror the full OpenCode 1.17.x schema so column probes exercise real layouts.
 
 const OPENCODE_SCHEMA = `
   CREATE TABLE session (
@@ -37,12 +34,7 @@ const OPENCODE_SCHEMA = `
 
 export const OPENCODE_FIXTURE_EPOCH_MS = 1_740_000_000_000
 
-/**
- * One `part` row. A bare string is a text part, which is what most turns are.
- *
- * The tool shape mirrors what OpenCode actually writes: the call's name and id
- * at the top level, and everything about the run nested under `state`.
- */
+/** Strings represent text parts; tool parts mirror OpenCode’s top-level identity and nested run state. */
 export type OpenCodeSqliteFixturePart =
   | string
   | { type: 'text' | 'reasoning'; text: string }
@@ -56,7 +48,6 @@ export type OpenCodeSqliteFixturePart =
 
 export type OpenCodeSqliteFixtureTurn = {
   role: 'user' | 'assistant'
-  /** One part row per entry, in the order the session recorded them. */
   parts: readonly OpenCodeSqliteFixturePart[]
 }
 
@@ -67,16 +58,7 @@ export type OpenCodeSqliteFixtureSession = {
   turns: readonly OpenCodeSqliteFixtureTurn[]
 }
 
-/**
- * Create an OpenCode SQLite database holding `sessions`.
- *
- * Each turn's parts are written as separate `part` rows, which is the shape a
- * reader has to reassemble; a fixture with one part per turn would never
- * exercise it. A session's `time_updated` is its last turn's timestamp, the
- * same stat the real database moves when a session gains a message.
- * @param dbPath - Where to create the database; parent directories are created.
- * @param sessions - The sessions to write, in the order they were created.
- */
+/** Store each turn’s parts separately and advance session recency to its final turn. */
 export function writeOpenCodeSqliteDatabase(
   dbPath: string,
   sessions: readonly OpenCodeSqliteFixtureSession[]
@@ -126,7 +108,6 @@ function writeSession(db: SyncDatabase, session: OpenCodeSqliteFixtureSession): 
   appendTurns(db, session, created)
 }
 
-/** Appends `turns` after whatever the session already holds. */
 export function appendTurns(
   db: SyncDatabase,
   session: OpenCodeSqliteFixtureSession,
@@ -188,13 +169,6 @@ function partData(
   }
 }
 
-/**
- * Add one turn to an existing session and move its `time_updated`, the way
- * OpenCode does when a session continues.
- * @param dbPath - The fixture database to append to.
- * @param sessionId - The session to continue.
- * @param turn - The turn to append.
- */
 export function appendOpenCodeSqliteTurn(
   dbPath: string,
   sessionId: string,
@@ -210,9 +184,7 @@ export function appendOpenCodeSqliteTurn(
   }
 }
 
-// Throws rather than falling back to the epoch: a mistyped id would otherwise
-// append orphan rows and update nothing, leaving a test asserting over a
-// transcript that no session owns.
+// Reject unknown session IDs rather than silently writing orphan rows into a misleading fixture.
 function currentUpdatedMs(db: SyncDatabase, sessionId: string): number {
   const row = db.prepare('SELECT time_updated FROM session WHERE id = ?').get(sessionId)
   if (row === undefined) {

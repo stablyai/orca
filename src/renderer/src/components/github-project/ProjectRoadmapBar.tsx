@@ -33,8 +33,7 @@ export default function ProjectRoadmapBar({
   const colors = chipColor ? singleSelectChipColors(chipColor) : labelChipColors('')
   const interactive = row.itemType !== 'REDACTED' && row.itemType !== 'DRAFT_ISSUE'
   const dates = formatRoadmapSpan(span, locale)
-  // Why: shared by the visible text, aria-label, and tooltip — a redacted row
-  // must never announce or render an empty name.
+  // Share the restricted-item fallback across visible text and accessible labels.
   const title =
     row.itemType === 'REDACTED'
       ? translate('auto.components.github.project.ProjectRoadmapBar.7d1220d979', 'Restricted item')
@@ -54,8 +53,7 @@ export default function ProjectRoadmapBar({
         'text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]',
         interactive ? 'cursor-pointer hover:brightness-110' : 'cursor-default',
         row.itemType === 'REDACTED' && 'opacity-60',
-        // Why: a point marker sizes to its own label instead of the span, so
-        // a single-date item stays readable rather than collapsing to a sliver.
+        // Single-date points need label width instead of a near-zero date span.
         span.point && 'max-w-60'
       )}
       style={{

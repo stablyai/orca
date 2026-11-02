@@ -9,8 +9,6 @@ import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-de
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 import { _resetGitHubPRStackCacheForTests } from './github-pr-stack'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 export function resetOriginRepositoryCache(): void {
   _resetOriginGitHubApiRepositoryCache()
 }
@@ -22,7 +20,7 @@ export function resetPRForBranchMocks(mocks: GitHubClientMocks): void {
   mocks.getOwnerRepoMock.mockReset()
   mocks.getIssueOwnerRepoMock.mockReset()
   mocks.getOwnerRepoForRemoteMock.mockReset()
-  // Why: resolveGitHubRepoExecution probes origin via getOwnerRepoForRemote.
+  // Route origin probes through the suite's repository fixture.
   mocks.getOwnerRepoForRemoteMock.mockImplementation(
     async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
       remoteName === 'origin' ? mocks.getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -41,7 +39,6 @@ export function resetPRForBranchMocks(mocks: GitHubClientMocks): void {
   mocks.noteRateLimitSpendMock.mockReset()
   mocks.ghRepoExecOptionsMock.mockClear()
   mocks.githubRepoContextMock.mockClear()
-  mocks.getSshGitProviderMock.mockReset()
   mocks.readLocalGitConfigSignatureMock.mockReset()
   mocks.readLocalGitConfigSignatureMock.mockResolvedValue(undefined)
   mocks.acquireMock.mockReset()
@@ -54,8 +51,6 @@ export function resetPRForBranchMocks(mocks: GitHubClientMocks): void {
   __resetTrackedUpstreamBranchCacheForTests()
   __resetPRConflictSummaryCachesForTests()
   resetMergedPRCommitMembershipCacheForTest()
-  // Why: the #9171 guard caches default-branch resolutions per repoPath;
-  // reset so non-open implicit lookups stay order-independent across tests.
   __resetRepoDefaultBranchCacheForTests()
 }
 
@@ -66,7 +61,6 @@ export function resetGraphQLRateLimitGuardMocks(mocks: GitHubClientMocks): void 
   mocks.getOwnerRepoMock.mockReset()
   mocks.getIssueOwnerRepoMock.mockReset()
   mocks.getOwnerRepoForRemoteMock.mockReset()
-  // Why: getPRComments and mutations resolve origin via getOwnerRepoForRemote.
   mocks.getOwnerRepoForRemoteMock.mockImplementation(
     async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
       remoteName === 'origin' ? mocks.getOwnerRepoMock(repoPath, connectionId, opts) : null

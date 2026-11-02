@@ -1,14 +1,4 @@
-import {
-  chmodSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { writeCliScreenshotTempFile } from './cli-screenshot-temp-file'
 import { formatBase64PayloadByteCount } from './base64-payload-byte-count'
 import { quoteCliCommandArgument } from './shell-command-quote'
 import type {
@@ -75,12 +65,13 @@ export function prepareComputerCliJsonResult<TResult>(
     return response
   }
   try {
-    const extension = screenshot.format === 'png' ? 'png' : 'img'
-    const outputDir = computerScreenshotTempDir()
-    cleanupComputerScreenshots(outputDir)
-    const outputPath = join(outputDir, `${safeCliFileStem(response.id)}-screenshot.${extension}`)
-    writeFileSync(outputPath, Buffer.from(screenshot.data, 'base64'), { mode: 0o600 })
-    const expiresAt = new Date(Date.now() + COMPUTER_SCREENSHOT_TTL_MS).toISOString()
+    const { path, expiresAt } = writeCliScreenshotTempFile(
+      COMPUTER_SCREENSHOT_TEMP_DIR,
+      response.id,
+      screenshot.data,
+      screenshot.format === 'png' ? 'png' : 'img'
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the screenshot field is rewritten; every other TResult field is spread through unchanged.
     return {
       ...response,
       result: {
@@ -88,74 +79,21 @@ export function prepareComputerCliJsonResult<TResult>(
         screenshot: {
           ...screenshot,
           data: undefined,
-          path: outputPath,
+          path,
           dataOmitted: true,
           expiresAt
         }
       }
     } as RuntimeRpcSuccess<TResult>
   } catch {
-    // Why: temp-file export is an ergonomics optimization; keep inline screenshot
-    // data when disk, permissions, or path validation would otherwise fail --json.
+    // Preserve inline screenshot data if the optional temp-file export fails.
     return response
   }
 }
 
-const COMPUTER_SCREENSHOT_TTL_MS = 24 * 60 * 60 * 1000
-const COMPUTER_SCREENSHOT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
-const COMPUTER_SCREENSHOT_CLEANUP_MARKER = '.last-cleanup'
-
-function computerScreenshotTempDir(): string {
-  const outputDir =
-    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR || join(tmpdir(), 'orca-computer-use')
-  mkdirSync(outputDir, { recursive: true, mode: 0o700 })
-  const stat = lstatSync(outputDir)
-  if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    throw new Error(`Unsafe computer screenshot temp path: ${outputDir}`)
-  }
-  if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) {
-    throw new Error(`Computer screenshot temp path is not owned by the current user: ${outputDir}`)
-  }
-  chmodSync(outputDir, 0o700)
-  return outputDir
-}
-
-function cleanupComputerScreenshots(outputDir: string): void {
-  const now = Date.now()
-  const markerPath = join(outputDir, COMPUTER_SCREENSHOT_CLEANUP_MARKER)
-  try {
-    // Why: agents can call computer-use CLI commands in loops; a marker keeps
-    // temp cleanup from becoming a synchronous directory scan per screenshot.
-    if (statSync(markerPath).mtimeMs > now - COMPUTER_SCREENSHOT_CLEANUP_INTERVAL_MS) {
-      return
-    }
-  } catch {
-    // Missing or unreadable marker means this process should attempt cleanup.
-  }
-
-  const cutoff = now - COMPUTER_SCREENSHOT_TTL_MS
-  for (const entry of readdirSync(outputDir)) {
-    if (!entry.endsWith('-screenshot.png') && !entry.endsWith('-screenshot.img')) {
-      continue
-    }
-    const path = join(outputDir, entry)
-    try {
-      if (statSync(path).mtimeMs < cutoff) {
-        rmSync(path, { force: true })
-      }
-    } catch {
-      // Best-effort cleanup only; formatting should not fail because a temp file raced.
-    }
-  }
-  try {
-    writeFileSync(markerPath, `${now}\n`, { mode: 0o600 })
-  } catch {
-    // Best-effort marker only; stale cleanup state should not hide a screenshot.
-  }
-}
-
-function safeCliFileStem(value: string): string {
-  return value.replaceAll(/[^a-zA-Z0-9._-]/g, '_')
+const COMPUTER_SCREENSHOT_TEMP_DIR = {
+  envVar: 'ORCA_COMPUTER_SCREENSHOT_TMPDIR',
+  dirName: 'orca-computer-use'
 }
 
 export function formatListApps(result: ComputerListAppsResult): string {
@@ -217,7 +155,7 @@ export function formatComputerAction(
   const inspectTail = unverified
     ? 'Inspect with the command above or use the --json result before assuming it worked.'
     : 'Use the --json result or rerun state before choosing the next element index.'
-  return `${formatActionVerb(verb)} ${outcome}${path}${verification}; ${result.snapshot.elementCount} visible elements in current window.${screenshotFailure} Use \`${followUpCommand}\` to inspect. ${inspectTail}`
+  return `${formatActionVerb(verb)} ${outcome}${path}${verification}; ${result.snapshot.elementCount} visible elements in current window.${screenshotFailure} Use \`${followUpCommand}\` to inspect. ${inspectTail}${result.snapshot.treeText ? `\n\n${result.snapshot.treeText}` : ''}`
 }
 
 function formatComputerFollowUpCommand(

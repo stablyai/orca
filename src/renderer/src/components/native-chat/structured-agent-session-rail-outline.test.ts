@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionConversationOutline } from '../../../../shared/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
 import { selectStructuredRailOutline } from './structured-agent-session-rail-outline'
 
 function outline(
@@ -20,18 +20,9 @@ function outline(
   }
 }
 
-const WINDOW = { epoch: 'epoch-1', oldestLoadedSequence: 50, hasOlder: true }
+const WINDOW = { epoch: 'epoch-1', oldestLoadedSequence: 50, hasOlder: true, contextFloor: 0 }
 
 describe('structured rail outline selection', () => {
-  it('needs no outline when nothing older is unloaded', () => {
-    expect(
-      selectStructuredRailOutline(outline(90, [1, 60]), { ...WINDOW, hasOlder: false })
-    ).toEqual({ kind: 'complete' })
-    expect(selectStructuredRailOutline(null, { ...WINDOW, oldestLoadedSequence: null })).toEqual({
-      kind: 'complete'
-    })
-  })
-
   it('uses only the entries older than the loaded window, which is authoritative for the rest', () => {
     const view = selectStructuredRailOutline(outline(90, [1, 20, 49, 50, 70]), WINDOW)
     expect(view).toEqual({
@@ -44,8 +35,13 @@ describe('structured rail outline selection', () => {
     })
   })
 
-  it('is stale, and so unused, while no outline has arrived', () => {
-    expect(selectStructuredRailOutline(null, WINDOW)).toEqual({ kind: 'stale' })
+  it('lists nothing from before the latest /clear, which the transcript no longer shows', () => {
+    const value = outline(90, [1, 20, 49])
+    expect(selectStructuredRailOutline(value, WINDOW)).toMatchObject({ entries: [{}, {}, {}] })
+    expect(selectStructuredRailOutline(value, { ...WINDOW, contextFloor: 20 })).toEqual({
+      kind: 'fresh',
+      entries: [{ id: 'user-49', text: 'prompt 49', hasImages: false }]
+    })
   })
 
   it('is stale across an epoch change', () => {
@@ -59,25 +55,5 @@ describe('structured rail outline selection', () => {
     expect(selectStructuredRailOutline(outline(48, [1]), WINDOW)).toEqual({ kind: 'stale' })
     // Covers through 49: the two sources abut, nothing is missing.
     expect(selectStructuredRailOutline(outline(49, [1]), WINDOW).kind).toBe('fresh')
-  })
-
-  it('hands the rail one entries array until the window edge moves', () => {
-    const value = outline(90, [1, 20, 49])
-    const first = selectStructuredRailOutline(value, WINDOW)
-    expect(selectStructuredRailOutline(value, { ...WINDOW })).toBe(first)
-    const paged = selectStructuredRailOutline(value, { ...WINDOW, oldestLoadedSequence: 20 })
-    expect(paged).not.toBe(first)
-    expect(paged).toMatchObject({ kind: 'fresh', entries: [{ id: 'user-1' }] })
-  })
-
-  it('keeps the same entries while a trimmed live window moves its edge past no user message', () => {
-    const value = outline(200, [1, 20, 49, 80])
-    const first = selectStructuredRailOutline(value, WINDOW)
-    // Each new live row head-trims the window by one; none of these edges uncovers an entry.
-    for (const oldestLoadedSequence of [51, 60, 80]) {
-      expect(selectStructuredRailOutline(value, { ...WINDOW, oldestLoadedSequence })).toBe(first)
-    }
-    const passed = selectStructuredRailOutline(value, { ...WINDOW, oldestLoadedSequence: 81 })
-    expect(passed).toMatchObject({ kind: 'fresh', entries: [{}, {}, {}, { id: 'user-80' }] })
   })
 })

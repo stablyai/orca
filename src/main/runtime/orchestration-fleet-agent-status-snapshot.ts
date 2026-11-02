@@ -1,3 +1,12 @@
+import type { TerminalIdentityReadContext } from './terminal/query/terminal-identity-read-context'
+import { conversationRecordReader } from './orchestration/structured-session-lineage'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
+import {
+  RuntimeAgentOrchestrationProjection,
+  type RuntimeAgentOrchestrationDependencies
+} from './runtime-agent-orchestration-projection'
+import { createOrchestrationProjectionScope } from './runtime-agent-orchestration-scope'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import {
@@ -6,20 +15,13 @@ import {
   type ObservedAgentStatusPaneIdentity
 } from '../ipc/agent-status-ipc-boundary'
 
-/** The runtime facts the fleet snapshot needs: the hook rows, the pane identity lookups the
- *  terminal registry owns, and the identity each pane was observed under when its row arrived. */
+/** Hook rows plus registry identity lookups and the identity observed when each row arrived. */
 export type FleetAgentStatusSnapshotSource = AgentStatusRuntimeEnrichment & {
   getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   readObservedAgentStatusPaneIdentityFn: (paneKey: string) => ObservedAgentStatusPaneIdentity
 }
 
-/**
- * Push-fed hook rows minted into fleet evidence. Callers must redact payload text.
- *
- * Extracted from the `@ts-nocheck` runtime mixin so the minting is type-checked: hook rows carry
- * only a pane key, and it was this hop publishing pane identity into a matcher that compares
- * terminal identity that made every local worker read `missing_status` while it was running.
- */
+/** Convert pane-keyed hooks to terminal evidence; callers must redact payload text. */
 export function readOrchestrationFleetAgentStatusSnapshot(
   runtime: FleetAgentStatusSnapshotSource
 ): readonly FleetAgentStatusEvidence[] {
@@ -30,4 +32,32 @@ export function readOrchestrationFleetAgentStatusSnapshot(
       runtime.readObservedAgentStatusPaneIdentityFn(entry.paneKey)
     )
   )
+}
+
+export function readCapturedOrchestrationFleetAgentStatusSnapshot(
+  source: Omit<FleetAgentStatusSnapshotSource, 'getAgentStatusOrchestrationContextForPaneKey'>,
+  dependencies: RuntimeAgentOrchestrationDependencies
+): readonly FleetAgentStatusEvidence[] {
+  const projection = new RuntimeAgentOrchestrationProjection(dependencies)
+  let scope: ReturnType<typeof createOrchestrationProjectionScope> | undefined
+  return readOrchestrationFleetAgentStatusSnapshot({
+    ...source,
+    getAgentStatusOrchestrationContextForPaneKey: (paneKey) => {
+      const handle = source.getAgentStatusTerminalHandleForPaneKey?.(paneKey)
+      if (!handle) {
+        return undefined
+      }
+      const db = dependencies.getDb()
+      scope ??= createOrchestrationProjectionScope(db, dependencies)
+      return projection.getForHandle(handle, db, { paneKey }, scope)
+    }
+  })
+}
+
+export function readAgentOrchestrationProjectionRecords(context?: TerminalIdentityReadContext) {
+  const read = () => {
+    const store = getStructuredAgentSessionHost()?.deps.store ?? peekOpenedAgentSessionRecordStore()
+    return store ? conversationRecordReader(store) : null
+  }
+  return context ? context.captureProjectionRecords(read) : read()
 }

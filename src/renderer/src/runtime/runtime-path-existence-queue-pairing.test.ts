@@ -43,7 +43,7 @@ for (const mode of ['scalar', 'queue', 'legacy', 'missing-method'] as const) {
       return { id: 'result', ok: true, result: [{ exists: true }] }
     })
     const context = {
-      settings: { activeRuntimeEnvironmentId: 'owner' },
+      target: { kind: 'environment' as const, environmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }
@@ -77,7 +77,7 @@ it('keeps two queued hovers on distinct revisions of the same environment', asyn
   )
   runtimeEnvironmentCall.mockResolvedValue({ id: 'result', ok: true, result: [{ exists: true }] })
   const context = {
-    settings: { activeRuntimeEnvironmentId: 'owner' },
+    target: { kind: 'environment' as const, environmentId: 'owner' },
     worktreeId: 'folder-1',
     worktreePath: '/folder'
   }

@@ -1,4 +1,4 @@
-import { GRAB_BUDGET } from '../../../../../shared/browser-grab-types'
+import { isBrowserAnnotationPageFull } from '../../../../../shared/browser-grab-types'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -79,9 +79,11 @@ export function createBrowserPageMetadataActions(
     addBrowserPageAnnotation: (annotation) =>
       set((s) => {
         const existing = s.browserAnnotationsByPageId[annotation.browserPageId] ?? []
-        const next = [...existing, sanitizeBrowserPageAnnotation(annotation)].slice(
-          -GRAB_BUDGET.annotationsMaxPerPage
-        )
+        // A full page refuses new notes; evicting the oldest would lose feedback unseen.
+        if (isBrowserAnnotationPageFull(existing.length)) {
+          return s
+        }
+        const next = [...existing, sanitizeBrowserPageAnnotation(annotation)]
         return {
           browserAnnotationsByPageId: {
             ...s.browserAnnotationsByPageId,

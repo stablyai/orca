@@ -4,6 +4,8 @@ import { opendir } from 'node:fs/promises'
 /** `denied` is the only outcome that proves a permission refusal; `other` keeps unknown errors apart. */
 export type DirectoryEnumerationOutcome = 'ok' | 'denied' | 'missing' | 'other'
 
+const pendingEnumerations = new Map<string, Promise<DirectoryEnumerationOutcome>>()
+
 function errorCode(error: unknown): string | undefined {
   if (typeof error !== 'object' || error === null || !('code' in error)) {
     return undefined
@@ -20,12 +22,19 @@ function outcomeForError(error: unknown): DirectoryEnumerationOutcome {
   return code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'other'
 }
 
-/**
- * Why enumeration and not `access()`: macOS TCC can let `access(R_OK|X_OK)` succeed on a protected
- * folder while `opendir` still fails, which is exactly what a shell listing its cwd hits. One entry
- * is enough — the refusal lands on `opendir` or the first read, never later.
- */
-export async function enumerateDirectoryOnce(path: string): Promise<DirectoryEnumerationOutcome> {
+/** Probe enumeration because TCC can reject opendir even when access() succeeds. */
+export function enumerateDirectoryOnce(path: string): Promise<DirectoryEnumerationOutcome> {
+  const pending = pendingEnumerations.get(path)
+  if (pending) {
+    return pending
+  }
+  // Keep an uninterruptible probe shared until it settles, even if its callers stop waiting.
+  const enumeration = enumerateDirectory(path).finally(() => pendingEnumerations.delete(path))
+  pendingEnumerations.set(path, enumeration)
+  return enumeration
+}
+
+async function enumerateDirectory(path: string): Promise<DirectoryEnumerationOutcome> {
   let dir: Dir | undefined
   try {
     dir = await opendir(path)

@@ -1,7 +1,16 @@
 import { z } from 'zod'
 import { PAIRING_OFFER_VERSION, type PairingOffer } from './pairing'
+import {
+  pairedRuntimeConnectionFromOffer,
+  type PairedRuntimeConnection
+} from './paired-runtime-connection'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
 import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
+import {
+  OrcadWslDeploymentLinkSchema,
+  type OrcadWslDeploymentLink
+} from './wsl-host-deployment-link'
+import type { WslHostServerStop } from './wsl-host-types'
 
 export const RuntimeAccessEndpointSchema = z.object({
   id: z.string().min(1),
@@ -32,8 +41,26 @@ export const RuntimeSshTunnelLinkSchema = z.object({
 export type RuntimeSshTunnelLink = z.infer<typeof RuntimeSshTunnelLinkSchema>
 
 /** A server Orca deployed and owns over SSH; unlike sshAccess, it grants lifecycle ownership. */
-export const OrcadDeploymentLinkSchema = RuntimeSshTunnelLinkSchema
-export type OrcadDeploymentLink = RuntimeSshTunnelLink
+export const OrcadSshDeploymentLinkSchema = RuntimeSshTunnelLinkSchema.extend({
+  // Absent on disk: the sidecar persists SSH links without it, so older builds read them unchanged.
+  kind: z.literal('ssh').optional()
+})
+export type OrcadSshDeploymentLink = z.infer<typeof OrcadSshDeploymentLinkSchema>
+
+/** A server Orca deployed and owns; the WSL kind is persisted only in wsl-host-deployment-store. */
+export const OrcadDeploymentLinkSchema = z.union([
+  OrcadSshDeploymentLinkSchema,
+  OrcadWslDeploymentLinkSchema
+])
+export type OrcadDeploymentLink = z.infer<typeof OrcadDeploymentLinkSchema>
+
+/** The managed deployment Orca owns over SSH; undefined for none or a WSL one. */
+export function getOrcadSshDeployment(environment: {
+  orcadDeployment?: OrcadDeploymentLink | null
+}): OrcadSshDeploymentLink | undefined {
+  const deployment = environment.orcadDeployment
+  return deployment && deployment.kind !== 'wsl' ? deployment : undefined
+}
 
 export const RuntimeSshAccessLinkSchema = RuntimeSshTunnelLinkSchema.extend({
   requestId: z.string().min(1).optional(),
@@ -41,8 +68,6 @@ export const RuntimeSshAccessLinkSchema = RuntimeSshTunnelLinkSchema.extend({
   endpointId: z.string().min(1),
   previousPreferredEndpointId: z.string().min(1)
 })
-
-export type RuntimeSshAccessLink = z.infer<typeof RuntimeSshAccessLinkSchema>
 
 export const RuntimeSshAccessOperationSchema = RuntimeSshTunnelLinkSchema.omit({ localPort: true })
   .extend({
@@ -74,10 +99,7 @@ export const PersistedRuntimeEnvironmentSchema = z.object({
 
 export type PersistedRuntimeEnvironment = z.infer<typeof PersistedRuntimeEnvironmentSchema>
 
-/**
- * A persisted environment with its sidecar state overlaid (runtime-environment-sidecar). These
- * fields never enter orca-environments.json: shipped builds strip unknown keys when they rewrite it.
- */
+/** Overlay sidecar-only state; never persist these fields in orca-environments.json, which shipped builds strip on rewrite. */
 export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.extend({
   sshAccess: RuntimeSshAccessLinkSchema.optional(),
   pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
@@ -117,10 +139,12 @@ export const KnownRuntimeEnvironmentSchema = PersistedRuntimeEnvironmentSchema.e
   .refine(
     (environment) => {
       const deployment = environment.orcadDeployment
+      // Keep WSL dependency in its own file: older environment schemas reject new connectionDependency values.
+      const dependency = deployment?.kind === 'wsl' ? undefined : 'ssh-tunnel'
       return (
         !deployment ||
         (!environment.sshAccess &&
-          environment.connectionDependency === 'ssh-tunnel' &&
+          environment.connectionDependency === dependency &&
           getPreferredLoopbackRuntimePort(environment) === deployment.localPort)
       )
     },
@@ -139,6 +163,12 @@ export type PublicKnownRuntimeEnvironment = Omit<KnownRuntimeEnvironment, 'endpo
   hostKeyFingerprint?: string
 }
 
+/** `serverStop` only for a host whose owning service stops a server (a WSL host, E11). */
+export type RuntimeEnvironmentRemoval = {
+  removed: PublicKnownRuntimeEnvironment
+  serverStop?: WslHostServerStop
+}
+
 export function redactRuntimeEnvironment(
   environment: KnownRuntimeEnvironment
 ): PublicKnownRuntimeEnvironment {
@@ -150,8 +180,7 @@ export function redactRuntimeEnvironment(
   }
 }
 
-// Why version 1 and the persisted schema: shipped builds accept only this shape, so every
-// T5 field lives in the sidecar and a downgrade rewrite cannot lose or reject it.
+// Retain version 1/persisted shape; newer state lives in the downgrade-safe sidecar.
 export const RuntimeEnvironmentStoreSchema = z.object({
   version: z.literal(1),
   environments: z.array(PersistedRuntimeEnvironmentSchema)
@@ -206,13 +235,71 @@ export function isUserManagedRuntimeEnvironment(
   return !isEphemeralVmRuntimeEnvironment(environment)
 }
 
-export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): PairingOffer {
+/** Only the user re-pairs these, with an access link; Orca pairs managed and cloud servers itself. */
+export function isRepairableWithAccessLink(
+  environment: Pick<PublicKnownRuntimeEnvironment, 'source' | 'orcadDeployment'>
+): boolean {
+  return !environment.orcadDeployment && isUserManagedRuntimeEnvironment(environment)
+}
+
+/** Who pairs a server that refused this desktop: the user with a link, Orca over SSH, or Orca on Connect. */
+export type RuntimePairingRepairRoute = 'access-link' | 'ssh' | 'connect'
+
+export function runtimePairingRepairRoute(
+  environment: Pick<PublicKnownRuntimeEnvironment, 'source' | 'orcadDeployment'>
+): RuntimePairingRepairRoute {
+  if (getOrcadSshDeployment(environment)) {
+    return 'ssh'
+  }
+  return isRepairableWithAccessLink(environment) ? 'access-link' : 'connect'
+}
+
+/** A WSL distro added as a host; keyed by its deployment record's kind, never by its name. */
+export function isWslHostRuntimeEnvironment<
+  T extends { orcadDeployment?: OrcadDeploymentLink | null }
+>(environment: T): environment is T & { orcadDeployment: OrcadWslDeploymentLink } {
+  return environment.orcadDeployment?.kind === 'wsl'
+}
+
+/**
+ * A server the generic remote-server surfaces list (Settings, status bar, server updates):
+ * neither a recipe VM nor a WSL host, which each have their own place.
+ */
+export function isListedRemoteServer(
+  environment: Pick<PublicKnownRuntimeEnvironment, 'source' | 'orcadDeployment'>
+): boolean {
+  return isUserManagedRuntimeEnvironment(environment) && !isWslHostRuntimeEnvironment(environment)
+}
+
+type PreferredEndpointSource = Pick<
+  KnownRuntimeEnvironment,
+  'name' | 'endpoints' | 'preferredEndpointId' | 'pairedDeviceId'
+>
+
+function preferredEndpoint(environment: PreferredEndpointSource) {
   const endpoint =
     environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
     environment.endpoints[0]
   if (!endpoint) {
     throw new Error(`Environment ${environment.name} has no access endpoints`)
   }
+  return endpoint
+}
+
+export function getPreferredPairedRuntimeConnection(
+  environment: PreferredEndpointSource
+): PairedRuntimeConnection {
+  const endpoint = preferredEndpoint(environment)
+  return pairedRuntimeConnectionFromOffer({
+    endpoint: endpoint.endpoint,
+    deviceToken: endpoint.deviceToken,
+    publicKeyB64: endpoint.publicKeyB64,
+    pairedDeviceId: environment.pairedDeviceId
+  })
+}
+
+export function getPreferredPairingOffer(environment: PreferredEndpointSource): PairingOffer {
+  const endpoint = preferredEndpoint(environment)
   return {
     v: PAIRING_OFFER_VERSION,
     endpoint: endpoint.endpoint,
@@ -222,11 +309,11 @@ export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): 
   }
 }
 
-/** The tunnel a server is reached through; only orcadDeployment also grants lifecycle ownership. */
+/** The SSH tunnel a server is reached through; only orcadDeployment also grants lifecycle ownership. */
 export function getRuntimeSshAccess(
   environment: Pick<KnownRuntimeEnvironment, 'orcadDeployment' | 'sshAccess'>
 ): RuntimeSshTunnelLink | undefined {
-  return environment.orcadDeployment ?? environment.sshAccess
+  return getOrcadSshDeployment(environment) ?? environment.sshAccess
 }
 
 export function getPreferredLoopbackRuntimePort(environment: {

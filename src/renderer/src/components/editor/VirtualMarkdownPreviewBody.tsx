@@ -11,6 +11,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Components } from 'react-markdown'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { scrollTopCache } from '@/lib/scroll-cache'
 import { renderMarkdownPreviewTree } from './markdown-preview-render-tree'
 import { scrollMarkdownPreviewVirtualizer } from './markdown-preview-anchor-navigation'
@@ -52,6 +53,7 @@ const RenderedBlock = memo(function RenderedBlock({
   block: MarkdownPreviewRenderedBlock
   components: Components
 }) {
+  useUiLanguageRevision()
   return <>{renderMarkdownPreviewTree(block.tree, components)}</>
 })
 

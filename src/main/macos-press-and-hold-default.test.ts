@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult } from '../shared/child-process/run-process'
+
+import type { ProcessResult } from '@orca/process-host/process-spec'
 import {
   ensureMacPressAndHoldDefault,
   interpretDefaultsRead,
@@ -17,7 +18,6 @@ const ORCA_DOMAIN = 'com.stablyai.orca'
 
 type HostOverrides = Partial<PressAndHoldHost> & { record?: PressAndHoldRecord | null }
 
-/** A macOS host whose domain has no explicit value — the state every affected user is in. */
 function createHost(overrides: HostOverrides = {}): {
   host: PressAndHoldHost
   writes: { domain: string; value: boolean }[]
@@ -70,8 +70,6 @@ describe('ensureMacPressAndHoldDefault', () => {
         })
 
         expect(ensureMacPressAndHoldDefault(host)).toBe('not-macos')
-        // Why assert the reads too: "inert" means no `defaults` subprocess and no userData I/O,
-        // not merely no write.
         expect(probe).not.toHaveBeenCalled()
         expect(readRecord).not.toHaveBeenCalled()
         expect(writes).toEqual([])
@@ -82,9 +80,7 @@ describe('ensureMacPressAndHoldDefault', () => {
 
   describe('respects an explicit user setting', () => {
     it('leaves the domain alone when the user already set a value', () => {
-      // One arm covers both `true` and `false`: the probe deliberately reports only presence, so
-      // whichever way the user's value points it is theirs. That the probe really does report
-      // presence for both is pinned against the real binary in the .defaults-domain test.
+      // The real-binary suite verifies that both true and false report set.
       const { host, writes, records } = createHost({ readDomainPreference: () => 'set' })
 
       expect(ensureMacPressAndHoldDefault(host)).toBe('kept-user-preference')
@@ -107,8 +103,7 @@ describe('ensureMacPressAndHoldDefault', () => {
     })
 
     it('stays out of the way after the user deletes the key we wrote', () => {
-      // The documented way back to the accent picker is `defaults delete`, which returns the
-      // domain to "unset". Without the recorded decision the next launch would rewrite it.
+      // Deleting the preference restores the accent picker; the recorded decision must prevent rewriting it.
       const { host, writes } = createHost({
         record: terminalRecord('applied'),
         readDomainPreference: () => 'unset'
@@ -144,7 +139,6 @@ describe('ensureMacPressAndHoldDefault', () => {
       expect(isOrcaPreferencesDomain('com.stablyai.orca')).toBe(true)
       expect(isOrcaPreferencesDomain('com.stablyai.orca.dev')).toBe(true)
       expect(isOrcaPreferencesDomain('com.github.Electron')).toBe(false)
-      // Why: a prefix test without the dot would accept a lookalike bundle id.
       expect(isOrcaPreferencesDomain('com.stablyai.orcafake')).toBe(false)
     })
   })
@@ -181,11 +175,6 @@ describe('ensureMacPressAndHoldDefault', () => {
   })
 })
 
-/**
- * Why here and not only in the .defaults-domain file: that file is macOS-only and CI has no macOS
- * runner, so this three-way rule would otherwise be enforced nowhere in CI. These cases need no
- * `defaults` binary — the sibling file pins that the real binary produces them.
- */
 describe('interpretDefaultsRead', () => {
   function probe(overrides: Partial<ProcessResult>): () => ProcessResult {
     return () => ({ code: 0, signal: null, stdout: '', stderr: '', timedOut: false, ...overrides })
@@ -200,7 +189,6 @@ describe('interpretDefaultsRead', () => {
   })
 
   describe('refuses to call a failed probe unset', () => {
-    // Each of these would otherwise overwrite a value the user deliberately set.
     const failures: [string, () => ProcessResult][] = [
       ['killed before it exited', probe({ code: null, signal: 'SIGTERM' })],
       ['timed out', probe({ code: null, timedOut: true })],
@@ -284,8 +272,7 @@ describe('startup wiring', () => {
     expect(callIndex).toBeGreaterThanOrEqual(0)
     expect(readyIndex).toBeGreaterThanOrEqual(0)
     expect(preflightCall).toBeGreaterThanOrEqual(0)
-    // Why after initDataPath: the record lives beside orca-data.json, and the canonical userData
-    // path is only captured there.
+    // initDataPath captures the canonical userData path where the decision record belongs.
     expect(callIndex).toBeGreaterThan(initDataPathIndex)
     expect(preflightCall).toBeLessThan(readyIndex)
   })

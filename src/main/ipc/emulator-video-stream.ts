@@ -4,10 +4,7 @@ import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
-// Bridges the main-process scrcpy video registry to renderer subscribers. The
-// renderer calls emulator:videoStreamStart with a deviceId; meta + H.264 access
-// units arrive on emulator:videoStreamMeta / emulator:videoStreamFrame. Mirrors
-// the MJPEG emulator-frame-stream handler but for the Android H.264 path.
+// Relay scrcpy metadata/H.264 units to renderer subscribers, parallel to the MJPEG stream handler.
 export function registerEmulatorVideoStreamHandlers(): void {
   type Subscription = {
     owner: WebContents
@@ -69,7 +66,14 @@ export function registerEmulatorVideoStreamHandlers(): void {
           if (owner.isDestroyed()) {
             return
           }
-          if (videoEvent.type === 'meta') {
+          if (videoEvent.type === 'end') {
+            stopSubscription(streamId, owner)
+            // Shares the MJPEG error channel; the renderer matches it by stream id.
+            owner.send('emulator:frameStreamError', {
+              streamId,
+              message: 'The Android video stream ended.'
+            })
+          } else if (videoEvent.type === 'meta') {
             owner.send('emulator:videoStreamMeta', {
               streamId,
               deviceId: args.deviceId,

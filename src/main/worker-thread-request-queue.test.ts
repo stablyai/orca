@@ -3,12 +3,6 @@ import { getEventListeners } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkerThreadRequestQueue } from './worker-thread-request-queue'
 
-// Why a direct test (#20940): three subsystems now share this queue, and each
-// client test can only observe the parts its own protocol happens to exercise.
-// The contract constrained here is the queue's own — dispatch order, where the
-// deadline clock starts, and when the respawn cap counts and clears — so a
-// change to it fails here rather than in whichever client noticed first.
-
 type Request = { id: number; label: string }
 type Response = { id: number; label: string }
 
@@ -54,7 +48,6 @@ class FakeWorker {
     }
   }
 
-  /** Answer the request currently in flight. */
   respond(): void {
     const last = this.posted.at(-1)
     if (!last) {
@@ -98,7 +91,6 @@ function send(
   return queue.dispatch((id) => ({ id, label }), TIMEOUT_MS, undefined, owner)
 }
 
-/** Resolve to the response or to the rejection, so a test can assert on either. */
 function settle(promise: Promise<Response>): Promise<unknown> {
   return promise.catch((error: unknown) => error)
 }
@@ -226,12 +218,10 @@ describe('WorkerThreadRequestQueue', () => {
     const first = send(queue, 'slow')
     const queued = settle(send(queue, 'behind'))
     await vi.advanceTimersByTimeAsync(TIMEOUT_MS - 1)
-    // 'behind' has now waited nearly its whole deadline without being posted.
     workers[0].respond()
     await expect(first).resolves.toMatchObject({ label: 'slow' })
     expect(labels(workers[0])).toEqual(['slow', 'behind'])
 
-    // A queue-inclusive clock would already have fired here.
     await vi.advanceTimersByTimeAsync(TIMEOUT_MS - 1)
     workers[0].respond()
 
@@ -261,7 +251,6 @@ describe('WorkerThreadRequestQueue', () => {
       workers.at(-1)?.emit('error', new Error(`boom ${death}`))
     }
 
-    // Three deaths consumed three calls; the fourth never got a worker.
     expect(workers).toHaveLength(MAX_CONSECUTIVE_DEATHS)
     expect(labels(workers[0])).toEqual(['a'])
     expect(labels(workers[2])).toEqual(['c'])
@@ -278,8 +267,7 @@ describe('WorkerThreadRequestQueue', () => {
     const workers: FakeWorker[] = []
     const queue = makeQueue(workers)
 
-    // One burst, never idle between the faults: the queue stays non-empty
-    // throughout, so only the success can clear the count.
+    // Keep one burst queued so idle resets cannot mask the success reset.
     const [a, b, c, d, e] = ['a', 'b', 'c', 'd', 'e'].map((label) => settle(send(queue, label)))
     await Promise.resolve()
 
@@ -296,8 +284,7 @@ describe('WorkerThreadRequestQueue', () => {
     workers[2].emit('error', new Error('boom 2'))
     expect(await d).toMatchObject({ message: 'boom 2' })
 
-    // Without the reset that fault is the third consecutive death and 'e' is
-    // drained with the crash-loop message instead of posted to a new worker.
+    // Without the success reset, this third fault would drain e instead of dispatching it.
     expect(labels(workers[3])).toEqual(['e'])
     workers[3].respond()
     expect(await e).toMatchObject({ label: 'e' })
@@ -315,15 +302,13 @@ describe('WorkerThreadRequestQueue', () => {
     }
     expect(workers).toHaveLength(2)
 
-    // Both deaths drained to an empty queue, so this burst is new work.
     const active = settle(send(queue, 'c'))
     const behind = settle(send(queue, 'd'))
     await Promise.resolve()
     workers[2].emit('error', new Error('boom c'))
 
     expect(await active).toMatchObject({ message: 'boom c' })
-    // Without the reset this would be the third consecutive death and 'd' would
-    // have been drained with the crash-loop message instead of posted.
+    // A new burst must not inherit the two prior faults and drain d.
     expect(labels(workers[3])).toEqual(['d'])
     workers[3].respond()
     expect(await behind).toMatchObject({ label: 'd' })
@@ -507,7 +492,6 @@ describe('WorkerThreadRequestQueue', () => {
       await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
       expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
 
-      // No second thread beside one still inside a native call (#24572).
       for (const label of ['a', 'b', 'c']) {
         expect(await settle(send(queue, label))).toMatchObject({
           message: 'unavailable: previous worker still exiting'

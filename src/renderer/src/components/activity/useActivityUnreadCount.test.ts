@@ -36,8 +36,7 @@ describe('countActivityUnread session-boundary rows (STA-3386)', () => {
   })
 
   it('keeps counting a real completion displaced into history by a session boundary', () => {
-    // Why: agent finished (unacknowledged), then the user resumed the session — the
-    // boundary row replaces the live done but the finish must stay unread.
+    // A session boundary replaces live done, but must preserve its unacknowledged completion in history.
     const source = makeSource(
       makeEntry({
         sessionBoundary: true,
@@ -167,9 +166,7 @@ describe('countActivityUnread working turns', () => {
 })
 
 describe('countActivityUnread reads the combined state, not the main agent fact', () => {
-  // The badge mirrors the Activity feed, which builds its rows from the combined state: a settled
-  // main agent whose subagent still runs is one live working row there, and no done event exists for
-  // the main agent's own finish until the row itself settles.
+  // Mirror combined Activity state: a settled main agent with running children is still working, with no completion event until the row settles.
   const NOW = AGENT_STATUS_STALE_AFTER_MS
 
   it('counts a fresh row held working by a subagent as one live working turn', () => {

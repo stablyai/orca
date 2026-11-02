@@ -76,8 +76,7 @@ describe('pane terminal output scheduler', () => {
       expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
       expect(recoveryReasons).toEqual(['write-stalled'])
       expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
-      // Only the first rejection touches xterm; later PTY deliveries credit
-      // directly while recovery owns the certified-dead instance.
+      // Only the first rejection reaches xterm; recovery owns the dead instance, while later deliveries credit directly.
       expect(terminal.write).toHaveBeenCalledTimes(1)
       expect(onParsed).not.toHaveBeenCalled()
       for (const ackCredit of ackCredits) {
@@ -98,16 +97,13 @@ describe('pane terminal output scheduler', () => {
       })
     }
 
-    // More than two drain slices: rejection must abandon the detached tail
-    // instead of synchronously retrying the same certified-dead xterm.
+    // Exceed two slices so rejection must abandon the detached tail instead of retrying dead xterm.
     writeTerminalOutput(throwing, 'x'.repeat(40 * 1024), { foreground: false })
 
-    // Why: drain runs inside setTimeout; if the throw escapes drainQueuedOutput
-    // it would crash the timer callback and leave the scheduler poisoned.
+    // Drain runs in a timer; an escaping throw would poison scheduling.
     expect(() => vi.advanceTimersByTime(50)).not.toThrow()
     expect(throwing.write).toHaveBeenCalledTimes(1)
 
-    // Advancing further must not rediscover the dead entry.
     vi.advanceTimersByTime(100)
     expect(throwing.write).toHaveBeenCalledTimes(1)
   })

@@ -6,18 +6,8 @@ import {
   type RuntimeDegradation
 } from '../../shared/runtime-types'
 
-/**
- * A note left by whoever proved this host cannot load or spawn PTYs, read back when
- * `status.get` assembles `degradations[]`.
- *
- * Why a module-level note rather than a constructor argument: only the host entry point
- * can run the out-of-process load probe, and it must run before anything requires
- * `node-pty` — long before `OrcaRuntimeService` exists. This is the same shape
- * `runtime-browser-commands-factory` uses for `browser_unavailable`, for the same reason.
- *
- * Silence means "nothing proved it broken", never "proved working". Hosts that never
- * run a precondition therefore report no degradation, which is the honest answer.
- */
+/** Entry-point PTY probes run before node-pty imports and runtime construction, so retain failures at module scope.
+ * Silence means no failure proved, never proof of working PTYs; unprobed hosts report no degradation. */
 export type RuntimeTerminalUnavailableCause = {
   reason: RuntimeTerminalUnavailableReason
   detail?: string
@@ -31,11 +21,6 @@ export function setRuntimeTerminalUnavailableCause(
   unavailableCause = cause
 }
 
-export function runtimeTerminalUnavailableCause(): RuntimeTerminalUnavailableCause | null {
-  return unavailableCause
-}
-
-/** The degradation entry for the recorded cause, or null when nothing is degraded. */
 export function runtimeTerminalDegradation(): RuntimeDegradation | null {
   const cause = unavailableCause
   if (!cause) {

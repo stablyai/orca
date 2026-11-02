@@ -1,7 +1,6 @@
 import type { IDisposable, Terminal } from '@xterm/xterm'
 
-// Structural so the capability-reply installer keeps its narrow Pick, but narrow
-// enough that a non-terminal wrapper cannot become a second, never-refreshed key.
+// Keep the capability installer’s narrow structural type but require terminal identity to exclude stale wrapper keys.
 type Da1OwnerTerminal = Pick<Terminal, 'cols' | 'rows' | 'element' | 'options'>
 
 const owners = new WeakMap<Da1OwnerTerminal, { refresh: () => void }>()

@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { TaskSourceContext } from '../../shared/task-source-context'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { LocalGitExecOptions } from '../gitlab/gitlab-project-ref-resolution'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
@@ -40,10 +40,7 @@ function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): R
   return store.getRepos().find((r) => resolve(r.path) === resolvedRepoPath)
 }
 
-// Why: mirror github.ts assertRegisteredRepo — main-process handlers
-// must never operate on a path the user hasn't explicitly registered as
-// a repo (filesystem-auth boundary). Source context adds a host check so a
-// task fetched from one machine cannot mutate a same-path repo on another.
+// Require registered paths and the captured host so same-path twins cannot receive cross-host mutations.
 export function assertRegisteredRepo(args: GitLabRepoSelectorArgs, store: Store): Repo {
   const repo = findRegisteredGitLabRepo(args, store)
   if (!repo) {

@@ -1,3 +1,4 @@
+import { themedStyles } from './mobile-tasks-dependencies'
 import { mobileTasksChromeStyles } from './mobile-tasks-chrome-styles'
 import { mobileTasksListStyles } from './mobile-tasks-list-styles'
 import { mobileTasksProjectPickerStyles } from './mobile-tasks-project-picker-styles'
@@ -6,7 +7,7 @@ import { mobileTasksWorkspaceReviewStyles } from './mobile-tasks-workspace-revie
 import { mobileTasksDiffCommentStyles } from './mobile-tasks-diff-comment-styles'
 import { mobileTasksComposerActionStyles } from './mobile-tasks-composer-action-styles'
 
-export const styles = {
+export const styles = themedStyles(() => ({
   ...mobileTasksChromeStyles,
   ...mobileTasksListStyles,
   ...mobileTasksProjectPickerStyles,
@@ -14,7 +15,7 @@ export const styles = {
   ...mobileTasksWorkspaceReviewStyles,
   ...mobileTasksDiffCommentStyles,
   ...mobileTasksComposerActionStyles
-}
+}))
 
 export function getPrSignalToneStyle(tone: 'neutral' | 'success' | 'warning' | 'danger') {
   if (tone === 'success') {

@@ -35,13 +35,31 @@ import type {
   CodexWslRuntimeHookInstallPlan,
   WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
 
-// Why (#16441): this run clears Orca's computed trust, awaits Codex's grant, and
-// may write computed trust back; a concurrent pane launch must not interleave
-// with that sequence. One lane per file keeps it atomic.
+/** True when touching the distro's `\\wsl.localhost` files now would start it (E9); a user act passes. */
+export async function isWslHookDistroBlocked(distro: string): Promise<boolean> {
+  return (await blockedWslDistroForPath('', distro)) !== null
+}
+
+/** A WSL home whose install was skipped because its distro is stopped; the relay installs later. */
+export function skippedWslHookInstallStatus(runtimeHomePath: string): AgentHookInstallStatus {
+  return {
+    agent: 'codex',
+    state: 'not_installed',
+    configPath: pathWin32.join(runtimeHomePath, 'hooks.json'),
+    managedHooksPresent: false,
+    detail: 'The WSL distro is not running; Orca installs these hooks once it runs.'
+  }
+}
+
+/**
+ * Serialize clear/grant/fallback per file so concurrent pane launches cannot interleave trust writes.
+ * Null: skipped, because the distro is stopped and its UNC files would start it.
+ */
 export function installManagedHooksIntoWslRuntime(
   plan: CodexWslRuntimeHookInstallPlan
-): Promise<AgentHookInstallStatus> {
+): Promise<AgentHookInstallStatus | null> {
   return runExclusivelyForCodexTrustConfig(plan.tomlPath, () =>
     installManagedHooksIntoWslRuntimeExclusively(plan)
   )
@@ -49,7 +67,11 @@ export function installManagedHooksIntoWslRuntime(
 
 async function installManagedHooksIntoWslRuntimeExclusively(
   plan: CodexWslRuntimeHookInstallPlan
-): Promise<AgentHookInstallStatus> {
+): Promise<AgentHookInstallStatus | null> {
+  // Checked inside the queue, right before the first UNC read: a stop while queued must skip.
+  if (await isWslHookDistroBlocked(plan.wslDistro)) {
+    return null
+  }
   const config = readHooksJson(plan.configPath)
   if (!config) {
     return {
@@ -98,14 +120,10 @@ async function installManagedHooksIntoWslRuntimeExclusively(
   writeManagedScript(plan.scriptPath, getManagedScript('posix'))
   writeCodexHooksJson(plan.configPath, nextHooks)
   try {
-    // Why: same grant-then-fallback split as the host install — codex runs
-    // inside the distro so the hash authority matches the codex the pane runs.
     const runtimeHomePath = pathWin32.dirname(plan.tomlPath)
-    // Why: a successful re-grant replaces the ledger. Keep the previous
-    // records long enough to prove ownership of stale canonical-path keys.
+    // Save the old ledger before re-grant replaces proof of stale canonical-path key ownership.
     const previousLedgerHome = readCodexTrustGrantLedgerHomeForReconciliation(runtimeHomePath)
-    // Why: Codex's verified RPC write must be the final config mutation. A
-    // host-side rewrite after verification can race or invalidate that grant.
+    // Clean before RPC: host writes after verification can invalidate Codex's grant.
     removeStaleWslRuntimeManagedHookTrustEntries(
       plan.tomlPath,
       trustEntries,
@@ -116,15 +134,27 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       tomlPath: plan.tomlPath,
       managedCommand: command,
       managedEntries: trustEntries,
+      // Use the distro's Codex as hash authority, matching the pane's runtime.
       host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome }
     }
-    // Why: the fallback below writes this trust back if the session fails.
+    // Fallback restores computed trust if the session fails.
     const grant = await grantManagedCodexHookTrust(grantPlan, () =>
       removeSelfComputedTrustBeforeGrant(grantPlan)
     )
+    // The distro may have stopped during the hash wait; the fallback write would start it again.
+    // hooks.json is already written, so report the missing trust rather than a clean skip.
+    if (grant.lane === 'fallback' && (await isWslHookDistroBlocked(plan.wslDistro))) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath: plan.configPath,
+        managedHooksPresent: true,
+        detail:
+          'Hooks installed but trust is pending: the WSL distro stopped before Orca could write it. Orca writes it once the distro runs.'
+      }
+    }
     if (grant.lane === 'fallback') {
-      // Why: WSL runtime homes may carry user hook approvals we did not rebuild
-      // here; only upsert Orca's entries instead of sweeping the whole source.
+      // Upsert only Orca's entries to preserve user approvals not rebuilt here.
       upsertHookTrustEntries(plan.tomlPath, trustEntries)
     }
   } catch (error) {
@@ -176,7 +206,7 @@ export function refreshWslRuntimeUserHooks(
   writeCodexHooksJson(plan.configPath, nextHooks)
   removeWslRuntimeManagedHookTrustEntries(plan)
   try {
-    // Why: the disabled path may run after the WSL mount root changed, so cleanup can't be scoped to the plan's current source path.
+    // Mount roots may have changed; cleanup must include earlier source paths.
     removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [])
   } catch (error) {
     console.warn('[codex-hook-service] failed to clean stale WSL trust entries', error)
@@ -190,24 +220,20 @@ export function refreshWslRuntimeUserHooks(
   }
 }
 
-// Why: transport failures preserve last known-good identity; a successful absence probe is strong enough to revoke trust immediately.
+// Transport failures preserve trust; confirmed absence revokes only without a successful install.
 export function getWslHookReconciliationAction(args: {
   settlement: WslCanonicalPathSettlement
   isCurrentGeneration: boolean
   installedTrustConfigPath: string | null
   resolvedTrustConfigPath: string | null
-  /** Whether the synchronous install for this generation wrote trust. */
+  /** Whether this generation's primary install wrote trust. */
   installSucceeded: boolean
 }): 'none' | 'remove' | 'reinstall' {
   if (!args.isCurrentGeneration) {
     return 'none'
   }
   if (args.settlement.status === 'missing') {
-    // Why: a `missing` directory probe right after a verified install/grant is
-    // a false negative — the RPC (or fallback) just wrote and read trust in
-    // that home, so it exists. Revoking here would delete the fresh grant the
-    // launching pane needs, resurfacing "hooks need review". A genuinely moved
-    // home resolves to a different path and takes the `reinstall` branch below.
+    // A successful trust write disproves a missing-home probe; preserve the launch's fresh grant.
     return args.installSucceeded ? 'none' : 'remove'
   }
   if (
@@ -220,7 +246,7 @@ export function getWslHookReconciliationAction(args: {
   return 'reinstall'
 }
 
-// Why: fold only the Windows-case-insensitive portion; a full lowercase would let case-distinct WSL homes share one reconciliation slot.
+// Fold only Windows path portions so case-distinct WSL homes keep separate reconciliation slots.
 export function getWslReconciliationKey(runtimeHomePath: string): string {
   return normalizeCodexProjectPathForLookup(runtimeHomePath)
 }

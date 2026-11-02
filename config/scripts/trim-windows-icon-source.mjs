@@ -1,18 +1,12 @@
 #!/usr/bin/env node
-// Build the Windows multi-size ICO from the macOS 1024px render, trimming the
-// transparent Icon Composer "safe-area" inset so the glyph fills the canvas the
-// way other Windows taskbar/"Open with" icons do. Without this the glyph is only
-// ~83% of the frame and looks visibly small next to native apps (issue #5357).
+// Trim macOS Icon Composer inset when generating Windows ICO; untrimmed glyph fills only ~83% and looks undersized (#5357).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { PNG } from 'pngjs'
 
-// Why: Windows renders the largest ICO frame at small sizes too, so the glyph
-// must fill nearly the whole canvas (~96%) to match native apps. A small uniform
-// margin keeps anti-aliased edges and the soft shadow from clipping at the border.
+// Target ~96% largest-frame fill because Windows downscales it; retain margin for antialiasing/shadow.
 export const ICON_CANVAS_MARGIN_RATIO = 0.02
-// Why: alpha below this is treated as background; the macOS render fades the
-// safe-area shadow to a few percent opacity, which must not count as glyph.
+// Ignore low-alpha safe-area shadow when finding glyph bounds.
 const ALPHA_BACKGROUND_THRESHOLD = 16
 // Standard Windows ICO sizes, largest first (matches the prior ImageMagick set).
 export const ICO_FRAME_SIZES = [256, 128, 64, 48, 32, 16]
@@ -28,8 +22,7 @@ export function encodePng({ width, height, data }) {
   return PNG.sync.write(png)
 }
 
-// Tightest box containing every pixel whose alpha exceeds the background
-// threshold. Returns null when the image is fully transparent.
+// Return tight alpha-threshold bounds or null for fully transparent image.
 export function findOpaqueBounds({ width, height, data }, threshold = ALPHA_BACKGROUND_THRESHOLD) {
   let minX = width
   let minY = height
@@ -60,7 +53,6 @@ export function findOpaqueBounds({ width, height, data }, threshold = ALPHA_BACK
   return { minX, minY, maxX, maxY, width: maxX - minX + 1, height: maxY - minY + 1 }
 }
 
-// Crop an RGBA image to the given inclusive bounds.
 export function cropImage({ width, data }, bounds) {
   const cropWidth = bounds.width
   const cropHeight = bounds.height
@@ -73,9 +65,7 @@ export function cropImage({ width, data }, bounds) {
   return { width: cropWidth, height: cropHeight, data: out }
 }
 
-// Center the (already-trimmed) glyph on a transparent square canvas, leaving a
-// small uniform margin so edges/shadow do not clip. The square side is the
-// glyph's longer dimension grown by the margin so the glyph keeps its shape.
+// Pad trimmed glyph uniformly into square without clipping shadow or distorting aspect ratio.
 export function squareWithMargin(image, marginRatio = ICON_CANVAS_MARGIN_RATIO) {
   const longSide = Math.max(image.width, image.height)
   const side = Math.round(longSide / (1 - 2 * marginRatio))
@@ -90,8 +80,7 @@ export function squareWithMargin(image, marginRatio = ICON_CANVAS_MARGIN_RATIO) 
   return { width: side, height: side, data }
 }
 
-// Area-averaging (box filter) resize with premultiplied alpha so transparent
-// edges do not bleed dark fringes. Used to downscale to each ICO frame size.
+// Premultiply alpha during box-filter downscale to avoid dark fringes at transparent edges.
 export function resizeImage(image, targetWidth, targetHeight) {
   const { width: srcW, height: srcH, data: src } = image
   const out = Buffer.alloc(targetWidth * targetHeight * 4)
@@ -149,8 +138,7 @@ export function resizeImage(image, targetWidth, targetHeight) {
   return { width: targetWidth, height: targetHeight, data: out }
 }
 
-// Encode a Windows .ico holding PNG-compressed frames (supported since Vista,
-// the format ImageMagick's auto-resize also emits for the larger sizes).
+// Use PNG-compressed ICO frames, supported since Vista and matching previous ImageMagick output.
 export function encodeIco(frames) {
   const header = Buffer.alloc(6)
   header.writeUInt16LE(0, 0) // reserved
@@ -179,8 +167,7 @@ export function encodeIco(frames) {
   return Buffer.concat([header, directory, ...payloads])
 }
 
-// Trim the safe-area inset from a 1024px source render and produce a filled
-// multi-size ICO buffer. Exported so the regression test can drive it directly.
+// Trim safe-area inset from source and return filled multi-size ICO; export permits pixel-level regression test.
 export function buildWindowsIcoFromPng(sourcePngBuffer, sizes = ICO_FRAME_SIZES) {
   const source = decodePng(sourcePngBuffer)
   const bounds = findOpaqueBounds(source)

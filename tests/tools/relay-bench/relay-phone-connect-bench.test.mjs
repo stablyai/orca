@@ -1,6 +1,4 @@
-// Why: decodeOffer used to be `pairingUrl.split('code=')[1]` fed straight to JSON.parse, so a
-// missing or malformed pairing link surfaced as a stack trace rather than usage. The link is a
-// live credential, so the failure text has to name the problem without echoing the code.
+// Malformed pairing links must produce usage errors without echoing live codes; the old split+JSON.parse leaked stack-shaped failures.
 import { describe, expect, it, vi } from 'vitest'
 import { decodeOffer, vetCellUrl } from './relay-phone-connect-bench.mjs'
 
@@ -32,8 +30,7 @@ describe('decodeOffer', () => {
   })
 })
 
-// Why: the cell URL from /v1/resolve carries the resume credential to whatever it names, so it
-// gets the same DNS layer as a probe origin, not just the literal-address check.
+// Vet resolved cell DNS as well as literals because it receives the resume credential.
 describe('vetCellUrl', () => {
   it('refuses a literal private cell before any lookup', async () => {
     const lookup = vi.fn()

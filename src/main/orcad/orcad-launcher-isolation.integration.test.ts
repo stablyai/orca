@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { ORCAD_LAUNCHER_FILENAME, ORCAD_SERVER_ENTRY_FILENAME } from '../../shared/orcad-artifacts'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { hashOrcadLauncher } from '../../shared/orcad-build-identity'
@@ -64,13 +64,16 @@ it('changes the launcher identity when the server is rebuilt', async () => {
 })
 
 afterAll(async () => {
-  await rm(root, { recursive: true, force: true })
+  // Windows can hold an exited node.exe image open briefly (EBUSY).
+  await rm(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 })
 })
 
 it('keeps the server and profile-state graph outside the compatibility launcher', async () => {
   expect(inputs.filter((path) => path.startsWith('src/main/'))).toEqual([
     'src/main/orcad/orcad-app-paths.ts',
+    'src/main/orcad/orcad-configuration-exit.ts',
     'src/main/orcad/orcad-bundled-runtime.ts',
+    'src/main/orcad/orcad-compile-cache.ts',
     'src/main/orcad/launcher.ts'
   ])
   expect(inputs.some((path) => path.startsWith('node_modules/'))).toBe(false)
@@ -86,15 +89,37 @@ it('runs an unpackaged server on the supported host runtime and preserves argume
     'console.log(JSON.stringify({ node: process.versions.node, args: process.argv.slice(2) }))'
   )
   await buildLauncher(entry)
-  const version = await runProcess({ program: launcherNode, args: ['-p', 'process.versions.node'] })
+  const version = await runProcess({
+    program: process.execPath,
+    args: ['-p', 'process.versions.node']
+  })
   const args = ['a path with spaces', '--port', '0']
   const result = await runProcess({
-    program: launcherNode,
+    program: process.execPath,
     args: [entry, ...args],
     env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
   })
   expect(result.code, result.stderr).toBe(0)
   expect(JSON.parse(result.stdout)).toEqual({ node: version.stdout.trim(), args })
+})
+
+it('refuses an old host runtime without a bundle before parsing the server', async ({ skip }) => {
+  const version = await runProcess({
+    program: launcherNode,
+    args: ['-p', 'process.versions.node']
+  })
+  if (Number(version.stdout.trim().split('.')[0]) >= 24) {
+    skip()
+  }
+  const result = await runProcess({
+    program: launcherNode,
+    args: [launcher],
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+  })
+  expect(result.code).toBe(78)
+  expect(result.stderr).toContain('requires Node.js 24')
+  expect(result.stderr).not.toContain('SyntaxError')
+  expect(result.stdout).toBe('')
 })
 
 it('preserves the crash exit code when the server fails while loading', async () => {
@@ -154,25 +179,6 @@ describe.skipIf(skip)('split launcher with the real bundled runtime', () => {
     })
     expect(result.code).toBe(78)
     expect(result.stderr).toContain('server does not match its launcher')
-    expect(result.stderr).not.toContain('server was loaded')
-  })
-
-  it('refuses an old host runtime without a bundle before loading the server', async ({ skip }) => {
-    const version = await runProcess({
-      program: launcherNode,
-      args: ['-p', 'process.versions.node']
-    })
-    if (Number(version.stdout.trim().split('.')[0]) >= 18) {
-      skip()
-    }
-    await writeFile(join(root, ORCAD_SERVER_ENTRY_FILENAME), 'throw new Error("server was loaded")')
-    const result = await runProcess({
-      program: launcherNode,
-      args: [launcher],
-      env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
-    })
-    expect(result.code).toBe(78)
-    expect(result.stderr).toContain('requires Node.js 18')
     expect(result.stderr).not.toContain('server was loaded')
   })
 })

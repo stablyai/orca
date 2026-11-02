@@ -2,8 +2,8 @@ import { isBenignCheckFailure } from '../updater-fallback'
 import { ReleaseFeedPreflightError } from './updater-state'
 import type { CheckFailureSource } from './updater-state'
 import { UpdaterReleaseFeed } from './updater-release-feed'
+import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 
-/** Normalizes check failures, retry policy, and release-feed preflight diagnostics. */
 export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
   protected isRetryableReleaseFeedPreflightFailure(sourceError: unknown): boolean {
     return (
@@ -31,7 +31,7 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
       return
     }
     if (this.isPinnedBuildActive) {
-      // Why: a failed pinned jump must hand the feed back before surfacing the error, or the pin blocks background checks for the process lifetime.
+      // Restore the release feed before reporting a failed pinned jump or it blocks all future background checks.
       this.clearAvailableUpdateContext()
       this.restoreReleaseUpdateSource()
       this.sendSettledCheckStatus({ state: 'error', message, userInitiated })
@@ -74,22 +74,24 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
         isBenignCheckFailure(message) ||
         this.isRetryableReleaseFeedPreflightFailure(sourceError)
       ) {
-        // Why: benign failures (incomplete latest.yml, network blips) are transient — retry, and skip persisting the timestamp (would suppress the next startup check).
+        // Transient feed failures need retries; persisting their timestamp would suppress the next startup check.
         console.warn('[updater] benign check failure:', message)
         this.clearAvailableUpdateContext()
         this.scheduleAutomaticUpdateCheck(this.getAutomaticRetryInterval())
         if (userInitiated) {
-          // Why: a user click needs visible feedback (idle looks broken); distinguish incomplete releases from transport failures.
+          // User clicks need visible feedback distinguishing incomplete releases from transport failure.
           this.sendSettledCheckStatus({
             state: 'error',
-            message: this.isStableReleaseNotReadyFailure(sourceError)
-              ? "A newer release isn't available for this device yet. Check again later."
-              : "Couldn't reach the update server. Try again in a few minutes.",
+            ...updaterCodedMessage(
+              this.isStableReleaseNotReadyFailure(sourceError)
+                ? 'releaseNotReady'
+                : 'updateServerUnreachable'
+            ),
             userInitiated: true
           })
         } else {
           if (this.isRetryableReleaseFeedPreflightFailure(sourceError)) {
-            // Why: release probes can fail transiently; keep the campaign pending so the short retry can still show it.
+            // Keep the campaign pending through transient probe failures so the short retry can surface it.
             this.deferPendingUpdateNudgeUntilRetry()
           }
           this.sendSettledCheckStatus({ state: 'idle' })
@@ -114,6 +116,5 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
     return this.pendingCheckFailurePromise
   }
 
-  /** Keeps retry interval access in one place for the scheduling layer. */
   protected abstract getAutomaticRetryInterval(): number
 }

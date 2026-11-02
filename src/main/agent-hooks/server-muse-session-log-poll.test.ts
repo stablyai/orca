@@ -44,7 +44,7 @@ describe('AgentHookServer Muse session log polling', () => {
     dirs.length = 0
   })
 
-  // Why: Muse fires no hook for request_user_input, so only the poll can surface the wait and its answer.
+  // Muse emits no request_user_input hook; polling must surface questions and answers.
   it('flips the pane to waiting for a logged question and back once it settles', async () => {
     const dataHome = mkdtempSync(join(tmpdir(), 'agent-hook-muse-poll-'))
     dirs.push(dataHome)

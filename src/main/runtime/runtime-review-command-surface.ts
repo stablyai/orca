@@ -24,6 +24,7 @@ type GitHubReviewMutationName =
   | 'mergeRepoPR'
   | 'setRepoPRAutoMerge'
   | 'markRepoPRReadyForReview'
+  | 'markRepoPRDraft'
   | 'updateRepoPRState'
   | 'requestRepoPRReviewers'
   | 'removeRepoPRReviewers'
@@ -68,6 +69,7 @@ export function installRuntimeReviewCommandSurface(
     diagnoseGitLabAuth: glq.diagnoseGitLabAuth.bind(glq),
     getGitLabRateLimit: glq.getGitLabRateLimit.bind(glq),
     listGitLabRepoLabels: glq.listGitLabRepoLabels.bind(glq),
+    listGitLabRepoAssignableUsers: glq.listGitLabRepoAssignableUsers.bind(glq),
     getGitLabRepoWorkItemDetails: glq.getGitLabRepoWorkItemDetails.bind(glq),
     getGitLabRepoWorkItemByPath: glq.getGitLabRepoWorkItemByPath.bind(glq),
     createGitLabRepoIssue: glm.createGitLabRepoIssue.bind(glm),
@@ -96,6 +98,7 @@ export function installRuntimeReviewCommandSurface(
     mergeRepoPR: ghm.mergeRepoPR.bind(ghm),
     setRepoPRAutoMerge: ghm.setRepoPRAutoMerge.bind(ghm),
     markRepoPRReadyForReview: ghm.markRepoPRReadyForReview.bind(ghm),
+    markRepoPRDraft: ghm.markRepoPRDraft.bind(ghm),
     updateRepoPRState: ghm.updateRepoPRState.bind(ghm),
     requestRepoPRReviewers: ghm.requestRepoPRReviewers.bind(ghm),
     removeRepoPRReviewers: ghm.removeRepoPRReviewers.bind(ghm),

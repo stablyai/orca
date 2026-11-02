@@ -41,7 +41,7 @@ describe('file explorer operation generations', () => {
     expect(
       getFileExplorerOperationOwnerFromState(useAppStore.getState(), FLOATING_TERMINAL_WORKTREE_ID)
     ).toEqual(owner)
-    expect(guard.route.settings.activeRuntimeEnvironmentId).toBeNull()
+    expect(guard.route.target).toEqual({ kind: 'local' })
     expect(guard.route.expectedExecutionHostId).toBe('local')
     expect(() => guard.assertCurrent()).not.toThrow()
   })

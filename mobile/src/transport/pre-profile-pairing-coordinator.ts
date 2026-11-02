@@ -13,9 +13,11 @@ import {
 } from './mobile-relay-pairing-journal'
 import {
   clearMobileRelayPairingJournal,
+  releaseMobileRelayPairingJournal,
   saveMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
 } from './mobile-relay-pairing-journal-store'
+import { settleMobileRelayPairingRecovery } from './mobile-relay-pairing-recovery'
 import {
   promotePairingJournalCredential,
   writeMobileRelayCredentialBundle
@@ -49,6 +51,8 @@ type Dependencies = {
   saveJournal: typeof saveMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
+  releaseJournal: typeof releaseMobileRelayPairingJournal
+  recoverPendingJournal: () => Promise<void>
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   recordDescriptorFromStatus: typeof recordHostDescriptorFromStatus
   now: () => number
@@ -64,11 +68,17 @@ const defaultDependencies: Dependencies = {
   saveJournal: saveMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
+  releaseJournal: releaseMobileRelayPairingJournal,
+  recoverPendingJournal: () => settleMobileRelayPairingRecovery(PENDING_RECOVERY_WAIT_MS),
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   recordDescriptorFromStatus: recordHostDescriptorFromStatus,
   now: Date.now,
   platform: Platform.OS
 }
+
+// How long a new scan lets a previous attempt's recovery publish a committed
+// install before the new journal supersedes it.
+const PENDING_RECOVERY_WAIT_MS = 8_000
 
 export function startPreProfilePairing(args: {
   offer: PairingOffer
@@ -102,7 +112,17 @@ export function startPreProfilePairing(args: {
     dispose()
   }, args.timeoutMs)
 
-  const result = runPairing(args.offer, args.connectOptions, dependencies, clients, () => disposed)
+  let savedJournalId: string | null = null
+  const result = runPairing(
+    args.offer,
+    args.connectOptions,
+    dependencies,
+    clients,
+    () => disposed,
+    (journalId) => {
+      savedJournalId = journalId
+    }
+  )
     .catch((error: unknown) => {
       if (timedOut) {
         throw new Error('mobile pairing timed out')
@@ -110,6 +130,9 @@ export function startPreProfilePairing(args: {
       throw error
     })
     .finally(() => {
+      if (savedJournalId) {
+        dependencies.releaseJournal(savedJournalId)
+      }
       if (timer) {
         clearTimeout(timer)
         timer = null
@@ -134,11 +157,11 @@ async function runPairing(
   connectOptions: ConnectOptions | undefined,
   dependencies: Dependencies,
   clients: Set<PairingCandidateClient>,
-  isDisposed: () => boolean
+  isDisposed: () => boolean,
+  onJournalSaved: (journalId: string) => void
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
-  // Why: every pairing artifact must share the preserved host id so re-pairing
-  // updates one card instead of publishing a second identity (STA-1840).
+  // Use the preserved host id for every artifact so re-pairing updates one card (STA-1840).
   const { id: hostId, name: hostName } = await dependencies.resolveHostIdentity(
     offer.publicKeyB64,
     `host-${now}`
@@ -146,6 +169,9 @@ async function runPairing(
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
+    // Give committed recovery a bounded publication chance before the new scan supersedes its journal.
+    await dependencies.recoverPendingJournal()
+    assertActive(isDisposed)
     journal = createMobileRelayPairingJournal({
       offer: { ...offer, relay: offer.relay },
       hostId,
@@ -153,6 +179,7 @@ async function runPairing(
       now
     })
     await dependencies.saveJournal(journal)
+    onJournalSaved(journal.metadata.journalId)
     assertActive(isDisposed)
   }
 
@@ -228,8 +255,7 @@ async function runPairing(
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
-    // Why: this commits a LAN-only host instead of failing, so the refusal code is the only
-    // record of why the phone never got a relay endpoint.
+    // Log the refusal code because LAN-only success otherwise hides why relay was unavailable.
     log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
     await dependencies.savePairedHost(baseHost(offer, hostId, hostName, now))
     await dependencies.clearJournal(journal.metadata.journalId)
@@ -253,12 +279,8 @@ async function runPairing(
   return { hostId }
 }
 
-/**
- * Why after the save: the saved row starts as its existing name (or "Host N") and the descriptor
- * writer adopt-renames it to the desktop's machine name in the same serialized store chain, so a
- * load issued after pairing returns the desktop-reported name. A recording failure is swallowed —
- * descriptor upkeep must never fail a pairing that already saved.
- */
+// After save, record descriptors on the same serialized chain so pairing returns the adopted machine name.
+// Swallow bookkeeping failures; the host is already committed.
 function recordWinnerDescriptor(
   dependencies: Dependencies,
   hostId: string,

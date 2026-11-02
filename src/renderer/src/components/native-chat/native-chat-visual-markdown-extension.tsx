@@ -3,8 +3,9 @@ import type { ExtraProps } from 'react-markdown'
 import type { CommentMarkdownExtension } from '@/components/sidebar/CommentMarkdown'
 import {
   NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH,
+  NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER,
   isNativeChatVisualFileName
-} from '../../../../shared/native-chat-visual-directive'
+} from '../../../../shared/native-chat/native-chat-visual-directive'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
 import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
@@ -15,7 +16,6 @@ import {
 
 type DivProps = ComponentPropsWithoutRef<'div'> & ExtraProps
 
-/** The placeholder's attributes, as react-markdown passed them (absent on an ordinary div). */
 function placeholderAttributes(props: DivProps): { nonce: unknown; file: unknown; title: unknown } {
   return {
     nonce: 'data-orca-visual' in props ? props['data-orca-visual'] : undefined,
@@ -32,7 +32,6 @@ function newNonce(): string {
 
 function createVisualExtension(
   owner: NativeChatVisualOwner,
-  messageId: string,
   nonce: string
 ): CommentMarkdownExtension {
   function VisualPlaceholder({ node: _node, ...props }: DivProps): React.JSX.Element {
@@ -50,7 +49,6 @@ function createVisualExtension(
     return (
       <NativeChatInlineVisual
         owner={owner}
-        messageId={messageId}
         file={file}
         title={typeof title === 'string' && title.length > 0 ? title : null}
       />
@@ -58,22 +56,20 @@ function createVisualExtension(
   }
   return {
     remarkPlugins: [[remarkNativeChatVisuals, nonce]],
+    extraFlowSyntaxMarkers: [NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER],
     sanitizeAttributes: { div: [...NATIVE_CHAT_VISUAL_PLACEHOLDER_PROPERTIES] },
     components: { div: VisualPlaceholder }
   }
 }
 
-/**
- * The visual extension for one assistant message, or undefined outside a structured chat. Stable
- * for the message's lifetime, so a mounted visual keeps its frame while the reply streams.
- */
+/** Keep the structured message’s extension stable so streaming preserves its mounted visual frame. */
 export function useNativeChatVisualMarkdownExtension(
   messageId: string | undefined
 ): CommentMarkdownExtension | undefined {
   const owner = useNativeChatVisualOwner()
   const [nonce] = useState(newNonce)
   return useMemo(
-    () => (owner && messageId ? createVisualExtension(owner, messageId, nonce) : undefined),
+    () => (owner && messageId ? createVisualExtension(owner, nonce) : undefined),
     [messageId, nonce, owner]
   )
 }

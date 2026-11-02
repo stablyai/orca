@@ -34,7 +34,7 @@ function buildManifest(tag: string): string {
 }
 
 function isPlatformManifestRequest(url: string): boolean {
-  return /\/latest(?:-[a-z]+)?\.yml$/.test(url)
+  return /\/latest(?:-[a-z0-9-]+)?\.yml$/.test(url)
 }
 
 function setPlatformForTest(platform: NodeJS.Platform): void {
@@ -70,7 +70,7 @@ function respondWithAtom(
       })
     }
 
-    const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
+    const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z0-9-]+)?\.yml$/)
     if (manifestMatch) {
       const tag = decodeURIComponent(manifestMatch[1])
       if (unavailableManifests.has(tag)) {
@@ -371,7 +371,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
         })
       }
 
-      const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
+      const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z0-9-]+)?\.yml$/)
       if (manifestMatch) {
         const version = decodeURIComponent(manifestMatch[1]).replace(/^v/i, '')
         return Promise.resolve({

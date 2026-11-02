@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { SshChannelMultiplexer, type MultiplexerTransport } from './ssh-channel-multiplexer'
-import { encodeFrame, MessageType, HEADER_LENGTH, encodeKeepAliveFrame } from './relay-protocol'
+import { encodeFrame, MessageType, encodeKeepAliveFrame } from './remote-exec/remote-frame-protocol'
+import { HEADER_LENGTH } from '../../shared/relay-frame-decoder'
 
 function createMockTransport(): MultiplexerTransport & {
   dataCallbacks: ((data: Buffer) => void)[]
@@ -96,7 +97,6 @@ describe('SshChannelMultiplexer', () => {
     it('sends a JSON-RPC request and resolves on response', async () => {
       const promise = mux.request('pty.spawn', { cols: 80, rows: 24 })
 
-      // Verify the request was written
       expect(transport.written.length).toBe(1)
       const frame = transport.written[0]
       expect(frame[0]).toBe(MessageType.Regular)
@@ -108,7 +108,6 @@ describe('SshChannelMultiplexer', () => {
       expect(payload.method).toBe('pty.spawn')
       expect(payload.id).toBe(1)
 
-      // Simulate response from relay
       const response = makeResponseFrame(1, { id: 'pty-1' }, 1)
       transport.dataCallbacks[0](response)
 
@@ -150,8 +149,7 @@ describe('SshChannelMultiplexer', () => {
     it('times out after 30s with no response', async () => {
       const promise = mux.request('pty.spawn')
 
-      // Feed keepalive frames periodically to prevent the connection-level
-      // timeout (20s no-data) from firing before the 30s request timeout.
+      // Keep connection liveness healthy while testing the longer request timeout.
       for (let i = 0; i < 6; i++) {
         vi.advanceTimersByTime(5_000)
         transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
@@ -336,19 +334,16 @@ describe('SshChannelMultiplexer', () => {
     })
 
     it('drives keepalive sends AND dead-link detection from a single interval', () => {
-      // The keepalive send and the liveness/timeout check were merged from two
-      // 5s intervals into one; there must be exactly one recurring timer.
+      // Require one recurring timer for ordered keepalive send and liveness checks.
       expect(vi.getTimerCount()).toBe(1)
 
-      // Send half: a keepalive is written on the tick.
       const before = transport.written.length
       vi.advanceTimersByTime(5_000)
       expect(transport.written.length).toBeGreaterThan(before)
       expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
       expect(vi.getTimerCount()).toBe(1)
 
-      // Check half: with no inbound frames or acks, the same interval declares
-      // the link dead (no-data + oldest-unacked both exceed the 20s window).
+      // The same timer declares silence dead only after both receive/ack windows expire.
       expect(mux.isDisposed()).toBe(false)
       vi.advanceTimersByTime(25_000)
       expect(mux.isDisposed()).toBe(true)
@@ -376,11 +371,8 @@ describe('SshChannelMultiplexer', () => {
       mux = new SshChannelMultiplexer(saturatedTransport)
 
       vi.advanceTimersByTime(5_000)
-      // The writer parked after its first frame: that is the saturation this test is about.
       expect(written).toHaveLength(1)
-      // Why: backpressure on our uplink is not evidence of death. The relay's own keepalive is,
-      // and only that inbound traffic may keep the link alive — suppressing the check on
-      // saturation alone wedged a half-open link forever (see the saturation-wedge suite).
+      // Only inbound peer traffic proves liveness; skipping health checks on saturation wedged half-open links forever.
       for (let tick = 0; tick < 5; tick++) {
         feed(encodeKeepAliveFrame(0, 0))
         vi.advanceTimersByTime(5_000)
@@ -443,7 +435,7 @@ describe('SshChannelMultiplexer', () => {
     it('keeps the link alive after wake when frames resume', () => {
       vi.advanceTimersByTime(5_000)
       vi.setSystemTime(Date.now() + 60 * 60 * 1000)
-      vi.advanceTimersByTime(5_000) // guard tick
+      vi.advanceTimersByTime(5_000)
 
       // The relay answers the post-wake probe; the link must stay up.
       let seq = 1
@@ -457,7 +449,7 @@ describe('SshChannelMultiplexer', () => {
     it('still detects a genuinely dead link within the next window after wake', () => {
       vi.advanceTimersByTime(5_000)
       vi.setSystemTime(Date.now() + 60 * 60 * 1000)
-      vi.advanceTimersByTime(5_000) // guard tick: reset + probe, no kill
+      vi.advanceTimersByTime(5_000)
 
       expect(mux.isDisposed()).toBe(false)
       // No frames arrive after the guard reset; the honest window expires.

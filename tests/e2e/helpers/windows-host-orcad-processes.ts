@@ -1,9 +1,6 @@
-/**
- * The managed server's processes on a Windows host-cell account, observed from the runner that
- * provisioned it: the lane's sshd listens on 127.0.0.1, so the account's processes are local here.
- */
+// Observe the Windows host-cell account locally: the runner provisioned it and its sshd listens on loopback.
 import path from 'node:path'
-import { runProcess } from '../../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 export type HostProcess = { pid: number; commandLine: string }
 

@@ -9,9 +9,7 @@ export type PostgresPoolPressureCounts = {
   databasePoolWaitMsMax: number
 }
 
-// A pool that cannot hand out a client throws a bare Error with no SQLSTATE, so
-// the message is all node-postgres gives us. Both of these come only from
-// pg-pool's connect path, so neither can be a statement that already ran.
+// pg-pool connect timeouts have no SQLSTATE; these messages prove acquisition failed before a statement ran.
 const POOL_CONNECT_TIMEOUT_MESSAGES = [
   // No pooled client came free within connectionTimeoutMillis.
   'timeout exceeded when trying to connect',
@@ -21,6 +19,14 @@ const POOL_CONNECT_TIMEOUT_MESSAGES = [
 // pg raises this whenever a socket ends early, during the handshake and mid
 // statement alike, so only the acquire boundary can tell the two apart.
 const CONNECTION_TERMINATED_MESSAGE = 'Connection terminated unexpectedly'
+// The socket to Postgres (or its proxy) failed before a client existed, e.g. a Cloud SQL restart.
+const ACQUIRE_SOCKET_ERRNOS = new Set([
+  'EPIPE',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EHOSTUNREACH'
+])
 
 // Membership is tracked beside the error rather than on it: an error object may
 // be frozen, and a mutated one would leak the marker into logs.
@@ -34,7 +40,7 @@ function errorCode(error: unknown): string {
   return String((error as { code?: unknown } | null)?.code)
 }
 
-function isPostgresPoolAcquireFailure(error: unknown): boolean {
+export function isPostgresPoolAcquireFailure(error: unknown): boolean {
   return typeof error === 'object' && error !== null && poolAcquireFailures.has(error)
 }
 
@@ -49,9 +55,10 @@ export function isPostgresPoolConnectTimeout(error: unknown): boolean {
 // outcome is unknown is not safe.
 export function isPostgresPoolConnectFailure(error: unknown): boolean {
   if (isPostgresPoolConnectTimeout(error)) return true
+  if (!isPostgresPoolAcquireFailure(error)) return false
   return (
-    errorMessage(error).includes(CONNECTION_TERMINATED_MESSAGE) &&
-    isPostgresPoolAcquireFailure(error)
+    errorMessage(error).includes(CONNECTION_TERMINATED_MESSAGE) ||
+    ACQUIRE_SOCKET_ERRNOS.has(errorCode(error))
   )
 }
 
@@ -78,9 +85,7 @@ export class PostgresPoolPressure {
   private waitersMax = 0
   private waitMsMax = 0
   private lastConsumed = emptyCounts()
-  // General work queues here, not in pg-pool, so pg-pool's own queue holds only
-  // priority callers. Holding a connection back instead would cost general
-  // throughput: one of 16 is the margin an asia-east2 drain release runs on.
+  // Queue general work here so pg-pool queues only priority; reserving an idle connection would lose Asia drain throughput.
   private readonly generalCapacity: number
   private generalInUse = 0
   private readonly generalQueue: GeneralLaneWaiter[] = []
@@ -223,14 +228,7 @@ async function markedAcquire(
   return guardCheckedOutClient(client, onRelease)
 }
 
-// pg-pool strips its own `error` listener when it hands a client out
-// (pg-pool@3.14.0 index.js:344) and only reattaches it in `_release`
-// (index.js:385), so a checked-out client has no `error` listener at all. A
-// backend that terminates that session mid-statement therefore emits `error`
-// with nothing listening, which is an unhandled 'error' event and kills the
-// process. `pool.on('error')` cannot cover this: pg-pool routes there only from
-// the idle listener. Every relay checkout awaits this function, so it is the
-// one seam that sees them all.
+// pg-pool removes error listeners on checkout and restores them on release; pool.on(error) covers only idle clients. Guard every checkout or terminated in-flight sessions crash the process.
 function guardCheckedOutClient(client: pg.PoolClient, onRelease: () => void): pg.PoolClient {
   let failure: Error | undefined
   const onError = (error: Error) => {

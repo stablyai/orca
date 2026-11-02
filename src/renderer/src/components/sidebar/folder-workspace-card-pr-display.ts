@@ -6,7 +6,7 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/worksp
 import { buildParentPrChecksRows } from '@/components/right-sidebar/parent-pr-checks-rows'
 import type { ParentPrChecksRow } from '@/components/right-sidebar/parent-pr-checks-row-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
+import { getProjectedWorktreeLineageChildrenByParentId } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 type FolderWorkspaceCardPrDisplayArgs = {
   folderWorkspaceId: string

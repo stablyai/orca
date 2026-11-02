@@ -3,10 +3,23 @@
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useIssueSourceActions } from './issue-source-actions'
-import { resolveDraftBaseBranchNamesWorkspace } from './workspace-identity-state'
 import { useGitHubProviderSelection } from './github-provider-selection'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
 
 type Input = Parameters<typeof useIssueSourceActions>[0]
+
+const linearIssue: LinearIssue = {
+  id: 'linear-9',
+  identifier: 'ENG-9',
+  title: 'Fix refreshed export',
+  url: 'https://linear.app/fixture/issue/ENG-9',
+  state: { name: 'Open', type: 'unstarted', color: '' },
+  team: { id: 'engineering', name: 'Engineering', key: 'ENG' },
+  labels: [],
+  labelIds: [],
+  priority: 0,
+  updatedAt: ''
+}
 
 function createInput(overrides: Partial<Input> = {}): Input {
   return {
@@ -36,12 +49,49 @@ function createInput(overrides: Partial<Input> = {}): Input {
     setReuseEligibleBranch: vi.fn(),
     setReuseSelectedBranch: vi.fn(),
     setStartFromResetHint: vi.fn(),
-    smartGitHubPrStartPointSelectionRef: { current: null },
+    smartSourceSelectionRef: { current: null },
     ...overrides
   } as Input
 }
 
 describe('composer name source selection', () => {
+  it.each([false, true])(
+    'keeps an Advanced Linear identifier name on source refresh (folder %s)',
+    (isProjectGroupTarget) => {
+      const input = createInput({
+        isProjectGroupTarget,
+        name: 'ENG-9',
+        lastAutoNameRef: { current: 'eng-9-fix-export' },
+        linkedWorkItem: {
+          provider: 'linear',
+          type: 'issue',
+          number: 0,
+          title: 'Fix export',
+          url: linearIssue.url,
+          linearIdentifier: 'ENG-9'
+        }
+      })
+      const { result } = renderHook(() => useIssueSourceActions(input))
+      act(() => result.current.handleSmartLinearIssueSelect(linearIssue))
+
+      expect(input.setName).not.toHaveBeenCalled()
+      expect(input.setLinkedWorkItem).toHaveBeenCalledWith(
+        expect.objectContaining({ linearIdentifier: 'ENG-9' })
+      )
+    }
+  )
+
+  it.each([false, true])(
+    'still replaces an unselected Linear identifier query (folder %s)',
+    (isProjectGroupTarget) => {
+      const input = createInput({ isProjectGroupTarget, name: 'ENG-9' })
+      const { result } = renderHook(() => useIssueSourceActions(input))
+      act(() => result.current.handleSmartLinearIssueSelect(linearIssue))
+
+      expect(input.setName).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it.each([false, true])('clears only source-owned bases when selecting Jira (%s)', (owned) => {
     const input = createInput({ baseBranch: 'release/1.2', baseBranchNamesWorkspace: owned })
     const { result } = renderHook(() => useIssueSourceActions(input))
@@ -163,31 +213,5 @@ describe('composer name source selection', () => {
     )
 
     expect(result.current.smartNameSelection?.kind).toBe('github-issue')
-  })
-})
-
-describe('base ref intent across a draft round trip', () => {
-  it('restores a base ref chosen in the picker as a base, not as a name source', () => {
-    expect(resolveDraftBaseBranchNamesWorkspace({ persistDraft: true, draftValue: false })).toBe(
-      false
-    )
-  })
-
-  it('restores a branch picked in the name field as a name source', () => {
-    expect(resolveDraftBaseBranchNamesWorkspace({ persistDraft: true, draftValue: true })).toBe(
-      true
-    )
-  })
-
-  it('treats a draft written before the flag existed as a name source', () => {
-    expect(
-      resolveDraftBaseBranchNamesWorkspace({ persistDraft: true, draftValue: undefined })
-    ).toBe(true)
-  })
-
-  it('ignores any stored intent when the composer does not persist drafts', () => {
-    expect(resolveDraftBaseBranchNamesWorkspace({ persistDraft: false, draftValue: false })).toBe(
-      true
-    )
   })
 })

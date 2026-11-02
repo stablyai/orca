@@ -140,7 +140,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent
     expect(result.issues).toEqual([
       expect.objectContaining({ message: expect.stringContaining('45s work budget') })
     ])
-    expect(outcomes).toEqual([{ session: null, byteOffset: 0, incomplete: true }])
+    expect(outcomes).toEqual([{ session: null, byteOffset: 0, incomplete: true, cancelled: false }])
     readers.capture.mockResolvedValue({ session, messages })
     expect((await scanAiVaultSessions({ platform: 'linux' })).sessions).toHaveLength(1)
     expect(readers.capture).toHaveBeenCalledTimes(2)
@@ -167,7 +167,9 @@ describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent
       controller.abort(new Error('Cancelled SQLite scan'))
       await rejected
       if (mode === 'capture') {
-        expect(outcomes).toEqual([{ session: null, byteOffset: 0, incomplete: true }])
+        expect(outcomes).toEqual([
+          { session: null, byteOffset: 0, incomplete: true, cancelled: true }
+        ])
       }
       readers.parse.mockResolvedValue(session)
       readers.capture.mockResolvedValue({ session, messages })
@@ -199,7 +201,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent
       scanAiVaultSessions({ platform: 'linux', signal: controller.signal })
     ).rejects.toMatchObject({ name: 'AbortError' })
     expect(received).toEqual(['First'])
-    expect(outcomes).toEqual([{ session: null, byteOffset: 0, incomplete: true }])
+    expect(outcomes).toEqual([{ session: null, byteOffset: 0, incomplete: true, cancelled: true }])
     resetTranscriptConsumersForTests()
     readers.parse.mockResolvedValue(session)
     expect((await scanAiVaultSessions({ platform: 'linux' })).sessions).toHaveLength(1)

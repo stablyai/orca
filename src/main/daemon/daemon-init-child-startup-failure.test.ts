@@ -30,7 +30,8 @@ vi.mock('./client', () => moduleFactories.client())
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
-vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('../ipc/pty/provider/registry', () => moduleFactories.ptyProviderRegistry())
+vi.mock('../ipc/pty/provider/listener-lifecycle', () => moduleFactories.ptyListenerLifecycle())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   beforeEach(() => {
@@ -511,7 +512,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       on(event: string, cb: (arg?: unknown) => void) {
         handlers[event]?.push(cb)
         if (event === 'exit') {
-          // Why: deliver the stderr tail before exit so the failure path sees the crash reason (mirrors a module-load crash).
+          // A module-load crash emits its stderr tail before exit.
           queueMicrotask(() => {
             for (const dataCb of stderrDataCbs.slice()) {
               dataCb(Buffer.from("Error: Cannot find module 'electron'\n"))
@@ -546,7 +547,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       4321,
       'failed-launch'
     )
-    // Why: release the piped stderr so the detached daemon can't keep the parent event loop alive after failure.
     expect(stderrDestroy).toHaveBeenCalled()
   })
 })

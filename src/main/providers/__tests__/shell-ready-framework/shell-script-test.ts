@@ -2,32 +2,14 @@ import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { getShellLaunchConfig } from '../../local-pty-shell-ready'
+import { getShellLaunchConfig } from '../../local-pty/local-pty-shell-ready'
 import { selectShellStartupFeatures } from '../../../shell-startup-features'
 import { escapeRegex } from '../../../../shared/string-utils'
-import { getShellReadyWrapperRoot } from '../../local-pty-shell-ready-wrapper-root'
+import { getShellReadyWrapperRoot } from '../../local-pty/local-pty-shell-ready-wrapper-root'
 
 const RUN_MARKER = /^[ \t]*#[ \t]*Run:.*$/m
 
-/**
- * Shell-script-literal test framework for shell-ready tests.
- *
- * Takes shell scripts as string literals that can be literally copy-pasted
- * into a terminal to replicate the test scenario.
- *
- * Example:
- * ```typescript
- * const { stdout } = await shellScriptTest(`
- *   mkdir -p ~/.config/zsh
- *   cat > ~/.zshenv <<'EOF'
- * export ZDOTDIR="$HOME/.config/zsh"
- * EOF
- *
- *   zsh -c 'env | grep ZDOTDIR'
- * `, { userDataPath })
- * expect(stdout).toMatchInlineSnapshot(...)
- * ```
- */
+/** Literal scripts reproduce shell-startup scenarios directly in a terminal. */
 
 export type ShellScriptTestResult = {
   stdout: string
@@ -73,14 +55,12 @@ export async function shellScriptTest(
 
     const env: Record<string, string> = {
       ...config.env,
-      // Why: these examples inspect startup-file discovery, not the PTY-owner
-      // protocol stream, so drop the tokens that write to stdout.
+      // Startup-discovery examples must not emit PTY-owner identity/marker protocol.
       ORCA_SHELL_FEATURES: (config.env.ORCA_SHELL_FEATURES ?? '')
         .split(',')
         .filter((feature) => feature !== 'identity' && feature !== 'markers')
         .join(','),
-      // Why: the framework creates user startup files under testHome after
-      // computing the wrapper config; route wrapper discovery to that fixture.
+      // User startup files live in testHome; route wrapper discovery there.
       HOME: testHome,
       ORCA_ORIG_ZDOTDIR: testHome,
       ORCA_ZSHENV_SOURCE_DIR: testHome
@@ -145,10 +125,7 @@ function normalizeOutput(
     return output
   }
 
-  // Why resolved rather than rebuilt: the wrapper tree is content-addressed, so
-  // rebuilding it from userDataPath yields a directory that never appears in the
-  // output and the placeholder silently stops substituting -- which would bake a
-  // machine-specific, hash-bearing path into the next inline snapshot.
+  // Use the resolved content-addressed wrapper root; rebuilding from userDataPath would leak hashed paths into snapshots.
   const wrapperDir = join(getShellReadyWrapperRoot(), ctx.shellName)
 
   const paths: { path: string; placeholder: string }[] = [

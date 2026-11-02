@@ -3,14 +3,16 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 
 type AgentSessionContinuationMenuItemProps = {
+  disabled?: boolean
   onSelect: () => void
 }
 
 export function AgentSessionContinuationMenuItem({
-  onSelect
+  onSelect,
+  disabled = false
 }: AgentSessionContinuationMenuItemProps): React.JSX.Element {
   return (
-    <DropdownMenuItem onSelect={onSelect}>
+    <DropdownMenuItem disabled={disabled} onSelect={onSelect}>
       <MessageSquarePlus />
       {translate(
         'components.agentSessionContinuation.handOffToAnotherAgent',

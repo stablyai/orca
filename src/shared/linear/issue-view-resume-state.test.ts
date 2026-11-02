@@ -119,8 +119,7 @@ describe('normalizeLinearIssueViewResumeState', () => {
 })
 
 describe('isDefaultLinearIssueViewResumeState', () => {
-  // Why: this is the sole reason normalize returns undefined, which is what actually
-  // clears a persisted view when the user puts every setting back to its default.
+  // Returning undefined clears persisted defaults after users revert every setting.
   it('drops a serialized default view so reverting a setting clears what was stored', () => {
     expect(
       normalizeLinearIssueViewResumeState(
@@ -188,8 +187,7 @@ describe('serializeLinearIssueViewResumeState', () => {
     })
   })
 
-  // Why: bounding runs after the emptiness check, so a filter whose ids are all
-  // over-length is non-empty going in and empty coming out.
+  // Overlength IDs can make a nonempty filter empty only after bounding.
   it('omits a filter that only becomes empty once bounded', () => {
     const serialized = serializeLinearIssueViewResumeState({
       ...defaultLinearIssueViewResumeState(),
@@ -254,8 +252,7 @@ describe('setLinearWorkspaceIssueFilter', () => {
     const filters = setLinearWorkspaceIssueFilter({}, 'workspace-a', FILTER_A)
 
     expect(setLinearWorkspaceIssueFilter(filters, 'workspace-a', { ...FILTER_A })).toBe(filters)
-    // Why: the contract is stability of the CANONICAL filter, so a duplicated or
-    // unsorted id must not churn the record either.
+    // Canonical-equivalent unsorted/duplicate IDs must preserve record identity too.
     expect(
       setLinearWorkspaceIssueFilter(filters, 'workspace-a', {
         ...FILTER_A,

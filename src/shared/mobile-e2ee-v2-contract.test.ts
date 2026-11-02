@@ -29,23 +29,28 @@ describe('mobile E2EE v2 contract', () => {
     ).toBeNull()
   })
 
-  it('rejects wrong-length handshake fields before base64 decoding', () => {
+  it('rejects each oversized handshake field without decoding it', () => {
     const { hello, ready } = createMobileE2EEV2Fixture()
-    const oversized = 'A'.repeat(45)
+    const oversized = 'A'.repeat(48)
     const decode = vi.spyOn(globalThis, 'atob')
-
-    expect(
-      validateMobileE2EEV2Handshake(
-        { ...hello, clientPublicKeyB64: oversized, clientNonceB64: oversized },
-        {
-          ...ready,
-          desktopPublicKeyB64: oversized,
-          clientNonceB64: oversized,
-          desktopNonceB64: oversized
-        }
-      )
-    ).toBeNull()
-    expect(decode).not.toHaveBeenCalled()
+    try {
+      expect(validateMobileE2EEV2Handshake(hello, ready)).not.toBeNull()
+      for (const [invalidHello, invalidReady] of [
+        [{ ...hello, clientPublicKeyB64: oversized }, ready],
+        [hello, { ...ready, desktopPublicKeyB64: oversized }],
+        [
+          { ...hello, clientNonceB64: oversized },
+          { ...ready, clientNonceB64: oversized }
+        ],
+        [hello, { ...ready, desktopNonceB64: oversized }]
+      ]) {
+        decode.mockClear()
+        expect(validateMobileE2EEV2Handshake(invalidHello, invalidReady)).toBeNull()
+        expect(decode).not.toHaveBeenCalledWith(oversized)
+      }
+    } finally {
+      decode.mockRestore()
+    }
   })
 
   it('rejects context and capability-selection changes', () => {
@@ -66,9 +71,13 @@ describe('mobile E2EE v2 contract', () => {
 
   it('requires relayHostId only for relay context', () => {
     const { hello, ready } = createMobileE2EEV2Fixture()
-    const relayWithoutId = { ...hello.context }
-    delete (relayWithoutId as { relayHostId?: string }).relayHostId
-    expect(validateMobileE2EEV2Handshake({ ...hello, context: relayWithoutId }, ready)).toBeNull()
+    const { relayHostId: _relayHostId, ...relayWithoutId } = hello.context
+    expect(
+      validateMobileE2EEV2Handshake(
+        { ...hello, context: relayWithoutId },
+        { ...ready, context: relayWithoutId }
+      )
+    ).toBeNull()
 
     const directContext = {
       protocol: 'orca-mobile-e2ee' as const,

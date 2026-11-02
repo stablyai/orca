@@ -130,7 +130,7 @@ describe('extractMarkdownPreviewLocalImageCandidates', () => {
       '/repo/docs/readme.md',
       {
         runtimeContext: {
-          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          target: { kind: 'environment' as const, environmentId: 'env-1' },
           worktreeId: 'wt-1',
           worktreePath: '/repo'
         }
@@ -141,7 +141,7 @@ describe('extractMarkdownPreviewLocalImageCandidates', () => {
       '/repo/docs/readme.md',
       {
         runtimeContext: {
-          settings: { activeRuntimeEnvironmentId: 'env-2' },
+          target: { kind: 'environment' as const, environmentId: 'env-2' },
           worktreeId: 'wt-1',
           worktreePath: '/repo'
         }

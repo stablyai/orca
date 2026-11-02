@@ -2,8 +2,7 @@ import type { ComponentProps } from 'react'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { useNativeChatPacedText } from './use-native-chat-paced-text'
 
-/** The agent's prose, drawn at a reading pace while it is being written. Its own component so
- *  a frame of the pace re-renders the prose and nothing else in its row. */
+/** Isolate paced text updates so animation frames do not rerender the rest of the row. */
 export function NativeChatPacedMarkdown({
   rowKey,
   content,
@@ -17,6 +16,7 @@ export function NativeChatPacedMarkdown({
   return (
     <NativeChatMarkdown
       {...props}
+      rowKey={rowKey}
       content={paced.text}
       streaming={streaming || paced.revealing}
       growing={paced.revealing}

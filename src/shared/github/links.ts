@@ -1,6 +1,4 @@
-// Why shared: main's terminal side-effect tracker emits pr-link facts
-// (terminal-side-effect-authority.md, slice 3) and needs the same GitHub URL
-// parsing core the renderer link picker uses.
+// Share URL parsing between main terminal side-effect PR facts and renderer link pickers (terminal-side-effect-authority.md, slice 3).
 const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
 
 export type RepoSlug = {
@@ -19,8 +17,7 @@ export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | 
   if (!slug?.owner || !slug.repo) {
     return null
   }
-  // Why: hosted identities carry the GHES host; links must point at that
-  // server, not github.com.
+  // Preserve GHES identity instead of defaulting Enterprise links to github.com.
   const host = slug.host ?? 'github.com'
   return `https://${host}/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}`
 }
@@ -34,10 +31,7 @@ function parseGitHubItemNumber(value: string): number | null {
   return parsed > 0 ? parsed : null
 }
 
-/**
- * Parses a GitHub issue/PR reference from plain input.
- * Supports issue/PR numbers (e.g. "42"), "#42", and full GitHub URLs.
- */
+/** Parse bare/# issue or PR numbers and full GitHub URLs. */
 export function parseGitHubIssueOrPRNumber(input: string): number | null {
   const trimmed = input.trim()
   if (!trimmed) {
@@ -68,10 +62,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
   return parseGitHubItemNumber(match[4])
 }
 
-/**
- * Parses an owner/repo slug plus issue/PR number from a GitHub URL. Returns
- * null for anything that isn't a recognizable GitHub-shaped issue or pull URL.
- */
+/** Parse owner/repo/number from GitHub-shaped issue/PR URLs; return null for other inputs. */
 export function parseGitHubIssueOrPRLink(input: string): GitHubIssueOrPRLink | null {
   const trimmed = input.trim()
   if (!trimmed) {
@@ -99,10 +90,7 @@ export function parseGitHubIssueOrPRLink(input: string): GitHubIssueOrPRLink | n
   }
 
   return {
-    // Why: the URL proves the host — GHES links must keep their server identity
-    // instead of being treated as github.com slugs.
-    // Why: GHES installations on non-default ports require the full URL host;
-    // `hostname` would silently redirect later API calls to port 443.
+    // URL identity must preserve GHES server and non-default port; hostname would redirect API calls to 443.
     slug: { owner: match[1], repo: match[2], host: url.host },
     type: match[3].toLowerCase() === 'pull' ? 'pr' : 'issue',
     number

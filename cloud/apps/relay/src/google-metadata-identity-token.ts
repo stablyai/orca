@@ -20,3 +20,24 @@ export async function googleMetadataIdentityToken(
   }
   return token
 }
+
+// Google identity tokens live an hour; minting one per request would be a metadata read each.
+// A failed mint is never reused.
+export function reusedIdentityToken(
+  mint: () => Promise<string>,
+  now: () => number = Date.now,
+  reuseMs = 10 * 60_000
+): () => Promise<string> {
+  let token: { value: Promise<string>; at: number } | undefined
+  return () => {
+    const at = now()
+    if (!token || at - token.at > reuseMs) {
+      const value = mint()
+      token = { value, at }
+      value.catch(() => {
+        if (token?.value === value) token = undefined
+      })
+    }
+    return token.value
+  }
+}

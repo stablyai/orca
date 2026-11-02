@@ -55,12 +55,7 @@ afterEach(() => {
   clearCrashBreadcrumbsForTest()
 })
 
-// One mount/reveal/wake transition expires every in-flight replay write at once, so
-// the burst reaches the 30-slot ring as N distinct entries. Field span streams measure
-// bursts of 26 in 0.96s and 62 over 85s. No captured report in the 09-02 corpus shows
-// a ring that actually drained — all nine bursts predate their report's ring window —
-// so this bounds a demonstrated hazard, not an observed loss, and must not cost the
-// durable span evidence that did carry those bursts.
+// Field spans show simultaneous replay wedges; bound the ring hazard while preserving durable per-event evidence.
 describe('replay-guard wedge burst against the fixed-size breadcrumb ring', () => {
   it('costs one ring slot per call site and preserves the pre-crash trail', () => {
     for (let index = 0; index < 10; index += 1) {
@@ -83,20 +78,16 @@ describe('replay-guard wedge burst against the fixed-size breadcrumb ring', () =
       emitReattachWedge(pane)
     }
 
-    // 26 emissions: one owns the slot, 25 fold into it.
     expect(wedgeCrumbs()[0]?.data?.suppressedSinceLast).toBe(25)
   })
 
-  // The 121-event field corpus lives entirely in the renderer.breadcrumb span stream,
-  // and the ring is cleared by the restart that usually precedes the crash report, so
-  // ring coalescing must not suppress the per-event spans.
+  // Restarts clear the ring; retain one durable span for every wedge event.
   it('still emits one durable span per wedge event', () => {
     for (let pane = 0; pane < 26; pane += 1) {
       emitReattachWedge(pane)
     }
 
     expect(wedgeSpanCount()).toBe(26)
-    // Why no count on the span: one span per event already carries the multiplicity.
     expect(
       startSpanMock.mock.calls.some((call) =>
         JSON.stringify(call[1]).includes('suppressedSinceLast')
@@ -104,8 +95,7 @@ describe('replay-guard wedge burst against the fixed-size breadcrumb ring', () =
     ).toBe(false)
   })
 
-  // Bundle 8907a508 mixes restore-path (identity-less) and reattach-path crumbs in one
-  // window; name-only keying would report only the last one's shape.
+  // Mixed restore/reattach bursts must retain both call-site shapes (bundle 8907a508).
   it('keeps restore-path and reattach-path call sites in separate slots', () => {
     emitRestoreWedge(1)
     emitRestoreWedge(2)

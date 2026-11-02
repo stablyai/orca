@@ -16,11 +16,7 @@ export function shouldProbeWindowsPowerShellAvailability(args: {
   )
 }
 
-/** Resolve which PowerShell executable to spawn right now on Windows.
- *
- * Why: explicit pwsh.exe choices must not be downgraded by a transient cold
- * availability probe; the spawn chain handles true absence with a safe fallback.
- */
+/** Preserve explicit pwsh choice through transient availability failures; spawn fallbacks handle genuine absence. */
 export function resolveEffectiveWindowsPowerShell(args: {
   shellFamily: WindowsPowerShellShellFamily
   implementation: WindowsPowerShellImplementation | undefined

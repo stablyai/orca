@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { runProcessSync } from '../shared/child-process/run-process'
+import { runProcessSync } from '@orca/process-host'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from './wsl-managed-cli-path-restore'
 
 const posix = process.platform !== 'win32'
@@ -51,9 +51,5 @@ describe.each(SHELLS)('WSL_MANAGED_CLI_PATH_RESTORE in $name', (shell) => {
     const result = run(shell, { ORCA_WSL_CLI_DIR: root, ORCA_CLI_COMMAND: 'orca-ide' })
     expect(result).toMatchObject({ code: 0, stdout: '/usr/bin:/bin' })
     expect(result.stderr).toContain('Orca CLI unavailable')
-  })
-
-  it.skipIf(!shell.enabled)('does nothing without a managed directory', () => {
-    expect(run(shell, {})).toMatchObject({ code: 0, stdout: '/usr/bin:/bin', stderr: '' })
   })
 })

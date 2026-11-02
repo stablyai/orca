@@ -1,11 +1,18 @@
 import { defineMethod } from '../core'
+import { resolveReplySnapshot } from '../content-snapshot-id'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import {
   includesQualifiedSearchRefs,
   projectRepoSearchRefsForClient
 } from './repo-search-ref-projection'
-import { RepoSelector } from './github-repo-target-schemas'
+import {
+  RepoIssueCommandRead,
+  RepoSelector,
+  RepoShow
+} from '../../../../shared/rpc-contract/github-repo-target-params'
+import { hostQualifiedRepoSelector } from '../../runtime-repo-selector'
+import { repoHooksCheckIsBackground } from '../../../../shared/repo-hooks-check-wake'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
@@ -19,7 +26,9 @@ import {
   ProjectGroupUpdate,
   RepoClone,
   RepoCreate,
+  RepoHooksCheck,
   RepoIssueCommandWrite,
+  RepoList,
   RepoPath,
   RepoReorder,
   RepoSearchRefs,
@@ -27,19 +36,21 @@ import {
   RepoSparsePresetSave,
   RepoUpdate
 } from '../../../../shared/rpc-contract/repo-params'
+import { RepoAddRemote } from '../../../../shared/rpc-contract/ssh-params'
 
 export const REPO_METHODS = [
   defineMethod({
     name: 'repo.list',
     permission: 'workspace',
-    params: null,
-    handler: (_params, context) => {
+    params: RepoList,
+    handler: (params, context) => {
       context.runtime.enrichMissingRepoGitRemoteIdentities?.()
-      return {
+      const reply = {
         repos: context.runtime
-          .listRepos()
+          .listVisibleRepos()
           .map((repo) => projectRepoVisibilityForClient(repo, context))
       }
+      return resolveReplySnapshot(reply, params.afterSnapshotId)
     }
   }),
   ...PROJECT_RUNTIME_METHODS,
@@ -47,7 +58,7 @@ export const REPO_METHODS = [
     name: 'projectGroup.list',
     permission: 'workspace',
     params: null,
-    handler: (_params, { runtime }) => ({ groups: runtime.listProjectGroups() })
+    handler: (_params, { runtime }) => ({ groups: runtime.listVisibleProjectGroups() })
   }),
   defineMethod({
     name: 'projectGroup.create',
@@ -77,7 +88,12 @@ export const REPO_METHODS = [
     params: ProjectGroupMoveProject,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.moveProjectToGroup(params.repo, params.groupId ?? null, params.order),
+        await context.runtime.moveProjectToGroup(
+          params.repo,
+          params.groupId ?? null,
+          params.order,
+          params.connectionId
+        ),
         context
       )
     })
@@ -126,6 +142,15 @@ export const REPO_METHODS = [
       )
     })
   }),
+  // Use a new ssh.target-management.v1 method: old repo.add would strip the target and register the path locally.
+  defineMethod({
+    name: 'repo.addRemote',
+    permission: 'workspace',
+    params: RepoAddRemote,
+    handler: async (params, context) => ({
+      repo: projectRepoVisibilityForClient(await context.runtime.addSshRepo(params), context)
+    })
+  }),
   defineMethod({
     name: 'repo.create',
     permission: 'workspace',
@@ -156,9 +181,12 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.show',
     permission: 'workspace',
-    params: RepoSelector,
+    params: RepoShow,
     handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(await context.runtime.showRepo(params.repo), context)
+      repo: projectRepoVisibilityForClient(
+        await context.runtime.showRepo(hostQualifiedRepoSelector(params.repo, params.repoHostId)),
+        context
+      )
     })
   }),
   defineMethod({
@@ -228,8 +256,9 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.hooksCheck',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.checkRepoHooks(params.repo)
+    params: RepoHooksCheck,
+    handler: async (params, { runtime }) =>
+      runtime.checkRepoHooks(params.repo, { background: repoHooksCheckIsBackground(params) })
   }),
   defineMethod({
     name: 'repo.setupScriptImports',
@@ -240,14 +269,17 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.issueCommandRead',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.readRepoIssueCommand(params.repo)
+    params: RepoIssueCommandRead,
+    handler: async (params, { runtime }) =>
+      runtime.readRepoIssueCommand(params.repo, { wakeWslDistro: params.wakeWslDistro })
   }),
   defineMethod({
     name: 'repo.issueCommandWrite',
     permission: 'workspace',
     params: RepoIssueCommandWrite,
     handler: async (params, { runtime }) =>
-      runtime.writeRepoIssueCommand(params.repo, params.content)
+      runtime.writeRepoIssueCommand(params.repo, params.content, {
+        wakeWslDistro: params.wakeWslDistro
+      })
   })
 ]

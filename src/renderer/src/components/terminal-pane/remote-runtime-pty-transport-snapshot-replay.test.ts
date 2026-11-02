@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import {
   TerminalStreamOpcode,
@@ -10,6 +10,18 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -60,8 +72,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
 
     expect(onReplayData).toHaveBeenCalledWith('beforeafter\x1b]0;Remote title\x07\x07', {
-      carriesNormalBuffer: true,
-      keepsLocalScrollback: true
+      carriesNormalBuffer: true
     })
     await vi.waitFor(() =>
       expect(onTitleChange).toHaveBeenCalledWith('Remote title', 'Remote title')
@@ -92,10 +103,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       'before\x1b]9999;{"state":"working","prompt":"old","agentType":"codex"}\x07after'
     )
 
-    expect(onReplayData).toHaveBeenCalledWith('beforeafter', {
-      carriesNormalBuffer: true,
-      keepsLocalScrollback: true
-    })
+    expect(onReplayData).toHaveBeenCalledWith('beforeafter', { carriesNormalBuffer: true })
     expect(onAgentStatus).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
     expect(onConnect).toHaveBeenCalled()
@@ -187,10 +195,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     const { streamId } = latestSubscribePayload()
     emitSnapshot(streamId, 'initial')
-    expect(onReplayData).toHaveBeenCalledWith('initial', {
-      carriesNormalBuffer: true,
-      keepsLocalScrollback: true
-    })
+    expect(onReplayData).toHaveBeenCalledWith('initial', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
 
     const snapshotPromise = transport.serializeBuffer?.({ scrollbackRows: 5000 })
@@ -288,10 +293,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)).toBeUndefined()
 
     emitSnapshot(streamId, 'initial replay')
-    expect(onReplayData).toHaveBeenCalledWith('initial replay', {
-      carriesNormalBuffer: true,
-      keepsLocalScrollback: true
-    })
+    expect(onReplayData).toHaveBeenCalledWith('initial replay', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
 
     await vi.waitFor(() =>

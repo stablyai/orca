@@ -1,0 +1,984 @@
+{
+  "schemaVersion": 1,
+  "scenario": "1000-small-files",
+  "scope": "Shared JSONL reader and file metadata hardening, exercised through the combined Claude scanner; the current Claude projection implementation is identical in both arms.",
+  "capturedAtUtc": "2026-10-09",
+  "environment": {
+    "node": "v24.20.0",
+    "platform": "darwin",
+    "osRelease": "25.3.0",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Max"
+  },
+  "rounds": 10,
+  "schedule": "Alternating before/after and after/before; five rounds in each order; tests and builds held during this final capture.",
+  "baselineCommit": "03a2ecaa00138ee44ad0dbb9dbd957cfe1a5e3f8",
+  "baselineModules": [
+    "src/main/claude-usage/transcript-record-parser.ts",
+    "src/main/usage/jsonl-file-checkpoint.ts",
+    "src/main/usage/jsonl-file-snapshot.ts",
+    "src/main/usage/jsonl-line-offsets.ts"
+  ],
+  "baselineHashesVerifiedAgainstGit": true,
+  "currentSourceHashesVerifiedAgainstFrozenWorktree": true,
+  "sourceFingerprintLabels": {
+    "HEAD": "The four pinned published baseline modules supplied as an overlay; this is the existing loader label, not the current Git HEAD.",
+    "worktree": "Frozen combined-worktree modules, held identical in both arms except the four baseline overlays."
+  },
+  "methodology": {
+    "cold": "1,000 freshly written tiny transcripts; empty scanner cache; filesystem page cache warm.",
+    "changed": "Append a duplicate usage row with higher token maxima to each file, then scan from the unchanged cache.",
+    "warm": "Reuse each arm's cold persisted cache without changing files; no transcript content reads.",
+    "durationMs": "Production scan only, excluding fixture writes and cache serialization.",
+    "totalDurationMs": "Production scan plus JSON cache serialization, excluding hydration and fixture writes.",
+    "bytesRead": "All raw bytes reported by the existing benchmark loader, including verification reads.",
+    "readCount": "Logical filesystem API read records, including streams; this does not claim an OS syscall count.",
+    "parity": "Exact sessions, daily aggregates, and per-file projections in cold/changed phases across arms, excluding volatile stat values and additive generation/resume metadata.",
+    "median": "Average of the middle two values for the ten samples; the temporary capture script's upper-middle summaries are retained separately.",
+    "reproduction": [
+      "Use loadClaudeUsageBenchmarkScanner and measureClaudeUsageBenchmarkScan from config/scripts/claude-usage-benchmark-scanner.mjs in the combined Claude/shared-reader worktree.",
+      "Load only the four baselineModules from baselineCommit into the before source-overlay map; load every other module once into a shared worktree-source map used by both arms.",
+      "Create an isolated agent home containing 1,000 JSONL files, one keyed assistant usage row per file, with input_tokens=100 and output_tokens=10.",
+      "Measure a cold scan, an unchanged scan from its cache, then append the same keyed row with input_tokens=200 and measure the changed scan. Exclude batched fixture writes from timers.",
+      "Alternate arm order for ten rounds, assert exact projected behavior parity for cold and changed phases, and assert that every unchanged scan reads zero transcript bytes.",
+      "Compare byte counts and stream counts separately from duration, and record all raw samples and source fingerprints."
+    ]
+  },
+  "captureScriptSha256": "d4bac98e4bd15f0ba4760646b9c63cd69160b4f5df7d09ae7b22b101ea0fc9c5",
+  "captureScriptStatus": "Local measurement adapter reused the existing loader; no separate benchmark framework or production tool was added.",
+  "toolingSha256": {
+    "config/scripts/claude-usage-benchmark-scanner.mjs": "ffb6e5defb921f2ab35726a716f5e731dec439ead53cc2f3a192c7bef4df45d3",
+    "config/scripts/counterbalanced-benchmark-schedule.mjs": "bc35b40e954fa7ddec0225ed375bd3b113c2e05b8554bc50734d14f89987294d"
+  },
+  "historyBytes": 307780,
+  "changedSnapshotBytes": 615560,
+  "exactColdChangedProjectionParity": true,
+  "medians": {
+    "before": {
+      "cold": {
+        "durationMs": 85.02441700000008,
+        "cacheSerializationMs": 1.705395499999895,
+        "totalDurationMs": 86.68222949999995,
+        "bytesRead": 615560.0,
+        "directReadBytes": 307780.0,
+        "readCount": 2000.0,
+        "streamCount": 1000.0,
+        "cachedStateBytes": 1508259.0
+      },
+      "warm": {
+        "durationMs": 7.808062500000233,
+        "cacheSerializationMs": 1.4102915000000849,
+        "totalDurationMs": 9.195042000000285,
+        "bytesRead": 0.0,
+        "directReadBytes": 0.0,
+        "readCount": 0.0,
+        "streamCount": 0.0,
+        "cachedStateBytes": 1508259.0
+      },
+      "changed": {
+        "durationMs": 91.5124165000002,
+        "cacheSerializationMs": 1.5766254999998637,
+        "totalDurationMs": 93.02370800000017,
+        "bytesRead": 1231120.0,
+        "directReadBytes": 615560.0,
+        "readCount": 2000.0,
+        "streamCount": 1000.0,
+        "cachedStateBytes": 1508232.0
+      }
+    },
+    "after": {
+      "cold": {
+        "durationMs": 80.5293959999999,
+        "cacheSerializationMs": 1.6749375000002829,
+        "totalDurationMs": 82.21989599999984,
+        "bytesRead": 615560.0,
+        "directReadBytes": 615560.0,
+        "readCount": 2000.0,
+        "streamCount": 0.0,
+        "cachedStateBytes": 1508252.0
+      },
+      "warm": {
+        "durationMs": 8.240729500000043,
+        "cacheSerializationMs": 1.4088955000003125,
+        "totalDurationMs": 9.655500500000016,
+        "bytesRead": 0.0,
+        "directReadBytes": 0.0,
+        "readCount": 0.0,
+        "streamCount": 0.0,
+        "cachedStateBytes": 1508252.0
+      },
+      "changed": {
+        "durationMs": 84.09189549999974,
+        "cacheSerializationMs": 1.587229000000093,
+        "totalDurationMs": 85.75574999999981,
+        "bytesRead": 1231120.0,
+        "directReadBytes": 1231120.0,
+        "readCount": 2000.0,
+        "streamCount": 0.0,
+        "cachedStateBytes": 1508243.0
+      }
+    }
+  },
+  "durationChangePercent": {
+    "cold": -5.286741336903466,
+    "warm": 5.541285049905742,
+    "changed": -8.108758662274473
+  },
+  "samples": [
+    {
+      "arm": "before",
+      "round": 0,
+      "cold": {
+        "durationMs": 392.049709,
+        "cacheSerializationMs": 1.6989579999999478,
+        "totalDurationMs": 393.74866699999995,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508277
+      },
+      "warm": {
+        "durationMs": 48.59562500000004,
+        "cacheSerializationMs": 1.523916999999983,
+        "totalDurationMs": 50.119542000000024,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508277
+      },
+      "changed": {
+        "durationMs": 233.39462500000002,
+        "cacheSerializationMs": 1.4007910000000265,
+        "totalDurationMs": 234.79541600000005,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508233
+      }
+    },
+    {
+      "arm": "after",
+      "round": 0,
+      "cold": {
+        "durationMs": 132.50262499999985,
+        "cacheSerializationMs": 1.6758330000000115,
+        "totalDurationMs": 134.17845799999986,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508243
+      },
+      "warm": {
+        "durationMs": 13.144000000000005,
+        "cacheSerializationMs": 1.4084580000001097,
+        "totalDurationMs": 14.552458000000115,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508243
+      },
+      "changed": {
+        "durationMs": 111.28033299999993,
+        "cacheSerializationMs": 1.5340830000000096,
+        "totalDurationMs": 112.81441599999994,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508271
+      }
+    },
+    {
+      "arm": "after",
+      "round": 1,
+      "cold": {
+        "durationMs": 174.1105,
+        "cacheSerializationMs": 1.588083000000097,
+        "totalDurationMs": 175.6985830000001,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508241
+      },
+      "warm": {
+        "durationMs": 12.503875000000107,
+        "cacheSerializationMs": 1.357582999999977,
+        "totalDurationMs": 13.861458000000084,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508241
+      },
+      "changed": {
+        "durationMs": 127.85537499999987,
+        "cacheSerializationMs": 1.5461250000000746,
+        "totalDurationMs": 129.40149999999994,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508289
+      }
+    },
+    {
+      "arm": "before",
+      "round": 1,
+      "cold": {
+        "durationMs": 126.94487499999991,
+        "cacheSerializationMs": 1.7684590000001208,
+        "totalDurationMs": 128.71333400000003,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508223
+      },
+      "warm": {
+        "durationMs": 8.401833000000124,
+        "cacheSerializationMs": 1.3886669999999413,
+        "totalDurationMs": 9.790500000000065,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508223
+      },
+      "changed": {
+        "durationMs": 114.26195800000005,
+        "cacheSerializationMs": 1.8519999999998618,
+        "totalDurationMs": 116.11395799999991,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508231
+      }
+    },
+    {
+      "arm": "before",
+      "round": 2,
+      "cold": {
+        "durationMs": 91.58558300000004,
+        "cacheSerializationMs": 1.4894590000003518,
+        "totalDurationMs": 93.0750420000004,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508261
+      },
+      "warm": {
+        "durationMs": 8.029250000000047,
+        "cacheSerializationMs": 1.4045000000000982,
+        "totalDurationMs": 9.433750000000146,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508261
+      },
+      "changed": {
+        "durationMs": 95.63120799999979,
+        "cacheSerializationMs": 1.6717079999998532,
+        "totalDurationMs": 97.30291599999964,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508229
+      }
+    },
+    {
+      "arm": "after",
+      "round": 2,
+      "cold": {
+        "durationMs": 109.59825000000001,
+        "cacheSerializationMs": 2.067250000000058,
+        "totalDurationMs": 111.66550000000007,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508283
+      },
+      "warm": {
+        "durationMs": 13.671583000000282,
+        "cacheSerializationMs": 1.3706250000000182,
+        "totalDurationMs": 15.0422080000003,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508283
+      },
+      "changed": {
+        "durationMs": 108.32254200000034,
+        "cacheSerializationMs": 1.7173749999997199,
+        "totalDurationMs": 110.03991700000006,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508251
+      }
+    },
+    {
+      "arm": "after",
+      "round": 3,
+      "cold": {
+        "durationMs": 80.29837499999985,
+        "cacheSerializationMs": 1.6784579999998641,
+        "totalDurationMs": 81.97683299999971,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508213
+      },
+      "warm": {
+        "durationMs": 8.142833000000337,
+        "cacheSerializationMs": 1.4027909999999792,
+        "totalDurationMs": 9.545624000000316,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508213
+      },
+      "changed": {
+        "durationMs": 88.40525000000025,
+        "cacheSerializationMs": 1.6283330000001115,
+        "totalDurationMs": 90.03358300000036,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508237
+      }
+    },
+    {
+      "arm": "before",
+      "round": 3,
+      "cold": {
+        "durationMs": 75.91833399999996,
+        "cacheSerializationMs": 1.7118329999998423,
+        "totalDurationMs": 77.6301669999998,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508261
+      },
+      "warm": {
+        "durationMs": 7.40179100000023,
+        "cacheSerializationMs": 1.40166599999975,
+        "totalDurationMs": 8.80345699999998,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508261
+      },
+      "changed": {
+        "durationMs": 86.82458300000008,
+        "cacheSerializationMs": 1.5110839999997552,
+        "totalDurationMs": 88.33566699999983,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508229
+      }
+    },
+    {
+      "arm": "before",
+      "round": 4,
+      "cold": {
+        "durationMs": 86.88720899999998,
+        "cacheSerializationMs": 1.7541670000000522,
+        "totalDurationMs": 88.64137600000004,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508281
+      },
+      "warm": {
+        "durationMs": 7.466167000000041,
+        "cacheSerializationMs": 1.4322910000000775,
+        "totalDurationMs": 8.898458000000119,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508281
+      },
+      "changed": {
+        "durationMs": 91.41150000000016,
+        "cacheSerializationMs": 1.5426669999997102,
+        "totalDurationMs": 92.95416699999987,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508227
+      }
+    },
+    {
+      "arm": "after",
+      "round": 4,
+      "cold": {
+        "durationMs": 80.76041699999996,
+        "cacheSerializationMs": 1.702541999999994,
+        "totalDurationMs": 82.46295899999996,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508227
+      },
+      "warm": {
+        "durationMs": 8.741708000000017,
+        "cacheSerializationMs": 1.4854580000001079,
+        "totalDurationMs": 10.227166000000125,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508227
+      },
+      "changed": {
+        "durationMs": 77.78320800000029,
+        "cacheSerializationMs": 1.4414170000000013,
+        "totalDurationMs": 79.22462500000029,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508195
+      }
+    },
+    {
+      "arm": "after",
+      "round": 5,
+      "cold": {
+        "durationMs": 75.24266699999998,
+        "cacheSerializationMs": 1.6534579999997732,
+        "totalDurationMs": 76.89612499999976,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508281
+      },
+      "warm": {
+        "durationMs": 8.298541999999998,
+        "cacheSerializationMs": 1.406333999999788,
+        "totalDurationMs": 9.704875999999786,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508281
+      },
+      "changed": {
+        "durationMs": 76.96762499999977,
+        "cacheSerializationMs": 1.446374999999989,
+        "totalDurationMs": 78.41399999999976,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508247
+      }
+    },
+    {
+      "arm": "before",
+      "round": 5,
+      "cold": {
+        "durationMs": 83.16162500000019,
+        "cacheSerializationMs": 1.561457999999675,
+        "totalDurationMs": 84.72308299999986,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508211
+      },
+      "warm": {
+        "durationMs": 7.586875000000418,
+        "cacheSerializationMs": 1.3694590000000062,
+        "totalDurationMs": 8.956334000000425,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508211
+      },
+      "changed": {
+        "durationMs": 81.44929200000024,
+        "cacheSerializationMs": 1.6840000000001965,
+        "totalDurationMs": 83.13329200000044,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508301
+      }
+    },
+    {
+      "arm": "before",
+      "round": 6,
+      "cold": {
+        "durationMs": 83.09058300000015,
+        "cacheSerializationMs": 1.5731669999995574,
+        "totalDurationMs": 84.66374999999971,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508219
+      },
+      "warm": {
+        "durationMs": 7.298624999999447,
+        "cacheSerializationMs": 1.4347920000000158,
+        "totalDurationMs": 8.733416999999463,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508219
+      },
+      "changed": {
+        "durationMs": 84.96458299999995,
+        "cacheSerializationMs": 1.6105840000000171,
+        "totalDurationMs": 86.57516699999996,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508219
+      }
+    },
+    {
+      "arm": "after",
+      "round": 6,
+      "cold": {
+        "durationMs": 70.85174999999981,
+        "cacheSerializationMs": 1.4307080000007772,
+        "totalDurationMs": 72.28245800000059,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508265
+      },
+      "warm": {
+        "durationMs": 7.037790999999743,
+        "cacheSerializationMs": 1.4527090000001408,
+        "totalDurationMs": 8.490499999999884,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508265
+      },
+      "changed": {
+        "durationMs": 71.76158299999952,
+        "cacheSerializationMs": 1.6893340000005992,
+        "totalDurationMs": 73.45091700000012,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508197
+      }
+    },
+    {
+      "arm": "after",
+      "round": 7,
+      "cold": {
+        "durationMs": 71.874417,
+        "cacheSerializationMs": 1.7616250000000946,
+        "totalDurationMs": 73.63604200000009,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508241
+      },
+      "warm": {
+        "durationMs": 7.877457999999933,
+        "cacheSerializationMs": 1.4134170000006634,
+        "totalDurationMs": 9.290875000000597,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508241
+      },
+      "changed": {
+        "durationMs": 71.59512500000073,
+        "cacheSerializationMs": 1.6312079999997877,
+        "totalDurationMs": 73.22633300000052,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508171
+      }
+    },
+    {
+      "arm": "before",
+      "round": 7,
+      "cold": {
+        "durationMs": 76.68987500000003,
+        "cacheSerializationMs": 1.752542000000176,
+        "totalDurationMs": 78.4424170000002,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508263
+      },
+      "warm": {
+        "durationMs": 6.472415999999612,
+        "cacheSerializationMs": 1.423917000000074,
+        "totalDurationMs": 7.896332999999686,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508263
+      },
+      "changed": {
+        "durationMs": 93.93520900000021,
+        "cacheSerializationMs": 1.528958999999304,
+        "totalDurationMs": 95.46416799999952,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508253
+      }
+    },
+    {
+      "arm": "before",
+      "round": 8,
+      "cold": {
+        "durationMs": 99.58229100000062,
+        "cacheSerializationMs": 2.150957999999264,
+        "totalDurationMs": 101.73324899999989,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508241
+      },
+      "warm": {
+        "durationMs": 8.437750000000051,
+        "cacheSerializationMs": 1.4160830000000715,
+        "totalDurationMs": 9.853833000000122,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508241
+      },
+      "changed": {
+        "durationMs": 91.61333300000024,
+        "cacheSerializationMs": 1.4799160000002303,
+        "totalDurationMs": 93.09324900000047,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508269
+      }
+    },
+    {
+      "arm": "after",
+      "round": 8,
+      "cold": {
+        "durationMs": 118.9740839999995,
+        "cacheSerializationMs": 1.6740420000005543,
+        "totalDurationMs": 120.64812600000005,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508267
+      },
+      "warm": {
+        "durationMs": 7.485000000000582,
+        "cacheSerializationMs": 1.4093330000005153,
+        "totalDurationMs": 8.894333000001097,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508267
+      },
+      "changed": {
+        "durationMs": 83.58533299999999,
+        "cacheSerializationMs": 1.4950419999995574,
+        "totalDurationMs": 85.08037499999955,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508251
+      }
+    },
+    {
+      "arm": "after",
+      "round": 9,
+      "cold": {
+        "durationMs": 76.86124999999993,
+        "cacheSerializationMs": 1.6329170000008162,
+        "totalDurationMs": 78.49416700000074,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508261
+      },
+      "warm": {
+        "durationMs": 8.182917000000089,
+        "cacheSerializationMs": 1.4232080000001588,
+        "totalDurationMs": 9.606125000000247,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508261
+      },
+      "changed": {
+        "durationMs": 84.59845799999948,
+        "cacheSerializationMs": 1.8326670000005834,
+        "totalDurationMs": 86.43112500000007,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508239
+      }
+    },
+    {
+      "arm": "before",
+      "round": 9,
+      "cold": {
+        "durationMs": 79.30645899999945,
+        "cacheSerializationMs": 1.5558329999994385,
+        "totalDurationMs": 80.86229199999889,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508257
+      },
+      "warm": {
+        "durationMs": 8.131749999999556,
+        "cacheSerializationMs": 1.381416999999601,
+        "totalDurationMs": 9.513166999999157,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508257
+      },
+      "changed": {
+        "durationMs": 90.45725000000039,
+        "cacheSerializationMs": 1.6439999999993233,
+        "totalDurationMs": 92.10124999999971,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508269
+      }
+    }
+  ],
+  "capturedUpperMiddleSummaries": {
+    "before": {
+      "cold": {
+        "durationMs": 86.88720899999998,
+        "cacheSerializationMs": 1.7118329999998423,
+        "totalDurationMs": 88.64137600000004,
+        "bytesRead": 615560,
+        "directReadBytes": 307780,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508261
+      },
+      "warm": {
+        "durationMs": 8.029250000000047,
+        "cacheSerializationMs": 1.4160830000000715,
+        "totalDurationMs": 9.433750000000146,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508261
+      },
+      "changed": {
+        "durationMs": 91.61333300000024,
+        "cacheSerializationMs": 1.6105840000000171,
+        "totalDurationMs": 93.09324900000047,
+        "bytesRead": 1231120,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 1000,
+        "cachedStateBytes": 1508233
+      }
+    },
+    "after": {
+      "cold": {
+        "durationMs": 80.76041699999996,
+        "cacheSerializationMs": 1.6758330000000115,
+        "totalDurationMs": 82.46295899999996,
+        "bytesRead": 615560,
+        "directReadBytes": 615560,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508261
+      },
+      "warm": {
+        "durationMs": 8.298541999999998,
+        "cacheSerializationMs": 1.4093330000005153,
+        "totalDurationMs": 9.704875999999786,
+        "bytesRead": 0,
+        "directReadBytes": 0,
+        "readCount": 0,
+        "streamCount": 0,
+        "cachedStateBytes": 1508261
+      },
+      "changed": {
+        "durationMs": 84.59845799999948,
+        "cacheSerializationMs": 1.6283330000001115,
+        "totalDurationMs": 86.43112500000007,
+        "bytesRead": 1231120,
+        "directReadBytes": 1231120,
+        "readCount": 2000,
+        "streamCount": 0,
+        "cachedStateBytes": 1508247
+      }
+    }
+  },
+  "sourceFingerprints": {
+    "before": {
+      "src/main/claude-usage/scanner.ts": {
+        "source": "worktree",
+        "sha256": "ef42add20f63152cf2ebe106e0794119b9c388c763736c8450b559ae7c2418f5"
+      },
+      "src/main/claude-usage/transcript-file-discovery.ts": {
+        "source": "worktree",
+        "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+      },
+      "src/main/claude-usage/transcript-projection-integrity.ts": {
+        "source": "worktree",
+        "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+      },
+      "src/main/claude-usage/transcript-record-parser.ts": {
+        "source": "HEAD",
+        "sha256": "d4fab89434c1b6c60480a561310542246be34ef86bc13da0340c1dfdbb269854"
+      },
+      "src/main/claude-usage/transcript-resume-projection.ts": {
+        "source": "worktree",
+        "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+      },
+      "src/main/claude-usage/transcript-token-checkpoint.ts": {
+        "source": "worktree",
+        "sha256": "e96cc4aa9b899cad90aee462f053f483f5bb010dea99de1ee11a9f8fd8a2d0f2"
+      },
+      "src/main/claude-usage/transcript-usage-projection.ts": {
+        "source": "worktree",
+        "sha256": "56e2fe017f806670595dae766b6291e09b05b321b83e4b83e1ae5166bab2041c"
+      },
+      "src/main/claude-usage/usage-aggregation.ts": {
+        "source": "worktree",
+        "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+      },
+      "src/main/claude-usage/worktree-attribution.ts": {
+        "source": "worktree",
+        "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+      },
+      "src/main/usage/jsonl-file-checkpoint.ts": {
+        "source": "HEAD",
+        "sha256": "8eb579f356e1bb23b36319f00b3d4603fff80a963222dcb8a22331319cab3a03"
+      },
+      "src/main/usage/jsonl-file-snapshot.ts": {
+        "source": "HEAD",
+        "sha256": "1bd98ac194f73097cd6c204238fe1db01e1e0d60a604e93c1d7841725971fe0d"
+      },
+      "src/main/usage/jsonl-line-offsets.ts": {
+        "source": "HEAD",
+        "sha256": "f119465fad3771acd72b128853e84eed9165f0f74b75743ad662aa5bab991273"
+      }
+    },
+    "after": {
+      "src/main/claude-usage/scanner.ts": {
+        "source": "worktree",
+        "sha256": "ef42add20f63152cf2ebe106e0794119b9c388c763736c8450b559ae7c2418f5"
+      },
+      "src/main/claude-usage/transcript-file-discovery.ts": {
+        "source": "worktree",
+        "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+      },
+      "src/main/claude-usage/transcript-projection-integrity.ts": {
+        "source": "worktree",
+        "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+      },
+      "src/main/claude-usage/transcript-record-parser.ts": {
+        "source": "worktree",
+        "sha256": "6598c02e38ea1776ef5ef926ca424dbc5880f27e7ff03b651cf8f60b791996f6"
+      },
+      "src/main/claude-usage/transcript-resume-projection.ts": {
+        "source": "worktree",
+        "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+      },
+      "src/main/claude-usage/transcript-token-checkpoint.ts": {
+        "source": "worktree",
+        "sha256": "e96cc4aa9b899cad90aee462f053f483f5bb010dea99de1ee11a9f8fd8a2d0f2"
+      },
+      "src/main/claude-usage/transcript-usage-projection.ts": {
+        "source": "worktree",
+        "sha256": "56e2fe017f806670595dae766b6291e09b05b321b83e4b83e1ae5166bab2041c"
+      },
+      "src/main/claude-usage/usage-aggregation.ts": {
+        "source": "worktree",
+        "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+      },
+      "src/main/claude-usage/worktree-attribution.ts": {
+        "source": "worktree",
+        "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+      },
+      "src/main/usage/jsonl-file-checkpoint.ts": {
+        "source": "worktree",
+        "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+      },
+      "src/main/usage/jsonl-file-snapshot.ts": {
+        "source": "worktree",
+        "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+      },
+      "src/main/usage/jsonl-line-offsets.ts": {
+        "source": "worktree",
+        "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+      }
+    }
+  },
+  "limits": [
+    "One macOS host and page-cache-warm fixtures; durations are evidence for this scenario, not a platform-independent performance contract.",
+    "This comparison is against the published incremental reader implementation, not the pre-PR full-scan implementation.",
+    "Both arms still read each small cold/changed snapshot twice; unchanged scans read zero transcript bytes.",
+    "Warm duration rose by about 0.43 ms over 1,000 files in this capture; exact bigint metadata adds CPU work without adding stat calls.",
+    "Large-file append-only checkpoints retain their documented limitation for arbitrary middle rewrites during growth."
+  ]
+}

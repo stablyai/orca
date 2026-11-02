@@ -101,10 +101,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
         if (!result.ok) {
           throw new Error(result.error.message)
         }
-        // The five collections are typed by the same entity schemas the item sheet reads them
-        // through, so the casts this call site carried are gone. `reviewDecision` is forwarded with
-        // no coalesce: explicit null and absent are different answers to "has this been reviewed",
-        // and collapsing either is a product change.
+        // Forward reviewDecision unchanged: null and absence represent distinct review states.
         setProjectRowDetail({
           provider: 'github',
           body: result.details.body ?? '',

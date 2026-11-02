@@ -53,8 +53,7 @@ function SetupGuideModalContent({
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
-  // Why: keep progress inputs live through the close-animation linger; dropping
-  // them mid-fade flips completed rows back to "not done yet" on screen.
+  // Keep progress inputs live through the closing fade so completed rows cannot flash incomplete.
   const progressInputsActive = open || lingering
   const progress = useSetupGuideProgress(
     progressInputsActive,
@@ -138,8 +137,7 @@ function SetupGuideModalContent({
         className="grid h-[min(780px,calc(100vh-2rem))] w-[min(1080px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:max-w-none"
         tabIndex={-1}
       >
-        {/* Why: labeled so it can't be mistaken for close; hidden below sm, where the header
-            centers the title under it (the sidebar entry keeps its own hide control). */}
+        {/* Label Hide separately from Close; small layouts retain the sidebar’s hide control. */}
         <Button
           type="button"
           variant="ghost"

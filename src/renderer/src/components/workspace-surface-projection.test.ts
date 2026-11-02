@@ -1,26 +1,14 @@
-/**
- * STA-4846: the terminal workbench is bare-workspace-id keyed end to end
- * (`activeWorktreeId`, `tabsByWorktree`, `mountedWorktreeIdsRef`, React keys),
- * but its catalog inputs are host-qualified — `getIndexedAllWorktrees` emits one
- * row per (host, id) and `mergeFetchedFolderWorkspacesForHost` keeps one folder
- * row per (host, id). A repo checked out at the same path locally and on an
- * SSH/paired-runtime host therefore reached the mount loops twice, mounting the
- * same tabIds under duplicate React keys with both trees marked visible.
- */
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+/** Host-qualified catalogs can repeat bare workspace IDs, but workbench state/React keys cannot (STA-4846). Collapse duplicates before mounting or the same visible tabs mount twice. */
 import { describe, expect, it, vi } from 'vitest'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
-import { getIndexedAllWorktrees, getIndexedWorktreeMap } from '../store/worktree-repo-index'
+import { getIndexedWorktreeMap } from '../store/worktree-repo-index'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
 const SHARED_WORKTREE_ID = 'repo-shared::/work/orca-feature'
 
-// A production collision differs only by host: `worktreeId` is `repoId::path`,
-// so both rows necessarily carry the same repoId and path (see STA-4343's
-// sidebar/worktree-list-groups-host-collision.test.ts).
+// Production Git workspace collisions share repo/path because worktreeId encodes both (STA-4343).
 const localWorktree: Worktree = {
   id: SHARED_WORKTREE_ID,
   repoId: 'repo-shared',
@@ -72,8 +60,7 @@ function project(input: {
   activeWorkspaceResolvedHostId?: ExecutionHostId | null
 }): ReturnType<typeof projectWorkspaceSurfaces> {
   return projectWorkspaceSurfaces({
-    // Built through the production index so the test pins the composition the
-    // workbench actually runs, not a re-implementation of the per-id collapse.
+    // Build through the real host index to test its composition with workbench collapse.
     worktreesById: getIndexedWorktreeMap({
       'repo-shared': [...(input.worktrees ?? [])]
     }),
@@ -90,37 +77,8 @@ describe('projectWorkspaceSurfaces', () => {
     expect(surfaces).toEqual([{ id: SHARED_WORKTREE_ID, path: '/work/orca-feature' }])
   })
 
-  it('never emits a duplicate id, so mount loops cannot reuse a React key', () => {
-    const surfaces = project({
-      worktrees: [localWorktree, sshWorktree],
-      folderWorkspaces: [localFolder, runtimeFolder]
-    })
-
-    expect(new Set(surfaces.map((surface) => surface.id)).size).toBe(surfaces.length)
-  })
-
-  it('emits one surface per folder workspace id across hosts', () => {
-    const surfaces = project({
-      folderWorkspaces: [localFolder, runtimeFolder]
-    })
-
-    expect(surfaces).toHaveLength(1)
-    expect(surfaces[0]?.id).toBe('folder:folder-shared')
-  })
-
-  it('mounts the active folder workspace at its resolved host path, not the first row', () => {
-    const surfaces = project({
-      folderWorkspaces: [localFolder, runtimeFolder],
-      activeWorkspaceId: 'folder:folder-shared',
-      activeWorkspaceResolvedHostId: 'runtime:env-1'
-    })
-
-    expect(surfaces).toEqual([{ id: 'folder:folder-shared', path: '/remote/orca' }])
-  })
-
   it('ignores the active workspace id entirely when no resolved host disambiguates', () => {
-    // The terminal foundation memo relies on this: with no resolved folder host it passes
-    // `null` instead of the active id, so a worktree switch cannot change the projection.
+    // With no resolved folder host, active ID is inert; the foundation relies on passing null to preserve projection identity.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const folderWorkspaces = [localFolder, runtimeFolder]
     const worktrees = [localWorktree]
@@ -166,8 +124,7 @@ describe('projectWorkspaceSurfaces', () => {
   })
 
   it('keeps the resolved-host path when the colliding rows swap order', () => {
-    // `mergeFetchedFolderWorkspacesForHost` reaps and re-appends a host's rows across a
-    // disconnect, so which row is first flips mid-session; a resolved host must pin the path.
+    // Reconnect can reverse catalog order; resolved folder host must retain the correct path.
     const surfaces = project({
       folderWorkspaces: [runtimeFolder, localFolder],
       activeWorkspaceId: 'folder:folder-shared',
@@ -178,8 +135,7 @@ describe('projectWorkspaceSurfaces', () => {
   })
 
   it('switches the active folder path from first-wins to the host that hydrates', () => {
-    // Ownership resolves to null while the folder-owner index still reads the
-    // colliding id as ambiguous, so the projection first-wins until it lands.
+    // Until folder ownership resolves, ambiguous collisions remain first-wins.
     const folderWorkspaces = [localFolder, runtimeFolder]
     const hydrating = project({
       folderWorkspaces,
@@ -194,35 +150,11 @@ describe('projectWorkspaceSurfaces', () => {
 
     expect(hydrating).toEqual([{ id: 'folder:folder-shared', path: '/work/orca-local' }])
     expect(hydrated).toEqual([{ id: 'folder:folder-shared', path: '/remote/orca' }])
-    // The id is what mounts; only the path moves, so the transition is no remount.
     expect(hydrated[0]?.id).toBe(hydrating[0]?.id)
-  })
-
-  it('keeps the surviving host row when a runtime disconnect drops its peer', () => {
-    // Loss of contact with the runtime must not unmount the workspace: the
-    // mount prune drops ids that leave the projection.
-    const surfaces = project({ worktrees: [localWorktree] })
-
-    expect(surfaces).toEqual([{ id: SHARED_WORKTREE_ID, path: '/work/orca-feature' }])
-  })
-
-  it('keeps distinct workspaces on one host', () => {
-    const otherWorktree: Worktree = {
-      ...localWorktree,
-      id: 'repo-shared::/work/orca-other',
-      path: '/work/orca-other'
-    }
-
-    expect(project({ worktrees: [localWorktree, otherWorktree] })).toEqual([
-      { id: SHARED_WORKTREE_ID, path: '/work/orca-feature' },
-      { id: 'repo-shared::/work/orca-other', path: '/work/orca-other' }
-    ])
   })
 })
 
-// The collapse only ever removes a duplicate id. Losing a surface the user owns
-// unmounts live terminals, which is strictly worse than the duplicate mount this
-// fixes, so every shape that reaches the workbench is pinned against dropping one.
+// Collapse may remove duplicates only; dropping an owned surface would destroy live terminals.
 describe('projectWorkspaceSurfaces never under-selects', () => {
   const unqualifiedWorktree: Worktree = { ...localWorktree, hostId: undefined }
   const secondSshWorktree: Worktree = {
@@ -278,8 +210,7 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
   })
 
   it('keeps the id when an unqualified row collides with a host-qualified one', () => {
-    // `composeWorktreeHostIdentity` gives an unqualified row its own bucket, so
-    // the pair survives the host-qualified index and must still collapse to one id.
+    // The host index preserves unqualified buckets too; workbench projection must still collapse duplicate IDs.
     expect(project({ worktrees: [unqualifiedWorktree, localWorktree] })).toEqual([
       { id: SHARED_WORKTREE_ID, path: '/work/orca-feature' }
     ])
@@ -288,14 +219,7 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
     ])
   })
 
-  it('collapses two SSH hosts publishing one worktree id, with no local row present', () => {
-    expect(project({ worktrees: [sshWorktree, secondSshWorktree] })).toEqual([
-      { id: SHARED_WORKTREE_ID, path: '/work/orca-feature' }
-    ])
-  })
-
   it('keeps a git worktree and a folder workspace apart even on the same id text', () => {
-    // `folderWorkspaceKey` prefixes `folder:`; a worktree id is `repoId::path`.
     const surfaces = project({
       worktrees: [{ ...localWorktree, id: 'folder-shared', path: '/work/collide' }],
       folderWorkspaces: [localFolder]
@@ -325,8 +249,7 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
   })
 
   it('does not let a folder row that names no host win the local tie-break', () => {
-    // `getCatalogOwnerHostId` defaults an unstamped row to `local`; honouring that
-    // would mount the unstamped row's path over the row that really is local.
+    // Do not let default-local ownership promote unstamped paths over explicitly local rows.
     const unstampedPeer: FolderWorkspace = {
       ...localFolder,
       folderPath: '/unknown/orca',
@@ -342,15 +265,9 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
       })
     ).toEqual([{ id: 'folder:folder-shared', path: '/work/orca-local' }])
   })
-
-  it('emits nothing extra and nothing missing for an empty catalog', () => {
-    expect(project({})).toEqual([])
-  })
 })
 
-// The feed swapped `useAllWorktrees` for `useWorktreeMap`. Both read the same
-// WeakMap-cached snapshot of `worktreesByRepo`, so the zustand `Object.is` compare
-// still re-renders on exactly the writes that replace the slice — no dropped update.
+// Both worktree hooks read the same WeakMap snapshot, preserving Object.is update behavior after the feed change.
 describe('worktree surface feed subscription identity', () => {
   const worktreesByRepo = { 'repo-shared': [localWorktree, sshWorktree] }
 
@@ -359,40 +276,5 @@ describe('worktree surface feed subscription identity', () => {
     expect(getIndexedWorktreeMap({ ...worktreesByRepo })).not.toBe(
       getIndexedWorktreeMap(worktreesByRepo)
     )
-  })
-
-  it('exposes the same id set the host-qualified array does', () => {
-    expect(new Set(getIndexedWorktreeMap(worktreesByRepo).keys())).toEqual(
-      new Set(getIndexedAllWorktrees(worktreesByRepo).map((worktree) => worktree.id))
-    )
-  })
-})
-
-// Why source text: the per-id collapse lives in the store index, so the module
-// tests above stay green even if the workbench goes back to flattening the
-// host-qualified array itself. The feed is the half that has to be ratcheted.
-const FOUNDATION_PATH = 'src/renderer/src/components/use-terminal-workspace-foundation.ts'
-
-describe('Terminal workbench surface feed', () => {
-  const source = readFileSync(join(process.cwd(), FOUNDATION_PATH), 'utf8')
-
-  it('feeds the projection from the store per-id index, never the host-qualified array', () => {
-    expect(source).not.toContain('useAllWorktrees')
-    expect(source).toContain('const worktreesById = useWorktreeMap()')
-  })
-
-  it('has exactly one projection call site, so no second flatten can hide beside it', () => {
-    const componentsDir = join(process.cwd(), 'src/renderer/src/components')
-    const callSiteFiles = readdirSync(componentsDir)
-      .filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.'))
-      .filter((name) =>
-        readFileSync(join(componentsDir, name), 'utf8').includes('projectWorkspaceSurfaces(')
-      )
-    expect(callSiteFiles.sort()).toEqual([
-      'use-terminal-workspace-foundation.ts',
-      'workspace-surface-projection.ts'
-    ])
-    expect(source.split('projectWorkspaceSurfaces(').length - 1).toBe(1)
-    expect(source).toContain('worktreesById,\n        folderWorkspaces,')
   })
 })

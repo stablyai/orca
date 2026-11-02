@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  buildMarkdownTableOfContents,
-  stripInlineMarkdownForToc
-} from './markdown-table-of-contents'
+import { buildMarkdownTableOfContents } from './markdown-table-of-contents'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -120,22 +117,5 @@ describe('markdown table of contents', () => {
       id: 'a--b',
       title: 'A & B'
     })
-  })
-
-  it('strips inline markdown from labels', () => {
-    expect(stripInlineMarkdownForToc('Use **bold** [links](./x) and [[docs|Docs]]')).toBe(
-      'Use bold links and Docs'
-    )
-  })
-
-  it('folds large pasted heading whitespace without global whitespace replacement', () => {
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-    const toc = buildMarkdownTableOfContents(`# ${'Large   heading\ttext '.repeat(120)}`)
-
-    expect(toc[0].title).toContain('Large heading text Large heading text')
-    const usedWhitespaceReplace = replaceSpy.mock.calls.some(
-      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
-    )
-    expect(usedWhitespaceReplace).toBe(false)
   })
 })

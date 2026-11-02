@@ -1,8 +1,6 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
-/** Names one user action that starts an agent: a click, a menu pick, a send. Minted once where that
- *  action is handled and passed down unchanged, so a re-delivery of the action (a double click, a
- *  caller retrying its own call) is the same request and every other action is a new one. */
+/** Mint once per user action and preserve through re-entry; separate clicks, including a double click, get distinct request IDs. */
 export type AgentLaunchRequestId = string
 
 export function newAgentLaunchRequestId(): AgentLaunchRequestId {

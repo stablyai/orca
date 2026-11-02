@@ -11,7 +11,7 @@ export function isProcessAlive(pid) {
   }
 }
 
-function readDaemonPids(userDataPath) {
+export function readDaemonPids(userDataPath) {
   const daemonDir = path.join(userDataPath, 'daemon')
   if (!existsSync(daemonDir)) {
     return []

@@ -27,7 +27,6 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     _worktreeId?: string,
     browserPageId?: string
   ): { browserPageId: string; url: string; title: string } | null {
-    // Why: expose the same metadata lookup as other bridges, though the CDP bridge routes only one active tab.
     const resolvedPageId = browserPageId ?? this.getActivePageId()
     if (!resolvedPageId) {
       return null
@@ -70,7 +69,7 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
   }
 
   tabSwitch(index: number): BrowserTabSwitchResult {
-    // Why: filter to live tabs so indices match tabList(), skipping destroyed-but-uncleaned entries.
+    // Keep indices aligned with tabList(), which skips destroyed guests.
     const liveEntries = [...this.getRegisteredTabs()].filter(([_tabId, wcId]) => {
       const guest = webContents.fromId(wcId)
       return guest && !guest.isDestroyed()

@@ -1,21 +1,15 @@
-/**
- * Decides what a click inside a preview guest means. This is the only way a URL leaves the
- * preview, so it answers for a click the reader really made: navigation the document starts by
- * itself never reaches here, and the guest's navigation policy refuses it outright.
- *
- * Runs in the guest's isolated world and exposes nothing to page script — the document cannot see
- * these listeners, remove them, or call what they call.
- */
-export type DocPreviewExternalLinkReporter = (url: string) => void
+// Runs in the isolated world so page scripts cannot access the link reporter or its listeners.
+import type { DocPreviewLinkModifiers } from '../shared/doc-preview-scheme'
 
-/**
- * Why the channel name is written out rather than imported: this module is bundled into a
- * sandboxed preload, whose `require` resolves only 'electron', so an import of shared code emits a
- * chunk require the guest cannot load. The test pins it to the constant main listens on.
- */
+export type DocPreviewExternalLinkReporter = (
+  url: string,
+  modifiers: DocPreviewLinkModifiers
+) => void
+
+// Keep this literal: shared imports emit chunk requires the sandboxed preload cannot load.
 export const PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL = 'docPreview:linkClick'
 
-/** Why not `instanceof HTMLAnchorElement`: an SVG `<a>` is an anchor too, and carries an SVGAnimatedString href. */
+// SVG anchors carry an SVGAnimatedString href and are not HTMLAnchorElements.
 function readAnchorHref(node: EventTarget): string | null {
   const element = node as { tagName?: unknown; href?: unknown }
   if (typeof element.tagName !== 'string' || element.tagName.toUpperCase() !== 'A') {
@@ -28,8 +22,7 @@ function readAnchorHref(node: EventTarget): string | null {
   if (typeof baseVal !== 'string' || baseVal.length === 0) {
     return null
   }
-  // Why resolved here: baseVal is the raw attribute, unlike an HTML anchor's absolute href, so
-  // every branch below would read an SVG link differently from the identical HTML one.
+  // SVG baseVal is relative; normalize it to match HTML anchors' absolute hrefs.
   try {
     return new URL(baseVal, window.location.href).toString()
   } catch {
@@ -37,7 +30,7 @@ function readAnchorHref(node: EventTarget): string | null {
   }
 }
 
-/** Why the composed path and not `event.target`: the press lands on whatever the anchor wraps, shadow roots included. */
+// The anchor may wrap the clicked element, including across a shadow root.
 function findClickedAnchor(event: Event): { element: EventTarget; href: string } | null {
   for (const node of event.composedPath()) {
     const href = readAnchorHref(node)
@@ -70,13 +63,12 @@ function scrollToFragment(fragment: string): void {
     target.scrollIntoView()
     return
   }
-  // Why: `#top` names the top of the document even when nothing carries that id.
+  // #top also works without a matching element.
   if (fragment === 'top') {
     scrollToDocumentTop()
   }
 }
 
-/** True when the href only moves within the document already on screen, which this handles itself. */
 function handleInDocumentFragment(element: EventTarget, href: string): boolean {
   if (readAttribute(element, 'href') === '#') {
     scrollToDocumentTop()
@@ -108,7 +100,7 @@ export function handleDocPreviewLinkClick(
   event: Event,
   report: DocPreviewExternalLinkReporter
 ): void {
-  // Why first: a click the page dispatched is the document asking to leave, not the reader.
+  // Only user clicks may open external links.
   if (!event.isTrusted) {
     return
   }
@@ -120,13 +112,16 @@ export function handleDocPreviewLinkClick(
     event.preventDefault()
     return
   }
-  // Why left alone: a link served the way this document was is a sibling preview document, which
-  // the guest policy already answers for — it navigates natively and the preview keeps its history.
+  // Let the guest navigate sibling preview documents to preserve its history.
   if (isSameSchemeAsDocument(anchor.href)) {
     return
   }
   event.preventDefault()
-  report(anchor.href)
+  report(anchor.href, {
+    metaKey: 'metaKey' in event && event.metaKey === true,
+    ctrlKey: 'ctrlKey' in event && event.ctrlKey === true,
+    shiftKey: 'shiftKey' in event && event.shiftKey === true
+  })
 }
 
 export function handleDocPreviewLinkAuxClick(event: MouseEvent): void {
@@ -136,13 +131,12 @@ export function handleDocPreviewLinkAuxClick(event: MouseEvent): void {
   if (!findClickedAnchor(event)) {
     return
   }
-  // Why swallowed rather than routed: a middle click asks for a background tab, and honouring it
-  // would let one press the reader barely registered open a browser tab.
+  // Suppress middle-click navigation to avoid opening an external background tab.
   event.preventDefault()
 }
 
 export function installDocPreviewLinkInterception(report: DocPreviewExternalLinkReporter): void {
-  // Why capture: the document's own handlers must not be able to consume the press first.
+  // Capture before the document's handlers can consume the click.
   document.addEventListener('click', (event) => handleDocPreviewLinkClick(event, report), true)
   document.addEventListener(
     'auxclick',

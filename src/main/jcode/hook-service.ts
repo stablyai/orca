@@ -16,14 +16,14 @@ import {
 } from '../agent-hooks/installer-utils-remote'
 import {
   buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue,
   POSIX_HOOK_STDIN_DRAIN_COMMAND,
   WINDOWS_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
 import {
   applyJcodeManagedHooks,
   parseJcodeHooksTable,
-  removeJcodeManagedHooks
+  removeJcodeManagedHooks,
+  type JcodeHooksTable
 } from './hook-config'
 import {
   getJcodeConfigPath,
@@ -38,28 +38,17 @@ import {
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
-    // Why a temp file rather than stdin: the shared builder posts `payload@-`, and on
-    // Windows jcode's payload never reaches stdin — the pre_tool gate has already
-    // drained it, and observer hooks are given a null stdin. Without this the server
-    // sees no event name and normalizeJcodeEvent drops every event, so a Windows pane
-    // would show no jcode status at all.
+    // Windows stdin is drained or null; post JCODE_HOOK_PAYLOAD through a temp file instead.
     const payloadFile = '%ORCA_JCODE_PAYLOAD_FILE%'
     return [
       '@echo off',
-      // EnableDelayedExpansion so `!JCODE_HOOK_PAYLOAD!` is written verbatim: plain
-      // `%VAR%` expansion re-parses the JSON's quotes and `&` as batch syntax.
+      // Delayed expansion keeps JSON quotes and & out of cmd parsing.
       'setlocal EnableDelayedExpansion',
-      // Why: endpoint file holds the live port/token; a PTY that outlives an Orca restart carries stale env, so `call` it to refresh (else PTY env).
+      // Refresh endpoint credentials for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      // Why the guard comes first here, unlike the POSIX script: on Windows a hook
-      // that owns stdin outside an Orca pane can hang forever, because the caller
-      // abandons the pipe rather than closing it (#11549). A jcode gate that exits
-      // without draining costs at most jcode's own 5s pre_tool timeout, which fails
-      // open; a hung hook process costs a stranded window per event.
+      // Guard before reading: abandoned Windows stdin can hang forever outside Orca (#11549).
       ...buildWindowsHookEnvironmentGuardLines(),
-      // Why: inside an Orca pane, pre_tool is jcode's gate — it writes the tool input
-      // to our stdin and waits for us, so drain it before the POST or a tool input
-      // larger than the pipe buffer stalls the agent mid-write.
+      // Drain pre_tool input before POST so jcode cannot block writing a payload larger than the pipe.
       `if "%JCODE_HOOK_EVENT%"=="pre_tool" ${WINDOWS_HOOK_STDIN_DRAIN_COMMAND}`,
       `set "ORCA_JCODE_PAYLOAD_FILE=%TEMP%\\orca-jcode-hook-%RANDOM%%RANDOM%.json"`,
       `>"${payloadFile}" echo(!JCODE_HOOK_PAYLOAD!`,
@@ -71,38 +60,29 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ])}`,
       `del "${payloadFile}" 2>nul`,
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
 
   return [
     '#!/bin/sh',
-    // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
-    // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race or CRLF-mangled line can't leak shell parse errors into agent transcripts (fail-open).
+    // Refresh surviving PTYs; silence sourcing failures from endpoint races or CRLF damage.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    // Why before the env guard: pre_tool is jcode's gate — it writes the tool input to
-    // our stdin and waits for us, so stdin must be drained before ANY exit path or a
-    // tool input larger than the pipe buffer stalls the agent mid-write.
+    // Drain gated input before every exit path so jcode cannot block mid-write.
     'if [ "$JCODE_HOOK_EVENT" = pre_tool ]; then',
     `  ${POSIX_HOOK_STDIN_DRAIN_COMMAND}`,
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
-    // Why the env var rather than a stdin capture: jcode hands the hook its payload as
-    // a ready JSON object (capped at 16 KB), so Orca forwards it verbatim instead of
-    // hand-building JSON in shell, which is unsafe for arbitrary text.
+    // Forward jcode's JSON payload verbatim; rebuilding arbitrary text in shell is unsafe.
     'payload="$JCODE_HOOK_PAYLOAD"',
     'orca_post_jcode_event() {',
     ...buildPosixAgentHookPostCommand('jcode').map((line) => `  ${line}`),
     '}',
-    // Why detached on the gate: jcode reads this script's stderr to EOF before it
-    // releases the tool call, so an inherited pipe would hold the tool open for as long
-    // as the POST ran. Orca observes the tool live and adds no latency; the gate always
-    // allows, because Orca never blocks a jcode tool.
+    // Detach the observer POST: jcode waits for gate stderr EOF before releasing the tool.
     'if [ "$JCODE_HOOK_EVENT" = pre_tool ]; then',
     '  orca_post_jcode_event >/dev/null 2>&1 &',
     'else',
@@ -136,14 +116,17 @@ export class JcodeHookService {
     let managedCount = 0
     for (const event of JCODE_HOOK_EVENTS) {
       const value = table[event]
-      if (value === managedCommand) {
+      const commands = typeof value === 'string' ? [value] : (value ?? [])
+      // A stale duplicate beside the current command still runs, so only a lone current entry counts.
+      if (commands.includes(managedCommand) && commands.filter(isManaged).length === 1) {
         managedCount += 1
-      } else if (isManaged(value)) {
+      } else if (commands.some(isManaged)) {
         outdated.push(event)
-      } else if (value === undefined) {
-        missing.push(event)
-      } else {
+      } else if (typeof value === 'string') {
         userOwned.push(event)
+      } else {
+        // Install appends Orca to user arrays, so they count as missing rather than user-owned.
+        missing.push(event)
       }
     }
     const hasManagedEntries = managedCount > 0 || outdated.length > 0
@@ -201,14 +184,13 @@ export class JcodeHookService {
     return this.getStatus()
   }
 
-  // Why: jcode invokes the script path recorded in its own config.toml, so an Orca
-  // upgrade that changes the script body must rewrite the file the user already has.
+  // jcode invokes the configured file, so upgrades must refresh existing scripts.
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getJcodeManagedScriptPath(), getManagedScript())
   }
 
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    // Why: remote-Windows is out of scope for v1 (same as Devin); assume POSIX.
+    // Remote hook execution assumes POSIX; Windows remotes are unsupported.
     const remoteConfigPath = getJcodeRemoteConfigPath(remoteHome)
     const remoteScriptFileName = getJcodePosixManagedScriptFileName()
     const remoteScriptPath = `${remoteHome.replace(/\/+$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
@@ -225,7 +207,7 @@ export class JcodeHookService {
           detail: 'Could not parse remote jcode config.toml [hooks] table'
         }
       }
-      // Why: write script before settings so a mid-install failure never leaves config referencing a missing script.
+      // Publish the script before config so interrupted installs cannot reference a missing file.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       const edited = applyJcodeManagedHooks(
         content,
@@ -268,7 +250,7 @@ export class JcodeHookService {
 
 export const jcodeHookService = new JcodeHookService()
 
-function readJcodeHooksTable(configPath: string): Record<string, string> | null {
+function readJcodeHooksTable(configPath: string): JcodeHooksTable | null {
   if (!existsSync(configPath)) {
     return {}
   }
@@ -288,8 +270,6 @@ function readConfigContent(configPath: string): string {
 }
 
 function writeConfigContent(configPath: string, content: string): void {
-  // Why: skip the write when the on-disk content is already identical (same
-  // no-op guard as writeHooksJson) so repeated install() calls stay inert.
   if (readConfigContent(configPath) === content) {
     return
   }

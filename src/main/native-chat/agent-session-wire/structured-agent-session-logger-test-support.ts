@@ -10,7 +10,6 @@ export type RecordedStructuredAgentSessionLog = {
   fields: StructuredAgentSessionLogFields
 }
 
-/** A logger that keeps every entry, for tests that assert a failure was reported. */
 export function recordingStructuredAgentSessionLogger(): {
   logger: StructuredAgentSessionLogger
   entries: RecordedStructuredAgentSessionLog[]
@@ -27,8 +26,7 @@ export function recordingStructuredAgentSessionLogger(): {
   }
 }
 
-/** A recording logger that also prints as production does, for a harness whose tests read either:
- *  the entries hold every level and every field, whatever the console mirror keeps. */
+/** Retain every entry/field while mirroring production console output. */
 export function recordingProductionStructuredAgentSessionLogger(): ReturnType<
   typeof recordingStructuredAgentSessionLogger
 > {
@@ -49,7 +47,6 @@ export function recordingProductionStructuredAgentSessionLogger(): ReturnType<
   }
 }
 
-/** What an event sink built outside a host needs: the session it writes for, and a logger. */
 export function testEventSinkLogging(sessionId = 'session-1'): {
   sessionId: string
   logger: StructuredAgentSessionLogger

@@ -1,28 +1,73 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Text } from 'react-native'
+import { ListRow } from '../components/list/ListGroup'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { KnownAppUpdate } from '../storage/app-update-preferences'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { formatTimeAgo } from '../worktree/agent-row-display'
+import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { SettingsSection } from './settings-screen-frame'
 
 export type AppUpdateCheckRowStatus = 'idle' | 'checking' | 'up-to-date' | 'failed'
 
-function checkRowValue(status: AppUpdateCheckRowStatus, lastCheckedAt: number | null, now: number) {
+function checkRowValue(
+  t: Translate,
+  status: AppUpdateCheckRowStatus,
+  lastCheckedAt: number | null,
+  now: number
+) {
   if (status === 'checking') {
-    return 'Checking…'
+    return t('settings.appUpdateSettingsRows.checking', 'Checking…')
   }
   if (status === 'up-to-date') {
-    return 'Up to date'
+    return t('settings.appUpdateSettingsRows.upToDate', 'Up to date')
   }
   if (status === 'failed') {
-    return "Couldn't check"
+    return t('settings.appUpdateSettingsRows.checkFailed', "Couldn't check")
   }
   if (lastCheckedAt === null) {
-    return 'Never'
+    return t('settings.appUpdateSettingsRows.neverChecked', 'Never')
   }
-  const ago = formatTimeAgo(lastCheckedAt, now)
-  return `Last checked ${ago === 'just now' ? ago : `${ago} ago`}`
+  const delta = now - lastCheckedAt
+  if (delta < 60_000) {
+    return t('settings.appUpdateSettingsRows.lastCheckedJustNow', 'Last checked just now')
+  }
+  const minutes = Math.max(0, Math.floor(delta / 60_000))
+  if (minutes < 60) {
+    const count = minutes
+    return count === 1
+      ? t('settings.appUpdateSettingsRows.lastCheckedMinutes_one', 'Last checked {{count}}m ago', {
+          count
+        })
+      : t(
+          'settings.appUpdateSettingsRows.lastCheckedMinutes_other',
+          'Last checked {{count}}m ago',
+          {
+            count
+          }
+        )
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    const count = hours
+    return count === 1
+      ? t('settings.appUpdateSettingsRows.lastCheckedHours_one', 'Last checked {{count}}h ago', {
+          count
+        })
+      : t('settings.appUpdateSettingsRows.lastCheckedHours_other', 'Last checked {{count}}h ago', {
+          count
+        })
+  }
+  const count = Math.floor(hours / 24)
+  return count === 1
+    ? t('settings.appUpdateSettingsRows.lastCheckedDays_one', 'Last checked {{count}}d ago', {
+        count
+      })
+    : t('settings.appUpdateSettingsRows.lastCheckedDays_other', 'Last checked {{count}}d ago', {
+        count
+      })
 }
 
-/** Settings' version row and manual check; the update row stays after the home card is dismissed. */
 export function AppUpdateSettingsRows(props: {
   installedVersion: string | null
   available: KnownAppUpdate | null
@@ -32,69 +77,52 @@ export function AppUpdateSettingsRows(props: {
   onUpdate: (url: string) => void
   onCheck: () => void
 }) {
-  const checkValue = checkRowValue(props.checkStatus, props.lastCheckedAt, props.now)
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const checkValue = checkRowValue(t, props.checkStatus, props.lastCheckedAt, props.now)
   const { available, installedVersion, onUpdate } = props
   const versionRow = available ? (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Update to Orca ${available.version}`}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    <ListRow
+      key="version"
+      title={t('settings.appUpdateSettingsRows.updateToVersion', 'Update to Orca {{version}}', {
+        version: available.version
+      })}
+      accessory={
+        <Text style={styles.actionValue}>
+          {t('settings.appUpdateSettingsRows.update', 'Update')}
+        </Text>
+      }
       onPress={() => onUpdate(available.url)}
-    >
-      <Text style={styles.rowLabel}>Update to Orca {available.version}</Text>
-      <Text style={styles.actionValue}>Update</Text>
-    </Pressable>
+    />
   ) : installedVersion ? (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>Version {installedVersion}</Text>
-    </View>
+    <ListRow
+      key="version"
+      title={t('settings.appUpdateSettingsRows.installedVersion', 'Version {{version}}', {
+        version: installedVersion
+      })}
+    />
   ) : null
   return (
-    <View style={styles.section}>
+    <SettingsSection>
       {versionRow}
-      {versionRow && <View style={styles.separator} />}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Check for updates, ${checkValue}`}
-        accessibilityState={{ busy: props.checkStatus === 'checking' }}
-        disabled={props.checkStatus === 'checking'}
-        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      <ListRow
+        key="check"
+        title={t('settings.appUpdateSettingsRows.checkUpdates', 'Check for updates')}
+        value={checkValue}
+        accessibilityLabel={t(
+          'settings.appUpdateSettingsRows.checkUpdatesStatus',
+          'Check for updates, {{status}}',
+          {
+            status: checkValue
+          }
+        )}
+        busy={props.checkStatus === 'checking'}
         onPress={props.onCheck}
-      >
-        <Text style={styles.rowLabel}>Check for updates</Text>
-        <Text style={styles.rowValue}>{checkValue}</Text>
-      </Pressable>
-    </View>
+      />
+    </SettingsSection>
   )
 }
 
-// Same panel, rows and separator as MobileSettingsSection.
-const styles = StyleSheet.create({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: { backgroundColor: colors.bgRaised },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowValue: { fontSize: typography.metaSize, color: colors.textSecondary },
-  actionValue: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})
+const styles = themedStyleSheet(() => ({
+  actionValue: { fontSize: 15, fontWeight: '600', color: colors.textPrimary }
+}))

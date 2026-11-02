@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   getLegacyManagedOrcadOwnerEnvironmentId,
   getManagedOrcadFenceEnvironmentId,
-  isEphemeralRuntimeSshOwner
+  isEphemeralRuntimeSshOwner,
+  managedOrcadServerName
 } from './managed-orcad-ssh-owner'
 
 describe('managed orcad SSH fence', () => {
@@ -10,7 +11,14 @@ describe('managed orcad SSH fence', () => {
     expect(getManagedOrcadFenceEnvironmentId({ orcadFence: { environmentId: 'env-1' } })).toBe(
       'env-1'
     )
-    expect(getManagedOrcadFenceEnvironmentId({})).toBeNull()
+    const legacyOnly = {
+      orcadFence: undefined,
+      owner: { type: 'on-demand-runtime' as const, runtimeId: 'managed-orcad:old' }
+    }
+    expect(getManagedOrcadFenceEnvironmentId({ ...legacyOnly })).toBeNull()
+    expect(
+      getManagedOrcadFenceEnvironmentId({ ...legacyOnly, orcadFence: { environmentId: 'env-2' } })
+    ).toBe('env-2')
     expect(getManagedOrcadFenceEnvironmentId(undefined)).toBeNull()
   })
 
@@ -24,5 +32,17 @@ describe('managed orcad SSH fence', () => {
     const owner = { type: 'on-demand-runtime' as const, runtimeId: 'runtime-1' }
     expect(getLegacyManagedOrcadOwnerEnvironmentId(owner)).toBeNull()
     expect(isEphemeralRuntimeSshOwner(owner)).toBe(true)
+  })
+
+  it("names a recipe VM's server after its runtime, so two VMs of one recipe never collide", () => {
+    const owner = { type: 'on-demand-runtime' as const, runtimeId: 'runtime-0123456789abcdef' }
+    expect(managedOrcadServerName({ label: 'Docker root', owner })).toBe('Docker root VM 89abcdef')
+    expect(
+      managedOrcadServerName({
+        label: 'Docker root',
+        owner: { ...owner, runtimeId: 'runtime-fedcba9876543210' }
+      })
+    ).toBe('Docker root VM 76543210')
+    expect(managedOrcadServerName({ label: 'Builder' })).toBe('Builder')
   })
 })

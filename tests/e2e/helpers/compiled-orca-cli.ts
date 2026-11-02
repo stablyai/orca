@@ -1,9 +1,6 @@
-/**
- * The bundled `orca` CLI (out/cli/index.js) run against one E2E app's runtime, as a user's shell
- * would run it: a separate process that finds the app through its userData directory.
- */
+// Run the bundled CLI as a separate process discovering this E2E runtime through its user-data directory.
 import path from 'node:path'
-import { runProcess } from '../../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 export type OrcaCliResult = {
   args: string[]

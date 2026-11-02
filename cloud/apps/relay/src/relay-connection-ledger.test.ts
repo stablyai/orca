@@ -169,4 +169,20 @@ describe('RelayConnectionLedger', () => {
       enforcedConnectionUnits: 0
     })
   })
+
+  it('books units only below the placement ceiling and releases each once', () => {
+    const ledger = new RelayConnectionLedger(6, 2)
+    const first = ledger.tryReserveBooking(2)!
+    expect(ledger.tryReserveBooking(2)).not.toBeNull()
+    expect(ledger.tryReserveBooking(2)).toBeNull()
+    expect(ledger.tryReserveControl(false)).not.toBeNull()
+    first.release()
+    first.release()
+    expect(ledger.counts().reservedConnectionUnits).toBe(1)
+    expect(ledger.canReserveBooking(100)).toBe(true)
+    ledger.tryReserveControl(false)
+    ledger.tryReserveControl(false)
+    expect(ledger.canReserveBooking(100)).toBe(false)
+  })
 })
+

@@ -1,3 +1,4 @@
+import { registerDaemonCreationFailureTests } from './daemon-server-creation-failure.test-fixture'
 import './mock-descendant-sweep'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,6 +16,7 @@ type DaemonServerInternals = {
 }
 
 describe('daemon async spawn cancellation', () => {
+  let spawned = 0
   let directory: string
   let server: DaemonServer
   let client: DaemonClient
@@ -23,6 +25,7 @@ describe('daemon async spawn cancellation', () => {
   let subprocess: ReturnType<typeof createMockSubprocess>
 
   beforeEach(async () => {
+    spawned = 0
     directory = mkdtempSync(join(tmpdir(), 'daemon-async-spawn-cancel-'))
     let markSpawnStarted: () => void = () => {}
     spawnStarted = new Promise<void>((resolve) => {
@@ -35,6 +38,7 @@ describe('daemon async spawn cancellation', () => {
       socketPath: getDaemonSocketPath(directory),
       tokenPath: join(directory, 'daemon.token'),
       spawnSubprocess: async () => {
+        spawned++
         subprocess = createMockSubprocess()
         markSpawnStarted()
         await spawnGate
@@ -53,7 +57,27 @@ describe('daemon async spawn cancellation', () => {
     releaseSpawn?.()
     client?.disconnect()
     await server?.shutdown()
+    vi.restoreAllMocks()
     rmSync(directory, { recursive: true, force: true })
+  })
+
+  registerDaemonCreationFailureTests({
+    get server() {
+      return server
+    },
+    get client() {
+      return client
+    },
+    get subprocess() {
+      return subprocess
+    },
+    get spawnStarted() {
+      return spawnStarted
+    },
+    get spawned() {
+      return spawned
+    },
+    releaseSpawn: () => releaseSpawn()
   })
 
   it.each(['cancelCreateOrAttach', 'kill'] as const)(
@@ -140,7 +164,6 @@ describe('daemon async spawn cancellation', () => {
       cols: 80,
       rows: 24
     })
-    // Only queues behind the create once that create is actually in flight.
     await spawnStarted
     const abort = new AbortController()
     const attach = client.request(
@@ -150,8 +173,7 @@ describe('daemon async spawn cancellation', () => {
       abort.signal
     )
     const daemon = server as unknown as DaemonServerInternals
-    // Attach-only used to register nothing, so the daemon could not match the
-    // cancel and the client dropped its only timeout.
+    // Attach-only preparations must remain registered so cancellation can find them.
     await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
 
     abort.abort()

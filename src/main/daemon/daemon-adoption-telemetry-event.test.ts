@@ -8,6 +8,7 @@ const {
   existsSyncMock,
   readFileSyncMock,
   getVersionMock,
+  getPathMock,
   codeIdentityMock
 } = vi.hoisted(() => ({
   trackMock: vi.fn(),
@@ -15,6 +16,7 @@ const {
   existsSyncMock: vi.fn(() => true),
   readFileSyncMock: vi.fn(),
   getVersionMock: vi.fn(() => '1.4.191'),
+  getPathMock: vi.fn((_name: string) => '/Users/alice/Library/Application Support/Orca'),
   codeIdentityMock: vi.fn(async () => 'parked')
 }))
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
@@ -25,7 +27,7 @@ vi.mock('node:fs', async (importOriginal) => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock
 }))
-// The app-side read is async on purpose: it can sit on an unanswered macOS folder prompt.
+// Async directory reads can remain pending on an unanswered macOS folder prompt.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   opendir: opendirMock
@@ -35,7 +37,7 @@ vi.mock('node:os', async (importOriginal) => ({
   homedir: () => '/Users/alice'
 }))
 vi.mock('../../shared/app-environment', () => ({
-  getAppEnvironment: () => ({ getVersion: getVersionMock })
+  getAppEnvironment: () => ({ getVersion: getVersionMock, getPath: getPathMock })
 }))
 
 import {
@@ -110,6 +112,24 @@ describe('classifyDaemonAdoptionOrigin', () => {
     })
     expect(codeIdentityMock).toHaveBeenLastCalledWith(undefined)
   })
+
+  it('reports a daemon started from the private stable copy', async () => {
+    const copies = '/Users/alice/Library/Application Support/Orca/daemon-host/macos'
+    const stableCopy = {
+      ...stalePidRecord,
+      spawnerExecPath: `${copies}/terminal-host-0f3c/app.noindex/Orca Terminal Host.app/Contents/MacOS/orca-terminal-host`
+    }
+    expect(await classifyDaemonAdoptionOrigin(stableCopy)).toMatchObject({
+      spawner_path_class: 'stable-copy'
+    })
+    expect(getPathMock).toHaveBeenCalledWith('userData')
+    getPathMock.mockImplementationOnce(() => {
+      throw new Error('AppEnvironment not initialized')
+    })
+    expect(await classifyDaemonAdoptionOrigin(stableCopy)).toMatchObject({
+      spawner_path_class: 'other'
+    })
+  })
 })
 
 describe('trackDaemonAdopted', () => {
@@ -140,8 +160,6 @@ describe('hasDaemonPtyCwdDenialDiverged', () => {
     expect(opendirMock).toHaveBeenCalledWith(DENIED_CWD)
   })
 
-  // False positives would drown the signal this event exists to measure, so every
-  // non-divergent shape must stay silent — including daemons too old to report.
   it('is false when the daemon could read the cwd or did not report one', async () => {
     expect(await hasDaemonPtyCwdDenialDiverged(DENIED_CWD, true)).toBe(false)
     expect(await hasDaemonPtyCwdDenialDiverged(DENIED_CWD, undefined)).toBe(false)
@@ -306,8 +324,6 @@ describe('reportDaemonPtyCwdVerdict', () => {
     ).resolves.toBeUndefined()
   })
 
-  // The read behind this can sit on an unanswered macOS folder prompt, and a spawn that waited
-  // for it would hold main's event loop for as long as the user leaves the sheet up.
   it('records nothing until the app-side read resolves, and the spawn need not wait', async () => {
     let release: (dir: ReturnType<typeof readableDir>) => void = () => {}
     opendirMock.mockReturnValue(

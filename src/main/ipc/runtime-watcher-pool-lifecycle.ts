@@ -1,4 +1,4 @@
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 
 export class RuntimeWatcherPoolLifecycle {
   readonly isolatedRoots = new Set<string>()
@@ -20,7 +20,7 @@ export class RuntimeWatcherPoolLifecycle {
   }
 
   quarantineOrFuse(root: string, isolated: boolean): void {
-    // Why: one quarantine attempt is the recovery budget; a second failure is fused.
+    // One quarantine attempt is the recovery budget; a second failure disables the root.
     if (isolated) {
       this.isolatedRoots.delete(root)
       this.failedQuarantineRoots.add(root)

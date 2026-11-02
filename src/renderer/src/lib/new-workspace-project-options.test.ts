@@ -436,8 +436,7 @@ describe('findActionableFolderProjectGroup', () => {
     ).toBe(folderGroups[1])
   })
 
-  // Regression: the composer's initial-group restoration skipped the actionable-host
-  // check, so a removed host could still back a folder workspace.
+  // Draft restoration must also reject removed/unreachable folder hosts.
   it('rejects a folder group whose host is unavailable', () => {
     expect(
       findActionableFolderProjectGroup({

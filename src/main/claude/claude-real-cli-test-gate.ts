@@ -6,9 +6,8 @@ export type ClaudeCliProbeResult = { status: number | null; stdout: string }
 export type RealClaudeAuthStatus = { loggedIn?: boolean; projectsDirectory?: string }
 
 export type RealClaudeCliGate = {
-  /** Null when the real-CLI suite may run; otherwise why it is skipped. */
+  /** Null permits the real-CLI suite to run. */
   skipReason: string | null
-  /** The CLI's own account report; null when skipped or unreadable. */
   authStatus: RealClaudeAuthStatus | null
 }
 
@@ -49,8 +48,7 @@ export function resolveRealClaudeCliGate(
   env: NodeJS.ProcessEnv,
   runClaude: (args: readonly string[]) => ClaudeCliProbeResult
 ): RealClaudeCliGate {
-  // Why before any probe: an installed, signed-in CLI is not consent to spend turns on that
-  // account and write transcripts into its home from a broad local test run.
+  // Require opt-in before probing an account whose tests spend turns and write transcripts.
   if (env[REAL_CLAUDE_CLI_TEST_ENV] !== '1') {
     return {
       skipReason: `set ${REAL_CLAUDE_CLI_TEST_ENV}=1 to run against the real claude CLI`,

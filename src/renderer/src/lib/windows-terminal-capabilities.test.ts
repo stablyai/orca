@@ -15,6 +15,7 @@ import {
   useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
+import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
 
 describe('Windows terminal capability host ownership', () => {
   it.each([
@@ -298,13 +299,7 @@ describe('windows terminal capabilities', () => {
         result: resultByMethod[args.method]
       }
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: runtimeEnvironmentCall
-        }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeEnvironmentCall })
 
     await expect(
       loadWindowsTerminalCapabilities({

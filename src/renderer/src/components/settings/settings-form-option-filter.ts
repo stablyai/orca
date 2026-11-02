@@ -40,7 +40,11 @@ export function filterTerminalThemeOptions(
   )
 }
 
-export function filterFontSuggestions(suggestions: readonly string[], query: string): string[] {
+export function filterFontSuggestions(
+  suggestions: readonly string[],
+  query: string,
+  defaultOptionLabel = ''
+): string[] {
   const normalizedQuery = normalizeSettingsFormOptionQuery(query)
   if (normalizedQuery === null) {
     return []
@@ -52,7 +56,7 @@ export function filterFontSuggestions(suggestions: readonly string[], query: str
   const startsWith: string[] = []
   const includes: string[] = []
   for (const font of suggestions) {
-    const normalizedFont = font.toLowerCase()
+    const normalizedFont = (font || defaultOptionLabel).toLowerCase()
     if (normalizedFont.startsWith(normalizedQuery)) {
       startsWith.push(font)
     } else if (normalizedFont.includes(normalizedQuery)) {

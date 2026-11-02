@@ -25,7 +25,7 @@ export class CodexJournalCompactions {
     private readonly sink: StructuredAgentSessionEventSink,
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly attributionFor: CodexRowAttribution,
-    /** Evidence for a conversation command the turn carries; its marker is the command's result. */
+    /** Records compaction evidence for the command carried by this turn. */
     private readonly compacted: (turnId: string) => void
   ) {}
 

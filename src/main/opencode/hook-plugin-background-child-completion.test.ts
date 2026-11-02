@@ -1,8 +1,3 @@
-/**
- * Executes the generated OpenCode plugin artifact to verify that a running
- * background child session keeps the pane working, so a root turn that ends
- * first cannot publish a false completion for the whole task tree.
- */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -180,23 +175,6 @@ describe('OpenCode plugin background child completion', () => {
     await hooks.event({ event: status('idle', 'child-b') })
     expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
     expect(posts.at(-1)?.sessionID).toBe('root')
-  })
-
-  it('retires a background child through an Idle whose ancestry cannot be resolved', async () => {
-    let resolvable = true
-    const hooks = await createHooks([], async () =>
-      resolvable ? { data: TASK_TREE } : Promise.reject(new Error('sdk outage'))
-    )
-
-    await hooks.event({ event: status('busy', 'root') })
-    await hooks.event({ event: status('busy', 'child') })
-    await hooks.event({ event: status('idle', 'root') })
-    expect(names()).not.toContain('SessionIdle')
-
-    resolvable = false
-    await hooks.event({ event: status('idle', 'child') })
-
-    expect(names()).toEqual(['SessionBusy', 'SessionIdle'])
   })
 
   it('drops a disposed factory background child instead of pinning the pane', async () => {

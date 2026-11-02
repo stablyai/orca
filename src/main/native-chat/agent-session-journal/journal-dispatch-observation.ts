@@ -1,14 +1,13 @@
 import type {
   AgentJournalDispatchState,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type AgentJournalDispatchObservation = {
   state: AgentJournalDispatchState
   recovered: boolean
 }
 
-/** Returns the latest write-ahead submission for the execution fence. */
 export function latestJournalDispatchObservation(
   journal: {
     submissions: () => readonly AgentJournalSubmission[]

@@ -12,7 +12,6 @@ type UseFileExplorerBackgroundMenuResult = {
   handleExplorerBackgroundDoubleClick: (event: React.MouseEvent<HTMLDivElement>) => void
 }
 
-/** Empty-space interactions of the explorer surface: background menu and new-file double click. */
 export function useFileExplorerBackgroundMenu({
   worktreePath,
   displayDepth = 0,

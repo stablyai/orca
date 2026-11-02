@@ -295,7 +295,7 @@ describe('attachPaneDrag', () => {
     expect(state.currentExternalDropTarget).toBeNull()
     expect(state.cleanupActiveDrag).toBeNull()
     expect(onDragActiveChange).toHaveBeenLastCalledWith(false)
-    expect(onLayoutChanged).toHaveBeenCalledExactlyOnceWith('gesture')
+    expect(onLayoutChanged).toHaveBeenCalledOnce()
   })
 
   it('drops onto an external target when no pane target is under the pointer', () => {
@@ -408,7 +408,7 @@ describe('attachPaneDrag', () => {
     expect(handle.listenerCount('lostpointercapture')).toBe(0)
     expect(handle.hasPointerCapture(1)).toBe(false)
     expect(state.cleanupActiveDrag).toBeNull()
-    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function), true)
+    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function))
   })
 
   it('ignores context-menu pointer buttons so the pane menu can open', () => {

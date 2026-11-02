@@ -1,9 +1,7 @@
 import type { PRCheckDetail } from './github/check-types'
 
-// Why: `neutral`/`skipped` carry no signal, so they sink below `success` — otherwise a
-// wall of skipped jobs buries the passing checks a reviewer actually reads.
-// A Map, not an object: conclusions arrive from provider payloads, and an object
-// would resolve `constructor`/`toString` off the prototype into a non-number rank.
+// Neutral/skipped carry no signal and must sink below success. Map provider values to avoid prototype-name ranks
+// (e.g. constructor/toString resolving as functions on plain objects).
 const CHECK_SEVERITY_RANK = new Map<string, number>([
   ['failure', 0],
   ['timed_out', 0],

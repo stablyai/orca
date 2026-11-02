@@ -1,11 +1,12 @@
 import { useCallback } from 'react'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getJiraSelfUser } from '@/components/jira-self-user'
 import { JiraUserPicker, type JiraUserPickerFixedOption } from '@/components/jira-user-picker'
-import { hasJiraAssigneeCreateField } from '@/components/task-page-jira-create-fields'
-import { getJiraProjectSelectionKey } from '@/components/task-page-jira-project-selection'
+import { hasJiraAssigneeCreateField } from '@/components/task-page/jira/task-page-jira-create-fields'
+import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
 import { jiraListAssignableUsersForProject } from '@/runtime/runtime-jira-client'
 import { translate } from '@/i18n/i18n'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export function TaskPageJiraIssueAssigneeField({
   model
@@ -34,7 +35,7 @@ export function TaskPageJiraIssueAssigneeField({
     setNewJiraIssueAssignee,
     newJiraIssueSubmitting
   } = model
-  const providerSettings = jiraTaskSourceContext ?? settings
+  const providerSettings = jiraTaskSourceContext ?? defaultScopeSource(settings)
   const projectKey = newJiraIssueTargetProject?.key
   const projectSiteId = newJiraIssueTargetProject?.siteId
   const searchAssignableUsers = useCallback(

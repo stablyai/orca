@@ -5,7 +5,7 @@ import { createEditorSaveQueue } from '../editor-save-queue'
 import { canAutoSaveOpenFile } from '../editor-autosave'
 
 const { writeFile } = vi.hoisted(() => ({ writeFile: vi.fn() }))
-vi.mock('@/runtime/runtime-file-client', () => ({ writeRuntimeFile: writeFile }))
+vi.mock('@/runtime/runtime-file-mutation-client', () => ({ writeRuntimeFile: writeFile }))
 
 it('blocks drafts, dirty state, autosave and explicit writes for paged previews', async () => {
   const store = createEditorStore()

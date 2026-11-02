@@ -27,9 +27,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
-}))
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
 vi.mock('sonner', () => ({
   toast: {

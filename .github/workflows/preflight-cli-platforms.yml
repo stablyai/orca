@@ -2,13 +2,14 @@ name: Preflight CLI platforms
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/main/ipc/preflight*'
       - 'src/main/ipc/agent-detection-shell-path.ts'
       - 'src/main/ipc/command-path-resolver*'
       - 'src/main/preflight/**'
       - 'src/main/startup/*shell*'
-      - 'src/shared/child-process/**'
+      - 'src/packages/process-host/**'
       - '.github/actions/install-node-dependencies/**'
       - '.github/workflows/preflight-cli-platforms.yml'
   workflow_dispatch:
@@ -22,6 +23,7 @@ concurrency:
 
 jobs:
   preflight:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Preflight CLI (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -53,6 +55,6 @@ jobs:
           src/main/startup/hydrate-shell-path.windows.test.ts
           src/main/startup/login-shell-environment.test.ts
           src/main/runtime/rpc/methods/preflight.test.ts
-          src/shared/child-process/process-tree-termination.test.ts
-          src/shared/child-process/run-process.test.ts
-          src/shared/child-process/run-process-termination-failure.test.ts
+          src/packages/process-host/src/process-tree-termination.test.ts
+          src/packages/process-host/src/run-process.test.ts
+          src/packages/process-host/src/run-process-termination-failure.test.ts

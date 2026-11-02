@@ -5,7 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
-import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalidation'
+import {
+  SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS,
+  useSetupScriptPromptRevalidation
+} from './useSetupScriptPromptRevalidation'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 
@@ -169,8 +172,7 @@ describe('useSetupScriptPromptRevalidation', () => {
 
   it('re-inspects when a worktree activates while the prompt shows no effective setup', async () => {
     const requestRevalidation = vi.fn()
-    // Mirror the card's real lifecycle: promptState is null on mount, so the
-    // activation effect does not fire until a negative result has been cached.
+    // Activation revalidation waits until a negative inspection result is cached.
     const rerender = await render({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -229,6 +231,25 @@ describe('useSetupScriptPromptRevalidation', () => {
     expect(requestRevalidation).toHaveBeenCalledTimes(1)
   })
 
+  it('re-inspects on window focus while the repo distro was stopped, so the card returns once it runs', async () => {
+    const requestRevalidation = vi.fn()
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: {
+        status: 'distro-stopped',
+        repoId: 'repo-1',
+        repoHostIdentity: getRepoHostIdentityForParts('repo-1', 'local')
+      },
+      requestRevalidation
+    })
+
+    await dispatchWindowFocus()
+
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+  })
+
   it('replays a worktree activation that landed while the prompt state was unsettled', async () => {
     const requestRevalidation = vi.fn()
     const rerender = await render({
@@ -238,8 +259,7 @@ describe('useSetupScriptPromptRevalidation', () => {
       promptState: missingSetup('repo-1'),
       requestRevalidation
     })
-    // The card nulls its state for the whole inspection round trip, so the
-    // activation lands while nothing is revalidatable.
+    // Model activation during the card’s inspection round trip, when its prompt state is null.
     await rerender({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -259,6 +279,34 @@ describe('useSetupScriptPromptRevalidation', () => {
     })
 
     expect(requestRevalidation).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-inspects each worktree once on first activation, not on every revisit', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const requestRevalidation = vi.fn()
+    await render({
+      activeRepo: GIT_REPO,
+      isDismissed: false,
+      sidebarOpen: true,
+      promptState: missingSetup('repo-1'),
+      requestRevalidation
+    })
+
+    for (let round = 0; round < 10; round += 1) {
+      await setActiveWorktree('worktree-2')
+      await setActiveWorktree('worktree-1')
+    }
+    expect(requestRevalidation).toHaveBeenCalledTimes(1)
+
+    await setActiveWorktree('worktree-3')
+    expect(requestRevalidation).toHaveBeenCalledTimes(2)
+
+    now.mockReturnValue(1_000_000 + SETUP_PROMPT_REVISIT_REVALIDATION_INTERVAL_MS)
+    await setActiveWorktree('worktree-1')
+    expect(requestRevalidation).toHaveBeenCalledTimes(3)
+    await setActiveWorktree('worktree-2')
+    expect(requestRevalidation).toHaveBeenCalledTimes(3)
+    now.mockRestore()
   })
 
   it('re-inspects when the repo runtime reconnects', async () => {

@@ -1,7 +1,7 @@
 import type { RuntimeEnvironmentStatus } from './runtime-status'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
 
@@ -9,8 +9,7 @@ export async function refreshRuntimeEnvironmentStatus(
   environmentId: string,
   timeoutMs: number,
   publish: (status: RuntimeEnvironmentStatus) => void,
-  // Why separate: a snapshot carries the host's own verdict, so it goes through
-  // applyRuntimeHostStatusSnapshot — the single place that decides when status is nulled.
+  // Snapshots carry the host verdict; applyRuntimeHostStatusSnapshot alone decides whether to null status.
   applySnapshot: (snapshot: RuntimeHostStatusSnapshot) => void
 ): Promise<boolean> {
   const expectedEnvironmentRevision = getRuntimeEnvironmentRevision(environmentId)

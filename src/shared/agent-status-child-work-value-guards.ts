@@ -28,8 +28,7 @@ function breaksOneLineText(code: number): boolean {
   return isControlCharCode(code) || code === 0x85 || code === 0x2028 || code === 0x2029
 }
 
-/** The one text normalizer for a child record: the status-row preview, with anything that would
- *  break a one-line row folded to a space and the cut's edges trimmed. */
+/** Share status-row preview normalization; fold all rendered line breaks to spaces and trim cut edges. */
 export function normalizeChildWorkText(raw: unknown, maxLength: number): string | undefined {
   const preview = normalizeOptionalField(raw, maxLength)
   if (preview === undefined) {

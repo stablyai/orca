@@ -1,10 +1,6 @@
 import type { AiActionId } from './source-control-ai-actions'
 
-/**
- * Registering a variable a hover card cannot describe is a compile error: the
- * element type is keyed off `SOURCE_CONTROL_ACTION_VARIABLE_INFO`, so chips can
- * never index a missing entry.
- */
+/** Key the registry off hover descriptions so an undocumented chip fails compilation. */
 export const SOURCE_CONTROL_ACTION_VARIABLES: Record<AiActionId, SourceControlActionVariable[]> = {
   commitMessage: ['basePrompt', 'branch', 'stagedFiles', 'stagedPatch', 'linkedIssue'],
   pullRequest: [
@@ -93,32 +89,16 @@ export const SOURCE_CONTROL_ACTION_VARIABLE_INFO = {
 
 export type SourceControlActionVariable = keyof typeof SOURCE_CONTROL_ACTION_VARIABLE_INFO
 
-/**
- * Issue numbers are positive integers on every supported provider, so anything
- * else (negative, zero, fractional, non-finite) is corrupt metadata rather than
- * a renderable issue reference — `Fixes #-7` is worse output than `Fixes #`.
- * The safe-integer bound also keeps the rendering in decimal notation: `String`
- * switches to exponent form (`1e+21`) above it.
- */
+/** Positive safe integers avoid corrupt issue references and String’s exponent notation at 1e+21. */
 export function isLinkedIssueNumber(linkedIssue: unknown): linkedIssue is number {
   return typeof linkedIssue === 'number' && Number.isSafeInteger(linkedIssue) && linkedIssue > 0
 }
 
-/**
- * Render the workspace-linked GitHub issue for template substitution. Anything
- * that is not a positive integer becomes `''` so the token expands to nothing
- * instead of leaking into the prompt.
- */
 export function formatLinkedIssueTemplateValue(linkedIssue: number | null | undefined): string {
   return isLinkedIssueNumber(linkedIssue) ? String(linkedIssue) : ''
 }
 
-/**
- * Attach a resolved issue number to a draft context. Returns the context untouched
- * when nothing resolves, so unlinked workspaces keep their existing context shape.
- * The `linkedIssue`-bearing constraint keeps the attach off contexts that do not
- * declare the field (branch-name generation), where it would be silently unread.
- */
+/** Keep unlinked context shape unchanged. The linkedIssue constraint excludes contexts (e.g. branch naming) that never read it. */
 export function withLinkedIssueDraftContext<T extends { linkedIssue?: number | null }>(
   context: T,
   linkedIssue: number | null | undefined

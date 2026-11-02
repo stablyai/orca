@@ -9,7 +9,7 @@ import type {
   RuntimeHostStatusSnapshot
 } from '../../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS,
   useNativeChatHostOutage
@@ -170,7 +170,6 @@ describe('useNativeChatHostOutage', () => {
       (id: string) => entry(id, { verification: 'unavailable', transport: 'unknown' }),
       true
     ],
-    // Auth or protocol refusals turn a reconnect away the same way, so none is offered.
     ['refused', refused, false]
   ])('says a %s host is offline at once', (_name, offline, canReconnect) => {
     const { result } = renderHook(() => useNativeChatHostOutage(remote))

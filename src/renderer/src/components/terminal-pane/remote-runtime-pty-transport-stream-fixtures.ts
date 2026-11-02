@@ -27,7 +27,9 @@ type SubscribePayload = {
     desktopViewportClaims?: 1
     outputPause?: 1
     writeUnavailable?: 1
+    inputAck?: 1
   }
+  inputSessionId?: string
 }
 
 /** Frame-level emitters/readers for the multiplex stream a remote PTY transport talks to. */

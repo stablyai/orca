@@ -22,8 +22,7 @@ function hasFilenameExtension(query: string): boolean {
   return /(?:^|[\\/])[^\\/]+\.[^\\/]+$/.test(query.trim())
 }
 
-// Why: multi-word text without path or filename syntax cannot overtake ranking
-// as a file match, so callers may treat its search ranking as already final.
+// Without path/extension syntax, multi-word queries have settled search precedence over file matches.
 export function isUnambiguousSearchQuery(query: string): boolean {
   const trimmed = query.trim()
   return /\s/.test(trimmed) && !hasPathSeparator(trimmed) && !hasFilenameExtension(trimmed)

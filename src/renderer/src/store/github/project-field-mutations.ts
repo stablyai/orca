@@ -8,8 +8,8 @@ import type {
 } from '../../../../shared/github/project-types'
 import type { GitHubProjectMutationResult } from '../../../../shared/github/project-result-types'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { projectViewSourceScope, settingsForProjectViewCacheKey } from './cache-identity'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { projectViewCacheKeyTarget, projectViewSourceScope } from './cache-identity'
 import { applyRowPatch, optimisticFieldValueFromMutation } from './project-cache'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
 
@@ -57,7 +57,7 @@ export function createProjectFieldActions(
       delete fields[fieldId]
     }
     applyRowPatch(set, cacheKey, rowId, { ...row, fieldValuesByFieldId: fields })
-    const target = getActiveRuntimeTarget(settingsForProjectViewCacheKey(get().settings, cacheKey))
+    const target = projectViewCacheKeyTarget(cacheKey)
     const args = { projectId: table.project.id, host: table.project.host, itemId: rowId, fieldId }
     let result: GitHubProjectMutationResult
     try {
@@ -70,7 +70,7 @@ export function createProjectFieldActions(
               { ...args, value },
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.updateProjectItemField({ ...args, value })
+          : await window.api.gh.updateProjectItemField({ ...args, value, wakeWslDistro: true })
         : target.kind === 'environment'
           ? await callRuntimeRpc<GitHubProjectMutationResult>(
               target,
@@ -78,7 +78,7 @@ export function createProjectFieldActions(
               args,
               { timeoutMs: 30_000 }
             )
-          : await window.api.gh.clearProjectItemField(args)
+          : await window.api.gh.clearProjectItemField({ ...args, wakeWslDistro: true })
     } catch (error) {
       result = {
         ok: false,
@@ -123,7 +123,7 @@ export function createProjectFieldActions(
   ): Promise<GitHubProjectMutationResult> => {
     const table = get().projectViewCache[cacheKey]?.data
     const key = JSON.stringify([
-      projectViewSourceScope(settingsForProjectViewCacheKey(get().settings, cacheKey)),
+      projectViewSourceScope(projectViewCacheKeyTarget(cacheKey)),
       githubProjectHost(table?.project.host).toLowerCase(),
       table?.project.id ?? cacheKey,
       rowId,

@@ -18,10 +18,13 @@ import {
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+import {
+  buildPosixScrubSafeEnvRestoreLines,
+  buildWindowsScrubSafeEnvRestoreLines
+} from '../../shared/agent-hook-scrub-safe-env'
 import {
   applyManagedDshPatch,
   isDshPatchFileUnappendable,
@@ -47,32 +50,23 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: same scrub as POSIX — restore the canonical names from their aliases first.
-      'if not defined ORCA_PANE_KEY if defined ORCA_AGENT_PANE set "ORCA_PANE_KEY=%ORCA_AGENT_PANE%"',
-      'if not defined ORCA_AGENT_LAUNCH_TOKEN if defined ORCA_AGENT_LAUNCH set "ORCA_AGENT_LAUNCH_TOKEN=%ORCA_AGENT_LAUNCH%"',
+      // Restore DSH-scrubbed KEY/TOKEN variables before any guard or spool code reads them.
+      ...buildWindowsScrubSafeEnvRestoreLines(),
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('dsh'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
 
   return [
     '#!/bin/sh',
-    // Why first: DSH's shell executor drops every env var whose NAME contains KEY, TOKEN,
-    // SECRET or PASSWORD before the hook starts, which takes ORCA_PANE_KEY and
-    // ORCA_AGENT_LAUNCH_TOKEN with it. Orca mirrors both onto scrub-safe aliases at spawn
-    // (see agent-hook-scrub-safe-env.ts); restore the canonical names from them so every
-    // line below — including the shared spool and post builders — is unchanged.
-    ': "${ORCA_PANE_KEY:=${ORCA_AGENT_PANE:-}}"',
-    ': "${ORCA_AGENT_LAUNCH_TOKEN:=${ORCA_AGENT_LAUNCH:-}}"',
-    'export ORCA_PANE_KEY ORCA_AGENT_LAUNCH_TOKEN',
+    // DSH scrubs KEY/TOKEN variables; recover canonical names from the aliases set at spawn.
+    ...buildPosixScrubSafeEnvRestoreLines(),
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('dsh'),
-    // Why: the endpoint file holds the live port/token; a PTY that outlived an Orca
-    // restart carries stale env, so source it to reach the new server.
+    // Refresh endpoint credentials for PTYs that outlive an Orca restart.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -88,7 +82,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
-/** '' when the file is absent (both are created lazily), null when it exists but cannot be read. */
+/** Distinguish absent files ('') from unreadable files (null). */
 function readTextOrAbsent(path: string): string | null {
   try {
     return readFileSync(path, 'utf-8')
@@ -97,7 +91,6 @@ function readTextOrAbsent(path: string): string | null {
   }
 }
 
-/** null for anything that is not parseable JSON; the caller reads that as "no events". */
 function parseJsonOrNull(text: string): unknown {
   try {
     return JSON.parse(text)
@@ -108,12 +101,10 @@ function parseJsonOrNull(text: string): unknown {
 
 function writePatchText(configPath: string, text: string): void {
   mkdirSync(dirname(configPath), { recursive: true })
-  // Why writeHooksJson: it owns the temp+rename and the rolling .bak this file needs too.
-  // Why preserveMode: an owner-only patch file must not widen to the umask default on rewrite.
+  // Reuse atomic replacement and backups while preserving owner-only permissions.
   writeHooksJson(configPath, {}, { serialized: text, preserveMode: true })
 }
 
-/** Why one constant: status has to say exactly what install said, on every later read. */
 const FLOW_STYLE_DETAIL =
   'The DSH home patch is a flow-style sequence ([…]); rewrite it as a block sequence (one `- ` entry per line) so Orca can add its hooks without breaking it'
 
@@ -135,8 +126,7 @@ function buildStatus(
   if (managedText === null) {
     return status(configPath, 'error', 'Could not read Orca managed hooks file')
   }
-  // Why before the pointer check: a refused file carries no managed region, so the pointer
-  // path would report a bare `not_installed` and drop the one detail that says why.
+  // Check refusal first: an absent managed pointer would otherwise hide the actionable error.
   if (isDshPatchFileUnappendable(patchText)) {
     return status(configPath, 'error', FLOW_STYLE_DETAIL)
   }
@@ -158,15 +148,12 @@ function buildStatus(
   if (missing.length === 0) {
     return status(configPath, 'installed', null, true)
   }
-  // Why the split: nothing present is an uninstalled agent; some present is a broken install,
-  // and naming the gap is the only way a user can tell those apart.
   return present.size === 0
     ? status(configPath, 'not_installed', null)
     : status(configPath, 'partial', `Managed hook missing for events: ${missing.join(', ')}`, true)
 }
 
-/** Installs Orca's status hooks into DSH. See `docs/reference/dsh-harness-integration.md`
- *  for the profile/patch-layer model and the env-scrub finding the aliases work around. */
+/** DSH patch-layer and env-scrub constraints: docs/reference/dsh-harness-integration.md. */
 export class DshHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getDshManagedScriptPath(), getManagedScript())
@@ -190,8 +177,7 @@ export class DshHookService {
     }
     const scriptPath = getDshManagedScriptPath()
     const managedHooksPath = getDshManagedHooksPath()
-    // Write the script and the managed hooks file first so the patch layer never points at
-    // files that do not exist yet — a bridge that cannot read its config runs no hooks.
+    // Publish dependencies before the patch layer so it cannot reference missing files.
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(
       managedHooksPath,
@@ -200,8 +186,6 @@ export class DshHookService {
     )
     const nextText = applyManagedDshPatch(patchText, managedHooksPath)
     if (nextText === null) {
-      // Why refuse rather than edit: YAML forbids a block entry after a flow sequence, so
-      // appending here would leave DSH unable to parse the user's own patch layer either.
       return status(configPath, 'error', FLOW_STYLE_DETAIL)
     }
     if (nextText !== patchText) {
@@ -210,7 +194,6 @@ export class DshHookService {
     return this.getStatus()
   }
 
-  /** Install on an SSH execution host, where DSH's shell contract is always POSIX. */
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getDshRemoteConfigPath(remoteHome)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/dsh-hook.sh`
@@ -244,7 +227,6 @@ export class DshHookService {
     if (changed) {
       writePatchText(configPath, nextText)
     }
-    // Why force: the file is Orca's own and may already be gone; its absence is the goal.
     rmSync(getDshManagedHooksPath(), { force: true })
     return this.getStatus()
   }

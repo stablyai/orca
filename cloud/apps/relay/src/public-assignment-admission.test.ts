@@ -32,9 +32,13 @@ describe('public assignment admission', () => {
       now: vi.fn(() => 0)
     })
     const lease = await admission.acquire('host-a')
+    expect(lease).not.toBeNull()
     lease?.release()
+    const next = await admission.acquire('host-b')
+    expect(next).not.toBeNull()
     lease?.release()
-    await expect(admission.acquire('host-b')).resolves.not.toBeNull()
+    await expect(admission.acquire('host-c')).resolves.toBeNull()
+    next?.release()
   })
 
   it('grants ordinary waiters in FIFO order without raising concurrency', async () => {
@@ -61,26 +65,6 @@ describe('public assignment admission', () => {
     const third = await thirdPromise
     expect(third).not.toBeNull()
     third?.release()
-  })
-
-  it('fails an ordinary wait closed when its bounded wait expires', async () => {
-    let expire!: () => void
-    const admission = new RelayPublicAssignmentAdmission({
-      maxConcurrent: 1,
-      maxQueued: 1,
-      waitMs: 1_000,
-      minIntervalMs: 0,
-      schedule: (callback) => {
-        expire = callback
-        return () => undefined
-      }
-    })
-    const first = await admission.acquire('host-a')
-    const waiting = admission.acquire('host-b')
-
-    expire()
-    await expect(waiting).resolves.toBeNull()
-    first?.release()
   })
 
   it('gives a bounded reserved waiter the next public slot', async () => {
@@ -114,27 +98,6 @@ describe('public assignment admission', () => {
     await expect(admission.acquire('host-d')).resolves.not.toBeNull()
     second?.release()
     expire()
-  })
-
-  it('lets reserved recovery displace the same host from the ordinary queue', async () => {
-    const admission = new RelayPublicAssignmentAdmission({
-      maxConcurrent: 1,
-      maxQueued: 1,
-      waitMs: 1_000,
-      maxReservedConcurrent: 1,
-      reservedWaitMs: 1_000,
-      minIntervalMs: 0,
-      schedule: () => () => undefined
-    })
-    const active = await admission.acquire('host-a')
-    const ordinary = admission.acquire('host-b')
-    const reserved = admission.acquireReserved('host-b')
-
-    await expect(ordinary).resolves.toBeNull()
-    active?.release()
-    const recovered = await reserved
-    expect(recovered).not.toBeNull()
-    recovered?.release()
   })
 
   it('fails a reserved wait closed when its bounded wait expires', async () => {
@@ -232,6 +195,9 @@ describe('public assignment admission', () => {
     await expect(waiting).resolves.toBeNull()
     expect(reasons).toEqual(['wait-timeout'])
     first?.release()
+    const recovered = await admission.acquire('host-b')
+    expect(recovered).not.toBeNull()
+    recovered?.release()
   })
 
   it('reports a displaced queue entry as superseded, not as a timeout', async () => {

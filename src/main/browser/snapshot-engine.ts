@@ -12,9 +12,7 @@ export type RefEntry = {
   role: string
   name: string
   sessionId?: string
-  // Why: when multiple elements share the same role+name, nth tracks which
-  // occurrence this ref represents (1-indexed). Used during stale ref recovery
-  // to disambiguate duplicates.
+  // One-based role/name occurrence for stale-reference recovery.
   nth?: number
 }
 
@@ -47,20 +45,13 @@ export async function buildSnapshot(
 
   walkTree(root, nodeById, 0, entries, () => refCounter++)
 
-  // Why: many modern SPAs use styled <div>s, <span>s, and custom elements as
-  // interactive controls without proper ARIA roles. These elements are invisible
-  // to the accessibility tree walk above but are clearly interactive (cursor:pointer,
-  // onclick, tabindex, contenteditable). This DOM query pass discovers them and
-  // promotes them to interactive refs so the agent can interact with them.
   const cursorInteractiveEntries = await findCursorInteractiveElements(sendCommand, entries)
   for (const cie of cursorInteractiveEntries) {
     cie.ref = `@e${refCounter++}`
     entries.push(cie)
   }
 
-  // Why: cross-origin iframes have their own AX trees accessible only through
-  // their dedicated CDP session. Append their elements after the parent tree
-  // so the agent can see and interact with iframe content.
+  // Cross-origin iframe accessibility trees require their own CDP sessions.
   const iframeRefSessions = new Map<string, string>()
   if (iframeSessions && makeIframeSender && iframeSessions.size > 0) {
     for (const [_frameId, sessionId] of iframeSessions) {
@@ -95,9 +86,6 @@ export async function buildSnapshot(
   const refs: BrowserSnapshotRef[] = []
   const lines: string[] = []
 
-  // Why: when multiple elements share the same role+name (e.g. 3 "Submit"
-  // buttons), the agent can't distinguish them from text alone. Appending a
-  // disambiguation suffix like "(2nd)" lets the agent refer to duplicates.
   const nameCounts = new Map<string, number>()
   const nameOccurrence = new Map<string, number>()
   for (const entry of entries) {

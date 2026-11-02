@@ -23,8 +23,7 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
-  // Why: the composer picks its submit modifier off the user agent; pin the non-Mac
-  // branch so the test drives Ctrl+Enter regardless of the runner's platform.
+  // Pin non-Mac userAgent so Ctrl+Enter is tested consistently across runner platforms.
   vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('X11; Linux x86_64')
   container = document.createElement('div')
   document.body.appendChild(container)

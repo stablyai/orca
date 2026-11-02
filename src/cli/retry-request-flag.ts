@@ -5,11 +5,7 @@ import {
   RETRY_REQUEST_ID_GUIDANCE
 } from '../shared/orchestration-retry-request-id'
 
-/**
- * `--retry-request` carries the mutation identity that makes a replay idempotent. A damaged value
- * must never fall through to `undefined`, because the client would then mint a fresh identity and
- * re-apply a mutation that may already have taken effect (#15180).
- */
+/** Reject damaged identities: falling back to a fresh id could replay an already-applied mutation. */
 export function readRetryRequestFlag(flags: Map<string, string | boolean>): string | undefined {
   const value = flags.get('retry-request')
   rejectValuelessFlag(value, 'retry-request')

@@ -11,7 +11,7 @@ import {
   TEARDOWN_CURRENT,
   turnItem
 } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
-import { AgentSessionRecoveryCapsule } from '../../../src/main/runtime/agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from '../../../src/main/runtime/agent-session/records/agent-session-recovery-capsule'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // A release whose marker parser still requires the chat's newest message id.
@@ -23,9 +23,13 @@ test('an older build reads the restart offer this build records at quit', async 
     // This build: the offer teardown takes for a chat whose turn was running.
     const marker = structuredAgentSessionWorkingAtStop({
       sessionId: SESSION,
-      session: { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } },
+      session: {
+        journal: journal([turnItem('turn-1', 'running')]),
+        child: { fence: 1, phase: 'ready' }
+      },
       getRecord: () => record(),
       childWork: () => undefined,
+      childWorkOpen: () => false,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
       now: NOW

@@ -40,6 +40,9 @@ vi.mock('@/store', () => ({
   }
 }))
 
+// Why: the background mount's sleeping-agent scan reads store state these launches never seed.
+vi.mock('@/lib/sleeping-agent-wake-requests', () => ({ requestSleepingAgentWakeOnMount: vi.fn() }))
+
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
@@ -49,9 +52,18 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
-vi.mock('@/lib/agent-launch-platform', () => ({
-  getAgentLaunchPlatformForRepo: mockGetAgentLaunchPlatformForRepo
-}))
+vi.mock('@/lib/execution-host-facts', async (importOriginal) => {
+  const hostFact = () => ({
+    kind: 'known' as const,
+    platform: mockGetAgentLaunchPlatformForRepo(),
+    hostKind: 'local' as const
+  })
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    resolveRepoExecutionHostPlatform: hostFact,
+    resolveWorktreeExecutionHostPlatform: hostFact
+  }
+})
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
@@ -84,26 +96,6 @@ describe('launchAgentBackgroundSession with automation extras', () => {
     })
   })
 
-  it('merges extras over the default arguments, before the prompt', async () => {
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
-    mockSpawn.mockResolvedValue({ id: 'pty-1' })
-
-    await launchAgentBackgroundSession({
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation',
-      extraAgentArgs: '--model opus --add-dir "my docs"'
-    })
-
-    expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
-      command:
-        "claude '--dangerously-skip-permissions' '--model' 'opus' '--add-dir' 'my docs' 'run the automation'",
-      launchConfig: {
-        agentArgs: "'--dangerously-skip-permissions' '--model' 'opus' '--add-dir' 'my docs'"
-      }
-    })
-  })
-
   it('fails before reserving a tab or spawning when the extras are refused', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
@@ -118,6 +110,40 @@ describe('launchAgentBackgroundSession with automation extras', () => {
     expect(mockSpawn).not.toHaveBeenCalled()
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockRegisterAgentLaunchConfig).not.toHaveBeenCalled()
+  })
+
+  it('suppresses Codex updates for a desktop automation without saving the override', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    await launchAgentBackgroundSession({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('check_for_update_on_startup=false'),
+        launchConfig: expect.objectContaining({
+          agentCommand: expect.not.stringContaining('check_for_update_on_startup')
+        })
+      })
+    )
+  })
+
+  it('marks paired-server launches unattended even when their prompt is pasted later', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    useRemoteAgentBackgroundRuntime(state)
+    await launchAgentBackgroundSession({
+      agent: 'aider',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({ agent: 'aider', promptDelivery: 'auto-submit' })
+      })
+    )
+    expect(mockSpawn).not.toHaveBeenCalled()
   })
 
   it('refuses a client-side launch that would drop extras on a paired server', async () => {

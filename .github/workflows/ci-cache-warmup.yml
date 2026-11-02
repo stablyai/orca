@@ -9,13 +9,19 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
+      - '.github/workflows/ci-cache-warmup-platform-jobs.yml'
+      - '.github/workflows/ci-cache-warmup-platforms.yml'
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/actions/prepare-native-runtime/**'
+      - '.github/actions/prepare-windows-cli-launcher/**'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
       - 'config/scripts/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
+      - '.github/actions/prepare-wayland-clipboard/**'
+      - 'native/wayland-clipboard/**'
+      - 'config/scripts/build-wayland-clipboard.mjs'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
       - 'config/docker/daemon-shutdown-descendants/**'
@@ -23,9 +29,10 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.npmrc'
-      - '.pnpmfile.cjs'
-      - 'config/tsconfig*.json'
+      - 'config/pnpmfile.cjs'
       - 'config/scripts/ensure-native-runtime.mjs'
+      - 'config/scripts/initialize-windows-native-toolchain.mjs'
+      - 'config/scripts/capture-windows-native-environment.cmd'
       - 'config/scripts/rebuild-native-deps.mjs'
       - 'config/scripts/node-pty-job-ownership.cjs'
       - 'config/scripts/windows-pe-machine.cjs'
@@ -39,28 +46,34 @@ on:
       - 'config/scripts/space-sharing-copy.mjs'
       - 'config/patches/**'
       - 'native/windows-registry/**'
+      - 'native/windows-security/**'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
-      - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
       - 'config/scripts/headless-detector-compiler-cache.mjs'
-      - '.github/actions/prepare-linux-package-fixture/**'
-      - 'config/docker/headless-serve-shutdown/**'
-      - 'config/docker/cli-launch-contract/**'
-      - 'config/docker/daemon-shutdown-descendants/**'
+      - '.github/actions/prepare-wayland-clipboard/**'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-cache-warmup-${{ github.event.pull_request.number || github.ref }}
-  # Scheduled retries must let an active warmer finish publishing its caches.
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  group: ci-cache-warmup-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   warm:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    concurrency:
+      group: ci-cache-warmup-linux-x64-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'schedule' }}
+    # Blacksmith and GitHub-hosted jobs restore from separate cache stores; warm both.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [blacksmith-4vcpu-ubuntu-2404, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -75,6 +88,8 @@ jobs:
           native-runtime: node
           node-version: '24'
           cache-electron-package: 'true'
+          # No hosted job restores the root store, so keep it out of GitHub's cache quota.
+          cache-pnpm-store: ${{ startsWith(matrix.runner, 'blacksmith-') }}
           cache-pnpm-store-lookup-only: 'true'
 
       - uses: ./.github/actions/prepare-headless-compiler
@@ -86,77 +101,10 @@ jobs:
 
       - uses: ./.github/actions/prepare-git-compatibility
 
-      - name: Cache TypeScript incremental state
-        id: typecheck-cache
-        uses: actions/cache@v5
+      - uses: ./.github/actions/prepare-wayland-clipboard
         with:
-          path: config/*.tsbuildinfo
-          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
-          restore-keys: |
-            tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
+          save-cache: 'true'
 
-      - name: Refresh TypeScript state for this commit
-        if: steps.typecheck-cache.outputs.cache-hit != 'true'
-        run: pnpm run typecheck
-
-  warm-linux-arm:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 10
-    env:
-      ORCA_BACKGROUND_LAUNCH: '1'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
-          node-version: '24'
-          cache-electron-package: 'true'
-          cache-pnpm-store-lookup-only: 'true'
-      - name: Populate shared Electron archive
-        run: node config/scripts/install-electron-package-binary.mjs
-      - name: Verify native cache is usable
-        run: node config/scripts/ensure-native-runtime.mjs --check-only
-
-  warm-windows:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2022, windows-11-arm]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    env:
-      ORCA_BACKGROUND_LAUNCH: '1'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/install-node-dependencies
-        with:
-          native-runtime: node
-          cache-pnpm-store-lookup-only: 'true'
-      - name: Verify native cache is usable
-        run: node config/scripts/ensure-native-runtime.mjs --check-only
-
-  warm-linux-package-fixtures:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      ORCA_BACKGROUND_LAUNCH: '1'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/prepare-linux-package-fixture
-        with:
-          fixture: daemon-shutdown-descendants
-          save-cache: ${{ github.event_name != 'pull_request' }}
-      - uses: ./.github/actions/prepare-linux-package-fixture
-        with:
-          fixture: headless-serve-shutdown
-          save-cache: ${{ github.event_name != 'pull_request' }}
-      - uses: ./.github/actions/prepare-linux-package-fixture
-        with:
-          fixture: cli-launch-contract
-          save-cache: ${{ github.event_name != 'pull_request' }}
+  warm-platforms:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/ci-cache-warmup-platform-jobs.yml

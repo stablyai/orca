@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import {
-  getRuntimeMobileSessionSyncKey,
-  hasRegisteredRuntimeTerminalTab,
-  registerRuntimeTerminalTab,
-  runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './sync-runtime-graph'
+import {
+  hasRegisteredRuntimeTerminalTab,
+  registerRuntimeTerminalTab
+} from './mounted-terminal-tab-registry'
 import type { AppState } from '../store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
@@ -173,38 +174,5 @@ describe('scheduleRuntimeGraphSync', () => {
 
     expect(syncWindowGraph).toHaveBeenCalledTimes(1)
     unregister()
-  })
-})
-
-describe('getRuntimeMobileSessionSyncKey scheduling inputs', () => {
-  it('changes when only tab group split ratios change', () => {
-    const base = makeState({
-      layoutByWorktree: {
-        'wt-1': {
-          type: 'split',
-          direction: 'horizontal',
-          first: { type: 'leaf', groupId: 'group-left' },
-          second: { type: 'leaf', groupId: 'group-right' },
-          ratio: 0.5
-        }
-      } as AppState['layoutByWorktree']
-    })
-    const baseKey = getRuntimeMobileSessionSyncKey(base)
-    const resized = makeState({
-      ...base,
-      layoutByWorktree: {
-        'wt-1': {
-          type: 'split',
-          direction: 'horizontal',
-          first: { type: 'leaf', groupId: 'group-left' },
-          second: { type: 'leaf', groupId: 'group-right' },
-          ratio: 0.65
-        }
-      } as AppState['layoutByWorktree']
-    })
-
-    const resizedKey = getRuntimeMobileSessionSyncKey(resized, base, baseKey)
-
-    expect(runtimeMobileSessionSyncKeysEqual(baseKey, resizedKey)).toBe(false)
   })
 })

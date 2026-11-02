@@ -6,9 +6,7 @@ import { PushHostChallengeStore } from './host-challenge-store.js'
 import { deriveHostFingerprint } from './host-fingerprint.js'
 import { openInMemoryPushDatabase } from './push-database.js'
 
-// Why: the desktop answers challenges in a workspace this one cannot import.
-// Both sides replay the same checked-in vector, so a transcript drift on
-// either side fails in that side's own suite.
+// Desktop is a separate workspace; replay one checked-in vector in both suites to catch transcript drift.
 describe('desktop host proof interop', () => {
   it('the checked-in vector answers to the same proof the fixture host computes', () => {
     const secretKey = new Uint8Array(Buffer.from(vector.hostSecretKeyB64, 'base64'))

@@ -1,0 +1,259 @@
+import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract'
+import { relayHostLogDigest } from './relay-host-log-digest.js'
+import type { ShadowSeatDirectory } from './shadow-seat-directory.js'
+
+// Compare memory seats against database answers for sticky verification/resolve; only count/log, preserving the database response.
+
+export type ShadowCompareRoute = 'sticky-verify' | 'resolve'
+
+export type ShadowCompareClass =
+  | 'agree'
+  // Neither the database nor the map has the host.
+  | 'agree-absent'
+  | 'map-incomplete'
+  // The cell's image has no seat feed (c17/c18 by design): outside the map, so not a coverage gap.
+  | 'cell-no-feed'
+  | 'cell-unpolled'
+  | 'db-only-left'
+  | 'db-only-unseen'
+  | 'cell-mismatch'
+  | 'epoch-mismatch'
+  | 'duplicate-seat'
+  // A superseded-shaped duplicate with no prior sighting, in the instance's first 100 s.
+  | 'superseded-unknown-age'
+  | 'map-only'
+  // The map seats the host on a cell the database does not call live, so resolve answered null.
+  | 'map-only-cell-unlive'
+  // As above, but the cell's heartbeat ran out after the last cell-list read (at most 30 s).
+  | 'cell-unlive-pending'
+
+export type ShadowCompareVerdict = { class: ShadowCompareClass; explained: boolean }
+
+export type ShadowCompareDatabaseAnswer = { cellId: string; assignmentEpoch: number } | null
+
+export const SHADOW_COMPARE_FLUSH_MS = 60_000
+// One poll/timeout/reconnect (~6s p95); cap explanations so lost leaves cannot look like lag forever.
+export const SHADOW_COMPARE_LAG_BOUND_MS = 10_000
+// Half-open superseded controls linger through silence timeout + ping interval + map polling lag.
+export const SHADOW_COMPARE_SUPERSEDED_CLOSE_MS =
+  RELAY_PROTOCOL_LIMITS.controlSilenceTimeoutMs +
+  RELAY_PROTOCOL_LIMITS.controlPingIntervalMs +
+  SHADOW_COMPARE_LAG_BOUND_MS
+// Per class per flush window, so a systemic fault cannot flood the log.
+export const SHADOW_COMPARE_SAMPLES_PER_CLASS = 10
+
+// `countByCell` is keyed by cell, so bounded by the fleet; prototype-free, so any cell id is a key.
+type ShadowCompareCount = { count: number; countByCell: Record<string, number> }
+
+export function classifyShadowSeat(
+  directory: ShadowSeatDirectory,
+  identity: { userId: string; relayHostId: string },
+  answer: ShadowCompareDatabaseAnswer,
+  now: number,
+  // When this instance began comparing; omitted, a missing sighting is never excused.
+  startedAt = -Infinity
+): ShadowCompareVerdict {
+  // Classification must not record sightings; a new-epoch guess explains mismatch for only one lag bound.
+  const movedAt = answer
+    ? (directory.databaseEpochFirstSeen(
+        identity.userId,
+        identity.relayHostId,
+        answer.assignmentEpoch
+      ) ?? now)
+    : now
+  if (!directory.isComplete()) return { class: 'map-incomplete', explained: true }
+  const seats = directory.seatsOf(identity.userId, identity.relayHostId)
+  if (!answer) {
+    if (seats.length === 0) return { class: 'agree-absent', explained: true }
+    const liveness = seats.map((seat) => directory.cellLiveness(seat.cellId, now))
+    if (liveness.includes('unlive')) return { class: 'map-only-cell-unlive', explained: true }
+    if (liveness.includes('unknown')) return { class: 'cell-unlive-pending', explained: true }
+    return { class: 'map-only', explained: false }
+  }
+  const answerStatus = directory.cellState(answer.cellId)?.status
+  if (answerStatus === 'no-feed') {
+    return { class: 'cell-no-feed', explained: true }
+  }
+  if (answerStatus !== 'live') {
+    return { class: 'cell-unpolled', explained: true }
+  }
+  if (seats.length > 1) {
+    // Inside a drain or rehome grace the old seat is drain-only until it closes.
+    if (seats.some((seat) => seat.state === 'drain-only')) {
+      return { class: 'duplicate-seat', explained: true }
+    }
+    // A newer DB seat supersedes older-epoch seats until their silence close;
+    // a level epoch is a real tie.
+    const current = seats.find(
+      (seat) => seat.cellId === answer.cellId && seat.epoch === answer.assignmentEpoch
+    )
+    const supersededShape =
+      current !== undefined &&
+      seats.every((seat) => seat === current || seat.epoch < current.epoch) &&
+      // A long-ago lower-epoch sighting dates the move to now; the join bounds the seat itself.
+      now - current.joinedAt <= SHADOW_COMPARE_SUPERSEDED_CLOSE_MS
+    if (!supersededShape) return { class: 'duplicate-seat', explained: false }
+    const known = directory.databaseEpochOf(identity.userId, identity.relayHostId)
+    if (!known) {
+      // Later missing sightings can mean other instances served compares or eviction; keep supersedes unexplained.
+      const starting = now - startedAt <= SHADOW_COMPARE_SUPERSEDED_CLOSE_MS
+      return { class: starting ? 'superseded-unknown-age' : 'duplicate-seat', explained: false }
+    }
+    const supersededAt = movedSince(known, answer, now)
+    const superseded =
+      supersededAt !== undefined && now - supersededAt <= SHADOW_COMPARE_SUPERSEDED_CLOSE_MS
+    return { class: 'duplicate-seat', explained: superseded }
+  }
+  const seat = seats[0]
+  if (!seat) {
+    const left = directory
+      .recentlyLeftOf(identity.userId, identity.relayHostId, now)
+      .some((entry) => entry.cellId === answer.cellId)
+    return { class: left ? 'db-only-left' : 'db-only-unseen', explained: true }
+  }
+  // No database grant time: date moves by this director’s first sighting of the newer epoch.
+  const mapBehind =
+    answer.assignmentEpoch > seat.epoch && now - movedAt <= SHADOW_COMPARE_LAG_BOUND_MS
+  if (seat.cellId !== answer.cellId) {
+    if (directory.cellState(seat.cellId)?.status === 'no-feed') {
+      return { class: 'cell-no-feed', explained: true }
+    }
+    // A stale seat cell is a coverage gap, kept visible rather than explained away.
+    const seatPolledAt = directory.cellState(seat.cellId)?.lastLiveAt ?? 0
+    if (now - seatPolledAt > SHADOW_COMPARE_LAG_BOUND_MS) {
+      return { class: 'cell-unpolled', explained: true }
+    }
+    return { class: 'cell-mismatch', explained: mapBehind }
+  }
+  if (seat.epoch !== answer.assignmentEpoch) {
+    return { class: 'epoch-mismatch', explained: mapBehind }
+  }
+  return { class: 'agree', explained: true }
+}
+
+// Date moves from prior sightings; regressed epochs are unknown, not new.
+function movedSince(
+  known: { epoch: number; firstSeenAt: number },
+  answer: { assignmentEpoch: number },
+  now: number
+): number | undefined {
+  if (known.epoch > answer.assignmentEpoch) return undefined
+  // A lower recorded epoch: the move is this sighting.
+  return known.epoch < answer.assignmentEpoch ? now : known.firstSeenAt
+}
+
+// Count DB cell and, for unexplained mismatch/duplicate, every seated cell so stale feeds show locally; no row/seats means no cells.
+function comparedCells(
+  directory: ShadowSeatDirectory,
+  identity: { userId: string; relayHostId: string },
+  answer: ShadowCompareDatabaseAnswer,
+  verdict: ShadowCompareVerdict
+): Set<string> {
+  const seats = directory.seatsOf(identity.userId, identity.relayHostId)
+  if (!answer) return new Set(seats.map((seat) => seat.cellId))
+  const cells = new Set([answer.cellId])
+  if (
+    !verdict.explained &&
+    (verdict.class === 'cell-mismatch' ||
+      verdict.class === 'duplicate-seat' ||
+      verdict.class === 'superseded-unknown-age')
+  ) {
+    for (const seat of seats) cells.add(seat.cellId)
+  }
+  return cells
+}
+
+export class ShadowDirectoryCompare {
+  private counts = new Map<string, ShadowCompareCount>()
+  private samples = new Map<ShadowCompareClass, number>()
+  private windowStartedAt: number
+  private readonly startedAt: number
+
+  constructor(
+    private readonly directory: ShadowSeatDirectory,
+    private readonly now: () => number = Date.now,
+    private readonly log: (line: string) => void = (line) => console.warn(line)
+  ) {
+    this.startedAt = now()
+    this.windowStartedAt = this.startedAt
+  }
+
+  compare(
+    route: ShadowCompareRoute,
+    identity: { userId: string; relayHostId: string },
+    answer: ShadowCompareDatabaseAnswer
+  ): ShadowCompareVerdict {
+    const now = this.now()
+    // Classify first, so it can tell a first-ever sighting from one seen before.
+    const verdict = classifyShadowSeat(this.directory, identity, answer, now, this.startedAt)
+    // Every answer, so a move's age counts from its first sighting on either route.
+    if (answer) {
+      this.directory.observeDatabaseEpoch(
+        identity.userId,
+        identity.relayHostId,
+        answer.assignmentEpoch,
+        now
+      )
+    }
+    const key = `${route}\u0000${verdict.class}\u0000${verdict.explained}`
+    const entry = this.counts.get(key) ?? { count: 0, countByCell: Object.create(null) }
+    this.counts.set(key, entry)
+    entry.count += 1
+    for (const cellId of comparedCells(this.directory, identity, answer, verdict)) {
+      entry.countByCell[cellId] = (entry.countByCell[cellId] ?? 0) + 1
+    }
+    if (!verdict.explained) this.sample(route, identity, answer, verdict, now)
+    if (now - this.windowStartedAt >= SHADOW_COMPARE_FLUSH_MS) this.flush(now)
+    return verdict
+  }
+
+  // Flush per route/class; count each compare once on every involved cell (comparedCells).
+  flush(now: number = this.now()): void {
+    for (const [key, { count, countByCell }] of this.counts) {
+      const [route, verdictClass, explained] = key.split('\u0000')
+      this.log(
+        JSON.stringify({
+          event: 'orca_relay_shadow_compare',
+          route,
+          class: verdictClass,
+          explained: explained === 'true',
+          count,
+          windowMs: now - this.windowStartedAt,
+          countByCell
+        })
+      )
+    }
+    this.counts = new Map()
+    this.samples = new Map()
+    this.windowStartedAt = now
+  }
+
+  private sample(
+    route: ShadowCompareRoute,
+    identity: { userId: string; relayHostId: string },
+    answer: ShadowCompareDatabaseAnswer,
+    verdict: ShadowCompareVerdict,
+    now: number
+  ): void {
+    const taken = this.samples.get(verdict.class) ?? 0
+    if (taken >= SHADOW_COMPARE_SAMPLES_PER_CLASS) return
+    this.samples.set(verdict.class, taken + 1)
+    const seats = this.directory.seatsOf(identity.userId, identity.relayHostId)
+    this.log(
+      JSON.stringify({
+        event: 'orca_relay_shadow_compare_unexplained',
+        route,
+        class: verdict.class,
+        host: relayHostLogDigest(identity.relayHostId),
+        db: answer ? { cellId: answer.cellId, assignmentEpoch: answer.assignmentEpoch } : null,
+        seats: seats.map((seat) => ({
+          cellId: seat.cellId,
+          epoch: seat.epoch,
+          state: seat.state,
+          ageMs: now - seat.joinedAt,
+          observedAgeMs: now - seat.observedAt
+        }))
+      })
+    )
+  }
+}

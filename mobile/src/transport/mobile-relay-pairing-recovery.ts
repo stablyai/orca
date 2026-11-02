@@ -14,6 +14,7 @@ import {
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
+  claimMobileRelayPairingJournalPublication,
   clearMobileRelayPairingJournal,
   loadMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
@@ -22,6 +23,7 @@ import {
   connectMobileRelayForPairing,
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
+import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import { relayHost } from './pairing-relay-host'
 import {
@@ -35,6 +37,7 @@ type RecoveryDependencies = {
   loadJournal: typeof loadMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
+  claimJournal: typeof claimMobileRelayPairingJournalPublication
   readCredentialBundle: typeof readMobileRelayCredentialBundle
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   loadHosts: typeof loadHosts
@@ -49,6 +52,7 @@ const defaultDependencies: RecoveryDependencies = {
   loadJournal: loadMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
+  claimJournal: claimMobileRelayPairingJournalPublication,
   readCredentialBundle: readMobileRelayCredentialBundle,
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   loadHosts,
@@ -59,8 +63,7 @@ const defaultDependencies: RecoveryDependencies = {
   platform: Platform.OS
 }
 
-// One full invite lifetime past expiry, so a momentary outage never discards a
-// journal that a later launch could still reconcile.
+// Allow another invite lifetime after expiry so brief outages do not discard recoverable journals.
 const ABANDON_GRACE_MS = 10 * 60 * 1000
 
 let recoveryPromise: Promise<MobileRelayPairingRecoveryResult> | null = null
@@ -76,6 +79,21 @@ export function recoverMobileRelayPairing(
     recoveryPromise = null
   })
   return recoveryPromise
+}
+
+// Bound the wait without blocking a new scan; stale recovery loses journal ownership when superseded.
+export async function settleMobileRelayPairingRecovery(
+  timeoutMs: number,
+  overrides: Partial<RecoveryDependencies> = {}
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    recoverMobileRelayPairing(overrides).catch(() => {}),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs)
+    })
+  ])
+  clearTimeout(timer)
 }
 
 async function runRecovery(
@@ -102,10 +120,9 @@ async function runRecovery(
   }
 
   const credentials = recoveryCredentials(journal, bundle, dependencies.now())
-  // Why: publishCommitted runs inside the catch below, so a failed local write
-  // of an authoritatively committed install must not look like "nothing to
-  // reconcile" — that journal is the only record left to retry the write from.
+  // Track committed status separately so local publication failure cannot discard the only durable recovery record.
   let observedCommitted = false
+  let rejectedCredentials = 0
   for (const credential of credentials) {
     let client: PairingCandidateClient | null = null
     try {
@@ -140,22 +157,22 @@ async function runRecovery(
         await publishCommitted(journal, reconciled, dependencies)
         return 'recovered'
       }
-    } catch {
+    } catch (error) {
       // Why: ambiguous pairing state advances only by credential priority and
       // authoritative status; a transport failure never rewrites the journal.
+      if (isExplicitCredentialRejection(error)) {
+        rejectedCredentials++
+      }
     } finally {
       client?.close()
     }
   }
-  // Why: past invite expiry no credential can still establish what happened, so
-  // retaining the journal cannot reconcile anything — it only fails every later
-  // pairing with "recovery pending" forever. Re-pairing mints a fresh device and
-  // any uncommitted server-side install expires on its own. The extra invite
-  // lifetime of slack keeps a brief relay outage from discarding a journal whose
-  // resume credential would have reconciled it on the next launch.
+  // Abandon uncommitted journals only after all credentials are rejected or invite expiry plus outage grace.
+  // A known committed install must retain its journal for local persistence retry.
   if (
     !observedCommitted &&
-    journal.metadata.relay.inviteExpiresAt + ABANDON_GRACE_MS <= dependencies.now()
+    (rejectedCredentials === credentials.length ||
+      journal.metadata.relay.inviteExpiresAt + ABANDON_GRACE_MS <= dependencies.now())
   ) {
     await dependencies.clearJournal(journal.metadata.journalId).catch(() => {})
     return 'abandoned'
@@ -251,6 +268,20 @@ async function publishCommitted(
     throw new Error('relay pairing recovery was not committed')
   }
   const installed = endpoints.installStatus.result
+  const release = await dependencies.claimJournal(journal.metadata.journalId)
+  try {
+    await writeCommitted(journal, endpoints.relay, installed, dependencies)
+  } finally {
+    release()
+  }
+}
+
+async function writeCommitted(
+  journal: MobileRelayPairingJournal,
+  relay: NonNullable<PairingGetEndpointsResult['relay']>,
+  installed: DeviceCredentialInstalled,
+  dependencies: RecoveryDependencies
+): Promise<void> {
   const reconciledJournal: MobileRelayPairingJournal = {
     ...journal,
     metadata: {
@@ -265,7 +296,7 @@ async function publishCommitted(
   await dependencies.writeCredentialBundle(
     promotePairingJournalCredential({ journal: reconciledJournal, installed })
   )
-  await dependencies.savePairedHost(relayHost(reconciledJournal, endpoints.relay))
+  await dependencies.savePairedHost(relayHost(reconciledJournal, relay))
   await dependencies.clearJournal(journal.metadata.journalId)
 }
 
@@ -285,7 +316,6 @@ function assertCommitted(
   }
 }
 
-/** Test-only: clear the startup single-flight between cases. */
 export function resetMobileRelayPairingRecoveryForTests(): void {
   recoveryPromise = null
 }

@@ -4,6 +4,8 @@ import { deriveGitRemoteIdentity } from '../shared/git-remote-identity'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import { githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
 import type { Repo } from '../shared/repo-types'
+import type { RepoHostTarget } from '../shared/repo-host-identity'
+import { repoTarget } from './persistence/repo-host-target-matcher.test-fixture'
 import { probeGitRemoteIdentity, type GitRemoteIdentityProbe } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,
@@ -39,8 +41,8 @@ function repo(overrides: Partial<Repo> = {}): Repo {
 function storeFor(repos: Repo[]) {
   const getRepo = (id: string, hostId?: ExecutionHostId) =>
     repos.find((row) => row.id === id && (!hostId || getRepoExecutionHostId(row) === hostId))
-  const updateRepo = vi.fn((id: string, updates: Partial<Repo>, hostId?: ExecutionHostId) => {
-    const current = getRepo(id, hostId)
+  const updateRepo = vi.fn((target: RepoHostTarget, updates: Partial<Repo>) => {
+    const current = getRepo(target.id, getRepoExecutionHostId(target))
     if (!current) {
       return null
     }
@@ -223,11 +225,9 @@ it('repairs only the matching owner when repo IDs and paths collide across hosts
   const store = storeFor([local, ssh])
   vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'resolved', identity: identity() })
   await refresh(store)
-  expect(store.updateRepo).toHaveBeenCalledWith(
-    'app',
-    { repoIcon: githubAvatarIcon({ owner: 'org-b', repo: 'app' }) },
-    'ssh:build'
-  )
+  expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('app', 'ssh:build'), {
+    repoIcon: githubAvatarIcon({ owner: 'org-b', repo: 'app' })
+  })
   expect(projectHostSetupProjectionFromRepos([local, ssh]).projects).toHaveLength(1)
 })
 
@@ -250,17 +250,13 @@ it('keeps local metadata writes scoped when a same-id ssh:build row comes first'
   expect(foreign.repoIcon).toBe(foreignIcon)
   expect(local.gitRemoteIdentity).toEqual(identity())
   expect(local.repoIcon).toEqual(githubAvatarIcon({ owner: 'org-b', repo: 'app' }))
-  expect(store.updateRepo).toHaveBeenCalledExactlyOnceWith(
-    'app',
-    { gitRemoteIdentity: identity(), repoIcon: local.repoIcon },
-    'local'
-  )
+  expect(store.updateRepo).toHaveBeenCalledExactlyOnceWith(repoTarget('app', 'local'), {
+    gitRemoteIdentity: identity(),
+    repoIcon: local.repoIcon
+  })
 })
 
-// Why this row is repaired where the `ssh:build` one above is not: a `runtime:` stamp reaches this
-// store only from a client addressing *this* host, so the files are here and `local` is the only
-// host that can answer for them (`getStoredRepoExecutionHostId`). Both rows are written, each
-// addressed by its own stamp, because that is what the store matches a write against.
+// A runtime stamp addresses files here, but store writes must still use that stamp.
 it('repairs a same-id runtime-addressed row under its own stamp', async () => {
   const runtimeRow = repo({
     executionHostId: 'runtime:env-a',
@@ -282,8 +278,8 @@ it('repairs a same-id runtime-addressed row under its own stamp', async () => {
   }
   expect(runtimeRow).toMatchObject(repaired)
   expect(local).toMatchObject(repaired)
-  expect(store.updateRepo).toHaveBeenCalledWith('app', repaired, 'runtime:env-a')
-  expect(store.updateRepo).toHaveBeenCalledWith('app', repaired, 'local')
+  expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('app', 'runtime:env-a'), repaired)
+  expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('app', 'local'), repaired)
 })
 
 it('does not write after a pending local probe becomes peer-owned', async () => {
@@ -328,7 +324,9 @@ it('does not overwrite a custom icon selected while the probe is pending', async
   answer({ status: 'resolved', identity: identity() })
   await flushRepoGitRemoteIdentityEnrichmentForTests()
   expect(row.repoIcon).toBe(selected)
-  expect(store.updateRepo).toHaveBeenCalledWith('app', { gitRemoteIdentity: identity() }, 'local')
+  expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('app', 'local'), {
+    gitRemoteIdentity: identity()
+  })
 })
 
 it('never probes folder workspaces for an avatar repair', async () => {

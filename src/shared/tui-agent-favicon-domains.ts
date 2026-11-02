@@ -1,0 +1,37 @@
+import type { TuiAgent } from './tui-agent'
+
+/** Google favicon-service domains for agents both apps draw from a favicon. */
+export const TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
+  grok: 'x.ai',
+  'mimo-code': 'mimo.xiaomi.com',
+  ante: 'antigma.ai',
+  trae: 'www.trae.cn',
+  muse: 'dev.meta.ai',
+  qoder: 'qoder.com',
+  'qoder-cn': 'qoder.cn',
+  zcode: 'zcode.z.ai',
+  'prime-agent': 'primeintellect.ai',
+  gemini: 'gemini.google.com',
+  antigravity: 'antigravity.google',
+  goose: 'goose-docs.ai',
+  amp: 'ampcode.com',
+  kiro: 'kiro.dev',
+  crush: 'charm.sh',
+  aug: 'augmentcode.com',
+  autohand: 'autohand.ai',
+  cline: 'cline.bot',
+  codebuff: 'codebuff.com',
+  freebuff: 'freebuff.com',
+  'command-code': 'commandcode.ai',
+  continue: 'continue.dev',
+  cursor: 'cursor.com',
+  kimi: 'moonshot.cn',
+  'mistral-vibe': 'mistral.ai',
+  'qwen-code': 'qwenlm.github.io',
+  rovo: 'atlassian.com',
+  hermes: 'nousresearch.com',
+  devin: 'devin.ai',
+  openclaw: 'openclaw.ai',
+  codebuddy: 'codebuddy.ai',
+  jcode: 'jcode.sh'
+}

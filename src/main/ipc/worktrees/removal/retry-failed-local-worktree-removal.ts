@@ -5,6 +5,7 @@ import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/runtime-int
 import { invalidateAuthorizedRootsCacheForRepo } from '../../registered-worktree-roots-scoped-invalidation'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import type { WorktreeRemovalRecord } from '../../../worktree-removal-records'
 import {
   preserveBranchHeadFallback,
   rememberPreservedBranchCleanupTarget
@@ -14,17 +15,14 @@ import {
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
 
-/**
- * Delete on the leftover of a local delete that failed after Git dropped the registration: runs the
- * recorded removal again with this handler's bookkeeping. Undefined when there is none.
- */
+/** Retry recorded leftovers after Git deregistration, retaining IPC bookkeeping; return undefined if none exist. */
 export function retryFailedLocalWorktreeRemoval(
   context: WorktreeIpcContext,
   args: RemoveWorktreeArgs,
   removalHostId: ExecutionHostId
 ): Promise<RemoveWorktreeResult> | undefined {
   const { store, runtime, options } = context
-  return retryFailedWorktreeRemoval(args.worktreeId, removalHostId, (record) =>
+  const jobFor = (record: WorktreeRemovalRecord) =>
     interruptedLocalWorktreeRemovalJob(record, {
       store,
       acquireWatcherRemoval: (path) => runtime.acquireFileWatcherRemoval(path),
@@ -47,7 +45,7 @@ export function retryFailedLocalWorktreeRemoval(
       purge: ({ worktreeId, repoId }) => {
         runtime.clearOptimisticReconcileToken(worktreeId)
         removeWorktreeMetadataAndTransientState(
-          store,
+          { store, runtime },
           worktreeId,
           LOCAL_EXECUTION_HOST_ID,
           args.snapshotPruneBatchId
@@ -58,5 +56,5 @@ export function retryFailedLocalWorktreeRemoval(
         options?.onWorktreeLifecycle?.({ kind: 'removed', worktreeId, path: worktreePath }),
       publish: (repoId) => runtime.publishWorktreeRemovalChange(repoId)
     })
-  )
+  return retryFailedWorktreeRemoval(args.worktreeId, removalHostId, jobFor, args.force ?? false)
 }

@@ -23,12 +23,7 @@ export function createWorkspaceCleanupFrozenRowOrder(
   }
 }
 
-/**
- * Rows already on screen keep their slot while a refresh streams updated
- * values in; rows the order has not seen yet append after them (in the live
- * sort among themselves) and claim the next slots, so later ticks cannot
- * reshuffle them either.
- */
+/** Keep visible rows in place while streaming; append new rows in their current sort order, then retain those slots too. */
 export function arrangeWorkspaceCleanupRowsByFrozenOrder<Row extends OrderedRow>(
   sortedRows: readonly Row[],
   order: WorkspaceCleanupFrozenRowOrder
@@ -66,13 +61,7 @@ export function extendWorkspaceCleanupFrozenRowOrder(
   return positions === null ? order : { ...order, positions }
 }
 
-/**
- * Streaming-order stability for the flat list: while a scan streams, existing
- * rows must not reshuffle on every progress tick. The user's sort applies to
- * the snapshot immediately; streamed value changes land in place; one calm
- * re-sort happens when the scan settles — or at once if the user explicitly
- * changes the sort mid-scan.
- */
+/** Apply sort immediately, hold row positions during streaming, then resort once at settlement or explicit sort change. */
 export function useWorkspaceCleanupRowOrder<Row extends OrderedRow>({
   rows,
   streaming,
@@ -82,10 +71,7 @@ export function useWorkspaceCleanupRowOrder<Row extends OrderedRow>({
   streaming: boolean
   sort: WorkspaceCleanupSortState
 }): readonly Row[] {
-  // Why: the frozen order must be React-owned state — a ref read during render
-  // is not a valid memo input under concurrent rendering and could arrange the
-  // list from a different render pass's order. The idle capture stays in a ref
-  // because it is only read and written inside the commit effect.
+  // Render reads React-owned order state; idle capture stays in commit-only refs to avoid mixing concurrent render passes.
   const [frozenOrder, setFrozenOrder] =
     useState<WorkspaceCleanupFrozenRowOrder>(UNCOMMITTED_ROW_ORDER)
   const idleOrderRef = useRef<WorkspaceCleanupFrozenRowOrder>(UNCOMMITTED_ROW_ORDER)

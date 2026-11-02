@@ -4,7 +4,6 @@ import { createTerminalDocument } from './create-terminal-document'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html'
 
-/** One host element carrying the document's markup, as the page's mount plants it. */
 function plantHost(id: string) {
   const host = document.createElement('div')
   host.id = id
@@ -33,18 +32,9 @@ function startDocumentIn(host: HTMLElement) {
   return { started, openedOn: engine.openedOn, posted }
 }
 
-/** One finger on the screen: the surface it is on, and the id it keeps for its lifetime. */
 type PlantedFinger = { surface: HTMLElement; identifier: number; x?: number; y?: number }
 
-/**
- * A touch event as the page's dispatcher sees it: every finger on the screen, not just this
- * document's.
- *
- * Dispatched on `document`, because the dispatcher's four listeners are document-level — which is
- * why a touch in one host reaches the other host's document at all. `touches` carries each finger's
- * own target, which is what says whose it is; the event's own target is the surface the gesture is
- * on.
- */
+// Dispatch on document with page-wide touches so both terminal scopes receive the event and must filter ownership.
 function fireTouch(type: string, fingers: PlantedFinger[], target: HTMLElement) {
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'touches', {
@@ -80,7 +70,6 @@ function elementOf(host: HTMLElement, id: string) {
 
 const surfaceOf = (host: HTMLElement) => elementOf(host, 'terminal-surface')
 
-/** Both documents in select mode, with what they posted getting there discarded. */
 function selectAllInBoth(...documents: Array<ReturnType<typeof startDocumentIn>>) {
   for (const started of documents) {
     started.started.send({ type: 'do-select-all' })
@@ -92,22 +81,7 @@ function selectAllInBoth(...documents: Array<ReturnType<typeof startDocumentIn>>
 const pinchCancels = (posted: Array<Record<string, unknown>>) =>
   posted.filter((message) => message.type === 'mobile-clip-cancel-by-pinch')
 
-/**
- * Two documents on one page read their own elements.
- *
- * Ruling 22 gave each call its own scope, which left the element reads as the last thing two
- * documents shared: they were `document.getElementById`, and the ids are in the markup every host
- * plants, so the second document's start sequence found the first host's surface, overlay, handles
- * and menu. Both documents then drove one terminal, and the second host stayed empty.
- *
- * It is reachable rather than theoretical. expo-router keeps the outgoing screen mounted for the
- * length of a stack transition, so two routes that both hold a terminal have two live documents on
- * the page while the animation runs.
- *
- * The oracle is where the engine opens. `term.open(element)` is the one call that says which
- * surface a document is actually driving, and it is read off the seam rather than off the scope,
- * which no caller can reach.
- */
+// Stack transitions overlap terminal mounts with duplicate markup ids; assert each engine opens its own host surface.
 describe('two terminal documents on one page', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
@@ -117,9 +91,6 @@ describe('two terminal documents on one page', () => {
     const first = plantHost('first-host')
     const second = plantHost('second-host')
 
-    // The precondition, read before either document starts: both hosts carry a surface under the
-    // same id, which is the shape that made a page-wide read wrong. A page with one surface on it
-    // would agree with the assertions below for no reason.
     expect(first.querySelector('#terminal-surface')).not.toBe(null)
     expect(second.querySelector('#terminal-surface')).not.toBe(null)
 
@@ -133,11 +104,7 @@ describe('two terminal documents on one page', () => {
     two.started.stop()
   })
 
-  /**
-   * The reviewer's repro (round 1, H1): the dispatcher's four listeners are on `document`, and the
-   * two-finger branch acts before it looks at the target, so a pinch anywhere on the page dropped
-   * the selection of every document on it.
-   */
+  // A pinch in another host must not clear this terminal’s selection before target filtering.
   it('leaves the other document alone when two fingers land in that other host', () => {
     const first = plantHost('first-host')
     const second = plantHost('second-host')
@@ -155,8 +122,7 @@ describe('two terminal documents on one page', () => {
     two.started.stop()
   })
 
-  // The control: the same event inside the document's own host still reaches it. Without this the
-  // assertion above passes for a dispatcher that ignores every touch.
+  // The same event inside this host must still reach it, ruling out an inert dispatcher.
   it('cancels its own selection when the two fingers land in its own host', () => {
     const first = plantHost('first-host')
     const second = plantHost('second-host')
@@ -173,11 +139,7 @@ describe('two terminal documents on one page', () => {
     two.started.stop()
   })
 
-  /**
-   * Round 2's residual, the same defect one level in: `eventTargetInRoot` settles whose event it is,
-   * and then every branch counts `e.touches`, which is every finger on the screen. A finger resting
-   * in the other terminal is therefore this one's second finger.
-   */
+  // Event ownership is not enough: page-wide touches must also exclude fingers in the other terminal.
   it("does not read another host's finger as its own second one", () => {
     const first = plantHost('first-host')
     const second = plantHost('second-host')
@@ -185,15 +147,12 @@ describe('two terminal documents on one page', () => {
     const two = startDocumentIn(second)
     selectAllInBoth(two)
     const held = { surface: surfaceOf(first), identifier: 0 }
-    // B's menu pill rather than its surface: a touch there is the one place a single finger leaves
-    // the selection alone, so "B keeps it" is the whole assertion rather than a choice between two
-    // ways of losing it (a tap on the surface dismisses it, by design).
+    // Use B’s menu pill so a local tap preserves selection; surface taps dismiss it by design.
     const pill = elementOf(second, 'selection-overlay')
 
     fireTouch('touchstart', [held], held.surface)
     one.posted.length = 0
     two.posted.length = 0
-    // One finger, on B's own overlay, while A's is still down.
     fireTouch('touchstart', [held, { surface: pill, identifier: 1 }], pill)
 
     expect(pinchCancels(two.posted)).toHaveLength(0)
@@ -203,8 +162,7 @@ describe('two terminal documents on one page', () => {
     two.started.stop()
   })
 
-  // The other side of the same read: on touchend the tap fires only when the last finger lifts, and
-  // a finger resting in A made B's count non-zero forever.
+  // A finger in A must not prevent B’s last-finger touchend from firing its tap.
   it('fires its own surface tap while the other host still has a finger down', () => {
     const first = plantHost('first-host')
     const second = plantHost('second-host')
@@ -225,7 +183,6 @@ describe('two terminal documents on one page', () => {
   })
 })
 
-/** A started document over a measured grid whose cells scale with the font, as xterm's do. */
 function startMeasuredDocument() {
   document.body.innerHTML = ''
   const host = plantHost('pinch-host')
@@ -266,7 +223,6 @@ function startMeasuredDocument() {
     createUnicode11Addon: () => null,
     createWebglAddon: () => null
   })
-  // The app's init carries the frame it laid out.
   started.send({
     type: 'init',
     cols: 80,
@@ -289,7 +245,6 @@ async function settle() {
 const metricsOf = (posted: Array<Record<string, unknown>>) =>
   posted.filter((message) => message.type === 'keyboard-avoidance-metrics')
 
-/** A touch on the surface itself, where the pinch listeners are; `fireTouch` reaches only `document`. */
 function fireSurfaceTouch(type: string, surface: HTMLElement, xs: number[]) {
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'touches', {
@@ -298,7 +253,6 @@ function fireSurfaceTouch(type: string, surface: HTMLElement, xs: number[]) {
   surface.dispatchEvent(event)
 }
 
-/** Two fingers 20px apart, spread to `spread`px, a parsed write mid-gesture, then both lift. */
 function pinchTo(doc: ReturnType<typeof startMeasuredDocument>, spread: number, write = true) {
   fireSurfaceTouch('touchstart', doc.surface, [10, 30])
   fireSurfaceTouch('touchmove', doc.surface, [10, 10 + spread])
@@ -308,10 +262,7 @@ function pinchTo(doc: ReturnType<typeof startMeasuredDocument>, spread: number, 
   fireSurfaceTouch('touchend', doc.surface, [])
 }
 
-/**
- * The lift's row pitch is read off the scale as drawn, and a pinch moves that scale with no fit
- * to report it. A write mid-gesture emits the transient pitch; the release must replace it.
- */
+// Pinch changes row pitch without a fit; release must replace metrics emitted during a mid-gesture write.
 describe('keyboard-avoidance metrics across a pinch', () => {
   it('reports the at-rest pitch after a pinch that releases onto the same preset', async () => {
     const doc = startMeasuredDocument()
@@ -346,8 +297,7 @@ describe('keyboard-avoidance metrics across a pinch', () => {
     await settle()
     const before = metricsOf(doc.posted).length
 
-    // The settings change sets the new font now and refits a frame later; the pinch releases
-    // onto that same preset in between.
+    // Change settings before deferred refit, then release the pinch onto that same preset.
     doc.started.send({ type: 'set-font-scale', fontScale: 1.5 })
     pinchTo(doc, 20, false)
     await settle()

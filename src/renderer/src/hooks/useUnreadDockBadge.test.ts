@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as UnreadBadgeCountModule from '@/lib/unread-badge-count'
 import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { makeTab } from '../store/slices/store-session-test-harness'
-import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 
 const { getUnreadBadgeCount } = vi.hoisted(() => ({ getUnreadBadgeCount: vi.fn() }))
 
@@ -16,7 +15,7 @@ vi.mock('@/lib/unread-badge-count', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import { clearUnreadDockBadgeCount, useUnreadDockBadge } from './useUnreadDockBadge'
+import { useUnreadDockBadge } from './useUnreadDockBadge'
 
 const initialState = useAppStore.getInitialState()
 
@@ -51,27 +50,6 @@ describe('useUnreadDockBadge', () => {
     vi.unstubAllGlobals()
   })
 
-  it('clears the app badge', () => {
-    clearUnreadDockBadgeCount()
-
-    expect(setUnreadDockBadgeCount).toHaveBeenCalledWith(0)
-  })
-
-  it('treats badge clearing as best-effort', async () => {
-    setUnreadDockBadgeCount.mockRejectedValueOnce(new Error('dock unavailable'))
-
-    clearUnreadDockBadgeCount()
-    await Promise.resolve()
-
-    expect(setUnreadDockBadgeCount).toHaveBeenCalledWith(0)
-  })
-
-  it('no-ops when the preload API is unavailable', () => {
-    vi.stubGlobal('window', {})
-
-    expect(() => clearUnreadDockBadgeCount()).not.toThrow()
-  })
-
   it('does not rescan workspaces for unrelated remote activity or parent renders', () => {
     const worktrees = Array.from({ length: 100 }, (_, index) =>
       makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo', isUnread: index === 99 })
@@ -93,36 +71,7 @@ describe('useUnreadDockBadge', () => {
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(1)
   })
 
-  it('recounts when a workspace unread flag changes, not when a tab marker does', () => {
-    renderHook(() => useUnreadDockBadge(false))
-    const worktree = makeWorktree({ id: 'repo::unread', repoId: 'repo' })
-    const tab = makeTab({ id: 'tab-unread', worktreeId: worktree.id })
-
-    act(() => useAppStore.setState({ worktreesByRepo: { repo: [worktree] } }))
-    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(2)
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
-
-    act(() =>
-      useAppStore.setState({
-        tabsByWorktree: { [worktree.id]: [tab] },
-        unreadTerminalTabs: { [tab.id]: 'terminal-bell' }
-      })
-    )
-    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(2)
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
-
-    act(() => useAppStore.getState().markWorktreeUnread(worktree.id))
-    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(3)
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
-
-    act(() => useAppStore.getState().clearWorktreeUnread(worktree.id))
-    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(4)
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
-  })
-
-  // Why render-counted: this hook is mounted on the App root, so anything that wakes its
-  // subscription re-renders the whole shell — the chrome layout, both providers and every
-  // non-memoised overlay — for a badge integer that did not move.
+  // Count renders because this App-root subscription can rerender the entire shell for an unchanged badge.
   it('leaves the App root asleep through title frames and wakes it only on a badge change', () => {
     const worktrees = Array.from({ length: 20 }, (_, index) =>
       makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo', isUnread: index === 19 })
@@ -149,11 +98,25 @@ describe('useUnreadDockBadge', () => {
     expect(useAppStore.getState().tabsByWorktree).not.toBe(tabsByWorktree)
     expect(renders).toBe(rendersAfterMount)
 
-    act(() => useAppStore.getState().markWorktreeUnread('repo::worktree-0'))
+    act(() =>
+      useAppStore.getState().markAgentAttentionUnread({
+        workspaceId: 'repo::worktree-0',
+        subjectKey: null,
+        groupId: null,
+        reason: 'agent-completion'
+      })
+    )
     expect(renders).toBe(rendersAfterMount + 1)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
 
-    act(() => useAppStore.getState().clearWorktreeUnread('repo::worktree-0'))
+    act(() =>
+      useAppStore
+        .getState()
+        .readOnScreenAttention(
+          { workspaceIds: ['repo::worktree-0'], targets: [] },
+          { screenArrived: true }
+        )
+    )
     expect(renders).toBe(rendersAfterMount + 2)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
   })
@@ -201,40 +164,8 @@ describe('useUnreadDockBadge', () => {
     )
     expect(renders).toBe(initialRenders)
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(1)
-    act(() => useAppStore.getState().clearTerminalTabUnread(tab.id))
+    act(() => useAppStore.setState({ unreadTerminalTabs: { orphan: 'terminal-bell' } }))
     expect(renders).toBe(initialRenders + 1)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
-  })
-
-  it('adds the floating terminal only while its launcher shows the unread dot', () => {
-    const tab = makeTab({ id: 'floating-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/tmp'), floatingTerminalEnabled: true },
-      worktreesByRepo: {
-        repo: [makeWorktree({ id: 'repo::unread', repoId: 'repo', isUnread: true })]
-      },
-      tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] }
-    })
-    const hook = renderHook(({ open }) => useUnreadDockBadge(open), {
-      initialProps: { open: false }
-    })
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
-
-    act(() => useAppStore.getState().markTerminalTabUnread(tab.id, 'terminal-bell'))
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
-
-    // An open panel hides the launcher dot; the bell is then only a tab highlight.
-    hook.rerender({ open: true })
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
-
-    hook.rerender({ open: false })
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
-
-    act(() =>
-      useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), floatingTerminalEnabled: false }
-      })
-    )
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
   })
 })

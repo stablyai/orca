@@ -51,19 +51,14 @@ function hostingNothingOnWeb(): void {
   resetBrowserClientHostIdForTests()
 }
 
-/** Where the local guest actually is after the user navigated it. */
 const GUEST_URL = 'https://www.google.com/maps/@37.7,-122.4,12z'
 const GUEST_TITLE = 'Google Maps'
-/** What the host still believes: the create-time url, and the registry's untouched title default. */
 const HOST_STALE_URL = 'https://maps.google.com/'
 const HOST_FALLBACK_TITLE = 'Browser'
-/** Where the guest goes next, while the host keeps republishing the same stale row. */
 const MOVED_GUEST_URL = 'https://www.google.com/maps/place/Ferry+Building'
 const MOVED_GUEST_TITLE = 'Ferry Building'
-/** Submitted against a page the host had not minted yet, so the row moved before the guest did. */
 const DEFERRED_URL = 'https://example.internal/deferred'
 
-/** The local row as the guest webview left it: navigated, settled, one entry of history behind it. */
 function localPage(overrides: Partial<BrowserPage> = {}): BrowserPage {
   return {
     id: LOCAL_PAGE,
@@ -141,7 +136,6 @@ function stateWithLocalRow(page: BrowserPage = localPage()): WebSessionTabsSyncS
   })
 }
 
-/** The snapshot the host republishes on tab focus / workspace switch, frozen at create time. */
 function staleHostSnapshot(
   overrides: Partial<RuntimeMobileSessionTabsResult['tabs'][number] & { placement: unknown }> = {},
   snapshotOverrides: Partial<RuntimeMobileSessionTabsResult> = {}
@@ -167,7 +161,6 @@ function staleHostSnapshot(
   )
 }
 
-/** The same page one snapshot later, with the host caught up to where the guest actually is. */
 function movedHostSnapshot(): RuntimeMobileSessionTabsResult {
   return staleHostSnapshot(
     { title: GUEST_TITLE, url: GUEST_URL, loading: false, canGoBack: true, canGoForward: true },
@@ -189,10 +182,7 @@ function applyStaleSnapshot(
   return applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW) as Partial<WebSessionTabsSyncState>
 }
 
-/**
- * An omitted patch key means unchanged, and an owned row that the snapshot leaves alone omits it
- * entirely — so read through to the seeded state rather than asserting on the diff.
- */
+// Omitted patch fields mean unchanged; assert effective seeded state, not the diff.
 function syncedPage(
   patch: Partial<WebSessionTabsSyncState>,
   state: WebSessionTabsSyncState,
@@ -201,7 +191,6 @@ function syncedPage(
   return (patch.browserPagesByWorkspace ?? state.browserPagesByWorkspace)[workspaceId]?.[0]
 }
 
-/** What the pane writes to the local row when the guest finishes a navigation. */
 function guestNavigated(
   state: WebSessionTabsSyncState,
   url: string,
@@ -228,8 +217,7 @@ describe('browser rows this client hosts own their page content', () => {
     resetBrowserClientHostIdForTests()
   })
 
-  // The reported bug: host title is the registry's 'Browser' default and its url never moved off
-  // create time, so the staged-title hold's url-equality arm fails the moment the guest navigates.
+  // Stale host URL/default title defeats staged-title URL matching once the guest navigates.
   it('keeps the local title when a stale host snapshot republishes the Browser fallback', () => {
     const state = stateWithLocalRow()
 
@@ -256,8 +244,7 @@ describe('browser rows this client hosts own their page content', () => {
     expect(syncedPage(applyStaleSnapshot(state), state)?.url).toBe(GUEST_URL)
   })
 
-  // Why a real title is covered separately: a host that has learned the title publishes a
-  // non-fallback string, which the staged-title hold would have accepted. Ownership, not staleness.
+  // A real host title passes the staged-title hold; distinguish ownership from staleness.
   it('keeps the local title even when the host publishes a real but older title', () => {
     const state = stateWithLocalRow()
     const patch = applyStaleSnapshot(
@@ -297,17 +284,14 @@ describe('browser rows this client hosts own their page content', () => {
     })
   })
 
-  // Why this and not just the value: a repeated stale snapshot that rebuilds an equal page still
-  // remounts the pane if it lands in the store, so ownership has to make the patch a no-op.
+  // Equal-valued page rebuilds still remount panes; require no patch on repeated stale snapshots.
   it('leaves the page list untouched when a stale host snapshot repeats', () => {
     const patch = applyStaleSnapshot(stateWithLocalRow())
 
     expect(patch.browserPagesByWorkspace?.[LOCAL_WORKSPACE]).toBeUndefined()
   })
 
-  // Why two snapshots and not one: every client holds a local row from its first snapshot onward,
-  // so a predicate that asks only whether a row exists cannot tell a mirror from a host until the
-  // second one arrives — and by then the mirror it froze is a permanent one.
+  // Mirrors also have local rows after one snapshot; require a second snapshot to expose predicates that freeze every mirror.
   it.each([
     ['a second desktop client', () => hostingClient(OTHER_CLIENT)],
     ['the web client, whose api cannot answer', hostingNothingOnWeb],
@@ -327,8 +311,7 @@ describe('browser rows this client hosts own their page content', () => {
     })
   })
 
-  // The other side of that boundary: the same placement, the same two snapshots, and the only
-  // difference is that the guest is this client's — so here the host's echo must lose.
+  // Same placement/two snapshots with this client owning the guest: host content must lose.
   it('keeps the guest truth across repeated snapshots on the client hosting the page', () => {
     const first = stateWithLocalRow()
     const afterFirst = mergePatch(first, applyStaleSnapshot(first))
@@ -344,8 +327,7 @@ describe('browser rows this client hosts own their page content', () => {
     })
   })
 
-  // Why a mirror still needs the host's own title hold: taking host content is not the same as
-  // taking whatever string the projection emitted, and the fallback is one of its outputs.
+  // Mirrors still need staged-title hold against host fallback titles.
   it('holds a mirrored title rather than showing the host fallback at the same url', () => {
     hostingClient(OTHER_CLIENT)
     const first = makeState()
@@ -358,10 +340,7 @@ describe('browser rows this client hosts own their page content', () => {
     expect(afterSecond.browserPagesByWorkspace[REMOTE_PAGE]?.[0]?.title).toBe(GUEST_TITLE)
   })
 
-  // Why a placement that names nobody has to be handled: session-tab snapshots are not validated
-  // against the placement schema on the way in, so a host on another version can publish one — and
-  // over the wire an absent id arrives as JSON null, which is also what this client reports when it
-  // hosts nothing. Two absent identities are not a match.
+  // Mixed-version snapshots bypass placement validation; absent IDs serialize as null like unhosted clients. Two absent identities do not prove ownership.
   it.each([
     ['a null host id', null],
     ['no host id at all', undefined]
@@ -384,8 +363,7 @@ describe('browser rows this client hosts own their page content', () => {
     })
   })
 
-  // Why an explicit server placement and not just an absent one: mixed versions really do publish
-  // it, and an absence-only test cannot tell a client check apart from a placement check.
+  // Mixed versions publish explicit server placement; absence-only tests miss wrong placement checks.
   it('takes host content for an explicitly server-placed page with a local row', () => {
     const state = stateWithLocalRow()
     const patch = applyStaleSnapshot(state, staleHostSnapshot({ placement: { kind: 'server' } }))
@@ -399,11 +377,7 @@ describe('browser rows this client hosts own their page content', () => {
     })
   })
 
-  // Why the very first placement-bearing snapshot: between the host minting the placement and this
-  // client's guest attaching to it, the host publishes its create-time row and the guest cannot yet
-  // answer. Ownership that waited for the attachment would spend that whole gap taking the host's
-  // 'Browser', which is the flicker. The row here has already moved off the create url — a url the
-  // user submitted while the page was still staged — so the staged-title hold cannot cover it.
+  // Placement proves ownership before guest attachment. A staged navigation already changed URL, so title-hold cannot prevent first-snapshot Browser flicker.
   it('owns the row from the snapshot that adopts it, before any guest has attached', () => {
     const staged = localPage({ url: DEFERRED_URL, title: DEFERRED_URL })
     const state = makeState({
@@ -421,9 +395,7 @@ describe('browser rows this client hosts own their page content', () => {
     })
   })
 
-  // Why a mapping and not a field: an owned row emits no page patch at all, so every value
-  // assertion here reads through to the seeded state and would pass just as well if the row had
-  // been dropped from the mirror entirely. The host tab id is only recorded for rows that survive.
+  // Owned rows emit no page patch; value checks alone pass if dropped entirely. Host-tab mapping proves survival.
   it('still mirrors the row it declines to overwrite', () => {
     const state = stateWithLocalRow()
     applyStaleSnapshot(state)

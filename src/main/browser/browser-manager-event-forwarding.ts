@@ -13,7 +13,7 @@ export abstract class BrowserManagerEventForwarding extends BrowserManagerBindin
   ): void {
     const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
     if (!browserTabId) {
-      // Why: a failure can arrive before the tab is registered; queue by guest ID so registerGuest can replay it.
+      // Failures can precede registration; registerGuest replays them by guest ID.
       this.pendingLoadFailuresByGuestId.set(guestWebContentsId, loadError)
       return
     }
@@ -85,6 +85,14 @@ export abstract class BrowserManagerEventForwarding extends BrowserManagerBindin
   }
 
   protected sendPopupEvent(browserTabId: string, event: PendingPopupEvent): void {
+    // An Orca tab is reported where it is requested and a child window where it opens.
+    if (event.action !== 'opened-in-orca') {
+      this.pageEvents.emit(browserTabId, {
+        kind: 'popup',
+        action: event.action,
+        origin: event.origin
+      })
+    }
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     if (!renderer) {
       return

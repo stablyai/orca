@@ -1,5 +1,8 @@
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
+import { aiVaultScanWork, trackAiVaultScanProgress } from './ai-vault-scan-progress'
+import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 import type { AiVaultSessionTitle } from '../../shared/ai-vault-session-title'
+import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import { readAiVaultFirstUserPrompt } from './session-first-user-prompt-read'
 import {
   flushSessionParseCachePersist,
@@ -21,6 +24,7 @@ import {
 import { readAiVaultSessionTitlesFromFiles } from './session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from './session-title-request-paths'
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
+import { noteWslDistroMayHaveStopped, noteWslDistroWoken } from '../wsl-background-distro-gate'
 
 if (!process.send) {
   throw new Error('AI Vault service requires a parent IPC channel.')
@@ -45,13 +49,27 @@ function titleKey(request: { agent: string; sessionId: string }): string {
   return `${request.agent}\0${request.sessionId}`
 }
 
+async function scanReportingProgress(
+  request: Extract<AiVaultServiceRequest, { operation: 'scan' }>,
+  signal: AbortSignal
+): Promise<{ result: AiVaultListResult; work: AiVaultScanWork | null }> {
+  const stopProgress = trackAiVaultScanProgress(signal, (work) =>
+    send({ type: 'progress', id: request.id, work })
+  )
+  try {
+    const result = await scanAiVaultSessions({ ...request.options, signal })
+    return { result, work: aiVaultScanWork(signal) }
+  } finally {
+    stopProgress()
+  }
+}
+
 async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultServiceResultValue> {
   if (sessionSearch.handles(request)) {
     try {
       return await sessionSearch.execute(request)
     } finally {
-      // A search registers no controller, so nothing else consumes a cancel sent
-      // for one; without this the id sits in the set for the process's life.
+      // Search has no controller to consume cancellation; discard its id here.
       cancelled.delete(request.id)
     }
   }
@@ -90,7 +108,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
       }
     }
     const startedAt = performance.now()
-    const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })
+    const { result, work } = await scanReportingProgress(request, controller.signal)
     for (const session of result.sessions) {
       if ((session.agent === 'claude' || session.agent === 'codex') && session.title.trim()) {
         cacheServiceTitle(titleIndex, {
@@ -102,7 +120,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     }
     return {
       operation: 'scan',
-      value: { result, durationMs: performance.now() - startedAt }
+      value: { result, durationMs: performance.now() - startedAt, work }
     }
   } finally {
     controllers.delete(request.id)
@@ -110,9 +128,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     for (const path of invalidatedPaths) {
       invalidateSessionParseCacheEntry(path)
     }
-    // Why: the re-apply only protects reads that overlapped the invalidation.
-    // Once nothing else is executing it has done its job, and holding the paths
-    // would re-evict them on every later request for the life of the process.
+    // Stop re-evicting paths once every read that could overlap the invalidation has finished.
     if (controllers.size === 0) {
       invalidatedPaths.clear()
     }
@@ -180,7 +196,11 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     if (raw.sessionSearch) {
       sessionSearch.apply(raw.sessionSearch)
     }
-    send({ type: 'ready', protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION, pid: process.pid })
+    send({
+      type: 'ready',
+      protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION,
+      pid: process.pid
+    })
     return
   }
   if (!initialized || shuttingDown) {
@@ -217,6 +237,14 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
   }
   if (raw?.type === 'shutdown') {
     void shutdown()
+    return
+  }
+  if (raw?.type === 'wslDistroNote' && typeof raw.distro === 'string') {
+    if (raw.kind === 'stopped') {
+      noteWslDistroMayHaveStopped(raw.distro)
+    } else {
+      noteWslDistroWoken(raw.distro)
+    }
     return
   }
   if (isAiVaultServiceRequest(raw)) {

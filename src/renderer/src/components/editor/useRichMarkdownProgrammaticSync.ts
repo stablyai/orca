@@ -8,10 +8,11 @@ import { normalizeEmptyListItems } from './rich-markdown-normalize'
 import { syncSlashMenu, type SlashMenuState } from './rich-markdown-slash-commands'
 import {
   createRichMarkdownImageResolverContext,
-  setRichMarkdownImageResolverContext,
-  type RichMarkdownImageResolverSettings
+  setRichMarkdownImageResolverContext
 } from './rich-markdown-image-context'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import { notifyStaleViewEditRejected, staleViewEditEpoch } from './editor-stale-view-edit'
 
 type RichMarkdownProgrammaticSyncOptions = {
   codec: RichMarkdownEditorCodec
@@ -23,12 +24,15 @@ type RichMarkdownProgrammaticSyncOptions = {
   externalSshTargetId?: string
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   lastCommittedMarkdownRef: MutableRefObject<string>
+  onContentChangeRef: MutableRefObject<(content: string) => void>
   originalSourceRef: MutableRefObject<string>
   baseCanonicalRef: MutableRefObject<string>
   markdownDocuments?: MarkdownDocument[]
   rootRef: MutableRefObject<HTMLDivElement | null>
-  runtimeEnvironmentId?: string | null
-  settings: RichMarkdownImageResolverSettings
+  runtimeTarget: RuntimeClientTarget | null
+  /** Pending debounced commit, based on the text this view last synced. */
+  serializeTimerRef: MutableRefObject<number | null>
+  pendingEditEpochRef: MutableRefObject<number>
   slashMenuSetter: Dispatch<SetStateAction<SlashMenuState | null>>
   worktreeId: string
   worktreeRoot: string | null
@@ -50,12 +54,14 @@ export function useRichMarkdownProgrammaticSync({
   externalSshTargetId,
   isApplyingProgrammaticUpdateRef,
   lastCommittedMarkdownRef,
+  onContentChangeRef,
   originalSourceRef,
   baseCanonicalRef,
   markdownDocuments,
   rootRef,
-  runtimeEnvironmentId,
-  settings,
+  runtimeTarget,
+  serializeTimerRef,
+  pendingEditEpochRef,
   slashMenuSetter,
   worktreeId,
   worktreeRoot
@@ -71,8 +77,7 @@ export function useRichMarkdownProgrammaticSync({
         createRichMarkdownImageResolverContext({
           filePath,
           externalSshTargetId,
-          runtimeEnvironmentId,
-          settings,
+          runtimeTarget,
           worktreeId,
           worktreeRoot
         })
@@ -85,8 +90,7 @@ export function useRichMarkdownProgrammaticSync({
     externalSshTargetId,
     filePath,
     isApplyingProgrammaticUpdateRef,
-    runtimeEnvironmentId,
-    settings,
+    runtimeTarget,
     worktreeId,
     worktreeRoot
   ])
@@ -109,17 +113,28 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor) {
       return
     }
-    if (content === lastCommittedMarkdownRef.current) {
+    const editEpoch = pendingEditEpochRef.current
+    const discarded = staleViewEditEpoch(fileId) !== editEpoch
+    const pendingTimer = serializeTimerRef.current
+    if (content === lastCommittedMarkdownRef.current && !(pendingTimer !== null && discarded)) {
       return
     }
-    if (editor.getMarkdown() === content) {
-      // Why: disk bytes changed but already render-equal to the current doc (e.g.
-      // an external tool canonicalized byte-level style). Skip the disruptive
-      // reload, but adopt the new bytes as the reconciliation baseline so the next
-      // edit patches onto the fresh source, not the stale pre-change source.
+    const matchesSharedText = editor.getMarkdown() === content
+    if (pendingTimer !== null) {
+      window.clearTimeout(pendingTimer)
+      serializeTimerRef.current = null
+      if (!discarded && !matchesSharedText) {
+        notifyStaleViewEditRejected(fileId, editEpoch)
+      }
+    }
+    if (matchesSharedText) {
+      // Adopt fresh source bytes without replacing an already matching document.
       lastCommittedMarkdownRef.current = content
       originalSourceRef.current = content
       baseCanonicalRef.current = content
+      if (pendingTimer !== null) {
+        onContentChangeRef.current(content)
+      }
       return
     }
     isApplyingProgrammaticUpdateRef.current = true
@@ -135,6 +150,10 @@ export function useRichMarkdownProgrammaticSync({
     } finally {
       isApplyingProgrammaticUpdateRef.current = false
     }
+    if (pendingTimer !== null) {
+      // Why: republishing the shared text recomputes the dirty flag this view's typing raised.
+      onContentChangeRef.current(content)
+    }
     syncSlashMenu(editor, rootRef.current, slashMenuSetter)
     syncDocLinkMenu(editor, rootRef.current, docLinkMenuSetter)
   }, [
@@ -145,9 +164,12 @@ export function useRichMarkdownProgrammaticSync({
     fileId,
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
+    onContentChangeRef,
+    pendingEditEpochRef,
     originalSourceRef,
     baseCanonicalRef,
     rootRef,
+    serializeTimerRef,
     slashMenuSetter
   ])
 }
@@ -163,19 +185,22 @@ function applyExternalRichMarkdownContent(
   try {
     const hadFocus = editor.isFocused
     const { from: prevFrom, to: prevTo } = editor.state.selection
-    editor.commands.setContent(
-      encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
-      {
-        contentType: 'markdown',
-        emitUpdate: false
-      }
-    )
-    // Why: normalizeEmptyListItems avoids splitting hard-wrapped paragraphs from
-    // external content, matching onCreate's single-paragraph reflow behavior.
+    // Exclude other views’ edits/reloads from this view’s undo so it cannot revert or resurrect their text.
+    editor
+      .chain()
+      .setMeta('addToHistory', false)
+      .setContent(
+        encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
+        {
+          contentType: 'markdown',
+          emitUpdate: false
+        }
+      )
+      .run()
+    // Normalize empty lists without splitting soft-wrapped prose, matching initial editor loading.
     normalizeEmptyListItems(editor)
     lastCommittedMarkdownRef.current = content
-    // Why: reset the reconciliation baseline to the freshly loaded external bytes
-    // so subsequent edits preserve the new source style, not the pre-reload one.
+    // Adopt external source style so later edits cannot revive the pre-reload formatting.
     originalSourceRef.current = content
     baseCanonicalRef.current = editor.getMarkdown()
     if (hadFocus) {

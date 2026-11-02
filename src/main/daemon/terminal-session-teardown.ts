@@ -1,4 +1,5 @@
 import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { excludeShellBackgroundJobs } from '../pty-shell-job-preservation'
 import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
 import type { Session } from './session'
 
@@ -12,8 +13,7 @@ type TeardownOperation = {
   immediatePromise: Promise<void> | null
 }
 
-/** Owns teardown by session id until descendant capture and root signalling
- * finish, even when the root exits and its Session is reaped. */
+/** Retain teardown ownership across descendant capture, root exit, and Session reaping. */
 export class TerminalSessionTeardown {
   private operations = new Map<string, TeardownOperation>()
 
@@ -23,8 +23,7 @@ export class TerminalSessionTeardown {
     return this.operations.get(sessionId)?.promise
   }
 
-  /** Resolves once this id's tracked teardown has released the process — a rejected teardown
-   *  released it too. Callers re-read session state afterwards and decide for themselves. */
+  /** Wait through rejected teardown work too; callers must recheck the Session’s actual liveness. */
   async settle(sessionId: string): Promise<void> {
     const operation = this.operations.get(sessionId)
     if (operation) {
@@ -54,8 +53,7 @@ export class TerminalSessionTeardown {
     if (pending) {
       pending.immediate = true
       if (pending.rootSignalled && pending.session.isAlive) {
-        // Why: the snapshot callback may have already sent the graceful root
-        // signal in this turn; an immediate join must still escalate and wait.
+        // Escalate even if the snapshot callback already sent a graceful signal in this turn.
         pending.rootCompletion = pending.session.forceKillAndWaitForExit()
       }
     }
@@ -71,21 +69,24 @@ export class TerminalSessionTeardown {
   }
 
   killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {
-    if (session.launchAgent) {
-      return this.killAgentSession(sessionId, session, immediate)
+    if (!session.launchAgent && !immediate && process.platform === 'win32') {
+      // The PTY job would also end `start /b` and GUI children, which a graceful close leaves running.
+      if (session.beginTermination()) {
+        session.signalTerminationRoot()
+        session.scheduleForceDisposeFallback()
+      }
+      return
     }
-    if (immediate) {
-      // Why tracked like the agent path: this claims termination on the Session and then awaits
-      // an OS probe and taskkill, and a create landing inside that window must be able to wait it
-      // out rather than be told the id is absent (#18046).
-      return this.track(sessionId, session, immediate, () =>
-        this.forceKillPlainShellSession(sessionId, session)
-      )
+    // Hand-typed agents carry no launch metadata, yet their detached tools outlive the shell's SIGHUP.
+    if (session.launchAgent || !immediate) {
+      return this.killAfterDescendantSnapshot(sessionId, session, immediate)
     }
-    session.kill()
+    // Track the async probe so a concurrent create waits instead of treating the terminating ID as absent (#18046).
+    return this.track(sessionId, session, immediate, () =>
+      this.forceKillPlainShellSession(sessionId, session)
+    )
   }
 
-  /** Publishes an operation for `sessionId` and retires it once the teardown settles. */
   private track(
     sessionId: string,
     session: Session,
@@ -128,22 +129,20 @@ export class TerminalSessionTeardown {
     await session.forceKillAndWaitForExit()
   }
 
-  private killAgentSession(
+  private killAfterDescendantSnapshot(
     sessionId: string,
     session: Session,
     immediate: boolean
   ): void | Promise<void> {
     const pending = this.operations.get(sessionId)
     if (pending) {
-      // Why: an immediate caller is a stronger teardown request and must not
-      // acknowledge a still-graceful root kill while capture is pending.
+      // An immediate join must escalate the pending graceful request.
       pending.immediate ||= immediate
       return pending.promise
     }
 
     if (!session.beginTermination()) {
-      // A completed graceful sweep can leave the root alive during its grace
-      // window. Immediate teardown may safely escalate once no scan is pending.
+      // A graceful sweep may leave the root alive; escalate after its scan has finished.
       if (immediate && session.isAlive && session.isTerminating) {
         return session.forceKillAndWaitForExit()
       }
@@ -158,8 +157,7 @@ export class TerminalSessionTeardown {
         killWithDescendantSweep(
           session.pid,
           () => {
-            // Why: natural exit reaps the PID while ps is running. Never signal that
-            // stale numeric PID after the Session no longer represents a live root.
+            // Natural exit can recycle the PID during capture; signal only while this Session still owns a live root.
             if (!session.isAlive) {
               return
             }
@@ -171,20 +169,22 @@ export class TerminalSessionTeardown {
             }
           },
           {
-            // Why: the descendant rows are only authoritative while this exact
-            // Session still owns the root PID captured by ps.
+            // Captured descendants are authoritative only while this exact Session owns the live root.
             ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
             terminateOwnedTree: () => session.terminateOwnedTree(),
             terminateDescendants: (snapshot) => {
-              entry.descendantVerification = terminateShutdownDescendants(snapshot)
+              entry.descendantVerification = terminateShutdownDescendants(
+                session.launchAgent || entry.immediate
+                  ? snapshot
+                  : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild)
+              )
               return entry.descendantVerification
             },
             awaitEscalation: () => entry.immediate
           }
         )
       )
-      // Why: descendant capture completion only proves signals were requested;
-      // destructive callers must retain the native owner until OS-confirmed exit.
+      // Requested signals do not prove exit; retain native ownership until OS-confirmed death.
       return sweep.then(() => entry.rootCompletion)
     })
   }

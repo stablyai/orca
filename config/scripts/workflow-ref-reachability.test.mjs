@@ -4,13 +4,16 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const readWorkflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
 const windowsVet = readWorkflow('dev-channel-win-build').jobs['build-win'].steps.find(
   (step) => step.id === 'vetted'
 )
-const macSteps = readWorkflow('adhoc-mac-build').jobs['build-adhoc-mac'].steps
+const adhoc = readWorkflow('adhoc-mac-build')
+const resolveSteps = adhoc.jobs['resolve-ref'].steps
+const earlyVet = resolveSteps.find((step) => step.id === 'resolve')
+const macSteps = adhoc.jobs['build-adhoc-mac-arch'].steps
 const macVet = macSteps.find((step) => step.id === 'vetted')
 const macCheckout = macSteps.find((step) => step.name === 'Checkout the requested ref')
 const directory = mkdtempSync(join(tmpdir(), 'workflow-ref-reachability-'))
@@ -40,6 +43,8 @@ beforeAll(async () => {
   for (const [ref, sha] of [
     ['refs/heads/Fix', upper],
     ['refs/heads/fix', lower],
+    ['refs/heads/Release', lower],
+    ['refs/tags/plain', upper],
     ['refs/pull/1/head', untrusted]
   ]) {
     await git(['-C', repository, 'update-ref', ref, sha])
@@ -55,14 +60,16 @@ async function vet(step, ref) {
   const scratch = mkdtempSync(join(directory, 'attempt-'))
   const script = join(scratch, 'vet.sh')
   writeFileSync(script, step.run)
-  return runProcess({
+  const output = join(scratch, 'output')
+  writeFileSync(output, '')
+  const result = await runProcess({
     program: 'bash',
     args: [script],
     env: {
       ...identity,
       REPO_URL: pathToFileURL(repository).href,
       RUNNER_TEMP: scratch,
-      GITHUB_OUTPUT: join(scratch, 'output'),
+      GITHUB_OUTPUT: output,
       REQUESTED_REF: ref,
       REQUESTED_SHA: ref,
       CHANNEL: 'hourly',
@@ -70,6 +77,7 @@ async function vet(step, ref) {
       VERSION: '1.0.0-hourly.test'
     }
   })
+  return { ...result, output: readFileSync(output, 'utf8') }
 }
 
 describe('release ref trust with case-twin names', () => {
@@ -78,24 +86,77 @@ describe('release ref trust with case-twin names', () => {
       const result = await vet(windowsVet, sha)
       expect(result.code, result.stderr).toBe(0)
     }
-    for (const ref of ['Fix', 'fix', 'Release', 'release', ancestor]) {
-      const result = await vet(macVet, ref)
-      expect(result.code, result.stderr).toBe(0)
+    for (const step of [earlyVet, macVet]) {
+      for (const [ref, sha] of [
+        ['Fix', upper],
+        ['fix', lower],
+        ['Release', lower],
+        ['release', lower],
+        ['refs/heads/Fix', upper],
+        ['refs/tags/Release', upper],
+        ['plain', upper],
+        ['refs/tags/release', lower],
+        [upper, upper],
+        [upper.toUpperCase(), upper],
+        [ancestor, ancestor]
+      ]) {
+        const result = await vet(step, ref)
+        expect(result.code, result.stderr).toBe(0)
+        expect(result.output).toBe(`sha=${sha}\n`)
+      }
     }
   })
 
   it('rejects PR-only commits even when the server has their objects', async () => {
-    for (const step of [windowsVet, macVet]) {
+    for (const step of [windowsVet, earlyVet, macVet]) {
       const result = await vet(step, untrusted)
       expect(result.code).not.toBe(0)
       expect(result.stdout).toContain('not reachable from any branch or tag')
+      expect(result.output).toBe('')
     }
-    const result = await vet(macVet, 'refs/pull/1/head')
-    expect(result.code).not.toBe(0)
-    expect(result.stdout).toContain('Refusing to build PR ref')
+    for (const step of [earlyVet, macVet]) {
+      for (const ref of ['refs/pull/1/head', 'pull/1/head']) {
+        const result = await vet(step, ref)
+        expect(result.code).not.toBe(0)
+        expect(result.stdout).toContain('Refusing to build PR ref')
+        expect(result.output).toBe('')
+      }
+    }
+  })
+
+  it('rejects revision expressions and abbreviated SHAs before emitting an identity', async () => {
+    for (const ref of ['Fix~1', 'Fix^{commit}', ancestor.slice(0, 12), 'missing', '--help']) {
+      const result = await vet(earlyVet, ref)
+      expect(result.code, ref).not.toBe(0)
+      expect(result.output, ref).toBe('')
+    }
+  })
+
+  it('validates before source checkout and gates every source-consuming adhoc job', () => {
+    expect(resolveSteps).toHaveLength(1)
+    expect(resolveSteps[0].id).toBe('resolve')
+    expect(earlyVet.env.REQUESTED_REF).toBe('${{ inputs.ref || github.ref_name }}')
+    expect(adhoc.jobs['resolve-ref'].outputs.sha).toBe('${{ steps.resolve.outputs.sha }}')
+    expect(earlyVet.run).toBe(macVet.run)
+    for (const job of Object.values(adhoc.jobs)) {
+      const consumesSource =
+        job.with?.ref ||
+        job.steps?.some(
+          (step) =>
+            step.uses?.startsWith('actions/checkout@') &&
+            step.with?.ref !== '${{ github.workflow_sha }}'
+        )
+      if (!consumesSource) {
+        continue
+      }
+      expect([job.needs].flat()).toContain('resolve-ref')
+      expect(job.if || '').not.toContain('always()')
+    }
   })
 
   it('checks out the vetted SHA shallowly without mirroring case-twin refs again', async () => {
+    expect(macCheckout.with.ref).toBe('${{ steps.vetted.outputs.sha }}')
+    expect(macCheckout.with['persist-credentials']).toBe(false)
     const checkout = join(directory, 'checkout')
     const env = { ...identity, ...macCheckout.env }
     await git(['init', checkout], env)

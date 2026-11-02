@@ -5,12 +5,7 @@ const { closeSync, openSync, readSync } = require('node:fs')
 /** PE `IMAGE_FILE_HEADER.Machine` values, so a cross-build cannot silently emit host arch. */
 const PE_MACHINE = { x64: 0x8664, arm64: 0xaa64 }
 
-/**
- * `IMAGE_FILE_HEADER.Machine`, or null when the file is not a PE image.
- *
- * Null rather than a throw because callers ask this of files they did not
- * produce: a truncated or non-PE binary is a thing to decide about, not a crash.
- */
+// Return null for truncated/non-PE input so caller can classify external artifact instead of crashing.
 function readPeMachine(binaryPath) {
   const fd = openSync(binaryPath, 'r')
   try {
@@ -32,7 +27,6 @@ function readPeMachine(binaryPath) {
   }
 }
 
-/** How to name a machine field in an error, including the file that has none. */
 function describePeMachine(machine) {
   return machine === null ? 'not a PE image' : `machine 0x${machine.toString(16)}`
 }

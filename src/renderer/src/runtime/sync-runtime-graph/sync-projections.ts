@@ -2,6 +2,8 @@ import type { AppState } from '@/store/types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { stableHashString } from './editor-draft-hash'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { getOpenFileIndexes } from './mobile-session-inputs'
+import { getMobileMarkdownSourceFile, isMobilePublishableOpenFile } from './mobile-session-surfaces'
 import {
   EMPTY_BROWSER_PAGES_BY_WORKSPACE,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
@@ -108,7 +110,9 @@ export function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openF
               language: file.language,
               mode: file.mode,
               diffSource: file.diffSource,
+              branchOldPath: file.branchOldPath,
               isDirty: file.isDirty,
+              mirroredFromRuntimeSession: file.mirroredFromRuntimeSession,
               isUntitled: file.isUntitled,
               deleteUntouchedOnClose: file.deleteUntouchedOnClose,
               markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
@@ -144,6 +148,8 @@ function buildBrowserWorkspacesProjection(
             projection: JSON.stringify(
               workspaces.map((workspace) => ({
                 id: workspace.id,
+                sessionProfileId: workspace.sessionProfileId,
+                sessionPartition: workspace.sessionPartition,
                 activePageId: workspace.activePageId,
                 title: workspace.title,
                 url: workspace.url,
@@ -187,6 +193,7 @@ function buildBrowserPagesProjection(
             projection: JSON.stringify(
               pages.map((page) => ({
                 id: page.id,
+                browserRuntimeEnvironmentId: page.browserRuntimeEnvironmentId,
                 title: page.title,
                 url: page.url,
                 loading: page.loading,
@@ -214,56 +221,91 @@ export function buildRuntimeMobileBrowserProjection(state: AppState): string {
   )},"pagesByWorkspace":${buildBrowserPagesProjection(getBrowserPagesByWorkspace(state))}}`
 }
 
-/**
- * Why memoized per file id: `setEditorDraft` fires on every Monaco keystroke and re-spreads
- * `editorDrafts`, so an unmemoized rebuild re-hashed every open dirty file's full text on the
- * input path. Only the typed file's draft string changes identity, so only it needs rehashing.
- */
-function getEditorDraftHashCache(editorDrafts: AppState['editorDrafts']): EditorDraftHashCache {
+let cachedDraftSourceFileIds: {
+  source: AppState['openFiles']
+  ids: ReadonlySet<string>
+} | null = null
+
+function getEditorDraftSourceFileIds(openFiles: AppState['openFiles']): ReadonlySet<string> {
+  if (cachedDraftSourceFileIds?.source === openFiles) {
+    return cachedDraftSourceFileIds.ids
+  }
+  const indexes = getOpenFileIndexes(openFiles)
+  const ids = new Set<string>()
+  for (const file of openFiles) {
+    if (!isMobilePublishableOpenFile(file)) {
+      continue
+    }
+    const source = getMobileMarkdownSourceFile(file, indexes.byWorktreeAndId.get(file.worktreeId))
+    if (source) {
+      ids.add(source.id)
+    }
+  }
+  cachedDraftSourceFileIds = { source: openFiles, ids }
+  return ids
+}
+
+// Reuse unchanged file hashes between coalesced snapshot captures.
+function getEditorDraftHashCache(
+  editorDrafts: AppState['editorDrafts'],
+  openFiles: AppState['openFiles']
+): EditorDraftHashCache {
   const cached = graphState.cachedEditorDraftHashes
-  if (cached?.source === editorDrafts) {
+  if (cached?.source === editorDrafts && cached.openFiles === openFiles) {
     return cached
   }
+
+  const sourceFileIds = getEditorDraftSourceFileIds(openFiles)
 
   const previousEntries = cached?.entries
   const entries = new Map<string, EditorDraftHashCacheEntry>()
   const hashByFileId = new Map<string, string>()
-  const parts: string[] = []
-  for (const [fileId, content] of Object.entries(editorDrafts)) {
+  for (const fileId of sourceFileIds) {
+    const content = editorDrafts[fileId]
+    if (content === undefined) {
+      continue
+    }
     const previous = previousEntries?.get(fileId)
     let entry: EditorDraftHashCacheEntry
     if (previous?.content === content) {
       entry = previous
     } else {
-      const fileIdJson = previous?.fileIdJson ?? JSON.stringify(fileId)
       const hash = stableHashString(content)
-      entry = { content, hash, fileIdJson, projection: `${fileIdJson}:${JSON.stringify(hash)}` }
+      entry = { content, hash }
     }
     entries.set(fileId, entry)
     hashByFileId.set(fileId, entry.hash)
-    parts.push(entry.projection)
   }
   const next: EditorDraftHashCache = {
     source: editorDrafts,
+    openFiles,
     entries,
-    hashByFileId,
-    projection: `{${parts.join(',')}}`
+    hashByFileId
   }
   graphState.cachedEditorDraftHashes = next
   return next
 }
 
 export function buildRuntimeMobileEditorDraftsProjection(
-  editorDrafts: AppState['editorDrafts']
-): string {
-  return getEditorDraftHashCache(editorDrafts).projection
+  editorDrafts: AppState['editorDrafts'],
+  openFiles: AppState['openFiles']
+): ReadonlyMap<string, string> {
+  const drafts = new Map<string, string>()
+  for (const fileId of getEditorDraftSourceFileIds(openFiles)) {
+    const content = editorDrafts[fileId]
+    if (content !== undefined) {
+      drafts.set(fileId, content)
+    }
+  }
+  return drafts
 }
 
-/** Per-file draft version stamps for the mobile session snapshot; shares the keystroke memo. */
+/** Per-file version stamps are hashed only when a mobile snapshot is built. */
 export function getEditorDraftVersionByFileId(
-  editorDrafts: AppState['editorDrafts']
+  editorDrafts: AppState['editorDrafts'],
+  openFiles: AppState['openFiles']
 ): ReadonlyMap<string, string> {
-  return getEditorDraftHashCache(editorDrafts).hashByFileId
+  return getEditorDraftHashCache(editorDrafts, openFiles).hashByFileId
 }
 
 export function resetRuntimeMobileSyncProjectionCachesForTests(): void {
@@ -272,4 +314,5 @@ export function resetRuntimeMobileSyncProjectionCachesForTests(): void {
   graphState.cachedBrowserWorkspacesProjection = null
   graphState.cachedBrowserPagesProjection = null
   graphState.cachedEditorDraftHashes = null
+  cachedDraftSourceFileIds = null
 }

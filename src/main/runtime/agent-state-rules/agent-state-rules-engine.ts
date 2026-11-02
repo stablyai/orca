@@ -14,20 +14,15 @@ import { compileTextAnchor } from './agent-state-text-anchors'
 import { isSettledAfter } from './blocked-text-layer'
 import { isCodexComposerReadyScreen, isCodexHeaderReadyScreen } from './codex-screen-predicates'
 
-/** What the first matching rule answered. Callers rank it among the other readiness lanes. */
 export type AgentStateVerdict = { ruleId: string } & AgentStateRuleAnswer
 
-/**
- * The regions a lane lets the rules read. A region that is absent, or null because no trustworthy
- * copy exists, skips the rules that read it: the lane reads only the evidence it ranks.
- */
+/** Missing/untrusted regions skip their rules; each lane reads only the evidence it ranks. */
 export type AgentStateRegions = {
   readScreenLines?: () => readonly string[] | null
-  /** The lowercased text tail. */
+  /** Lowercased text tail. */
   readText?: () => string
-  /** The status the shared title classifier gave the pane title. */
   readTitleStatus?: () => AgentStatus | null
-  /** False on a pane with no output clock (restored or adopted); absent reads as clocked. */
+  /** False for restored/adopted panes without an output clock; absent means clocked. */
   hasOutputClock?: boolean
 }
 
@@ -37,7 +32,7 @@ type RegionReader<T> = () => T | null
 
 type RegionReads = {
   screen: RegionReader<readonly string[]>
-  /** The screen joined and lowercased, for named screen predicates. */
+  /** Joined, lowercased screen for named predicates. */
   screenText: RegionReader<string>
   text: RegionReader<string>
   title: RegionReader<AgentStatus>
@@ -47,7 +42,6 @@ type CompiledRule = {
   verdict: AgentStateVerdict
   region: Region
   skipWithoutClock: boolean
-  /** False when its region is unreadable, which skips the rule. */
   matches: (reads: RegionReads) => boolean
 }
 
@@ -78,7 +72,7 @@ function compileCondition(
       return (reads) => readThen(reads.title, (status) => status === when.status)
     case 'text': {
       const anchor = file.anchors.find((candidate) => candidate.id === when.anchor)
-      // Why unreachable: the schema requires the anchor to be one of this file's text anchors.
+      // Schema validation guarantees this file owns the text anchor.
       if (anchor?.when.region !== 'text') {
         throw new Error(`agent state rules ${file.id}: no text anchor ${when.anchor}`)
       }
@@ -90,7 +84,6 @@ function compileCondition(
 }
 
 export function compileAgentRules(file: AgentStateRulesFile): CompiledRule[] {
-  // Why stable: equal priorities keep file order.
   return file.rules
     .toSorted((left, right) => right.priority - left.priority)
     .map((rule) => ({
@@ -119,21 +112,16 @@ const filesByKey = compiledFromActiveAgentStateRules(
     )
 )
 
-// Why the unknown-pane file for a null agent: an adopted pane can still run a known agent.
+// Adopted panes can run a known agent without a launch identity.
 function compiledFileFor(agent: TuiAgent | null | undefined): CompiledFile | undefined {
   return filesByKey().get(agent ?? UNKNOWN_PANE_RULES_ID)
 }
 
-/**
- * Whether the agent's rules read the PTY's trusted grid. Why it changes which screen is read, and
- * how a clockless wait probes: those rules were recorded against that grid, while every other
- * agent keeps the live screen.
- */
+/** Preserve the grid the rules were recorded against; also determines clockless wait probing. */
 export function readsTrustedScreen(agent: TuiAgent | null | undefined): boolean {
   return compiledFileFor(agent)?.readsTrustedScreen ?? false
 }
 
-/** Which fresh hook rows for the agent's main turn decide readiness ahead of its rules. */
 export function hookAuthority(agent: TuiAgent | null | undefined): HookAuthority {
   return compiledFileFor(agent)?.hooks ?? 'identity-only'
 }
@@ -149,20 +137,16 @@ function isStrongQuietIdle(verdict: AgentStateVerdict): boolean {
   return verdict.state === 'idle' && verdict.strength === 'strong' && verdict.requiresQuiet
 }
 
-/** Whether the agent has a ready sign it also paints mid-turn, which the quiet lane must read. */
 export function hasQuietReadyRules(agent: TuiAgent | null | undefined): boolean {
   return someRule(agent, (rule) => isStrongQuietIdle(rule.verdict))
 }
 
-/**
- * Whether the agent's own ready text is held to quiet. Why it shuts the shared text lane on a
- * clocked pane: that lane settles any rule file's ready text at once, which would skip the quiet.
- */
+/** Shut the shared immediate text lane when this agent's ready text must wait for quiet. */
 export function holdsReadyTextToQuiet(agent: TuiAgent | null | undefined): boolean {
   return someRule(agent, (rule) => rule.region === 'text' && isStrongQuietIdle(rule.verdict))
 }
 
-/** Whether the agent's own idle-title rule waits for quiet; null when it has none. */
+/** Null means this agent has no idle-title rule. */
 export function idleTitleRequiresQuiet(agent: TuiAgent | null | undefined): boolean | null {
   const verdict = compiledFileFor(agent)?.rules.find((rule) => rule.region === 'title')?.verdict
   return verdict?.state === 'idle' ? verdict.requiresQuiet : null
@@ -187,7 +171,7 @@ export function evaluateCompiledRules(
     text: memoize(regions.readText),
     title: memoize(regions.readTitleStatus)
   }
-  // Why no answer rather than a refusal: with no readable region the caller's other lanes decide.
+  // Unreadable regions leave the verdict to other lanes.
   for (const rule of rules) {
     if (rule.skipWithoutClock && regions.hasOutputClock === false) {
       continue
@@ -199,7 +183,7 @@ export function evaluateCompiledRules(
   return null
 }
 
-/** The agent's priority list over its regions: the first match answers; none leaves it to the caller. */
+/** First match wins; no match leaves the verdict to the caller. */
 export function evaluateAgentStateRules(
   agent: TuiAgent | null | undefined,
   regions: AgentStateRegions

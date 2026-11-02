@@ -11,34 +11,13 @@ import type { SessionSearchFileRow, SessionSearchStore } from './session-search-
 
 export type SessionSearchIndexPassOptions = {
   signal?: AbortSignal
-  /** The store's rows for this pass, read once. Absent means the index holds nothing. */
+  /** Snapshot of indexed rows; a missing key means the path has no row. */
   rows: ReadonlyMap<string, SessionSearchFileRow>
-  /**
-   * True once the pass has spent its wall-clock deadline. The one bound on how
-   * long a pass reads for: files and bytes are proxies for time, and the thing
-   * worth capping is the share of the wall clock an unasked background index
-   * takes. Never applied before the pass has read anything, so an oversized
-   * transcript is read alone rather than deferred for ever.
-   */
+  /** Stop between files once overdue, but always read one file to avoid starving large transcripts. */
   overdue?: () => boolean
 }
 
-/**
- * Reads whatever the decide step says is owed, until the deadline.
- *
- * Nothing is recorded about what it did not reach beyond `left`, a count the
- * caller reports and nothing acts on. A candidate the deadline cut off is still
- * owed on the next pass for the same reason it was owed on this one — its row
- * says so — so there is no queue to keep, nothing to bound, and nothing to
- * drop. What the reads themselves leave behind is written by the index consumer
- * onto the rows.
- *
- * `left` is what makes the backlog sayable: a candidate with no row yet, or one
- * whose row does not say it is owed, is counted by no `due` query, so without
- * this the status has no way to tell an index that holds everything from one
- * that has barely started. Candidates whose row is already `due` are left out,
- * because the status adds `left` to that same count.
- */
+/** Deferred candidates stay owed by their stored state; left counts backlog outside the due-row count. */
 export async function runSessionSearchIndexPass(
   store: SessionSearchStore,
   candidates: readonly SessionFileCandidate[],
@@ -56,36 +35,35 @@ export async function runSessionSearchIndexPass(
     const decision = sessionSearchReadDecision({
       candidate,
       row,
-      // Only asked for a path the index holds something for; for the rest the
-      // decision is already made and this would be a query per new file.
+      // New paths already require reading; avoid a redundant cursor query per file.
       cursor: row ? store.indexedFile(path, fileIdentity(candidate.file)) : null,
       cutoffMs
     })
     if (decision === 'skip') {
       continue
     }
-    // The decide step is one cursor lookup, so it runs for the whole list even
-    // once the deadline has gone: knowing what is owed costs nothing, and the
-    // count of what a pass left is worth more than the microseconds.
+    // Continue decisions after the read deadline to count remaining backlog.
     outOfTime ||= read > 0 && options.overdue?.() === true
     if (outOfTime) {
-      // A `due` row is already in `stateCounts().due`, which the status adds
-      // this to; counting it here would report the same file twice.
+      // Status adds left to due-row counts; exclude due rows here to avoid double counting.
       if (row?.state !== 'due') {
         left += 1
       }
       continue
     }
-    // The clock the deadline reads is one the owner may close behind: the read
-    // below writes to the store, so stop here rather than on a shut handle.
+    // Deadline callbacks may close the owner; recheck cancellation before touching the store.
     throwIfAiVaultScanCancelled(options.signal)
     read += 1
     try {
-      await parseAgentSessionFileCached(candidate, process.platform, stats, decision)
+      await parseAgentSessionFileCached(
+        candidate,
+        process.platform,
+        stats,
+        decision,
+        options.signal
+      )
     } catch (error) {
       throwIfAiVaultScanCancelled(options.signal)
-      // The reader reports a read it could not finish to the consumer, which is
-      // what records the failure on the row; nothing is counted here.
       console.warn(
         '[ai-vault-search] indexing skipped',
         candidate.agent,

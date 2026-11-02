@@ -12,6 +12,7 @@ import {
 } from '../../../shared/tui-agent-startup-shell'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type AiVaultResumeShellState = Pick<
   AppState,
@@ -28,29 +29,26 @@ export function resolveAiVaultResumeStartupShell(args: {
   state: AiVaultResumeShellState
   worktreeId?: string | null
   platform: NodeJS.Platform
-  isLocalSession: boolean
 }): AgentStartupShell {
-  // Why no login-shell probe: everything this command is built from — quoting
-  // and env clearing — is emitted in a form that is correct in sh and fish
-  // alike, so the Unix branch never has to know which one reads the line.
+  // No login-shell probe: quoting and env clearing are deliberately valid in both sh and fish.
   if (args.platform !== 'win32') {
     return 'posix'
   }
-  const projectRuntime = args.isLocalSession
-    ? getLocalProjectExecutionRuntimeContext(args.state, args.worktreeId, CLIENT_PLATFORM)
-    : undefined
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(
+    args.state,
+    args.worktreeId,
+    CLIENT_PLATFORM
+  )
   const workspacePath = getAiVaultResumeWorkspacePath(
     args.state,
     args.worktreeId ?? args.state.activeWorktreeId
   )
-  const shellOverride = args.isLocalSession
-    ? resolveLocalWindowsTerminalShellOverrideForTab({
-        explicitShellOverride: undefined,
-        defaultWindowsShell: args.state.settings?.terminalWindowsShell,
-        isWslWorktree: Boolean(workspacePath && parseWslUncPath(workspacePath)),
-        projectRuntime
-      })
-    : undefined
+  const shellOverride = resolveLocalWindowsTerminalShellOverrideForTab({
+    explicitShellOverride: undefined,
+    defaultWindowsShell: args.state.settings?.terminalWindowsShell,
+    isWslWorktree: Boolean(workspacePath && parseWslUncPath(workspacePath)),
+    projectRuntime
+  })
   const shell = shellOverride ? resolveWindowsShellStartupFamily(shellOverride) : undefined
   return resolveStartupShell(args.platform, shell)
 }
@@ -65,14 +63,15 @@ export function getAiVaultResumeWorkspacePath(
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return (
-      state.folderWorkspaces.find((workspace) => workspace.id === workspaceScope.folderWorkspaceId)
-        ?.folderPath ?? null
+      selectFolderWorkspaces(state).find(
+        (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+      )?.folderPath ?? null
     )
   }
   const targetWorktreeId =
     workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
   return (
-    Object.values(state.worktreesByRepo ?? {})
+    Object.values(selectWorktreesByRepo(state) ?? {})
       .flat()
       .find((candidate) => candidate.id === targetWorktreeId)?.path ?? null
   )
@@ -95,10 +94,10 @@ export function getAiVaultResumeWorkspaceWslDistro(
     activeWorktreeId: state.activeWorktreeId ?? null,
     projects: state.projects ?? [],
     settings: state.settings ?? null,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups ?? [],
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo
+    worktreesByRepo: selectWorktreesByRepo(state)
   }
   if (workspaceKey?.type === 'folder') {
     if (

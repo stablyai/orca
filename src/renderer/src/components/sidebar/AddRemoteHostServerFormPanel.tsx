@@ -58,6 +58,13 @@ export function AddRemoteHostServerFormPanel({
         onSubmit={onSubmit}
       />
 
+      <p className="text-xs text-muted-foreground">
+        {translate(
+          'auto.components.sidebar.AddRemoteHostDialog.serverRunsAsYou',
+          'This device will be able to run commands as you on this server.'
+        )}
+      </p>
+
       <DialogFooter className="sm:justify-between">
         <span />
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

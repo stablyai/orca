@@ -1,20 +1,4 @@
-/**
- * Counters behind the design doc's request-count and stale-response release
- * gates: how many authority calls the cache actually sent, how many callers
- * joined one already in flight, how many answers the fence threw away, and how
- * big/slow each answer was.
- *
- * Nothing here holds an automation, a prompt, or run output — only counts,
- * durations, and the stable/authority keys the gate is stated in terms of.
- *
- * Two accounting rules run through the whole file, because the gates are stated
- * per *request* while the cache settles per *entry*:
- *  - A legacy unscoped call is one request for its whole authority. It is
- *    counted against the authority and against no stable key, so "one legacy
- *    call per authority per cycle" stays a number you can assert on.
- *  - Anything counted per entry (`discardedEntries`, per-key `rows`) says so at
- *    the field, and must never be divided by or compared against `responses`.
- */
+/** Count requests, dedupe, fence discards and response size/duration without retaining prompts/output. Legacy requests belong only to their authority; per-entry rows/discards must not be compared with request counts. */
 
 export type AutomationHostRequestTransport = 'scoped' | 'legacy'
 
@@ -23,32 +7,19 @@ export type AutomationHostKeyCounters = {
   requests: number
   scopedRequests: number
   legacyRequests: number
-  /**
-   * Unpooled `status.get` capability probes, which ride outside the four-slot
-   * pool; probes dedupe per authority incarnation, so this counts what was
-   * actually sent. Relay traffic is `requests + capabilityProbes`; the
-   * in-flight ceiling is stated over `requests` alone.
-   */
+  /** Unpooled status.get probes dedupe per authority incarnation. Total relay calls = requests + capabilityProbes; only requests count toward the pool ceiling. */
   capabilityProbes: number
   /** Callers that joined a request already in flight, keyed like `requests`. */
   dedupeHits: number
   /** Requests whose answer landed nowhere because the fence rejected every entry. */
   discardedCommits: number
   discardedFailures: number
-  /**
-   * Entries the fence rejected. One legacy answer can reject many at once, so
-   * this is per entry and is not comparable with `responses` or `requests`.
-   */
+  /** Per-entry rejections; one legacy response can reject many, unlike requests/responses. */
   discardedEntries: number
   responses: number
   /** Requests that threw. `durationMsTotal` spans these too. */
   failures: number
-  /**
-   * On `totals` and `byAuthority`, rows the response carried. On `byStableKey`,
-   * rows attributed to that entry — a legacy answer is counted once against its
-   * authority and fanned out to keys for row attribution only, so a key can
-   * carry rows while its `requests` is 0.
-   */
+  /** Totals/authority buckets count response rows once; key buckets count attributed rows, including legacy fan-out with zero per-key requests. */
   rows: number
   /** See `serializedCharsMeasured`; 0 also means "not measured". */
   approxSerializedChars: number
@@ -59,17 +30,10 @@ export type AutomationHostKeyCounters = {
 
 export type AutomationHostDiagnosticsSnapshot = {
   totals: AutomationHostKeyCounters
-  /**
-   * Bucket totals can trail `totals` after eviction, so `sum(byStableKey)` is a
-   * lower bound on `totals`, never an equality.
-   */
+  /** Evicted buckets can trail cumulative totals; their sum is only a lower bound. */
   byAuthority: Record<string, AutomationHostKeyCounters>
   byStableKey: Record<string, AutomationHostKeyCounters>
-  /**
-   * Sizing requires re-serializing a response the transport already decoded,
-   * which is the one measurement here expensive enough to disturb the 50 ms
-   * budget it exists to verify. False means unmeasured, not zero.
-   */
+  /** Reserialization can disturb the 50ms budget, so opt in; false means unmeasured, not zero. */
   serializedCharsMeasured: boolean
 }
 
@@ -120,8 +84,7 @@ export type AutomationHostDiagnostics = {
   reset: () => void
 }
 
-// Bounds memory when a session churns through hosts: the gate is stated over a
-// 50-host fixture, so a cap well above that loses nothing it needs to prove.
+// Bound host-churn memory well above the 50-host measurement fixture.
 const MAX_TRACKED_KEYS = 512
 
 function emptyCounters(): AutomationHostKeyCounters {
@@ -159,9 +122,7 @@ export function createAutomationHostDiagnostics(
     if (existing) {
       return existing
     }
-    // Eviction is first-seen order, not least-recently-used: keeping it that way
-    // costs no re-insert on the recording path, and at 512 keys against a 50-host
-    // gate nothing under test is ever reached.
+    // Evict first-seen keys without hot-path LRU reinsertion; the 512-key cap exceeds the 50-host fixture.
     if (buckets.size >= maxTrackedKeys) {
       const oldest = buckets.keys().next()
       if (!oldest.done) {
@@ -264,13 +225,7 @@ export function createAutomationHostDiagnostics(
 /** Shared instance the scheduler and list client write to when nothing is injected. */
 export const automationHostDiagnostics = createAutomationHostDiagnostics()
 
-/**
- * Payload size as UTF-16 code units of a re-serialization — an approximation of
- * what crossed the wire, not a byte count, which is why nothing here is named
- * `bytes`. Guarded by the caller's `measuringSerializedChars()` check, and
- * undefined when the payload will not serialize: an unmeasurable response must
- * not read as a zero-sized one.
- */
+/** Measure reserialized UTF-16 code units, not wire bytes. Caller gates the cost; unserializable responses return undefined rather than a misleading zero. */
 export function measureAutomationHostResponseChars(payload: unknown): number | undefined {
   try {
     return JSON.stringify(payload)?.length

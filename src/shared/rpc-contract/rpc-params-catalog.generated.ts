@@ -19,44 +19,74 @@ import {
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
 import {
+  BundledSkillAutoUpdateRequestSchema,
+  BundledSkillExecuteRequestSchema,
+  BundledSkillPlanRequestSchema
+} from '../bundled-skill-plan'
+import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
+import {
+  DesktopBrowserBridgeAttachParams,
+  DesktopBrowserBridgeResultParams
+} from '../desktop-browser-bridge-protocol'
+import { RegisterDeviceKeyParamsSchema } from '../device-key-registration-contract'
+import { HostAccountLaunchEnvParams } from '../host-account-launch-env'
+import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../mobile-relay-credential-contract'
+import { MobileRelayHostWorktreesParamsSchema } from '../mobile-relay-hosts-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
-import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration-scrollback'
+import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
+import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
+import {
+  OrcadDeclareClientParamsSchema,
+  OrcadPeerDesktopsParamsSchema
+} from '../orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
-import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
+import { CrewSubscribeParams } from '../orchestration-crew'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
   AddCodexFromHomeParams,
   AddDataAccountParams,
+  BeginClaudeSignInParams,
   ConsumeCodexResetCreditParams,
+  FinishClaudeSignInParams,
+  HostAccountSignInCodeParams,
+  HostAccountSignInFlowParams,
+  HostAccountSignInStartParams,
+  HostAccountSignInWaitParams,
   ListAccountsParams,
   RemoveAccountParams,
   RemoveDataAccountParams,
   SelectAccountParams,
+  SelectClaudeAccountParams,
   SelectCodexAccountForTargetParams,
   SelectDataAccountParams
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
+import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
 import {
   AttachmentReadParams,
   AttachmentUploadAppendParams,
   AttachmentUploadIdParams,
   AttachmentUploadStartParams
 } from './agent-session-attachment-params'
+import { CurrentRequestsParams } from './agent-session-current-requests-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
 import { ReadVisualParams } from './agent-session-visual-params'
 import {
+  AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from './ai-vault-params'
 import {
   AntigravityAccountMutationParams,
-  AntigravityAccountTargetParams
+  AntigravityAccountTargetParams,
+  AntigravityChatSignInCompleteParams,
+  AntigravityChatSignInFlowParams
 } from './antigravity-accounts-params'
 import { ArtifactsDeleteParams, ListOptions, SourceRequest, WriteRequest } from './artifacts-params'
 import {
@@ -69,6 +99,7 @@ import {
 import { CertificateProceed } from './browser-core-params'
 import { MouseClick } from './browser-extras-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser-identity-params'
+import { Screenshot, Snapshot } from './browser-observation-params'
 import {
   Check,
   ClipboardWrite,
@@ -95,10 +126,10 @@ import {
   MouseButton,
   MouseWheel,
   MouseXY,
+  ProfileClearGoogleCookies,
   ProfileDelete,
   ProfileImportFromBrowser,
   Screencast,
-  Screenshot,
   Scroll,
   Select,
   SelectorPath,
@@ -130,6 +161,7 @@ import {
   SettingsUpdate
 } from './client-settings-params'
 import { FeatureInteractionIdParam, UiUpdate } from './client-ui-params'
+import { ClientWorkspaceViewParams } from './client-workspace-view-params'
 import {
   AbortImageUpload,
   AppendImageUploadChunk,
@@ -153,6 +185,15 @@ import {
   SetValue,
   TypeText
 } from './computer-schemas-params'
+import {
+  ConnectorAnswer,
+  ConnectorCancel,
+  ConnectorPendingPrompt,
+  ConnectorReply,
+  ConnectorSend,
+  ConnectorStart,
+  ConnectorWatch
+} from './connector-params'
 import {
   AttachParams as AttachParamsOfEmulatorParams,
   AxParams,
@@ -179,12 +220,17 @@ import {
   FileDelete,
   FileMutationOpen,
   FileRename,
+  FileReplaceWithUpload,
   FileWrite,
   FileWriteBase64,
-  FileWriteBase64Chunk
+  FileWriteBase64Chunk,
+  FileWriteIfUnchanged
 } from './files-mutation-params'
 import {
+  ChatImageRead,
   DocPreviewFileRead,
+  DocPreviewFileReadChunk,
+  FileDirRead,
   FileListAll,
   FileOpenDiff,
   FileOpenTab,
@@ -197,7 +243,13 @@ import {
   ResolveTerminalPath,
   ServerDirectoryBrowse
 } from './files-params'
-import { FileOpen, WorktreeSelector } from './files-target-params'
+import {
+  FileSaveAbort,
+  FileSaveBegin,
+  FileSaveChunk,
+  FileSaveCommit
+} from './files-staged-save-params'
+import { FileOpen, FileWatch, WorktreeSelector } from './files-target-params'
 import { TerminalArtifactFile, TerminalArtifactFileWrite } from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
@@ -209,6 +261,7 @@ import {
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
+  GitBulkStage,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
@@ -225,6 +278,7 @@ import {
   GitRebaseFromBase,
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
+  GitResolveConflict,
   GitStatusParams,
   GitSubmoduleStatus,
   GitTargetedRemote,
@@ -260,6 +314,7 @@ import {
   ReviewThread
 } from './github-pull-request-params'
 import {
+  MarkPrDraft,
   MarkPrReadyForReview,
   MergePr,
   PRReviewComment,
@@ -271,12 +326,13 @@ import {
   UpdatePrState,
   UpdatePrTitle
 } from './github-pull-request-update-params'
-import { RepoSelector, SlugRepo } from './github-repo-target-params'
+import { RepoIssueCommandRead, RepoSelector, RepoShow, SlugRepo } from './github-repo-target-params'
 import {
   IssuesList,
   RateLimit,
   WorkItem,
   WorkItemByOwnerRepo,
+  WorkItemDetails,
   WorkItemsCount,
   WorkItemsList
 } from './github-repo-work-item-params'
@@ -298,7 +354,7 @@ import {
   UpdateMrReviewers,
   UpdateMrState,
   WorkItemByPath,
-  WorkItemDetails,
+  WorkItemDetails as WorkItemDetailsOfGitlabParams,
   WorkItemsList as WorkItemsListOfGitlabParams
 } from './gitlab-params'
 import {
@@ -306,10 +362,14 @@ import {
   HostedReviewCreationEligibility,
   HostedReviewForBranch
 } from './hosted-review-params'
+import { JiraFavouriteFilterParams } from './jira-favourite-filter-params'
 import {
   AssignableUsers,
+  AttachmentImage,
+  CancelGenerateIssueSummary,
   Connect,
   CreateIssue as CreateIssueOfJiraParams,
+  GenerateIssueSummary,
   IssueComment as IssueCommentOfJiraParams,
   IssueKey,
   IssueUpdate,
@@ -322,9 +382,13 @@ import {
   SiteSelection,
   UserSearch
 } from './jira-params'
+import { JiraQuickFilterStateParam } from './jira-quick-filter-params'
+import { JiraSavedFilterMutationParam } from './jira-saved-filter-params'
 import {
   AgentIssueContext,
   AgentSearchIssues,
+  LinearCommentDelete,
+  LinearCommentEdit,
   LinearCurrentContext,
   LinearIssueAddComment,
   LinearIssueAttachLink,
@@ -361,6 +425,11 @@ import {
   WorkspaceSelection
 } from './linear-params'
 import { CreateProject } from './linear-project-create-params'
+import { LinkPreviewGetParams } from './link-preview-params'
+import {
+  ManagedRuntimeAgentParams,
+  ManagedRuntimeCancelParams
+} from './managed-runtime-install-params'
 import {
   ManagedServerRecover,
   ManagedServerSelector,
@@ -370,10 +439,15 @@ import { NativeChatSession, NativeChatUnsubscribe } from './native-chat-params'
 import {
   NotificationGetMissedSinceParams,
   NotificationRegisterPushParams,
+  NotificationReportDesktopPresenceParams,
   NotificationUnsubscribeParams,
   NotificationsSubscribeParams
 } from './notifications-params'
-import { OrcadMigrationCatalogParams } from './orcad-migration-params'
+import {
+  OrcadMigrationCatalogParams,
+  OrcadMigrationCatalogReferenceParams,
+  OrcadMigrationCommitCatalogParams
+} from './orcad-migration-params'
 import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
@@ -415,7 +489,10 @@ import {
   RunUseParams
 } from './orchestration-runs-params'
 import { WorkerDispatchParams, WorkerReadParams } from './orchestration-worker-control-params'
-import { OrchestrationWorkerTerminalUserInputParams } from './orchestration-worker-release-params'
+import {
+  OrchestrationWorkerKeepOpenParams,
+  OrchestrationWorkerSubjectParams
+} from './orchestration-worker-release-params'
 import {
   WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
   WorkerListParams,
@@ -424,15 +501,31 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginDevEmitParams,
+  PluginDevInspectParams,
+  PluginDevLoadParams,
+  PluginDevRequestParams,
+  PluginDevUnloadParams,
+  PluginGetLogsParams,
   PluginInvokeCommandParams,
+  PluginOpenParams,
   PluginReadPanelEntryParams,
+  PluginRestartParams,
+  PluginRpcConsentParams,
   PluginSetEnabledParams,
+  PluginSetSystemEnabledParams,
+  PluginShotChromeParams,
+  PluginShotEditorParams,
+  PluginShotParams,
+  PluginShotReplayParams,
   PluginsPanelActionParams
 } from './plugins-params'
 import {
+  PreflightAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
-  PreflightDetectRemoteWindowsTerminalCapabilities
+  PreflightDetectRemoteWindowsTerminalCapabilities,
+  PreflightProjectAgentDetection
 } from './preflight-params'
 import {
   ProjectHostSetupClone,
@@ -442,6 +535,7 @@ import {
   ProjectHostSetupUpdate,
   ProjectUpdate
 } from './project-runtime-params'
+import { ReferenceFind, ReferenceList } from './reference-params'
 import {
   ProjectGroupCreate,
   ProjectGroupImportNested,
@@ -451,7 +545,9 @@ import {
   ProjectGroupUpdate,
   RepoClone,
   RepoCreate,
+  RepoHooksCheck,
   RepoIssueCommandWrite,
+  RepoList,
   RepoPath,
   RepoReorder,
   RepoSearchRefs,
@@ -467,6 +563,7 @@ import {
   CloseLifecycleTab,
   CloseTab,
   CreateTerminalTab,
+  MovePaneToNewTab,
   MoveTab,
   SaveMarkdownTab,
   SessionTabsUnsubscribe,
@@ -474,6 +571,8 @@ import {
   UpdatePaneLayout,
   WorktreeTabSelector
 } from './session-tabs-schemas-params'
+import { SessionReadTerminalScrollbackParams } from './session-terminal-scrollback-params'
+import { SidebarSessionBeginParams } from './sidebar-session-params'
 import {
   SkillsCancelInstallParams,
   SkillsDiscoverParams,
@@ -484,14 +583,25 @@ import {
   DictationHandle,
   DictationSetup,
   DictationStart,
+  OpenAiSpeechKeySet,
   SpeechModelAction
 } from './speech-params'
-import { SshTarget } from './ssh-params'
+import {
+  RepoAddRemote,
+  SshBrowseDir,
+  SshConnect,
+  SshTarget,
+  SshTargetAdd,
+  SshTargetUpdate
+} from './ssh-params'
+import { StatusGetParams } from './status-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
+import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
   AttachParams,
+  AvailabilityParams,
   CancelParams,
   ConversationCommandParams,
   CreateParams,
@@ -499,6 +609,7 @@ import {
   HandoffStatusParams,
   HistoryParams,
   HoldParams,
+  ItemParams,
   ModelCatalogParams,
   OptionsParams,
   QueuedMessageActionParams,
@@ -507,14 +618,24 @@ import {
   RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
+  RevealParams,
   RewindParams,
   SendParams,
   SetOptionParams,
+  SleepWorkspaceParams,
   SubscribeParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
+import {
+  QueuedMessageEditHoldParams,
+  QueuedMessageMoveParams,
+  QueuedMessageUpdateParams
+} from './structured-agent-session-queued-edit-params'
+import { RenameParams } from './structured-agent-session-rename-params'
+import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
+import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
 import {
@@ -532,14 +653,18 @@ import {
   TerminalInspectProcess,
   TerminalListParams,
   TerminalRead,
+  TerminalReadKittyFile,
   TerminalRecoverPane,
   TerminalRename,
   TerminalResolveActive,
   TerminalResolvePane,
+  TerminalReveal,
   TerminalSend,
+  TerminalSetPaneTitle,
   TerminalSetViewerColors,
   TerminalSplit,
   TerminalStopExact,
+  TerminalViewClaudeAgent,
   TerminalWait
 } from './terminal-unary-params'
 import { TerminalGetAutoRestoreFitParams } from './terminal-viewport-methods-params'
@@ -550,7 +675,26 @@ import {
   TerminalUpdateViewport
 } from './terminal-viewport-schemas-params'
 import { UpdaterCheckParams } from './updater-params'
-import { WorkspacePortKillParams, WorkspacePortScanParams } from './workspace-ports-params'
+import {
+  UsageCredentialApiKeyParams,
+  UsageCredentialSessionCookieParams
+} from './usage-credentials-params'
+import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
+import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
+import {
+  LayoutApplyParams,
+  LayoutReportViewParams,
+  LayoutSubscribeParams,
+  LayoutUnsubscribeParams
+} from './workspace-layout-params'
+import {
+  WorkspacePortKillHostParams,
+  WorkspacePortKillParams,
+  WorkspacePortProbePageParams,
+  WorkspacePortScanHostParams,
+  WorkspacePortScanParams
+} from './workspace-ports-params'
+import { SetCollapsedParams } from './workspace-view-collapse-params'
 import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-params'
 import {
   WorktreeActivate,
@@ -563,9 +707,13 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector as WorktreeSelectorOfWorktreeParams,
   WorktreeSet,
+  WorktreeSleepParams,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
+import { WorktreeAdoptProvisionedRoot } from './worktree-provisioned-root-params'
+import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
+import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
 import { SkillDeleteRequestSchema } from '../skill-delete-contract'
 import {
@@ -587,56 +735,87 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.addCodexFromHome': AddCodexFromHomeParams,
   'accounts.addDataFromHome': AddDataAccountParams,
   'accounts.antigravityAddCurrent': AntigravityAccountTargetParams,
+  'accounts.antigravityChatSignInCancel': AntigravityChatSignInFlowParams,
+  'accounts.antigravityChatSignInComplete': AntigravityChatSignInCompleteParams,
+  'accounts.antigravityChatSignInStart': null,
+  'accounts.antigravityChatSignInSubscribe': null,
   'accounts.antigravityList': AntigravityAccountTargetParams,
   'accounts.antigravityRemove': AntigravityAccountMutationParams,
   'accounts.antigravitySelect': AntigravityAccountMutationParams,
+  'accounts.beginClaudeSignIn': BeginClaudeSignInParams,
+  'accounts.cancelClaudeSignIn': FinishClaudeSignInParams,
   'accounts.consumeCodexResetCredit': ConsumeCodexResetCreditParams,
+  'accounts.finishClaudeSignIn': FinishClaudeSignInParams,
+  'accounts.hostSignInCancel': HostAccountSignInFlowParams,
+  'accounts.hostSignInStart': HostAccountSignInStartParams,
+  'accounts.hostSignInSubmitCode': HostAccountSignInCodeParams,
+  'accounts.hostSignInWait': HostAccountSignInWaitParams,
   'accounts.list': ListAccountsParams,
   'accounts.listData': null,
+  'accounts.minimaxClearApiKey': null,
+  'accounts.minimaxClearSessionCookie': null,
+  'accounts.minimaxCredentialsStatus': null,
+  'accounts.minimaxSaveApiKey': UsageCredentialApiKeyParams,
+  'accounts.minimaxSaveSessionCookie': UsageCredentialSessionCookieParams,
   'accounts.removeClaude': RemoveAccountParams,
   'accounts.removeCodex': RemoveAccountParams,
   'accounts.removeData': RemoveDataAccountParams,
-  'accounts.selectClaude': SelectAccountParams,
+  'accounts.selectClaude': SelectClaudeAccountParams,
   'accounts.selectCodex': SelectAccountParams,
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.selectData': SelectDataAccountParams,
+  'accounts.setHostLaunchEnv': HostAccountLaunchEnvParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,
+  'accounts.zcodePlanClearApiKey': null,
+  'accounts.zcodePlanCredentialsStatus': null,
+  'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
+  'agentSession.cancelUsageLimitContinue': CancelUsageLimitContinueParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
+  'agentSession.continuationContext': ContinuationContextParams,
   'agentSession.continueInterrupted': ContinueInterruptedParams,
   'agentSession.conversationCommand': ConversationCommandParams,
   'agentSession.conversationOutline': OptionsParams,
   'agentSession.create': CreateParams,
   'agentSession.createSupport': CreateSupportParams,
+  'agentSession.currentRequests': CurrentRequestsParams,
   'agentSession.ensure': AttachParams,
   'agentSession.handoffStatus': HandoffStatusParams,
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
+  'agentSession.item': ItemParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
   'agentSession.queuedMessageDelete': QueuedMessageActionParams,
+  'agentSession.queuedMessageEditHold': QueuedMessageEditHoldParams,
+  'agentSession.queuedMessageMove': QueuedMessageMoveParams,
   'agentSession.queuedMessageSend': QueuedMessageActionParams,
+  'agentSession.queuedMessageUpdate': QueuedMessageUpdateParams,
   'agentSession.queuedMessagesResume': QueuedMessagesResumeParams,
   'agentSession.readVisual': ReadVisualParams,
+  'agentSession.regenerateName': OptionsParams,
   'agentSession.release': HoldParams,
+  'agentSession.rename': RenameParams,
   'agentSession.respondToApproval': RespondParams,
   'agentSession.respondToQuestion': RespondToQuestionParams,
   'agentSession.restartContinue': RestartResumeParams,
   'agentSession.restartResumable': RestartResumableParams,
   'agentSession.restartResumableDismiss': RestartResumableParams,
   'agentSession.restartResume': RestartResumeParams,
-  'agentSession.reveal': OptionsParams,
+  'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
   'agentSession.setOption': SetOptionParams,
+  'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
+  'agentSession.subscribeAvailability': AvailabilityParams,
   'agentSession.subscribeStatus': null,
   'agentSession.subscribeTurnCompletions': SubscribeTurnCompletionsParams,
   'agentSession.threadGoal': ThreadGoalParams,
@@ -648,6 +827,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSessionAttachment.uploadStart': AttachmentUploadStartParams,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
+  'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
@@ -721,6 +901,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.openUrl': BrowserOpenUrlParams,
   'browser.pdf': BrowserTarget,
   'browser.profileClearDefaultCookies': null,
+  'browser.profileClearGoogleCookies': ProfileClearGoogleCookies,
   'browser.profileCreate': ProfileCreate,
   'browser.profileDelete': ProfileDelete,
   'browser.profileDetectBrowsers': null,
@@ -739,7 +920,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.setHeaders': SetHeaders,
   'browser.setMedia': SetMedia,
   'browser.setOffline': SetOffline,
-  'browser.snapshot': BrowserTarget,
+  'browser.snapshot': Snapshot,
   'browser.storage.local.clear': BrowserTarget,
   'browser.storage.local.get': StorageKey,
   'browser.storage.local.set': StorageKeyValue,
@@ -779,11 +960,21 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.scroll': ScrollOfComputerSchemasParams,
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
+  'connector.answer': ConnectorAnswer,
+  'connector.cancel': ConnectorCancel,
+  'connector.pendingPrompt': ConnectorPendingPrompt,
+  'connector.reply': ConnectorReply,
+  'connector.send': ConnectorSend,
+  'connector.start': ConnectorStart,
+  'connector.watch': ConnectorWatch,
+  'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
+  'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,
   'emulator.attach': AttachParamsOfEmulatorParams,
   'emulator.availability': EmulatorAvailabilityParams,
   'emulator.ax': AxParams,
   'emulator.button': ButtonParams,
+  'emulator.checkInput': ListParams,
   'emulator.exec': ExecParams,
   'emulator.gesture': GestureParams,
   'emulator.kill': KillParams,
@@ -812,22 +1003,30 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.openDiff': FileOpenDiff,
   'files.pathsExist': FilePathsExist,
   'files.read': FileOpen,
+  'files.readChatImage': ChatImageRead,
   'files.readChunk': FileReadChunk,
-  'files.readDir': FileTreePath,
+  'files.readDir': FileDirRead,
   'files.readDocPreview': DocPreviewFileRead,
+  'files.readDocPreviewChunk': DocPreviewFileReadChunk,
   'files.readPreview': FileOpen,
   'files.readTerminalArtifact': TerminalArtifactFile,
   'files.readTerminalArtifactPreview': TerminalArtifactFile,
   'files.rename': FileRename,
+  'files.replaceWithUpload': FileReplaceWithUpload,
   'files.resolveTerminalPath': ResolveTerminalPath,
+  'files.saveAbort': FileSaveAbort,
+  'files.saveBegin': FileSaveBegin,
+  'files.saveChunk': FileSaveChunk,
+  'files.saveCommit': FileSaveCommit,
   'files.search': FileSearch,
   'files.searchPaths': FilePathSearch,
   'files.stat': FileTreePath,
   'files.unwatch': FileUnwatch,
-  'files.watch': WorktreeSelector,
+  'files.watch': FileWatch,
   'files.write': FileWrite,
   'files.writeBase64': FileWriteBase64,
   'files.writeBase64Chunk': FileWriteBase64Chunk,
+  'files.writeIfUnchanged': FileWriteIfUnchanged,
   'files.writeTerminalArtifact': TerminalArtifactFileWrite,
   'folderWorkspace.create': FolderWorkspaceCreate,
   'folderWorkspace.delete': FolderWorkspaceSelector,
@@ -839,7 +1038,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,
-  'git.bulkStage': GitBulkPaths,
+  'git.bulkStage': GitBulkStage,
   'git.bulkUnstage': GitBulkPaths,
   'git.cancelGenerateCommitMessage': WorktreeSelectorOfGitParams,
   'git.cancelGeneratePullRequestFields': WorktreeSelectorOfGitParams,
@@ -848,6 +1047,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.commit': GitCommit,
   'git.commitCompare': GitCommitCompare,
   'git.commitDiff': GitCommitDiff,
+  'git.completeMerge': WorktreeSelectorOfGitParams,
   'git.conflictOperation': WorktreeSelectorOfGitParams,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
@@ -859,11 +1059,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.generatePullRequestFields': GitGeneratePullRequestFields,
   'git.history': GitHistory,
   'git.localBranches': WorktreeSelectorOfGitParams,
+  'git.mutationInFlight': WorktreeSelectorOfGitParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
   'git.rebaseFromBase': GitRebaseFromBase,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
   'git.remoteFileUrl': GitRemoteFileUrl,
+  'git.resolveConflict': GitResolveConflict,
   'git.stage': GitFilePath,
   'git.status': GitStatusParams,
   'git.submoduleStatus': GitSubmoduleStatus,
@@ -880,6 +1082,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.listIssues': IssuesList,
   'github.listLabels': RepoSelector,
   'github.listWorkItems': WorkItemsList,
+  'github.markPRDraft': MarkPrDraft,
   'github.markPRReadyForReview': MarkPrReadyForReview,
   'github.mergePR': MergePr,
   'github.prCheckDetails': PullRequestCheckDetails,
@@ -920,13 +1123,14 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.validateAccountBinding': ValidateAccountBinding,
   'github.workItem': WorkItem,
   'github.workItemByOwnerRepo': WorkItemByOwnerRepo,
-  'github.workItemDetails': WorkItem,
+  'github.workItemDetails': WorkItemDetails,
   'gitlab.addIssueComment': AddIssueComment,
   'gitlab.addMRComment': AddMRComment,
   'gitlab.addMRInlineComment': AddMRInlineComment,
   'gitlab.createIssue': CreateIssueOfGitlabParams,
   'gitlab.diagnoseAuth': EmptyParams,
   'gitlab.jobTrace': JobTrace,
+  'gitlab.listAssignableUsers': RepoSelectorOfGitlabParams,
   'gitlab.listIssues': IssuesListOfGitlabParams,
   'gitlab.listLabels': RepoSelectorOfGitlabParams,
   'gitlab.listMRs': WorkItemsListOfGitlabParams,
@@ -941,8 +1145,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRReviewers': UpdateMrReviewers,
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
-  'gitlab.workItemDetails': WorkItemDetails,
+  'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
+  'host.declareClient': OrcadDeclareClientParamsSchema,
   'host.gitBash.isAvailable': null,
+  'host.peerDesktops': OrcadPeerDesktopsParamsSchema,
   'host.platform': null,
   'host.pwsh.isAvailable': null,
   'host.wsl.isAvailable': null,
@@ -952,9 +1158,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'hostedReview.forBranch': HostedReviewForBranch,
   'hostedReview.getCreationEligibility': HostedReviewCreationEligibility,
   'jira.addIssueComment': IssueCommentOfJiraParams,
+  'jira.attachmentImage': AttachmentImage,
+  'jira.cancelGenerateIssueSummary': CancelGenerateIssueSummary,
   'jira.connect': Connect,
   'jira.createIssue': CreateIssueOfJiraParams,
   'jira.disconnect': SiteSelection,
+  'jira.generateIssueSummary': GenerateIssueSummary,
   'jira.getIssue': IssueKey,
   'jira.getIssueStream': IssueKey,
   'jira.getProjectStatusOrder': ProjectStatusOrder,
@@ -962,6 +1171,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'jira.issueCommentsStream': IssueKey,
   'jira.listAssignableUsers': AssignableUsers,
   'jira.listCreateFields': ProjectIssueTypeFields,
+  'jira.listFavouriteFilters': JiraFavouriteFilterParams,
   'jira.listIssueTypes': ProjectIssueTypes,
   'jira.listIssues': ListIssues,
   'jira.listPriorities': SiteSelection,
@@ -975,6 +1185,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'jira.status': null,
   'jira.testConnection': SiteSelection,
   'jira.updateIssue': IssueUpdate,
+  'layout.apply': LayoutApplyParams,
+  'layout.getRemoteSnapshots': null,
+  'layout.reopenHeldPanes': LayoutReopenHeldPanesParams,
+  'layout.reportView': LayoutReportViewParams,
+  'layout.startWslHeldPanes': LayoutReopenHeldPanesParams,
+  'layout.subscribe': LayoutSubscribeParams,
+  'layout.unsubscribe': LayoutUnsubscribeParams,
   'linear.addIssueComment': IssueCommentOfLinearParams,
   'linear.agentIssueList': LinearIssueList,
   'linear.agentProjectList': LinearProjectList,
@@ -983,6 +1200,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.agentTeamList': LinearWorkspaceRead,
   'linear.agentTeamMembers': LinearTeamLookup,
   'linear.agentTeamStates': LinearTeamLookup,
+  'linear.commentDelete': LinearCommentDelete,
+  'linear.commentEdit': LinearCommentEdit,
   'linear.connect': ConnectOfLinearParams,
   'linear.createIssue': CreateIssueOfLinearParams,
   'linear.createProject': CreateProject,
@@ -1016,7 +1235,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.teamStates': TeamId,
   'linear.testConnection': WorkspaceSelection,
   'linear.updateIssue': IssueUpdateOfLinearParams,
+  'linkPreview.get': LinkPreviewGetParams,
+  'managedRuntime.cancel': ManagedRuntimeCancelParams,
+  'managedRuntime.install': ManagedRuntimeAgentParams,
+  'managedRuntime.remove': ManagedRuntimeAgentParams,
+  'managedRuntime.subscribe': ManagedRuntimeAgentParams,
   'managedServer.cancelStop': ManagedServerSelector,
+  'managedServer.forget': ManagedServerSelector,
   'managedServer.recover': ManagedServerRecover,
   'managedServer.rollback': ManagedServerSelector,
   'managedServer.status': ManagedServerSelector,
@@ -1024,6 +1249,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'managedServer.update': ManagedServerUpdate,
   'markdown.readTab': ActivateTab,
   'markdown.saveTab': SaveMarkdownTab,
+  'mobileRelay.hosts.list': null,
+  'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
+  'mobileRelay.projectSections': null,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
@@ -1033,19 +1261,23 @@ export const RPC_PARAMS_BY_METHOD = {
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.registerPush': NotificationRegisterPushParams,
+  'notifications.reportDesktopPresence': NotificationReportDesktopPresenceParams,
   'notifications.subscribe': NotificationsSubscribeParams,
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
   'orcad.migration.abortCatalog': OrcadMigrationCatalogParams,
+  'orcad.migration.abortCatalogByReference': OrcadMigrationCatalogReferenceParams,
   'orcad.migration.catalogState': OrcadMigrationCatalogParams,
-  'orcad.migration.commitCatalog': OrcadMigrationCatalogParams,
+  'orcad.migration.commitCatalog': OrcadMigrationCommitCatalogParams,
+  'orcad.migration.stageBlobChunk': OrcadMigrationBlobChunkRequestSchema,
   'orcad.migration.stageCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.stageSnapshotChunk': OrcadMigrationSnapshotChunkRequestSchema,
   'orcad.terminalCensus': OrcadTerminalCensusParamsSchema,
   'orchestration.ask': AskParams,
   'orchestration.callerShow': null,
   'orchestration.check': CheckParams,
+  'orchestration.crewSubscribe': CrewSubscribeParams,
   'orchestration.dispatch': DispatchParams,
   'orchestration.dispatchShow': DispatchShowParams,
   'orchestration.federationAck': FederationAckParams,
@@ -1056,6 +1288,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.federationRead': FederationReadParams,
   'orchestration.federationReadOutput': FederationOutputReadParams,
   'orchestration.federationRelease': FederationDispatchParams,
+  'orchestration.federationRetain': FederationDispatchParams,
   'orchestration.federationShow': FederationDispatchParams,
   'orchestration.federationStop': FederationDispatchParams,
   'orchestration.gateCreate': GateCreateParams,
@@ -1077,6 +1310,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.taskCreate': TaskCreateParams,
   'orchestration.taskList': TaskListParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
+  'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
+  'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
+  'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,
   'orchestration.workerRelease': WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
@@ -1084,21 +1320,38 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerShow': WorkerDispatchParams,
   'orchestration.workerStart': WorkerStartParams,
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
-  'orchestration.workerTerminalUserInput': OrchestrationWorkerTerminalUserInputParams,
+  'orchestration.workerTerminalUserInput': OrchestrationWorkerSubjectParams,
+  'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
-  'plugins.consent': pluginConsentRequestSchema,
+  'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'plugins.consent': PluginRpcConsentParams,
+  'plugins.devEmit': PluginDevEmitParams,
+  'plugins.devHook': PluginDevEmitParams,
+  'plugins.devInspect': PluginDevInspectParams,
+  'plugins.devLoad': PluginDevLoadParams,
+  'plugins.devRequest': PluginDevRequestParams,
+  'plugins.devUnload': PluginDevUnloadParams,
+  'plugins.getLogs': PluginGetLogsParams,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
+  'plugins.open': PluginOpenParams,
   'plugins.panelAction': PluginsPanelActionParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
+  'plugins.refresh': null,
+  'plugins.restart': PluginRestartParams,
   'plugins.setEnabled': PluginSetEnabledParams,
+  'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
+  'plugins.shot': PluginShotParams,
+  'plugins.shotChrome': PluginShotChromeParams,
+  'plugins.shotEditor': PluginShotEditorParams,
+  'plugins.shotReplay': PluginShotReplayParams,
   'preflight.check': PreflightCheck,
-  'preflight.detectAgents': null,
+  'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
-  'preflight.refreshAgents': null,
+  'preflight.refreshAgents': PreflightAgentDetection,
   'project.list': null,
   'project.update': ProjectUpdate,
   'projectGroup.create': ProjectGroupCreate,
@@ -1114,28 +1367,34 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectHostSetup.list': null,
   'projectHostSetup.setupExistingFolder': ProjectHostSetupExistingFolder,
   'projectHostSetup.update': ProjectHostSetupUpdate,
+  'reference.find': ReferenceFind,
+  'reference.list': ReferenceList,
   'repo.add': RepoPath,
+  'repo.addRemote': RepoAddRemote,
   'repo.baseRefDefault': RepoSelector,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
   'repo.hooks': RepoSelector,
-  'repo.hooksCheck': RepoSelector,
-  'repo.issueCommandRead': RepoSelector,
+  'repo.hooksCheck': RepoHooksCheck,
+  'repo.issueCommandRead': RepoIssueCommandRead,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
-  'repo.list': null,
+  'repo.list': RepoList,
   'repo.reorder': RepoReorder,
   'repo.rm': RepoSelector,
   'repo.saveSparsePreset': RepoSparsePresetSave,
   'repo.searchRefs': RepoSearchRefs,
   'repo.setBaseRef': RepoSetBaseRef,
   'repo.setupScriptImports': RepoSelector,
-  'repo.show': RepoSelector,
+  'repo.show': RepoShow,
   'repo.sparsePresets': RepoSelector,
   'repo.update': RepoUpdate,
+  'runtime.automaticWork.resume': null,
+  'runtime.automaticWork.status': null,
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
   'runtime.clientEvents.subscribe': null,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
+  'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
   'session.tabs.closeLifecycle': CloseLifecycleTab,
@@ -1143,6 +1402,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.list': WorktreeTabSelector,
   'session.tabs.listAll': null,
   'session.tabs.move': MoveTab,
+  'session.tabs.movePaneToNewTab': MovePaneToNewTab,
   'session.tabs.setTabProps': SetTabProps,
   'session.tabs.subscribe': WorktreeTabSelector,
   'session.tabs.subscribeAll': null,
@@ -1150,21 +1410,37 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.unsubscribeAll': SessionTabsUnsubscribeAllParams,
   'session.tabs.updatePaneLayout': UpdatePaneLayout,
   'settings.get': null,
+  'settings.getAgentLaunch': null,
   'settings.getTerminalQuickCommands': null,
+  'settings.mutateAgentLaunch': AgentLaunchSettingsMutation,
   'settings.mutateNativeChatSessionOptions': NativeChatSessionOptionsMutation,
   'settings.update': SettingsUpdate,
   'settings.updatePRBotAuthorOverride': PRBotAuthorOverrideUpdate,
   'settings.updateTerminalQuickCommands': TerminalQuickCommandsUpdate,
+  'sidebarInputs.activityFacts': null,
+  'sidebarInputs.desktopFacts': null,
+  'sidebarInputs.pairedServerRows': null,
+  'sidebarInputs.read': SidebarInputsReadParams,
+  'sidebarInputs.repoIcons': RepoIconDataUrlsParams,
+  'sidebarInputs.reportView': ClientWorkspaceViewParams,
+  'sidebarInputs.reviewFacts': null,
+  'sidebarInputs.temporal': null,
+  'sidebarInputs.workspaceCreations': null,
+  'sidebarInputs.workspaceRows': null,
+  'sidebarSession.begin': SidebarSessionBeginParams,
+  'skills.autoUpdateBundledOrca': BundledSkillAutoUpdateRequestSchema,
   'skills.beginUpload': SkillUploadBeginRequestSchema,
   'skills.cancelInstall': SkillsCancelInstallParams,
   'skills.cancelUpload': SkillUploadCommitRequestSchema,
   'skills.commitUpload': SkillUploadCommitRequestSchema,
   'skills.delete': SkillDeleteRequestSchema,
   'skills.discover': SkillsDiscoverParams,
+  'skills.executeBundledOrca': BundledSkillExecuteRequestSchema,
   'skills.getInstallProgress': SkillsGetInstallProgressParams,
   'skills.install': SkillInstallRequestSchema,
   'skills.installBundle': SkillBundleInstallRequestSchema,
   'skills.listManagedInstalls': null,
+  'skills.planBundledOrca': BundledSkillPlanRequestSchema,
   'skills.previewDelete': SkillDeleteRequestSchema,
   'skills.previewInstall': SkillInstallPreviewRequestSchema,
   'skills.removeInstall': SkillRemoveRequestSchema,
@@ -1178,13 +1454,21 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.models.delete': SpeechModelAction,
   'speech.models.download': SpeechModelAction,
   'speech.models.list': null,
-  'ssh.connect': SshTarget,
+  'speech.openAiKey.clear': null,
+  'speech.openAiKey.set': OpenAiSpeechKeySet,
+  'speech.openAiKey.status': null,
+  'ssh.addTarget': SshTargetAdd,
+  'ssh.browseDir': SshBrowseDir,
+  'ssh.connect': SshConnect,
   'ssh.getState': SshTarget,
+  'ssh.listEditableTargets': null,
   'ssh.listRemovedTargetLabels': null,
   'ssh.listTargetSummaries': null,
   'ssh.listTargets': null,
+  'ssh.removeTarget': SshTarget,
+  'ssh.updateTarget': SshTargetUpdate,
   'stats.summary': null,
-  'status.get': null,
+  'status.get': StatusGetParams,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentStatus': TerminalHandle,
   'terminal.clearBuffer': TerminalHandle,
@@ -1202,6 +1486,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.list': TerminalListParams,
   'terminal.multiplex': TerminalMultiplex,
   'terminal.read': TerminalRead,
+  'terminal.readKittyFile': TerminalReadKittyFile,
   'terminal.recoverPane': TerminalRecoverPane,
   'terminal.rename': TerminalRename,
   'terminal.resetInputModes': TerminalHandle,
@@ -1210,9 +1495,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.resolveIdentity': TerminalHandle,
   'terminal.resolvePane': TerminalResolvePane,
   'terminal.restoreFit': TerminalHandle,
+  'terminal.reveal': TerminalReveal,
   'terminal.send': TerminalSend,
   'terminal.setAutoRestoreFit': TerminalSetAutoRestoreFit,
   'terminal.setDisplayMode': TerminalSetDisplayMode,
+  'terminal.setPaneTitle': TerminalSetPaneTitle,
   'terminal.setViewerColors': TerminalSetViewerColors,
   'terminal.show': TerminalHandle,
   'terminal.sleep': TerminalCloseAll,
@@ -1220,19 +1507,34 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.stop': TerminalCloseAll,
   'terminal.stopExact': TerminalStopExact,
   'terminal.subscribe': TerminalSubscribe,
+  'terminal.subscribeClaudeAgentViews': null,
   'terminal.unsubscribe': TerminalUnsubscribe,
   'terminal.updateViewport': TerminalUpdateViewport,
+  'terminal.viewClaudeAgent': TerminalViewClaudeAgent,
   'terminal.wait': TerminalWait,
+  'terminalDaemon.limit': null,
+  'terminalDaemon.restartSevered': TerminalDaemonRestartSeveredParams,
+  'terminalDaemon.setLimit': TerminalLimitUpdateParams,
+  'terminalDaemon.severedStatus': null,
   'ui.get': null,
+  'ui.getJiraQuickFilters': null,
+  'ui.getJiraSavedFilters': null,
+  'ui.mutateJiraSavedFilters': JiraSavedFilterMutationParam,
   'ui.recordFeatureInteraction': FeatureInteractionIdParam,
   'ui.set': UiUpdate,
+  'ui.setCollapsed': SetCollapsedParams,
+  'ui.setJiraQuickFilters': JiraQuickFilterStateParam,
   'updater.check': UpdaterCheckParams,
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
   'workspacePorts.kill': WorkspacePortKillParams,
+  'workspacePorts.killHost': WorkspacePortKillHostParams,
+  'workspacePorts.probePage': WorkspacePortProbePageParams,
   'workspacePorts.scan': WorkspacePortScanParams,
+  'workspacePorts.scanHost': WorkspacePortScanHostParams,
   'worktree.activate': WorktreeActivate,
+  'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,
@@ -1247,7 +1549,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.rm': WorktreeRemove,
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,
-  'worktree.sleep': WorktreeSelectorOfWorktreeParams,
+  'worktree.sleep': WorktreeSleepParams,
   'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
 } as const
 

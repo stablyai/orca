@@ -41,7 +41,6 @@ function cursor(): number | null | undefined {
   return store.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset
 }
 
-/** What the row itself says it still owes, which is the only record there is. */
 function owed(): { state: string; fail_count: number } | undefined {
   return index.db
     .prepare('SELECT state, fail_count FROM files WHERE path = ?')
@@ -75,9 +74,6 @@ it('appends onto its own cursor and carries the content hash forward', async () 
 })
 
 it('appends onto a file it read through and decoded no session from', async () => {
-  // An excluded Codex worker transcript: read through, nothing to index, and
-  // still growing. Its cursor is sound, so a re-read of the whole file every
-  // pass buys nothing.
   replayTranscriptRead({
     messages: userMessages('excluded span', 3),
     outcome: { session: null, byteOffset: 100 }
@@ -103,8 +99,6 @@ it('declines an append that starts past its own cursor and records the file', as
     outcome: { byteOffset: 100 }
   })
 
-  // The session list read further than this index did, so the appended span
-  // continues from bytes the index never saw.
   replayTranscriptRead({
     mode: 'append',
     previousByteOffset: 900,
@@ -174,11 +168,37 @@ it('indexes nothing at all from a read that was incomplete from the start', asyn
   expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({
     n: 0
   })
-  // No cursor, because nothing was read through. The row exists all the same:
-  // it is where the failure is counted, and a file that fails on its first read
-  // is exactly the one that has no row of its own to count on.
   expect(cursor()).toBe(0)
   expect(owed()).toMatchObject({ state: 'failed', fail_count: 1 })
+})
+
+it('leaves the row untouched when the read was cancelled', async () => {
+  replayTranscriptRead({
+    messages: userMessages('complete span', 3),
+    outcome: { byteOffset: 100 }
+  })
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    replayTranscriptRead({
+      mode: 'append',
+      previousByteOffset: 100,
+      messages: userMessages('cut short', 5),
+      outcome: { session: null, byteOffset: 100, incomplete: true, cancelled: true }
+    })
+  }
+
+  expect(indexedMessages()).toBe(3)
+  expect(cursor()).toBe(100)
+  expect(owed()).toMatchObject({ state: 'current', fail_count: 0 })
+})
+
+it('records no row for a first read that was cancelled', async () => {
+  replayTranscriptRead({
+    messages: userMessages('cut short', 2),
+    outcome: { session: null, byteOffset: 0, incomplete: true, cancelled: true }
+  })
+
+  expect(indexedMessages()).toBe(0)
+  expect(owed()).toBeUndefined()
 })
 
 it('drops a file whose parser returned no session', async () => {
@@ -198,13 +218,10 @@ it('drops a file whose parser returned no session', async () => {
   expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({
     n: 0
   })
-  // The file is still read through, so a later scan does not re-read it.
   expect(cursor()).toBe(300)
 })
 
 it('writes nothing for a source whose parser cannot reach the channel', async () => {
-  // An OpenCode SQLite candidate decodes in a worker, so every read of it is
-  // incomplete, and no re-read would help.
   const candidate = {
     ...syntheticCandidate({ path: '/opencode/opencode.db#session-1' }),
     agent: 'opencode' as const
@@ -218,8 +235,6 @@ it('writes nothing for a source whose parser cannot reach the channel', async ()
   expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
     n: 0
   })
-  // No row at all, which is the record: the next pass reads a path the
-  // file table does not name.
   expect(owed()).toBeUndefined()
 })
 
@@ -230,8 +245,6 @@ it('ignores a candidate older than the retention cutoff', async () => {
   expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
     n: 0
   })
-  // No row at all, which is the record: the next pass reads a path the
-  // file table does not name.
   expect(owed()).toBeUndefined()
 })
 
@@ -317,7 +330,6 @@ it('keeps a proven file identity when a later read cannot stat it', async () => 
     outcome: { byteOffset: 100 }
   })
 
-  // A host that cannot prove identity re-reads the same file.
   replayTranscriptRead({
     candidate: syntheticCandidate(),
     mode: 'append',
@@ -327,7 +339,6 @@ it('keeps a proven file identity when a later read cannot stat it', async () => 
   })
   expect(indexedMessages()).toBe(4)
 
-  // The stored identity survived, so a rename-replace is still detectable.
   replayTranscriptRead({
     candidate: syntheticCandidate({ dev: 1, ino: 99 }),
     mode: 'append',

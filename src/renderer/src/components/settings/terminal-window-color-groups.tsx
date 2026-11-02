@@ -103,8 +103,7 @@ export const COLOR_OVERRIDE_GROUPS: {
           return translate('auto.components.settings.TerminalWindowSection.862e463f7f', 'Bold Text')
         },
         get description() {
-          // Why: xterm.js ITheme has no bold color slot (xtermjs/xterm.js#6032); the value is
-          // preserved but the terminal renderer does not apply it yet. Keep the copy honest.
+          // xterm has no bold color slot (#6032); explain why saved values are not rendered.
           return translate(
             'auto.components.settings.TerminalWindowSection.605a35d600',
             'Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.'

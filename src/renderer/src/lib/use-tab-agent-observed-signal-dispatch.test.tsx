@@ -81,7 +81,7 @@ function publishRuntimeTitle(revision: number): void {
 let probeRenders = 0
 let latestAgent: TerminalAgent | null = null
 
-/** Stands in for SortableTab, useTabAgent's only production caller. */
+/** Stands in for TerminalSortableTab, useTabAgent's only production caller. */
 function TabAgentProbe(): null {
   probeRenders += 1
   const tab = useAppStore((state) => state.tabsByWorktree[WORKTREE_ID]?.[0]) as TerminalTab
@@ -120,8 +120,7 @@ describe('useTabAgent observed-signal dispatch', () => {
     for (let revision = 1; revision <= TITLE_PUBLICATIONS; revision += 1) {
       act(() => publishRuntimeTitle(revision))
     }
-    // One commit per publication. Re-dispatching the unchanged observed-signal
-    // flag doubled this, and put SortableTab's fiber in every #185 stack.
+    // Each title publication should commit once; redundant true dispatches doubled commits and implicated SortableTab in unrelated #185 cascades.
     expect(probeRenders).toBe(TITLE_PUBLICATIONS)
     expect(latestAgent).toBe('codex')
   })

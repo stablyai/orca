@@ -8,7 +8,7 @@ import type { PreparedDroppedPaths } from '../../../../shared/native-file-drop-p
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { collectPublicPanes, toPublicPane } from '@/lib/pane-manager/pane-public-view'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import {
   NativeChatPaneFileDropSurface,
@@ -52,7 +52,7 @@ vi.mock('@/store', () => ({
     { getState: () => mocks.state }
   )
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
@@ -83,6 +83,9 @@ vi.mock('./TerminalSessionStateSaveFailureDialog', () => ({
 vi.mock('@/components/link-actions/LinkActionPopover', () => ({ LinkActionPopover: () => null }))
 vi.mock('./TerminalAgentSessionForkDialog', () => ({ TerminalAgentSessionForkDialog: () => null }))
 vi.mock('./SessionRestoredBannerPortals', () => ({ SessionRestoredBannerPortals: () => null }))
+vi.mock('../orchestration-crew/TerminalCrewPortals', () => ({
+  TerminalCrewPortals: () => null
+}))
 vi.mock('./TerminalQuickCommandEditorDialog', () => ({
   TerminalQuickCommandEditorDialog: () => null
 }))
@@ -184,6 +187,7 @@ function mountSurface(
       2: { left: 220, top: 0, width: 200 }
     },
     renamingPaneId: null,
+    activeAgentId: null,
     renameInputRef: { current: null },
     paneTitleBackground: 'transparent',
     activatePaneTitleInteraction: activate,
@@ -459,13 +463,13 @@ describe('terminal element file drops', () => {
     await settle()
     expect(mocks.importPaths).toHaveBeenCalledWith(
       expect.objectContaining({
-        settings: { activeRuntimeEnvironmentId: 'owner-runtime' },
+        target: { kind: 'environment', environmentId: 'owner-runtime' },
         worktreePath: '/owner/workspace',
         expectedExecutionHostId: 'local'
       }),
       ['/client/file.txt'],
       '/owner/workspace/.orca/drops',
-      { assertCurrent: expect.any(Function) }
+      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
     )
     expect(fixture.sends[0]).toHaveBeenCalledExactlyOnceWith(
       '/owner/workspace/.orca/drops/file.txt ',

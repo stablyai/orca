@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getBaseRefDefault: vi.fn(),
   gitExecFileAsync: vi.fn(),
-  getSshGitProvider: vi.fn(),
-  prefetchRemoteWorktreeCreateBase: vi.fn(),
   resolveRemoteTrackingBase: vi.fn(),
   hasRemoteTrackingRef: vi.fn(),
   getOrStartRemoteTrackingBaseRefresh: vi.fn(),
@@ -13,10 +11,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./git/repo', () => ({ getBaseRefDefault: mocks.getBaseRefDefault }))
 vi.mock('./git/runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
-vi.mock('./providers/ssh-git-dispatch', () => ({ getSshGitProvider: mocks.getSshGitProvider }))
-vi.mock('./ipc/worktree-remote', () => ({
-  prefetchRemoteWorktreeCreateBase: mocks.prefetchRemoteWorktreeCreateBase
-}))
 
 import { prefetchWorktreeCreateBase } from './worktree-create-base-prefetch'
 
@@ -39,7 +33,6 @@ function runtime() {
   }
 }
 
-/** Resolve only the named refs/objects; every other rev-parse answers "absent". */
 function resolveOnly(present: string[]): void {
   mocks.gitExecFileAsync.mockImplementation(async (args: string[]) => {
     const rev = args.at(-1)?.replace('^{commit}', '') ?? ''
@@ -79,7 +72,6 @@ describe('prefetchWorktreeCreateBase local git routing', () => {
       cwd: repo.path,
       ...WSL
     })
-    // A base that is already local needs no fetch.
     expect(mocks.fetchRemoteWithCache).not.toHaveBeenCalled()
   })
 
@@ -154,15 +146,12 @@ describe('prefetchWorktreeCreateBase local git routing', () => {
     for (const call of mocks.gitExecFileAsync.mock.calls) {
       expect(call[1]).toEqual({ cwd: repo.path })
     }
-    // Runtime calls keep their original arity so host repos stay on the runtime's own defaults.
     expect(mocks.resolveRemoteTrackingBase).toHaveBeenCalledWith(repo.path, 'feature/topic')
     expect(mocks.fetchRemoteWithCache).toHaveBeenCalledWith(repo.path, 'origin')
   })
 
   it('does not resolve a local base for SSH repos', async () => {
     const prepareCheckout = vi.fn()
-    const provider = { exec: vi.fn() }
-    mocks.getSshGitProvider.mockReturnValue(provider)
 
     await expect(
       prefetchWorktreeCreateBase({
@@ -174,12 +163,8 @@ describe('prefetchWorktreeCreateBase local git routing', () => {
       })
     ).resolves.toBeUndefined()
 
-    expect(mocks.prefetchRemoteWorktreeCreateBase).toHaveBeenCalledWith(
-      provider,
-      expect.objectContaining({ connectionId: 'conn-1' }),
-      { baseBranch: 'origin/main' }
-    )
     expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
+    expect(mocks.resolveRemoteTrackingBase).not.toHaveBeenCalled()
     expect(prepareCheckout).not.toHaveBeenCalled()
   })
 })

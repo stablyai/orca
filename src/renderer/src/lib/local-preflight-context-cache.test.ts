@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
+import { createTestStore } from '../store/slices/store-test-helpers'
+import { getDefaultSettings } from '../../../shared/constants'
 import {
   _getProjectRuntimePreflightContextCacheSizeForTest,
   _getWslPreflightContextCacheSizeForTest,
@@ -8,6 +10,8 @@ import {
   getLocalPreflightContext,
   resetLocalPreflightContextCachesForTests
 } from './local-preflight-context'
+
+const baseState = createTestStore().getState()
 
 const WSL_CACHE_LIMIT = 128
 const PROJECT_RUNTIME_CACHE_LIMIT = 2048
@@ -22,34 +26,26 @@ function makeRepos(id: string, path: string): AppState['repos'] {
 
 function makeWslState(distro: string): AppState {
   return {
+    ...baseState,
     activeRepoId: 'repo-1',
     activeWorktreeId: null,
     repos: makeRepos('repo-1', `\\\\wsl.localhost\\${distro}\\home\\alice\\repo`),
     worktreesByRepo: {}
-  } as AppState
+  }
 }
 
 function makeWindowsProjectState(projectId: string): AppState {
   return {
+    ...baseState,
     activeRepoId: projectId,
     activeWorktreeId: null,
     repos: makeRepos(projectId, `C:\\Users\\alice\\${projectId}`),
-    settings: {},
+    settings: getDefaultSettings('/tmp'),
     worktreesByRepo: {}
-  } as AppState
+  }
 }
 
 describe('local preflight context caches', () => {
-  it('releases an old WSL selector snapshot after sustained context churn', () => {
-    const first = getLocalPreflightContext(makeWslState('Distro0'), 'darwin')
-
-    for (let index = 1; index <= WSL_CACHE_LIMIT; index += 1) {
-      getLocalPreflightContext(makeWslState(`Distro${index}`), 'darwin')
-    }
-
-    expect(getLocalPreflightContext(makeWslState('Distro0'), 'darwin')).not.toBe(first)
-  })
-
   it('caps cached WSL distro snapshots', () => {
     for (let index = 0; index < WSL_CACHE_LIMIT + 1; index++) {
       const distro = `Distro${index}`
