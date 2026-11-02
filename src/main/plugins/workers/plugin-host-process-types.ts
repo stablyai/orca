@@ -1,5 +1,6 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
+import type { PluginHookName } from '../../../shared/plugins/contributions/plugin-hook-contribution'
 import type {
   PluginErrorCode,
   PluginHostCallOutcome
@@ -35,6 +36,8 @@ export type PluginWorkerHandle = {
   deliverEvent(event: PluginEventName, payload: unknown): void
   /** A panel's `plugin.request`; rejects with a {@link PluginWorkerRequestError}. */
   requestFromPanel(request: PluginWorkerPanelRequest): Promise<unknown>
+  /** One hook's handlers; resolves with the worker's raw decision, which the host validates. */
+  runHook(event: PluginHookName, payload: unknown, timeoutMs: number): Promise<unknown>
   /** Fire-and-forget: the worker's `storage`/`settings` `onDidChange` listeners. */
   notifyDataChanged(change: PluginDataChanged): void
   /** Last completed work timestamp, in milliseconds, for idle reaping. */

@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
-import { realpath, stat } from 'node:fs/promises'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { readdir, realpath, stat } from 'node:fs/promises'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES,
@@ -167,16 +167,49 @@ async function resolvePathFromRealRoot(
   return artifactReal
 }
 
+/** Why: APFS and NTFS resolve `dark.json` to a committed `DARK.json`, but Linux does not. */
+async function assertExactPathSpelling(
+  rootDir: string,
+  relativePath: string,
+  listDirectory: (dir: string) => Promise<string[]>
+): Promise<void> {
+  let dir = resolve(rootDir)
+  for (const segment of relativePath.split(/[\\/]/)) {
+    const names = await listDirectory(dir)
+    if (!names.includes(segment)) {
+      const lower = segment.toLowerCase()
+      const actual = names.find((name) => name.toLowerCase() === lower)
+      throw new Error(
+        actual === undefined
+          ? `"${segment}" does not match its on-disk name (check case and Unicode normalization)`
+          : `"${segment}" is spelled "${actual}" on disk; paths are case-sensitive on Linux`
+      )
+    }
+    dir = join(dir, segment)
+  }
+}
+
 /** Presence and containment checks are bounded by the manifest's declared artifacts. */
 export async function validateDeclaredPluginArtifacts(
   rootDir: string,
-  manifest: PluginManifest
+  manifest: PluginManifest,
+  // Why: installed plugins predate the case rule, so startup must not drop them on macOS/Windows.
+  { allowCaseMismatch = false }: { allowCaseMismatch?: boolean } = {}
 ): Promise<PluginArtifactValidationResult> {
   const artifacts = declaredArtifactPaths(manifest)
   if (artifacts.length === 0) {
     return { ok: true }
   }
   const seen = new Set<string>()
+  const listings = new Map<string, Promise<string[]>>()
+  const listDirectory = (dir: string): Promise<string[]> => {
+    let listing = listings.get(dir)
+    if (!listing) {
+      listing = readdir(dir)
+      listings.set(dir, listing)
+    }
+    return listing
+  }
   let rootReal: string
   try {
     rootReal = await realpath(resolve(rootDir))
@@ -196,6 +229,9 @@ export async function validateDeclaredPluginArtifacts(
         artifact.kind,
         artifact.kind === 'file' ? artifact.maxBytes : undefined
       )
+      if (!allowCaseMismatch) {
+        await assertExactPathSpelling(rootDir, artifact.path, listDirectory)
+      }
     } catch (error) {
       return {
         ok: false,

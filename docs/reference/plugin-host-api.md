@@ -30,6 +30,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`plugin.request`](#pluginrequest) | none | panel, editor | no | 1.2 | Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name. |
 | [`agents.list`](#agentslist) | `agent:read` | worker, panel, editor | no | 1.2 | The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after. |
 | [`events.subscribe`](#eventssubscribe) | none | panel, editor | no | 1.2 | Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. |
+| [`statusBar.update`](#statusbarupdate) | none | worker | no | 1.2 | Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled. |
 
 ### `workspace.readContext`
 
@@ -175,6 +176,14 @@ Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the
 (params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }) => { ok: true }
 ```
 
+### `statusBar.update`
+
+Changes one of the plugin's `contributes.statusBarItems` (named by `id`): fields given replace their current value, `visible: false` hides it. Desktop app only; lasts until Orca restarts, and is hidden while the plugin is disabled.
+
+```ts
+(params: { id: string; text?: string; icon?: "activity" | "bar-chart-3" | "bell" | "blocks" | "book" | "bot" | "bug" | "calendar" | "cloud" | "code" | "database" | "file-text" | "flag" | "folder" | "gauge" | "globe" | "hammer" | "layers" | "lightbulb" | "package" | "plug" | "puzzle" | "rocket" | "star" | "terminal" | "wrench" | "zap" | "add" | "remove" | "delete" | "edit" | "refresh" | "search" | "settings" | "check" | "close" | "info" | "warning" | "error" | "open-external" | "copy" | "download" | "upload" | "play" | "pause" | "stop" | "more" | "expand" | "collapse" | "next" | "filter" | "branch" | "file" | "agent" | "link"; tone?: "neutral" | "accent" | "success" | "warning" | "danger"; tooltip?: string; visible?: boolean }) => { ok: true }
+```
+
 ## Events
 
 A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.
@@ -185,6 +194,18 @@ A worker receives the events its manifest lists in `contributes.events` through 
 | `workspace.removed` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string }` | A worktree workspace was removed. |
 | `agent.status.changed` | `{ workspaceId: string \| null; paneKey: string; terminalId?: string; title?: string; state: "working" \| "blocked" \| "waiting" \| "done"; receivedAt: number; mainAgent?: { state: "working" \| "blocked" \| "waiting" \| "done"; outcome?: "success" \| "failure" \| "cancellation" \| "superseded" \| "interruption" \| "unconfirmed"; stateStartedAt: number } }` | An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it. |
 | `workspace.changed` | `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } \| null }` | The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context. |
+
+## Hooks
+
+A worker changes or stops what Orca is about to do with `orca.hooks.on(hook, (event, next) => ...)`, which returns `{ dispose() }`. Each hook must be listed in `contributes.hooks` (`main` and the `trusted-worker` profile; no capability). Return `next(event)` to go on, with the fields the hook allows changed; return a result such as `{ deny: reason }` to stop; return nothing to pass. Plugins run one after another (installed plugins by key, then development folders), then Orca acts on what is left. Orca starts the workers of plugins that list hooks as soon as they are enabled and keeps them running. A handler that takes longer than 2 s, a worker that does not start within the worker ready timeout, a throw, a crash or a disabled plugin counts as having passed, and `orca plugin logs` shows the hook, the plugin and how long it took. A guard that must fail closed sets `"onError": "deny"` on its `contributes.hooks` entry; then those failures refuse the action, naming the plugin. Decide before any other awaited call: an awaited host call ahead of your `{ deny }` can fail or time out and let the action through.
+
+Hooks run in the workers of the Orca that handles the request, before it acts: for an SSH or WSL terminal or workspace, that is the desktop, before the work is sent to its host. A paired client reaching a remote Orca server is decided by that server's plugins. `orca plugin types` writes the events as `PluginHooks` in `orca/host`; `orca/testing` `mountWorker(...).hooks.fire(hook, event)` returns what the chain decided.
+
+| Hook | Event | Stop result | `next` may change | Summary |
+| --- | --- | --- | --- | --- |
+| `terminal.send` | `{ terminalId: string; text: string; enter: boolean; inputKind: "driving" \| "orchestration" \| "launch" }` | `{ deny: string }` | `text`, `enter` | Text Orca, the CLI or a plugin is about to send to a terminal. A person typing (on the desktop, a phone or a paired client) is never hooked, and prompts Orca submits to an agent are not included (a separate agent prompt hook covers them). Writes to one terminal stay in order while a hook decides. Rewrite `text` or `enter` with `next`, or return `{ deny }` to refuse the send. |
+| `workspace.create.before` | `{ kind: "worktree" \| "folder"; projectId: string; name: string; branch?: string; base?: string }` | `{ deny: string }` | `name`, `branch`, `base` | A worktree or folder workspace is about to be created. Change `name`, `branch` or `base` with `next`, or return `{ deny }` to refuse it. |
+| `workspace.create.after` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string; branch: string }` | none | nothing | A worktree or folder workspace was created. Observe only: Orca does not wait for it, and results are ignored. |
 
 ## Errors
 
