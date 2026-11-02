@@ -25,12 +25,15 @@ import { provisionClaudeAccountProfile } from './claude-profile-setup'
 
 const roots: string[] = []
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
 const local = { runtime: 'host', executionHostId: 'local' } as const
 function fixture() {
+  vi.stubEnv('CLAUDE_CONFIG_DIR', '')
+  vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'claude-profile-setup-')))
   roots.push(root)
   state.home = join(root, 'home')
@@ -40,7 +43,7 @@ function fixture() {
   mkdirSync(dataRoot)
   const service = new ClaudeHookService()
   const installHooks = (target: { configDir: string }) =>
-    service.install({ claudeVersion: '2.1.261', ...target })
+    service.installProfile({ claudeVersion: '2.1.261', target: { kind: 'profile', ...target } })
   const setup = () =>
     provisionClaudeAccountProfile({
       dataRoot,
@@ -60,7 +63,7 @@ describe('Claude account profile setup', () => {
     const f = fixture()
     mkdirSync(join(f.defaultHome, 'skills'))
     writeFileSync(join(f.defaultHome, 'settings.json'), '{"model":"opus"}')
-    f.service.install({ claudeVersion: '2.1.261' })
+    await f.service.installSystem({ claudeVersion: '2.1.261' })
     const report = await f.setup()
     const home = join(f.dataRoot, 'claude-profiles/a/home')
     expect(report).toMatchObject({ outcome: 'prepared', warnings: [] })
@@ -87,7 +90,11 @@ describe('Claude account profile setup', () => {
       dataRoot: f.dataRoot,
       profile: describeClaudeProfile(f.dataRoot, 'a', local),
       userHome: state.home,
-      installHooks: (target) => f.service.install({ ...target, claudeVersion: unknown }),
+      installHooks: (target) =>
+        f.service.installProfile({
+          target: { kind: 'profile', ...target },
+          claudeVersion: unknown
+        }),
       platform: 'linux'
     })
     expect(refreshed.warnings).toEqual([])

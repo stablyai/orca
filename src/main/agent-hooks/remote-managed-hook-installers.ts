@@ -32,6 +32,8 @@ export type RemoteManagedHookInstallOptions = {
   /** Login-shell KIRO_HOME on the execution host; it replaces ~/.kiro outright. */
   kiroHomeDir?: string
   claudeVersion?: string
+  /** Claude settings root resolved on the execution host, independently of its script home. */
+  claudeConfigDir?: string
   /** Cancellation stops the next installer; individual mutations remain atomic. */
   signal?: AbortSignal
   /** Only positively detected, enabled agents may mutate configs; omitted/empty installs nothing. */
@@ -52,7 +54,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
     'claude',
     (sftp, remoteHome, options) =>
       claudeHookService.installRemote(sftp, remoteHome, {
-        claudeVersion: options?.claudeVersion
+        claudeVersion: options?.claudeVersion,
+        configDir: options?.claudeConfigDir
       })
   ],
   ['openclaude', (sftp, remoteHome) => openClaudeHookService.installRemote(sftp, remoteHome)],

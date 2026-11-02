@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { readActiveClaudeKeychainCredentialsStrict } from '../claude-accounts/keychain'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth/runtime-auth-types'
-import { readUserClaudeConfigDir } from '../claude-accounts/claude-profile-paths'
+import { readUserClaudeConfigDir } from '../../shared/claude-user-config'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 
 export type ClaudeOAuthCredentialSource =

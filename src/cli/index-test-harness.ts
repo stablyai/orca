@@ -23,8 +23,8 @@ export async function createRuntimeClientModuleMock(mocks: RuntimeClientModuleMo
   class RuntimeClient {
     readonly isRemote: boolean
     call = mocks.callMock
-    getCliStatus = vi.fn()
-    openOrca = vi.fn()
+    getCliStatus: Mock = vi.fn()
+    openOrca: Mock = vi.fn()
 
     constructor(
       _userDataPath?: string,

@@ -208,10 +208,16 @@ describe('WslHookRelayManager', () => {
       registerInstallPlugins?: boolean
       detectedAgents?: string[]
       claudeVersion?: string
+      claudeConfigDir?: string
       claudePluginDir?: string
     } = {}
   ): MultiplexerTransport {
-    const { registerInstallPlugins = true, detectedAgents = ['codex'], claudeVersion } = options
+    const {
+      registerInstallPlugins = true,
+      detectedAgents = ['codex'],
+      claudeVersion,
+      claudeConfigDir
+    } = options
     const harness = createGuestHarness()
     harnesses.push(harness)
     registerWslHookFsHandlers(harness.guestDispatcher, home)
@@ -220,7 +226,8 @@ describe('WslHookRelayManager', () => {
     }))
     harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
       agents: detectedAgents,
-      ...(claudeVersion ? { versions: { claude: claudeVersion } } : {})
+      ...(claudeVersion ? { versions: { claude: claudeVersion } } : {}),
+      ...(claudeConfigDir ? { claudeConfigDir } : {})
     }))
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
@@ -503,7 +510,11 @@ describe('WslHookRelayManager', () => {
     'forwards identified WSL version without losing agent presence: %s',
     async (raw, expected) => {
       const waitForSentinel = vi.fn(async () =>
-        guestTransport({ detectedAgents: ['claude'], claudeVersion: raw })
+        guestTransport({
+          detectedAgents: ['claude'],
+          claudeVersion: raw,
+          claudeConfigDir: '/srv/claude-settings'
+        })
       )
       const { manager, deps } = createManager({ waitForSentinel })
 
@@ -512,6 +523,7 @@ describe('WslHookRelayManager', () => {
 
       expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
         agents: ['claude'],
+        claudeConfigDir: '/srv/claude-settings',
         ...(expected ? { claudeVersion: expected } : {})
       })
       manager.disposeAll()

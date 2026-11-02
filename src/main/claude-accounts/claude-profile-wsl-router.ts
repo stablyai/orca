@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { lstat, readFile } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV,
@@ -31,7 +32,12 @@ import {
   getSelectedClaudeAccountIdForTarget
 } from './runtime-selection'
 
-type WslSetup = (distro: string, guestHome: string, accountId: string) => Promise<void>
+type WslSetup = (
+  distro: string,
+  guestHome: string,
+  accountId: string,
+  hooks: boolean
+) => Promise<void>
 
 /** Route each distro through guest-owned profiles, history links, and selection pointers. */
 export class ClaudeWslProfileRouter {
@@ -228,7 +234,8 @@ export class ClaudeWslProfileRouter {
     if (running) {
       return running
     }
-    const run = (this.args.runSetup ?? runWslSetup)(distro, home, accountId).finally(() =>
+    const hooks = isAgentStatusHooksEnabledForAgent(this.args.getSettings(), 'claude')
+    const run = (this.args.runSetup ?? runWslSetup)(distro, home, accountId, hooks).finally(() =>
       this.setups.delete(accountId)
     )
     this.setups.set(accountId, run)
@@ -276,7 +283,7 @@ async function runGuest(distro: string, spec: WslSpec, timeoutMs = 15_000): Prom
 }
 
 /** Run guest setup with the pinned Node runtime. */
-const runWslSetup: WslSetup = async (distro, home, accountId) => {
+const runWslSetup: WslSetup = async (distro, home, accountId, hooks) => {
   const helper = relayBundleCandidates('wsl')
     .map((dir) => join(dir, WSL_CLAUDE_PROFILE_HELPER_FILENAME))
     .find(existsSync)
@@ -298,7 +305,7 @@ const runWslSetup: WslSetup = async (distro, home, accountId) => {
   const report = await run(
     {
       program: '/usr/bin/env',
-      args: ['-u', 'NODE_OPTIONS', node, guestHelper, home, distro, accountId],
+      args: ['-u', 'NODE_OPTIONS', node, guestHelper, home, distro, accountId, String(hooks)],
       loginPath: 'none'
     },
     120_000

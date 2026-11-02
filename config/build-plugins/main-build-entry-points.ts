@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../src/shared/orcad-local-serve-selection'
-import { CLI_MAIN_ENTRY_NAMES } from './plain-node-entry-guard'
+import { CLI_MAIN_ENTRY_NAMES } from './cli-main-entry-names'
 
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {

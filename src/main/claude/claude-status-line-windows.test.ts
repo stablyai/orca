@@ -104,7 +104,7 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
       mkdirSync(join(home, '.claude'), { recursive: true })
       writeFileSync(settingsPath(home), JSON.stringify(seed))
     }
-    new ClaudeHookService().install(CURRENT_CLAUDE)
+    await new ClaudeHookService().installSystem(CURRENT_CLAUDE)
     const settings: StatusLineSettings = JSON.parse(readFileSync(settingsPath(home), 'utf-8'))
     const command = settings.statusLine?.command
     if (!command) {

@@ -1,3 +1,7 @@
+import { wslHookInvocation, conventionalHookInvocation } from './agent-hooks-wsl'
+import { AGENT_HOOK_TARGETS } from '../../shared/agent-hook-types'
+import type { ManagedHookInvocation } from '../../main/claude/claude-hook-target'
+import { readUserClaudeConfigDirAsSet } from '../../shared/claude-user-config'
 import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
@@ -11,6 +15,7 @@ import {
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { ProfileStateOfflineLocation } from '../../main/persistence/profile-state/profile-state-offline-settings'
 
 type AgentHookCommandResult = {
@@ -19,6 +24,11 @@ type AgentHookCommandResult = {
   appliedBy: 'runtime' | 'offline'
   statuses: AgentHookInstallStatus[]
 }
+
+type HookSettings = Pick<
+  GlobalSettings,
+  'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'agentCmdOverrides'
+>
 
 // Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
 const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
@@ -43,9 +53,7 @@ function legacyProfileStateLocation(): ProfileStateOfflineLocation {
   }
 }
 
-async function readHookSettingsFromDisk(): Promise<
-  Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
-> {
+async function readHookSettingsFromDisk(): Promise<HookSettings> {
   const { acquireProfileStateRuntimeAdmission } =
     await import('../../main/persistence/profile-state/profile-state-access.js')
   const admission = acquireProfileStateRuntimeAdmission(getDefaultUserDataPath())
@@ -56,9 +64,7 @@ async function readHookSettingsFromDisk(): Promise<
   }
 }
 
-async function readAdmittedHookSettingsFromDisk(): Promise<
-  Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
-> {
+async function readAdmittedHookSettingsFromDisk(): Promise<HookSettings> {
   const { readAgentHookSettingsFromProfileState } =
     await import('../../main/persistence/profile-state/profile-state-offline-settings.js')
   return readAgentHookSettingsFromProfileState(
@@ -110,10 +116,20 @@ async function updateAdmittedEnabledOnDisk(enabled: boolean): Promise<{
       profileId: profile.profile.id
     }
   }
-  return updateAgentHookSettingsFromProfileState(location, enabled)
+  const updated = updateAgentHookSettingsFromProfileState(location, enabled)
+  return {
+    ...updated,
+    settings: {
+      ...updated.settings,
+      disabledTuiAgents: normalizeDisabledTuiAgents(updated.settings.disabledTuiAgents)
+    }
+  }
 }
 
-async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
+async function updateRunningRuntime(
+  client: RuntimeClient,
+  enabled: boolean
+): Promise<{ settings: HookSettings } | null> {
   const status = await client.getOfflineRuntimeAdmission()
   if (!status.reachable) {
     if (status.legacyPidRunning) {
@@ -122,10 +138,14 @@ async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Pr
         'Orca is running but unavailable. Retry when it responds, or stop Orca before changing agent hooks offline.'
       )
     }
-    return false
+    return null
   }
-  await client.call('settings.update', { agentStatusHooksEnabled: enabled }, { timeoutMs: 10_000 })
-  return true
+  const updated = await client.call<{ settings: HookSettings }>(
+    'settings.update',
+    { agentStatusHooksEnabled: enabled },
+    { timeoutMs: 10_000 }
+  )
+  return updated.result
 }
 
 function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
@@ -157,18 +177,53 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
     .join('\n')
 }
 
+function hookInvocation(): ManagedHookInvocation {
+  if (wslHookInvocation()) {
+    return conventionalHookInvocation()
+  }
+  const configDir = readUserClaudeConfigDirAsSet(process.env)
+  return configDir === undefined ? {} : { env: { CLAUDE_CONFIG_DIR: configDir } }
+}
+
 async function setAgentHooksEnabled(
   client: RuntimeClient,
   enabled: boolean
 ): Promise<AgentHookCommandResult> {
-  const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
-    await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+  const controls = await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+  const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } = controls
+  const origin = wslHookInvocation()
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
   const settingsPath = offlineUpdate?.settingsPath ?? (await getDataPath())
-  const statuses = updatedRuntime
-    ? getManagedAgentHookStatuses()
-    : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings)
+  const invocation = { ...hookInvocation(), userDataPath: getDefaultUserDataPath() }
+  let statuses: AgentHookInstallStatus[]
+  if (origin?.context) {
+    const nativeOptions = {
+      ...invocation,
+      agents: AGENT_HOOK_TARGETS.filter((agent) => agent !== 'claude')
+    }
+    const nativeStatuses = updatedRuntime
+      ? await getManagedAgentHookStatuses(nativeOptions)
+      : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings, nativeOptions)
+    const claude = await controls.runWslClaudeHookCommand(
+      { distro: origin.distro, context: origin.context },
+      enabled ? 'on' : 'off',
+      updatedRuntime?.settings ?? offlineUpdate?.settings ?? null
+    )
+    statuses = [claude, ...nativeStatuses]
+  } else if (updatedRuntime && invocation.env) {
+    const applied = await applyAgentStatusHooksEnabled(enabled, updatedRuntime.settings, {
+      ...invocation,
+      agents: ['claude']
+    })
+    statuses = (await getManagedAgentHookStatuses(invocation)).map(
+      (status) => applied.find((result) => result.agent === status.agent) ?? status
+    )
+  } else {
+    statuses = updatedRuntime
+      ? await getManagedAgentHookStatuses(invocation)
+      : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings, invocation)
+  }
   return {
     enabled,
     settingsPath,
@@ -198,15 +253,34 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
       // Best effort: old or unavailable runtimes must not block Codex launch.
     }
   },
-  'agent hooks status': async ({ json, flags }) => {
+  'agent hooks status': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
-    const { getManagedAgentHookStatuses } =
-      await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+    const controls = await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+    const { getManagedAgentHookStatuses } = controls
+    const origin = wslHookInvocation()
+    const admission = origin?.context ? await client.getOfflineRuntimeAdmission() : null
+    const settings = admission?.reachable
+      ? (await client.call<{ settings: HookSettings }>('settings.get')).result.settings
+      : await readHookSettingsFromDisk()
+    const invocation = hookInvocation()
+    const statuses = origin?.context
+      ? [
+          await controls.runWslClaudeHookCommand(
+            { distro: origin.distro, context: origin.context },
+            'status',
+            settings
+          ),
+          ...(await getManagedAgentHookStatuses({
+            ...invocation,
+            agents: AGENT_HOOK_TARGETS.filter((agent) => agent !== 'claude')
+          }))
+        ]
+      : await getManagedAgentHookStatuses(invocation)
     const result: AgentHookCommandResult = {
-      enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
+      enabled: settings.agentStatusHooksEnabled,
       settingsPath: await getDataPath(),
       appliedBy: 'offline',
-      statuses: getManagedAgentHookStatuses()
+      statuses
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },

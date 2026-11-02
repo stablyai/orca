@@ -44,15 +44,18 @@ describe('Claude settings written for a strict settings schema', () => {
     ).toEqual([])
   }
 
-  it.each(strictReleases)('a fresh install writes only what Claude %s accepts', (version) => {
-    new ClaudeHookService().install({ claudeVersion: version })
+  it.each(strictReleases)('a fresh install writes only what Claude %s accepts', async (version) => {
+    await new ClaudeHookService().installSystem({ claudeVersion: version })
     expectAcceptedBy(version)
   })
 
-  it.each(strictReleases)('a downgrade to Claude %s leaves only what it accepts', (version) => {
-    const service = new ClaudeHookService()
-    service.install({ claudeVersion: '2.1.261' })
-    service.install({ claudeVersion: version })
-    expectAcceptedBy(version)
-  })
+  it.each(strictReleases)(
+    'a downgrade to Claude %s leaves only what it accepts',
+    async (version) => {
+      const service = new ClaudeHookService()
+      await service.installSystem({ claudeVersion: '2.1.261' })
+      await service.installSystem({ claudeVersion: version })
+      expectAcceptedBy(version)
+    }
+  )
 })

@@ -1,5 +1,10 @@
 // POSIX hooks drain before exit; Windows missing-context hooks may exit without owning stdin.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  diagnosticInstall,
+  joinNativePreparation,
+  resetNativePreparationTrace
+} from './managed-hook-native-preparation.test-fixture'
 import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -8,11 +13,13 @@ import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
 import type * as NativeHookExecutableModule from './windows-native-hook-executable'
+import { withClaudeSystemScope } from '../claude/statusline-ownership'
 
 let isolatedUserDataDir = ''
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
+  resetNativePreparationTrace()
   vi.stubEnv('GROK_HOME', undefined)
   vi.stubEnv('KIMI_CODE_HOME', undefined)
   vi.stubEnv('COPILOT_HOME', undefined)
@@ -24,7 +31,8 @@ beforeEach(() => {
   process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await joinNativePreparation(homedirMock())
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
@@ -163,7 +171,7 @@ const REMOTE_INSTALLERS = [
 
 const LOCAL_INSTALLERS = [
   { agent: 'antigravity', install: () => new AntigravityHookService().install() },
-  { agent: 'claude', install: () => new ClaudeHookService().install() },
+  { agent: 'claude', install: async () => await new ClaudeHookService().installSystem() },
   { agent: 'openclaude', install: () => openClaudeHookService.install() },
   { agent: 'codex', install: () => new CodexHookService().install() },
   { agent: 'command-code', install: () => new CommandCodeHookService().install() },
@@ -269,10 +277,15 @@ async function generatePosixScripts(onlyAgent?: string): Promise<Map<string, str
 // Keep the platform override pinned across asynchronous installers.
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
-  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   try {
+    // Capture real ownership before the generated-script platform override.
+    await diagnosticInstall('real-ownership-before-platform-override', () =>
+      withClaudeSystemScope(homedirMock(), AbortSignal.timeout(2000), async () => {})
+    )
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
     return await run()
   } finally {
+    await joinNativePreparation(homedirMock())
     if (original) {
       Object.defineProperty(process, 'platform', original)
     }
@@ -305,7 +318,10 @@ describe('Windows managed hook stdin structure', () => {
     try {
       await withPlatform('win32', async () => {
         for (const entry of LOCAL_INSTALLERS) {
-          expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
+          const status = await diagnosticInstall(entry.agent, async () => await entry.install())
+          expect(status.state, `${entry.agent} install status: ${JSON.stringify(status)}`).toBe(
+            'installed'
+          )
         }
       })
       const hooksDir = join(home, '.orca', 'agent-hooks')
@@ -360,6 +376,7 @@ describe('Windows managed hook stdin structure', () => {
         ).toBeLessThan(decoded.indexOf('[Console]::In.ReadToEnd()'))
       }
     } finally {
+      await joinNativePreparation(home)
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
       if (previousGrokHome === undefined) {
         delete process.env.GROK_HOME
@@ -384,7 +401,10 @@ describe('Windows managed hook stdin structure', () => {
       try {
         const gitBash = findGitBash()
         for (const entry of LOCAL_INSTALLERS) {
-          expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
+          const status = await diagnosticInstall(entry.agent, async () => await entry.install())
+          expect(status.state, `${entry.agent} install status: ${JSON.stringify(status)}`).toBe(
+            'installed'
+          )
         }
         const hooksDir = join(home, '.orca', 'agent-hooks')
         const mainScripts = readdirSync(hooksDir).filter(
@@ -490,6 +510,7 @@ describe('Windows managed hook stdin structure', () => {
           expect(abandoned.exitCode, `${launcher.name} abandoned-stdin exit code`).toBe(0)
         }
       } finally {
+        await joinNativePreparation(home)
         homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
         rmSync(home, { recursive: true, force: true })
       }
@@ -510,7 +531,10 @@ describe('Windows managed hook stdin structure', () => {
       seedCmdAutoRunTarget(absentProfile)
       try {
         bundledHook.path = bundled ? buildWindowsNativeHookExecutable() : null
-        expect(new ClaudeHookService().install().state).toBe('installed')
+        const status = await diagnosticInstall(`claude stdout ${form}`, () =>
+          new ClaudeHookService().installSystem()
+        )
+        expect(status.state, JSON.stringify(status)).toBe('installed')
         const settings = JSON.parse(
           readFileSync(join(home, '.claude', 'settings.json'), 'utf8')
         ) as { hooks: Record<string, { hooks: { command: string; args?: string[] }[] }[]> }
@@ -561,6 +585,7 @@ describe('Windows managed hook stdin structure', () => {
           }
         }
       } finally {
+        await joinNativePreparation(home)
         bundledHook.path = null
         homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
         rmSync(home, { recursive: true, force: true })

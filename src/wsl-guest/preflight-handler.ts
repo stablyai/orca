@@ -1,3 +1,4 @@
+import { resolveSystemClaudeHookTarget } from '../main/claude/claude-hook-target'
 import { execFile } from 'node:child_process'
 import { userInfo } from 'node:os'
 import { promisify } from 'node:util'
@@ -39,7 +40,10 @@ const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
 
 export class PreflightHandler {
-  constructor(private readonly dispatcher: RelayDispatcher) {
+  constructor(
+    private readonly dispatcher: Pick<RelayDispatcher, 'onRequest'>,
+    private readonly invocationConfigDir?: string
+  ) {
     this.registerHandlers()
   }
 
@@ -54,6 +58,7 @@ export class PreflightHandler {
   private async detectAgents(params: Record<string, unknown>): Promise<{
     agents: string[]
     versions?: Record<string, string>
+    claudeConfigDir?: string
   }> {
     const commands = params.commands as AgentDetectionCommand[]
     if (!Array.isArray(commands)) {
@@ -105,7 +110,13 @@ export class PreflightHandler {
 
     return {
       agents: [...new Set(detectedCommands.map(({ id }) => id))],
-      ...(Object.keys(versions).length > 0 ? { versions } : {})
+      ...(Object.keys(versions).length > 0 ? { versions } : {}),
+      ...(detectedCommands.some(({ id }) => id === 'claude')
+        ? {
+            claudeConfigDir:
+              this.invocationConfigDir ?? (await resolveSystemClaudeHookTarget()).configDir
+          }
+        : {})
     }
   }
 

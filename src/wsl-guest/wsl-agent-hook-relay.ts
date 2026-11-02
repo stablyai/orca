@@ -3,6 +3,7 @@
 // Exit with stdin: a lingering listener can let WSL forwarding capture the freed Windows port and blackhole hooks.
 import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
 import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../shared/claude-agent-view'
+import { runWslHookCommandSession } from './wsl-hook-command-session'
 import { homedir } from 'node:os'
 
 import { RELAY_SENTINEL } from './protocol'
@@ -27,6 +28,10 @@ import {
 } from '../shared/wsl-hook-relay-contract'
 
 async function main(): Promise<void> {
+  if (process.argv[2] === '--hook-filesystem') {
+    await runWslHookCommandSession()
+    return
+  }
   const windowsPort = Number(process.env.ORCA_AGENT_HOOK_PORT ?? '')
   const token = process.env.ORCA_AGENT_HOOK_TOKEN ?? ''
   if (!Number.isInteger(windowsPort) || windowsPort <= 0 || token.length === 0) {
@@ -132,4 +137,7 @@ async function main(): Promise<void> {
   dispatcher.writePrimaryBytes(Buffer.from(RELAY_SENTINEL))
 }
 
-void main()
+void main().catch((error: unknown) => {
+  process.stderr.write(`${String(error)}\n`)
+  process.exitCode = 1
+})

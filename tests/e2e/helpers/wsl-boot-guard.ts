@@ -12,7 +12,12 @@ import {
   UNC_TOUCH,
   type DiagnosticRecord
 } from './wsl-boot-diagnostics-log'
-import { orcaWslLaunches, shouldRetryTerminate, WSL_EXE } from './wsl-terminate-retry'
+import {
+  orcaWslLaunches,
+  shouldRetryTerminate,
+  WSL_EXE,
+  type TerminateRetryState
+} from './wsl-terminate-retry'
 
 /** Async with a timeout: a hung wsl.exe must fail the test, never block the worker past its timeout. */
 export function wsl(args: readonly string[], timeoutMs = 60_000): Promise<string> {
@@ -93,6 +98,21 @@ export function watchDistroRunning(
 ): {
   stopped: Promise<void>
   stop: () => Promise<{ seenRunning: boolean; reads: number }>
+  diagnostics: () => Readonly<{
+    inputKind: 'original parsed decision inputs'
+    watchStartedAt: number
+    elapsedOrigin: 'watcher start after terminate returned'
+    initialStart: number
+    initialEnd: number
+    initialGap: readonly DiagnosticRecord[]
+    latestRetry: Readonly<{ state: Readonly<TerminateRetryState>; allowed: boolean }> | null
+    finished: boolean
+    confirmedStopped: boolean
+    seenRunning: boolean
+    retried: boolean
+    reads: number
+    failures: number
+  }>
 } {
   let finished = false
   let confirmedStopped = false
@@ -122,7 +142,17 @@ export function watchDistroRunning(
     )
   let grace = armGrace()
   // Spawns are interleaved into the timeline so a boot can be matched to the launch before it.
-  let spawnsSeen = readDiagnosticLog(spawnLog).length
+  const initial = readDiagnosticLog(spawnLog)
+  const initialEnd = initial.length
+  const initialStart = options.spawnsBefore ?? initialEnd
+  const initialGap = initial.slice(initialStart)
+  let spawnsSeen = initialEnd
+  let latestRetry: { state: TerminateRetryState; allowed: boolean } | null = null
+  const retryDecision = (state: TerminateRetryState): boolean => {
+    const allowed = shouldRetryTerminate(state)
+    latestRetry = { state, allowed }
+    return allowed
+  }
   const logNewWslSpawns = (): void => {
     const spawns = readDiagnosticLog(spawnLog)
     for (const spawn of orcaWslLaunches(spawns.slice(spawnsSeen))) {
@@ -149,7 +179,7 @@ export function watchDistroRunning(
         } else if (
           running &&
           options.retryTerminate &&
-          shouldRetryTerminate({
+          retryDecision({
             retried,
             confirmedStopped,
             msSinceTerminate: Date.now() - watchStartedAt,
@@ -187,6 +217,21 @@ export function watchDistroRunning(
   tick()
   return {
     stopped,
+    diagnostics: () => ({
+      inputKind: 'original parsed decision inputs',
+      watchStartedAt,
+      elapsedOrigin: 'watcher start after terminate returned',
+      initialStart,
+      initialEnd,
+      initialGap,
+      latestRetry,
+      finished,
+      confirmedStopped,
+      seenRunning,
+      retried,
+      reads,
+      failures
+    }),
     stop: async () => {
       finished = true
       clearTimeout(timer)

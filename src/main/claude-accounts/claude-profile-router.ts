@@ -18,13 +18,12 @@ import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import { describeClaudeProfile, type ClaudeProfileDescriptor } from './claude-profile-paths'
 import {
-  describeClaudeProfile,
-  type ClaudeProfileDescriptor,
   readUserClaudeConfigDir,
   readUserClaudeConfigDirAsSet,
   resolveClaudeDefaultHome
-} from './claude-profile-paths'
+} from '../../shared/claude-user-config'
 import type { ClaudeProfileSetupReport } from './claude-profile-setup'
 import { runClaudeProfileSetupInWorker } from './claude-profile-setup-worker'
 import type { ClaudeEnvPatch } from './environment'
@@ -316,9 +315,8 @@ export class ClaudeProfileRouter {
     if (!profile) {
       return null
     }
-    const selected =
-      this.accountLogin(profile.accountId) ??
-      findClaudeAccount(this.args.getSettings(), profile.accountId)
+    const id = profile.accountId
+    const selected = this.accountLogin(id) ?? findClaudeAccount(this.args.getSettings(), id)
     const systemDefault = this.systemDefaultLogin(5_000)
     return !selected || !systemDefault || !isSameClaudeLogin(selected, systemDefault)
   }

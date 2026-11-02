@@ -14,10 +14,12 @@ vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 import {
   describeClaudeProfile,
   prepareClaudeProfileDirectory,
-  readClaudeProfileObject,
+  readClaudeProfileObject
+} from './claude-profile-paths'
+import {
   readUserClaudeConfigDir,
   readUserClaudeConfigDirAsSet
-} from './claude-profile-paths'
+} from '../../shared/claude-user-config'
 
 const caseInsensitive = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'claude-case-probe-'))

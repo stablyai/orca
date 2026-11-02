@@ -28,9 +28,15 @@ vi.mock('@orca/process-host', async (original) => ({
 // Exercise the existing hook installer on one isolated target; do not discover installed agents.
 vi.mock('../../main/agent-hooks/managed-agent-hook-controls', async () => {
   const { claudeHookService } = await import('../../main/claude/hook-service.js')
+  const { systemClaudeHookTarget } = await import('../../main/claude/claude-hook-target.js')
   return {
     applyAgentStatusHooksEnabled: vi.fn(async (enabled: boolean) => [
-      enabled ? claudeHookService.install({ claudeVersion: '2.1.0' }) : claudeHookService.remove()
+      enabled
+        ? await claudeHookService.installSystem({ claudeVersion: '2.1.0' })
+        : await claudeHookService.removeSystem({
+            target: systemClaudeHookTarget(),
+            userDataPath: process.env.ORCA_USER_DATA_PATH!
+          })
     ]),
     getManagedAgentHookStatuses: () => [claudeHookService.getStatus()]
   }
@@ -72,11 +78,11 @@ beforeEach(() => {
     'XDG_CONFIG_HOME',
     'XDG_DATA_HOME',
     'XDG_CACHE_HOME',
-    'CODEX_HOME',
-    'CLAUDE_CONFIG_DIR'
+    'CODEX_HOME'
   ]) {
     vi.stubEnv(key, join(root, key))
   }
+  vi.stubEnv('CLAUDE_CONFIG_DIR', join(root, 'HOME', '.claude'))
   vi.stubEnv('ORCA_USER_DATA_PATH', root)
   setAppEnvironment({
     getPath: () => root,

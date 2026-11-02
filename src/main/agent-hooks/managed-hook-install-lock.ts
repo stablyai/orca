@@ -1,29 +1,82 @@
-import { mkdir } from 'node:fs/promises'
+import { chmod, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { removeManagedHookLock } from './managed-hook-lock-claims'
+import { removeManagedHookLock, scopedWindowsOwnerPolicy } from './managed-hook-lock-claims'
 import {
   cleanupManagedHookLockFiles,
   deactivateManagedHookLockOwner,
   inspectManagedHookLock,
   isManagedHookLockOwnerActive,
-  tryCreateManagedHookLock,
-  type ManagedHookLockOwner
+  tryCreateManagedHookLock
 } from './managed-hook-lock-records'
 import {
   readManagedHookHostIdentity,
-  readManagedHookProcessIdentity
+  readManagedHookProcessIdentity,
+  readScopedWindowsSelfIdentity,
+  type ManagedHookEvidenceReader,
+  type ManagedHookOwnerPolicy
 } from './managed-hook-owner-identity'
 
 const LOCK_WAIT_TIMEOUT_MS = 10_000
 const LOCK_RETRY_MS = 20
+const scopedPreparation = new Map<string, Promise<string | null | undefined>>()
+let scopedProcessIdentity: Promise<string | null | undefined> | undefined
+
+export type ManagedHookLockOwner = {
+  token: string
+  pid: number
+  hostIdentity: string
+  processIdentity: string
+}
+
+export type ManagedHookLockClaim = Omit<ManagedHookLockOwner, 'token'> & {
+  ownerToken: string
+  claimToken: string
+}
+
+export type AcquiredClaim = {
+  kind: 'claimed'
+  claim: ManagedHookLockClaim
+  claimRecordPath: string
+  claimedOwnerPath: string
+}
+
+export type ClaimResult =
+  | AcquiredClaim
+  | { kind: 'active' | 'foreign' | 'unverifiable' | 'contended' }
+
+export async function waitForManagedHookPreparation<T>(
+  preparation: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  if (!signal) {
+    return await preparation
+  }
+  signal.throwIfAborted()
+  let abort!: () => void
+  try {
+    return await Promise.race([
+      preparation,
+      new Promise<never>((_, reject) => {
+        abort = () => reject(signal.reason)
+        signal.addEventListener('abort', abort, { once: true })
+        if (signal.aborted) {
+          abort()
+        }
+      })
+    ])
+  } finally {
+    signal.removeEventListener('abort', abort)
+  }
+}
 
 async function releaseInstallLock(
   lockPath: string,
   lockParent: string,
   owner: ManagedHookLockOwner,
   hostIdentity: string,
-  processIdentity: string
+  processIdentity: string,
+  policy?: ManagedHookOwnerPolicy
 ): Promise<void> {
   try {
     const removal = await removeManagedHookLock(
@@ -31,7 +84,8 @@ async function releaseInstallLock(
       lockParent,
       owner,
       hostIdentity,
-      processIdentity
+      processIdentity,
+      policy
     )
     if (removal !== 'removed') {
       console.warn(`[agent-hooks] Failed to release managed-hook install lock: ${removal}`)
@@ -47,21 +101,99 @@ async function acquireInstallLock(
   home: string,
   signal?: AbortSignal,
   suppliedHostIdentity?: string,
-  waitTimeoutMs = LOCK_WAIT_TIMEOUT_MS
+  waitTimeoutMs = LOCK_WAIT_TIMEOUT_MS,
+  explicitParent?: string,
+  readEvidence?: ManagedHookEvidenceReader
 ): Promise<() => Promise<void>> {
-  const lockParent = join(home, '.orca')
+  const lockParent = explicitParent ?? join(home, '.orca')
   const lockPath = join(lockParent, 'managed-hook-install.lock')
-  await mkdir(lockParent, { recursive: true })
+  await mkdir(lockParent, { recursive: true, ...(explicitParent ? { mode: 0o700 } : {}) })
+  if (explicitParent && process.platform !== 'win32') {
+    await chmod(lockParent, 0o700)
+  }
   const hostIdentity = suppliedHostIdentity ?? (await readManagedHookHostIdentity())
-  await cleanupManagedHookLockFiles(lockParent, hostIdentity)
-  const processIdentity = await readManagedHookProcessIdentity(process.pid)
+  const scopedWindows = !!explicitParent && process.platform === 'win32'
+  let preparation = explicitParent ? scopedPreparation.get(lockParent) : undefined
+  if (!preparation) {
+    if (explicitParent && scopedPreparation.size > 0) {
+      throw new Error('Managed-hook scoped preparation is still running')
+    }
+    const ownerSignal = explicitParent ? AbortSignal.timeout(2000) : undefined
+    preparation = (async () => {
+      if (scopedWindows) {
+        scopedProcessIdentity ??= Promise.resolve(readScopedWindowsSelfIdentity())
+        const identity = await scopedProcessIdentity
+        if (typeof identity !== 'string') {
+          throw new Error('Could not identify the managed-hook installer process')
+        }
+        await cleanupManagedHookLockFiles(
+          lockParent,
+          hostIdentity,
+          ownerSignal,
+          scopedWindowsOwnerPolicy(identity, ownerSignal!)
+        )
+        return identity
+      }
+      await cleanupManagedHookLockFiles(lockParent, hostIdentity, ownerSignal)
+      if (!explicitParent) {
+        return await readManagedHookProcessIdentity(process.pid)
+      }
+      scopedProcessIdentity ??= readManagedHookProcessIdentity(process.pid).then(
+        (identity) => {
+          if (typeof identity !== 'string') {
+            scopedProcessIdentity = undefined
+          }
+          return identity
+        },
+        (error: unknown) => {
+          scopedProcessIdentity = undefined
+          throw error
+        }
+      )
+      const identity = await scopedProcessIdentity
+      ownerSignal?.throwIfAborted()
+      return identity
+    })()
+    if (explicitParent) {
+      scopedPreparation.set(lockParent, preparation)
+      void preparation.then(
+        () => scopedPreparation.delete(lockParent),
+        () => scopedPreparation.delete(lockParent)
+      )
+    }
+  }
+  const processIdentity = await waitForManagedHookPreparation(
+    preparation,
+    explicitParent ? signal : undefined
+  )
   if (typeof processIdentity !== 'string') {
     throw new Error('Could not identify the managed-hook installer process')
   }
   const deadline = Date.now() + waitTimeoutMs
+  const policy = scopedWindows
+    ? scopedWindowsOwnerPolicy(
+        processIdentity,
+        signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(waitTimeoutMs)])
+          : AbortSignal.timeout(waitTimeoutMs),
+        readEvidence
+      )
+    : undefined
+  const release = async (owner: ManagedHookLockOwner) =>
+    await releaseInstallLock(
+      lockPath,
+      lockParent,
+      owner,
+      hostIdentity,
+      processIdentity,
+      scopedWindows
+        ? scopedWindowsOwnerPolicy(processIdentity, AbortSignal.timeout(250), readEvidence)
+        : undefined
+    )
 
   while (true) {
     signal?.throwIfAborted()
+    policy?.check()
     const owner = await tryCreateManagedHookLock(
       lockParent,
       lockPath,
@@ -69,8 +201,12 @@ async function acquireInstallLock(
       processIdentity
     )
     if (owner) {
-      return async () =>
-        await releaseInstallLock(lockPath, lockParent, owner, hostIdentity, processIdentity)
+      if (policy && (signal?.aborted || Date.now() >= deadline)) {
+        await release(owner)
+        signal?.throwIfAborted()
+        throw new Error('Timed out waiting for another managed-hook install to finish')
+      }
+      return async () => await release(owner)
     }
 
     const state = await inspectManagedHookLock(lockPath)
@@ -84,25 +220,48 @@ async function acquireInstallLock(
     }
 
     if (state.kind === 'owned') {
-      const currentIdentity = await readManagedHookProcessIdentity(state.owner.pid)
-      if (currentIdentity === undefined) {
-        throw new Error('Could not verify the managed-hook lock owner process')
+      let ended: boolean
+      if (policy) {
+        const lifecycle = await policy.observe(
+          state.owner,
+          state.owner.token,
+          isManagedHookLockOwnerActive(state.owner.token),
+          true
+        )
+        if (lifecycle === 'unknown') {
+          throw new Error('Could not verify the managed-hook lock owner process')
+        }
+        ended = lifecycle === 'ended'
+      } else {
+        const currentIdentity = await readManagedHookProcessIdentity(state.owner.pid)
+        if (currentIdentity === undefined) {
+          throw new Error('Could not verify the managed-hook lock owner process')
+        }
+        const abandonedOwnLock =
+          state.owner.pid === process.pid &&
+          currentIdentity === processIdentity &&
+          !isManagedHookLockOwnerActive(state.owner.token)
+        ended =
+          currentIdentity === null ||
+          currentIdentity !== state.owner.processIdentity ||
+          abandonedOwnLock
       }
-      const abandonedOwnLock =
-        state.owner.pid === process.pid &&
-        currentIdentity === processIdentity &&
-        !isManagedHookLockOwnerActive(state.owner.token)
-      if (
-        currentIdentity === null ||
-        currentIdentity !== state.owner.processIdentity ||
-        abandonedOwnLock
-      ) {
+      if (ended) {
         const removal = await removeManagedHookLock(
           lockPath,
           lockParent,
           state.owner,
           hostIdentity,
-          processIdentity
+          processIdentity,
+          policy,
+          policy
+            ? () => {
+                policy.check()
+                if (Date.now() >= deadline) {
+                  throw new Error('Timed out waiting for another managed-hook install to finish')
+                }
+              }
+            : undefined
         )
         if (removal === 'removed') {
           if (Date.now() >= deadline) {
@@ -131,13 +290,19 @@ export async function withManagedHookInstallLock<T>(
   signal: AbortSignal | undefined,
   run: () => Promise<T>,
   hostIdentity?: string,
-  options?: { waitTimeoutMs?: number }
+  options?: {
+    waitTimeoutMs?: number
+    lockParent?: string
+    readEvidence?: ManagedHookEvidenceReader
+  }
 ): Promise<T> {
   const release = await acquireInstallLock(
     home,
     signal,
     hostIdentity,
-    options?.waitTimeoutMs ?? LOCK_WAIT_TIMEOUT_MS
+    options?.waitTimeoutMs ?? LOCK_WAIT_TIMEOUT_MS,
+    options?.lockParent,
+    options?.readEvidence
   )
   try {
     signal?.throwIfAborted()

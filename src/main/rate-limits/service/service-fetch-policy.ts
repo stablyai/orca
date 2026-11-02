@@ -16,7 +16,7 @@ import {
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
 } from '../claude-usage-window'
-import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
+import { readUserClaudeConfigDir } from '../../../shared/claude-user-config'
 import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {

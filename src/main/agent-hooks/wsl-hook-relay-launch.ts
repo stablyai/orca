@@ -31,8 +31,8 @@ const INSTALL_TIMEOUT_MS = 30_000
 
 export type WslHookRelayBundle = { jsPath: string; version: string }
 
-export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
-  for (const dir of relayBundleCandidates('wsl')) {
+export function resolveWslHookRelayBundle(appPath?: string): WslHookRelayBundle | null {
+  for (const dir of relayBundleCandidates('wsl', appPath)) {
     const jsPath = join(dir, WSL_HOOK_RELAY_BUNDLE_NAME)
     const versionPath = join(dir, WSL_HOOK_RELAY_VERSION_FILE)
     if (existsSync(jsPath) && existsSync(versionPath)) {
@@ -54,13 +54,21 @@ function guestRelayDirExpr(version: string): string {
 /** Probe candidate Node versions: noninteractive sh may miss a newer nvm installation. */
 export function buildGuestLaunchScript(version: string): string {
   const dir = guestRelayDirExpr(version)
-  // A WSL host distro may have no system node but usually has orcad's pinned runtime.
-  const [orcadRuntime, orcadMachineRuntimes] = orcadPosixNodeRuntimeGlobs()
   return [
     '#!/bin/sh',
     `d="${dir}"`,
     `v="$(cat "$d/${WSL_HOOK_RELAY_VERSION_FILE}" 2>/dev/null || true)"`,
     `[ -n "$${WSL_HOOK_RELAY_VERSION_ENV}" ] && [ "$v" = "$${WSL_HOOK_RELAY_VERSION_ENV}" ] || exit ${WSL_HOOK_RELAY_STALE_EXIT_CODE}`,
+    buildGuestNodeSelectionScript(),
+    `exec "$n" "$d/${WSL_HOOK_RELAY_BUNDLE_NAME}"`,
+    ''
+  ].join('\n')
+}
+
+/** Command sessions use the same Node18 floor and bounded candidate catalog as the relay. */
+export function buildGuestNodeSelectionScript(): string {
+  const [orcadRuntime, orcadMachineRuntimes] = orcadPosixNodeRuntimeGlobs()
+  return [
     'n=""',
     `for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node" ${orcadRuntime} ${orcadMachineRuntimes}; do`,
     '  [ -n "$c" ] && [ -x "$c" ] || continue',
@@ -69,9 +77,7 @@ export function buildGuestLaunchScript(version: string): string {
     '    break',
     '  fi',
     'done',
-    `[ -n "$n" ] || exit ${WSL_HOOK_RELAY_NO_NODE_EXIT_CODE}`,
-    `exec "$n" "$d/${WSL_HOOK_RELAY_BUNDLE_NAME}"`,
-    ''
+    `[ -n "$n" ] || exit ${WSL_HOOK_RELAY_NO_NODE_EXIT_CODE}`
   ].join('\n')
 }
 

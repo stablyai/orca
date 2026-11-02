@@ -99,10 +99,29 @@ describe('WSL CLI PowerShell boundary', () => {
         await writeFile(bridgePath, buildWslBridgeScript(), 'utf8')
         await writeFile(
           targetPath,
-          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null, distro: process.env.ORCA_CLI_WSL_DISTRO ?? null }))\n',
+          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null, distro: process.env.ORCA_CLI_WSL_DISTRO ?? null, context: process.env.ORCA_CLI_WSL_CONTEXT ?? null }))\n',
           'utf8'
         )
         const invocations = [
+          {
+            bridgeArgs: [
+              process.execPath,
+              '-WslCwd',
+              wslCwd,
+              '-WslContext',
+              'opaque-base64-origin',
+              '-WslDistro',
+              'Ubuntu Work',
+              targetPath,
+              ...FORWARDED_ARGS
+            ],
+            expected: {
+              argv: FORWARDED_ARGS,
+              cwd: wslCwd,
+              distro: 'Ubuntu Work',
+              context: 'opaque-base64-origin'
+            }
+          },
           {
             bridgeArgs: [
               process.execPath,
@@ -113,19 +132,19 @@ describe('WSL CLI PowerShell boundary', () => {
               targetPath,
               ...FORWARDED_ARGS
             ],
-            expected: { argv: FORWARDED_ARGS, cwd: wslCwd, distro: 'Ubuntu Work' }
+            expected: { argv: FORWARDED_ARGS, cwd: wslCwd, distro: 'Ubuntu Work', context: null }
           },
           {
             bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath, ...FORWARDED_ARGS],
-            expected: { argv: FORWARDED_ARGS, cwd: wslCwd, distro: null }
+            expected: { argv: FORWARDED_ARGS, cwd: wslCwd, distro: null, context: null }
           },
           {
             bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath],
-            expected: { argv: [], cwd: wslCwd, distro: null }
+            expected: { argv: [], cwd: wslCwd, distro: null, context: null }
           },
           {
             bridgeArgs: [process.execPath, targetPath, ...FORWARDED_ARGS],
-            expected: { argv: FORWARDED_ARGS, cwd: null, distro: null }
+            expected: { argv: FORWARDED_ARGS, cwd: null, distro: null, context: null }
           }
         ]
         for (const { bridgeArgs, expected } of invocations) {
@@ -147,6 +166,7 @@ describe('WSL CLI PowerShell boundary', () => {
                 ...process.env,
                 ORCA_CLI_CWD: 'stale',
                 ORCA_CLI_WSL_DISTRO: 'stale-distro',
+                ORCA_CLI_WSL_CONTEXT: 'stale-context',
                 WSL_DISTRO_NAME: 'wrong-distro'
               }
             }

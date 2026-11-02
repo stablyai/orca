@@ -223,6 +223,28 @@ describe('managed hook owner identity', () => {
     expect(execFileAsync).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps default Windows empty-output and signal fallback semantics unchanged', async () => {
+    const { identity, execFileAsync } = await loadWindowsIdentity()
+    const signal = vi.spyOn(process, 'kill').mockReturnValue(true)
+    try {
+      execFileAsync.mockResolvedValueOnce({ stdout: '' })
+      await expect(identity.readManagedHookProcessIdentity(123)).resolves.toBeUndefined()
+      expect(signal).not.toHaveBeenCalled()
+      execFileAsync.mockRejectedValue(new Error('transport unavailable'))
+      await expect(identity.readManagedHookProcessIdentity(123)).resolves.toBeUndefined()
+      signal.mockImplementation(() => {
+        throw Object.assign(new Error('access denied'), { code: 'EPERM' })
+      })
+      await expect(identity.readManagedHookProcessIdentity(123)).resolves.toBeUndefined()
+      signal.mockImplementation(() => {
+        throw Object.assign(new Error('absent'), { code: 'ESRCH' })
+      })
+      await expect(identity.readManagedHookProcessIdentity(123)).resolves.toBeNull()
+    } finally {
+      signal.mockRestore()
+    }
+  })
+
   it('retries an unverified macOS process identity', async () => {
     const identity = await loadDarwinIdentity()
 

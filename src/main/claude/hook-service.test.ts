@@ -1,8 +1,12 @@
+import { systemClaudeHookTarget } from './claude-hook-target'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { vi, describe, expect, it } from 'vitest'
+import { vi, describe, expect, it, beforeEach, afterEach } from 'vitest'
 import type * as GitBashModule from '../git-bash'
+
+beforeEach(() => vi.stubEnv('CLAUDE_CONFIG_DIR', ''))
+afterEach(() => vi.unstubAllEnvs())
 
 vi.mock('electron', () => ({
   app: {
@@ -121,7 +125,7 @@ function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
 }
 
 describe('ClaudeHookService.install', () => {
-  it('installs managed hooks into Claude settings and preserves user Bedrock settings', () => {
+  it('installs managed hooks into Claude settings and preserves user Bedrock settings', async () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-hooks-'))
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
@@ -156,7 +160,7 @@ describe('ClaudeHookService.install', () => {
         })
       )
 
-      const status = new ClaudeHookService().install(CURRENT_CLAUDE)
+      const status = await new ClaudeHookService().installSystem(CURRENT_CLAUDE)
       expect(status.state).toBe('installed')
 
       const legacy = JSON.parse(readFileSync(legacyPath, 'utf-8'))
@@ -215,13 +219,13 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  it('writes only the events an old resolved Claude knows and reports that as installed', () => {
+  it('writes only the events an old resolved Claude knows and reports that as installed', async () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-old-version-'))
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
     try {
       const service = new ClaudeHookService()
-      expect(service.install({ claudeVersion: '2.1.32' }).state).toBe('installed')
+      expect((await service.installSystem({ claudeVersion: '2.1.32' })).state).toBe('installed')
 
       const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
       for (const event of ['StopFailure', 'PostCompact', 'TeammateIdle', 'SessionEnd']) {
@@ -235,17 +239,17 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  it('keeps newer Orca events and reports installed when a later probe cannot resolve the version', () => {
+  it('keeps newer Orca events and reports installed when a later probe cannot resolve the version', async () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-unknown-version-'))
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
     try {
       const service = new ClaudeHookService()
       const settingsPath = join(tmpHome, '.claude', 'settings.json')
-      expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+      expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
       const known = JSON.parse(readFileSync(settingsPath, 'utf-8'))
 
-      expect(service.install().state).toBe('installed')
+      expect((await service.installSystem()).state).toBe('installed')
 
       const unknown = JSON.parse(readFileSync(settingsPath, 'utf-8'))
       expect(unknown.hooks).toEqual(known.hooks)
@@ -256,7 +260,7 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  it('never overwrites a user-owned statusLine command', () => {
+  it('never overwrites a user-owned statusLine command', async () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-user-statusline-'))
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
@@ -273,7 +277,7 @@ describe('ClaudeHookService.install', () => {
         })
       )
 
-      expect(new ClaudeHookService().install().state).toBe('installed')
+      expect((await new ClaudeHookService().installSystem()).state).toBe('installed')
 
       const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
       expect(settings.statusLine).toEqual({
@@ -281,7 +285,10 @@ describe('ClaudeHookService.install', () => {
         command: '/usr/local/bin/my-statusline'
       })
 
-      new ClaudeHookService().remove()
+      await new ClaudeHookService().removeSystem({
+        target: systemClaudeHookTarget(),
+        userDataPath: join(tmpHome, 'data')
+      })
       const afterRemove = JSON.parse(readFileSync(settingsPath, 'utf-8'))
       expect(afterRemove.statusLine).toEqual({
         type: 'command',
@@ -293,13 +300,16 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  it('removes the managed statusLine on remove()', () => {
+  it('removes the managed statusLine on remove()', async () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-remove-'))
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
     try {
-      new ClaudeHookService().install()
-      new ClaudeHookService().remove()
+      await new ClaudeHookService().installSystem()
+      await new ClaudeHookService().removeSystem({
+        target: systemClaudeHookTarget(),
+        userDataPath: join(tmpHome, 'data')
+      })
       const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
       expect(settings.statusLine).toBeUndefined()
     } finally {
@@ -308,24 +318,27 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  it('does not re-install a managed statusLine the user deleted, until remove() resets the opt-out', () => {
+  it('does not re-install a managed statusLine the user deleted, until remove() resets the opt-out', async () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-optout-'))
     vi.stubEnv('HOME', tmpHome)
     vi.stubEnv('USERPROFILE', tmpHome)
     try {
       const settingsPath = join(tmpHome, '.claude', 'settings.json')
-      new ClaudeHookService().install()
+      await new ClaudeHookService().installSystem()
       expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).statusLine).toBeTruthy()
 
       const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
       delete settings.statusLine
       writeFileSync(settingsPath, JSON.stringify(settings))
 
-      new ClaudeHookService().install()
+      await new ClaudeHookService().installSystem()
       expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).statusLine).toBeUndefined()
 
-      new ClaudeHookService().remove()
-      new ClaudeHookService().install()
+      await new ClaudeHookService().removeSystem({
+        target: systemClaudeHookTarget(),
+        userDataPath: join(tmpHome, 'data')
+      })
+      await new ClaudeHookService().installSystem()
       expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).statusLine).toBeTruthy()
     } finally {
       vi.unstubAllEnvs()
@@ -335,7 +348,7 @@ describe('ClaudeHookService.install', () => {
 
   it.skipIf(process.platform !== 'win32')(
     'sweeps a previously installed encoded launcher on reinstall, keeping user hooks',
-    () => {
+    async () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-migrate-'))
       vi.stubEnv('HOME', tmpHome)
       vi.stubEnv('USERPROFILE', tmpHome)
@@ -363,7 +376,7 @@ describe('ClaudeHookService.install', () => {
           'utf-8'
         )
 
-        expect(new ClaudeHookService().install().state).toBe('installed')
+        expect((await new ClaudeHookService().installSystem()).state).toBe('installed')
 
         const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
           hooks: Record<string, { hooks: TestHook[] }[]>
@@ -383,7 +396,7 @@ describe('ClaudeHookService.install', () => {
 
   it.skipIf(process.platform !== 'win32')(
     'reports a stale absolute path as not_installed and rewrites it on install (#18875)',
-    () => {
+    async () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-moved-'))
       vi.stubEnv('HOME', tmpHome)
       vi.stubEnv('USERPROFILE', tmpHome)
@@ -409,7 +422,7 @@ describe('ClaudeHookService.install', () => {
         )
 
         expect(new ClaudeHookService().getStatus().state).toBe('not_installed')
-        expect(new ClaudeHookService().install().state).toBe('installed')
+        expect((await new ClaudeHookService().installSystem()).state).toBe('installed')
 
         const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
           hooks: Record<string, { hooks: TestHook[] }[]>
@@ -426,6 +439,55 @@ describe('ClaudeHookService.install', () => {
 })
 
 describe('ClaudeHookService.installRemote', () => {
+  it('writes custom remote settings while keeping the managed script under remote HOME', async () => {
+    const svc = new ClaudeHookService()
+    const { sftp, fs } = createFakeSftp()
+    const status = await svc.installRemote(sftp, '/home/dev', {
+      ...CURRENT_CLAUDE,
+      configDir: '/srv/custom-claude'
+    })
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe('/srv/custom-claude/settings.json')
+    const settings = fs.files.get('/srv/custom-claude/settings.json')
+    expect(fs.files.has('/home/dev/.claude/settings.json')).toBe(false)
+    const parsed = JSON.parse(settings!)
+    for (const event of [
+      'SessionStart',
+      'UserPromptSubmit',
+      'Stop',
+      'StopFailure',
+      'SubagentStart',
+      'SubagentStop',
+      'TeammateIdle',
+      'PreToolUse',
+      'PostToolUse',
+      'PostToolUseFailure',
+      'PermissionRequest'
+    ]) {
+      expect(parsed.hooks[event]).toBeTruthy()
+      const cmd = parsed.hooks[event][0].hooks[0].command
+      expect(cmd).toContain('"${HOME-}/.orca/agent-hooks/claude-hook.sh"')
+      expect(cmd).not.toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
+    }
+    const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
+    expect(script).toContain('#!/bin/sh')
+    expect(script).toContain('DEVIN_PROJECT_DIR')
+    expect(script).toContain('GROK_HOOK_EVENT')
+    expect(script).toMatch(
+      /^#!\/bin\/sh\norca_hook_printed=\n[\s\S]*\ntrap orca_hook_finish EXIT\n/
+    )
+    expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
+    expect(script).toContain('-H "Content-Type: application/json"')
+    expect(script).toContain('orca_hook_metadata=$(printf')
+    expect(script).toContain('unset ORCA_AGENT_HOOK_TRANSPORT')
+    expect(script).toContain('-H "X-Orca-Agent-Hook-Meta: ${orca_hook_metadata}"')
+    expect(script).toContain('--data-binary @-')
+    expect(script).toContain('--data-urlencode "payload@-"')
+    expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
+    expect(parsed.statusLine).toBeUndefined()
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toBeUndefined()
+  })
+
   it('writes only the events the remote Claude knows, adding newer ones once it upgrades', async () => {
     const svc = new ClaudeHookService()
     const { sftp, fs } = createFakeSftp()

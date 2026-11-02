@@ -1,8 +1,14 @@
+import {
+  getAppEnvironment,
+  hasAppEnvironment,
+  setAppEnvironment
+} from '../../../shared/app-environment'
+import { seam, main, file, read } from '../claude-system-statusline.test-fixture'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
-import { parse } from 'jsonc-parser'
+import { afterEach, expect, it, vi } from 'vitest'
+import { parse, type ParseError } from 'jsonc-parser'
 import { claudeAgentViewChord } from './agent-view-keybindings'
 import { createAgentHookMemorySftp } from '../../agent-hooks/agent-hook-memory-sftp.test-fixture'
 import {
@@ -269,3 +275,97 @@ it.each([false, true])(
     expect(installClaudeAgentView(join(root, 'settings.json'))).toBe(true)
   }
 )
+
+it('maintains only owned view state at the CLI-selected custom root for on, off and disabled removal', async () => {
+  const environment = getAppEnvironment()
+  const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+  const errors = vi.spyOn(console, 'error')
+  const warnings = vi.spyOn(console, 'warn')
+  const config = file('custom')
+  const root = join(seam.home, 'custom')
+  const legacy = join(root, 'skills', 'orca-agent-view')
+  const bindings = join(root, 'keybindings.json')
+  const foreign = { context: 'Chat', bindings: { 'ctrl+k': 'command:user' } }
+  function seedLegacy() {
+    mkdirSync(join(legacy, '.claude-plugin'), { recursive: true })
+    mkdirSync(join(legacy, 'hooks'), { recursive: true })
+    writeFileSync(
+      join(legacy, '.claude-plugin', 'orca-managed.json'),
+      JSON.stringify({
+        owner: 'stablyai/orca/claude-agent-view',
+        binding: { context: 'Chat', chord: 'ctrl+alt+g' }
+      })
+    )
+    writeFileSync(join(legacy, 'hooks', 'register.js'), 'legacy')
+    // Restore minified-last coverage once MAIN-KEYBINDINGS-SERIALIZER-01 is fixed; owned-first avoids that main bug.
+    writeFileSync(
+      bindings,
+      JSON.stringify({
+        custom: true,
+        bindings: [
+          { context: 'Chat', bindings: { 'ctrl+alt+g': 'command:orca-agent-view' } },
+          foreign
+        ]
+      })
+    )
+  }
+  seedLegacy()
+  writeFileSync(
+    config,
+    JSON.stringify({ enabledPlugins: { 'user@market': true }, model: 'user-model' })
+  )
+  vi.stubEnv('CLAUDE_CONFIG_DIR', root)
+  Reflect.deleteProperty(globalThis, Symbol.for('orca.host.appEnvironment'))
+  try {
+    for (const [action, disabled] of [
+      ['on', false],
+      ['off', false],
+      ['on', true]
+    ] as const) {
+      if (action === 'off') {
+        seedLegacy()
+      }
+      if (disabled) {
+        expect(
+          installClaudeAgentView(config),
+          readFileSync(bindings, 'utf8') + readFileSync(join(root, 'orca-agent-view.json'), 'utf8')
+        ).toBe(true)
+        expect(claudeAgentViewChord(readFileSync(bindings, 'utf8'))).toBeDefined()
+        seam.disabledTuiAgents = ['claude']
+      }
+      expect(hasAppEnvironment()).toBe(false)
+      await main(['agent', 'hooks', action, '--json'])
+      const installed = action === 'on' && seam.disabledTuiAgents.length === 0
+      expect(JSON.parse(String(output.mock.calls.at(-1)?.[0])).result.statuses).toContainEqual({
+        agent: 'claude',
+        state: installed ? 'installed' : 'not_installed',
+        configPath: config,
+        managedHooksPresent: installed,
+        detail: null
+      })
+      expect(existsSync(legacy)).toBe(false)
+      const raw = readFileSync(bindings, 'utf8')
+      const parseErrors: ParseError[] = []
+      expect(parse(raw, parseErrors, { allowTrailingComma: true })).toEqual({
+        custom: true,
+        bindings: [foreign]
+      })
+      expect(parseErrors, raw).toEqual([])
+      expect(await read(config)).toMatchObject({
+        enabledPlugins: { 'user@market': true },
+        model: 'user-model'
+      })
+      expect(await read(join(root, 'orca-agent-view.json'))).toMatchObject({
+        owner: 'stablyai/orca/claude-agent-view',
+        setup: 'pending',
+        cleanupPending: false
+      })
+      expect(hasAppEnvironment()).toBe(false)
+    }
+    expect(errors).not.toHaveBeenCalled()
+    expect(warnings).not.toHaveBeenCalled()
+    expect(process.exitCode).toBeUndefined()
+  } finally {
+    setAppEnvironment(environment)
+  }
+})

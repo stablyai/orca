@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import * as fs from 'node:fs'
-import { tmpdir } from 'node:os'
+import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -9,6 +9,7 @@ import {
 } from '../../shared/orca-profiles'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { PersistedState } from '../../shared/persisted-state-types'
+import type { SystemClaudeHookTarget } from '../../main/claude/claude-hook-target'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile
@@ -88,6 +89,7 @@ vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
   getManagedAgentHookStatuses: getManagedAgentHookStatusesMock
 }))
 
+import * as wslLocation from './account-wsl-location'
 import { main } from '../index'
 
 function readDefaultProfileState(userDataPath: string) {
@@ -141,6 +143,153 @@ describe('agent hooks CLI handler', () => {
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
     rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  it('keeps old WSL wrappers on the explicit conventional native target online and offline for on/off/status', async () => {
+    vi.spyOn(wslLocation, 'getWslAccountTarget').mockReturnValue({
+      runtime: 'wsl',
+      wslDistro: 'Legacy'
+    })
+    vi.stubEnv('HOME', join(userDataPath, 'windows-home'))
+    vi.stubEnv('USERPROFILE', join(userDataPath, 'windows-home'))
+    vi.stubEnv('ORCA_CLI_WSL_CONTEXT', '')
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/home/guest/custom')
+    vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
+    const target: SystemClaudeHookTarget = {
+      kind: 'system-default',
+      configDir: join(homedir(), '.claude')
+    }
+    const { resolveSystemClaudeHookTarget } =
+      await import('../../main/claude/claude-hook-target.js')
+    expect(await resolveSystemClaudeHookTarget({ target })).toEqual(target)
+    writeDataFile(userDataPath, getDefaultPersistedState(userDataPath))
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    for (const reachable of [false, true]) {
+      for (const action of ['on', 'off', 'status']) {
+        process.exitCode = undefined
+        applyAgentStatusHooksEnabledMock.mockClear()
+        getManagedAgentHookStatusesMock.mockClear().mockResolvedValue([
+          {
+            agent: 'claude',
+            state: 'not_installed',
+            configPath: join(target.configDir, 'settings.json'),
+            managedHooksPresent: false,
+            detail: null
+          }
+        ])
+        if (action !== 'status') {
+          getCliStatusMock.mockResolvedValueOnce({
+            id: 'legacy',
+            ok: true,
+            result: {
+              app: { running: reachable, pid: null },
+              runtime: { state: reachable ? 'ready' : 'not_running', reachable, runtimeId: null },
+              graph: { state: 'ready' }
+            },
+            _meta: { runtimeId: 'legacy' }
+          })
+        }
+        callMock.mockResolvedValue({
+          result: { settings: { agentStatusHooksEnabled: action !== 'off' } }
+        })
+        await main(['agent', 'hooks', action], userDataPath)
+        expect(process.exitCode).not.toBe(1)
+        if (action !== 'status' && !reachable) {
+          expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
+            action === 'on',
+            expect.any(Object),
+            { target, userDataPath }
+          )
+        } else {
+          expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+          expect(getManagedAgentHookStatusesMock).toHaveBeenCalledWith(
+            action === 'status' ? { target } : { target, userDataPath }
+          )
+          expect(console.log).toHaveBeenCalledWith(
+            expect.stringContaining(join(target.configDir, 'settings.json'))
+          )
+        }
+        expect(JSON.stringify(applyAgentStatusHooksEnabledMock.mock.calls)).not.toContain(
+          '/home/guest'
+        )
+        expect(JSON.stringify(getManagedAgentHookStatusesMock.mock.calls)).not.toContain(
+          '/home/guest'
+        )
+      }
+    }
+  })
+
+  it.each(['on', 'off'])(
+    'applies online custom-root %s without local SQLite and reports the action result',
+    async (command) => {
+      await runAgentHooksOff(userDataPath)
+      applyAgentStatusHooksEnabledMock.mockClear()
+      vi.spyOn(profileStateDatabase, 'isProfileStateSqliteAvailable').mockReturnValue(false)
+      vi.stubEnv('CLAUDE_CONFIG_DIR', '/cli/custom-claude')
+      vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
+      getCliStatusMock.mockResolvedValueOnce({
+        id: 'status',
+        ok: true,
+        result: {
+          app: { running: true, pid: null },
+          runtime: { state: 'ready', reachable: true, runtimeId: null },
+          graph: { state: 'ready' }
+        },
+        _meta: { runtimeId: 'test' }
+      })
+      const settings = {
+        agentCmdOverrides: { claude: '/opt/custom-claude' },
+        disabledTuiAgents: ['gemini']
+      }
+      callMock.mockResolvedValueOnce({ result: { settings } })
+      const failed = {
+        agent: 'claude',
+        state: 'error',
+        configPath: '/cli/custom-claude/settings.json',
+        managedHooksPresent: true,
+        detail: 'write denied'
+      }
+      applyAgentStatusHooksEnabledMock.mockResolvedValueOnce([failed])
+      getManagedAgentHookStatusesMock.mockReturnValue([{ ...failed, state: 'not_installed' }])
+      await main(['agent', 'hooks', command, '--json'], userDataPath)
+      expect(process.exitCode).not.toBe(1)
+      expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
+        command === 'on',
+        settings,
+        expect.objectContaining({
+          agents: ['claude'],
+          env: expect.objectContaining({ CLAUDE_CONFIG_DIR: '/cli/custom-claude' })
+        })
+      )
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('write denied'))
+    }
+  )
+
+  it('keeps the Grok opt-out when offline on carries a custom Claude root', async () => {
+    vi.stubEnv('HOME', userDataPath)
+    vi.stubEnv('USERPROFILE', userDataPath)
+    vi.stubEnv('GROK_HOME', join(userDataPath, '.grok'))
+    const configDir = join(userDataPath, 'custom-claude')
+    vi.stubEnv('CLAUDE_CONFIG_DIR', configDir)
+    vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
+    const grokHooks = join(userDataPath, '.grok', 'hooks', 'orca-status.json')
+    mkdirSync(join(userDataPath, '.grok', 'hooks'), { recursive: true })
+    writeFileSync(grokHooks, '{"hooks":{}}\n')
+    const { GrokHookService } = await import('../../main/grok/hook-service.js')
+    applyAgentStatusHooksEnabledMock.mockImplementationOnce(
+      async (_enabled, _settings, options) => [new GrokHookService().install(options)]
+    )
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+
+    await main(['agent', 'hooks', 'on', '--json'], userDataPath)
+
+    expect(process.exitCode).not.toBe(1)
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(true, expect.any(Object), {
+      env: { CLAUDE_CONFIG_DIR: configDir },
+      userDataPath
+    })
+    expect(readFileSync(grokHooks, 'utf8')).toBe('{"hooks":{}}\n')
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('not_installed'))
   })
 
   it('keeps new card style off when creating offline settings for a fresh profile', async () => {

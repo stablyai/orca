@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { link, lstat, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { readManagedHookProcessIdentity } from './managed-hook-owner-identity'
+import type { ManagedHookLockOwner, ManagedHookLockClaim } from './managed-hook-install-lock'
+export type { ManagedHookLockOwner, ManagedHookLockClaim } from './managed-hook-install-lock'
+import {
+  readManagedHookProcessIdentity,
+  type ManagedHookOwnerPolicy
+} from './managed-hook-owner-identity'
 
 const UUID_PATTERN = '[\\da-f]{8}-[\\da-f]{4}-[1-5][\\da-f]{3}-[89ab][\\da-f]{3}-[\\da-f]{12}'
 const OWNER_FILE_PATTERN = new RegExp(
@@ -21,21 +26,7 @@ const CLAIM_RECORD_PATTERN = new RegExp(
   'i'
 )
 const activeOwnerTokens = new Set<string>()
-
-export type ManagedHookLockOwner = {
-  token: string
-  pid: number
-  hostIdentity: string
-  processIdentity: string
-}
-
-export type ManagedHookLockClaim = {
-  ownerToken: string
-  claimToken: string
-  pid: number
-  hostIdentity: string
-  processIdentity: string
-}
+export const activeClaimTokens = new Set<string>()
 
 export type ManagedHookLockState =
   | { kind: 'missing' }
@@ -60,6 +51,19 @@ export function claimedOwnerFileName(ownerToken: string, claimToken: string): st
 
 export function claimRecordFileName(ownerToken: string, claimToken: string): string {
   return `managed-hook-install.claim-${ownerToken}-${claimToken}.json`
+}
+
+export async function findClaimedOwner(
+  lockParent: string,
+  ownerToken: string
+): Promise<{ claimToken: string; path: string } | null | undefined> {
+  const matches = (await readdir(lockParent)).flatMap((entry) => {
+    const match = CLAIMED_OWNER_PATTERN.exec(entry)
+    return match?.[1] === ownerToken && match[2]
+      ? [{ claimToken: match[2], path: join(lockParent, entry) }]
+      : []
+  })
+  return matches.length === 1 ? matches[0] : matches.length === 0 ? null : undefined
 }
 
 export function deactivateManagedHookLockOwner(ownerToken: string): void {
@@ -187,13 +191,28 @@ export async function tryCreateManagedHookLock(
   }
 }
 
-async function cleanOwnerEntry(path: string, token: string, hostIdentity: string): Promise<void> {
+async function cleanOwnerEntry(
+  path: string,
+  token: string,
+  hostIdentity: string,
+  policy?: ManagedHookOwnerPolicy
+): Promise<void> {
   const stats = await lstat(path)
   if (stats.nlink !== 1) {
     return
   }
   const owner = parseOwner(await readFile(path, 'utf8'), token)
   if (!owner || owner.hostIdentity !== hostIdentity) {
+    return
+  }
+  if (policy) {
+    if (
+      (await policy.observe(owner, owner.token, isManagedHookLockOwnerActive(owner.token))) ===
+      'ended'
+    ) {
+      policy.check()
+      await unlink(path)
+    }
     return
   }
   const currentIdentity = await readManagedHookProcessIdentity(owner.pid)
@@ -208,16 +227,18 @@ async function cleanOwnerEntry(path: string, token: string, hostIdentity: string
 async function cleanLockEntry(
   entry: string,
   lockParent: string,
-  hostIdentity: string
+  hostIdentity: string,
+  policy?: ManagedHookOwnerPolicy
 ): Promise<void> {
   const path = join(lockParent, entry)
   const ownerToken = OWNER_FILE_PATTERN.exec(entry)?.[1] ?? OWNER_DRAFT_PATTERN.exec(entry)?.[1]
   if (ownerToken) {
-    await cleanOwnerEntry(path, ownerToken, hostIdentity)
+    await cleanOwnerEntry(path, ownerToken, hostIdentity, policy)
     return
   }
   const claimedMatch = CLAIMED_OWNER_PATTERN.exec(entry)
   if (claimedMatch?.[1] && claimedMatch[2] && (await lstat(path)).nlink === 1) {
+    policy?.check()
     await unlink(path)
     await removeFileIfPresent(
       join(lockParent, claimRecordFileName(claimedMatch[1], claimedMatch[2]))
@@ -240,6 +261,16 @@ async function cleanLockEntry(
       throw error
     }
   }
+  if (policy) {
+    if (
+      (await policy.observe(claim, claim.claimToken, activeClaimTokens.has(claim.claimToken))) ===
+      'ended'
+    ) {
+      policy.check()
+      await unlink(path)
+    }
+    return
+  }
   const currentIdentity = await readManagedHookProcessIdentity(claim.pid)
   if (
     currentIdentity === null ||
@@ -251,7 +282,9 @@ async function cleanLockEntry(
 
 export async function cleanupManagedHookLockFiles(
   lockParent: string,
-  hostIdentity: string
+  hostIdentity: string,
+  signal?: AbortSignal,
+  policy?: ManagedHookOwnerPolicy
 ): Promise<void> {
   let entries: string[]
   try {
@@ -259,15 +292,27 @@ export async function cleanupManagedHookLockFiles(
   } catch {
     return
   }
-  await Promise.all(
-    entries.map(async (entry) => {
-      try {
-        await cleanLockEntry(entry, lockParent, hostIdentity)
-      } catch (error) {
-        if (!hasCode(error, 'ENOENT')) {
-          console.warn('[agent-hooks] Failed to clean managed-hook lock file', error)
-        }
+  const clean = async (entry: string) => {
+    signal?.throwIfAborted()
+    try {
+      await cleanLockEntry(entry, lockParent, hostIdentity, policy)
+    } catch (error) {
+      if (!hasCode(error, 'ENOENT')) {
+        console.warn('[agent-hooks] Failed to clean managed-hook lock file', error)
+      }
+    }
+  }
+  if (!signal) {
+    await Promise.all(entries.map(clean))
+    return
+  }
+  let cursor = 0
+  await Promise.allSettled(
+    [0, 1].map(async () => {
+      while (cursor < entries.length) {
+        await clean(entries[cursor++])
       }
     })
   )
+  signal.throwIfAborted()
 }

@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, readFile, readlink, unlink, writeFile } from 'node:fs/promises'
 import { join, win32 } from 'node:path'
 import { promisify } from 'node:util'
+import { readWindowsProcessCreationTime } from '../windows/windows-process-table'
+import type { ManagedHookLockOwner } from './managed-hook-lock-records'
 
 const runtimeHostIdentity = `runtime:${randomUUID()}`
 const runtimeProcessIdentity = `runtime:${randomUUID()}`
@@ -11,6 +13,33 @@ let bootIdentityPromise: Promise<string | undefined> | undefined
 let selfProcessIdentityPromise: Promise<string | null | undefined> | undefined
 const HOST_TOKEN_PATTERN = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
 const WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS = 5_000
+
+export type ManagedHookLifecycle = 'same' | 'ended' | 'unknown'
+export type ManagedHookEvidenceReader = <T>(
+  signal: AbortSignal,
+  read: () => Promise<T>
+) => Promise<T>
+export type ManagedHookOwnerPolicy = {
+  check: () => void
+  observe: (
+    record: { pid: number; processIdentity: string },
+    token: string,
+    active: boolean,
+    conflict?: boolean,
+    owner?: ManagedHookLockOwner
+  ) => Promise<ManagedHookLifecycle>
+}
+
+export function canonicalBirth(identity: string, pid: number): number | undefined {
+  const match = /^win32:([1-9]\d*):([1-9]\d*)$/.exec(identity)
+  const birth = Number(match?.[2])
+  return match?.[1] === String(pid) && Number.isSafeInteger(birth) && birth > 0 ? birth : undefined
+}
+
+export function readScopedWindowsSelfIdentity(): string {
+  const birth = readWindowsProcessCreationTime(process.pid)
+  return birth === null ? runtimeProcessIdentity : `win32:${process.pid}:${birth}`
+}
 
 function getWindowsPowerShellPath(): string {
   return win32.join(
@@ -28,6 +57,15 @@ function getWindowsRegistryPath(): string {
 
 function hasCode(error: unknown, code: string): boolean {
   return error instanceof Error && 'code' in error && error.code === code
+}
+
+export function readProcessPresence(pid: number): true | null | undefined {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return hasCode(error, 'ESRCH') ? null : undefined
+  }
 }
 
 export function parseLinuxStartTicks(statLine: string): string | null {
@@ -220,28 +258,13 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
 
   if (process.platform === 'win32') {
     try {
-      const { stdout } = await promisify(execFile)(
-        getWindowsPowerShellPath(),
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          `$ErrorActionPreference = 'Stop'; ` +
-            `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; ` +
-            `if (!$p) { 'missing'; exit 0 }; ` +
-            `[string]([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds()`
-        ],
-        { encoding: 'utf8', timeout: WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS, windowsHide: true }
-      )
-      const startedAt = stdout.trim()
-      return startedAt === 'missing' ? null : startedAt ? `win32:${pid}:${startedAt}` : undefined
+      return await readWindowsProcessIdentity(pid)
     } catch {
-      try {
-        process.kill(pid, 0)
-        return pid === process.pid ? runtimeProcessIdentity : undefined
-      } catch (error) {
-        return hasCode(error, 'ESRCH') ? null : undefined
+      const present = readProcessPresence(pid)
+      if (present === null) {
+        return null
       }
+      return present === true && pid === process.pid ? runtimeProcessIdentity : undefined
     }
   }
 
@@ -261,14 +284,28 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
     const startedAt = stdout.trim()
     return startedAt ? `${process.platform}:${bootIdentity ?? 'unknown-boot'}:${startedAt}` : null
   } catch {
-    try {
-      process.kill(pid, 0)
-      return undefined
-    } catch (error) {
-      if (hasCode(error, 'ESRCH')) {
-        return null
-      }
-      return pid === process.pid ? runtimeProcessIdentity : undefined
+    const present = readProcessPresence(pid)
+    if (present === null) {
+      return null
     }
+    return present === undefined && pid === process.pid ? runtimeProcessIdentity : undefined
   }
+}
+
+export async function readWindowsProcessIdentity(pid: number): Promise<string | null | undefined> {
+  const { stdout } = await promisify(execFile)(
+    getWindowsPowerShellPath(),
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `$ErrorActionPreference = 'Stop'; ` +
+        `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; ` +
+        `if (!$p) { 'missing'; exit 0 }; ` +
+        `[string]([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds()`
+    ],
+    { encoding: 'utf8', timeout: WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS, windowsHide: true }
+  )
+  const startedAt = stdout.trim()
+  return startedAt === 'missing' ? null : startedAt ? `win32:${pid}:${startedAt}` : undefined
 }

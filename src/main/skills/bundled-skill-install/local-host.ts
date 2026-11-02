@@ -7,7 +7,7 @@ import { detectInstalledAgentsWithShellPathHydration } from '../../preflight/ins
 import {
   readUserClaudeConfigDir,
   resolveClaudeDefaultHome
-} from '../../claude-accounts/claude-profile-paths'
+} from '../../../shared/claude-user-config'
 import {
   resolveEnvironmentSkillProviderRoots,
   withClaudeSkillProviderRoot
