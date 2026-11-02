@@ -33,6 +33,7 @@ import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host
 import { publishExternalLinkOpener } from '../src/platform/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blur.web'
+import { startIgnoringPressableIconHits } from '../src/platform/pressable-svg-hits.web'
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
 // Select the page-client provider explicitly; the builder aliases extensionless screen imports to this same web module.
 import { RpcClientProvider } from '../src/transport/client-context.web'
@@ -145,6 +146,7 @@ bootstrapShellPage({
       subscribe: client.onKeyboardInsetUpdate
     })
     startBlurringOnKeyboardClose()
+    startIgnoringPressableIconHits()
     // Without a host in init, leave every storage key unwritable for older shells.
     publishPageStorage(
       session.storage,
