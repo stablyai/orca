@@ -27,7 +27,7 @@ export function conversationSwitchFailureText(
   if (reason === 'conversationHeldElsewhere') {
     return translate(
       'components.tab.bar.switch.openElsewhere',
-      '{{agent}} is open in another chat or terminal. Continue there, or close it there and switch again.',
+      '{{agent}} is open in another chat or terminal. Continue the conversation there.',
       values
     )
   }

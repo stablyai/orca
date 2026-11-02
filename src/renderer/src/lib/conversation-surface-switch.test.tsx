@@ -294,7 +294,7 @@ it.each([
     const args = direction === 'chat' ? { direction, ...fromPane, source: fromPane } : subject
     await expect(runConversationSwitch(args)).resolves.toBe(false)
     expect(mocks.error).toHaveBeenCalledExactlyOnceWith(
-      'Codex is open in another chat or terminal. Continue there, or close it there and switch again.'
+      'Codex is open in another chat or terminal. Continue the conversation there.'
     )
   }
 )

@@ -1927,7 +1927,7 @@
           "right": "Close tabs to the right?"
         },
         "switch": {
-          "openElsewhere": "{{agent}} is open in another chat or terminal. Continue there, or close it there and switch again.",
+          "openElsewhere": "{{agent}} is open in another chat or terminal. Continue the conversation there.",
           "stopUnknown": "Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try switching again.",
           "outcomeUnknown": "Orca could not confirm the {{agent}} switch. Check the open chat and terminal before trying again.",
           "historyUnavailable": "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then try again.",
