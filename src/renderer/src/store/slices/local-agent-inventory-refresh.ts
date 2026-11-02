@@ -1,4 +1,3 @@
-import type { LocalAgentWorkspace } from '@/lib/local-preflight-context'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -32,13 +31,11 @@ export function refreshLocalAgentInventory(
   set: StoreApi<AppState>['setState'],
   get: StoreApi<AppState>['getState'],
   lifecycle: LocalAgentInventoryLifecycle,
-  worktreeId?: LocalAgentWorkspace,
+  worktreeId?: string | null,
   includeDisabled = false,
   options: LocalAgentRefreshOptions = {}
 ): Promise<TuiAgent[]> {
-  const isolatedInventory =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
-    (typeof worktreeId === 'object' && worktreeId !== null)
+  const isolatedInventory = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
   const context = getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
   const contextKey = localAgentInventoryContextKey(context, includeDisabled)
   const publishedContextKey = localAgentInventoryContextKey(context)

@@ -8,14 +8,9 @@ import {
   readChatProgramFactsVersion
 } from './host-chat-program'
 import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
-import {
-  loadHostStructuredAgents,
-  readHostStructuredAgentsForRuntime,
-  hostStructuredAgentsReadFailed
-} from '@/runtime/host-structured-agents'
+import { loadHostStructuredAgents } from '@/runtime/host-structured-agents'
 import {
   acquireHostStructuredAgentAvailability,
-  readHostStructuredAgentAvailability,
   firstHostStructuredAgentAvailability
 } from '@/runtime/host-structured-agent-availability'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
@@ -58,24 +53,7 @@ export function holdChatProgramFacts(context: ReturnType<typeof resolveChatProgr
 }
 
 export function useChatProgramFacts(workspace: ProspectiveWorkspace, active = true): void {
-  const read = () => {
-    const context = resolveChatProgramContext(useAppStore.getState(), workspace)
-    return JSON.stringify([
-      context.revision,
-      (() => {
-        const value = readHostStructuredAgentAvailability(
-          context.executionHostId,
-          context.runtimeId,
-          context.pairingRevision
-        )
-        return value.state === 'received' ? [...value.byAgent] : value.state
-      })(),
-      readHostStructuredAgentsForRuntime(context.executionHostId, context.runtimeId),
-      context.runtimeId !== undefined &&
-        hostStructuredAgentsReadFailed(context.executionHostId, context.runtimeId)
-    ])
-  }
-  useSyncExternalStore(subscribeChatProgramFacts, read, read)
+  useChatProgramFactsVersion()
   const key = useAppStore((state) => resolveChatProgramContext(state, workspace).revision)
   useEffect(() => {
     return active

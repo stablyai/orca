@@ -1,4 +1,3 @@
-import type { LocalAgentWorkspace } from '@/lib/local-preflight-context'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { haveSameDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
@@ -42,7 +41,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
   const actions = {
     ...createEmptyLocalDetectedAgentState(),
 
-    readLocalAgentInventory: (id?: LocalAgentWorkspace) =>
+    readLocalAgentInventory: (id?: string | null) =>
       readLocalAgentInventoryOutcome(
         get(),
         id,
@@ -53,28 +52,25 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       nativeInventoryRequested = true
       return actions.ensureDetectedAgents(undefined, true)
     },
-    ensureAllDetectedAgents: (worktreeId?: LocalAgentWorkspace): Promise<TuiAgent[]> =>
+    ensureAllDetectedAgents: (worktreeId?: string | null): Promise<TuiAgent[]> =>
       actions.ensureDetectedAgents(worktreeId, false, true),
-    isLocalAgentInventoryRefused: (worktreeId?: LocalAgentWorkspace): boolean =>
+    isLocalAgentInventoryRefused: (worktreeId?: string | null): boolean =>
       lifecycle.refusedContextKeys.has(
         localAgentInventoryContextKey(
           getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
         )
       ),
-    ensureDetectedAgentsForPicker: (worktreeId?: LocalAgentWorkspace): Promise<TuiAgent[]> =>
+    ensureDetectedAgentsForPicker: (worktreeId?: string | null): Promise<TuiAgent[]> =>
       actions.ensureDetectedAgents(worktreeId, false, false, { wakeWslDistro: true }),
     ensureDetectedAgents: (
-      worktreeId?: LocalAgentWorkspace,
+      worktreeId?: string | null,
       nativeHost = false,
       includeDisabled = false,
       options: LocalAgentRefreshOptions = {}
     ): Promise<TuiAgent[]> => {
       const wake = options.wakeWslDistro === true
       const isolatedInventory =
-        includeDisabled ||
-        nativeHost ||
-        worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
-        (typeof worktreeId === 'object' && worktreeId !== null)
+        includeDisabled || nativeHost || worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const context = nativeHost
         ? undefined
         : getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
@@ -206,11 +202,11 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     },
 
     refreshAllDetectedAgents: (
-      worktreeId?: LocalAgentWorkspace,
+      worktreeId?: string | null,
       options?: LocalAgentRefreshOptions
     ): Promise<TuiAgent[]> =>
       refreshLocalAgentInventory(set, get, lifecycle, worktreeId, true, options),
-    refreshDetectedAgents: (worktreeId?: LocalAgentWorkspace, options?: LocalAgentRefreshOptions) =>
+    refreshDetectedAgents: (worktreeId?: string | null, options?: LocalAgentRefreshOptions) =>
       refreshLocalAgentInventory(set, get, lifecycle, worktreeId, false, options),
 
     clearLocalDetectedAgentContextsForProjects: (projectIds: readonly string[]) => {
