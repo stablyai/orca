@@ -3,22 +3,26 @@ import { spawnProcess } from '@orca/process-host'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { connect, createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import WebSocket from 'ws'
 
-const appDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const appDirectory = fileURLToPath(new URL('..', import.meta.url))
 const cleanups: (() => void)[] = []
 afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup()
+  for (const cleanup of cleanups.splice(0).toReversed()) {
+    cleanup()
+  }
 })
 
 async function unusedPort(): Promise<number> {
   const server = createServer()
   await new Promise<void>((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
   const address = server.address()
-  if (!address || typeof address === 'string') throw new Error('missing test port')
+  if (!address || typeof address === 'string') {
+    throw new Error('missing test port')
+  }
   await new Promise<void>((resolveClose) => server.close(() => resolveClose()))
   return address.port
 }
@@ -48,14 +52,18 @@ async function startRelay(port: number): Promise<ChildProcess> {
     stdio: ['ignore', 'pipe', 'pipe']
   })
   cleanups.push(() => {
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL')
+    }
     rmSync(dataDirectory, { recursive: true, force: true })
   })
   await new Promise<void>((resolveReady, reject) => {
     let stderr = ''
     child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
     child.stdout?.on('data', (chunk: Buffer) => {
-      if (chunk.toString().includes('[orca-relay] listening')) resolveReady()
+      if (chunk.toString().includes('[orca-relay] listening')) {
+        resolveReady()
+      }
     })
     child.once('exit', (code) => reject(new Error(`relay exited before ready: ${code}\n${stderr}`)))
   })
@@ -66,7 +74,9 @@ async function silentTcpPeer(port: number, firstBytes?: string): Promise<Socket>
   const peer = connect(port, '127.0.0.1')
   peer.on('error', () => undefined)
   await new Promise<void>((resolveConnect) => peer.once('connect', () => resolveConnect()))
-  if (firstBytes) peer.write(firstBytes)
+  if (firstBytes) {
+    peer.write(firstBytes)
+  }
   return peer
 }
 

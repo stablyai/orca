@@ -208,12 +208,16 @@ async function closeDatabaseAndExit(shutdownStartedAt: number): Promise<void> {
 }
 let shuttingDown = false
 const shutdown = (): void => {
-  if (shuttingDown) return
+  if (shuttingDown) {
+    return
+  }
   shuttingDown = true
   const shutdownStartedAt = Date.now()
   setTimeout(() => process.exit(0), SHUTDOWN_EXIT_BACKSTOP_MS).unref()
   setTimeout(() => {
-    for (const socket of openSockets) socket.destroy()
+    for (const socket of openSockets) {
+      socket.destroy()
+    }
   }, SHUTDOWN_SOCKET_GRACE_MS).unref()
   if (cleanupTimer) clearInterval(cleanupTimer)
   if (assignmentCleanupTimer) clearInterval(assignmentCleanupTimer)
