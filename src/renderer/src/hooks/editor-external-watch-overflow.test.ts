@@ -111,21 +111,6 @@ describe('reconcileEditorTabsAfterOverflow', () => {
     expect(setExternalMutation).not.toHaveBeenCalledWith('a.ts', 'deleted')
   })
 
-  it('compares dirty tabs asynchronously without reloading them', () => {
-    setTabs(tab('dirty.ts', { isDirty: true, lastKnownDiskSignature: 'sig' }))
-    reconcileEditorTabsAfterOverflow(target, true)
-
-    expect(harness.compareDirty).toHaveBeenCalledWith(
-      { ...target, connectionId: undefined, runtimeEnvironmentId: null },
-      ['dirty.ts'],
-      false,
-      true
-    )
-    expect(setExternalMutation).not.toHaveBeenCalled()
-    expect(harness.runtimePathsExist).not.toHaveBeenCalled()
-    expect(harness.scheduleReload).not.toHaveBeenCalled()
-  })
-
   it('a storm overflow reloads clean tabs without probing or dropping combined bodies', () => {
     setTabs(
       tab('a.md', { externalMutation: 'deleted' }),

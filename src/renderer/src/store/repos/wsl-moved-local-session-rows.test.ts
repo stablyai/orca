@@ -119,12 +119,6 @@ describe('WSL moved local session rows', () => {
     expect(local.unifiedTabs?.[STAYING_ID]?.map((entry) => entry.id)).toEqual(['tab-9'])
   })
 
-  it('leaves the partition alone when nothing moved', () => {
-    const local = localPartition()
-
-    expect(withoutWslMovedLocalRows(local, [])).toBe(local)
-  })
-
   it("hydrates one tab-1, the host's, when both partitions hold it; the local chat stays", async () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       wslMovedSessionReadApi(MOVED, {

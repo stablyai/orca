@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeLogic from './ipc/worktree-logic'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import { WORKTREE_CREATE_PREPARATION_TTL_MS } from './worktree-create-preparation-pool'
 import type { Repo } from '../shared/repo-types'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'

@@ -15,7 +15,7 @@
 2 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
 1 src/main/codex-accounts/runtime-home-service-home-routing.ts
 1 src/main/codex-accounts/runtime-home-service-wsl.ts
-2 src/main/codex-accounts/service.ts
+1 src/main/codex-accounts/service.ts
 1 src/main/computer/macos-computer-use-permissions.ts
 2 src/main/daemon/daemon-cgroup-scope.ts
 1 src/main/daemon/daemon-process-identity-query.ts

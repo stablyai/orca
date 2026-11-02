@@ -1,3 +1,4 @@
+import { scrollRichMarkdownElementIntoView } from './rich-markdown-viewport'
 import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import { MarkdownHeadingSlugger } from './markdown-heading-slug'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
@@ -18,7 +19,10 @@ export function scrollToAnchorInEditor(root: HTMLElement | null, anchor: string)
   for (const heading of headings) {
     if (slugger.slug(heading.textContent ?? '') === decoded) {
       revealMarkdownNavigationDetails(heading)
-      heading.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
+      scrollRichMarkdownElementIntoView(heading, {
+        behavior: motionSafeScrollBehavior(),
+        block: 'start'
+      })
       return
     }
   }

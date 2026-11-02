@@ -14,7 +14,7 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
-vi.mock('../runtime/agent-session-runtime-end-record', () => ({
+vi.mock('../runtime/agent-session/records/agent-session-runtime-end-record', () => ({
   recordAgentSessionRuntimeEnd: recordAgentSessionRuntimeEndMock
 }))
 

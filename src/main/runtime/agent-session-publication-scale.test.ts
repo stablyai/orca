@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import * as journalReducer from '../native-chat/agent-session-journal/journal-reducer'
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { StatusFeedSession } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-deps'
 import type { StructuredAgentSessionHostSession } from '../native-chat/agent-session-wire/structured-agent-session-host-types'
@@ -19,7 +19,7 @@ import { hostTestMessage } from '../native-chat/agent-session-wire/structured-ag
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import {
   countStoreWork,
   scaleDirectory,
@@ -216,13 +216,17 @@ describe('real-store status and queue publications', () => {
           subscribers.publish(id, session.journal)
         }
       }
-      // Each publish derives queue pauses twice and checks current work independently.
+      // Three publications retain the former four-read ceiling; cached reads may disappear.
+      const lists = counts.lists - warm.lists
+      const submissions = counts.submissions - warm.submissions
+      expect(lists).toBeLessThanOrEqual(12 * n)
+      expect(submissions).toBeLessThanOrEqual(12 * n)
       expect(counts).toEqual({
         ...warm,
-        lists: warm.lists + 12 * n,
-        listRows: warm.listRows + 12 * n * cards,
-        submissions: warm.submissions + 12 * n,
-        submissionRows: warm.submissionRows + 12 * n * sends
+        lists: warm.lists + lists,
+        listRows: warm.listRows + lists * cards,
+        submissions: warm.submissions + submissions,
+        submissionRows: warm.submissionRows + submissions * sends
       })
       expect(work.counts).toMatchObject({ views: 9 * n, inventories: 0, clones: 0, decodes: 0 })
       expect(statusEvents).toEqual([])

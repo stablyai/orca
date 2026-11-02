@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getBashShellReadyRcfileContent } from './providers/local-pty-shell-ready-bash-rcfile'
-import { getLocalZshWrapperSpec } from './providers/local-pty-shell-ready-wrapper-fileset'
+import { getBashShellReadyRcfileContent } from './providers/local-pty/local-pty-shell-ready-bash-rcfile'
+import { getLocalZshWrapperSpec } from './providers/local-pty/local-pty-shell-ready-wrapper-fileset'
 import { buildZshStartupHook } from './zsh-startup-wrapper-builder'
 import { parseFileUriPath } from './daemon/osc7-file-uri'
 

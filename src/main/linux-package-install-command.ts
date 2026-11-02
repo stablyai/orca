@@ -7,7 +7,8 @@ import type { LinuxRootPackageType } from '../shared/update-status-types'
 const TRUSTED_EXECUTABLE_DIRECTORIES = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
 
 const DEB_PACKAGE_MANAGERS: { name: string; args: string[] }[] = [
-  { name: 'apt', args: ['install', '--'] },
+  // Preset apt's own root fallback for file: reads (_apt can't read ~/.cache); network methods stay sandboxed.
+  { name: 'apt', args: ['-o', 'Binary::file::APT::Sandbox::User=root', 'install', '--'] },
   { name: 'dpkg', args: ['-i', '--'] }
 ]
 

@@ -1,3 +1,4 @@
+import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
@@ -33,7 +34,11 @@ type RuntimeFolderWorktreeCreateDeps = {
     options: TerminalCreateOptions
   ) => Promise<RuntimeTerminalCreate>
   pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
-  sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
+  sendFollowup: (
+    handle: string,
+    followup: WorktreeStartupFollowup,
+    terminal: RuntimeTerminalCreate
+  ) => void
   invalidateResolvedWorktrees: () => void
   notifyWorktreesChanged: (repoId: string) => void
   emitCreated: (event: {
@@ -167,11 +172,12 @@ export async function createRuntimeFolderWorktree(args: {
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...(shouldActivate ? {} : { surfaceOwner: false })
       })
+      request.onStartupTerminalCreated?.(terminal)
       if (args.draftPaste) {
         deps.pasteDraft(terminal.handle, args.draftPaste)
       }
       if (args.startupFollowup) {
-        deps.sendFollowup(terminal.handle, args.startupFollowup)
+        deps.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
       didSpawnStartup = true
       startupTerminal = {
@@ -184,7 +190,8 @@ export async function createRuntimeFolderWorktree(args: {
       }
     } catch (error) {
       const message = readableWslDistroHoldText(
-        error instanceof Error ? error.message : String(error)
+        formatTerminalStartFailure(error) ??
+          (error instanceof Error ? error.message : String(error))
       )
       warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
       console.warn(`[worktree-create] ${warning}`)
@@ -218,7 +225,8 @@ export async function createRuntimeFolderWorktree(args: {
       await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {
       const message = readableWslDistroHoldText(
-        error instanceof Error ? error.message : String(error)
+        formatTerminalStartFailure(error) ??
+          (error instanceof Error ? error.message : String(error))
       )
       const initialWarning = `Failed to create the initial terminal for ${worktree.path}: ${message}`
       warning = warning

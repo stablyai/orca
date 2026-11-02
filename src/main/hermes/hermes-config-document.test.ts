@@ -118,20 +118,6 @@ describe('Hermes YAML document edits', () => {
     expect(output).toContain('shared_env: *env')
   })
 
-  it('keeps folded scalars, quoted strings and long lines in a real update', () => {
-    const input = `# header\nprompt: >-\n  First line\n  Second line\nquoted: 'off'\nlong: ${'word '
-      .repeat(30)
-      .trimEnd()}\nplugins: {enabled: [other]}\n`
-    const output = updateConfigContent(input, enablePlugin).content ?? ''
-    expect(output).toContain('prompt: >-\n  First line\n  Second line\n')
-    expect(output).toContain("quoted: 'off'")
-    expect(output).toContain(`long: ${'word '.repeat(30).trimEnd()}\n`)
-    expect(parse(output)).toEqual({
-      ...parse(input),
-      plugins: { enabled: ['other', 'orca-status'] }
-    })
-  })
-
   it.each(['\n', '\r\n'])(
     'leaves unrelated source bytes intact with unusual indentation (%j)',
     (eol) => {

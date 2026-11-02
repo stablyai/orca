@@ -10,7 +10,7 @@ import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-com
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import type * as FileNameSortModule from '../../../../../../shared/file-name-sort'
-import type * as SourceControlTreeModule from '../../source-control-tree'
+import type * as SourceControlTreeModule from '../../../../../../shared/source-control-tree'
 import type * as SubmoduleExpansionModule from './submodule-expansion'
 import type * as FileProjectionModule from './use-file-projection'
 import type * as RowOpeningModule from './use-row-opening'
@@ -44,7 +44,7 @@ vi.mock('../../../../../../shared/file-name-sort', async (importOriginal) => {
   }
 })
 
-vi.mock('../../source-control-tree', async (importOriginal) => {
+vi.mock('../../../../../../shared/source-control-tree', async (importOriginal) => {
   const actual = await importOriginal<typeof SourceControlTreeModule>()
   return {
     ...actual,

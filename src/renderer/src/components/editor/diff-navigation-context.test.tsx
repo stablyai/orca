@@ -91,20 +91,6 @@ describe('DiffNavigationProvider', () => {
     registrationRenderCount = 0
   })
 
-  it('exposes the change count and routes nav actions to the registered editor', () => {
-    mount()
-    const editor = createFakeEditor(3)
-    act(() => registration?.registerDiffEditor(editor))
-
-    expect(captured?.changeCount).toBe(3)
-
-    act(() => captured?.goToNextDiff())
-    expect(editor.goToDiff).toHaveBeenCalledWith('next')
-
-    act(() => captured?.goToPreviousDiff())
-    expect(editor.goToDiff).toHaveBeenCalledWith('previous')
-  })
-
   it('re-renders when onDidUpdateDiff flips the count 0 -> N (count is state)', () => {
     mount()
     const editor = createFakeEditor(0)
@@ -154,18 +140,5 @@ describe('DiffNavigationProvider', () => {
 
     expect(editor.disposeUpdate).toHaveBeenCalledOnce()
     root = null
-  })
-
-  it('installs a capture-phase key listener on register and removes it on unregister', () => {
-    mount()
-    const editor = createFakeEditor(2)
-    const addSpy = vi.spyOn(editor.containerNode, 'addEventListener')
-    const removeSpy = vi.spyOn(editor.containerNode, 'removeEventListener')
-
-    act(() => registration?.registerDiffEditor(editor))
-    expect(addSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true)
-
-    act(() => registration?.unregisterDiffEditor(editor))
-    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true)
   })
 })

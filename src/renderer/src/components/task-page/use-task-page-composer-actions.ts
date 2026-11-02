@@ -1,4 +1,4 @@
-import type { TaskPageJiraListEffectsModel } from '../use-task-page-jira-list-effects'
+import type { TaskPageJiraListEffectsModel } from './jira/use-task-page-jira-list-effects'
 import { useCallback } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'

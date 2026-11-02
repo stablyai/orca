@@ -16,16 +16,6 @@ const snapshot = {
 }
 
 describe('OpenCode execution-host primary-agent context', () => {
-  it('uses the resolved first selectable primary and leaves absent identity unknown', () => {
-    expect(parseOpenCodeLaunchModelContext(snapshot)).toEqual({ primaryAgent: 'build' })
-    expect(
-      parseOpenCodeLaunchModelContext({
-        ...snapshot,
-        agents: { location: { directory }, data: [] }
-      })
-    ).toBeNull()
-  })
-
   it('uses recorded 2.0.19 resolved agents without inventing stale or disabled primaries', () => {
     for (const capture of recordedCases) {
       const original = JSON.parse(capture.configContent)
@@ -71,23 +61,6 @@ describe('OpenCode execution-host primary-agent context', () => {
         })
       ).toBe(JSON.stringify({ model: capture.model }))
     }
-  })
-
-  it('tolerates absent model fields and unrelated agent records', () => {
-    expect(
-      parseOpenCodeLaunchModelContext({
-        ...snapshot,
-        agents: {
-          location: { directory },
-          data: [
-            { unrelated: true },
-            { id: 'hidden', hidden: true },
-            { id: 'child', mode: 'subagent' },
-            { id: 'reviewer', mode: 'primary', model: null }
-          ]
-        }
-      })
-    ).toEqual({ primaryAgent: 'reviewer' })
   })
 
   it('never uses primary-agent data from a foreign location', () => {

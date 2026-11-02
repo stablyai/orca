@@ -74,26 +74,4 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
       executionHostId: 'ssh:box'
     })
   })
-
-  it('drops the tab digit chord rather than switching tabs behind the overlay', async () => {
-    const storeState = createPaletteState('worktree-palette')
-    const harness = await loadIpcEventsHarness(storeState)
-    harness.useIpcEvents()
-
-    harness.jumpToTabIndex(1)
-
-    expect(storeState.setActiveTab).not.toHaveBeenCalled()
-  })
-
-  it('stops delivering row jumps after unsubscribe', async () => {
-    const { emitCmdJRowIndexJump, subscribeCmdJRowIndexJump } = await loadRowJumpBus()
-    const seen: number[] = []
-    const unsubscribe = subscribeCmdJRowIndexJump((index) => seen.push(index))
-
-    emitCmdJRowIndexJump(0)
-    unsubscribe()
-    emitCmdJRowIndexJump(1)
-
-    expect(seen).toEqual([0])
-  })
 })

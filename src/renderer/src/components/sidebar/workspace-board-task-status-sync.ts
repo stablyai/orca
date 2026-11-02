@@ -1,3 +1,5 @@
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-publication'
 import { linearGetIssue, linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { linearTeamStates } from '@/runtime/runtime-linear-project-client'
 import type { LinearMutationResult, RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
@@ -187,6 +189,7 @@ async function syncLinearWorktreeStatus(
   if (!settings) {
     return skipped(result, { kind: 'owner-ambiguous', issueIdentifier: worktree.linkedLinearIssue })
   }
+  const scope = getLinearSourceScope(settings)
   const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? undefined
 
   try {
@@ -237,6 +240,7 @@ async function syncLinearWorktreeStatus(
         detail: updateResult.error
       })
     }
+    confirmLinearIssueWrite({ scope, id: issue.id })
     result.updated += 1
     return result
   } catch (error) {

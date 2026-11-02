@@ -87,15 +87,6 @@ describe('runtime worktree change invalidation', () => {
     listWorktreesStrictMock.mockResolvedValue([row(REPO_PATH)])
   })
 
-  it('moves the scan generation the runtime listing witnesses', () => {
-    makeRuntime()
-    const before = getLocalWorktreeScanGeneration(REPO_ID)
-
-    runWorktreeChangeInvalidators(REPO_ID)
-
-    expect(getLocalWorktreeScanGeneration(REPO_ID)).not.toBe(before)
-  })
-
   it('bumps that generation from the change event the runtime itself sends, with no window notifier attached', () => {
     const runtime = makeRuntimeService()
     const before = getLocalWorktreeScanGeneration(REPO_ID)

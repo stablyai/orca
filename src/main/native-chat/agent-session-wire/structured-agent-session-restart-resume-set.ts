@@ -1,19 +1,17 @@
 // Trust stop-time witnesses, not post-attach journal rewrites. Delete superseded/forked offers;
 // structural refusal preserves them for a compatible build or later ownership resolution.
 
-import type { AgentSessionAnyRefusalDetails } from '../../../shared/agent-session-wire-refusals'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleRoot
-} from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionAnyRefusalDetails } from '../../../shared/agent-session/failures/agent-session-refusal-details'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleRoot } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger,
   AgentSessionResumeWork
-} from '../../../shared/agent-session-resume-marker'
-import type { AgentSessionRestartActivity } from '../../../shared/agent-session-restart-activity'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionRestartActivity } from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
 import { isResumableStructuredAgentSessionRecord } from './structured-agent-session-resume-eligibility'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
