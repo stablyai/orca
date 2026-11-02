@@ -62,9 +62,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  const awaitingOptions = support?.sessionId === sessionId && support.fence !== fence
-  const acceptsPicks =
-    (!transportEnabled || fence !== null) && launch?.seedPending !== true && !awaitingOptions
+  const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
 
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,

@@ -1340,7 +1340,9 @@
       "activateAiVaultStructuredSession": {
         "unavailable": "La sesión del agente estructurado aún no está disponible. Vuelve a intentarlo en un momento.",
         "gone": "Este chat ya no está en este anfitrión, por lo que no se puede volver a abrir aquí.",
-        "hostCannotOpen": "Este chat no se puede volver a abrir hasta que se actualice Orca."
+        "hostCannotOpen": "Este chat no se puede volver a abrir hasta que se actualice Orca.",
+        "worktreeDeleted": "El worktree se eliminó.",
+        "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Las recetas con raíz aprovisionada no admiten sparse checkout."
@@ -4099,7 +4101,6 @@
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
             "c98ea88392": "Ninguna otra cuenta",
-            "9332ba8684": "Cambiar a",
             "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
@@ -6006,11 +6007,7 @@
           "93cbea12c2": "Notas",
           "dbe2d18972": "Más acciones de {{value0}}",
           "2c67730e07": "Abrir en Orca",
-          "e42941631a": "Ver en Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Editar issue",
-          "b22f058067": "Ver en GitHub",
-          "e97d8f2876": "Issue #{{value0}}",
           "3ea2702e62": "Vinculado {{value0}} #{{value1}}",
           "b105fd3057": "Linear vinculado {{value0}}",
           "3f2649eeb8": "Issue vinculado #{{value0}}",
@@ -6033,8 +6030,6 @@
           "cliCreatedFromShell": "Creado a través de `orca worktree create`",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "Creado por Orca CLI",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Ver en Jira",
           "linkedJira": "Jira {{value0}} vinculado",
           "openInOrcaBrowser": "Abrir en el navegador Orca"
         },
@@ -6985,6 +6980,7 @@
           }
         },
         "AccountsPane": {
+          "locationSaveFailed": "No se pudo guardar la ubicación de las cuentas. Inténtalo de nuevo.",
           "c2d2751587": "Eliminar cuenta",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "¿Eliminar la cuenta de Claude?",
@@ -20166,6 +20162,7 @@
       "detectingAgents": "Detectando agentes en el host de este espacio de trabajo…",
       "detectionFailed": "No se pudieron detectar agentes en el host de este espacio de trabajo.",
       "noAgents": "No se detectaron agentes habilitados en el host de este espacio de trabajo.",
+      "onlySourceFamilyDetected": "En el host de este espacio de trabajo solo hay disponibles agentes que comparten el límite de uso con {{agent}}. Activa o instala un agente diferente.",
       "context": "Contexto",
       "modeFocused": "Traspaso enfocado (recomendado)",
       "modeFocusedDescription": "Usa el estado más reciente y el espacio de trabajo actual, y consulta detalles anteriores solo cuando hacen falta.",
@@ -21811,6 +21808,7 @@
     "scanIssues": {
       "issuesOmitted": "Se omitieron problemas adicionales del escaneo.",
       "sessionMetadataUnreadable": "No se pudieron leer los metadatos de las sesiones en este escaneo.",
+      "transcriptTooLarge": "Una conversación de {{label}} es demasiado grande para cargarla en el historial de sesiones. Intenta reanudarla directamente en {{label}}.",
       "openCodeScannerUnavailable": "Se omitió el historial de OpenCode porque su escáner en segundo plano no pudo iniciarse; la aplicación sigue respondiendo.",
       "openCodeScanIncomplete": "El escaneo del historial de OpenCode no se completó: {{detail}}",
       "openCodeWslReaderPreparing": "Preparando el lector SQLite de WSL. Actualiza Vault cuando termine la configuración.",
@@ -22160,7 +22158,8 @@
       "showLinked_many": "Mostrar {{count}} revisiones y tareas vinculadas",
       "linkedCount_one": "{{count}} vinculado",
       "linkedCount_other": "{{count}} vinculados",
-      "linkedCount_many": "{{count}} vinculados"
+      "linkedCount_many": "{{count}} vinculados",
+      "labels": "Etiquetas: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Actualiza el tiempo de ejecución remoto para cambiar los enlaces del espacio de trabajo",
@@ -23377,6 +23376,7 @@
       "serveSimUnavailable": "serve-sim no está disponible.",
       "serveSimNoEndpoints": "serve-sim no devolvió puntos de conexión de transmisión.",
       "serveSimEndpointUnreachable": "serve-sim se inició, pero no se puede acceder a su punto de conexión de transmisión.",
+      "deviceHubInputBlocked": "Device Hub de Xcode ha tomado el control de la entrada de este simulador, así que los toques y lo que escribas no le llegarán. Cierra Device Hub y vuelve a conectar el simulador.",
       "androidSdkMissing": "No se encontró el SDK de Android. Instala Android Studio y configura ANDROID_HOME.",
       "adbUnavailable": "adb no está disponible.",
       "noAndroidDevices": "No se encontraron dispositivos Android ni AVD. Crea uno en Android Studio.",

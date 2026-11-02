@@ -1,5 +1,3 @@
-import type { AgentSessionRecordReader } from '../../runtime/orchestration/structured-session-lineage'
-import type { NativeResponseEvidence } from '../../runtime/orchestration/structured-parent-account-work'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type {
@@ -206,12 +204,6 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
-  parentAccountWork?: (
-    record: AgentSessionRecord,
-    root: string,
-    response: NativeResponseEvidence,
-    reader: AgentSessionRecordReader
-  ) => boolean
   conversationNaming?: StructuredAgentSessionConversationNaming
   /** Carries the user's chat name into the agent's own conversation; never delays the caller. */
   nameProviderConversation?: (record: AgentSessionRecord) => void

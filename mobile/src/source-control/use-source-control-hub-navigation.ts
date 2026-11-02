@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useOptionPager } from '../components/BottomDrawer'
+import { useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useBackClaim } from '../navigation/use-back-claim'
 import type { SourceControlHubRouteTab, SourceControlHubTab } from './mobile-source-control-hub-tab'
 import type { PrTabScreen } from '../components/pr-sidebar/use-mobile-pr-tab'

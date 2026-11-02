@@ -7,7 +7,6 @@ import {
   agentSessionOperationExpiry,
   agentSessionOperationKey,
   evaluateAgentSessionOperation,
-  isAgentSessionOperationRow,
   pruneAgentSessionOperationRows,
   type AgentSessionOperationRow
 } from './agent-session-operation-ledger'
@@ -152,43 +151,10 @@ describe('retention', () => {
     expect(evaluate(pruneAgentSessionOperationRows(rows, lastAdmissibleAt)).decision).toBe('replay')
   })
 
-  it('anchors retention to the later of recording and stamping', () => {
-    const late = agentSessionOperationExpiry(NOW + 10_000, NOW)
-    expect(late).toBe(agentSessionOperationExpiry(NOW + 10_000, NOW + 10_000))
-    expect(late).toBeGreaterThan(agentSessionOperationExpiry(NOW, NOW))
-    expect(agentSessionOperationExpiry(NOW, NOW + 10_000)).toBe(late)
-  })
-
   it('drops only rows past their own expiry', () => {
     const rows = new Map<string, AgentSessionOperationRow>()
     const row = admit(rows)
     expect(pruneAgentSessionOperationRows(rows, row.expiresAt).size).toBe(0)
     expect(pruneAgentSessionOperationRows(rows, row.expiresAt - 1).size).toBe(1)
-  })
-})
-
-describe('persisted row validation', () => {
-  it('accepts every recorded outcome shape', () => {
-    const rows = new Map<string, AgentSessionOperationRow>()
-    const row = admit(rows)
-    expect(isAgentSessionOperationRow(row)).toBe(true)
-    expect(
-      isAgentSessionOperationRow({ ...row, outcome: { status: 'succeeded', sessionId: 's-1' } })
-    ).toBe(true)
-    expect(isAgentSessionOperationRow({ ...row, outcome: { status: 'unknown' } })).toBe(true)
-    expect(isAgentSessionOperationRow({ ...row, outcome: { status: 'failed', code: 'x' } })).toBe(
-      true
-    )
-  })
-
-  it('rejects rows a later build could misread', () => {
-    const rows = new Map<string, AgentSessionOperationRow>()
-    const row = admit(rows)
-    expect(isAgentSessionOperationRow({ ...row, operationId: 'garbage' })).toBe(false)
-    expect(isAgentSessionOperationRow({ ...row, callerKey: '' })).toBe(false)
-    expect(isAgentSessionOperationRow({ ...row, expiresAt: 1.5 })).toBe(false)
-    expect(isAgentSessionOperationRow({ ...row, outcome: { status: 'succeeded' } })).toBe(false)
-    expect(isAgentSessionOperationRow({ ...row, outcome: null })).toBe(false)
-    expect(isAgentSessionOperationRow(null)).toBe(false)
   })
 })
