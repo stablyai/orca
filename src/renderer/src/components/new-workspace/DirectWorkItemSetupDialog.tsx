@@ -62,9 +62,7 @@ export function DirectWorkItemSetupDialog({
           resolvedSetupDecision={null}
           setupDecision={null}
           onSetupDecisionChange={request.choose}
-          renderDescription={(text) => (
-            <DialogDescription className="text-xs">{text}</DialogDescription>
-          )}
+          renderDescription={(text) => <DialogDescription size="compact">{text}</DialogDescription>}
           unavailable={
             inspection.kind === 'unavailable'
               ? {

@@ -35,6 +35,11 @@ it('disables setup choices until a failed inspection recovers, then accepts one 
   const retry = Promise.withResolvers<DirectSetupInspection>()
   const result = requestDirectWorkItemSetup('Repo', { kind: 'unavailable' }, () => retry.promise)
   render(<DirectWorkItemSetupDialog request={request()} />)
+  const help = 'Choose whether to run setup before creating this workspace.'
+  expect(screen.getByRole('dialog', { description: help })).toBeTruthy()
+  const description = screen.getByText(help)
+  expect(description.getAttribute('data-size')).toBe('compact')
+  expect(description.className).toBe('text-sm text-muted-foreground data-[size=compact]:text-xs')
   expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Run setup' }).disabled).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Retry' }).disabled).toBe(true)
