@@ -14,6 +14,8 @@ import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
 export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
 
+export type PaneActivationOptions = { focus?: boolean }
+
 /** One-shot spawn/adoption hints belong to creation, separate from persistent ManagedPane state. */
 export type PaneSpawnHints = {
   cwd?: string

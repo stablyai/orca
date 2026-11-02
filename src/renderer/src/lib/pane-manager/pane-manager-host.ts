@@ -1,5 +1,6 @@
 import type {
   ManagedPaneInternal,
+  PaneActivationOptions,
   PaneManagerOptions,
   PaneStyleOptions
 } from './pane-manager-types'
@@ -25,7 +26,7 @@ export type PaneManagerHost = {
     spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
   ) => void
   getDragCallbacks: () => DragReorderCallbacks
-  setActivePane: (paneId: number, opts?: { focus?: boolean }) => void
+  setActivePane: (paneId: number, opts?: PaneActivationOptions) => void
   setActivePaneId: (paneId: number | null) => void
   requestPaneReparentFrame: (callback: FrameRequestCallback) => void
 }

@@ -13,6 +13,7 @@ vi.mock('@/lib/visible-overlay', () => ({ hasVisibleOverlay: () => overlay.visib
 const insertTypedText = vi.fn(() => true)
 const composer: NativeChatComposerHandle = {
   focus: () => true,
+  insertAgentReferences: () => false,
   insertTypedText,
   appendText: () => {},
   acceptsText: () => true,

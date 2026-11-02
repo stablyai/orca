@@ -577,6 +577,7 @@ it.each(['updated', 'not-editable', 'clean-gone', 'cancel'] as const)(
           current: {
             focus: () => true,
             acceptsText: () => !editor?.saving,
+            insertAgentReferences: () => false,
             insertTypedText: (text) => {
               if (!editor || editor.saving) {
                 return false

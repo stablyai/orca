@@ -75,6 +75,10 @@ function commandParts(text: string): { name: string; argument: string } | null {
   if (!text.startsWith('/')) {
     return null
   }
+  const goal = /^\/goal(?:\s+([\s\S]*))?$/i.exec(text.trimEnd())
+  if (goal) {
+    return { name: 'goal', argument: goal[1]?.trim() ?? '' }
+  }
   const match = /^\/([^\s]+)(?:\s+(.*))?$/.exec(text.trimEnd())
   return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
 }

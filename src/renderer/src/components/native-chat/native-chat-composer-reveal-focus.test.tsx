@@ -55,6 +55,7 @@ function Harness(props: HarnessProps): React.JSX.Element {
       return true
     },
     insertTypedText: () => true,
+    insertAgentReferences: () => false,
     appendText: () => {},
     acceptsText: () => true,
     handlePasteEvent: () => {},

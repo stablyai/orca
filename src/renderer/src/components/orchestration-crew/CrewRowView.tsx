@@ -36,12 +36,16 @@ export const CrewRowView = memo(function CrewRowView({
   row,
   look,
   target,
-  isVisible
+  isVisible,
+  canMention,
+  mention: mentionRows
 }: {
   row: OrchestrationCrewRow
   look: CrewRowLook
   target: RuntimeClientTarget
   isVisible: boolean
+  canMention: boolean
+  mention: (rows: OrchestrationCrewRow[]) => void
 }) {
   // memo() skips the parent re-render a language switch relies on.
   useUiLanguageRevision()
@@ -51,14 +55,23 @@ export const CrewRowView = memo(function CrewRowView({
     void openOrchestrationCrewAgent(row, target)
   }
   const toggle = () => setExpanded((value) => !value)
+  const mention = () => mentionRows([row])
   return (
     <div className="mx-2 mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-lg border border-transparent px-2.5 py-2 hover:border-border/70 hover:bg-accent/50">
       <button
         type="button"
-        className="row-span-2 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default"
-        aria-expanded={expanded}
-        onClick={toggle}
+        className="row-span-2 grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-md text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-50"
+        disabled={!canMention || !row.sendAddress}
+        // Keep focus in the terminal or composer the mention lands in.
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={mention}
       >
+        {/* Screen readers hear the action and agent first, then the row's status, task and message. */}
+        <span className="sr-only">
+          {translate('components.orchestrationCrew.mentionAgent', 'Mention {{name}}:', {
+            name: row.label
+          })}
+        </span>
         <CrewAgentIcons look={look} hostLabel={row.hostLabel} />
         <span className="truncate text-[13px] font-medium">{row.task?.title ?? row.label}</span>
         <span
@@ -92,7 +105,9 @@ export const CrewRowView = memo(function CrewRowView({
         >
           <ExternalLink />
         </IconButton>
-        {isVisible ? <CrewRowMenu row={row} open={open} /> : null}
+        {isVisible ? (
+          <CrewRowMenu row={row} open={open} canMention={canMention} mention={mention} />
+        ) : null}
       </div>
       <Time className="justify-self-end pr-1" at={row.pendingQuestion?.at ?? row.latest?.at} />
       {!row.sendAddress ? (

@@ -5,12 +5,15 @@ import StarterKit from '@tiptap/starter-kit'
 import { describe, expect, it } from 'vitest'
 import {
   NativeChatFileReference,
+  NativeChatImageReference,
   NativeChatSkill,
   promptLeafText,
   promptText,
   promptTextOffset,
   promptTextPosition
 } from './native-chat-prompt-document'
+import { NativeChatAgentReference } from './native-chat-agent-reference'
+import { slicePromptDocument } from './native-chat-prompt-document-text'
 
 const schema = getSchema([StarterKit, NativeChatSkill, NativeChatFileReference])
 
@@ -79,6 +82,42 @@ function selectablePositions(doc: ProseMirrorNode): number[] {
 }
 
 describe('prompt document reads', () => {
+  it('slices serialized UTF-16 offsets with retained agent/image/file/skill atoms, breaks and empty blocks', () => {
+    const atoms = getSchema([
+      StarterKit,
+      NativeChatSkill,
+      NativeChatFileReference,
+      NativeChatImageReference,
+      NativeChatAgentReference
+    ])
+    const doc = atoms.nodeFromJSON({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'sent😀' }] },
+        { type: 'paragraph' },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'nativeChatAgentReference',
+              attrs: { label: 'Worker', address: 'term_worker', hostKey: 'remote' }
+            },
+            { type: 'hardBreak' },
+            { type: 'nativeChatImageReference', attrs: { attachmentId: 'shot' } },
+            { type: 'nativeChatFileReference', attrs: { token: '@f', path: '/f' } },
+            { type: 'nativeChatSkill', attrs: { token: '$review', path: '/review/SKILL.md' } },
+            { type: 'text', text: '😀 end' }
+          ]
+        },
+        { type: 'paragraph' }
+      ]
+    })
+    const text = promptText(doc)
+    const left = atoms.nodeFromJSON(slicePromptDocument(doc.toJSON(), 'sent😀'.length, text.length))
+    expect(promptText(left)).toBe(text.slice('sent😀'.length))
+    expect(left.toJSON().content?.[2].content).toEqual(doc.toJSON().content?.[2].content)
+    expect(promptText(left)).toContain('@Worker (Orca agent term_worker)\n')
+  })
   it('reads UTF-16 units, pills, hard breaks and paragraphs as the agent receives them', () => {
     const doc = documentWithAtoms()
     expect(promptText(doc)).toBe('a😀$rev\nb\n@f$x\n')

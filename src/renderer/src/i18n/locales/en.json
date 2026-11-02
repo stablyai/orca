@@ -20801,6 +20801,10 @@
       "stepCheck": "Check"
     },
     "orchestrationCrew": {
+      "mentionAll": "Mention all",
+      "mentionAgent": "Mention {{name}}:",
+      "mentionInMessage": "Mention in message",
+      "mentionRejected": "The terminal did not accept the agent reference. Try again.",
       "title": "Orchestration",
       "sendingUnavailable": "Sending unavailable",
       "workers_one": "{{count}} worker",
