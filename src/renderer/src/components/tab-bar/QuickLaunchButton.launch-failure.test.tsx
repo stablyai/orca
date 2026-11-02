@@ -66,13 +66,13 @@ it('a shortcut while SSH is still connecting waits silently, then settled missin
   unavailableSsh()
   Object.assign(store, { activeGroupIdByWorktree: {}, groupsByWorktree: {} })
   const sshState = (status: string) =>
-    new Map([['missing-host', { status }]]) as unknown as typeof store.sshConnectionStates
-  store.sshConnectionStates = sshState('connecting')
+    Object.assign(store, { sshConnectionStates: new Map([['missing-host', { status }]]) })
+  sshState('connecting')
   launchAgentTabShortcut('wt-1', { agent: 'codex' }, () => true)
   expect(mockToastError).not.toHaveBeenCalled()
   expect(mockCreateTab).not.toHaveBeenCalled()
 
-  store.sshConnectionStates = sshState('disconnected')
+  sshState('disconnected')
   launchAgentTabShortcut('wt-1', { agent: 'codex' }, () => true)
   expect(mockToastError).toHaveBeenCalledExactlyOnceWith('Could not start a new Codex session.', {
     description: 'Connect to this workspace’s SSH host, then try again.'

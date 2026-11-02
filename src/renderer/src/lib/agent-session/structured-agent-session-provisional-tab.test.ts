@@ -17,7 +17,7 @@ import {
   resetStructuredAgentLaunchRegistryForTests
 } from './launch/structured-agent-session-launch-registry'
 import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
-import type { AgentTerminalLaunchCompletion } from './launch/structured-agent-session-launch-admission'
+import type * as admission from './launch/structured-agent-session-launch-admission'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
@@ -197,11 +197,11 @@ function openChat(
   prompt = 'hand-off context',
   resume = false
 ) {
-  let complete!: (value: AgentTerminalLaunchCompletion) => void
-  const completion = new Promise<AgentTerminalLaunchCompletion>((resolve) => {
+  let complete!: (value: admission.AgentTerminalLaunchCompletion) => void
+  const completion = new Promise<admission.AgentTerminalLaunchCompletion>((resolve) => {
     complete = resolve
   })
-  const fallback = vi.fn(() => ({ opened: true, completion }))
+  const fallback = vi.fn((): admission.StructuredLaunchTerminal => ({ opened: true, completion }))
   const plan = {
     ...planSettlingAs(new StructuredAgentSessionCreateRefusalError('no'), prompt, resume),
     requestedSurface
@@ -770,7 +770,7 @@ describe('a provisional structured chat tab', () => {
 
   it("puts a refused terminal fallback's advice on the failed chat, with no message of its own", async () => {
     const { launch, chat, fallback } = openChat(undefined, undefined, '')
-    fallback.mockReturnValueOnce({ opened: false, refusal: 'Reconnect it.' } as never)
+    fallback.mockReturnValueOnce({ opened: false, refusal: 'Reconnect it.' })
     await main.settle()
     refuse()
     expect((await launch?.settlement)?.kind).toBe('failed')
