@@ -22,6 +22,7 @@ const TRUST_DIALOG_CHOICE_ROWS = 6
 const TRUST_DIALOG_CURSOR_RE = /^[\u276f\u203a]/
 /** Screen reads while our row is up are throttled to this; a working agent's output cannot hold the row. */
 const TRUST_DIALOG_READ_INTERVAL_MS = 400
+const TRUST_DIALOG_PROBE_RETRIES = 3
 // Claude repaints without sync markers, so a resize clear read before its redraw is not proof the dialog left.
 const TRUST_DIALOG_CLEAR_AFTER_MISSES = 2
 
@@ -126,14 +127,29 @@ export class TrustDialogStatusObserver {
       this.publishWaiting(ptyId, pane, agent, emulator)
       return
     }
-    // An agent typed into a shell paints its dialog before the foreground-process probe names it.
+    this.identifyAndPublish(ptyId, pane, TRUST_DIALOG_PROBE_RETRIES)
+  }
+
+  // An agent typed into a shell paints its dialog before the foreground-process probe names it.
+  private identifyAndPublish(ptyId: string, pane: PaneScan, retries: number): void {
     pane.resolvingAgent = true
     const resolved = (identified?: TerminalAgent | null) => {
       pane.resolvingAgent = false
       const current = this.deps.getEmulator(ptyId)
-      if (this.panes.get(ptyId) === pane && current && isTrustDialogOnScreen(current)) {
-        this.publishWaiting(ptyId, pane, identified ?? this.deps.getPaneAgent(ptyId), current)
+      if (this.panes.get(ptyId) !== pane || !current || !isTrustDialogOnScreen(current)) {
+        return
       }
+      const agent = identified ?? this.deps.getPaneAgent(ptyId)
+      // A timed-out probe answers undefined; a still-static dialog repaints nothing to rescan on.
+      if (identified === undefined && !agent && retries > 0) {
+        pane.resolvingAgent = true
+        setTimeout(
+          () => this.identifyAndPublish(ptyId, pane, retries - 1),
+          TRUST_DIALOG_READ_INTERVAL_MS
+        ).unref?.()
+        return
+      }
+      this.publishWaiting(ptyId, pane, agent, current)
     }
     void Promise.resolve(this.deps.identifyUnownedAgent(ptyId)).then(resolved, () => resolved())
   }

@@ -112,6 +112,20 @@ describe('TrustDialogStatusObserver', () => {
     expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).not.toBe('claude')
   })
 
+  it('retries hand-typed Claude identification after the probe times out', async () => {
+    const { runtime, published, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
+    )
+    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
+      Promise.resolve(undefined)
+    )
+    await write(recording)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(published).toEqual(['waiting'])
+  })
+
   // Keys verified against Claude Code 2.1.316: digits do nothing, Down+Enter trusts, Enter alone exits.
   it.each([
     ['claude-dialog-trust-workspace', 'claude', '\x1b[B\r'],
