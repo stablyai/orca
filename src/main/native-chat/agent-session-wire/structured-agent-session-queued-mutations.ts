@@ -12,14 +12,17 @@ import type {
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult
 } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
+import {
+  QueuedMessageNotConsumableError,
+  QueuedMessageNotOwedError
+} from '../agent-session-journal/queued-message-consume-error'
 import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-failure'
 import {
   journalRowReceiptResult,
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
-import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { queuedMessageOwed, structuredQueueHold } from './structured-agent-session-queued-messages'
 import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
 import {
   mutateStructuredAgentSession,
@@ -117,6 +120,7 @@ export function sendQueuedStructuredAgentMessage(
         return invalid("A command can't be sent while the agent is working.")
       }
       const submissionId = operationId
+      const owed = queuedMessageOwed(context.deps, ctx.sessionId, row.body)
       try {
         await ctx.journal.appendSubmission(
           {
@@ -129,12 +133,21 @@ export function sendQueuedStructuredAgentMessage(
             fence: ctx.fence,
             handoverRecorded: true
           },
-          { messageId, expect: row.state },
+          { messageId, expect: row.state, ...(owed && { owed }) },
           ctx.operationReceipt
         )
       } catch (error) {
         if (error instanceof QueuedMessageNotConsumableError) {
           return invalid('The queued message changed underneath this Send; try again.')
+        }
+        if (error instanceof QueuedMessageNotOwedError) {
+          if (error.owed === 'unavailable') {
+            return invalid(
+              "Orca can't confirm this message still applies right now; try again shortly."
+            )
+          }
+          await ctx.journal.queuedMessages.withdraw([messageId])
+          return invalid('This message no longer applies to this chat, so it was removed.')
         }
         throw error
       }

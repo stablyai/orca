@@ -94,8 +94,8 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       .map((submission) => submission.clientMessageId)
   }
 
-  it('keeps a report whose provider died before the echo, and hands it over after the next turn that runs', async () => {
-    // Death before echo leaves the report unread; death/idle edges must not restart the provider for it.
+  it('never hands a report the provider may have taken over again, even after a later turn; check keeps it', async () => {
+    // Death before the echo leaves the report in doubt: it may have reached the agent, so only check returns it.
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
@@ -114,10 +114,11 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
     expect(revived.turns[0]!.text).toContain('again')
     await settleTurn(COORDINATOR, 0)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(isWholeMail(turnText(revived.turns[1]!))).toBe(true)
-    await settleTurn(COORDINATOR, 1)
-    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
+    await edgesAnswered()
+    expect(revived.turns).toHaveLength(1)
+    expect(await mailSends()).toHaveLength(1)
+    const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
+    expect(checked).toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
   })
 
   it('does not restart a provider that dies before every echo, however many edges follow', async () => {
@@ -155,7 +156,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     }
   )
 
-  it('hands the next report over after a transient death, then the one the death left unread', async () => {
+  it('hands the next report over after a transient death, leaving the one in doubt to check', async () => {
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     const second = await call(
@@ -174,11 +175,10 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const revived = connectionFor(COORDINATOR)
     expect(isWholeMail(turnText(revived.turns.at(-1)!))).toBe(true)
     await settleTurn(COORDINATOR, revived.turns.length - 1)
-    // The report the death left in doubt follows as its own turn once a turn has run.
-    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(3), WAIT)
-    expect(isWholeMail(turnText(revived.turns.at(-1)!))).toBe(true)
-    await settleTurn(COORDINATOR, revived.turns.length - 1)
-    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
+    await edgesAnswered()
+    // The report the death left in doubt is not sent again: check is where it waits.
+    expect(providerFaults.turnStarts).toBe(2)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
     expect(providerFaults.starts - before).toBe(1)
   })
 
@@ -299,8 +299,8 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     }
   )
 
-  it('hands a report over after the next turn that runs, even once a rewind dropped its send', async () => {
-    const chat = await openChat(COORDINATOR)
+  it('does not send a report again once a rewind dropped its in-doubt send', async () => {
+    await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     providerFaults.crashOnTurnStart = 'exit-then-throw'
     await finishWorker(taskId)
@@ -318,15 +318,39 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
     const revived = await vi.waitFor(() => {
       const connection = connectionFor(COORDINATOR)
-      expect(connection).not.toBe(chat)
+      expect(connection.turns.length).toBeGreaterThan(0)
       return connection
     }, WAIT)
-    await vi.waitFor(async () => {
-      const index = revived.turns.length - 1
-      await settleTurn(COORDINATOR, index)
-      expect(unread(`run:${runId}`)).toEqual([])
-    }, WAIT)
-    expect(revived.turns.map(turnText).filter(isWholeMail)).toHaveLength(1)
+    await settleTurn(COORDINATOR, revived.turns.length - 1)
+    await edgesAnswered()
+    // Its admission is on record even though the rewind dropped the send: it may have been taken.
+    expect(revived.turns.map(turnText).filter(isWholeMail)).toEqual([])
+    expect(unread(`run:${runId}`)).toHaveLength(1)
+  })
+
+  it('counts only a /clear made after a refused start: one before it starts nothing, one after it one attempt', async () => {
+    observationClock.start()
+    await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await clearChat(COORDINATOR)
+    providerFaults.refuseStart = () => new AgentSessionAcquisitionRefusal('no login', 'notSignedIn')
+    const before = providerFaults.starts
+    await finishWorker(taskId)
+    await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
+    for (let edge = 0; edge < 4; edge += 1) {
+      await edgesAnswered()
+      await observationClock.observe(100)
+    }
+    expect(providerFaults.starts - before).toBe(1)
+
+    await clearChat(COORDINATOR)
+    await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 2), WAIT)
+    for (let edge = 0; edge < 4; edge += 1) {
+      await edgesAnswered()
+      await observationClock.observe(100)
+    }
+    expect(providerFaults.starts - before).toBe(2)
+    expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
   it('starts a coordinator whose agent is not running through the send alone', async () => {
@@ -433,13 +457,13 @@ describe('a /clear keeps the chat its orchestration address', () => {
     })
   })
 
-  it('hands mail the earlier context never took to the fresh context, without a user message', async () => {
+  it('does not send the fresh context a report the earlier one may have taken', async () => {
     observationClock.start()
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    // The provider dies before it runs the report, so the earlier context never took it.
+    // The provider dies before the echo: the earlier context may or may not have taken it.
     chat.handlers.onExit?.(new Error('provider died before the echo'))
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(COORDINATOR)?.lease.claimStatus).toBe('released')
@@ -449,12 +473,10 @@ describe('a /clear keeps the chat its orchestration address', () => {
     const cleared = await clearChat(COORDINATOR)
     expect(cleared).toBe(COORDINATOR)
     await observationClock.observe(2_000)
-    await vi.waitFor(
-      () => expect(isWholeMail(turnText(connectionFor(cleared).turns[0]!))).toBe(true),
-      WAIT
-    )
-    await settleTurn(cleared, 0)
-    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
+    await observationClock.edgesAnswered(runtime, WAIT)
+    // Nothing starts the fresh context for it; check still returns it.
+    expect(codex.connections.filter((connection) => connection !== chat)).toEqual([])
+    expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
   it('keeps a Run under the same conversation address through repeated clears', async () => {

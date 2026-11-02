@@ -7,7 +7,8 @@ import {
   getFollowUpDispatch,
   hasNewUnreadFollowUpMail,
   FOLLOW_UP_MESSAGE_TYPES,
-  listDispatchesWithFollowUpMail
+  listDispatchesWithFollowUpMail,
+  receivesMailWhole
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../../../orchestration/orchestration-party'
@@ -52,6 +53,12 @@ export function continueUnreadWorkerMail(
 const FOLLOW_UP_TASK = {
   subject: 'New messages',
   body: 'You have new orchestration messages. Read them with the `check` command above, then continue.'
+}
+
+// A chat is handed each message whole right after this Task, one at a time.
+const CHAT_FOLLOW_UP_TASK = {
+  subject: 'New messages',
+  body: 'You have new orchestration messages. They arrive next, one at a time; act on each.'
 }
 
 async function continueUnreadMail(
@@ -108,7 +115,9 @@ async function continueUnreadMail(
             db,
             plan,
             from: first.from_handle,
-            message: FOLLOW_UP_TASK,
+            message: receivesMailWhole(plan.latest.assignee_handle)
+              ? CHAT_FOLLOW_UP_TASK
+              : FOLLOW_UP_TASK,
             takesMailOf: dispatchId
           })
         : plan
@@ -166,7 +175,7 @@ export function passHeldWorkerMail(
   // The follow-up's claim and the moves below re-address mail a chat may still hold as a card.
   const custody = custodyOf(db, followUpId)
   if (custody === 'starting') {
-    runtime.withdrawTakenChatMail()
+    runtime.withdrawStaleChatMail()
     return
   }
   const worker = db.getWorkerDispatch(followUpId)
@@ -209,7 +218,11 @@ export function passHeldWorkerMail(
     // A follow-up that already finished holds this mail as any finished worker does.
     markUnreadFollowUpMail(db, followUpId)
   }
-  runtime.withdrawTakenChatMail()
+  runtime.withdrawStaleChatMail()
+  if (custody === 'ready') {
+    // Its Task is in: a chat's moved mail follows it, each message whole.
+    runtime.deliverPendingMessagesForHandle(`dispatch:${followUpId}`)
+  }
   if (custody === 'reported') {
     continueUnreadWorkerMail(runtime, db, followUpId)
   }

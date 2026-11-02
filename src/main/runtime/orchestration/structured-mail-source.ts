@@ -97,9 +97,7 @@ export function structuredMailMessage(input: {
   senderSnapshot: SenderSnapshotResolver
 }): { body: AgentJournalMessageItem; whole: boolean } {
   const from = structuredMailSource({ ...input, batch: [input.message] })
-  const whole: AgentJournalMessageItem['blocks'] = [
-    { type: 'text', text: formatMessageBanner(input.message, { cliCommand: input.cliCommand }) }
-  ]
+  const whole = wholeMailBlocks(input.message, input.cliCommand)
   if (!structuredAgentSessionBlocksTooLarge(whole)) {
     return { body: { kind: 'message', role: 'user', blocks: whole, from }, whole: true }
   }
@@ -108,6 +106,21 @@ export function structuredMailMessage(input: {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: pointer }], from },
     whole: false
   }
+}
+
+/** Whether a message goes to a chat whole, rather than as a pointer at `check`. */
+export function structuredMailFitsWhole(
+  message: MessageRow,
+  cliCommand: OrchestrationCliCommand
+): boolean {
+  return !structuredAgentSessionBlocksTooLarge(wholeMailBlocks(message, cliCommand))
+}
+
+function wholeMailBlocks(
+  message: MessageRow,
+  cliCommand: OrchestrationCliCommand
+): AgentJournalMessageItem['blocks'] {
+  return [{ type: 'text', text: formatMessageBanner(message, { cliCommand }) }]
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }

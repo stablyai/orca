@@ -1,5 +1,5 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// Worker mail belongs to its Dispatch mailbox; a message lost with the provider is handed over again once a later turn runs, including after restart or clear.
+// Worker mail belongs to its Dispatch mailbox; a message the provider may have taken before it died is never handed over again, even after a later turn, a restart or a clear: check keeps it.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
@@ -69,28 +69,27 @@ async function nextTurn(sessionId: string): Promise<{ turns: { text: string }[] 
   return revived
 }
 
-describe("a chat worker's lost Dispatch mail is handed over again", () => {
-  // Also covered by the restored-mail repoint a restart schedules; this pins the end result.
-  it('after a restart', async () => {
+describe("a chat worker's in-doubt Dispatch mail is not handed over again", () => {
+  it('after a restart and a later turn', async () => {
     observationClock.start()
-    await heldDispatchMail()
+    const mailbox = await heldDispatchMail()
     restartRuntime()
 
     const revived = await nextTurn(PEER_CHAT)
 
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(isWholeMail(turnText(revived.turns[1]!))).toBe(true)
+    expect(revived.turns).toHaveLength(1)
+    expect(db.getUnreadMessages(mailbox)).toHaveLength(1)
   })
 
-  it('in the same chat after /clear', async () => {
+  it('in the same chat after /clear and a later turn', async () => {
     observationClock.start()
-    await heldDispatchMail()
+    const mailbox = await heldDispatchMail()
     const cleared = await clearChat(PEER_CHAT)
     expect(cleared).toBe(PEER_CHAT)
 
     const revived = await nextTurn(cleared)
 
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(isWholeMail(turnText(revived.turns[1]!))).toBe(true)
+    expect(revived.turns).toHaveLength(1)
+    expect(db.getUnreadMessages(mailbox)).toHaveLength(1)
   })
 })

@@ -48,7 +48,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
       // Mail this check takes may still wait as a card in a chat's queue; that card must not run too.
       const releasing = <T>(result: T): T => {
         if (consumingCheck) {
-          runtime.withdrawTakenChatMail()
+          runtime.withdrawStaleChatMail()
         }
         return result
       }

@@ -4,10 +4,7 @@ import {
   agentSessionRecordFixture
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 
 const hostRef: { current: unknown } = { current: null }
@@ -43,24 +40,6 @@ function transcript(count: number): AgentJournalRenderItem[] {
   )
 }
 
-function pointerSubmission(
-  clientMessageId: string,
-  fence: number,
-  acceptedSequence: number
-): AgentJournalSubmission {
-  return {
-    clientMessageId,
-    acceptedSequence,
-    submittedAt: 1_000,
-    fence,
-    payloadFingerprint: 'fp',
-    dispatchState: 'pending',
-    providerItemId: null,
-    reason: null,
-    resolvedAt: null
-  }
-}
-
 const NOTICE_SOURCE: AgentMessageSource = {
   kind: 'agent',
   senders: [],
@@ -85,53 +64,86 @@ describe('structured mailbox pointer host', () => {
     })
   })
 
+  const rejected = (rejection: { kind: string }) => ({
+    clientMessageId: 'op1',
+    submission: { dispatchState: 'rejected', reason: 'no', rejection }
+  })
+  const marks = { acceptedTurnAt: 0, clearedAt: 0 }
+
   it.each([
-    [
-      'a waiting card',
-      { clientMessageId: 'op1', queued: { state: 'waiting' } },
-      undefined,
-      'waiting'
-    ],
-    [
-      'a deleted card',
-      { clientMessageId: 'op1', queued: { state: 'withdrawn' } },
-      undefined,
-      'handed'
-    ],
+    ['a waiting card', { clientMessageId: 'op1', queued: { state: 'waiting' } }, 'waiting'],
+    ['a deleted card', { clientMessageId: 'op1', queued: { state: 'withdrawn' } }, 'withdrawn'],
     [
       "a card's accepted handoff",
       { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } },
-      undefined,
-      'handed'
+      'accepted'
     ],
     [
+      // The card is the queue's to retry; the mailbox never mints a copy of it.
       "a card's rejected handoff",
-      { clientMessageId: 'op1', submission: { dispatchState: 'rejected' } },
-      undefined,
-      'lost'
+      { clientMessageId: 'op1', submission: { dispatchState: 'rejected', queuedMessageId: 'op1' } },
+      'waiting'
     ],
-    ['a pending immediate send', null, 'pending', 'waiting'],
-    ['an unanswered immediate send', null, 'unknown', 'lost'],
-    ['nothing recorded', null, undefined, 'absent']
-  ] as const)('reads %s without replaying the send', async (_label, answer, sent, expected) => {
+    [
+      'a pending immediate send',
+      { clientMessageId: 'op1', submission: { dispatchState: 'pending' } },
+      'waiting'
+    ],
+    [
+      'an unanswered immediate send',
+      { clientMessageId: 'op1', submission: { dispatchState: 'unknown' } },
+      'unknown'
+    ],
+    ['nothing recorded', null, 'absent']
+  ] as const)('reads %s without replaying the send', async (_label, answer, expected) => {
+    hostRef.current = { sendFacts: async () => ({ answer, ...marks }) }
+    expect(await createStructuredMailboxPointerHost().observe('s1', 'op1')).toEqual({
+      kind: expected
+    })
+  })
+
+  it.each([
+    ['no turn or clear since', { rejectedAt: 10 }, false],
+    ['a turn accepted after it settled', { rejectedAt: 10, acceptedTurnAt: 11 }, true],
+    ['a /clear made after it settled', { rejectedAt: 10, clearedAt: 12 }, true],
+    // A clear made before the send, even one the send's own lease still carries, is no recovery.
+    ['only a /clear from before it', { rejectedAt: 10, clearedAt: 4, acceptedTurnAt: 3 }, false],
+    ['a turn at the same position', { rejectedAt: 10, acceptedTurnAt: 10 }, false],
+    ['no recorded rejection position', { acceptedTurnAt: 11 }, false]
+  ] as const)('repeats a rejected send only after %s', async (_label, facts, recovered) => {
     hostRef.current = {
-      queuedSendAnswer: async () => answer,
-      journalSnapshot: async () => ({
-        items: [],
-        submissions: sent ? [{ ...pointerSubmission('op1', 1, 1), dispatchState: sent }] : []
-      })
+      sendFacts: async () => ({ answer: rejected({ kind: 'notSignedIn' }), ...marks, ...facts })
     }
-    expect(await createStructuredMailboxPointerHost().observe('s1', 'op1')).toBe(expected)
+    expect(await createStructuredMailboxPointerHost().observe('s1', 'op1')).toEqual({
+      kind: 'rejected',
+      cancelled: false,
+      recovered
+    })
+  })
+
+  it('tells a stopped send from a failed one', async () => {
+    hostRef.current = {
+      sendFacts: async () => ({ answer: rejected({ kind: 'cancelled' }), ...marks, rejectedAt: 1 })
+    }
+    expect(await createStructuredMailboxPointerHost().observe('s1', 'op1')).toEqual({
+      kind: 'rejected',
+      cancelled: true,
+      recovered: false
+    })
   })
 
   it('reads an unreadable session as unreadable, never as nothing recorded', async () => {
-    expect(await createStructuredMailboxPointerHost().observe('s1', 'op1')).toBe('unreadable')
+    expect(await createStructuredMailboxPointerHost().observe('s1', 'op1')).toEqual({
+      kind: 'unreadable'
+    })
     hostRef.current = {
-      queuedSendAnswer: async () => {
+      sendFacts: async () => {
         throw new Error('agent_session_ownership_unknown')
       }
     }
-    expect(await createStructuredMailboxPointerHost().observe('s1', 'op1')).toBe('unreadable')
+    expect(await createStructuredMailboxPointerHost().observe('s1', 'op1')).toEqual({
+      kind: 'unreadable'
+    })
   })
 
   it('reports an unattached host rather than a rejection when nothing can be sent', async () => {

@@ -495,10 +495,11 @@ it.each(['worker-stop', 'worker-release'] as const)(
 type ParkedMailRegistry = ReadonlyMap<unknown, unknown>
 
 function observeParkedMail(value: unknown): ParkedMailRegistry {
-  if (!isRecord(value) || !(value.parkedUntilJournalEdge instanceof Map)) {
+  const parking = isRecord(value) ? value.parking : undefined
+  if (!isRecord(parking) || !(parking.parked instanceof Map)) {
     throw new Error('expected actual parked mail registry')
   }
-  return value.parkedUntilJournalEdge
+  return parking.parked
 }
 
 it('worker-abandon settles and fences consumption, releases the existing binding and retains the child', async () => {

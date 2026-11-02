@@ -15,16 +15,20 @@ export type StructuredPointerSendOutcome =
 
 /** What became of one earlier send, read from the chat's journal without replaying it. */
 export type StructuredMailSendState =
-  /** A card still waiting in the queue, or a handoff not yet answered. */
-  | 'waiting'
-  /** The agent was handed it, or the person deleted its card. */
-  | 'handed'
-  /** Rejected or left unanswered: it may never have reached the agent. */
-  | 'lost'
-  /** Nothing recorded under the id: the send never landed. */
-  | 'absent'
+  /** Still the chat's to hand over: a card waiting, paused or returned, or a handoff not yet answered. */
+  | { kind: 'waiting' }
+  /** Its card was deleted before handover. */
+  | { kind: 'withdrawn' }
+  | { kind: 'accepted' }
+  /** Sent at once and proven never delivered. `cancelled`: someone stopped it on purpose.
+   *  `recovered`: a turn was accepted, or the context cleared, after the rejection settled. */
+  | { kind: 'rejected'; cancelled: boolean; recovered: boolean }
+  /** It may have reached the agent; nothing says whether it did. */
+  | { kind: 'unknown' }
+  /** A complete read found nothing under its id: it was never admitted. */
+  | { kind: 'absent' }
   /** The session cannot be read now. */
-  | 'unreadable'
+  | { kind: 'unreadable' }
 
 export type StructuredMailboxPointerHost = {
   send: (input: {
@@ -34,16 +38,14 @@ export type StructuredMailboxPointerHost = {
     expectedRuntimeFence: number
     /** Names its senders as `from`. */
     body: AgentJournalMessageItem
-    /** Rechecked at admission: the mail may have been consumed while the send waited. */
+    /** Rechecked at admission: the mail may have been taken, or its owner changed, while the send waited. */
     stillOwed: () => boolean
   }) => Promise<StructuredPointerSendOutcome>
   observe: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
-  /** Whether a lost send is worth repeating: the agent accepted a turn since, or a /clear replaced
-   *  the context it went to. Edges alone never repeat it, so an agent dying on every start is not
-   *  restarted by each one. */
-  repeatable: (sessionId: string, sent: { atMs: number; fence: number }) => Promise<boolean>
   /** Delete a card still waiting in the queue; false when it could not be deleted now. */
   withdraw: (sessionId: string, operationId: string) => Promise<boolean>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
+  /** Coalesced journal publications of a session; returns the unsubscribe. */
+  watchJournal: (sessionId: string, onActivity: () => void) => () => void
 }

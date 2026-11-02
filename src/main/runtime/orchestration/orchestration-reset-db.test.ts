@@ -138,7 +138,8 @@ describe('OrchestrationDb reset scopes', () => {
         afterSequence: 0
       })
     ).toEqual([])
-    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toEqual([])
+    // A chat send record outlives the reset until the card it names is deleted from the chat.
+    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toHaveLength(1)
   })
 
   it('resetTasks preserves Runs and messages while clearing every worker attachment', () => {
@@ -165,7 +166,7 @@ describe('OrchestrationDb reset scopes', () => {
         body: 'Yes'
       })
     ).toThrowError(expect.objectContaining({ code: 'dispatch_inactive' }))
-    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toEqual([])
+    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toHaveLength(1)
   })
 
   it('resetTasks records who created each removed Task, Dispatch and worker', () => {
@@ -375,7 +376,7 @@ describe('OrchestrationDb reset scopes', () => {
         afterSequence: 0
       })
     ).toHaveLength(1)
-    // A chat send record must not survive deletion of its message.
-    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toEqual([])
+    // A chat send record outlives its message until the card it names is deleted from the chat.
+    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toHaveLength(1)
   })
 })

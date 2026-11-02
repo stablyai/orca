@@ -36,6 +36,7 @@ export function wireStructuredAgentSessionQueuedMessages(
       hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
+    owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })
   return {

@@ -16,6 +16,9 @@ import {
 } from '../../../shared/agent-process-recognition'
 import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
+import type { OrchestrationDb } from './db'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
 import {
   chatDispatchMailTarget,
   handleLessCoordinatorSessionId,
@@ -214,11 +217,22 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
   }
 
-  /** After a check or a follow-up takes mail, delete the cards that still wait to hand it to a chat. */
-  withdrawTakenChatMail(): void {
-    void this.orchestrationStructuredMailboxPointerDelivery.withdrawTaken().catch((error) => {
-      console.warn('[orchestration] withdrawing taken chat mail failed', error)
-    })
+  /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no
+   *  longer owes. Visible cleanup only: it never holds up the action that called it. */
+  withdrawStaleChatMail(): void {
+    this.orchestrationStructuredMailboxPointerDelivery.withdrawStale()
+  }
+
+  /** Asked as a chat's queue hands over an agent's card; opening the database lets a restart's first
+   *  handover decide. */
+  structuredChatMailOwed(sessionId: string, from: AgentMessageSource): QueuedMessageOwed {
+    let db: OrchestrationDb | null
+    try {
+      db = this.getExistingOrchestrationDb()
+    } catch {
+      return 'unavailable'
+    }
+    return this.orchestrationStructuredMailboxPointerDelivery.owedAtHandover(sessionId, from, db)
   }
 
   /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */
@@ -236,7 +250,8 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     const dispatchId = mailboxHandle.slice('dispatch:'.length)
     const dispatch = this._orchestrationDb?.getDispatchContextById?.(dispatchId)
     const assignee = dispatch?.assignee_handle
-    if (!assignee) {
+    // A Dispatch's mail follows its Task: none reaches the chat before it took the Task, or after it ended.
+    if (!assignee || dispatch.status !== 'dispatched') {
       return null
     }
     const chat = chatDispatchMailTarget(dispatch, this._orchestrationDb)

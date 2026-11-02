@@ -38,7 +38,7 @@ import {
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
 } from '../../structured-worker-identity'
-import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
+import { subscribeForRedrive } from '../../orchestration/structured-session-journal-redrive'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 
 type StructuredWorkerBinding = {
@@ -302,37 +302,4 @@ function requireInstalledHost(): StructuredAgentSessionHost {
     )
   }
   return host
-}
-
-/** Coalesce streaming batches until quiet; settled turns stop emitting, so the final nudge still lands promptly. */
-const REDRIVE_FLUSH_MS = 300
-
-/** A turn that streams without pause still gets re-evaluated this often. */
-const REDRIVE_MAX_WAIT_MS = 2_000
-
-/** Any journal batch can carry a tombstoned turn settlement; coalesce expensive parked-mail gate checks.
- * Pointers count waiting messages, so batches may combine safely. Fresh mail still uses deliverForHandle immediately. */
-function subscribeForRedrive(
-  host: StructuredAgentSessionHost,
-  sessionId: string,
-  onJournalActivity: (sessionId: string) => void
-): () => void {
-  const coalescer = createKeyedTrailingEdgeCoalescer(onJournalActivity, {
-    flushMs: REDRIVE_FLUSH_MS,
-    maxWaitMs: REDRIVE_MAX_WAIT_MS
-  })
-  try {
-    const unsubscribe = host.observeJournalPublications(sessionId, () => {
-      coalescer.schedule(sessionId)
-    })
-    // Discard pending redrive on settlement so it cannot nudge a session no dispatch owns.
-    return () => {
-      coalescer.dispose()
-      unsubscribe()
-    }
-  } catch (error) {
-    console.warn('[orchestration] structured worker redrive subscription failed', sessionId, error)
-    coalescer.dispose()
-    return () => {}
-  }
 }

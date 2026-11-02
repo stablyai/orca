@@ -115,12 +115,13 @@ async function renderChatMail(mailbox: string): Promise<{ text: string; id: stri
     getDb: () => db,
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: () => ({ sessionId: CHAT_SESSION, dispatchId: null }),
+    mailboxEnded: () => false,
     getCliCommand: localOrchestrationCliCommand,
     senderSnapshot: () => ({ name: null, agent: null }),
     host: {
       currentFence: () => 1,
-      observe: async () => 'handed',
-      repeatable: async () => false,
+      watchJournal: () => () => {},
+      observe: async () => ({ kind: 'accepted' }),
       withdraw: async () => true,
       send: async (input) => {
         for (const block of input.body.blocks) {

@@ -20,6 +20,16 @@ export function getStructuredMailSends(
     .all(mailboxHandle) as StructuredMailSendRow[]
 }
 
+export function getStructuredMailSend(
+  this: OrchestrationDb,
+  mailboxHandle: string,
+  messageId: string
+): StructuredMailSendRow | undefined {
+  return this.db
+    .prepare('SELECT * FROM structured_mail_sends WHERE mailbox_handle = ? AND message_id = ?')
+    .get(mailboxHandle, messageId) as StructuredMailSendRow | undefined
+}
+
 export function getStructuredMailSendMailboxes(this: OrchestrationDb): string[] {
   return (
     this.db.prepare('SELECT DISTINCT mailbox_handle FROM structured_mail_sends').all() as {
@@ -28,35 +38,51 @@ export function getStructuredMailSendMailboxes(this: OrchestrationDb): string[] 
   ).map((row) => row.mailbox_handle)
 }
 
-/** Sends whose message a check consumed or a move re-addressed while it still waited in the chat. */
-export function getTakenStructuredMailSends(this: OrchestrationDb): StructuredMailSendRow[] {
-  return this.db
-    .prepare(
-      `SELECT s.* FROM structured_mail_sends s
-       LEFT JOIN messages m ON m.id = s.message_id
-       WHERE m.id IS NULL OR m.read = 1 OR m.to_handle <> s.mailbox_handle`
-    )
-    .all() as StructuredMailSendRow[]
+/** Record a first send; false when another pass already holds this message's send. */
+export function putStructuredMailSend(this: OrchestrationDb, row: StructuredMailSendRow): boolean {
+  return (
+    this.db
+      .prepare(
+        `INSERT INTO structured_mail_sends
+           (mailbox_handle, message_id, session_id, operation_id, minted_at_ms, fence)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(mailbox_handle, message_id) DO NOTHING`
+      )
+      .run(
+        row.mailbox_handle,
+        row.message_id,
+        row.session_id,
+        row.operation_id,
+        row.minted_at_ms,
+        row.fence
+      ).changes === 1
+  )
 }
 
-export function putStructuredMailSend(this: OrchestrationDb, row: StructuredMailSendRow): void {
-  this.db
-    .prepare(
-      `INSERT INTO structured_mail_sends
-         (mailbox_handle, message_id, session_id, operation_id, minted_at_ms, fence)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(mailbox_handle, message_id) DO UPDATE SET
-         session_id = excluded.session_id, operation_id = excluded.operation_id,
-         minted_at_ms = excluded.minted_at_ms, fence = excluded.fence`
-    )
-    .run(
-      row.mailbox_handle,
-      row.message_id,
-      row.session_id,
-      row.operation_id,
-      row.minted_at_ms,
-      row.fence
-    )
+/** Swap one attempt for the next only if it is still the current one, so two passes that both saw it
+ *  fail cannot both send it again. */
+export function replaceStructuredMailSendAttempt(
+  this: OrchestrationDb,
+  expectedOperationId: string,
+  next: StructuredMailSendRow
+): boolean {
+  return (
+    this.db
+      .prepare(
+        `UPDATE structured_mail_sends
+            SET session_id = ?, operation_id = ?, minted_at_ms = ?, fence = ?
+          WHERE mailbox_handle = ? AND message_id = ? AND operation_id = ?`
+      )
+      .run(
+        next.session_id,
+        next.operation_id,
+        next.minted_at_ms,
+        next.fence,
+        next.mailbox_handle,
+        next.message_id,
+        expectedOperationId
+      ).changes === 1
+  )
 }
 
 export function deleteStructuredMailSend(
@@ -71,18 +97,20 @@ export function deleteStructuredMailSend(
 
 export type StructuredMailSendStoreMethods = {
   getStructuredMailSends: typeof getStructuredMailSends
+  getStructuredMailSend: typeof getStructuredMailSend
   getStructuredMailSendMailboxes: typeof getStructuredMailSendMailboxes
-  getTakenStructuredMailSends: typeof getTakenStructuredMailSends
   putStructuredMailSend: typeof putStructuredMailSend
+  replaceStructuredMailSendAttempt: typeof replaceStructuredMailSendAttempt
   deleteStructuredMailSend: typeof deleteStructuredMailSend
 }
 
 export function attachStructuredMailSendStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     getStructuredMailSends,
+    getStructuredMailSend,
     getStructuredMailSendMailboxes,
-    getTakenStructuredMailSends,
     putStructuredMailSend,
+    replaceStructuredMailSendAttempt,
     deleteStructuredMailSend
   })
 }

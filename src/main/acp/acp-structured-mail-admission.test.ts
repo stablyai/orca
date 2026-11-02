@@ -53,7 +53,7 @@ it('queues mail behind an answerable ACP question without interrupting it', asyn
   expect(after.submissions).toEqual(before.submissions)
   expect(after.items.filter((row) => row.body.kind === 'question')).toEqual(questions)
   expect(host.currentWork(SESSION)?.hasActionablePrompt()).toBe(true)
-  expect(await pointer.observe(SESSION, operationId)).toBe('waiting')
+  expect(await pointer.observe(SESSION, operationId)).toEqual({ kind: 'waiting' })
   expect(framesOf(rig.child(), 'session/cancel')).toHaveLength(0)
   await host.close(SESSION, 'user-close')
 })

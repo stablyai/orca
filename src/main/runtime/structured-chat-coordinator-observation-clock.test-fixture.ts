@@ -27,12 +27,17 @@ export function createCoordinatorMailObservationClock(
       runtime: Pick<OrcaRuntimeService, 'onStructuredSessionStatusForMail'>,
       wait: { timeout: number }
     ): Promise<void> {
-      const reads = vi.spyOn(getHost(), 'journalSnapshot')
+      // The lane reads each outstanding send by key; a session with none outstanding reads nothing.
+      const reads = vi.spyOn(getHost(), 'sendFacts')
       runtime.onStructuredSessionStatusForMail({ sessionId, status: null })
       runtime.onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
-      await vi.waitFor(() => expect(reads).toHaveBeenCalled(), wait)
-      await Promise.all(reads.mock.results.map((read) => read.value))
-      await new Promise((resolve) => setImmediate(resolve))
+      await vi.waitFor(async () => {
+        await Promise.allSettled(reads.mock.results.map((read) => read.value))
+        await new Promise((resolve) => setImmediate(resolve))
+        const settled = reads.mock.calls.length
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(reads.mock.calls.length).toBe(settled)
+      }, wait)
       reads.mockRestore()
     },
     async drainClosedDatabaseRepair(): Promise<void> {

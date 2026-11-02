@@ -6,14 +6,9 @@ import type {
   StructuredMailboxPointerHost,
   StructuredMailSendState
 } from './structured-mailbox-pointer-host-contract'
-import type {
-  AgentJournalDispatchState,
-  AgentJournalSnapshot
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  agentSessionSendSubmission,
-  type AgentSessionSendResult
-} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionSendSubmission } from '../../../shared/agent-session/agent-session-wire'
+import { dispatchWasWithdrawn } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
 import {
@@ -21,6 +16,7 @@ import {
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
+import { subscribeForRedrive } from './structured-session-journal-redrive'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -62,41 +58,52 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
   }
 }
 
-function dispatchStateOf(state: AgentJournalDispatchState): StructuredMailSendState {
-  if (state === 'accepted') {
-    return 'handed'
-  }
-  return state === 'pending' ? 'waiting' : 'lost'
-}
-
-/** A card's own state, or the handoff it became; immediate sends are read off the submissions. */
+/** A card's own state, or the handoff it became; a send made at once is its own submission.
+ *  Read by key: a lane following many sends never takes a whole-history snapshot for each. */
 async function observeMailSend(
   sessionId: string,
   operationId: string
 ): Promise<StructuredMailSendState> {
   const host = getStructuredAgentSessionHost()
   if (!host) {
-    return 'unreadable'
+    return { kind: 'unreadable' }
   }
-  let answer: AgentSessionSendResult | null
+  let facts: Awaited<ReturnType<typeof host.sendFacts>>
   try {
-    answer = await host.queuedSendAnswer(sessionId, operationId)
+    facts = await host.sendFacts(sessionId, operationId)
   } catch {
-    return 'unreadable'
+    // Unreadable proves nothing, least of all that nothing was sent.
+    return { kind: 'unreadable' }
   }
-  if (answer && 'queued' in answer && answer.queued) {
-    // A deleted card is the person's call, as with any queued message.
-    return answer.queued.state === 'withdrawn' ? 'handed' : 'waiting'
+  const { answer } = facts
+  if (!answer) {
+    return { kind: 'absent' }
   }
-  const submission =
-    agentSessionSendSubmission(answer ?? undefined) ??
-    (await readSessionJournal(sessionId))?.submissions.find(
-      (entry) => entry.clientMessageId === operationId
-    )
-  if (submission) {
-    return dispatchStateOf(submission.dispatchState)
+  if ('queued' in answer && answer.queued) {
+    return answer.queued.state === 'withdrawn' ? { kind: 'withdrawn' } : { kind: 'waiting' }
   }
-  return answer ? 'lost' : 'absent'
+  const submission = agentSessionSendSubmission(answer)
+  switch (submission?.dispatchState) {
+    case 'accepted':
+      return { kind: 'accepted' }
+    case 'pending':
+      return { kind: 'waiting' }
+    case 'rejected': {
+      if (submission.queuedMessageId !== undefined) {
+        // A card's failed handoff: the card is the queue's to retry, never a mailbox copy.
+        return { kind: 'waiting' }
+      }
+      const at = facts.rejectedAt
+      return {
+        kind: 'rejected',
+        cancelled: dispatchWasWithdrawn(submission),
+        // Journal order, never clocks: only a turn handed over, or a clear made, after the rejection settled.
+        recovered: at !== undefined && (facts.acceptedTurnAt > at || facts.clearedAt > at)
+      }
+    }
+    default:
+      return { kind: 'unknown' }
+  }
 }
 
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
@@ -105,27 +112,15 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return observeMailSend(sessionId, operationId)
     },
 
-    async repeatable(sessionId, sent) {
-      const boundary =
-        getStructuredAgentSessionHost()?.deps.store.getConversation(
-          sessionId
-        )?.providerContextBoundary
-      if (boundary && sent.fence <= boundary.afterFence) {
-        return true
-      }
-      const snapshot = await readSessionJournal(sessionId)
-      return (
-        snapshot?.submissions.some(
-          (entry) => entry.dispatchState === 'accepted' && entry.submittedAt > sent.atMs
-        ) ?? false
-      )
-    },
-
     async withdraw(sessionId, operationId) {
       const host = getStructuredAgentSessionHost()
-      const fence = host?.deps.store.getConversation(sessionId)?.currentFence
-      if (!host || fence === undefined) {
+      if (!host) {
         return false
+      }
+      const fence = host.deps.store.getConversation(sessionId)?.currentFence
+      if (fence === undefined) {
+        // No conversation is left to hand the card over.
+        return true
       }
       const fields = { messageId: operationId }
       const result = await host
@@ -148,6 +143,11 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
         .catch(() => null)
       // Already handed over, or never a card (sent at once), counts as done: nothing is left to hand over twice.
       return result?.ok === true
+    },
+
+    watchJournal(sessionId, onActivity) {
+      const host = getStructuredAgentSessionHost()
+      return host ? subscribeForRedrive(host, sessionId, onActivity) : () => {}
     },
 
     currentFence(sessionId) {

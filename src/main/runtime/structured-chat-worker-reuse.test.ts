@@ -14,6 +14,7 @@ import {
   db,
   dispatcher,
   host,
+  isWholeMail,
   openChat,
   queuedCardTexts,
   request,
@@ -378,27 +379,31 @@ describe('a send to a finished structured worker', () => {
     expect(await reportDone(identity.sessionId, taskId, firstDispatchId)).toMatchObject({
       ok: true
     })
-    // The follow-up took the mail, so its card was deleted and only the follow-up's own Task waits.
+    // The follow-up took the mail: the old card is gone, its Task waits first, then the mail itself.
     await vi.waitFor(async () => {
       const cards = await queuedCardTexts(identity.sessionId)
-      expect(cards).toHaveLength(1)
-      expect(cards[0]).toContain('`check` command above')
+      expect(cards).toHaveLength(2)
+      expect(cards[0]).toContain('arrive next, one at a time')
+      expect(isWholeMail(cards[1]!)).toBe(true)
+      expect(cards[1]).toContain('and the docs')
     }, WAIT)
+    expect((await queuedCardTexts(identity.sessionId)).join('\n')).not.toContain('`check`')
     worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
     await host.flushStreamedEvents(identity.sessionId)
     await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
+    expect(turnText(worker.turns[1]!)).toContain('arrive next, one at a time')
     await settleTurn(identity.sessionId, 1)
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(3), WAIT)
+    expect(isWholeMail(turnText(worker.turns[2]!))).toBe(true)
+    expect(turnText(worker.turns[2]!)).toContain('and the docs')
+    await settleTurn(identity.sessionId, 2)
 
-    expect(turnText(worker.turns[1]!)).toContain('`check` command above')
-    expect(worker.turns.map(turnText).join('\n')).not.toContain('and the docs')
+    const followUp = getFollowUpDispatch(db, firstDispatchId)!
     await vi.waitFor(
-      () => expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toHaveLength(0),
+      () => expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([]),
       WAIT
     )
-    const followUp = getFollowUpDispatch(db, firstDispatchId)!
-    expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toMatchObject([
-      { body: 'and the docs' }
-    ])
+    expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
   })
 })
 

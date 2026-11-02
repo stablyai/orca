@@ -532,14 +532,10 @@ describe('the structured redrive publication edge', () => {
         await vi.advanceTimersByTimeAsync(300)
         expect(observe).not.toHaveBeenCalled()
         expect(create).not.toHaveBeenCalled()
-        expect(send).toHaveBeenCalledTimes(2)
-        expect(dispatch).toHaveBeenCalledTimes(1)
-        expect(dispatch.mock.calls[0]![0].body).toMatchObject({
-          kind: 'message',
-          role: 'user',
-          from: { orchestration: { message: 'mail-notice', mailbox, messages: [{ messageId }] } }
-        })
-        expect(state.db.getMessageById(messageId)?.delivered_at).not.toBeNull()
+        // Its Dispatch settled: the mail goes to a follow-up, never into the chat that finished it.
+        expect(send).toHaveBeenCalledTimes(1)
+        expect(dispatch).not.toHaveBeenCalled()
+        expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
       }
     }
   )

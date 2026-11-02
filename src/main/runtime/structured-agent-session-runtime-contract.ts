@@ -64,6 +64,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
+  /** See `StructuredAgentSessionHostDeps.queuedAgentMessageOwed`. */
+  queuedAgentMessageOwed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
   resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   /** Launch prep's sync for a probed home; see `CodexModelCatalogProbeDeps.prepareHome`. */
   prepareCodexCatalogProbeHome?: (homePath: string) => void

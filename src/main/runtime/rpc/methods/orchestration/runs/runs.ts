@@ -121,6 +121,8 @@ export const ORCHESTRATION_RUN_METHODS = [
       for (const runId of new Set([params.id, ...priorRuns.map((prior) => prior.id)])) {
         runtime.cancelMessageWaiters(`run:${runId}`)
       }
+      // The former coordinator's waiting report cards are the new one's mail now.
+      runtime.withdrawStaleChatMail()
       return { run: exposeRun(run) }
     }
   }),

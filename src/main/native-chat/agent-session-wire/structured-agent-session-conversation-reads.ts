@@ -13,6 +13,10 @@ import type {
 } from './structured-agent-session-host-types'
 import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
+import {
+  queuedSendAnswer,
+  structuredSendFacts
+} from './structured-agent-session-queued-send-answer'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -73,8 +77,13 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       return structuredAgentSessionCatalogScopeOwned(context().deps, params, session)
     }
   }))
+  const journalOf = async (id: string) => (await context().conversation(id)).journal
   return {
     readModelCatalog,
+    queuedSendAnswer: async (id: string, messageId: string) =>
+      queuedSendAnswer(await journalOf(id), messageId),
+    sendFacts: async (id: string, messageId: string) =>
+      structuredSendFacts(await journalOf(id), messageId),
     readCommands: (id: string, commandsOnRequest = false) =>
       context().readCommands(id, commandsOnRequest),
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>

@@ -15,9 +15,16 @@ import {
   contextStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork
 } from './structured-agent-session-current-work'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
+import {
+  QueuedMessageNotConsumableError,
+  QueuedMessageNotOwedError,
+  type QueuedMessageOwed
+} from '../agent-session-journal/queued-message-consume-error'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
-import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionHostDeps,
+  StructuredAgentSessionHostSession
+} from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   type AgentSessionTurnContext,
@@ -190,6 +197,17 @@ export async function maybeQueueStructuredAgentSessionSend(
   }
 }
 
+/** An agent's card asks whether it is still owed when it is handed over; a person's always is. */
+export function queuedMessageOwed(
+  deps: Pick<StructuredAgentSessionHostDeps, 'queuedAgentMessageOwed'>,
+  sessionId: string,
+  body: AgentJournalMessageItem
+): (() => QueuedMessageOwed) | undefined {
+  const { from } = body
+  const decide = deps.queuedAgentMessageOwed
+  return from?.kind === 'agent' && decide ? () => decide(sessionId, from) : undefined
+}
+
 export type QueuedMessageDrainDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
@@ -198,6 +216,7 @@ export type QueuedMessageDrainDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   wakeDelivery: (sessionId: string) => void
   submissionReceipt?: (sessionId: string) => JournalOperationReceipt
+  owed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
   logger: StructuredAgentSessionLogger
 }
 
@@ -265,6 +284,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
     }
     // Fresh submission IDs link drafts through queuedMessageId, never equality.
     const submissionId = createStructuredAgentSessionOperationId(randomUUID)
+    const owed = queuedMessageOwed({ queuedAgentMessageOwed: this.deps.owed }, sessionId, next.body)
     try {
       await journal.appendSubmission(
         {
@@ -277,11 +297,24 @@ export class StructuredAgentSessionQueuedMessageDrain {
           fence,
           handoverRecorded: true
         },
-        { messageId: next.messageId, expect: 'waiting', yieldsToPause: true },
+        {
+          messageId: next.messageId,
+          expect: 'waiting',
+          yieldsToPause: true,
+          ...(owed && { owed })
+        },
         this.deps.submissionReceipt?.(sessionId)
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
+        return
+      }
+      if (error instanceof QueuedMessageNotOwedError) {
+        // No longer owed here: drop it without a turn; its withdrawal commit wakes the next card.
+        // One that cannot be decided now waits at the head for a later wake.
+        if (error.owed === 'stale') {
+          await journal.queuedMessages.withdraw([next.messageId])
+        }
         return
       }
       // Persist failed conversion as a held waiting card; only explicit Send retries, avoiding loops.
