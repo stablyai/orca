@@ -158,7 +158,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       if (takeover === cancel) {
         takeover = null
       }
-      // Exhaustive: every outcome either hands the keys over or recovers them exactly once.
+      // Exhaustive (lint-enforced): every outcome either hands the keys over or recovers them once.
       switch (outcome) {
         case 'staged':
         case 'delivered':
@@ -168,10 +168,6 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
           return showHeldKeysNotice(draftAgent, content, 'not-sent')
         case 'unconfirmed':
           return showHeldKeysNotice(draftAgent, content, 'unconfirmed')
-        default: {
-          const unhandled: never = outcome
-          return unhandled
-        }
       }
     })
   }
