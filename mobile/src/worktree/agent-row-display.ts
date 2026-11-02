@@ -2,7 +2,7 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 import { agentVerdictDisplayMark } from '../../../src/shared/agent-main-agent-verdict'
 import { resolveDecayedAgentRowState } from '../../../src/shared/agent-row-decay-state'
-import { getAgentPromptLabel } from '../../../src/shared/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../src/shared/agent-row-primary-text'
 import { translate } from '../i18n/mobile-i18n'
 
 // Mirror desktop AgentStateDot vocabulary.
@@ -86,7 +86,7 @@ export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): st
   if (message) {
     return message
   }
-  const prompt = getAgentPromptLabel(row.prompt)
+  const prompt = getAgentRowPrimaryText({ prompt: row.prompt })
   if (prompt) {
     return prompt
   }
