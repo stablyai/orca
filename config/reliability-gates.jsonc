@@ -3307,7 +3307,7 @@
       "providers": ["local", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
+      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state. The test-value audit narrowed simulator-palette-search.test.ts to the recency tie, same-id host isolation, ambiguous legacy host rejection and oversized-input getter tripwire. Supplied timestamp, empty-query context ordering, host projection, alias/range, metadata matching, active-tab score, over-token/whitespace and malformed display-name fallback examples were removed. Their separate alarms are lost; retained candidate and activation contracts do not establish equivalent coverage. Historical run commands and results remain historical.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4965",
         "https://github.com/stablyai/orca/pull/15371"
@@ -3578,7 +3578,8 @@
         "The paired Electron simulator path seeds renderer state because remote web clients cannot launch a native emulator.",
         "The paired Electron journey proves a real host mirror stamp before injecting the same-id sibling state; it does not create the collision through the wire.",
         "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix.",
-        "The test-value audit removed the palette repository resolver examples and manual emulator local-provider routing assertion. Their historical alarms are no longer provided by these suites; the retained emulator cases cover narrower coordination boundaries. No equivalent coverage is claimed."
+        "The test-value audit removed the palette repository resolver examples and manual emulator local-provider routing assertion. Their historical alarms are no longer provided by these suites; the retained emulator cases cover narrower coordination boundaries. No equivalent coverage is claimed.",
+        "The test-value audit narrowed simulator-palette-search.test.ts to the recency tie, same-id host isolation, ambiguous legacy host rejection and oversized-input getter tripwire. Supplied timestamp, empty-query context ordering, host projection, alias/range, metadata matching, active-tab score, over-token/whitespace and malformed display-name fallback examples were removed. Their separate alarms are lost; retained candidate and activation contracts do not establish equivalent coverage. Historical run commands and results remain historical."
       ],
       "demotionRule": "Cannot promote if a same-id sibling tab duplicates, disappears, activates another host, or if ambiguous unstamped ownership is guessed."
     },
