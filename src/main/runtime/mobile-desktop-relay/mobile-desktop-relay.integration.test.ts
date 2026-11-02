@@ -711,7 +711,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       const originalStatus = host.runtime.getStatus.bind(host.runtime)
       const status = vi.spyOn(host.runtime, 'getStatus').mockImplementation(() => ({
         ...originalStatus(),
-        capabilities: originalStatus().capabilities.filter(
+        capabilities: (originalStatus().capabilities ?? []).filter(
           (value) => value !== GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
         )
       }))

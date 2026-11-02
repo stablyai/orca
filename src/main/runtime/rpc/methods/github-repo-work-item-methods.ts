@@ -105,16 +105,25 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
     name: 'github.workItemDetails',
     permission: 'workspace',
     params: WorkItemDetails,
-    handler: async (params, { runtime }) =>
-      runtime.getRepoWorkItemDetails(
-        params.repo,
-        params.number,
-        params.type,
-        ...(params.canonical !== undefined
-          ? ([params.ownerRepo, params.canonical] as const)
-          : params.ownerRepo
-            ? ([params.ownerRepo] as const)
-            : ([] as const))
-      )
+    handler: async (params, { runtime }) => {
+      if (params.canonical !== undefined) {
+        return runtime.getRepoWorkItemDetails(
+          params.repo,
+          params.number,
+          params.type,
+          params.ownerRepo,
+          params.canonical
+        )
+      }
+      if (params.ownerRepo) {
+        return runtime.getRepoWorkItemDetails(
+          params.repo,
+          params.number,
+          params.type,
+          params.ownerRepo
+        )
+      }
+      return runtime.getRepoWorkItemDetails(params.repo, params.number, params.type)
+    }
   })
 ]
