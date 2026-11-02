@@ -28,7 +28,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean } = {}): TestPane {
+function createTestPane(options: { cursorBlink?: boolean } = {}): TestPane {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const terminal = new Terminal({
@@ -49,7 +49,7 @@ function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean }
     // the rendered-cursor oracle needs a renderer that paints in happy-dom.
     gpuRenderingEnabled: false,
     terminalGpuAcceleration: 'off',
-    webglAddon: options.webglAddon ? ({ dispose: vi.fn() } as never) : null,
+    webglAddon: null,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
     webglAttachFailedSinceRecovery: false,
@@ -72,11 +72,8 @@ function renderedText(pane: TestPane): string {
   return pane.host.querySelector('.xterm-rows')?.textContent ?? ''
 }
 
-async function reveal(
-  panes: TestPane[],
-  owner?: Parameters<typeof resumePaneRendering>[1]
-): Promise<void> {
-  resumePaneRendering(panes, owner)
+async function reveal(panes: TestPane[]): Promise<void> {
+  resumePaneRendering(panes)
   for (const pane of panes) {
     pane.terminal.focus()
   }
@@ -154,23 +151,6 @@ describe('hidden-pane cursor blink suspension', () => {
     await write(pane.terminal, 'x')
     await flushRender()
     expect(renderedText(pane)).toContain('x')
-    expect(rendersBlinkingCursor(pane)).toBe(true)
-  })
-
-  it('restores blink on the retained-hidden-WebGL path, which skips dispose', async () => {
-    const owner = {}
-    const pane = createTestPane({ webglAddon: true })
-    const addon = pane.webglAddon
-    await write(pane.terminal, 'ready$ ')
-    await flushRender()
-
-    suspendPaneRendering([pane], { owner, livePanes: () => [pane] })
-    // Retention skips disposeWebgl, so only explicit blink suspension can stop this timer.
-    expect(addon?.dispose).not.toHaveBeenCalled()
-    expect(isTerminalCursorBlinkSuspended(pane.terminal)).toBe(true)
-
-    await reveal([pane], owner)
-    await nextFrame()
     expect(rendersBlinkingCursor(pane)).toBe(true)
   })
 

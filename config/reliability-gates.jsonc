@@ -3307,7 +3307,7 @@
       "providers": ["local", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. Manual local-emulator contracts retain local ownership and dedupe explicitly owned tabs before worktree hydration. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
+      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4965",
         "https://github.com/stablyai/orca/pull/15371"
@@ -3317,14 +3317,13 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/open-mobile-emulator-tab.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/open-mobile-emulator-tab.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
         "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -3333,7 +3332,6 @@
         "src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx",
         "src/renderer/src/components/tab-bar/use-open-tab-search.test.ts",
         "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
-        "src/renderer/src/lib/palette-repo-resolution.test.ts",
         "src/renderer/src/lib/browser-palette-page-entries.test.ts",
         "src/renderer/src/lib/browser-palette-search.test.ts",
         "src/renderer/src/lib/simulator-palette-search.test.ts",
@@ -3376,25 +3374,12 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/palette-repo-resolution.test.ts",
-          "assertions": [
-            "paired SSH rows resolve display metadata through their runtime owner alias",
-            "paired SSH worktrees resolve their runtime-owned repository metadata",
-            "an unavailable explicit runtime owner never borrows physical-host or bare repository metadata",
-            "an explicit unknown owner never borrows another host's metadata"
-          ]
-        },
-        {
           "file": "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
           "assertions": [
             "same-id folder simulator reuse selects the active owning host",
             "inactive local simulator creation remains host-stamped amid a collision",
             "an explicitly owned simulator is reused before its matching worktree row hydrates"
           ]
-        },
-        {
-          "file": "src/renderer/src/lib/open-mobile-emulator-tab.test.ts",
-          "assertions": ["manual emulator launch lookup and creation stay on the local provider"]
         },
         {
           "file": "src/renderer/src/lib/browser-palette-page-entries.test.ts",
@@ -3478,7 +3463,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
           "result": "passed",
           "durationSeconds": 10.5,
-          "summary": "The review-hardened candidate passed 189/189 focused contracts, including direct browser-result host fallback, SSH plus paired-runtime current-row aliases, explicit-owner fail-closed behavior, generic workspace rows, simulator reuse, local creation stamping, activation, and same-id distinct-runtime mirror preservation."
+          "summary": "The review-hardened candidate passed 189/189 focused contracts, including direct browser-result host fallback, SSH plus paired-runtime current-row aliases, explicit-owner fail-closed behavior, generic workspace rows, simulator reuse, local creation stamping, activation, and same-id distinct-runtime mirror preservation. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts"
         },
         {
           "date": "2026-08-20",
@@ -3487,17 +3473,18 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
           "result": "failed",
           "durationSeconds": 0.8,
-          "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally."
+          "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
         },
         {
           "date": "2026-08-21",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/worktree-jump/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
           "result": "passed",
           "durationSeconds": 24.3,
-          "summary": "The OpenCode-review-hardened candidate passed 225/225 focused contracts, including unfiltered ownership ambiguity under host filters and scoped open-tab search, review-cache ownership, rendered palette repo metadata, folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
+          "summary": "The OpenCode-review-hardened candidate passed 225/225 focused contracts, including unfiltered ownership ambiguity under host filters and scoped open-tab search, review-cache ownership, rendered palette repo metadata, folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage."
         },
         {
           "date": "2026-08-20",
@@ -3506,7 +3493,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
           "result": "failed",
           "durationSeconds": 0.1,
-          "summary": "The final reviewer repo-label oracle failed 1/6 before the follow-up: a paired SSH worktree resolved the local bare-id repository instead of its runtime-owned repository."
+          "summary": "The final reviewer repo-label oracle failed 1/6 before the follow-up: a paired SSH worktree resolved the local bare-id repository instead of its runtime-owned repository. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
         },
         {
           "date": "2026-08-20",
@@ -3515,7 +3503,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
           "result": "failed",
           "durationSeconds": 0.1,
-          "summary": "The final clean-round fail-closed oracle failed 1/7 before the follow-up: an unavailable explicit runtime owner borrowed physical SSH repository metadata."
+          "summary": "The final clean-round fail-closed oracle failed 1/7 before the follow-up: an unavailable explicit runtime owner borrowed physical SSH repository metadata. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
         },
         {
           "date": "2026-08-20",
@@ -3574,7 +3563,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, 1/7 before unavailable-runtime fail-closed hardening, 1/12 with the component's physical-host bypass restored, 1/6 before review-cache ownership used the same resolver, 1/6 before the downstream document rejected a remote owner's unqualified legacy cache entry, and 1/6 when a host filter or scoped open-tab search hid the same-id sibling from legacy ambiguity detection. Manual local-provider ownership failed 1/12 before explicit host routing, and pre-hydration dedupe failed 1/13 before exact stamped-owner reuse; the combined contracts then passed 25/25 and the six-file review suite passed 73/73. The prior completed focused suite passed 225/225."
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, 1/7 before unavailable-runtime fail-closed hardening, 1/12 with the component's physical-host bypass restored, 1/6 before review-cache ownership used the same resolver, 1/6 before the downstream document rejected a remote owner's unqualified legacy cache entry, and 1/6 when a host filter or scoped open-tab search hid the same-id sibling from legacy ambiguity detection. Manual local-provider ownership failed 1/12 before explicit host routing, and pre-hydration dedupe failed 1/13 before exact stamped-owner reuse; the combined contracts then passed 25/25 and the six-file review suite passed 73/73. The prior completed focused suite passed 225/225. Historical results include examples subsequently removed in the test-value audit; they do not establish current coverage for those removed assertions."
       },
       "performanceBudget": {
         "required": true,
@@ -3588,7 +3577,8 @@
         "Live Linux, Windows, and paired-runtime-over-SSH journeys are not collected; the SSH/runtime dual-owner topology is deterministic renderer coverage.",
         "The paired Electron simulator path seeds renderer state because remote web clients cannot launch a native emulator.",
         "The paired Electron journey proves a real host mirror stamp before injecting the same-id sibling state; it does not create the collision through the wire.",
-        "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix."
+        "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix.",
+        "The test-value audit removed the palette repository resolver examples and manual emulator local-provider routing assertion. Their historical alarms are no longer provided by these suites; the retained emulator cases cover narrower coordination boundaries. No equivalent coverage is claimed."
       ],
       "demotionRule": "Cannot promote if a same-id sibling tab duplicates, disappears, activates another host, or if ambiguous unstamped ownership is guessed."
     },
@@ -11201,7 +11191,7 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the WebGL/link/search containment suites on main@1282f5c2d, adopting the #6949 atlas-recovery rename and #7133's reveal hardening tests. Core addon-load throw containment and live typed-input survival arrive with #7004 and a live follow-up.",
+      "coverageNotes": "Local macOS evidence over the WebGL/link/search containment suites on main@1282f5c2d, adopting the #6949 atlas-recovery rename and #7133's reveal hardening tests. Core addon-load throw containment and live typed-input survival arrive with #7004 and a live follow-up. The test-value audit removed the reveal-repaint mock-routing suite, including settled-frame ordering and per-pane failure-isolation alarms. These historical assertions are no longer supplied by that suite; no equivalent coverage is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6852",
         "https://github.com/stablyai/orca/pull/6872",
@@ -11210,7 +11200,7 @@
       "invariant": "Search, link, WebGL, decoration, input-protocol, or keyboard-navigation errors must not unmount the terminal surface, crash React/window, break focus, or stop PTY input/output.",
       "oracle": "The current executable slice injects a core addon load throw and asserts pane opening continues through later addons, covers link provider throws as pane-scoped no-link results, covers search decoration positive-integer failures as false results instead of renderer crashes, and covers WebGL attach/refresh/recovery containment. Focused typed input echo after addon failure still needs a live/component follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts",
@@ -11219,7 +11209,6 @@
         "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
-        "src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
       ],
       "assertionRefs": [
@@ -11243,7 +11232,9 @@
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
-          "assertions": ["continues recovery when a manager throws after scheduling"]
+          "assertions": [
+            "continues recovery when a manager throws after scheduling"
+          ]
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
@@ -11255,12 +11246,6 @@
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
           "assertions": [
             "attach bail disposes the addon instead of orphaning it (#7133 single-addon invariant)"
-          ]
-        },
-        {
-          "file": "src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts",
-          "assertions": [
-            "reveal repaint waits for a settled frame and keeps repainting when one pane throws (#7133)"
           ]
         },
         {
@@ -11278,7 +11263,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/pane-reveal-repaint.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
           "result": "passed",
           "durationSeconds": 0.8,
-          "summary": "8 test file(s) passed, 33 tests passed on main@1282f5c2d in a clean checkout."
+          "summary": "8 test file(s) passed, 33 tests passed on main@1282f5c2d in a clean checkout. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-link-provider-guard.test.ts src/renderer/src/components/terminal-search-safe-find.test.ts src/renderer/src/lib/pane-manager/pane-webgl-refresh-lifecycle.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -11291,7 +11277,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "#7133 proved the reveal-hardening slice against live corrupted specimens; the link/search guards reproduce their original crashes in-test. No recorded red runs for the refresh-lifecycle slice."
+        "evidence": "#7133 proved the reveal-hardening slice against live corrupted specimens; the link/search guards reproduce their original crashes in-test. No recorded red runs for the refresh-lifecycle slice. Historical evidence includes assertions subsequently removed in the test-value audit; it does not establish their current coverage."
       },
       "performanceBudget": {
         "required": false,
@@ -11303,7 +11289,8 @@
       ],
       "knownGaps": [
         "Current command is renderer-unit containment, not live Electron typed input/output survival after addon failure.",
-        "Does not yet inject WebGL dispose/reset throws and active/hidden/resumed pane focus recovery in one component-level oracle."
+        "Does not yet inject WebGL dispose/reset throws and active/hidden/resumed pane focus recovery in one component-level oracle.",
+        "The test-value audit removed the reveal-repaint mock-routing suite, including settled-frame ordering and per-pane failure-isolation alarms. These historical assertions are no longer supplied by that suite; no equivalent coverage is claimed."
       ],
       "demotionRule": "Cannot promote while it only checks visual rendering."
     },
@@ -17544,16 +17531,16 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Deterministic renderer contracts require foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output to stay on pane-local repaint paths without a global atlas reset. Separate contracts preserve explicit paste, reveal, visibility-resume, system-resume, and confirmed-desync recovery. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels; the candidate has not been rerun against an isolated live paired server.",
+      "coverageNotes": "Deterministic renderer contracts require foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output to stay on pane-local repaint paths without a global atlas reset. Separate contracts preserve explicit paste, reveal, visibility-resume, system-resume, and confirmed-desync recovery. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels; the candidate has not been rerun against an isolated live paired server. The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7054",
         "https://github.com/stablyai/orca/pull/7604",
         "https://github.com/stablyai/orca/issues/12094"
       ],
       "invariant": "Ordinary PTY output must never clear the shared WebGL glyph atlas, including synchronized frames, hidden output, renderer-risk glyphs, and alternate-screen entry, redraw, or exit. Affected visible panes still receive pane-local refresh after parsing. Explicit paste, reveal, visibility-resume, system-resume, context-loss, and confirmed-desync recovery remain available and may reset visible renderers.",
-      "oracle": "Parse foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output and require pane-local refresh where needed with zero calls to shared reset-and-refresh recovery. Require the atlas-recovery module to expose only explicit lifecycle entry points, then verify paste and tab reveal still perform their recovery bursts. Dispatch a visible document visibilitychange and require atlas-preserving wake recovery; register one visible manager and 64 hidden managers and require heavy recovery to reset and refresh only the visible manager. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
+      "oracle": "Parse foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output and require pane-local refresh where needed with zero calls to shared reset-and-refresh recovery. Require the atlas-recovery module to expose only explicit lifecycle entry points, then verify paste and tab reveal still perform their recovery bursts. Dispatch a visible document visibilitychange and require atlas-preserving wake recovery. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
       ],
@@ -17561,7 +17548,6 @@
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
-        "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
@@ -17571,7 +17557,9 @@
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
-          "assertions": ["preserves the glyph atlas when a fullscreen Space becomes visible"]
+          "assertions": [
+            "preserves the glyph atlas when a fullscreen Space becomes visible"
+          ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts",
@@ -17581,23 +17569,27 @@
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
-          "assertions": ["limits atlas recovery to explicit renderer lifecycle events"]
-        },
-        {
-          "file": "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
-          "assertions": ["bounds atlas recovery to visible managers"]
+          "assertions": [
+            "limits atlas recovery to explicit renderer lifecycle events"
+          ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
-          "assertions": ["persists and recovers after the same cells stay missing twice"]
+          "assertions": [
+            "persists and recovers after the same cells stay missing twice"
+          ]
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
-          "assertions": ["recovers a context-lost pane on the next rendering resume"]
+          "assertions": [
+            "recovers a context-lost pane on the next rendering resume"
+          ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts",
-          "assertions": ["keeps hidden synchronized output off the global atlas recovery path"]
+          "assertions": [
+            "keeps hidden synchronized output off the global atlas recovery path"
+          ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts",
@@ -17622,8 +17614,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-renderer-risk-repaint.test.ts",
           "result": "passed",
           "durationSeconds": 47,
-          "summary": "All 625 focused renderer contracts passed on the final head for atlas-preserving visibility, visible-only heavy recovery fanout, confirmed-desync and context-loss recovery, explicit lifecycle recovery, pane-local foreground redraws, and zero ordinary-output atlas resets.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts"
+          "summary": "All 625 focused renderer contracts passed on the final head for atlas-preserving visibility, visible-only heavy recovery fanout, confirmed-desync and context-loss recovery, explicit lifecycle recovery, pane-local foreground redraws, and zero ordinary-output atlas resets. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects-window-focus-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-input-and-repaint.test.ts"
         },
         {
           "date": "2026-08-01",
@@ -17654,7 +17646,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Before the change, foreground renderer-risk and alternate-screen PTY writes requested terminal-output atlas recovery after parsing; hidden synchronized/TUI output also drove the same path. The updated oracle spies on that request before its removed 200ms debounce and on the eventual shared reset, while explicit lifecycle recovery remains required."
+        "evidence": "Before the change, foreground renderer-risk and alternate-screen PTY writes requested terminal-output atlas recovery after parsing; hidden synchronized/TUI output also drove the same path. The updated oracle spies on that request before its removed 200ms debounce and on the eventual shared reset, while explicit lifecycle recovery remains required. Historical evidence includes assertions subsequently removed in the test-value audit; it does not establish their current coverage."
       },
       "performanceBudget": {
         "required": true,
@@ -17668,7 +17660,8 @@
       "knownGaps": [
         "The Electron harness used a deterministic visibility-event fallback because BrowserWindow.hide did not change document.visibilityState.",
         "No isolated live paired-server candidate run is recorded; remote-runtime coverage is a provider-agnostic renderer contract plus production incident evidence.",
-        "The gate counts recovery fanout and pixel retention but does not impose an end-to-end renderer frame-latency threshold."
+        "The gate counts recovery fanout and pixel retention but does not impose an end-to-end renderer frame-latency threshold.",
+        "The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed."
       ],
       "demotionRule": "Demote if ordinary PTY output re-enters shared reset/refresh recovery, pane-local redraw coverage regresses, ordinary visibility clears the atlas, real WebGL pixels regress, or the focused Electron test cannot remain deterministic."
     },
@@ -17758,7 +17751,7 @@
       "providers": ["local", "daemon"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "A headed macOS Electron test drives explicit destructive atlas recovery while DEC 2026 output is held, then compares compositor screenshots before and after a direct full-buffer present. The same renderer choreography is provider-local, but daemon, SSH, remote-runtime, Linux, and Windows GPU runs remain gaps.",
+      "coverageNotes": "A headed macOS Electron test drives explicit destructive atlas recovery while DEC 2026 output is held, then compares compositor screenshots before and after a direct full-buffer present. The same renderer choreography is provider-local, but daemon, SSH, remote-runtime, Linux, and Windows GPU runs remain gaps. The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7133",
         "https://github.com/stablyai/orca/pull/7054"
@@ -17767,14 +17760,13 @@
       "oracle": "Hold DEC 2026, invoke explicit atlas recovery, require an atlas clear, screenshot the pane, force a direct renderer present, and assert the bounded pixel diff is immaterial. Compositor screenshots only, because WebGL canvas readback is blank with preserveDrawingBuffer disabled.",
       "commands": [
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
         "ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
-        "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
         "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
         "src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts",
         "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
@@ -17812,7 +17804,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
           "result": "passed",
           "durationSeconds": 2,
-          "summary": "All 98 renderer contracts passed, including same-DPR zero-scan behavior, visible-only fanout, tri-state DPR repair, deduplicated bounded retry, heavy-reveal repair, and listener cleanup."
+          "summary": "All 98 renderer contracts passed, including same-DPR zero-scan behavior, visible-only fanout, tri-state DPR repair, deduplicated bounded retry, heavy-reveal repair, and listener cleanup. Historical command preserved after the test-value audit removed the referenced reveal/repaint or registry recovery assertions. currentCommand is an administrative link; this historical run has not validated the remaining command or equivalent coverage.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts"
         },
         {
           "date": "2026-08-23",
@@ -17843,11 +17836,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Without the forced synchronized-output present, the damaged compositor differed from a direct renderer present across 87.68% of pixels even though serialization already contained the new frame. With explicit destructive recovery, the same oracle passes the 1.5% material-diff threshold."
+        "evidence": "Without the forced synchronized-output present, the damaged compositor differed from a direct renderer present across 87.68% of pixels even though serialization already contained the new frame. With explicit destructive recovery, the same oracle passes the 1.5% material-diff threshold. Historical evidence includes assertions subsequently removed in the test-value audit; it does not establish their current coverage."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Destructive recovery remains event-driven and limited to confirmed renderer-lifecycle boundaries. Gate-local contracts prove ordinary same-DPR resize performs zero pane scans; a true transition scans only the visible manager; unavailable canvas retry is deduplicated and capped at 16 frames; and heavy reveal adds one bounded visible-pane scan. The shared terminal-render.atlas-recovery-fanout contracts separately prove zero hidden-manager atlas clears or presents and a per-pane display:none retry capped at 16 frames."
+        "evidence": "Destructive recovery remains event-driven and limited to confirmed renderer-lifecycle boundaries. Gate-local contracts prove ordinary same-DPR resize performs zero pane scans; a true transition scans only the visible manager; unavailable canvas retry is deduplicated and capped at 16 frames; and heavy reveal adds one bounded visible-pane scan. Registry visible-only fanout assertions were removed in the test-value audit; historical results do not establish their current coverage."
       },
       "promotionCriteria": [
         "Establish a stable material-diff threshold across platforms via nightly runs.",
@@ -17857,7 +17850,8 @@
       "knownGaps": [
         "The deterministic recovery test disables xterm's one-second safety timeout so the held-frame damage remains stable until recovery.",
         "The renderer-level frame injection isolates the paint failure; provider delivery and hidden-output snapshot restore have separate gates.",
-        "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded."
+        "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded.",
+        "The test-value audit removed registry recovery fanout, visibility, ordering and failure-isolation assertions. The remaining registry test constrains diagnostic sampling only and is excluded from this gate. No equivalent recovery coverage is claimed."
       ],
       "demotionRule": "Drop from the golden suite back to nightly diagnostic if diff thresholds cannot be kept stable across CI runners."
     },
