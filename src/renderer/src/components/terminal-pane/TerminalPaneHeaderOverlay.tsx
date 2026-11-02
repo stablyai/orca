@@ -46,6 +46,8 @@ type TerminalPaneHeaderOverlayProps = {
   onShowTerminal?: () => void
   /** Offers the tab menu's "Switch to Chat" for the active pane's own conversation. */
   canResumeInNewNativeChat?: boolean
+  /** The pane's agent runs but hasn't reported its conversation yet: the switch shows disabled. */
+  resumeInChatConversationUnknown?: boolean
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
@@ -85,6 +87,7 @@ export default function TerminalPaneHeaderOverlay({
   canShowTerminal,
   onShowTerminal,
   canResumeInNewNativeChat,
+  resumeInChatConversationUnknown,
   canContinueAgentSessionInNewSession,
   onContinueAgentSessionInNewSession,
   onSplitPane,
@@ -263,6 +266,7 @@ export default function TerminalPaneHeaderOverlay({
                       tabId={tabId}
                       worktreeId={worktreeId}
                       paneKey={makePaneKey(tabId, pane.leafId)}
+                      conversationUnknown={resumeInChatConversationUnknown}
                     />
                   ) : null}
                   {showAlwaysOnHeaders && showSplitButton ? (

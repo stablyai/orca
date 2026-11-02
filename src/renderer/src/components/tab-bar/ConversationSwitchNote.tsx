@@ -6,6 +6,7 @@ import {
   type ConversationSwitchSurface
 } from '@/lib/conversation-switch-state'
 import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 /**
  * What a switch is doing while its source still shows (Brennan 11-01: "users may not be switched
@@ -46,13 +47,28 @@ export function ConversationSwitchNote({
   )
 }
 
-/** The note on a terminal pane being switched, in that pane, whichever pane is active. */
-export function ConversationSwitchNotePortal({
-  paneKey,
-  container
+/** The note on each terminal pane being switched, whichever pane is active. A pane showing its
+ *  stopped state already says what happened, so it shows one notice at a time. */
+export function ConversationSwitchNotePortals({
+  tabId,
+  panes,
+  stoppedPaneIds
 }: {
-  paneKey: string
-  container: HTMLElement
+  tabId: string
+  panes: readonly { id: number; leafId: string; container: HTMLElement }[]
+  stoppedPaneIds: Readonly<Record<number, unknown>>
 }): React.JSX.Element {
-  return createPortal(<ConversationSwitchNote surface={{ paneKey }} />, container)
+  return (
+    <>
+      {panes.map((pane) =>
+        stoppedPaneIds[pane.id]
+          ? null
+          : createPortal(
+              <ConversationSwitchNote surface={{ paneKey: makePaneKey(tabId, pane.leafId) }} />,
+              pane.container,
+              `switch-note-${pane.id}`
+            )
+      )}
+    </>
+  )
 }

@@ -27,13 +27,18 @@ import { resolvePaneHeaderSwitchOffer } from '../tab-bar/tab-session-history-swi
 /**
  * The agent the header's switch offers for: the live one only, since launch and title hints
  * outlive the agent's exit. A pane a failed switch stopped keeps the control its failure message
- * points to ("Use Switch to Chat UI to try again").
+ * points to ("Use Switch to Chat UI to try again"), for the conversation it stopped.
  */
 export function paneHeaderSwitchAgent(
   detected: string | undefined,
   processExit: PaneProcessExit | undefined
-): string | null {
-  return detected ?? (processExit?.reason === 'switch-stopped' ? (processExit.agent ?? null) : null)
+): { agent: string; stopped: boolean } | null {
+  if (detected) {
+    return { agent: detected, stopped: false }
+  }
+  return processExit?.reason === 'switch-stopped' && processExit.agent
+    ? { agent: processExit.agent, stopped: true }
+    : null
 }
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
@@ -188,7 +193,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const activeLeafId = activePane?.leafId ?? null
   // One subscription for both reads keeps the pane inside its store listener budget.
-  const activeLiveAgent = paneHeaderSwitchAgent(
+  const activeSwitchAgent = paneHeaderSwitchAgent(
     activeLeafId ? tabAgentTypeByLeaf[activeLeafId] : undefined,
     activePane ? paneProcessExitsByPaneId[activePane.id] : undefined
   )
@@ -204,7 +209,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
           ? resolvePaneHeaderSwitchOffer(state, {
               worktreeId,
               paneKey: makePaneKey(tabId, activeLeafId),
-              liveAgent: activeLiveAgent
+              liveAgent: activeSwitchAgent?.agent ?? null,
+              stopped: activeSwitchAgent?.stopped
             })
           : null
     }))

@@ -118,3 +118,23 @@ it('shows disabled while the agent has not reported its conversation yet', async
   fireEvent.click(button)
   expect(mocks.run).not.toHaveBeenCalled()
 })
+
+// R146-4: a fresh agent in the pane never offers a conversation remembered from an earlier run.
+it('stays disabled while the running agent has no conversation, even with one remembered', () => {
+  render(
+    <TooltipProvider delayDuration={0}>
+      <TerminalPaneResumeInChatButton
+        tabId="tab-1"
+        worktreeId="wt-1"
+        paneKey="tab-1:leaf"
+        conversationUnknown
+      />
+    </TooltipProvider>
+  )
+  const button = screen.getByRole('button', {
+    name: 'Switch to Chat UI. No saved conversation is available in this terminal yet.'
+  })
+  expect(button.hasAttribute('disabled')).toBe(true)
+  fireEvent.click(button)
+  expect(mocks.run).not.toHaveBeenCalled()
+})

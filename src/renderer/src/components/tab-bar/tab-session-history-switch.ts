@@ -4,8 +4,7 @@ import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   collectAgentPaneConversations,
-  resolvePaneAgentConversation,
-  resolvePaneLastAgentConversation
+  resolvePaneAgentConversation
 } from '@/lib/ai-vault-tab-title-requests'
 import {
   isAiVaultSessionResumableContent,
@@ -13,14 +12,9 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  type ExecutionHostScope
-} from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostScope } from '../../../../shared/execution-host'
 import {
   adoptsCliConversations,
-  CLI_CONVERSATION_ADOPTING_AGENTS,
   cliConversationRowsShareAgent,
   type CliConversationRowAgent
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
@@ -42,11 +36,8 @@ import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault
 import { resolveAiVaultHostScopeDefaults } from '../right-sidebar/ai-vault-host-scope'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault-session-refresh'
-import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session-launch-plan'
-import { resolveHostCapabilities } from '@/lib/agent-launch-route-input'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
+import { canHostOfferTabSessionMove } from './pane-resume-in-chat-offer'
 
 /** Find native chats by Orca session ID and terminal tabs by their provider conversation. */
 export type TabSessionHistorySubject = {
@@ -67,92 +58,13 @@ export type TabSessionSwitch = {
   worktreeId: string
 }
 
-/** Skips lookups on hosts where the row's gate can never pass, so no remote scan runs for nothing. */
-function canHostOfferTabSessionMove(hostScope: ExecutionHostScope): boolean {
-  if (hostScope === LOCAL_EXECUTION_HOST_ID) {
-    return true
-  }
-  return parseExecutionHostId(hostScope)?.kind === 'runtime'
-}
-
-/** Null when the pane has nothing to move; `host-update-required` when its host predates chat resume. */
-export type PaneResumeInNewChatOffer = 'available' | 'host-update-required' | null
-
-/** The pane's known identity and launch route, without a History request. */
-export function resolvePaneResumeInNewChatOffer(
-  state: AppState,
-  pane: { worktreeId: string; paneKey: string }
-): PaneResumeInNewChatOffer {
-  const conversation = resolvePaneLastAgentConversation(state, pane, adoptsCliConversations)
-  if (!conversation) {
-    return null
-  }
-  if (!canChatRunAgentIn(state, conversation.worktreeId, conversation.agent)) {
-    return null
-  }
-  if (conversation.executionHostId === LOCAL_EXECUTION_HOST_ID) {
-    return 'available'
-  }
-  // Older hosts' create schemas reject resumeFrom; unverified capabilities offer nothing yet.
-  const capabilities = resolveHostCapabilities(state, conversation.executionHostId)
-  if (!capabilities) {
-    return null
-  }
-  return capabilities.includes(STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY)
-    ? 'available'
-    : 'host-update-required'
-}
-
-/** The row gate's launch-route half, so a project the chat route refuses (WSL, repair) hides it. */
-function canChatRunAgentIn(
-  state: AppState,
-  worktreeId: string,
-  agent: CliConversationRowAgent
-): boolean {
-  const hostScope = resolveAiVaultHostScopeDefaults(
-    getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId),
-    worktreeId
-  ).defaultExecutionHostScope
-  return (
-    canHostOfferTabSessionMove(hostScope) &&
-    CLI_CONVERSATION_ADOPTING_AGENTS[agent].some((adopting) =>
-      structuredAgentSessionLaunchFeasible(state, {
-        agent: adopting,
-        workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
-        settings: state.settings
-      })
-    )
-  )
-}
-
-/** The pane header's switch: `conversation-unknown` while the agent hasn't reported one yet. */
-export type PaneHeaderSwitchOffer = PaneResumeInNewChatOffer | 'conversation-unknown'
-
-/**
- * Shown while the pane runs an agent Chat UI can take over, where Chat UI can run, as Hand Off
- * shows for any agent (Brennan 11-01); disabled until the agent's conversation is known. Keyed on
- * the live agent alone, so a pane back at its shell offers nothing, even with a remembered
- * conversation (Session History still reaches it).
- */
-export function resolvePaneHeaderSwitchOffer(
-  state: AppState,
-  pane: { worktreeId: string; paneKey: string; liveAgent: string | null }
-): PaneHeaderSwitchOffer | null {
-  if (!adoptsCliConversations(pane.liveAgent)) {
-    return null
-  }
-  if (!canChatRunAgentIn(state, pane.worktreeId, pane.liveAgent)) {
-    return null
-  }
-  return resolvePaneResumeInNewChatOffer(state, pane) ?? 'conversation-unknown'
-}
-
-export function canPaneOfferResumeInNewChat(
-  state: AppState,
-  pane: { worktreeId: string; paneKey: string }
-): boolean {
-  return resolvePaneResumeInNewChatOffer(state, pane) !== null
-}
+export {
+  canPaneOfferResumeInNewChat,
+  resolvePaneHeaderSwitchOffer,
+  resolvePaneResumeInNewChatOffer,
+  type PaneHeaderSwitchOffer,
+  type PaneResumeInNewChatOffer
+} from './pane-resume-in-chat-offer'
 
 /** A native chat tab's session and the provider recorded when it was created. */
 export type NativeChatTabSession = {

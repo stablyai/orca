@@ -32,7 +32,7 @@ import { useAppStore } from '@/store'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useWslHostStartCardReplacesPaneError } from './use-wsl-host-stopped-pane'
-import { ConversationSwitchNotePortal } from '../tab-bar/ConversationSwitchNote'
+import { ConversationSwitchNotePortals } from '../tab-bar/ConversationSwitchNote'
 
 export function TerminalPaneSurface({
   controller
@@ -77,6 +77,7 @@ export function TerminalPaneSurface({
     isTabPinned,
     keybindings,
     managedPanes,
+    paneProcessExitsByPaneId,
     managerRef,
     menuAgentSessionId,
     menuPaneHasCustomTitle,
@@ -196,13 +197,11 @@ export function TerminalPaneSurface({
         />
       ))}
       <TerminalPaneCodexRestartPortals controller={controller} />
-      {managedPanes.map((pane) => (
-        <ConversationSwitchNotePortal
-          key={`switch-note-${pane.id}`}
-          paneKey={makePaneKey(tabId, pane.leafId)}
-          container={pane.container}
-        />
-      ))}
+      <ConversationSwitchNotePortals
+        tabId={tabId}
+        panes={managedPanes}
+        stoppedPaneIds={paneProcessExitsByPaneId}
+      />
       <AgentLaunchPaneNoticePortal
         refusal={visibleLaunchRefusal}
         agentId={activeAgentId}
@@ -372,6 +371,7 @@ export function TerminalPaneSurface({
         canShowTerminal={activePaneIsChatLeaf}
         onShowTerminal={handleToggleNativeChat}
         canResumeInNewNativeChat={activePaneSwitchOffer !== null}
+        resumeInChatConversationUnknown={activePaneSwitchOffer === 'conversation-unknown'}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)

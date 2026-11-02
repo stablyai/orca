@@ -17,17 +17,21 @@ import {
 export function TerminalPaneResumeInChatButton({
   tabId,
   worktreeId,
-  paneKey
+  paneKey,
+  conversationUnknown = false
 }: {
   tabId: string
   worktreeId: string
   paneKey: string
+  /** The running agent hasn't reported its conversation: a remembered one is never offered. */
+  conversationUnknown?: boolean
 }): React.JSX.Element | null {
-  const source = useAppStore(
+  const resolved = useAppStore(
     useShallow((state) =>
       resolveCliChatResumeSource(state, { tab: { id: tabId, worktreeId }, paneKey })
     )
   )
+  const source = conversationUnknown ? null : resolved
   const capability = useCliChatResumeCapability(worktreeId, source?.agent)
   const readiness = useConversationSwitchReadiness(
     source ? { direction: 'chat', ...source, source } : null

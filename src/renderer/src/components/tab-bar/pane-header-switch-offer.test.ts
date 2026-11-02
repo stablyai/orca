@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import { useAppStore } from '@/store'
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import { paneHeaderSwitchAgent } from '../terminal-pane/use-terminal-pane-projection'
 import {
@@ -39,12 +40,12 @@ const paneGate = (state: AppState, paneKey: string) =>
 // The header's switch follows Hand Off (Brennan 11-01): shown for a live agent Chat UI can take
 // over, disabled until its conversation is known, hidden once the pane is back at its shell.
 describe('the pane header switch', () => {
-  const headerOffer = (state: AppState, liveAgent: string | null) =>
-    resolvePaneHeaderSwitchOffer(state, {
-      worktreeId: WORKTREE_ID,
-      paneKey: claudePane,
-      liveAgent
-    })
+  const headerOffer = (
+    state: AppState,
+    liveAgent: string | null,
+    stopped = false,
+    paneKey = claudePane
+  ) => resolvePaneHeaderSwitchOffer(state, { worktreeId: WORKTREE_ID, paneKey, liveAgent, stopped })
 
   it('is enabled for a live agent whose conversation is known', () => {
     expect(headerOffer(makeState(liveClaudeEntry), 'claude')).toBe('available')
@@ -69,12 +70,51 @@ describe('the pane header switch', () => {
     expect(headerOffer(state, null)).toBeNull()
   })
 
+  // A conversation remembered from an earlier run in this pane, after that agent exited.
+  const leaf = '11111111-1111-4111-8111-111111111111'
+  const remembered = `term-1:${leaf}`
+  const rememberedOnly = (): AppState => {
+    makeState()
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: null,
+          activeLeafId: leaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leaf]: 'pty-1' }
+        }
+      }
+    })
+    const store = () => useAppStore.getState()
+    store().setAgentStatus(
+      remembered,
+      { state: 'done', prompt: 'hi', agentType: 'claude' },
+      undefined,
+      undefined,
+      { tabId: 'term-1', worktreeId: WORKTREE_ID },
+      { providerSession: { key: 'session_id', id: 'claude-session-1' } }
+    )
+    store().removeAgentStatus(remembered)
+    return store()
+  }
+
+  it('never offers an earlier run\u2019s conversation for a new agent in the pane', () => {
+    const state = rememberedOnly()
+    expect(paneGate(state, remembered)).toBe(true)
+    expect(headerOffer(state, 'claude', false, remembered)).toBe('conversation-unknown')
+    expect(headerOffer(state, 'codex', false, remembered)).toBe('conversation-unknown')
+  })
+
   it('stays on a pane a failed switch stopped, which its failure message points to', () => {
     const exit = { paneId: 1, exitCode: 0, startup: { command: '' }, agent: 'claude' as const }
     const stopped = paneHeaderSwitchAgent(undefined, { ...exit, reason: 'switch-stopped' })
-    expect(headerOffer(makeState(liveClaudeEntry), stopped)).toBe('available')
+    expect(stopped).toEqual({ agent: 'claude', stopped: true })
+    expect(headerOffer(rememberedOnly(), stopped!.agent, stopped!.stopped, remembered)).toBe(
+      'available'
+    )
     expect(paneHeaderSwitchAgent(undefined, { ...exit, reason: 'process-failed' })).toBeNull()
     expect(paneHeaderSwitchAgent(undefined, undefined)).toBeNull()
+    expect(paneHeaderSwitchAgent('codex', undefined)).toEqual({ agent: 'codex', stopped: false })
   })
 
   it('hides for an agent Chat UI cannot take over, and where Chat UI cannot run', () => {
