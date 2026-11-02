@@ -17,6 +17,8 @@ export const PLUGIN_PANEL_BRIDGE_SINCE = PLUGIN_PANEL_UI_SINCE
 export const PLUGIN_EDITOR_FRAME_SINCE = '1.4.248'
 /** First release that runs `contributes.hooks` and `orca.hooks.on`. */
 export const PLUGIN_HOOKS_SINCE = '1.4.248'
+/** Workers act on workspaces, terminals and agents: `workspace:write`, `terminal:read`, `agent:launch`. */
+export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
 
 type PluginFieldDoc = {
   description: string

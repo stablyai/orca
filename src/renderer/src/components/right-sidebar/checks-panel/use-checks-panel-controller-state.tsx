@@ -90,12 +90,18 @@ export function useChecksPanelControllerState() {
   )
 
   const [checks, setChecksState] = useState<PRCheckDetail[]>([])
+  // The GitLab parent pipeline from the same reply as its jobs; every other checks write clears it.
+  const [gitLabPipelineCheck, setGitLabPipelineCheck] = useState<PRCheckDetail | null>(null)
   // Distinguish failed reads from No checks configured.
   const [checksError, setChecksError] = useState<string | null>(null)
-  const setChecks = useCallback((next: SetStateAction<PRCheckDetail[]>) => {
-    setChecksError(null)
-    setChecksState(next)
-  }, [])
+  const setChecks = useCallback(
+    (next: SetStateAction<PRCheckDetail[]>, pipelineCheck: PRCheckDetail | null = null) => {
+      setChecksError(null)
+      setChecksState(next)
+      setGitLabPipelineCheck(pipelineCheck)
+    },
+    []
+  )
   const [checksLoading, setChecksLoading] = useState(false)
   const [comments, setCommentsState] = useState<PRComment[]>([])
   const [commentsError, setCommentsError] = useState<string | null>(null)
@@ -290,6 +296,7 @@ export function useChecksPanelControllerState() {
     resolveReviewThread,
     detectedAgentIds,
     checks,
+    gitLabPipelineCheck,
     setChecks,
     checksLoading,
     setChecksLoading,

@@ -24,9 +24,11 @@ export type PluginWorkerPanelRequest = {
 
 export type PluginWorkerLogSink = (level: 'info' | 'warn' | 'error', line: string) => void
 
+/** `signal` aborts once the worker cancels the call or goes away. */
 export type PluginWorkerHostCallExecutor = (
   method: string,
-  params: unknown
+  params: unknown,
+  signal?: AbortSignal
 ) => Promise<PluginHostCallOutcome>
 
 export type PluginWorkerHandle = {

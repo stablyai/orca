@@ -111,19 +111,23 @@ fingerprint Orca did not give you. New capabilities or changed commands print a 
 - A worker's `main` must `export default function activate(orca)`.
 - A worker save restarts the worker and drops its in-memory state; keep counters and caches you need across saves in `orca.storage`.
 - A plugin holds at most 2,000 files and 50 MiB; each transpiled file 1 MiB.
+- Custom editors: sync with `orca.document.session()`. `plugin check` fails on an editor's syntax
+  errors, missing files and refused imports without running it (and warns on `eval`); test its
+  sync in Node with `mockEditorHost({ text })` from `orca/testing` (`replace`, `conflictNext`,
+  `flush`, `edits`).
 
 ## Conditional references
 
 Run `ORCA skills get orca-plugin-authoring --reference references/<file>.md` and read only what you
 need (`--references` lists them; `--full` if `--reference` is rejected).
 
-| Read when                                                            | Reference                  |
-| -------------------------------------------------------------------- | -------------------------- |
-| Reading `dev watch` events; shots, `open`, `dev emit`; test examples | `references/workflow.md`   |
-| The full test kit: `mount`, `mountWorker`, `mockHost`, every act     | `references/testing.md`    |
-| A worker panel, storage, settings; agent status; events; hooks       | `references/recipes.md`    |
-| Writing a components panel: components, props, atoms, `host`         | `references/components.md` |
-| Calling the host from a worker, frame or panel; capabilities         | `references/host-api.md`   |
-| Subscribing to worker, frame or panel events and their payloads      | `references/events.md`     |
-| Writing or fixing `orca-plugin.json`, choosing `engines.orca`        | `references/manifest.md`   |
-| Running any `ORCA plugin` command you have not used in this task     | `references/cli.md`        |
+| Read when                                                                            | Reference                  |
+| ------------------------------------------------------------------------------------ | -------------------------- |
+| Reading `dev watch` events; shots, `open`, `dev emit`; test examples                 | `references/workflow.md`   |
+| The full test kit: `mount`, `mountWorker`, `mockHost`, every act                     | `references/testing.md`    |
+| A worker panel, storage, settings; agent status; events; hooks; a rich custom editor | `references/recipes.md`    |
+| Writing a components panel: components, props, atoms, `host`                         | `references/components.md` |
+| Calling the host from a worker, frame or panel; capabilities                         | `references/host-api.md`   |
+| Subscribing to worker, frame or panel events and their payloads                      | `references/events.md`     |
+| Writing or fixing `orca-plugin.json`, choosing `engines.orca`                        | `references/manifest.md`   |
+| Running any `ORCA plugin` command you have not used in this task                     | `references/cli.md`        |
