@@ -12,7 +12,19 @@ import { registerSessionHandlers } from '../../src/main/ipc/session'
 import * as worktreeIdentity from '../../src/shared/worktree/id'
 import * as tabMerge from '../../src/main/runtime/mobile-session-tab-merge'
 import * as recordRows from '../../src/main/runtime/agent-session/records/agent-session-record-rows'
+import * as storeDraft from '../../src/main/runtime/agent-session/records/agent-session-store-draft'
+import * as attribution from '../../src/main/runtime/agent-session/agent-session-runtime-attribution'
+import { sessionCrewChanges } from '../../src/main/runtime/orchestration/crew/crew-changes'
+import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
 import type { Tab } from '../../src/shared/tab-types'
+import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
+import type { ProfileStateDomainReplacement } from '../../src/main/persistence/loading-store/profile-state-authority'
+import * as placement from '../../src/main/runtime/session-tabs/structured-session-placement'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../src/shared/runtime-types'
+import { collectionVisits } from '../../src/main/runtime/collection-visits.test-fixture'
 import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
 import {
   retired,
@@ -20,7 +32,8 @@ import {
   windowFrame,
   notes,
   resultAt,
-  ids
+  ids,
+  recordQueries
 } from './structured-session-placement.test-fixture'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
@@ -41,6 +54,9 @@ vi.mock('electron', async (original) => ({
 
 const chatIds = (prefix: string, n: number) =>
   Array.from({ length: n }, (_, i) => `${prefix}-${i.toString().padStart(5, '0')}`)
+// Per-phase budget for the graph contract: visits/lookups per listed chat, plus a fixed cost.
+const GRAPH_PER_CHAT = 40
+const GRAPH_FIXED = 400
 const linear = (tally: Record<string, number[]>) => {
   for (const [key, [small, large]] of Object.entries(tally)) {
     expect([key, large]).toEqual([key, expect.any(Number)])
@@ -56,66 +72,134 @@ it.each([20, 200])(
     const tally = graphTally
     const others = chatIds('other', n)
     const listed = [B, C, ...others]
-    const rig = await retired([C, ...others], listed)
+    // N unrelated readable chats elsewhere, which no graph or query here names.
+    const rig = await retired([C, ...others], listed, { unrelated: chatIds('unrelated', n) })
     attachWindow(rig)
     rig.runtime.mobileSessionTabsByWorktree.delete(rig.old)
     await rig.runtime.restoreStructuredAgentSessionTabs()
     await chatTabCommandsSettled()
-    const records = vi.spyOn(rig.store, 'getRecord')
-    const readability = vi.spyOn(rig.store, 'isSessionUnreadable')
     const identities = vi.spyOn(worktreeIdentity, 'worktreeIdsEqual')
     const rows = vi.spyOn(tabMerge, 'getMobileSessionSnapshotTabIdentityKeys')
-    let published = 0
-    rig.runtime.onMobileSessionTabsChanged(() => published++)
-    const phase = (name: string, run: () => void) => {
-      for (const spy of [records, readability, identities, rows]) {
-        spy.mockClear()
+    // One subscriber, as one phone: what each settled notification delivers.
+    const delivered = { notifications: 0, elements: 0, bytes: 0 }
+    rig.runtime.onMobileSessionTabsChanged((result) => {
+      delivered.notifications++
+      delivered.elements +=
+        result.tabs.length + result.tabGroups.reduce((sum, group) => sum + group.tabOrder.length, 0)
+      delivered.bytes += JSON.stringify(result).length
+    })
+    // The window's own frame, its chat order split across groups of ten.
+    const frame = (version: number) => {
+      const whole = windowFrame(rig.old, version, [notes], listed)
+      const order = whole.tabGroups[0]!.tabOrder
+      return {
+        ...whole,
+        tabGroups: Array.from({ length: Math.ceil(order.length / 10) }, (_, i) => ({
+          id: `window-group-${i}`,
+          activeTabId: null,
+          tabOrder: order.slice(i * 10, i * 10 + 10)
+        }))
       }
-      published = 0
-      run()
+    }
+    // Inherited from main, unchanged here, counted apart and reported, not bounded: each chat tab's
+    // title searches the workspace's saved tabs (prune-mobile-session-tab-group-layout.ts), and
+    // merging a frame searches every group's order once per chat (appendChatTabOrder); both read
+    // N² entries for N chats in one workspace.
+    const inherited = { titleVisits: 0, chatOrderVisits: 0 }
+    const title = rig.runtime['structuredConversationTabName'].bind(rig.runtime)
+    Object.defineProperty(rig.runtime, 'structuredConversationTabName', {
+      value: (workspaceId: string, sessionId: string) => {
+        const named = collectionVisits(() => title(workspaceId, sessionId))
+        inherited.titleVisits += named.visits
+        return named.value
+      }
+    })
+    const order = tabMerge.appendChatTabOrder
+    vi.spyOn(tabMerge, 'appendChatTabOrder').mockImplementation((...args) => {
+      const ordered = collectionVisits(() => order(...args))
+      inherited.chatOrderVisits += ordered.visits
+      return ordered.value
+    })
+    // The real graph entry point; the keyed coalescer then delivers what it scheduled.
+    const graph = (
+      mobileSessionTabs: RuntimeMobileSessionTabsSnapshot[],
+      unchangedMobileSessionWorktrees: string[] = []
+    ) =>
+      rig.runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs,
+        unchangedMobileSessionWorktrees
+      }).mobileSessionResyncWorktrees ?? []
+    const phase = (name: string, run: () => string[]) => {
+      identities.mockClear()
+      rows.mockClear()
+      Object.assign(delivered, { notifications: 0, elements: 0, bytes: 0 })
+      Object.assign(inherited, { titleVisits: 0, chatOrderVisits: 0 })
+      const records = recordQueries(rig.store)
+      const synced = collectionVisits(run)
+      const published = collectionVisits(() =>
+        rig.runtime['mobileSessionTabsNotifyCoalescer'].flushAll()
+      )
+      records.restore()
       for (const [key, value] of Object.entries({
-        records: records.mock.calls.length,
-        readability: readability.mock.calls.length,
+        recordLookups: records.counts.lookups,
+        recordsEnumerated: records.counts.enumerated,
+        syncVisits: synced.visits,
+        syncLookups: synced.lookups,
         identities: identities.mock.calls.length,
         rows: rows.mock.calls.length,
-        published
+        publishVisits: published.visits,
+        ...delivered,
+        ...inherited
       })) {
         ;(tally[`${name}.${key}`] ??= []).push(value)
       }
+      return synced.value
     }
-    const sync = rig.runtime['syncMobileSessionTabs'].bind(rig.runtime)
-    phase('accept', () => sync([windowFrame(rig.old, 7, [notes], listed)]))
-    phase('resend', () => {
-      const resync = new Set<string>()
-      sync([], [rig.old], resync)
-      expect([...resync]).toEqual([])
-    })
+    expect(phase('accept', () => graph([frame(7)]))).toEqual([])
+    expect(phase('resend', () => graph([], [rig.old]))).toEqual([])
     expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: true } })
-    phase('staleResend', () => {
-      const resync = new Set<string>()
-      sync([], [rig.old], resync)
-      expect([...resync]).toEqual([rig.old])
-      sync([windowFrame(rig.old, 8, [notes], listed)])
-    })
+    expect(phase('staleResend', () => graph([], [rig.old]))).toEqual([rig.old])
+    expect(phase('staleFrame', () => graph([frame(8)]))).toEqual([])
     const kept = [C, ...others, notes.id].sort()
     expect(ids(resultAt(rig, rig.old))).toEqual(kept)
     // The window stops listing the workspace; the host keeps its own chat rows there.
-    phase('omission', () => sync([]))
+    expect(phase('omission', () => graph([]))).toEqual([])
     expect(ids(resultAt(rig, rig.old))).toEqual([C, ...others].sort())
-    phase('unchanged', () => sync([], [rig.old], new Set()))
+    // "Unchanged" for a workspace the window last omitted asks it for a whole frame again.
+    expect(phase('unchanged', () => graph([], [rig.old]))).toEqual([rig.old])
+    let outbound: RuntimeMobileSessionTabsResult | undefined
     phase('outbound', () => {
-      expect(ids(resultAt(rig, rig.old))).toEqual([C, ...others].sort())
+      outbound = resultAt(rig, rig.old)
+      return []
     })
+    expect(ids(outbound)).toEqual([C, ...others].sort())
     for (const [key, counts] of Object.entries(tally)) {
-      if (key.endsWith('.published')) {
-        expect(Math.max(...counts), key).toBeLessThanOrEqual(2)
+      const at = counts.length - 1
+      // Settled delivery follows the one workspace that changed, never the chat count.
+      if (key.endsWith('.notifications')) {
+        expect(counts[at], key).toBeLessThanOrEqual(1)
+      }
+      // No placement query enumerates the stored records, related or not.
+      if (key.endsWith('.recordsEnumerated')) {
+        expect(counts[at], key).toBe(0)
+      }
+      // A fixed cost plus a few visits or lookups per listed chat in each phase.
+      if (/\.(syncVisits|syncLookups|publishVisits|recordLookups)$/.test(key)) {
+        expect(counts[at], key).toBeLessThanOrEqual(GRAPH_PER_CHAT * listed.length + GRAPH_FIXED)
       }
     }
     if (n === 200) {
       console.log('S3_GRAPH_COUNTS', JSON.stringify(tally))
       // The 20-chat case runs first in this file and leaves its counts beside these.
       expect(Object.values(tally).every((counts) => counts.length === 2)).toBe(true)
-      linear(tally)
+      // Reported, not bounded here: the inherited searches above.
+      linear(
+        Object.fromEntries(
+          Object.entries(tally).filter(([key]) => !/\.(titleVisits|chatOrderVisits)$/.test(key))
+        )
+      )
     }
   }
 )
@@ -126,78 +210,172 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
   expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: true } })
   const [moved] = rig.profile.getWorkspaceSession('local')!.unifiedTabs![rig.old]!
   registerSessionHandlers(rig.profile, rig.runtime)
-  const records = vi.spyOn(rig.store, 'getRecord')
   const sets = vi.spyOn(rig.profile, 'setWorkspaceSession')
   const patches = vi.spyOn(rig.profile, 'patchWorkspaceSession')
+  // What reaches the profile database through flush, and the writes it announces.
+  const written = { domains: 0, bytes: 0, notified: 0 }
+  for (const name of ['writeSerializedDomains', 'writeCompleteSerializedDomains'] as const) {
+    const write = ProfileStateSqliteAuthority.prototype[name]
+    vi.spyOn(ProfileStateSqliteAuthority.prototype, name).mockImplementation(function (
+      this: ProfileStateSqliteAuthority,
+      replacements: readonly ProfileStateDomainReplacement[],
+      ...rest: never[]
+    ) {
+      written.domains += replacements.length
+      written.bytes += replacements.reduce((sum, entry) => sum + (entry.payload?.length ?? 0), 0)
+      return write.call(this, replacements, ...rest)
+    })
+  }
+  rig.profile.onStateWritten(() => written.notified++)
+  const placements = vi.spyOn(placement, 'structuredSessionPlacementAllowed')
   for (const n of [20, 200]) {
-    // Every workspace holds the moved chat, a terminal, and another host's tab with the same IDs,
-    // in a split layout whose order and selection name the moved chat.
+    // N workspaces hold the moved chat, a terminal, an editor and another host's tab with the same
+    // ID, in a nested split whose order, selection and recent tabs name the moved chat; N more
+    // hold only a terminal and an editor, which no filtering should touch.
     const workspaces = Array.from({ length: n }, (_, i) => `removed-${i}::/old/${i}`)
-    const tabsOf = (workspace: string): Tab[] => [
-      { ...moved!, worktreeId: workspace, groupId: `${workspace}-a` },
-      { ...moved!, id: 't', entityId: 't', contentType: 'terminal', groupId: `${workspace}-b` },
-      {
-        ...moved!,
-        worktreeId: workspace,
-        groupId: `${workspace}-b`,
-        executionHostId: 'runtime:other'
-      }
-    ]
+    const unaffected = Array.from({ length: n }, (_, i) => `kept-${i}::/kept/${i}`)
+    const row = (
+      workspace: string,
+      id: string,
+      contentType: Tab['contentType'],
+      group: string
+    ) => ({
+      ...moved!,
+      id,
+      entityId: id,
+      contentType,
+      worktreeId: workspace,
+      groupId: `${workspace}-${group}`
+    })
+    const tabsOf = (workspace: string): Tab[] =>
+      workspace.startsWith('kept-')
+        ? [row(workspace, 't', 'terminal', 'b'), row(workspace, 'e', 'editor', 'c')]
+        : [
+            { ...moved!, worktreeId: workspace, groupId: `${workspace}-a` },
+            row(workspace, 't', 'terminal', 'b'),
+            ...(twin(workspace)
+              ? [
+                  {
+                    ...moved!,
+                    worktreeId: workspace,
+                    groupId: `${workspace}-b`,
+                    executionHostId: 'runtime:other'
+                  }
+                ]
+              : []),
+            row(workspace, 'e', 'editor', 'c')
+          ]
+    const groupsOf = (w: string) =>
+      w.startsWith('kept-')
+        ? [
+            { id: `${w}-b`, worktreeId: w, activeTabId: 't', tabOrder: ['t'], recentTabIds: ['t'] },
+            { id: `${w}-c`, worktreeId: w, activeTabId: 'e', tabOrder: ['e'], recentTabIds: ['e'] }
+          ]
+        : [
+            {
+              id: `${w}-a`,
+              worktreeId: w,
+              activeTabId: moved!.id,
+              tabOrder: [moved!.id],
+              recentTabIds: [moved!.id]
+            },
+            {
+              id: `${w}-b`,
+              worktreeId: w,
+              activeTabId: 't',
+              tabOrder: ['t', moved!.id],
+              recentTabIds: [moved!.id, 't']
+            },
+            { id: `${w}-c`, worktreeId: w, activeTabId: 'e', tabOrder: ['e'], recentTabIds: ['e'] }
+          ]
+    const treeOf = (w: string) =>
+      w.startsWith('kept-')
+        ? {
+            type: 'split' as const,
+            direction: 'vertical' as const,
+            first: { type: 'leaf' as const, groupId: `${w}-b` },
+            second: { type: 'leaf' as const, groupId: `${w}-c` }
+          }
+        : {
+            type: 'split' as const,
+            direction: 'horizontal' as const,
+            first: { type: 'leaf' as const, groupId: `${w}-a` },
+            second: {
+              type: 'split' as const,
+              direction: 'vertical' as const,
+              first: { type: 'leaf' as const, groupId: `${w}-b` },
+              second: { type: 'leaf' as const, groupId: `${w}-c` }
+            }
+          }
+    const all = [...workspaces, ...unaffected]
+    // Half the moved chat's workspaces also hold another host's tab with its ID, which keeps every
+    // reference to that ID; in the rest its order, recent-tab, tree and focus references go.
+    const twin = (workspace: string) => workspaces.indexOf(workspace) % 2 === 0
     const stored = rig.profile.getWorkspaceSession('local')!
     const session: WorkspaceSessionState = {
       ...stored,
-      unifiedTabs: Object.fromEntries(workspaces.map((w) => [w, tabsOf(w)])),
-      tabGroups: Object.fromEntries(
-        workspaces.map((w) => [
-          w,
-          [
-            { id: `${w}-a`, worktreeId: w, activeTabId: moved!.id, tabOrder: [moved!.id] },
-            { id: `${w}-b`, worktreeId: w, activeTabId: 't', tabOrder: ['t', moved!.id] }
-          ]
-        ])
-      ),
-      tabGroupLayouts: Object.fromEntries(
-        workspaces.map((w) => [
-          w,
-          {
-            type: 'split',
-            direction: 'horizontal',
-            first: { type: 'leaf', groupId: `${w}-a` },
-            second: { type: 'leaf', groupId: `${w}-b` }
-          }
-        ])
-      ),
-      activeTabIdByWorktree: Object.fromEntries(workspaces.map((w) => [w, moved!.id]))
+      unifiedTabs: Object.fromEntries(all.map((w) => [w, tabsOf(w)])),
+      tabGroups: Object.fromEntries(all.map((w) => [w, groupsOf(w)])),
+      tabGroupLayouts: Object.fromEntries(all.map((w) => [w, treeOf(w)])),
+      activeTabIdByWorktree: Object.fromEntries(all.map((w) => [w, moved!.id]))
     }
     const phase = async (name: string, run: () => unknown) => {
-      for (const spy of [records, sets, patches]) {
+      // Earlier writes settle first, so each phase reports only its own.
+      await rig.profile.flushPendingOrThrowAsync()
+      for (const spy of [sets, patches, placements]) {
         spy.mockClear()
       }
-      await run()
+      Object.assign(written, { domains: 0, bytes: 0, notified: 0 })
+      const records = recordQueries(rig.store)
+      const handled = collectionVisits(run)
+      records.restore()
+      const value = await handled.value
+      await rig.profile.flushPendingOrThrowAsync()
       for (const [key, value] of Object.entries({
-        records: records.mock.calls.length,
+        recordLookups: records.counts.lookups,
+        recordsEnumerated: records.counts.enumerated,
+        visits: handled.visits,
+        lookups: handled.lookups,
+        placements: placements.mock.calls.length,
         sets: sets.mock.calls.length,
-        patches: patches.mock.calls.length
+        patches: patches.mock.calls.length,
+        ...written
       })) {
         ;(tally[`${name}.${key}`] ??= []).push(value)
       }
+      return value
     }
     await phase('set', () => handlers.get('session:set')!({}, session, 'local'))
     const placed = rig.profile.getWorkspaceSession('local')!
     for (const workspace of workspaces) {
-      // The moved chat leaves; the terminal and the other host's tab keep their places.
+      // The moved chat leaves; the terminal, the editor and the other host's tab keep their places.
       expect(
-        placed.unifiedTabs![workspace]!.map((tab) => [tab.contentType, tab.executionHostId])
+        placed.unifiedTabs![workspace]!.map((tab) => [tab.id, tab.contentType, tab.executionHostId])
       ).toEqual([
-        ['terminal', moved!.executionHostId],
-        ['agent-session', 'runtime:other']
+        ['t', 'terminal', moved!.executionHostId],
+        ...(twin(workspace) ? [[moved!.id, 'agent-session', 'runtime:other']] : []),
+        ['e', 'editor', moved!.executionHostId]
       ])
+      const [, b, c] = groupsOf(workspace)
+      expect(placed.tabGroups[workspace]).toEqual(
+        twin(workspace) ? groupsOf(workspace) : [{ ...b, tabOrder: ['t'], recentTabIds: ['t'] }, c]
+      )
+      expect(placed.tabGroupLayouts?.[workspace]).toEqual(
+        twin(workspace) ? treeOf(workspace) : treeOf(workspace).second
+      )
+      expect(placed.activeTabIdByWorktree?.[workspace]).toBe(
+        twin(workspace) ? moved!.id : undefined
+      )
     }
-    let read: WorkspaceSessionState | undefined
-    await phase('get', async () => {
-      read = (await handlers.get('session:get')!({}, 'local')) as WorkspaceSessionState
-    })
-    expect(read!.unifiedTabs).toEqual(placed.unifiedTabs)
+    for (const workspace of unaffected) {
+      expect(placed.unifiedTabs[workspace]).toEqual(session.unifiedTabs[workspace])
+      expect(placed.tabGroups[workspace]).toEqual(session.tabGroups[workspace])
+      expect(placed.tabGroupLayouts?.[workspace]).toEqual(session.tabGroupLayouts?.[workspace])
+    }
+    const read = (await phase('get', () =>
+      handlers.get('session:get')!({}, 'local')
+    )) as WorkspaceSessionState
+    expect(read.unifiedTabs).toEqual(placed.unifiedTabs)
     await phase('patch', () =>
       handlers.get('session:patch')!({}, { unifiedTabs: session.unifiedTabs }, 'local')
     )
@@ -210,55 +388,163 @@ it('saved get, set and patch through the real handlers filter N and 10N workspac
     expect(rig.profile.getWorkspaceSession('local')!.unifiedTabs).toEqual(placed.unifiedTabs)
   }
   console.log('S3_SAVED_COUNTS', JSON.stringify(tally))
-  expect(tally['viewPatch.records']).toEqual([0, 0])
+  // A view-only patch asks no placement, and reads the records no more at 10N.
+  expect(tally['viewPatch.placements']).toEqual([0, 0])
+  expect(tally['viewPatch.recordLookups']![1]).toBe(tally['viewPatch.recordLookups']![0])
   expect(tally['get.sets']).toEqual([0, 0])
+  expect(tally['get.domains']).toEqual([0, 0])
+  expect(tally['get.notified']).toEqual([0, 0])
   for (const name of ['set', 'patch', 'resave']) {
     expect(tally[`${name}.${name === 'patch' ? 'patches' : 'sets'}`]).toEqual([1, 1])
+  }
+  // Per phase, for W = 2N workspaces of a few tabs and groups each: one placement per moved row,
+  // two record lookups per moved row, a fixed number of visits and lookups per workspace, and at
+  // most one database write and one write notice.
+  for (const [key, counts] of Object.entries(tally)) {
+    for (const [i, n] of [20, 200].entries()) {
+      const bound = key.endsWith('.placements')
+        ? n
+        : key.endsWith('.recordLookups')
+          ? 2 * n + 8
+          : key.endsWith('.visits')
+            ? 40 * 2 * n + 200
+            : key.endsWith('.lookups')
+              ? 15 * 2 * n + 50
+              : key.endsWith('.domains') || key.endsWith('.notified')
+                ? 1
+                : Infinity
+      expect(counts[i], key).toBeLessThanOrEqual(bound)
+    }
   }
   linear(tally)
 })
 
 // Each population gets its own profile and journal, so the N and 10N runs are separate cases.
-const rebindCatalogReads = new Map<number, Record<string, number>>()
+const rebindTally: Record<string, number[]> = {}
 it.each([20, 200])(
   'one rebind among %i other chats writes one record and one journal row; a repeat or an overtaken rebind writes none',
   async (n) => {
     const tally: Record<string, Record<string, number>> = {}
+    // V visible chats in the old workspace, H unrelated chats elsewhere and A finished replies.
     const others = chatIds('other', n)
-    const rig = await retired(others, others)
+    const rig = await retired(others, others, { unrelated: chatIds('unrelated', n), completed: n })
+    // A populated catalog: N folder projects and N folder workspaces, none at the chat's directory.
+    const group = rig.profile.createProjectGroup({
+      name: 'Elsewhere',
+      parentPath: `${root}-elsewhere`,
+      connectionId: null,
+      parentGroupId: null,
+      createdFrom: 'manual'
+    })
+    for (let i = 0; i < n; i++) {
+      rig.profile.addRepo(
+        storeRepo({ id: `elsewhere-${i}`, path: `${root}-elsewhere/r${i}`, kind: 'folder' })
+      )
+      rig.profile.createFolderWorkspace({
+        projectGroupId: group.id,
+        folderPath: `${root}-elsewhere/f${i}`,
+        name: `Elsewhere ${i}`
+      })
+    }
     // Startup settles first: it reconciles every loaded lease once, before anything is measured.
     await rig.runtime.restoreStructuredAgentSessionTabs()
     await chatTabCommandsSettled()
-    const writes = vi.spyOn(recordRows, 'writeAgentSessionStoreRows')
-    const prepare = vi.spyOn(rig.host.deps.journalDatabase.db, 'prepare')
-    const catalog = [
-      vi.spyOn(rig.profile, 'getRepos'),
-      vi.spyOn(rig.profile, 'getFolderWorkspaces'),
-      vi.spyOn(rig.profile, 'getProjectGroups')
-    ]
-    const phase = async (name: string, run: () => Promise<unknown>) => {
-      for (const spy of [writes, prepare, ...catalog]) {
-        spy.mockClear()
-      }
-      await run()
-      const upserts = writes.mock.calls.map(([, write]) => write.records.upsert)
-      tally[name] = {
-        recordWrites: upserts.filter((upsert) => upsert.length > 0).length,
-        recordsWritten: upserts.reduce((sum, upsert) => sum + upsert.length, 0),
-        journalUpdates: prepare.mock.calls.filter(([sql]) =>
-          /^\s*UPDATE journal_sessions/i.test(sql)
-        ).length,
-        catalogReads: catalog.reduce((sum, spy) => sum + spy.mock.calls.length, 0)
-      }
+    const work: Record<string, number> = {}
+    const add = (key: string, count: number) => (work[key] = (work[key] ?? 0) + count)
+    // Catalog rows read, while the reveal prepares and while its receipt admits the destination.
+    let stage: 'prepare' | 'admission' = 'prepare'
+    for (const name of ['getRepos', 'getFolderWorkspaces', 'getProjectGroups'] as const) {
+      const read = rig.profile[name].bind(rig.profile) as () => object[]
+      vi.spyOn(rig.profile, name).mockImplementation(
+        (() =>
+          new Proxy(read(), {
+            get: (rows, key, receiver) => {
+              if (typeof key === 'string' && /^\d+$/.test(key)) {
+                add(`${stage}CatalogRows`, 1)
+              }
+              return Reflect.get(rows, key, receiver)
+            }
+          })) as never
+      )
     }
-    // A removal that overtakes the queued rebind leaves both addresses as they were.
     const rebind = rig.store.rebindWorkspace.bind(rig.store)
     let removal: ReturnType<typeof acquireWatcherRemovalGate> | undefined
-    vi.spyOn(rig.store, 'rebindWorkspace').mockImplementationOnce(async (...args) => {
-      removal = acquireWatcherRemovalGate(root)
-      removal.abandonPendingInstalls()
-      return rebind(...args)
+    let overtake = true
+    vi.spyOn(rig.store, 'rebindWorkspace').mockImplementation(
+      (sessionId, original, location, check) => {
+        // A removal that overtakes the first queued rebind leaves both addresses as they were.
+        if (overtake) {
+          overtake = false
+          removal = acquireWatcherRemovalGate(root)
+          removal.abandonPendingInstalls()
+        }
+        // The receipt's commit-time proof: the catalog read while admitting the destination.
+        return rebind(sessionId, original, location, (record) => {
+          stage = 'admission'
+          try {
+            check(record)
+          } finally {
+            stage = 'prepare'
+          }
+        })
+      }
+    )
+    // The receipt's own collection work: draft copy, runtime attribution and the row diff.
+    for (const [module, name, key] of [
+      [storeDraft, 'draftAgentSessionStoreState', 'draftCopy'],
+      [attribution, 'attributeAgentSessionRuntime', 'attribution'],
+      [storeDraft, 'agentSessionStoreDraftRowWrites', 'diff']
+    ] as const) {
+      const original = (module as Record<string, (...args: never[]) => unknown>)[name]!
+      vi.spyOn(module as never, name as never).mockImplementation(((...args: never[]) => {
+        const counted = collectionVisits(() => original(...args))
+        add(`${key}Visits`, counted.visits)
+        add(`${key}Lookups`, counted.lookups)
+        return counted.value
+      }) as never)
+    }
+    const writes = vi.spyOn(recordRows, 'writeAgentSessionStoreRows')
+    // Journal statements as executed, with their bindings.
+    const prepare = rig.host.deps.journalDatabase.db.prepare.bind(rig.host.deps.journalDatabase.db)
+    vi.spyOn(rig.host.deps.journalDatabase.db, 'prepare').mockImplementation((sql) => {
+      const statement = prepare(sql)
+      if (/^\s*UPDATE journal_sessions/i.test(sql)) {
+        const run = statement.run.bind(statement)
+        vi.spyOn(statement, 'run').mockImplementation((...bindings) => {
+          add('journalUpdates', 1)
+          add('journalBindings', bindings.length)
+          return run(...bindings)
+        })
+      }
+      return statement
     })
+    const unsubscribe = sessionCrewChanges.subscribe((facets) =>
+      add(facets.has('records') ? 'topologyNotices' : 'otherNotices', 1)
+    )
+    const phase = async (name: string, run: () => Promise<unknown>) => {
+      writes.mockClear()
+      for (const key of Object.keys(work)) {
+        work[key] = 0
+      }
+      await run()
+      const rows = writes.mock.calls.map(([, write]) => write)
+      tally[name] = {
+        ...work,
+        recordsWritten: rows.reduce((sum, write) => sum + write.records.upsert.length, 0),
+        recordsRemoved: rows.reduce((sum, write) => sum + write.records.remove.length, 0),
+        operationsWritten: rows.reduce((sum, write) => sum + write.operations.upsert.length, 0),
+        operationsRemoved: rows.reduce((sum, write) => sum + write.operations.remove.length, 0),
+        encodedBytes: rows.reduce(
+          (sum, write) =>
+            sum +
+            [...write.records.upsert, ...write.operations.upsert].reduce(
+              (bytes, [, json]) => bytes + json.length,
+              0
+            ),
+          0
+        )
+      }
+    }
     await phase('overtaken', async () =>
       expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: false } })
     )
@@ -276,20 +562,47 @@ it.each([20, 200])(
         .get(B)
     ).toMatchObject({ workspace_id: rig.destination })
     await phase('repeat', () => reveal(rig))
+    unsubscribe()
     expect(others.map((id) => rig.store.getRecord(id)?.location.workspaceId)).toEqual(
       others.map(() => rig.old)
     )
     console.log('S3_REBIND_COUNTS', JSON.stringify({ n, tally }))
-    expect(tally.move).toMatchObject({ recordsWritten: 1, journalUpdates: 1 })
-    expect(tally.overtaken).toMatchObject({ recordsWritten: 0, journalUpdates: 0 })
-    expect(tally.repeat).toMatchObject({ recordsWritten: 0, journalUpdates: 0 })
-    // Catalog work does not grow with the other chats.
-    const reads = Object.fromEntries(
-      Object.entries(tally).map(([name, counts]) => [name, counts.catalogReads!])
-    )
-    rebindCatalogReads.set(n, reads)
+    expect(tally.move).toMatchObject({
+      recordsWritten: 1,
+      recordsRemoved: 0,
+      operationsWritten: 0,
+      operationsRemoved: 0,
+      journalUpdates: 1,
+      journalBindings: 2,
+      // The moved record's commit and its placement's follow-up, at any N.
+      topologyNotices: 2
+    })
+    for (const name of ['overtaken', 'repeat']) {
+      expect(tally[name], name).toMatchObject({ recordsWritten: 0, operationsWritten: 0 })
+      expect(tally[name]!.journalUpdates ?? 0, name).toBe(0)
+    }
+    // Per phase: catalog reads a fixed number of passes over its 2N + 3 rows, never per stored
+    // chat or reply; the receipt's copy, attribution and diff a fixed number of passes over the
+    // H + V records, A replies and V visible tabs.
+    const stored = 3 * n + 4
+    for (const [name, counts] of Object.entries(tally)) {
+      for (const [key, value] of Object.entries(counts)) {
+        ;(rebindTally[`${name}.${key}`] ??= []).push(value)
+      }
+      for (const stage of ['prepare', 'admission']) {
+        expect(counts[`${stage}CatalogRows`] ?? 0, `${name}.${stage}`).toBeLessThanOrEqual(
+          24 * (2 * n + 3) + 100
+        )
+      }
+      for (const key of ['draftCopy', 'attribution', 'diff']) {
+        expect(counts[`${key}Visits`] ?? 0, `${name}.${key}`).toBeLessThanOrEqual(10 * stored + 50)
+      }
+    }
     if (n === 200) {
-      expect(reads).toEqual(rebindCatalogReads.get(20) ?? reads)
+      // The 20-chat case runs first in this file and leaves its counts beside these.
+      linear(
+        Object.fromEntries(Object.entries(rebindTally).filter(([, counts]) => counts.length === 2))
+      )
     }
   }
 )

@@ -13,16 +13,61 @@ import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import { withChatTabChanges } from '../../src/main/runtime/agent-session/agent-session-tab-layout'
 import { getRepoMainWorktreeId } from '../../src/shared/worktree/id'
+import {
+  editPersistedTestAgentSessionStore,
+  storedTestAgentSessionRecord
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionOperationKey } from '../../src/shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
 import type {
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
 
-/** B, and any `kept` chats, live in a workspace whose registration is gone; `visible` chats show. */
-export async function retired(kept: string[] = [], visible = kept) {
+/** B, and any `kept` chats, live in a workspace whose registration is gone; `visible` chats show.
+ *  `unrelated` chats are readable records in another workspace, and `completed` operation rows
+ *  are finished replies the store keeps. */
+export async function retired(
+  kept: string[] = [],
+  visible = kept,
+  { unrelated = [], completed = 0 }: { unrelated?: string[]; completed?: number } = {}
+) {
   const old = `retired-project::${root}`
   const input = await inWorkspace(old, 'folder', 'local', visible)
+  await editPersistedTestAgentSessionStore(root, (persisted) => {
+    for (const sessionId of unrelated) {
+      const record = agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId,
+          ownerProcess: null,
+          reservedSpawnToken: null,
+          claimStatus: 'released'
+        })
+      )
+      persisted.records[sessionId] = storedTestAgentSessionRecord({
+        ...record,
+        location: { ...record.location, workspaceId: 'unrelated::/elsewhere' }
+      })
+    }
+    const now = Date.now()
+    for (let i = 0; i < completed; i++) {
+      const operationId = `completed-${i}`
+      persisted.operations[agentSessionOperationKey('phone', operationId)] = {
+        callerKey: 'phone',
+        operationId,
+        fingerprint: operationId,
+        operationTimestamp: now,
+        recordedAt: now,
+        expiresAt: now + 3_600_000,
+        outcome: { status: 'succeeded', sessionId: `done-${i}` }
+      }
+    }
+  })
   input.profile.removeFolderWorkspace(input.folderId)
   input.profile.setWorkspaceSession(
     withChatTabChanges(
@@ -107,3 +152,43 @@ export const graphPublished = (rig: AuthorityRig) => {
 }
 export const ids = (frame: RuntimeMobileSessionTabsResult | undefined) =>
   (frame?.tabs ?? []).map((tab) => (tab.type === 'agent-session' ? tab.sessionId : tab.id)).sort()
+
+type Method = (...args: unknown[]) => unknown
+/** The record store's own record and unreadable-row maps, as their query bodies use them: keys
+ *  looked up, and rows enumerated. Restore before the store's next write replaces them. */
+export function recordQueries(store: AgentSessionRecordStore) {
+  const counts = { lookups: 0, enumerated: 0 }
+  const state = store['state']
+  const maps: Map<string, unknown>[] = [state.records, state.unreadableRecords]
+  for (const map of maps) {
+    const own = map as unknown as Record<PropertyKey, Method>
+    for (const key of ['get', 'has']) {
+      const query = own[key]!
+      own[key] = (id) => {
+        counts.lookups++
+        return query.call(map, id)
+      }
+    }
+    for (const key of [Symbol.iterator, 'entries', 'values', 'keys']) {
+      const iterate = own[key]!
+      own[key] = () => {
+        const rows = iterate.call(map) as IterableIterator<unknown>
+        return Object.assign(Object.create(Object.getPrototypeOf(rows)), {
+          next: () => {
+            const step = rows.next()
+            counts.enumerated += step.done ? 0 : 1
+            return step
+          }
+        })
+      }
+    }
+  }
+  const restore = () => {
+    for (const map of maps) {
+      for (const key of ['get', 'has', Symbol.iterator, 'entries', 'values', 'keys']) {
+        delete (map as unknown as Record<PropertyKey, Method>)[key]
+      }
+    }
+  }
+  return { counts, restore }
+}

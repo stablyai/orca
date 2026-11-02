@@ -222,74 +222,146 @@ function counted<T extends object>(row: T, reads: { count: number }): T {
   return copy
 }
 
-it.each([
-  { owner: 'stamped', executionHostId: 'local' as const },
-  { owner: 'legacy', executionHostId: undefined }
-])(
-  'a moved reveal over N and 10N unrelated workspaces prunes its one old tab in one write ($owner owner)',
-  async ({ executionHostId }) => {
-    const retired = `retired-project::${destination.path}`
-    const tally: Record<string, number[]> = {}
-    for (const n of [20, 200]) {
-      const catalogReads = { count: 0 }
-      const unrelatedReads = { count: 0 }
-      const unrelated = Array.from({ length: n }, (_, i) =>
-        counted(
-          { ...other, id: `repo-1::/workspace/u${i}`, path: `/workspace/u${i}` },
-          catalogReads
-        )
-      )
-      seedEmptyActivatableWorktree(destination, { extraWorktrees: [other, ...unrelated] })
-      const moved = { ...chat(retired), executionHostId }
-      // The old workspace keeps N other chats beside the moved one, in its group and tab bar.
-      const kept = Array.from({ length: n }, (_, i) => ({
-        ...chat(retired),
-        id: `kept-${i}`,
-        entityId: `kept-chat-${i}`
-      }))
-      const unrelatedTabs = Object.fromEntries(
-        unrelated.map((row) => [row.id, [counted(chat(row.id), unrelatedReads)]])
-      )
-      useAppStore.setState({
-        activeWorktreeId: retired,
-        sleepingAgentSessionsByPaneKey: {},
-        unifiedTabsByWorktree: { ...unrelatedTabs, [retired]: [moved, ...kept] },
-        groupsByWorktree: {
-          [retired]: [
-            {
-              id: 'group',
-              worktreeId: retired,
-              tabOrder: [moved.id, ...kept.map((tab) => tab.id)],
-              activeTabId: moved.id
-            }
-          ]
+/** A copy of `items` that counts each element read. */
+function countedOrder(items: string[], reads: { count: number }): string[] {
+  return new Proxy(items, {
+    get: (target, key) => {
+      if (typeof key === 'string' && /^\d+$/.test(key)) {
+        reads.count++
+      }
+      return target[key as keyof string[]]
+    }
+  })
+}
+
+type PruneCase = { owner: string; executionHostId: ExecutionHostId | undefined; site: string }
+
+/** N unrelated listed workspaces with a chat each, and an old key holding the moved chat beside N
+ *  kept chats, chat C, an editor and another host's tab of the same chat in two groups with MRU. */
+function prunePopulation(n: number, executionHostId: ExecutionHostId | undefined) {
+  const retired = `retired-project::${destination.path}`
+  const reads = { catalog: { count: 0 }, unrelated: { count: 0 }, old: { count: 0 } }
+  const orderReads = { count: 0 }
+  const unrelated = Array.from({ length: n }, (_, i) =>
+    counted({ ...other, id: `repo-1::/workspace/u${i}`, path: `/workspace/u${i}` }, reads.catalog)
+  )
+  seedEmptyActivatableWorktree(destination, { extraWorktrees: [other, ...unrelated] })
+  const old = (tab: Tab) => counted(tab, reads.old)
+  const moved = old({ ...chat(retired), executionHostId })
+  const kept = Array.from({ length: n }, (_, i) =>
+    old({ ...chat(retired), id: `kept-${i}`, entityId: `kept-chat-${i}` })
+  )
+  const chatC = old({ ...chat(retired), id: 'chat-c-tab', entityId: 'chat-c' })
+  const editor = old({
+    ...chat(retired),
+    id: 'editor-tab',
+    entityId: '/file',
+    contentType: 'editor'
+  })
+  // Another host's tab of the same chat: not this owner's copy, so it stays.
+  const foreign = old({ ...chat(retired), id: 'foreign-a', executionHostId: 'runtime:env-9' })
+  const half = kept.slice(0, n / 2).map((tab) => tab.id)
+  const rest = kept.slice(n / 2).map((tab) => tab.id)
+  const ids = [moved, ...kept, chatC, editor, foreign].map((tab) => tab.id)
+  const unrelatedTabs = Object.fromEntries(
+    unrelated.map((row) => [row.id, [counted(chat(row.id), reads.unrelated)]])
+  )
+  const order = (items: string[]) => countedOrder(items, orderReads)
+  useAppStore.setState({
+    sleepingAgentSessionsByPaneKey: {},
+    unifiedTabsByWorktree: {
+      ...unrelatedTabs,
+      [retired]: [moved, ...kept, chatC, editor, foreign]
+    },
+    groupsByWorktree: {
+      [retired]: [
+        {
+          id: 'group',
+          worktreeId: retired,
+          tabOrder: order([moved.id, ...half, chatC.id]),
+          recentTabIds: order([...half, moved.id]),
+          activeTabId: moved.id
         },
-        tabBarOrderByWorktree: { [retired]: [moved.id, ...kept.map((tab) => tab.id)] }
-      })
+        {
+          id: 'group-b',
+          worktreeId: retired,
+          tabOrder: order([...rest, editor.id, foreign.id]),
+          recentTabIds: order([foreign.id, editor.id]),
+          activeTabId: editor.id
+        }
+      ]
+    },
+    tabBarOrderByWorktree: { [retired]: order(ids) }
+  })
+  // References the old key holds: its tabs, both groups' orders and MRU, and its tab bar.
+  const references = 2 * ids.length + n / 2 + 3
+  return { retired, reads, orderReads, unrelated, kept, chatC, editor, foreign, half, references }
+}
+
+const destinationTab = () => {
+  const tab = chat(destination.id)
+  return {
+    unifiedTab: tab,
+    group: { id: 'group', worktreeId: destination.id, tabOrder: [tab.id], activeTabId: null }
+  }
+}
+
+it.each<PruneCase>([
+  { owner: 'stamped', executionHostId: 'local', site: 'reveal' },
+  { owner: 'legacy', executionHostId: undefined, site: 'reveal' },
+  { owner: 'stamped', executionHostId: 'local', site: 'settlement' },
+  { owner: 'legacy', executionHostId: undefined, site: 'settlement' }
+])(
+  'a moved open over N and 10N unrelated workspaces prunes its one old tab in one write ($owner owner, $site prune)',
+  async ({ executionHostId, site }) => {
+    const tally: Record<string, number[]> = {}
+    const budgets: Record<string, number[]> = {}
+    for (const n of [20, 200]) {
+      const population = prunePopulation(n, executionHostId)
+      const { retired, reads, orderReads, unrelated } = population
+      const placeDestination = () => {
+        const { unifiedTab, group } = destinationTab()
+        useAppStore.setState((state) => ({
+          unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [destination.id]: [unifiedTab] },
+          groupsByWorktree: { ...state.groupsByWorktree, [destination.id]: [group] }
+        }))
+      }
+      if (site === 'settlement') {
+        // The host already lists the chat at its new workspace, which is on screen: the open
+        // needs no reveal, and the settled open drops the old copy.
+        placeDestination()
+        useAppStore.setState({
+          activeWorktreeId: destination.id,
+          activeWorkspaceExecutionHostId: 'local'
+        })
+      } else {
+        useAppStore.setState({ activeWorktreeId: retired })
+      }
       mocks.call.mockImplementation(async (_host, method: string) => {
         if (method === 'orchestration.partyLocation') {
-          return { location: { kind: 'chat', sessionId: 'chat-a', worktreeId: retired } }
+          const worktreeId = site === 'settlement' ? destination.id : retired
+          return { location: { kind: 'chat', sessionId: 'chat-a', worktreeId } }
         }
         if (method === 'agentSession.reveal') {
-          const tab = chat(destination.id)
-          useAppStore.setState((state) => ({
-            unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [destination.id]: [tab] },
-            groupsByWorktree: {
-              ...state.groupsByWorktree,
-              [destination.id]: [
-                { id: 'group', worktreeId: destination.id, tabOrder: [tab.id], activeTabId: null }
-              ]
-            }
-          }))
+          placeDestination()
           return { ok: true, sessionId: 'chat-a', workspaceId: destination.id, agent: 'codex' }
         }
         return { ok: true }
       })
-      const unrelatedEntry = useAppStore.getState().unifiedTabsByWorktree[unrelated[0]!.id]
+      const affected = () => useAppStore.getState().unifiedTabsByWorktree[retired]
+      const unrelatedEntry = () => useAppStore.getState().unifiedTabsByWorktree[unrelated[0]!.id]
+      const changes = { affected: 0, unrelated: 0 }
+      let seen = { affected: affected(), unrelated: unrelatedEntry() }
+      const unsubscribe = useAppStore.subscribe(() => {
+        changes.affected += affected() === seen.affected ? 0 : 1
+        changes.unrelated += unrelatedEntry() === seen.unrelated ? 0 : 1
+        seen = { affected: affected(), unrelated: unrelatedEntry() }
+      })
       let pruning = false
-      let pruneWrites = 0
+      const prunes = { calls: 0, writes: 0, mapsCopied: 0, keysCopied: 0 }
       const prune = pruneModule.retireMovedSessionPlacement
       vi.spyOn(pruneModule, 'retireMovedSessionPlacement').mockImplementation((...args) => {
+        prunes.calls++
         pruning = true
         try {
           prune(...args)
@@ -299,46 +371,106 @@ it.each([
       })
       const setState = useAppStore.setState
       vi.spyOn(useAppStore, 'setState').mockImplementation((...args) => {
-        pruneWrites += pruning ? 1 : 0
+        if (pruning) {
+          prunes.writes++
+          // The pruner copies a root map once when it changes one of its entries.
+          const before = useAppStore.getState()
+          const written = args[0] as Partial<typeof before>
+          for (const key of [
+            'unifiedTabsByWorktree',
+            'groupsByWorktree',
+            'tabBarOrderByWorktree'
+          ] as const) {
+            if (written[key] && written[key] !== before[key]) {
+              prunes.mapsCopied++
+              prunes.keysCopied += Object.keys(before[key]).length
+            }
+          }
+        }
         return setState(...args)
       })
       resume.mockClear()
-      catalogReads.count = 0
-      unrelatedReads.count = 0
+      mocks.call.mockClear()
+      for (const counter of [reads.catalog, reads.unrelated, reads.old, orderReads]) {
+        counter.count = 0
+      }
 
       await expect(open(retired)).resolves.toBe(true)
 
+      unsubscribe()
       const state = useAppStore.getState()
       expect(state.activeWorktreeId).toBe(destination.id)
+      expect(state.activeWorkspaceExecutionHostId).toBe('local')
+      expect(state.activeView).toBe('terminal')
       expect(shownChat()).toBe(chat(destination.id).id)
-      expect(state.unifiedTabsByWorktree[retired]?.map((tab) => tab.id)).toEqual(
-        kept.map((tab) => tab.id)
+      expect(mocks.call.mock.calls.some((call) => call[1] === 'agentSession.reveal')).toBe(
+        site === 'reveal'
       )
-      expect(state.groupsByWorktree[retired]?.[0]?.tabOrder).toEqual(kept.map((tab) => tab.id))
-      expect(state.tabBarOrderByWorktree[retired]).toEqual(kept.map((tab) => tab.id))
-      // An unrelated workspace's entry is the same object, so its selector does not change.
-      expect(state.unifiedTabsByWorktree[unrelated[0]!.id]).toBe(unrelatedEntry)
-      await vi.waitFor(() => expect(resume).toHaveBeenCalledOnce())
-      const writes = pruneWrites
+      const keptIds = population.kept.map((tab) => tab.id)
+      // Everything else in the old workspace stays, in order: N chats, C, the editor and the
+      // other host's tab of the same chat.
+      expect(state.unifiedTabsByWorktree[retired]?.map((tab) => tab.id)).toEqual([
+        ...keptIds,
+        population.chatC.id,
+        population.editor.id,
+        population.foreign.id
+      ])
+      const [group, groupB] = state.groupsByWorktree[retired]!
+      expect([...group!.tabOrder]).toEqual([...population.half, population.chatC.id])
+      expect([...(group!.recentTabIds ?? [])]).toEqual(population.half)
+      expect(group!.activeTabId).toBe(population.half.at(-1))
+      expect(groupB!.activeTabId).toBe(population.editor.id)
+      expect([...state.tabBarOrderByWorktree[retired]!]).toEqual([
+        ...keptIds,
+        population.chatC.id,
+        population.editor.id,
+        population.foreign.id
+      ])
+      expect(changes).toEqual({ affected: 1, unrelated: 0 })
+      // A switch wakes the destination once; a chat opened where the user already is wakes nothing.
+      await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(site === 'settlement' ? 0 : 1))
+      const measured = { ...prunes }
       // A repeat finds nothing to prune and writes nothing.
       prune('chat-a', retired, destination.id, { kind: 'local' })
       expect(useAppStore.getState().unifiedTabsByWorktree[retired]).toBe(
         state.unifiedTabsByWorktree[retired]
       )
-      for (const [key, value] of Object.entries({
-        pruneWrites: writes,
-        unrelatedTabReads: unrelatedReads.count,
-        catalogReads: catalogReads.count
-      })) {
+      const workspaces = Object.keys(state.unifiedTabsByWorktree).length
+      const counts = {
+        pruneCalls: measured.calls,
+        pruneWrites: measured.writes,
+        mapsCopied: measured.mapsCopied,
+        keysCopied: measured.keysCopied,
+        oldKeyTabReads: reads.old.count,
+        oldKeyOrderReads: orderReads.count,
+        unrelatedTabReads: reads.unrelated.count,
+        catalogReads: reads.catalog.count
+      }
+      for (const [key, value] of Object.entries(counts)) {
         ;(tally[key] ??= []).push(value)
+      }
+      // Fixed overhead plus a constant per supplied element, per phase.
+      const budget = {
+        keysCopied: 3 * workspaces + 3,
+        oldKeyTabReads: 64 + 24 * (n + 4),
+        oldKeyOrderReads: 16 + 4 * population.references,
+        catalogReads: 64 + 2 * (n + 2)
+      }
+      for (const [key, value] of Object.entries(budget)) {
+        ;(budgets[key] ??= []).push(value)
+        expect(counts[key as keyof typeof counts]).toBeLessThanOrEqual(value)
       }
       vi.restoreAllMocks()
       resume = vi.spyOn(sleepingResume, 'resumeSleepingAgentSessionsForWorktree').mockReturnValue(1)
     }
-    console.log('S3_OPENER_COUNTS', JSON.stringify({ executionHostId, tally }))
-    // The opener prunes after the reveal and again at settlement; only the first finds the tab.
+    console.log('S3_OPENER_COUNTS', JSON.stringify({ executionHostId, site, tally, budgets }))
+    // Both production call sites run (after the reveal, if any, and at settlement); one prunes.
+    expect(tally.pruneCalls).toEqual(site === 'reveal' ? [2, 2] : [1, 1])
     expect(tally.pruneWrites).toEqual([1, 1])
+    expect(tally.mapsCopied).toEqual([3, 3])
     expect(tally.unrelatedTabReads).toEqual([0, 0])
-    expect(tally.catalogReads![1]).toBeLessThanOrEqual(12 * Math.max(tally.catalogReads![0]!, 1))
+    for (const key of ['keysCopied', 'oldKeyTabReads', 'oldKeyOrderReads', 'catalogReads']) {
+      expect(tally[key]![1]).toBeLessThanOrEqual(12 * Math.max(tally[key]![0]!, 1))
+    }
   }
 )
