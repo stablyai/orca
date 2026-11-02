@@ -1,4 +1,4 @@
-import { removeGroupLayoutLeaf } from './tab-group-layout-tree'
+import { pruneGroupLayoutLeaves } from '../workspace-session-terminal-tab-close'
 import { filterRecord } from './stored-record-fields'
 import type { CommandOf, LayoutCommandResult } from './workspace-layout-command-types'
 import type { WorkspaceLayout, WorkspaceLayoutModel } from './workspace-layout-model'
@@ -23,13 +23,12 @@ export function closeChatTabsTogether(
     return null
   }
   const byId = new Map(workspace.tabs.map((tab) => [tab.id, tab]))
-  // Where in the command each tab closed: emptied groups leave the tree in that order.
-  const closedAt = new Map<string, number>()
+  const closing = new Set<string>()
   const closed: string[] = []
   const missing: string[] = []
   const refused: RefusedClose[] = []
-  for (const [index, tabId] of command.tabIds.entries()) {
-    const tab = closedAt.has(tabId) ? undefined : byId.get(tabId)
+  for (const tabId of command.tabIds) {
+    const tab = closing.has(tabId) ? undefined : byId.get(tabId)
     if (!tab) {
       closed.push(tabId)
       missing.push(tabId)
@@ -46,41 +45,32 @@ export function closeChatTabsTogether(
       refused.push({ tabId, code: 'editor_tab_has_unsaved_draft' })
       continue
     }
-    closedAt.set(tabId, index)
+    closing.add(tabId)
     closed.push(tabId)
   }
-  if (closedAt.size === 0) {
+  if (closing.size === 0) {
     return { model, closed, missing, refused }
   }
-  const emptied: { groupId: string; at: number }[] = []
+  // The groups these closes empty leave the tree together, in one pass over it.
+  const emptied = new Set<string>()
   const groups = workspace.groups.flatMap((group) => {
-    let last = -1
-    const tabOrder = group.tabOrder.filter((id) => {
-      const at = closedAt.get(id)
-      if (at === undefined) {
-        return true
-      }
-      last = Math.max(last, at)
-      return false
-    })
-    if (last < 0) {
+    const tabOrder = group.tabOrder.filter((id) => !closing.has(id))
+    if (tabOrder.length === group.tabOrder.length) {
       return [group]
     }
     if (tabOrder.length === 0) {
-      emptied.push({ groupId: group.id, at: last })
+      emptied.add(group.id)
       return []
     }
     return [{ ...group, tabOrder }]
   })
-  let groupLayout = workspace.groupLayout
-  for (const { groupId } of emptied.sort((a, b) => a.at - b.at)) {
-    groupLayout = groupLayout
-      ? (removeGroupLayoutLeaf(groupLayout, groupId) ?? undefined)
-      : undefined
-  }
+  const groupLayout =
+    emptied.size > 0
+      ? pruneGroupLayoutLeaves(workspace.groupLayout, (groupId) => !emptied.has(groupId))
+      : workspace.groupLayout
   const next: WorkspaceLayout = {
     ...workspace,
-    tabs: workspace.tabs.filter((tab) => !closedAt.has(tab.id)),
+    tabs: workspace.tabs.filter((tab) => !closing.has(tab.id)),
     groups
   }
   if (groupLayout) {
@@ -89,7 +79,7 @@ export function closeChatTabsTogether(
     delete next.groupLayout
   }
   if (next.editorViews) {
-    next.editorViews = filterRecord(next.editorViews, (tabId) => !closedAt.has(tabId))
+    next.editorViews = filterRecord(next.editorViews, (tabId) => !closing.has(tabId))
   }
   return { model: withWorkspace(model, command.workspace, next), closed, missing, refused }
 }

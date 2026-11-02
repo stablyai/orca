@@ -27,9 +27,12 @@ import * as tabLayout from './agent-session/agent-session-tab-layout'
 import * as tabCommands from '../../shared/workspace-layout/workspace-layout-tab-commands'
 import * as removal from '../../shared/workspace-layout/workspace-layout-removal'
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
-import { collectionVisits } from './collection-visits.test-fixture'
+import { collectionVisits, fieldReads } from './collection-visits.test-fixture'
+import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
+import type { ProfileStateDomainReplacement } from '../persistence/loading-store/profile-state-authority'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
+import type { TabGroupLayoutNode } from '../../shared/tab-types'
 
 // CLI capability probing is outside tab authority and must not start a real CLI in this fixture.
 vi.mock('../claude/claude-cli-flag-prewarm', () => ({
@@ -224,21 +227,29 @@ it.each(['receipt-first', 'ordinary-first'] as const)(
 )
 
 const OLD = 'retired-project::/old/project'
-/** N moved chats, each now placed in its own current workspace with its saved hint (unless
- *  `hints` is off) under one old key, and N chats sharing one current workspace; all readable,
- *  visible and released before anything is measured. */
+/** A readable chat still placed at the old key, kept with its own saved tab. */
+const RETAINED = 'retained-chat'
+/** N moved chats, each now placed in its own current workspace, and N chats sharing one current
+ *  workspace; all readable, visible and released before anything is measured. The old key keeps
+ *  N retained groups: the retained chat with an editor beside it, then an editor in each other
+ *  group, with order, selection and recent tabs, in one subtree of its split. With `hints`, the
+ *  moved chats' saved tabs sit in the other subtree, one group each (every tenth twice). */
 async function startupPopulation(n: number, hints: boolean) {
   const name = (kind: string, i: number) => `${kind}-${i.toString().padStart(5, '0')}`
   const moved = Array.from({ length: n }, (_, i) => name('moved', i))
   const shared = Array.from({ length: n }, (_, i) => name('shared', i))
-  const visible = [...moved, ...shared]
+  const visible = [...moved, ...shared, RETAINED]
   const input = await authorityProfile([], { records: visible, visible })
   const prior = await readPersistedTestAgentSessionStore(root)
   await seedTestAgentSessionRecordStore(root, {
     records: Object.values(prior.records).map((record) => {
       const index = moved.indexOf(record.sessionId)
       const workspaceId =
-        index !== -1 ? `current-${index}::/current/${index}` : 'shared::/current/shared'
+        record.sessionId === RETAINED
+          ? OLD
+          : index !== -1
+            ? `current-${index}::/current/${index}`
+            : 'shared::/current/shared'
       return {
         ...record,
         location: { ...record.location, workspaceId, workspaceKind: 'git-worktree' as const }
@@ -249,36 +260,87 @@ async function startupPopulation(n: number, hints: boolean) {
       sessionId
     }))
   })
-  if (hints) {
-    const session = withChatTabChanges(
-      'local',
-      getDefaultWorkspaceSession(),
-      OLD,
-      moved.map((sessionId) => ({
-        open: { sessionId, agent: 'codex', tabId: structuredAgentSessionTabId(sessionId) }
+  const base = withChatTabChanges(
+    'local',
+    getDefaultWorkspaceSession(),
+    OLD,
+    [RETAINED, ...(hints ? moved : [])].map((sessionId) => ({
+      open: { sessionId, agent: 'codex', tabId: structuredAgentSessionTabId(sessionId) }
+    }))
+  )!
+  const rowOf = new Map((base.unifiedTabs?.[OLD] ?? []).map((row) => [row.entityId, row]))
+  const chat = structuredAgentSessionTabId(RETAINED)
+  const editor = (i: number) => `editor-${i}`
+  const retained = Array.from({ length: n }, (_, i) => ({
+    id: `retained-group-${i}`,
+    worktreeId: OLD,
+    activeTabId: editor(i),
+    tabOrder: i === 0 ? [chat, editor(i)] : [editor(i)],
+    recentTabIds: i === 0 ? [editor(i), chat] : [editor(i)]
+  }))
+  // Every tenth moved chat holds a second saved tab there too, after its first.
+  const again = (tabId: string) => (twice.has(tabId) ? [tabId, `${tabId}-again`] : [tabId])
+  const hinted = (hints ? moved : []).map((sessionId, i) => {
+    const tabOrder = again(structuredAgentSessionTabId(sessionId))
+    return { id: `moved-group-${i}`, worktreeId: OLD, activeTabId: tabOrder[0]!, tabOrder }
+  })
+  const template = rowOf.get(RETAINED)!
+  const { agentSessionAgent: _agent, ...plain } = template
+  const rows = [
+    ...retained.flatMap((group, i) =>
+      group.tabOrder.map((id, sortOrder) =>
+        id === chat
+          ? { ...template, groupId: group.id, sortOrder }
+          : {
+              ...plain,
+              id,
+              entityId: `/old/project/${editor(i)}.ts`,
+              contentType: 'editor' as const,
+              groupId: group.id,
+              sortOrder
+            }
+      )
+    ),
+    ...hinted.flatMap((group, i) =>
+      group.tabOrder.map((id, sortOrder) => ({
+        ...rowOf.get(moved[i]!)!,
+        id,
+        groupId: group.id,
+        sortOrder
       }))
-    )!
-    // Every tenth moved chat holds a second saved tab there too, after its first.
-    const again = (tabId: string) => (twice.has(tabId) ? [tabId, `${tabId}-again`] : [tabId])
-    input.profile.setWorkspaceSession({
-      ...session,
-      unifiedTabs: {
-        ...session.unifiedTabs,
-        [OLD]: (session.unifiedTabs?.[OLD] ?? []).flatMap((row) =>
-          again(row.id).map((id) => ({ ...row, id }))
-        )
-      },
-      tabGroups: {
-        ...session.tabGroups,
-        [OLD]: (session.tabGroups?.[OLD] ?? []).map((group) => ({
-          ...group,
-          tabOrder: group.tabOrder.flatMap(again)
-        }))
-      }
-    })
-  }
+    )
+  ]
+  const retainedTree = splitTree(retained.map((group) => group.id))!
+  const movedTree = splitTree(hinted.map((group) => group.id))
+  input.profile.setWorkspaceSession({
+    ...base,
+    unifiedTabs: { [OLD]: rows },
+    tabGroups: { [OLD]: [...hinted, ...retained] },
+    tabGroupLayouts: {
+      [OLD]: movedTree
+        ? { type: 'split', direction: 'horizontal', first: movedTree, second: retainedTree }
+        : retainedTree
+    },
+    activeGroupIdByWorktree: { [OLD]: retained[0]!.id },
+    activeTabIdByWorktree: { [OLD]: chat }
+  })
   await input.profile.flushPendingOrThrowAsync()
-  return { input, moved, shared }
+  return { input, moved, shared, kept: { rows: rows.slice(0, n + 1), retained, retainedTree } }
+}
+
+/** A balanced split over the groups, in their order. */
+function splitTree(groupIds: readonly string[]): TabGroupLayoutNode | undefined {
+  if (groupIds.length <= 1) {
+    return groupIds[0] ? { type: 'leaf', groupId: groupIds[0] } : undefined
+  }
+  const half = Math.ceil(groupIds.length / 2)
+  return {
+    type: 'split',
+    direction: 'vertical',
+    first: splitTree(groupIds.slice(0, half))!,
+    second: splitTree(groupIds.slice(half))!,
+    ratio: 0.5
+  }
 }
 
 /** The old-key tabs of the moved chats, each tenth one's second tab right after its first. */
@@ -299,7 +361,7 @@ const oldKeyCloses = (moved: readonly string[]) =>
 /** One real startup restore, settled, with the builder's own accumulation and each later phase
  *  counted. */
 async function measuredStartup(n: number, hints: boolean, window: boolean, closing: boolean) {
-  const { input, moved, shared } = await startupPopulation(n, hints)
+  const { input, moved, shared, kept } = await startupPopulation(n, hints)
   const rig = await openAuthorityRuntime(input)
   if (window) {
     // Only the host's window availability seam; no app or window is launched.
@@ -348,10 +410,33 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     loads.rows += Object.values(args[1].unifiedTabs ?? {}).flat().length
     return load(...args)
   })
-  const commands = vi.spyOn(rig.runtime, 'applyLayoutCommand')
-  // The old key's close, as the elements its holder lookup, command resolver and reducer visit
-  // and the workspace map keys its reducer copies.
-  const work = { holders: 0, resolver: 0, reducer: 0, rootCopies: 0, rootKeysCopied: 0 }
+  // The old-key close command, run alone by the serial queue: the durable writes it makes.
+  let closingOld = false
+  let closeWrites = 0
+  const apply = rig.runtime.applyLayoutCommand.bind(rig.runtime)
+  const commands = vi
+    .spyOn(rig.runtime, 'applyLayoutCommand')
+    .mockImplementation(async (command, run) => {
+      closingOld = command.type === 'closeTabs' && command.workspace === OLD
+      try {
+        return await apply(command, run)
+      } finally {
+        closingOld = false
+      }
+    })
+  // The old key's close, as the elements its holder lookup, command resolver and reducer visit,
+  // the fields of its tree the reducer reads, the size of what the reducer was given, and the
+  // workspace map keys it copies.
+  const work = {
+    holders: 0,
+    resolver: 0,
+    reducer: 0,
+    reducerInput: 0,
+    treeNodes: 0,
+    treeReads: 0,
+    rootCopies: 0,
+    rootKeysCopied: 0
+  }
   const counted =
     <A extends unknown[], R>(part: 'holders' | 'resolver' | 'reducer', run: (...args: A) => R) =>
     (...args: A): R => {
@@ -386,11 +471,22 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     if (command.workspace !== OLD) {
       return close(model, command, context)
     }
+    // Tabs, groups, order and recent-tab references, and tree nodes, as the reducer gets them.
+    const workspace = model.workspaces[OLD]
+    const tree = fieldReads()
+    const nodes = tree.watchTree(workspace?.groupLayout)
+    work.treeNodes += nodes
+    work.reducerInput +=
+      nodes +
+      (workspace?.tabs.length ?? 0) +
+      (workspace?.groups ?? []).reduce((sum, group) => sum + 1 + group.tabOrder.length, 0)
     reducing = true
     try {
       return counted('reducer', close)(model, command, context)
     } finally {
       reducing = false
+      work.treeReads += tree.reads()
+      tree.restore()
     }
   })
   const copy = removal.withWorkspace
@@ -402,10 +498,33 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     return copy(model, key, workspace)
   })
   const saves = vi.spyOn(rig.profile, 'setWorkspaceSession')
+  let durableWrites = 0
+  for (const write of ['writeSerializedDomains', 'writeCompleteSerializedDomains'] as const) {
+    const original = ProfileStateSqliteAuthority.prototype[write] as (
+      replacements: readonly ProfileStateDomainReplacement[],
+      ...rest: never[]
+    ) => void
+    vi.spyOn(ProfileStateSqliteAuthority.prototype, write).mockImplementation(function (
+      this: ProfileStateSqliteAuthority,
+      replacements: readonly ProfileStateDomainReplacement[],
+      ...rest: never[]
+    ) {
+      durableWrites++
+      closeWrites += closingOld ? 1 : 0
+      return original.call(this, replacements, ...rest)
+    })
+  }
   let notified = 0
-  rig.runtime.onMobileSessionTabsChanged(() => notified++)
+  let oldKeyNotices = 0
+  rig.runtime.onMobileSessionTabsChanged((result) => {
+    notified++
+    oldKeyNotices += result.worktree === OLD ? 1 : 0
+  })
   await rig.runtime.restoreStructuredAgentSessionTabs()
   await chatTabCommandsSettled()
+  // Writes and notices settle before they are read.
+  await rig.profile.flushPendingOrThrowAsync()
+  rig.runtime['mobileSessionTabsNotifyCoalescer'].flushAll()
   expect(built).toHaveLength(1)
   const [{ result, unchanged }] = built
   expect(unchanged).toBe(true)
@@ -418,13 +537,24 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
   for (const [index, sessionId] of moved.entries()) {
     expect(opened(`current-${index}::/current/${index}`)).toEqual([sessionId])
   }
+  // The retained chat's own open, then the moved chats' old-key closes.
+  expect(opened(OLD)).toEqual([RETAINED])
   const oldCloses = hints && closing ? oldKeyCloses(moved) : []
-  expect(result.get(OLD) ?? []).toEqual(oldCloses)
-  expect(contributed).toBe(2 * n + oldCloses.length)
+  expect((result.get(OLD) ?? []).filter((change) => 'close' in change)).toEqual(oldCloses)
+  expect(contributed).toBe(2 * n + 1 + oldCloses.length)
   const closes = commands.mock.calls.flatMap(([command]) =>
     command.type === 'closeTabs' && command.workspace === OLD ? [command.tabIds.length] : []
   )
-  const savedOld = rig.profile.getWorkspaceSession('local')?.unifiedTabs?.[OLD] ?? []
+  const saved = rig.profile.getWorkspaceSession('local')
+  const savedOld = saved?.unifiedTabs?.[OLD] ?? []
+  if (!window) {
+    // Exactly the retained chat, editors, groups (order, selection, recent tabs) and their subtree.
+    expect(savedOld.map((tab) => [tab.id, tab.groupId])).toEqual(
+      kept.rows.map((tab) => [tab.id, tab.groupId])
+    )
+    expect(saved?.tabGroups?.[OLD]).toEqual(kept.retained)
+    expect(saved?.tabGroupLayouts?.[OLD]).toEqual(kept.retainedTree)
+  }
   const counts = {
     contributed,
     buckets: own.length,
@@ -433,9 +563,12 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     loadedRows: loads.rows,
     oldKeyCloseCommands: closes.length,
     oldKeyTabsClosedPerCommand: closes[0] ?? 0,
-    savedOldKeyTabs: savedOld.length,
+    savedMovedTabs: savedOld.filter((tab) => moved.includes(tab.entityId)).length,
     saves: saves.mock.calls.length,
+    durableWrites,
+    closeWrites,
     notified,
+    oldKeyNotices,
     ...work
   }
   expect(counts.buckets).toBe(result.size)
@@ -467,28 +600,39 @@ it.each([
       }
     }
     console.log('S2_STARTUP_COUNTS', JSON.stringify({ mode, tally }))
-    expect(tally.contributed).toEqual(closing ? [62, 620] : [40, 400])
+    expect(tally.contributed).toEqual(closing ? [63, 621] : [41, 401])
     expect(tally.carried).toEqual([0, 0])
     expect(tally.buckets![1]).toBeLessThanOrEqual(12 * tally.buckets![0]!)
     if (main) {
       // The moved cohort's closes are one command whatever N is, and add only a fixed number of
-      // whole-layout loads; the opens' per-change layout work is inherited and reported only.
+      // whole-layout loads, durable writes and old-key notices beside the same population without
+      // hints; the opens' per-change saves, writes and notices are inherited and only reported.
       expect(tally.oldKeyCloseCommands).toEqual([1, 1])
       expect(tally.oldKeyTabsClosedPerCommand).toEqual([22, 220])
-      expect(tally.savedOldKeyTabs).toEqual([0, 0])
-      const added = tally.loads!.map((value, i) => value - tally['withoutHints.loads']![i]!)
-      expect(added[1]).toBe(added[0])
-      expect(added[0]).toBeLessThanOrEqual(4)
-      // Inside that command: a pass over the old key's T tabs per partition to find holders, two
-      // resolutions (the command and its admission) and one reducer pass with one workspace-map
-      // copy, each a fixed cost plus a few visits per tab. One lookup or close per tab instead
-      // grows with T² and fails these.
-      for (const [i, tabs] of [22, 220].entries()) {
-        expect(tally.holders![i]).toBeLessThanOrEqual(5 * tabs + 16)
-        expect(tally.resolver![i]).toBeLessThanOrEqual(10 * tabs + 16)
-        expect(tally.reducer![i]).toBeLessThanOrEqual(8 * tabs + 32)
+      expect(tally.savedMovedTabs).toEqual([0, 0])
+      // The close writes once or twice itself; the old key's notices differ by a fixed count.
+      expect(Math.max(...tally.closeWrites!)).toBeLessThanOrEqual(2)
+      for (const key of ['loads', 'oldKeyNotices']) {
+        const added = tally[key]!.map((value, i) => value - tally[`withoutHints.${key}`]![i]!)
+        console.log('S2_CLOSE_ADDED', key, JSON.stringify(added))
+        expect(added[1], key).toBe(added[0])
+        expect(added[0], key).toBeLessThanOrEqual(4)
       }
-      for (const part of ['holders', 'resolver', 'reducer']) {
+      // Inside that command, each a fixed cost plus a few visits per element it is given: the
+      // holder lookup over the old key's R saved rows for its T requested tabs, two resolutions
+      // (the command and its admission) over the same, one reducer pass over its input (tabs,
+      // groups, order references and tree nodes) reading each tree node a fixed number of times,
+      // and one workspace-map copy. One lookup, close or tree removal per tab or emptied group
+      // instead grows with N² and fails these.
+      for (const [i, n] of [20, 200].entries()) {
+        const requested = n + n / 10
+        const rows = requested + n + 1
+        expect(tally.holders![i], 'holders').toBeLessThanOrEqual(5 * (rows + requested) + 16)
+        expect(tally.resolver![i], 'resolver').toBeLessThanOrEqual(10 * (rows + requested) + 16)
+        expect(tally.reducer![i], 'reducer').toBeLessThanOrEqual(6 * tally.reducerInput![i]! + 32)
+        expect(tally.treeReads![i], 'tree').toBeLessThanOrEqual(4 * tally.treeNodes![i]! + 16)
+      }
+      for (const part of ['holders', 'resolver', 'reducer', 'treeReads']) {
         expect(tally[part]![1]).toBeLessThanOrEqual(12 * tally[part]![0]!)
         expect(tally[`withoutHints.${part}`]).toEqual([0, 0])
       }

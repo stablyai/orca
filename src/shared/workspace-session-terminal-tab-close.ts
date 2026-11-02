@@ -38,21 +38,30 @@ export function pruneGroupLayout(
   node: TabGroupLayoutNode | undefined,
   validGroupIds: ReadonlySet<string>
 ): TabGroupLayoutNode | undefined {
+  return pruneGroupLayoutLeaves(node, (groupId) => validGroupIds.has(groupId))
+}
+
+/** One pass over the tree: leaves `keep` rejects go, a split left with one child becomes that
+ *  child, and a subtree that loses nothing is returned as it was. */
+export function pruneGroupLayoutLeaves(
+  node: TabGroupLayoutNode | undefined,
+  keep: (groupId: string) => boolean
+): TabGroupLayoutNode | undefined {
   if (!node) {
     return undefined
   }
   if (node.type === 'leaf') {
-    return validGroupIds.has(node.groupId) ? node : undefined
+    return keep(node.groupId) ? node : undefined
   }
-  const first = pruneGroupLayout(node.first, validGroupIds)
-  const second = pruneGroupLayout(node.second, validGroupIds)
+  const first = pruneGroupLayoutLeaves(node.first, keep)
+  const second = pruneGroupLayoutLeaves(node.second, keep)
   if (!first) {
     return second
   }
   if (!second) {
     return first
   }
-  return { ...node, first, second }
+  return first === node.first && second === node.second ? node : { ...node, first, second }
 }
 
 function collectTabPtyIds(

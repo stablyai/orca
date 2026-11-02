@@ -359,8 +359,8 @@ it.each(['accepted', 'refused'] as const)(
   }
 )
 
-/** Chat A in three tabs (a3 never requested), chat C and an editor; a2 and a3 each alone in a
- *  split group, and the first group's selection and recent tabs saved. */
+/** Chat A in four tabs, chat C and an editor; a4, then a2 and a3, each alone in a split group on
+ *  either side of C's group, whose selection and recent tabs are saved. */
 async function savedDuplicateChats(workspace: string) {
   const { fixture } =
     await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
@@ -385,13 +385,15 @@ async function savedDuplicateChats(workspace: string) {
   })
   await chat('A', 'a2')
   await chat('A', 'a3')
+  await chat('A', 'a4')
   const groupOf = (tabId: string) =>
     store
       .getWorkspaceSession()
       .tabGroups?.[workspace]?.find((group) => group.tabOrder.includes(tabId))?.id ?? 'no-group'
   for (const [tabId, beside, direction] of [
     ['a2', 'a1', 'right'],
-    ['a3', 'a2', 'down']
+    ['a3', 'a2', 'down'],
+    ['a4', 'a1', 'left']
   ] as const) {
     await store.applyLayoutCommand({
       type: 'splitGroup',
@@ -402,14 +404,22 @@ async function savedDuplicateChats(workspace: string) {
     })
   }
   const session = store.getWorkspaceSession()
-  const [first, ...rest] = session.tabGroups?.[workspace] ?? []
-  expect(first!.tabOrder).toEqual(['a1', 'c', 'e'])
-  expect(rest.map((group) => group.tabOrder)).toEqual([['a2'], ['a3']])
+  const groups = session.tabGroups?.[workspace] ?? []
+  expect(groups.map((group) => group.tabOrder).toSorted()).toEqual([
+    ['a1', 'c', 'e'],
+    ['a2'],
+    ['a3'],
+    ['a4']
+  ])
   return {
     ...session,
     tabGroups: {
       ...session.tabGroups,
-      [workspace]: [{ ...first!, activeTabId: 'a1', recentTabIds: ['e', 'c', 'a1'] }, ...rest]
+      [workspace]: groups.map((group) =>
+        group.tabOrder.includes('c')
+          ? { ...group, activeTabId: 'a1', recentTabIds: ['e', 'c', 'a1'] }
+          : group
+      )
     }
   }
 }
@@ -417,11 +427,13 @@ async function savedDuplicateChats(workspace: string) {
 it.each(
   [true, false].flatMap((main) =>
     [
-      { closes: ['a1', 'a2'], left: ['c', 'e', 'a3'] },
+      { closes: ['a1', 'a2'], left: ['c', 'e', 'a3', 'a4'] },
       // A close names the first A tab left, or closes nothing: a2 first finds a1 there.
-      { closes: ['a2', 'a1'], left: ['c', 'e', 'a2', 'a3'] },
-      { closes: ['a1', 'a1'], left: ['c', 'e', 'a2', 'a3'] },
-      { closes: ['a1', 'a2', 'a3'], left: ['c', 'e'] }
+      { closes: ['a2', 'a1'], left: ['c', 'e', 'a2', 'a3', 'a4'] },
+      { closes: ['a1', 'a1'], left: ['c', 'e', 'a2', 'a3', 'a4'] },
+      { closes: ['a1', 'a2', 'a3'], left: ['c', 'e', 'a4'] },
+      // Empties groups on both sides of C's group in the tree.
+      { closes: ['a1', 'a2', 'a3', 'a4'], left: ['c', 'e'] }
     ].map((row) => ({ ...row, main }))
   )
 )(
@@ -472,6 +484,9 @@ it.each(
     expect({ ...together, commands: [] }).toEqual({ ...one, commands: [] })
     expect(together.tabs?.map((tab) => tab.id).toSorted()).toEqual(left.toSorted())
     // The first group keeps C and the editor, its selection following the close in both.
-    expect(together.groups?.[0]).toMatchObject({ tabOrder: ['c', 'e'], recentTabIds: ['e', 'c'] })
+    expect(together.groups?.find((group) => group.tabOrder.includes('c'))).toMatchObject({
+      tabOrder: ['c', 'e'],
+      recentTabIds: ['e', 'c']
+    })
   }
 )
