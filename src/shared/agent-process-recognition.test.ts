@@ -67,6 +67,10 @@ describe('agent process recognition', () => {
       processName: 'codex-aarch64-ap'
     })
     expect(isRecognizedAgentType('codex-aarch64-ap')).toBe(true)
+    // The expected-agent check shares that identity, as it does for versioned Grok.
+    expect(isExpectedAgentProcess('codex-aarch64-ap', 'codex')).toBe(true)
+    expect(isExpectedAgentProcess('grok-0.2.51', 'grok')).toBe(true)
+    expect(isExpectedAgentProcess('codex-aarch64-ap', 'claude')).toBe(false)
   })
 
   it.each(['posix', 'powershell', 'cmd'] as const)(

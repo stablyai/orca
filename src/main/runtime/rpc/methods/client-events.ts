@@ -4,23 +4,11 @@ import {
 } from '../../../ssh/targets/ssh-target-registry'
 import { getPublicSshState } from '../../public-ssh-state'
 import { defineMethod, defineStreamingMethod } from '../core'
-import {
-  ClientEventsUnsubscribeParams,
-  DismissGeneratedInputNoticeParams
-} from '../../../../shared/rpc-contract/client-events-params'
+import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
 
 let clientEventSubscriptionSeq = 0
 
 export const CLIENT_EVENT_METHODS = [
-  defineMethod({
-    name: 'terminal.dismissGeneratedInputNotice',
-    permission: 'workspace',
-    params: DismissGeneratedInputNoticeParams,
-    handler: async ({ id }, { runtime }) => {
-      runtime.generatedInputNotices.dismiss(id)
-      return { dismissed: true }
-    }
-  }),
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
     permission: 'workspace',
@@ -64,7 +52,6 @@ export const CLIENT_EVENT_METHODS = [
           type: 'ready',
           subscriptionId,
           snapshot: {
-            generatedInputNotices: runtime.generatedInputNotices.snapshot(),
             sshStates,
             nativeChatQueueFollowUps: runtime.getClientSettings().nativeChatQueueFollowUps
           }

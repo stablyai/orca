@@ -62,7 +62,7 @@ describe('generated input admission', () => {
   it('measures compatibility quiet live from subscription without requiring a lost startup byte', async () => {
     vi.useFakeTimers()
     const result = waitForGeneratedAgentInput(
-      { subscribe: () => () => {}, accept: async () => true },
+      { subscribe: () => () => {}, bracketedPaste: () => true, accept: async () => true },
       'render-quiet-after-bracketed-paste'
     )
     let settled = false

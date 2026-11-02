@@ -8,7 +8,19 @@ export type GeneratedAgentInputHost = {
   subscribe: (observe: (data: string) => void) => (() => void) | Promise<() => void>
   replay?: () => string | undefined
   composerReady?: () => boolean | Promise<boolean>
+  /** The terminal's current bracketed-paste mode, when the host's model knows it. */
+  bracketedPaste?: () => boolean
   accept: (quiet: boolean) => boolean | Promise<boolean>
+}
+
+/** Agents whose composer paints before it takes input prove readiness only with their own marker;
+ *  quiet or a painted composer glyph is no evidence for them. */
+export function signalAllowsCompatibilityEvidence(signal: DraftPasteReadySignal): boolean {
+  return (
+    signal !== 'codex-composer-prompt' &&
+    signal !== 'opencode-agent-row' &&
+    signal !== 'render-cursor-after-bracketed-paste'
+  )
 }
 
 /** Compatibility quiet is live evidence, never a deadline's permission to write. */
@@ -18,17 +30,15 @@ export function waitForGeneratedAgentInput(
   options: { timeoutMs?: number; requireComposerMarker?: boolean; signal?: AbortSignal } = {}
 ): Promise<boolean> {
   const deadline = Date.now() + (options.timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS)
-  const permitsQuiet =
-    !options.requireComposerMarker &&
-    signal !== 'codex-composer-prompt' &&
-    signal !== 'opencode-agent-row' &&
-    signal !== 'render-cursor-after-bracketed-paste'
+  const permitsQuiet = !options.requireComposerMarker && signalAllowsCompatibilityEvidence(signal)
   return new Promise((resolve) => {
     let scanner = createDraftPasteReadyScanner(signal)
     let lastOutput = Date.now()
     let handoffCarry = ''
     let sequence = 0
     let ready = false
+    // Quiet counts only once the agent has enabled paste input, seen live or in the current mode.
+    let quietArmed = false
     let graceAt: number | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
     let hardTimer: ReturnType<typeof setTimeout> | undefined
@@ -58,11 +68,13 @@ export function waitForGeneratedAgentInput(
       if (last) {
         scanner = createDraftPasteReadyScanner(signal)
         ready = false
+        quietArmed = false
         graceAt = null
         data = combined.slice(last.index + last[0].length)
       }
       const result = scanner.observe(data)
       ready ||= result.ready
+      quietArmed ||= result.armQuietTimer
       if (result.readyAfterMs === null) {
         graceAt = null
       } else if (result.readyAfterMs !== undefined) {
@@ -83,9 +95,14 @@ export function waitForGeneratedAgentInput(
           ready ||
           (graceAt !== null && Date.now() >= graceAt) ||
           (await host.composerReady?.()) === true
-        const quiet = permitsQuiet && Date.now() - lastOutput >= GENERATED_AGENT_INPUT_QUIET_MS
+        const quiet =
+          permitsQuiet &&
+          (quietArmed || host.bracketedPaste?.() === true) &&
+          Date.now() - lastOutput >= GENERATED_AGENT_INPUT_QUIET_MS
+        // Output during the read voids only quiet; a positive composer survives a busy footer, and
+        // the writer rechecks the current screen before every byte.
         if ((marker || quiet) && (await host.accept(!marker))) {
-          if (!settled && observedSequence === sequence && Date.now() < deadline) {
+          if (!settled && (marker || observedSequence === sequence) && Date.now() < deadline) {
             finish(true)
           }
         }

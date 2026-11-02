@@ -26,7 +26,9 @@ it.each([
       getForegroundProcess: async () => TUI_AGENT_CONFIG[agent].expectedProcess,
       subscribeToData: () => () => {},
       readRecentOutput: () => undefined,
-      readInputScreen: async () => ruledScreenLines,
+      readInputScreen: async () => ({ lines: ruledScreenLines, alternateScreen: false }),
+      // The host's emulator holds the live mode; no replayed 2004 byte is needed.
+      bracketedPaste: () => true,
       write: vi.fn()
     },
     'handle',
@@ -46,7 +48,9 @@ it('delivers to a recorded default-quiet composer on late attach with no 2004 re
       getForegroundProcess: async () => 'cline',
       subscribeToData: () => () => {},
       readRecentOutput: () => undefined,
-      readInputScreen: async () => ruledScreenLines,
+      readInputScreen: async () => ({ lines: ruledScreenLines, alternateScreen: false }),
+      // The host's emulator holds the live mode; no replayed 2004 byte is needed.
+      bracketedPaste: () => true,
       write: vi.fn()
     },
     'handle',
