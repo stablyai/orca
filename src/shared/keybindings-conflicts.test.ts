@@ -82,6 +82,23 @@ describe('keybindings', () => {
     })
   })
 
+  it('keeps worktree palette and native chat toggle on distinct chords across platforms', () => {
+    // Mod+Shift+J previously collided on Windows and Linux with worktree.palette (#37061).
+    expect(getEffectiveKeybindingsForAction('worktree.palette', 'darwin')).toEqual(['Mod+J'])
+    expect(getEffectiveKeybindingsForAction('terminal.toggleNativeChat', 'darwin')).toEqual([
+      'Mod+Shift+J'
+    ])
+
+    for (const platform of ['linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('worktree.palette', platform)).toEqual([
+        'Mod+Shift+J'
+      ])
+      expect(getEffectiveKeybindingsForAction('terminal.toggleNativeChat', platform)).toEqual([
+        'Mod+Alt+J'
+      ])
+    }
+  })
+
   it('finds app-level owners of a prospective plugin chord with overrides', () => {
     expect(findKeybindingActionsForBinding('Mod+P', 'darwin')).toContain('worktree.quickOpen')
     expect(
