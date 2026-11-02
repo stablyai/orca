@@ -8,9 +8,12 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { TabEntryOption } from './tab-create-entry-action'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import * as hintExamples from './tab-agent-search-hint-examples'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import * as telemetry from '@/lib/telemetry'
 
 // Stub runtime IPC/store-backed actions to isolate keyboard option handling.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
@@ -336,5 +339,268 @@ describe('TabBarCreateEntry keyboard navigation', () => {
 
     pressKey(firstItem, 'ArrowUp')
     expect(document.activeElement).toBe(input)
+  })
+})
+
+const claudeHintEntry: AgentPickerEntry = {
+  agent: 'claude',
+  label: 'Claude',
+  rows: [{ agent: 'claude', kind: 'chat' }],
+  surfaces: ['chat'],
+  defaultSurface: 'chat',
+  terminal: {},
+  structured: {},
+  catalog: {
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [{ id: 'opus[1m]', label: 'Opus (1M context)', isDefault: true, efforts: [] }]
+  }
+}
+const codexHintEntry: AgentPickerEntry = {
+  ...claudeHintEntry,
+  agent: 'codex',
+  label: 'Codex',
+  rows: [{ agent: 'codex', kind: 'cli' }],
+  surfaces: ['terminal'],
+  defaultSurface: 'terminal',
+  catalog: {
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [{ id: 'gpt-6.1-terra', label: '6.1-terra', isDefault: true, efforts: [] }]
+  }
+}
+
+describe('first-time agent search hint', () => {
+  beforeEach(() => {
+    localStorage.removeItem('orca.tabAgentSearchHint.v1')
+    useAppStore.setState({ persistedUIReady: true })
+    vi.spyOn(telemetry, 'track').mockImplementation(() => {})
+    vi.spyOn(crypto, 'getRandomValues').mockImplementation((array) => {
+      if (array instanceof Uint8Array) {
+        array.fill(255)
+      }
+      return array
+    })
+  })
+  afterEach(() => {
+    localStorage.removeItem('orca.tabAgentSearchHint.v1')
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    { entry: claudeHintEntry, query: 'Opus (1M context)', model: 'opus[1m]' },
+    { entry: codexHintEntry, query: '6.1-terra', model: 'gpt-6.1-terra' }
+  ])('fills $query and launches the available model on Enter', ({ entry, query, model }) => {
+    const onQueryChange = vi.fn()
+    const onLaunchAgentOption = vi.fn()
+    const onOpenEntry = vi.fn()
+    mount(
+      <TabBarCreateEntry
+        worktreeId="wt"
+        groupId="g"
+        menuOpen
+        onOpenEntry={onOpenEntry}
+        onLaunchAgentOption={onLaunchAgentOption}
+        agentPickerEntries={[entry]}
+        onQueryChange={onQueryChange}
+      />
+    )
+    const hint = container.querySelector('#tab-agent-search-hint')
+    expect(hint).not.toBeNull()
+    const button = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(query)
+    )
+    expect(button).toBeDefined()
+    act(() => button?.click())
+    expect(container.querySelector('input')?.value).toBe(query)
+    expect(document.activeElement).toBe(container.querySelector('input'))
+    expect(onQueryChange).toHaveBeenLastCalledWith(query)
+    expect(container.querySelector('#tab-agent-search-hint')).toBeNull()
+    submitForm()
+    expect(onLaunchAgentOption).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setup: { agent: entry.agent, surface: entry.defaultSurface, choices: { model } }
+      })
+    )
+    expect(onOpenEntry).not.toHaveBeenCalled()
+    expect(vi.mocked(telemetry.track).mock.calls).toEqual([
+      ['tab_agent_search_hint_exposure', { experiment_cohort: 'treatment' }],
+      ['tab_agent_search_hint_action', { experiment_cohort: 'treatment', action: 'try_example' }],
+      ['tab_agent_search_hint_action', { experiment_cohort: 'treatment', action: 'agent_selected' }]
+    ])
+    setQuery('')
+    expect(container.querySelector('#tab-agent-search-hint')).toBeNull()
+  })
+
+  it('waits for a searchable catalog and an empty query before consuming exposure', () => {
+    const renderMenu = (entry: AgentPickerEntry) => (
+      <TabBarCreateEntry
+        worktreeId="wt"
+        groupId="g"
+        menuOpen
+        onOpenEntry={vi.fn()}
+        agentPickerEntries={[entry]}
+      />
+    )
+    mount(renderMenu({ ...claudeHintEntry, catalog: { origin: 'unknown' } }))
+    expect(container.querySelector('#tab-agent-search-hint')).toBeNull()
+    expect(localStorage.getItem('orca.tabAgentSearchHint.v1')).toBeNull()
+    setQuery('hello')
+    mount(renderMenu(claudeHintEntry))
+    expect(container.querySelector('#tab-agent-search-hint')).toBeNull()
+    expect(localStorage.getItem('orca.tabAgentSearchHint.v1')).toBeNull()
+    setQuery('')
+    expect(container.querySelector('#tab-agent-search-hint')).not.toBeNull()
+    expect(localStorage.getItem('orca.tabAgentSearchHint.v1')).toBe('treatment')
+  })
+
+  it('does not offer the hint again after reopening the menu', () => {
+    const renderMenu = (menuOpen: boolean) => (
+      <TabBarCreateEntry
+        worktreeId="wt"
+        groupId="g"
+        menuOpen={menuOpen}
+        onOpenEntry={vi.fn()}
+        agentPickerEntries={[claudeHintEntry]}
+      />
+    )
+    mount(renderMenu(true))
+    expect(container.querySelector('#tab-agent-search-hint')).not.toBeNull()
+    mount(renderMenu(false))
+    mount(renderMenu(true))
+    expect(container.querySelector('#tab-agent-search-hint')).toBeNull()
+  })
+
+  it.each([0, 255])('records one selection during the exposure menu session (%i)', (byte) => {
+    vi.mocked(crypto.getRandomValues).mockImplementation((array) => {
+      if (array instanceof Uint8Array) {
+        array.fill(byte)
+      }
+      return array
+    })
+    const onLaunchAgentOption = vi.fn()
+    mount(
+      <TabBarCreateEntry
+        worktreeId="wt"
+        groupId="g"
+        menuOpen
+        onOpenEntry={vi.fn()}
+        onLaunchAgentOption={onLaunchAgentOption}
+        agentPickerEntries={[claudeHintEntry]}
+      />
+    )
+    setQuery('opus')
+    submitForm()
+    submitForm()
+
+    expect(onLaunchAgentOption).toHaveBeenCalledTimes(2)
+    const experiment_cohort = byte >= 128 ? 'treatment' : 'control'
+    expect(vi.mocked(telemetry.track).mock.calls).toEqual([
+      ['tab_agent_search_hint_exposure', { experiment_cohort }],
+      ['tab_agent_search_hint_action', { experiment_cohort, action: 'agent_selected' }]
+    ])
+  })
+
+  it.each([0, 255])(
+    'ends measurement when the exposure menu closes without a selection (%i)',
+    (byte) => {
+      vi.mocked(crypto.getRandomValues).mockImplementation((array) => {
+        if (array instanceof Uint8Array) {
+          array.fill(byte)
+        }
+        return array
+      })
+      const onLaunchAgentOption = vi.fn()
+      const renderMenu = (menuOpen: boolean) => (
+        <TabBarCreateEntry
+          worktreeId="wt"
+          groupId="g"
+          menuOpen={menuOpen}
+          onOpenEntry={vi.fn()}
+          onLaunchAgentOption={onLaunchAgentOption}
+          agentPickerEntries={[claudeHintEntry]}
+        />
+      )
+      mount(renderMenu(true))
+      mount(renderMenu(false))
+      mount(renderMenu(true))
+      setQuery('opus')
+      submitForm()
+
+      expect(onLaunchAgentOption).toHaveBeenCalledOnce()
+      expect(telemetry.track).toHaveBeenCalledExactlyOnceWith('tab_agent_search_hint_exposure', {
+        experiment_cohort: byte >= 128 ? 'treatment' : 'control'
+      })
+    }
+  )
+
+  it('keeps measuring the exposure session after the hint is dismissed', () => {
+    mount(
+      <TabBarCreateEntry
+        worktreeId="wt"
+        groupId="g"
+        menuOpen
+        onOpenEntry={vi.fn()}
+        onLaunchAgentOption={vi.fn()}
+        agentPickerEntries={[claudeHintEntry]}
+      />
+    )
+    const dismiss = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Dismiss agent search hint"]'
+    )
+    expect(dismiss).not.toBeNull()
+    act(() => dismiss?.click())
+    setQuery('opus')
+    submitForm()
+
+    expect(vi.mocked(telemetry.track).mock.calls).toEqual([
+      ['tab_agent_search_hint_exposure', { experiment_cohort: 'treatment' }],
+      ['tab_agent_search_hint_action', { experiment_cohort: 'treatment', action: 'dismissed' }],
+      ['tab_agent_search_hint_action', { experiment_cohort: 'treatment', action: 'agent_selected' }]
+    ])
+  })
+
+  it.each(['control', 'treatment'])(
+    'skips example selection for an already exposed %s user',
+    (cohort) => {
+      localStorage.setItem('orca.tabAgentSearchHint.v1', cohort)
+      const selectExamples = vi.spyOn(hintExamples, 'getTabAgentSearchHintExamples')
+      const onLaunchAgentOption = vi.fn()
+      mount(
+        <TabBarCreateEntry
+          worktreeId="wt"
+          groupId="g"
+          menuOpen
+          onOpenEntry={vi.fn()}
+          onLaunchAgentOption={onLaunchAgentOption}
+          agentPickerEntries={[claudeHintEntry]}
+        />
+      )
+      expect(container.querySelector('#tab-agent-search-hint')).toBeNull()
+      expect(selectExamples).not.toHaveBeenCalled()
+      setQuery('opus')
+      submitForm()
+      expect(onLaunchAgentOption).toHaveBeenCalledOnce()
+      expect(telemetry.track).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not select examples while typing or while a catalog refresh arrives with a query', () => {
+    const selectExamples = vi.spyOn(hintExamples, 'getTabAgentSearchHintExamples')
+    const renderMenu = () => (
+      <TabBarCreateEntry
+        worktreeId="wt"
+        groupId="g"
+        menuOpen
+        onOpenEntry={vi.fn()}
+        agentPickerEntries={[claudeHintEntry]}
+      />
+    )
+    mount(renderMenu())
+    expect(selectExamples).toHaveBeenCalledTimes(1)
+    setQuery('o')
+    setQuery('op')
+    mount(renderMenu())
+    expect(selectExamples).toHaveBeenCalledTimes(1)
   })
 })

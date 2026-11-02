@@ -39,6 +39,8 @@ import {
   settingsChangedSchema
 } from './telemetry-daemon-event-schemas'
 import {
+  tabAgentSearchHintExposureSchema,
+  tabAgentSearchHintActionSchema,
   contextualTourOutcomeSchema,
   contextualTourShownSchema,
   editorExternalChangeConflictActionSchema,
@@ -223,6 +225,8 @@ export const eventSchemas = {
   onboarding_feature_setup_terminal_interacted: onboardingFeatureSetupTerminalInteractedSchema,
   activation_checklist_item_completed: activationChecklistItemCompletedSchema,
 
+  tab_agent_search_hint_exposure: tabAgentSearchHintExposureSchema,
+  tab_agent_search_hint_action: tabAgentSearchHintActionSchema,
   contextual_tour_shown: contextualTourShownSchema,
   contextual_tour_outcome: contextualTourOutcomeSchema,
   setup_guide_opened: setupGuideOpenedSchema,

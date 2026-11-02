@@ -129,3 +129,15 @@ export const toastActionOverModalSchema = z
     raised_by: z.enum(['click', 'new_toast'])
   })
   .strict()
+
+export const tabAgentSearchHintExposureSchema = z
+  .object({
+    experiment_cohort: z.enum(['control', 'treatment'])
+  })
+  .strict()
+
+export const tabAgentSearchHintActionSchema = tabAgentSearchHintExposureSchema
+  .extend({
+    action: z.enum(['dismissed', 'try_example', 'agent_selected'])
+  })
+  .strict()
