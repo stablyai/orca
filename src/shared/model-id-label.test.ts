@@ -11,6 +11,9 @@ describe('labelFromModelId', () => {
     expect(labelFromModelId('gemini-2.5-flash-preview-05-20')).toBe(
       'Gemini 2.5 Flash Preview 05 20'
     )
+    expect(labelFromModelId('gemini-2.5-flash-preview-10-20')).toBe(
+      'Gemini 2.5 Flash Preview 10 20'
+    )
     expect(labelFromModelId('llama-3-8b')).toBe('Llama 3 8B')
   })
 })
