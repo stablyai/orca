@@ -5751,11 +5751,7 @@
           "93cbea12c2": "笔记",
           "dbe2d18972": "更多 {{value0}} 操作",
           "2c67730e07": "在 Orca 中打开",
-          "e42941631a": "Linear 视图",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "编辑议题",
-          "b22f058067": "在 GitHub 上查看",
-          "e97d8f2876": "议题 #{{value0}}",
           "3ea2702e62": "已链接 {{value0}} #{{value1}}",
           "b105fd3057": "链接 Linear {{value0}}",
           "3f2649eeb8": "链接议题#{{value0}}",
@@ -5778,8 +5774,6 @@
           "cliCreatedFromShell": "通过 `orca worktree create` 创建",
           "cliStartupAgent": "Started with {{value0}}",
           "cliCreated": "由 Orca CLI 创建",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "在 Jira 中查看",
           "linkedJira": "已关联 Jira {{value0}}",
           "openInOrcaBrowser": "在 Orca 浏览器中打开"
         },
@@ -21438,7 +21432,8 @@
       "checksNeutral": "中性",
       "allReviewChecks": "评审：{{count}} · 检查：{{status}}",
       "showLinked_other": "显示 {{count}} 个关联的审查和任务",
-      "linkedCount_other": "已关联 {{count}} 项"
+      "linkedCount_other": "已关联 {{count}} 项",
+      "labels": "标签：{{labels}}"
     },
     "attachments": {
       "updateRuntime": "更新远程运行时以更改工作区链接",

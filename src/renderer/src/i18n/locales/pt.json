@@ -11398,11 +11398,7 @@
           "dbe2d18972": "Mais ações de {{value0}}",
           "openInOrcaBrowser": "Abrir no navegador do Orca",
           "2c67730e07": "Abrir no Orca",
-          "e42941631a": "Ver no Linear",
-          "5e982e6128": "Linear {{value0}}",
           "807b13b9ec": "Editar issue",
-          "b22f058067": "Ver no GitHub",
-          "e97d8f2876": "Issue #{{value0}}",
           "moreIssueActions": "Mais ações da issue",
           "copyLink": "Copiar link",
           "copyLinkSuccess": "{{value0}} copiado",
@@ -11425,8 +11421,6 @@
           "cliCreatedFromShell": "Criado via `orca worktree create`",
           "cliStartupAgent": "Iniciado com {{value0}}",
           "cliCreated": "Criado pela CLI do Orca",
-          "jiraIssue": "Jira {{value0}}",
-          "viewOnJira": "Ver no Jira",
           "linkedJira": "Jira {{value0}} vinculado"
         },
         "LinearAgentSkillSetupPrompt": {
@@ -22092,7 +22086,8 @@
       "showLinked_many": "Mostrar {{count}} revisões e tarefas vinculadas",
       "linkedCount_one": "{{count}} vinculado",
       "linkedCount_other": "{{count}} vinculados",
-      "linkedCount_many": "{{count}} vinculados"
+      "linkedCount_many": "{{count}} vinculados",
+      "labels": "Rótulos: {{labels}}"
     },
     "attachments": {
       "updateRuntime": "Atualize o runtime remoto para alterar os links do espaço de trabalho",
