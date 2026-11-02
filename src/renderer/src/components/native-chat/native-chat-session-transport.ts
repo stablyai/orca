@@ -36,8 +36,8 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
 
 /** Web IPC already targets its paired runtime; preserve sync desktop and deferred web teardown forms. */
 const localNativeChatTransport: NativeChatSessionTransport = {
-  readSession: (agent, sessionId, limit, transcriptPath) =>
-    window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
+  readSession: (agent, sessionId, limit, transcriptPath, options) =>
+    window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath, options),
   subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
 }
 

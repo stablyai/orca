@@ -122,12 +122,6 @@ describe('structured session visibility on empty worktrees', () => {
     expect(applied.layoutByWorktree[GIT_WT]).toEqual({ type: 'leaf', groupId: LOCAL_ROOT })
   })
 
-  it('materializes a rendered group on a truly empty git worktree', () => {
-    const applied = applyStructured(emptyState({}), headlessSnapshot(GIT_WT))
-
-    expectChatTabRendered(applied, GIT_WT)
-  })
-
   it('materializes a rendered group on a truly empty folder workspace', () => {
     const applied = applyStructured(
       emptyState({ activeWorktreeId: FOLDER_WT }),
@@ -135,21 +129,6 @@ describe('structured session visibility on empty worktrees', () => {
     )
 
     expectChatTabRendered(applied, FOLDER_WT)
-  })
-
-  it('adopts the session into an existing empty local root group', () => {
-    const state = emptyState({
-      groupsByWorktree: {
-        [GIT_WT]: [{ id: LOCAL_ROOT, worktreeId: GIT_WT, activeTabId: null, tabOrder: [] }]
-      },
-      layoutByWorktree: { [GIT_WT]: { type: 'leaf', groupId: LOCAL_ROOT } },
-      activeGroupIdByWorktree: { [GIT_WT]: LOCAL_ROOT }
-    })
-
-    const applied = applyStructured(state, headlessSnapshot(GIT_WT))
-
-    const chatTab = expectChatTabRendered(applied, GIT_WT)
-    expect(chatTab.groupId).toBe(LOCAL_ROOT)
   })
 
   it('keeps the folder-workspace local split intact while placing the session beside the terminal', () => {

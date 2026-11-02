@@ -1,3 +1,4 @@
+import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(target: RuntimeClientTarget, method: string, params?: unknown) => Promise<unknown>>()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: vi.fn()
 }))
 vi.mock('./structured-agent-session-close', () => ({
@@ -30,7 +31,6 @@ vi.mock('./runtime-worktree-selector', () => ({
 import {
   getStructuredAgentSessionLaunchLifecycle,
   hasStructuredAgentSessionLaunchCancellationTombstone,
-  markStructuredAgentSessionLaunchCancelled,
   resetStructuredAgentLaunchRegistryForTests,
   retireAbsentStructuredAgentSessionLaunchCancellationTombstones
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'

@@ -31,10 +31,10 @@ export function getAutomationRunWorkspaceDisplay({
   }
   if (worktree) {
     return {
-      rowLabel: worktree.displayName,
-      detailLabel: worktree.displayName,
+      rowLabel: run.workspaceDisplayName?.trim() || worktree.displayName,
+      detailLabel: run.workspaceDisplayName?.trim() || worktree.displayName,
       muted: false,
-      title: worktree.displayName
+      title: run.workspaceDisplayName?.trim() || worktree.displayName
     }
   }
 

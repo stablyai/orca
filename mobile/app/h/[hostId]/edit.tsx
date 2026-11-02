@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
@@ -173,7 +173,7 @@ export default function EditHostScreen() {
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
         <Pressable
-          style={styles.backButton}
+          style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
           onPress={leave}
           accessibilityRole="button"
           accessibilityLabel={t('common.back', 'Back')}
@@ -202,7 +202,10 @@ export default function EditHostScreen() {
       {loadError ? (
         <View style={styles.errorState}>
           <Text style={styles.errorText}>{loadError}</Text>
-          <Pressable style={styles.secondaryButton} onPress={leave}>
+          <Pressable
+            style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
+            onPress={leave}
+          >
             <Text style={styles.secondaryButtonText}>{t('host.edit.goBack', 'Go back')}</Text>
           </Pressable>
         </View>
@@ -318,7 +321,7 @@ const styles = themedStyleSheet(() => ({
     minWidth: 64,
     height: 34,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.surfaceBright,
     alignItems: 'center',
     justifyContent: 'center'
@@ -385,7 +388,7 @@ const styles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   secondaryButtonText: {

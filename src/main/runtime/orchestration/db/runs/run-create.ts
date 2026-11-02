@@ -22,7 +22,6 @@ export function createRun(
   const id = generateId('run')
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    this.unbindOtherRunsForCoordinator(coordinator)
     this.db
       .prepare(
         `INSERT INTO runs (

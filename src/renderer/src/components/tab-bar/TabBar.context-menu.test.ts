@@ -348,7 +348,7 @@ describe('TabBar context menu wiring', () => {
     expect(sortable[0].props.tabCount).toBe(2)
   })
 
-  it('keeps the tab strip content-sized until horizontal scrolling is needed', async () => {
+  it('sizes the tab strip from its tabs while allowing horizontal scrolling', async () => {
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       editorFiles: [EDITOR_FILE],
@@ -357,7 +357,7 @@ describe('TabBar context menu wiring', () => {
     })
     const divs = findChildrenByType(element, 'div')
     const stripWrapper = divs.find((candidate) =>
-      String(candidate.props.className ?? '').includes('flex-[0_1_auto]')
+      String(candidate.props.className ?? '').includes('group/tab-strip')
     )
     const strip = divs.find((candidate) =>
       String(candidate.props.className ?? '').includes('terminal-tab-strip')
@@ -366,6 +366,8 @@ describe('TabBar context menu wiring', () => {
     expect(stripWrapper).toBeTruthy()
     expect(stripWrapper?.props.className).toContain('min-w-0')
     expect(stripWrapper?.props.className).toContain('max-w-full')
+    expect(stripWrapper?.props.className).toContain('w-max')
+    expect(stripWrapper?.props.className).toContain('shrink')
     expect(strip).toBeTruthy()
     expect(strip?.props.className).toContain('min-w-0')
     expect(strip?.props.className).toContain('flex-1')

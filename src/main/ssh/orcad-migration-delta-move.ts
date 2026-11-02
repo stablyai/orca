@@ -7,7 +7,7 @@ import type { OrcadDeltaMoveResult } from '../../shared/orcad-managed-runtime'
 import { recordManagedOrcadMigration } from '../../shared/runtime-environment-managed-orcad-store'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   abortOrcadMigrationCutover,
   commitOrcadMigrationDestination,

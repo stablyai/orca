@@ -2,6 +2,9 @@ export const GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY = 'github.markPRReadyForRev
 // Hosts with this capability let mobile call github.markPRReadyForReview.
 export const MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY =
   'mobile.github.markPRReadyForReview.v1' as const
+// Hosts with this capability let mobile call github.markPRDraft; older hosts hide Mark as draft.
+export const MOBILE_GITHUB_MARK_PR_DRAFT_RUNTIME_CAPABILITY =
+  'mobile.github.markPRDraft.v1' as const
 export const GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE =
   'Marking a pull request ready requires a newer Orca server. Update the server and try again.'
 export const GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY =
@@ -16,5 +19,6 @@ export const SOURCE_CONTROL_RUNTIME_CAPABILITIES = [
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
+  MOBILE_GITHUB_MARK_PR_DRAFT_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY
 ] as const

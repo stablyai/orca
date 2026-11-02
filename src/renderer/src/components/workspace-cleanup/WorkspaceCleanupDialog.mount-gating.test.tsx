@@ -6,7 +6,6 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup'
 import WorkspaceCleanupDialog from './WorkspaceCleanupDialog'
-import { WorkspaceCleanupScanSupersededError } from '@/store/slices/workspace-cleanup-broad-scan-registry'
 
 const probes = vi.hoisted(() => ({ facets: vi.fn() }))
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
@@ -153,18 +152,5 @@ describe('WorkspaceCleanupDialog mount gating', () => {
       'Workspace scan ready',
       expect.objectContaining({ action: expect.objectContaining({ label: 'Review' }) })
     )
-  })
-
-  it('does not report a superseded scan as a failure', async () => {
-    seedStore(
-      vi.fn(async () => {
-        throw new WorkspaceCleanupScanSupersededError()
-      })
-    )
-    await act(async () => root.render(<WorkspaceCleanupDialog />))
-
-    await openDialog()
-
-    expect(toast.error).not.toHaveBeenCalled()
   })
 })

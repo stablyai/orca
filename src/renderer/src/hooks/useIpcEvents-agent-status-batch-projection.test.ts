@@ -198,7 +198,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         worktreeId,
         state: 'waiting',
         prompt: 'waiting turn',
-        agentType: 'pi',
+        agentType: 'hermes',
         receivedAt: 1_700_000_000_000,
         stateStartedAt: 1_700_000_000_000
       },
@@ -207,7 +207,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         worktreeId,
         state: 'done',
         prompt: 'completed turn',
-        agentType: 'pi',
+        agentType: 'hermes',
         receivedAt: 1_700_000_000_001,
         stateStartedAt: 1_700_000_000_001
       }
@@ -257,7 +257,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await vi.waitFor(() => {
       expect(store.getState().agentStatusByPaneKey[waitingPaneKey]?.state).toBe('waiting')
       expect(store.getState().agentStatusByPaneKey[donePaneKey]?.state).toBe('done')
-      expect(store.getState().tabsByWorktree[worktreeId]?.[0]?.title).toBe('Pi ready')
+      expect(store.getState().tabsByWorktree[worktreeId]?.[0]?.title).toBe('Hermes ready')
     })
   })
 
@@ -587,32 +587,32 @@ describe('useIpcEvents agent status snapshot integration', () => {
         })
       }
 
-      emit(1_700_000_000_000, 'working', 'pi')
-      emit(1_700_000_000_001, 'waiting', 'pi')
-      emit(1_700_000_000_002, 'waiting', 'pi')
-      emit(1_700_000_000_003, 'done', 'pi')
-      emit(1_700_000_000_002, 'waiting', 'pi')
+      emit(1_700_000_000_000, 'working', 'hermes')
+      emit(1_700_000_000_001, 'waiting', 'hermes')
+      emit(1_700_000_000_002, 'waiting', 'hermes')
+      emit(1_700_000_000_003, 'done', 'hermes')
+      emit(1_700_000_000_002, 'waiting', 'hermes')
       vi.advanceTimersByTime(40)
 
       expect(setAgentStatus).toHaveBeenCalledTimes(1)
       expect(setAgentStatuses).toHaveBeenCalledTimes(1)
       expect(setAgentStatuses.mock.calls[0][0]).toEqual([
         expect.objectContaining({
-          payload: expect.objectContaining({ agentType: 'pi', state: 'waiting' }),
-          terminalTitle: 'Pi - action required'
+          payload: expect.objectContaining({ agentType: 'hermes', state: 'waiting' }),
+          terminalTitle: 'Hermes - action required'
         }),
         expect.objectContaining({
-          payload: expect.objectContaining({ agentType: 'pi', state: 'waiting' }),
-          terminalTitle: 'Pi - action required'
+          payload: expect.objectContaining({ agentType: 'hermes', state: 'waiting' }),
+          terminalTitle: 'Hermes - action required'
         }),
         expect.objectContaining({
-          payload: expect.objectContaining({ agentType: 'pi', state: 'done' }),
-          terminalTitle: 'Pi ready'
+          payload: expect.objectContaining({ agentType: 'hermes', state: 'done' }),
+          terminalTitle: 'Hermes ready'
         })
       ])
       expect(setAgentStatuses.mock.results[0].value).toEqual([true, true, true])
       expect(updateTabTitle).toHaveBeenCalledOnce()
-      expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Pi ready')
+      expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Hermes ready')
       expect(updateTabTitles).toHaveBeenCalledTimes(1)
       expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
     } finally {

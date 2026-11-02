@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, EyeOff, Siren } from 'lucide-react'
+import { BellRing, Bot, EyeOff, MessageCircleQuestion, Siren } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   MacNotificationPermissionCard,
@@ -143,6 +143,25 @@ export function NotificationsPane({
         onToggle={() =>
           void updateNotificationSettings({
             agentTaskComplete: !notificationSettings.agentTaskComplete
+          })
+        }
+      />
+
+      <NotificationSettingToggle
+        icon={<MessageCircleQuestion className="size-4" />}
+        label={translate(
+          'auto.components.settings.NotificationsPane.63fc5ec9d2',
+          'Agent Needs Input'
+        )}
+        description={translate(
+          'auto.components.settings.NotificationsPane.e1b1724793',
+          'A coding agent asks for permission or has a question.'
+        )}
+        checked={notificationSettings.agentNeedsInput}
+        disabled={!notificationSettings.enabled}
+        onToggle={() =>
+          void updateNotificationSettings({
+            agentNeedsInput: !notificationSettings.agentNeedsInput
           })
         }
       />

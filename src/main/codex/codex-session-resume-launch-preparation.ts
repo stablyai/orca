@@ -1,4 +1,4 @@
-import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import {
   trustedCodexResumeHomes,

@@ -87,7 +87,7 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
-vi.mock('@/lib/structured-agent-session-launch', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
@@ -577,7 +577,7 @@ describe('agent shortcut delivery and deferred ownership', () => {
         [TEST_REPO.id]: [makeWorktree({ id: controller.activeWorktreeId!, repoId: TEST_REPO.id })]
       },
       detectedAgentIds: ['codex'],
-      settings: { ...store.getState().settings!, experimentalNativeChat: false }
+      settings: { ...store.getState().settings!, nativeChatProviders: {} }
     })
     mocks.state = { ...store.getState() }
   })

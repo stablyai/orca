@@ -5,7 +5,7 @@ import {
   getNativeChatAgentProfile,
   readsSkillSource,
   type NativeChatAgentProfile
-} from '../../../shared/native-chat-agent-profiles'
+} from '../../../shared/native-chat/native-chat-agent-profiles'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/tui-agent-selection'

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { GitHistoryItem, GitHistoryResult } from '../../../src/shared/git-history-types'
-import { formatCommitTime, mapMobileCommitRows, toMobileCommitRow } from './mobile-git-history'
+import {
+  appendMobileGitHistoryPage,
+  buildMobileCommitsListItems,
+  buildMobileCommitsView,
+  formatCommitTime,
+  mapMobileCommitRows,
+  toMobileCommitRow
+} from './mobile-git-history'
+import { branchCommitsSinceBase } from './mobile-pr-create-draft'
+import type { MobileGitHistoryResult } from './git-history-reply-schema'
 
 const NOW = 1_000_000_000_000
 
@@ -62,5 +71,92 @@ describe('mapMobileCommitRows', () => {
   it('maps all items', () => {
     const result = { items: [item(), item({ id: 'c'.repeat(40) })] } as GitHistoryResult
     expect(mapMobileCommitRows(result, NOW)).toHaveLength(2)
+  })
+})
+
+describe('branch-only commit pages', () => {
+  const branch = {
+    baseRef: { name: 'origin/main', category: 'remote branches' },
+    ahead: 3,
+    behind: 12,
+    unpushed: 1
+  }
+  function page(ids: string[], extra: Partial<MobileGitHistoryResult>): MobileGitHistoryResult {
+    return {
+      items: ids.map((id) => item({ id, subject: id, pushed: id.startsWith('p') })),
+      ...extra
+    }
+  }
+
+  it('stops paging on hosts that ignore skip, so page one is never repeated', () => {
+    const pages = appendMobileGitHistoryPage(null, page(['u1'], { hasMore: true }))
+    expect(pages.hasMore).toBe(false)
+  })
+
+  it('groups by pushed state and ends at the base only after the last page', () => {
+    const first = appendMobileGitHistoryPage(
+      null,
+      page(['u1', 'p1'], { branch, hasMore: true, skip: 0 })
+    )
+    const firstItems = buildMobileCommitsListItems(buildMobileCommitsView(first, NOW))
+    expect(firstItems.map((entry) => entry.key)).toEqual(['not-pushed', 'u1', 'on-origin', 'p1'])
+
+    // HEAD moved between pages: the repeated commit is dropped.
+    const last = appendMobileGitHistoryPage(first, page(['p1', 'p2'], { branch, skip: 2 }))
+    // The next page starts past what the host served, not past the rows kept after dedupe.
+    expect(last.nextSkip).toBe(4)
+    const items = buildMobileCommitsListItems(buildMobileCommitsView(last, NOW))
+    expect(items.map((entry) => entry.key)).toEqual([
+      'not-pushed',
+      'u1',
+      'on-origin',
+      'p1',
+      'p2',
+      'base'
+    ])
+    expect(items.at(-1)).toMatchObject({
+      kind: 'base',
+      baseRefName: 'origin/main',
+      behind: 12,
+      canUpdateFromBase: true
+    })
+    expect(items.filter((entry) => entry.kind === 'section').map((entry) => entry.title)).toEqual([
+      'Not pushed 1',
+      'On origin 2'
+    ])
+  })
+
+  it('shows older hosts their full history without groups or a base marker', () => {
+    const pages = appendMobileGitHistoryPage(null, page(['a', 'b'], {}))
+    const items = buildMobileCommitsListItems(buildMobileCommitsView(pages, NOW))
+    expect(items.map((entry) => [entry.kind, entry.kind === 'commit' && entry.pushed])).toEqual([
+      ['commit', null],
+      ['commit', null]
+    ])
+  })
+})
+
+describe('branchCommitsSinceBase', () => {
+  const item = (id: string, parentIds: string[], subject = id) => ({ id, parentIds, subject })
+
+  it("gives up on merged history rather than list the base's commits as the branch's own", () => {
+    // git log --topo-order after `git merge main` on a two-commit branch; rev-list main..HEAD counts 3.
+    const history = {
+      items: [
+        item('merge', ['two', 'mainB']),
+        item('mainB', ['mainA']),
+        item('mainA', ['base']),
+        item('two', ['one']),
+        item('one', ['base']),
+        item('base', [])
+      ]
+    }
+    expect(branchCommitsSinceBase(history, 3)).toEqual([])
+    const linear = { items: [item('two', ['one']), item('one', ['base']), item('base', [])] }
+    expect(branchCommitsSinceBase(linear, 2).map((commit) => commit.id)).toEqual(['two', 'one'])
+  })
+
+  it('knows no commits without the base compare', () => {
+    expect(branchCommitsSinceBase({ items: [item('a', ['b'])] }, null)).toEqual([])
   })
 })

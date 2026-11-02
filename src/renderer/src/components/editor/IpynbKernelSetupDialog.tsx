@@ -1,3 +1,4 @@
+// @protected-copy: notebook trust and kernel setup copy.
 import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'

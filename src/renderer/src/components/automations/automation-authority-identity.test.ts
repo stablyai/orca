@@ -55,6 +55,23 @@ describe('automationAuthorityPartitionContext', () => {
     expect(context.repoConnectionId('p1')).toBeUndefined()
     expect(context.projectsAuthoritative).toBe(false)
   })
+
+  it.each([false, true])(
+    'refuses unqualified copied IDs in either repo order (reverse=%s)',
+    (reverse) => {
+      const repos = [repo({ id: 'same' }), repo({ id: 'same', executionHostId: 'ssh:box' })]
+      const context = automationAuthorityPartitionContext(
+        groupReposByAutomationAuthority(reverse ? repos.toReversed() : repos),
+        DESKTOP
+      )
+      expect(context.repoConnectionId('same')).toBeUndefined()
+      const canonicalOnly = automationAuthorityPartitionContext(
+        groupReposByAutomationAuthority([repos.find((row) => row.executionHostId === 'ssh:box')!]),
+        DESKTOP
+      )
+      expect(canonicalOnly.repoConnectionId('same')).toBe('box')
+    }
+  )
 })
 
 describe('automationRuntimePairingRevision', () => {

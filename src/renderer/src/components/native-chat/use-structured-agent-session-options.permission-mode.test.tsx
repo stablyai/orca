@@ -2,16 +2,17 @@ import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-session-permission-modes-capability'
+} from '../../../../shared/agent-session/agent-session-permission-modes-capability'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 // @vitest-environment happy-dom
 
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { useLayoutEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), write: vi.fn() }))
@@ -80,10 +81,14 @@ function permission(snapshot: readonly SessionOptionDescriptor[]): string | null
   return entry?.kind.type === 'select' ? entry.kind.currentValue : null
 }
 
-function renderReopened(fence: number, agent: 'codex' | 'claude' = 'codex') {
+function renderReopened(
+  fence: number,
+  agent: 'codex' | 'claude' = 'codex',
+  onCommit?: (snapshot: readonly SessionOptionDescriptor[]) => void
+) {
   return renderHook(
-    (props: { fence: number; stamp: string }) =>
-      useStructuredAgentSessionOptions({
+    (props: { fence: number; stamp: string }) => {
+      const options = useStructuredAgentSessionOptions({
         agent,
         sessionId: 'session-1',
         target: LOCAL_TARGET,
@@ -95,7 +100,10 @@ function renderReopened(fence: number, agent: 'codex' | 'claude' = 'codex') {
         unloadedTurnRevisions: undefined,
         hostOptionStamp: props.stamp,
         mutate
-      }),
+      })
+      useLayoutEffect(() => onCommit?.(options.optionSnapshot))
+      return options
+    },
     { initialProps: { fence, stamp: 'model-a|ask' } }
   )
 }
@@ -137,11 +145,18 @@ describe('the permission mode another device picks', () => {
       const answer = await read(...args)
       return { ...answer, current: { ...answer.current, reportedPermissionMode: 'full-access' } }
     })
-    const { result, rerender, unmount } = renderReopened(1)
+    const committed: string[] = []
+    const { result, rerender, unmount } = renderReopened(1, 'codex', (snapshot) => {
+      const entry = snapshot.find((descriptor) => descriptor.id === 'permissionMode')
+      committed.push(`${entry?.description}/${entry?.settable}`)
+    })
     const row = () => result.current.optionSnapshot.find((entry) => entry.id === 'permissionMode')
     await waitFor(() => expect(row()).toMatchObject({ description: 'Full access', settable: true }))
     mocks.call.mockImplementation(() => new Promise(() => {}))
+    committed.length = 0
     rerender({ fence: 2, stamp: 'model-a|own' })
+    // Every frame of the new process, including the one before its read lease attaches.
+    expect([...new Set(committed)]).toEqual(['Permissions/false'])
     expect(row()).toMatchObject({ description: 'Permissions', settable: false })
     unmount()
   })
@@ -237,14 +252,12 @@ describe('a permission pick on this device', () => {
         envelope: expect.objectContaining({ expectedRuntimeFence: 1 })
       })
     )
-    expect(result.current.sendSource.optionStateRef.current.pendingId).toBeNull()
     expect(result.current.optionSnapshot.find((row) => row.id === 'model')?.settable).toBe(true)
     await act(async () => {
       reply.resolve(acceptedReply('permissionMode', 'own'))
       await picking
     })
     await expect(picking).resolves.toBe(true)
-    expect(result.current.sendSource.optionStateRef.current.pendingId).toBeNull()
     expect(result.current.optionSnapshot.find((row) => row.id === 'model')?.settable).toBe(true)
     unmount()
   })
@@ -271,7 +284,7 @@ describe('a permission pick on this device', () => {
     expect(permission(result.current.optionSnapshot)).toBe('auto')
     unmount()
 
-    // A permission commit clears generic pendingId while the model request still runs.
+    // A permission pick stays available while the model request still runs.
     let model = 'model-a'
     forgetStructuredSessionSelection('session-1', LOCAL_TARGET)
     mocks.call.mockImplementation((_target: unknown, method: string, params: unknown) =>

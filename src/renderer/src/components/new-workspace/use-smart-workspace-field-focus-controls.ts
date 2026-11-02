@@ -76,6 +76,14 @@ export function useSmartWorkspaceFieldFocusControls({
     },
     [deferSourcePopoverUntilInteractionRef, disabled, selectedSource, setOpen]
   )
+  // Stable so the memoized emoji picker button skips re-rendering on every keystroke.
+  const handleEmojiPickerOpenChange = useCallback((pickerOpen: boolean): void => {
+    if (pickerOpen) {
+      // Why: the source results list and `:` suggestions would otherwise sit under the picker.
+      setOpen(false)
+      setEmojiCursor(null)
+    }
+  }, [])
   const setInputNode = useCallback(
     (node: HTMLInputElement | null) => {
       if (node === null) {
@@ -104,6 +112,7 @@ export function useSmartWorkspaceFieldFocusControls({
     markSourcePopoverUserEngaged,
     tryOpenSourcePopover,
     handleSourcePopoverOpenChange,
+    handleEmojiPickerOpenChange,
     setInputNode
   }
 }

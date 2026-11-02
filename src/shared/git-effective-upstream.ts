@@ -32,7 +32,7 @@ function hasMultipleSlashSegments(refName: string): boolean {
   return refName.includes('/') && refName.indexOf('/') !== refName.lastIndexOf('/')
 }
 
-async function splitRemoteBranchNameByKnownRemote(
+export async function splitRemoteBranchNameByKnownRemote(
   runGit: GitCommandRunner,
   refName: string
 ): Promise<{ remoteName: string; branchName: string } | null> {

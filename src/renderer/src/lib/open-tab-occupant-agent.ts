@@ -1,6 +1,6 @@
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'

@@ -17,6 +17,7 @@ import type { useFileExplorerSelection } from './useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import type { WslHostUnavailableReason } from '../terminal-pane/use-wsl-host-unavailable-reason'
+import type { StoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
 
 type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
@@ -38,6 +39,7 @@ type FileExplorerFilesTreePaneProps = {
   handleExplorerBackgroundContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   handleExplorerBackgroundDoubleClick: (event: React.MouseEvent<HTMLDivElement>) => void
   wslHostUnavailable?: WslHostUnavailableReason | null
+  stoppedWslHost?: StoppedWslHost | null
 }
 
 export function FileExplorerFilesTreePane({
@@ -59,7 +61,8 @@ export function FileExplorerFilesTreePane({
   visibleRowCount,
   handleExplorerBackgroundContextMenuCapture,
   handleExplorerBackgroundDoubleClick,
-  wslHostUnavailable = null
+  wslHostUnavailable = null,
+  stoppedWslHost = null
 }: FileExplorerFilesTreePaneProps): React.JSX.Element {
   const { loadingDirPaths, rootError } = tree
   const rootCache = displayRootPath ? tree.dirCache[displayRootPath] : undefined
@@ -123,6 +126,7 @@ export function FileExplorerFilesTreePane({
   const showTree = !isEmptyState
   // Retry cannot succeed while WSL hosts are off; offer the switch instead.
   const wslHostsTurnedOff = hasError && wslHostUnavailable === 'turned-off'
+  const wslHostStopped = hasError && stoppedWslHost !== null
   const emptyMessage =
     hasNameFilter && !nameFilterFiles.loadError
       ? translate(
@@ -166,7 +170,8 @@ export function FileExplorerFilesTreePane({
         !isLoading &&
         !hasNameFilter &&
         displayRootPath &&
-        !wslHostsTurnedOff && (
+        !wslHostsTurnedOff &&
+        !wslHostStopped && (
           <div className="px-2 py-1 text-xs text-muted-foreground" role="status">
             {showTree && <p>{treeError}</p>}
             <Button
@@ -186,6 +191,12 @@ export function FileExplorerFilesTreePane({
           emptyMessage={emptyMessage}
           scopedToFolder={!!displayRootPath && displayRootPath !== worktreePath}
           wslHostsTurnedOff={wslHostsTurnedOff}
+          stoppedWslHost={stoppedWslHost}
+          onWslHostStarted={() => {
+            if (displayRootPath) {
+              void tree.refreshDir(displayRootPath)
+            }
+          }}
         />
       )}
       {showTree && (
