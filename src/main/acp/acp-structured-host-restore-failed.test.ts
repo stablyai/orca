@@ -6,6 +6,11 @@ import {
   currentContextTransferTarget
 } from '../native-chat/agent-session-journal/context-transfer-repository'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as contextTransferEcho from '../native-chat/agent-session-journal/context-transfer-echo'
+import {
+  instrumentContextTransferFacts,
+  seedClosedContextHistories
+} from '../native-chat/agent-session-journal/context-transfer-scaling.test-support'
 import { z } from 'zod'
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -318,6 +323,70 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
       await host.close(SESSION, 'user-close')
     }
   )
+
+  it('classifies marked ACP load replays without scanning retained history', async () => {
+    const { host, fence, ready, exchange, replays, journalDatabase } = await openRestoreRig(
+      -32002,
+      'Resource not found'
+    )
+    expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+    await ready()
+    await exchange('remember 42', 'noted', PROVIDER_SESSION)
+    await host.close(SESSION, 'user-close')
+    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+    await ready()
+    await exchange('continue', '42', FRESH)
+    const live = readContextTransfers(journalDatabase.db, SESSION).filter(
+      (row) => !row.id.startsWith('old-')
+    )
+    // Each scale replays ten marked items it has not imported before.
+    const work = async (closed: number, firstMarker: number) => {
+      const retained = seedClosedContextHistories(journalDatabase.db, SESSION, live, closed)
+      await host.close(SESSION, 'evict')
+      replays.set(FRESH, (agent) => {
+        for (let i = firstMarker; i < firstMarker + 10; i++) {
+          agent.notify('session/update', {
+            sessionId: FRESH,
+            update: {
+              sessionUpdate: 'user_message_chunk',
+              content: {
+                type: 'text',
+                text: `<orca_context_handoff id="old-D-${i}">\nQuoted ${i}\n</orca_context_handoff>`
+              }
+            },
+            _meta: { isReplay: true, promptId: `prompt:marked-${i}` }
+          })
+          agent.notify('session/update', {
+            sessionId: FRESH,
+            update: {
+              sessionUpdate: 'agent_message_chunk',
+              content: { type: 'text', text: `reply ${i}` }
+            },
+            _meta: { isReplay: true, promptId: `prompt:marked-${i}` }
+          })
+        }
+      })
+      const facts = instrumentContextTransferFacts(journalDatabase.db)
+      const echo = vi.spyOn(contextTransferEcho, 'matchContextTransferEcho')
+      expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+      await ready()
+      await host.flushStreamedEvents(SESSION)
+      const echoes = echo.mock.calls.length
+      echo.mockRestore()
+      return { retained, echoes, ...facts.counts }
+    }
+    const small = await work(20, 0)
+    const large = await work(200, 10)
+    // Reopening loads each retained record once; classifying the replay adds no load or scan.
+    for (const counts of [small, large]) {
+      expect(counts).toMatchObject({ decodes: counts.retained, loads: 1 })
+    }
+    expect(small.echoes).toBeGreaterThanOrEqual(10)
+    expect(large.echoes).toBe(small.echoes)
+    expect(large.kindReads).toBe(small.kindReads)
+    expect(large.transferSelects).toBe(small.transferSelects)
+    await host.close(SESSION, 'user-close')
+  })
 
   it('accepts a lost carrier reply from exact ACP load replay without exposing its historical prefix', async () => {
     const { host, fence, ready, exchange, rig, replays, messages, journalDatabase } =

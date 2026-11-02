@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem,
   type AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { selectRecoveryDelivery } from '../agent-session-context-transfer-text'
@@ -14,13 +15,26 @@ import { deriveContextTransferState } from '../agent-session-journal/context-tra
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
   contextTransferFixture,
-  transferEventually as eventually
+  transferEventually as eventually,
+  TRANSFER_CALLER
 } from './structured-agent-session-context-transfer.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
+  hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 import { prepareNativeRecovery } from './structured-agent-session-recovery'
+import {
+  instrumentContextTransferFacts,
+  seedClosedContextHistories
+} from '../agent-session-journal/context-transfer-scaling.test-support'
+import * as journalOpen from '../agent-session-journal/journal-open'
+import { rebaseCompletedContextRewind } from '../agent-session-journal/context-transfer-rebase'
+import { captureRecoveryContext } from '../agent-session-journal/context-transfer-capture'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { catchUpCodexThread } from '../../codex/codex-structured-thread-catch-up'
+import { codexWith } from '../../codex/codex-thread-catch-up-contract-test-fixture'
+import { persistRewindRecord } from './structured-rewind-recovery'
 
 // N/10N contracts: count record visits, decodes, writes and text reads, never time.
 const fixtures: Awaited<ReturnType<typeof contextTransferFixture>>[] = []
@@ -40,63 +54,14 @@ async function settledRecovery() {
   await eventually(async () =>
     expect((await fixture.submission(settle))?.dispatchState).toBe('accepted')
   )
-  return { fixture, journal: recovery.journal, native: recovery.native }
+  return { fixture, journal: recovery.journal, native: recovery.native, lose: recovery.lose }
 }
 
-/** Closed histories stay retained after clear; seed them around the live recovery's facts. */
 async function withClosedHistories(closed: number) {
-  const { fixture, journal, native } = await settledRecovery()
-  const live = journal.contextTransfers.read()
-  const handoff = live.find((row) => row.kind === 'handoff')
-  const target = live.find((row) => row.kind === 'target')
-  const delivery = live.find((row) => row.kind === 'delivery')
-  if (handoff?.kind !== 'handoff' || target?.kind !== 'target' || delivery?.kind !== 'delivery') {
-    throw new Error('Missing settled recovery facts')
-  }
-  if (!target.targetLink) {
-    throw new Error('Missing published target')
-  }
-  const old: ContextTransferRecord[] = []
-  for (let i = 0; i < closed; i++) {
-    const handoffId = `old-H-${i}`
-    const targetId = `old-T-${i}`
-    old.push(
-      { ...handoff, id: handoffId, handoffId },
-      {
-        ...target,
-        id: targetId,
-        handoffId,
-        firstInputId: `old-P-${i}`,
-        targetLink: {
-          ...target.targetLink,
-          linkId: `old-L-${i}`,
-          handle: {
-            ...target.targetLink.handle,
-            nativeId: `00000000-0000-4000-9000-${String(i).padStart(12, '0')}`
-          }
-        }
-      },
-      { ...delivery, id: `old-D-${i}`, handoffId, targetId },
-      {
-        kind: 'closure',
-        id: `old-C-${i}`,
-        sessionId: SESSION,
-        handoffId,
-        commandId: `clear-${i}`,
-        at: 1,
-        cause: 'context-clear'
-      }
-    )
-  }
+  const { fixture, journal, native, lose } = await settledRecovery()
   const db = openTestJournalHostDatabase(fixture.root).db
-  db.prepare('DELETE FROM agent_session_context_transfers WHERE session_id = ?').run(SESSION)
-  const insert = db.prepare(
-    'INSERT INTO agent_session_context_transfers (id,session_id,handoff_id,kind,format,record_json) VALUES (?,?,?,?,1,?)'
-  )
-  for (const record of [...old, ...live]) {
-    insert.run(record.id, SESSION, record.handoffId, record.kind, JSON.stringify(record))
-  }
-  return { fixture, journal, native, db }
+  const retained = seedClosedContextHistories(db, SESSION, journal.contextTransfers.read(), closed)
+  return { fixture, journal, native, lose, db, retained }
 }
 
 function countKindReads(records: readonly ContextTransferRecord[]) {
@@ -260,4 +225,203 @@ it('captures once per new source, linearly, and bounds carrier selection by the 
   expect(large.captureReads).toBeLessThanOrEqual(small.captureReads * 10)
   expect(large.frozenBytes).toBeLessThanOrEqual(64_000)
   expect(large.selectionReads).toBe(small.selectionReads)
+})
+
+const markedTurn = (index: number) => ({
+  id: `marked-turn-${index}`,
+  status: 'completed',
+  itemsView: 'full',
+  startedAt: 1_700_000_000 + index * 100,
+  completedAt: 1_700_000_000 + index * 100 + 50,
+  items: [
+    {
+      type: 'userMessage',
+      id: `marked-u-${index}`,
+      content: [{ type: 'text', text: `ask ${index}` }]
+    },
+    {
+      type: 'agentMessage',
+      id: `marked-a-${index}`,
+      text: `<orca_context_handoff id="old-D-${index}">\nQuoted\n</orca_context_handoff>`
+    }
+  ]
+})
+
+async function reattachedRecovery(closed: number) {
+  const setup = await withClosedHistories(closed)
+  const { fixture, lose, db } = setup
+  await fixture.host.close(SESSION, 'evict')
+  lose()
+  const facts = instrumentContextTransferFacts(db)
+  expect(
+    await fixture.host.attach(
+      TRANSFER_CALLER,
+      hostTestAttachParams(fixture.store.requireWritableRecord(SESSION).lease.runtimeFence)
+    )
+  ).toMatchObject({ ok: true })
+  await eventually(() => expect(fixture.childPhase()).toBe('ready'))
+  const journal = fixture.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  return { ...setup, journal, facts }
+}
+
+it('publishes a recovery target with one fact load whatever history is retained', async () => {
+  const work = async (closed: number) => {
+    const { facts, retained } = await reattachedRecovery(closed)
+    return { retained, ...facts.counts }
+  }
+  const small = await work(20)
+  const large = await work(200)
+  // Reopening loads each retained record once; publication itself adds no load or scan.
+  for (const counts of [small, large]) {
+    expect(counts).toMatchObject({ decodes: counts.retained, loads: 1, transferSelects: 1 })
+  }
+  expect(large.kindReads).toBe(small.kindReads)
+})
+
+it('carries owed history through occupancy, encoding and selection independent of retained history', async () => {
+  const work = async (closed: number) => {
+    const { fixture, journal, facts } = await reattachedRecovery(closed)
+    const encode = vi.fn(async (input: { body: AgentJournalMessageItem }) => ({
+      bytes: Buffer.byteLength(JSON.stringify(input.body)),
+      limit: 1024 * 1024
+    }))
+    fixture.host.deps.adapter.historicalInputBytes = encode
+    const usage = vi.spyOn(journal, 'contextUsage')
+    facts.reset()
+    const sent = await fixture.accept('Carry the saved number')
+    await eventually(async () =>
+      expect((await fixture.submission(sent))?.dispatchState).toBe('accepted')
+    )
+    return { ...facts.counts, encodings: encode.mock.calls.length, usage: usage.mock.calls.length }
+  }
+  const small = await work(20)
+  const large = await work(200)
+  expect(small).toMatchObject({ decodes: 0, loads: 0, transferSelects: 0 })
+  expect(large).toEqual(small)
+  expect(small.encodings).toBeGreaterThan(1)
+})
+
+it('classifies marked Codex history imports without scanning retained history', async () => {
+  const work = async (closed: number) => {
+    const { fixture, journal, native, db } = await withClosedHistories(closed)
+    const facts = instrumentContextTransferFacts(db)
+    journal.contextTransfers.reopen()
+    facts.reset()
+    const echo = vi.spyOn(journal, 'recoveryEcho')
+    await catchUpCodexThread({
+      connection: codexWith(Array.from({ length: 10 }, (_, index) => markedTurn(index))),
+      threadId: native(),
+      sessionId: SESSION,
+      sink: fixture.acquire.mock.calls.at(-1)![0].events!
+    })
+    return { ...facts.counts, echoes: echo.mock.calls.length }
+  }
+  const small = await work(20)
+  const large = await work(200)
+  expect(small.echoes).toBeGreaterThanOrEqual(10)
+  expect(small).toMatchObject({ decodes: 0, loads: 0 })
+  expect(large).toEqual(small)
+})
+
+it('rebases a rewind once, without restoring the journal again for a repeated publication', async () => {
+  const work = async (closed: number) => {
+    const { fixture, journal, db } = await withClosedHistories(closed)
+    const facts = instrumentContextTransferFacts(db)
+    journal.contextTransfers.reopen()
+    const kept = journal.snapshot().items.flatMap((item) => {
+      const identity = parseAgentJournalItemKey(item.itemId)
+      return identity
+        ? [
+            {
+              identity,
+              body: item.body,
+              observedAt: item.observedAt,
+              ownerFence: journal.itemFence(item.itemId) ?? 1,
+              turnScope: item.turnScope
+            }
+          ]
+        : []
+    })
+    const rewind = {
+      operationId: 'scaled-rewind',
+      callerKey: TRANSFER_CALLER.callerKey,
+      itemId: journal.snapshot().items[0]!.itemId,
+      expectedEpoch: journal.cursor().epoch,
+      phase: 'provider-succeeded' as const
+    }
+    const fence = fixture.store.requireWritableRecord(SESSION).lease.runtimeFence
+    await persistRewindRecord(fixture.store, SESSION, fence, rewind)
+    facts.reset()
+    await journal.replaceEpochItems('handle_forked', fence, kept, (cursor) =>
+      fixture.store.conversationReceipts.rewind(SESSION, fence, rewind, cursor)
+    )
+    const rewound = { ...facts.counts }
+    const restore = vi.spyOn(journalOpen, 'restoreJournal')
+    facts.reset()
+    journal.contextTransfers.commit((tx) => rebaseCompletedContextRewind(tx, SESSION))
+    const repeated = { ...facts.counts, restores: restore.mock.calls.length }
+    restore.mockRestore()
+    return { rewound, repeated }
+  }
+  const small = await work(20)
+  const large = await work(200)
+  expect(small.rewound).toMatchObject({ decodes: 0, loads: 0, transferSelects: 0 })
+  expect(large.rewound).toEqual(small.rewound)
+  expect(small.repeated).toEqual({
+    decodes: 0,
+    loads: 0,
+    kindReads: 0,
+    transferSelects: 0,
+    restores: 0
+  })
+  expect(large.repeated).toEqual(small.repeated)
+})
+
+it('authenticates an export with no retained-history work and source reads linear in the source', async () => {
+  const work = async (closed: number, items: number) => {
+    const { journal, db } = await withClosedHistories(closed)
+    const facts = instrumentContextTransferFacts(db)
+    journal.contextTransfers.reopen()
+    const base = journal.snapshot()
+    const view = savedView(base, items, 'saved export text')
+    const snapshot = { ...view.snapshot, cursor: { ...base.cursor, sequence: items + 1 } }
+    vi.spyOn(journal, 'snapshot').mockReturnValue(snapshot)
+    const live = journal.contextTransfers.read().find((row) => row.kind === 'handoff')
+    if (live?.kind !== 'handoff') {
+      throw new Error('Missing frozen source')
+    }
+    const handoff = {
+      ...live,
+      id: `export-${closed}-${items}`,
+      handoffId: `export-${closed}-${items}`,
+      sourceCursor: snapshot.cursor,
+      capture: captureRecoveryContext(snapshot, journal.canonicalItemId).capture
+    }
+    view.reads.count = 0
+    facts.reset()
+    const path = await journal.exportRecoveryContext(handoff)
+    expect(path).toEqual(expect.any(String))
+    return { ...facts.counts, sourceReads: view.reads.count }
+  }
+  const small = await work(20, 20)
+  const retained = await work(200, 20)
+  const source = await work(20, 200)
+  expect(small).toMatchObject({ decodes: 0, loads: 0, kindReads: 0, transferSelects: 0 })
+  expect(retained).toEqual(small)
+  // Authentication must re-read the whole source, so this alone grows with it.
+  expect(source.sourceReads).toBe(small.sourceReads * 10)
+})
+
+it('leaves no cached fact behind a rolled-back write', async () => {
+  const { fixture, journal } = await settledRecovery()
+  const chain = () => fixture.store.requireWritableRecord(SESSION).providerHandleChain
+  const before = [...journal.contextTransfers.read()]
+  expect(() =>
+    journal.contextTransfers.commit((db) => {
+      closeContextTransfers(db, SESSION, 'rolled-back-clear', 'context-clear', 3)
+      throw new Error('clear failed after closing')
+    })
+  ).toThrow('clear failed after closing')
+  expect(journal.contextTransfers.read()).toEqual(before)
+  expect(deriveContextTransferState(journal.contextTransfers.read(), chain()).kind).toBe('settled')
 })
