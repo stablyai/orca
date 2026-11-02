@@ -181,7 +181,8 @@ export function createProviderAccountServices(
         id: account.id,
         managedAuthRuntime: account.managedAuthRuntime,
         wslDistro: account.wslDistro,
-        wslLinuxAuthPath: account.wslLinuxAuthPath
+        wslLinuxAuthPath: account.wslLinuxAuthPath,
+        recentAt: account.lastAuthenticatedAt
       }))
   })
   // Why: a statusline post names its CLAUDE_CONFIG_DIR; only the account layer knows whose folder that is.

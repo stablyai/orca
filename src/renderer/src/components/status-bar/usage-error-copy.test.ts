@@ -55,6 +55,24 @@ describe('structured failure kinds over message wording', () => {
   })
 })
 
+describe('claude lapsed refresh token', () => {
+  it('asks for a new sign-in instead of waiting for Claude', () => {
+    const lapsed = {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      error: 'Sign in again to use this account.',
+      status: 'error',
+      usageMetadata: { failureKind: 'lapsed' }
+    } as const
+    expect(getProviderUsageStatusLabel(lapsed)).toBe('Sign in again')
+    expect(getProviderUsageErrorMessage(lapsed)).toBe(
+      'The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.'
+    )
+  })
+})
+
 describe('owner placeholder tooltip', () => {
   it('follows the current language, not the one the placeholder was built in', () => {
     const placeholder = {

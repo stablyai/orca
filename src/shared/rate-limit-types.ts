@@ -49,6 +49,8 @@ export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
 export type UsageRateLimitFailureKind =
   | 'missing-credentials'
   | 'stale-token'
+  /** Refresh token was rejected (`invalid_grant`). The account needs a new sign-in. */
+  | 'lapsed'
   | 'refreshable-credentials-without-token'
   | 'delegated-refresh-required'
   | 'deferred-by-live-session'
@@ -74,6 +76,8 @@ export type UsageRateLimitMetadata = {
   source?: UsageRateLimitSource
   attemptedSources?: UsageRateLimitSource[]
   failureKind?: UsageRateLimitFailureKind
+  /** HTTP status from the usage or token endpoint, when the failure was an HTTP error. */
+  httpStatus?: number
   credentialSource?: string
   authProvenance?: string
   lastSuccessfulSource?: UsageRateLimitSource

@@ -140,6 +140,10 @@ export class ClaudeAccountService {
     return this.selection.setAutoSwitch(enabled)
   }
 
+  setTokenRefresh(enabled: boolean): ClaudeRateLimitAccountsState {
+    return this.selection.setTokenRefresh(enabled)
+  }
+
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
     return this.runtimeAuth.getRuntimeConfigDir(target)
   }

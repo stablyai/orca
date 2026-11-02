@@ -130,6 +130,19 @@ export type ClaudeRateLimitAccountsState = {
   systemDefaultMayBeCopied?: boolean
   /** Whether this host switches accounts before a usage limit; absent from older hosts. */
   autoSwitchEnabled?: boolean
+  /** Whether idle Claude accounts refresh their own access tokens. Absent from older hosts. */
+  tokenRefresh?: 'on' | 'off'
+  /** In-memory refresh book for this process. Absent from older hosts. */
+  tokenRefreshAccounts?: {
+    accountId: string
+    lastRefreshAt: number | null
+    nextRetryAt: number | null
+    lapsed: boolean
+    /** 1-based place among accounts still waiting. Absent on older hosts. */
+    queuePosition?: number | null
+    /** Shared endpoint backoff step. Absent on older hosts. */
+    backoffLevel?: number
+  }[]
   /** Live sessions billed to each account. Absent from older hosts. */
   assignedSessions?: { accountId: string; count: number }[]
   /** Every live pane and the account it bills. */
@@ -143,6 +156,14 @@ export type ClaudeAccountSelectionChange = {
   target: CodexAccountSelectionTarget
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+}
+
+/** One-shot refresh. The access token stays on the runtime. */
+export type ClaudeTokenRefreshNowResult = {
+  accountId: string
+  email?: string
+  outcome: 'ok' | 'skipped' | 'failed' | 'lapsed'
+  reason?: string
 }
 
 /** One live Claude pane and the account its next request bills. */

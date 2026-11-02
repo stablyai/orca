@@ -10,6 +10,8 @@ type AccountsBlock = {
   }
   /** Claude only: whether the host switches accounts before a usage limit (absent from older hosts). */
   autoSwitchEnabled?: boolean
+  /** Claude only: whether idle accounts refresh access tokens (absent from older hosts). */
+  tokenRefresh?: 'on' | 'off'
   /** Claude only: live sessions billed to each account (absent from older hosts). */
   assignedSessions?: readonly { accountId: string; count: number }[]
   /** Claude only: panes whose billed account differs from the folder they launched in. */
@@ -55,6 +57,9 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
   })
   if (block.autoSwitchEnabled !== undefined) {
     lines.push(`  auto-switch: ${block.autoSwitchEnabled ? 'on' : 'off'}`)
+  }
+  if (block.tokenRefresh !== undefined) {
+    lines.push(`  token-refresh: ${block.tokenRefresh}`)
   }
   for (const assignment of block.paneAssignments ?? []) {
     lines.push(`  pane ${assignment.ptyId}: account ${assignment.accountId}`)

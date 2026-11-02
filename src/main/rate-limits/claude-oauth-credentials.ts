@@ -22,7 +22,7 @@ export type ClaudeOAuthCredentialReadResult = {
   keychainUnavailable?: boolean
   unavailable?: boolean
 }
-type ClaudeOAuthCredentialReadOptions = {
+export type ClaudeOAuthCredentialReadOptions = {
   credentialsFileConfigDir?: string
   keychainConfigDir?: string
   /** System Default only: a managed profile never reads another login's item. */

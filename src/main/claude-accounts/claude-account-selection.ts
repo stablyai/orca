@@ -7,6 +7,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { RateLimitService } from '../rate-limits/service'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
 import { claudeListedPaneAccounts } from './claude-listed-pane-accounts'
+import { claudeTokenRefreshFields, installClaudeTokenRefresh } from './claude-token-refresh-list'
 import { listClaudePaneAccounts } from './claude-pane-account-registry'
 import { savedWslClaudeAccountHome } from './claude-profile-wsl-paths'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
@@ -34,6 +35,7 @@ export type ClaudeAccountSettings = Pick<
   | 'activeClaudeManagedAccountId'
   | 'activeClaudeManagedAccountIdsByRuntime'
   | 'claudeAutoSwitchEnabled'
+  | 'claudeAccountTokenRefresh'
 >
 
 export type ClaudeAccountStore = {
@@ -68,7 +70,14 @@ export class ClaudeAccountSelection {
     private readonly store: ClaudeAccountStore,
     private readonly rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime
-  ) {}
+  ) {
+    installClaudeTokenRefresh(this.store)
+  }
+
+  setTokenRefresh(enabled: boolean): ClaudeRateLimitAccountsState {
+    this.saveSettings({ claudeAccountTokenRefresh: enabled })
+    return this.list()
+  }
 
   list(): ClaudeRateLimitAccountsState {
     this.pruneSelection()
@@ -100,6 +109,7 @@ export class ClaudeAccountSelection {
       activeAccountId: selection.host,
       activeAccountIdsByRuntime: selection,
       autoSwitchEnabled: settings.claudeAutoSwitchEnabled === true,
+      ...claudeTokenRefreshFields(settings, accounts),
       assignedSessions,
       paneAccounts,
       ...(paneAssignments.length > 0 ? { paneAssignments } : {}),

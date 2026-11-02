@@ -15,6 +15,7 @@ export type InactiveClaudeAccount = {
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   wslLinuxAuthPath?: string | null
+  recentAt?: number
 }
 
 export async function fetchInactiveClaudeAccountUsage(

@@ -51,7 +51,7 @@ function getDelegatedCliRefreshProvider(
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
-/** An idle login's access token lapsed, not the login: Claude refreshes it the next time it runs. */
+/** A stale access token still has a usable refresh token. `lapsed` is a rejected refresh token. */
 export function isClaudeUsageWaitingForClaude(p: ProviderRateLimits): boolean {
   return p.provider === 'claude' && p.usageMetadata?.failureKind === 'stale-token'
 }
@@ -84,7 +84,9 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.claude.waiting.label',
           'Updates when Claude runs'
         )
-      // Why: Orca never refreshes a Claude login; only an older host that still does reports these.
+      case 'lapsed':
+        return translate('accounts.claude.usageSignInLabel', 'Sign in again')
+      // Why: an older host reports these while a refresh is already in progress.
       case 'refreshable-credentials-without-token':
       case 'delegated-refresh-required':
         return translate('auto.components.status.bar.tooltip.1804cd8c3f', 'Refreshing sign-in')
@@ -178,6 +180,11 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.claude.waiting.message',
           'Claude usage updates the next time Claude runs.'
         )
+      case 'lapsed':
+        return translate(
+          'accounts.claude.usageSignInMessage',
+          'The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.'
+        )
       case 'refreshable-credentials-without-token':
       case 'delegated-refresh-required':
         return translate(
@@ -243,4 +250,15 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     )
   }
   return p.error
+}
+
+/** needsSignIn, or a refresh-book row whose refresh token was rejected. */
+export function claudeAccountNeedsSignIn(
+  account: { id: string; needsSignIn?: boolean },
+  refreshAccounts: readonly { accountId: string; lapsed: boolean }[] | undefined
+): boolean {
+  return (
+    account.needsSignIn === true ||
+    refreshAccounts?.some((row) => row.accountId === account.id && row.lapsed) === true
+  )
 }

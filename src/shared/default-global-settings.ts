@@ -207,6 +207,7 @@ export function buildDefaultSettings(args: {
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
     claudeAutoSwitchEnabled: false,
+    claudeAccountTokenRefresh: false,
     terminalScopeHistoryByWorktree: true,
     terminalHiddenViewParking: true,
     // Default-on kill switches use !== false so older persisted settings retain behavior.
