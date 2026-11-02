@@ -1,4 +1,5 @@
 import type { JobTerminationOutcome } from './windows/windows-pty-job'
+import { isPtyRootAnchored } from './pty/anchored-pty-roots'
 import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
   verifyWindowsTreeKillTarget,
@@ -34,6 +35,8 @@ export type DescendantSnapshot = {
   capturedAtMsByPid?: Readonly<Record<string, number>>
   /** Fresh ancestry proves ownership despite lstart’s second-resolution timestamps; retained merge rows do not. */
   reDerivedPids?: ReadonlySet<number>
+  /** The root's one child on a macOS anchored terminal. Walked through, never signalled. */
+  anchorPid?: number
 }
 
 export type SignalSender = (pid: number, signal: NodeJS.Signals) => void
@@ -133,6 +136,8 @@ export function collectDescendantRows(
   const descendants: ProcessTableRow[] = []
   const queue = [rootPid]
   const visited = new Set(queue)
+  const anchored = isPtyRootAnchored(rootPid)
+  let anchorPid: number | undefined
   for (let nextIndex = 0; nextIndex < queue.length; nextIndex += 1) {
     const pid = queue[nextIndex]
     for (const child of childrenByPpid.get(pid) ?? []) {
@@ -141,7 +146,11 @@ export function collectDescendantRows(
         continue
       }
       visited.add(child.pid)
-      descendants.push(child)
+      if (anchored && pid === rootPid) {
+        anchorPid = child.pid
+      } else {
+        descendants.push(child)
+      }
       queue.push(child.pid)
     }
   }
@@ -150,7 +159,8 @@ export function collectDescendantRows(
     rootPgid: rootRow.pgid,
     descendants,
     capturedAtMs,
-    reDerivedPids: new Set(descendants.map((row) => row.pid))
+    reDerivedPids: new Set(descendants.map((row) => row.pid)),
+    ...(anchorPid === undefined ? {} : { anchorPid })
   }
 }
 

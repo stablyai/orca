@@ -5,10 +5,20 @@ export function excludeShellBackgroundJobs(
   snapshot: DescendantSnapshot,
   shellIsRootChild: boolean
 ): DescendantSnapshot {
-  const rootPid = snapshot.root?.pid
-  let shell = { pid: rootPid, pgid: snapshot.rootPgid }
+  let shell: { pid?: number; pgid: number | null } = {
+    pid: snapshot.root?.pid,
+    pgid: snapshot.rootPgid
+  }
+  if (snapshot.anchorPid !== undefined) {
+    // What Orca spawned sits under the anchor, so it stands in for the root below.
+    const spawned = snapshot.descendants.filter((row) => row.ppid === snapshot.anchorPid)
+    if (spawned.length !== 1) {
+      return snapshot
+    }
+    shell = spawned[0]
+  }
   if (shellIsRootChild) {
-    const children = snapshot.descendants.filter((row) => row.ppid === rootPid)
+    const children = snapshot.descendants.filter((row) => row.ppid === shell.pid)
     // Without one unambiguous shell, sweep everything rather than guess.
     if (children.length !== 1) {
       return snapshot

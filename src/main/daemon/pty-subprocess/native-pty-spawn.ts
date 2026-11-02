@@ -10,6 +10,8 @@ import {
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
 import { wrapPtySpawnInTerminalScope } from '../terminal-scopes-runtime'
+import { markPtyRootAnchored, unmarkPtyRootAnchored } from '../../pty/anchored-pty-roots'
+import { wrapPtySpawnInMacosTerminalAnchor } from './macos-terminal-anchor'
 import { spawnConptyWithInputReader, type ConptyStartupEvents } from './conpty-startup-input-reader'
 
 async function loadNodePty(): Promise<typeof pty> {
@@ -68,7 +70,8 @@ export async function spawnNativeDaemonPty(args: {
     args.signal?.throwIfAborted()
     assertWslDistroAllowed(shellPath, shellArgs)
     const tcc = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
-    const wrapped = wrapPtySpawnInTerminalScope(tcc.file, tcc.args, args.env)
+    const anchor = wrapPtySpawnInMacosTerminalAnchor(tcc.file, tcc.args, args.env)
+    const wrapped = wrapPtySpawnInTerminalScope(anchor.file, anchor.args, args.env)
     const nodePty = await loadNodePty()
     // Establish the host job before spawning so Windows PTYs inherit membership.
     if (process.platform === 'win32') {
@@ -92,6 +95,11 @@ export async function spawnNativeDaemonPty(args: {
     } catch (error) {
       attempt.resolve({ kind: 'failed', completion: Promise.resolve() })
       throw error
+    }
+    if (anchor.anchored) {
+      const rootPid = proc.pid
+      markPtyRootAnchored(rootPid)
+      proc.onExit(() => unmarkPtyRootAnchored(rootPid))
     }
     const physical = createDaemonPtyPhysicalOwner(proc, shellPath)
     unpublishedOwner = physical

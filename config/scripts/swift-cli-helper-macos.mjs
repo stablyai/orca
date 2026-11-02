@@ -53,7 +53,8 @@ const DEV_SWIFT_CLI_HELPERS = [
     'orca-keyboard-layout',
     'shifted Option composition stays conservative'
   ],
-  ['process-footprint-macos', 'orca-process-footprint', 'memory panel falls back to top']
+  ['process-footprint-macos', 'orca-process-footprint', 'memory panel falls back to top'],
+  ['terminal-anchor-macos', 'orca-terminal-anchor', 'terminals run without an anchor']
 ]
 
 /** Dev bundles build each helper for the host arch; a missing swiftc only degrades that helper's feature. */

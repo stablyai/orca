@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   MAC_TERMINAL_HOST_BUNDLE,
@@ -167,10 +167,38 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
     writeFileSync(join(nodePty, 'src', 'unix.cc'), 'source')
     writeFileSync(join(root, 'node'), 'pinned-node', { mode: 0o644 })
     writeFileSync(join(root, 'icon.icns'), 'icon')
+    mkdirSync(join(appPath, 'Contents', 'MacOS'), { recursive: true })
+    writeFileSync(join(appPath, 'Contents', 'MacOS', 'orca-terminal-anchor'), 'anchor', {
+      mode: 0o644
+    })
   })
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })
+  })
+
+  it('copies the terminal anchor beside the host, where the daemon looks for it', () => {
+    const paths = assembleMacTerminalHost({
+      appPath,
+      nodeExecutable: join(root, 'node'),
+      iconPath: join(root, 'icon.icns'),
+      info: buildMacTerminalHostInfo({ appInfo, usageDescriptions, minimumOs: '13.5' })
+    })
+    expect(dirname(paths.terminalAnchor)).toBe(dirname(paths.executable))
+    expect(readFileSync(paths.terminalAnchor, 'utf8')).toBe('anchor')
+    expect(statSync(paths.terminalAnchor).mode & 0o111).not.toBe(0)
+  })
+
+  it('fails the build when the terminal anchor was not built', () => {
+    rmSync(join(appPath, 'Contents', 'MacOS', 'orca-terminal-anchor'))
+    expect(() =>
+      assembleMacTerminalHost({
+        appPath,
+        nodeExecutable: join(root, 'node'),
+        iconPath: join(root, 'icon.icns'),
+        info: {}
+      })
+    ).toThrow(/missing .*orca-terminal-anchor/)
   })
 
   it('lays out the pinned Node, daemon JS and runtime node-pty files only', () => {

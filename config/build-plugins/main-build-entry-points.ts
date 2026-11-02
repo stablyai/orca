@@ -14,6 +14,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
     'src/main/browser/extensions/browser-extension-native-host-supervisor-entry.ts'
   ),
   'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
+  'terminal-anchor-entry': resolve('src/main/daemon/terminal-anchor-entry.ts'),
   'plugin-host-entry': resolve('src/main/plugins/workers/plugin-host-entry.ts'),
   'plugin-source-transpile-worker-entry': resolve(
     'src/main/plugins/panels/plugin-source-transpile-worker-entry.ts'
