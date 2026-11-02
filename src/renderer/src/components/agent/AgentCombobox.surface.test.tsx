@@ -25,8 +25,8 @@ const detection: UseDetectedAgentsResult = {
   refresh: async () => []
 }
 
-function settled(rows: NewTabAgentMenuRow[]): NewTabAgentMenuModel {
-  return { state: 'settled', rows, detection }
+function settled(rows: NewTabAgentMenuRow[], terminalPending?: true): NewTabAgentMenuModel {
+  return { state: 'settled', rows, detection, ...(terminalPending ? { terminalPending } : {}) }
 }
 
 const CHAT_ROWS: NewTabAgentMenuRow[] = [
@@ -138,7 +138,7 @@ describe('AgentCombobox surface rows', () => {
     const { onPick, rerender } = renderPicker(settled(CHAT_ROWS), 'claude')
     fireEvent.click(screen.getByRole('combobox'))
     fireEvent.keyDown(screen.getByPlaceholderText('Search agents...'), { key: 'ArrowRight' })
-    rerender({ ...settled(CHAT_ROWS), terminalPending: true })
+    rerender(settled(CHAT_ROWS, true))
     fireEvent.keyDown(screen.getByPlaceholderText('Search agents...'), { key: 'Enter' })
     expect(onPick).not.toHaveBeenCalled()
     const terminal = screen.getByRole('button', { name: 'Start Claude in a terminal' })

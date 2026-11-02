@@ -35,6 +35,7 @@ import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { nativeChatComposerDraftWritesSettled } from '@/components/native-chat/native-chat-composer-draft-persistence'
 import type { SelectionOperation } from '../../../shared/structured-agent-session-selection-operations'
+import { launchedTab } from './agent-tab-launch-outcome.test-fixture'
 
 // No initial chat mode proves availability rejection preceded terminal-tab adoption.
 describe('structured chat adoption guard on the launch path', () => {
@@ -119,11 +120,11 @@ describe('structured chat adoption guard on the launch path', () => {
       const { TooltipProvider } = tooltip
       const { useTabAgentMenuLaunch } = quickLaunch
       const launcher = await import('./launch-agent-in-new-tab')
-      const owned: ReturnType<typeof launcher.launchAgentInNewTab>[] = []
+      const owned: ReturnType<typeof launchedTab>[] = []
       const originalLaunch = launcher.launchAgentInNewTab
       const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab').mockImplementation((args) => {
         const result = originalLaunch(args)
-        owned.push(result)
+        owned.push(launchedTab(result))
         return result
       })
       const warnings = vi.spyOn(console, 'warn')
@@ -421,7 +422,7 @@ describe('structured chat adoption guard on the launch path', () => {
             })
           }
           const call = dispatch.mock.results.at(-1)
-          const result = call?.type === 'return' ? call.value : undefined
+          const result = launchedTab(call?.type === 'return' ? call.value : null)
           const settlement = await result?.structuredSettlement
           expect(states.size).toBeGreaterThan(0)
           await main.settle()

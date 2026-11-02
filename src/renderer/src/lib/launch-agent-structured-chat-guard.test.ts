@@ -31,6 +31,7 @@ import {
 import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
 import * as capabilities from '@/runtime/local-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { launchedTab } from './agent-tab-launch-outcome.test-fixture'
 
 const mockCreateUnifiedTab = vi.fn<AppState['createUnifiedTab']>()
 const mockSetTabViewMode = vi.fn<AppState['setTabViewMode']>()
@@ -316,7 +317,7 @@ describe('structured chat adoption guard on the launch path', () => {
         launchAgentInNewTab({ requestId: 'request-6', agent: 'codex', worktreeId: 'wt-1' })
       ]
       // With no answer yet, each launch waits (bounded) for the runtime before opening its terminal.
-      await Promise.all(launches.map((launch) => launch?.structuredSettlement))
+      await Promise.all(launches.map((launch) => launchedTab(launch)?.structuredSettlement))
 
       expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
       expect(mockCreateTab).toHaveBeenCalledTimes(2)

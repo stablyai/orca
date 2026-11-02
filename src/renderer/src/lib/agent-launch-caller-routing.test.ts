@@ -16,6 +16,7 @@ import {
 } from './agent-launch-funnel-test-harness'
 
 import type * as LaunchAdmissionModule from './agent-session/launch/structured-agent-session-launch-admission'
+import { launchedTab } from './agent-tab-launch-outcome.test-fixture'
 const store = createLaunchFunnelStore()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 const mockLaunchAgentInWebHostTab = vi.fn()
@@ -101,7 +102,7 @@ async function useActualAdmission(): Promise<void> {
 
 async function launch(profile: AgentLaunchCallerProfile) {
   const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
+  return launchedTab(launchAgentInNewTab({ requestId: 'request-1', ...profile.args }))
 }
 
 describe('agent launch caller routing', () => {

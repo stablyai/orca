@@ -21,6 +21,7 @@ import {
 } from './launch-agent-in-new-tab-test-fixture'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { launchedTab } from './agent-tab-launch-outcome.test-fixture'
 
 describe('launchAgentInNewTab', () => {
   it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
@@ -408,8 +409,9 @@ describe('launchAgentInNewTab', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    await launchAgentInNewTab({ requestId: 'request-14', agent: 'claude', worktreeId: 'wt-1' })
-      ?.terminalCompletion
+    await launchedTab(
+      launchAgentInNewTab({ requestId: 'request-14', agent: 'claude', worktreeId: 'wt-1' })
+    )?.terminalCompletion
     expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/Claude.*try again/))
     expect(mockSetActiveTabType).not.toHaveBeenCalled()
   })

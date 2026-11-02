@@ -35,6 +35,7 @@ import {
 import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch-picker-rows'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { fetchCodexModelCatalogListing } from './codex-model-catalog-reader-test-fixture'
+import { launchedTab } from './agent-tab-launch-outcome.test-fixture'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 afterEach(() => {
@@ -250,7 +251,7 @@ describe('picker window launch contract', () => {
           })
         }
         const call = dispatch.mock.results.at(-1)
-        const result = call?.type === 'return' ? call.value : undefined
+        const result = launchedTab(call?.type === 'return' ? call.value : null)
         await result?.terminalCompletion
         cleanup()
         return {
