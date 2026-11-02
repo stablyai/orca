@@ -4,10 +4,7 @@ import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncSta
 import { isClientOwnedAgentStatus, isMirroredAgentStatusOwnedBy } from './agent-status-primitives'
 import { writableWebSessionTabsRecord } from './state-equality-core'
 
-export function matchesMirroredTerminal(
-  entry: AgentStatusEntry,
-  surface: TerminalSurface
-): boolean {
+function matchesMirroredTerminal(entry: AgentStatusEntry, surface: TerminalSurface): boolean {
   return entry.terminalHandle === undefined || entry.terminalHandle === surface.terminal
 }
 
@@ -35,10 +32,11 @@ export function buildMirroredAgentRetentionPatch(
     }
     const owned = (entry: AgentStatusEntry): boolean =>
       !!agentTypeToIconAgent(entry.agentType) &&
-      isMirroredAgentStatusOwnedBy(entry, environmentId, worktreeId) &&
-      matchesMirroredTerminal(entry, surface)
+      isMirroredAgentStatusOwnedBy(entry, environmentId, worktreeId)
     const retained = state.retainedAgentsByPaneKey?.[paneKey]
-    if (retained && owned(retained.entry)) {
+    const retiresRetained =
+      retained && owned(retained.entry) && matchesMirroredTerminal(retained.entry, surface)
+    if (retiresRetained) {
       patch.retainedAgentsByPaneKey ??= writableWebSessionTabsRecord(
         state,
         'retainedAgentsByPaneKey',
@@ -47,9 +45,7 @@ export function buildMirroredAgentRetentionPatch(
       delete patch.retainedAgentsByPaneKey[paneKey]
     }
     if (
-      live &&
-      live.mirroredEvidenceReceivedAt !== undefined &&
-      owned(live) &&
+      (retiresRetained || (live && live.mirroredEvidenceReceivedAt !== undefined && owned(live))) &&
       !state.retentionSuppressedPaneKeys?.[paneKey]
     ) {
       patch.retentionSuppressedPaneKeys ??= writableWebSessionTabsRecord(
@@ -60,7 +56,7 @@ export function buildMirroredAgentRetentionPatch(
       patch.retentionSuppressedPaneKeys[paneKey] = true
     }
   }
-  // A fresh host row re-derives liveness even if React never observed the prior disappearance.
+  // A fresh host row ends suppression and re-derives session dating even after retention effects.
   for (const paneKey of accepted.keys()) {
     if ((patch.retentionSuppressedPaneKeys ?? state.retentionSuppressedPaneKeys)?.[paneKey]) {
       patch.retentionSuppressedPaneKeys ??= writableWebSessionTabsRecord(

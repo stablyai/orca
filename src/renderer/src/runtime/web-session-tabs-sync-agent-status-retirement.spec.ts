@@ -144,6 +144,85 @@ export function registerHostStatusRetirementTests({
     expect(store.getState().retainedAgentsByPaneKey[key]?.entry.updatedAt).toBe(T0 + 2000)
   })
 
+  it.each(['live', 'retained-only'] as const)(
+    'dates a successor by its own observation after %s omission and retention effects have settled',
+    (source) => {
+      const store = seedPairedClientStore()
+      const done = makeHostSnapshot({
+        snapshotVersion: 1,
+        hostTabIds: [KEEP_TAB],
+        hostNow: T0,
+        hostAgentStatusTabIds: [KEEP_TAB],
+        hostAgentStatusState: 'done'
+      })
+      done.tabs[0]!.agentStatus!.providerSession = { key: 'session_id', id: 'A' }
+      applyHostSnapshot(store, done, T0)
+      const previous = replayRetainedAgentsSync(store, new Map(), T0)
+      if (source === 'retained-only') {
+        store.getState().removeAgentStatus(mirrorPaneKey(KEEP_TAB, KEEP_LEAF))
+        replayRetainedAgentsSync(store, previous, T0)
+        expect(observeCurrentDisplay(store, T0).sidebar).toHaveLength(1)
+      }
+      const shell = makeShellSnapshot({
+        snapshotVersion: 2,
+        hostTabIds: [KEEP_TAB],
+        hostNow: T0 + 1000
+      })
+      applyHostSnapshot(store, shell, T0 + 1000)
+      replayRetainedAgentsSync(store, previous, T0 + 1000)
+      expect(observeCurrentDisplay(store, T0 + 1000).sidebar).toEqual([])
+      const successor = makeHostSnapshot({
+        snapshotVersion: 3,
+        hostTabIds: [KEEP_TAB],
+        hostNow: T0 + 2000,
+        hostAgentStatusTabIds: [KEEP_TAB],
+        hostAgentStatusState: 'working'
+      })
+      successor.tabs[0]!.agentStatus!.providerSession = { key: 'session_id', id: 'B' }
+      applyHostSnapshot(store, successor, T0 + 2000)
+      const key = mirrorPaneKey(KEEP_TAB, KEEP_LEAF)
+      expect(store.getState().agentStatusByPaneKey[key]?.firstStateStartedAt).toBe(T0 + 2000)
+      expect(store.getState().retentionSuppressedPaneKeys[key]).toBeUndefined()
+      expect(observeCurrentDisplay(store, T0 + 2000).sidebar).toEqual([key])
+    }
+  )
+
+  it.each(['working', 'done'] as const)(
+    'retires an old %s row when a current ready surface has replaced the terminal after a missed exit',
+    (state) => {
+      const store = seedPairedClientStore()
+      const before = makeHostSnapshot({
+        snapshotVersion: 1,
+        hostTabIds: [KEEP_TAB],
+        hostNow: T0,
+        hostAgentStatusTabIds: [KEEP_TAB],
+        hostAgentStatusState: state
+      })
+      before.tabs[0]!.agentStatus!.terminalHandle = before.tabs[0]!.terminal
+      applyHostSnapshot(store, before, T0)
+      const previous = replayRetainedAgentsSync(store, new Map(), T0)
+      const after = makeShellSnapshot({
+        snapshotVersion: 2,
+        hostTabIds: [KEEP_TAB],
+        hostNow: T0 + 1000
+      })
+      after.tabs[0]!.terminal = 'replacement-terminal'
+      applyHostSnapshot(store, after, T0 + 1000)
+      const key = mirrorPaneKey(KEEP_TAB, KEEP_LEAF)
+      expect(store.getState().agentStatusByPaneKey[key]).toBeUndefined()
+      replayRetainedAgentsSync(store, previous, T0 + 1000)
+      expect(store.getState().retainedAgentsByPaneKey[key]).toBeUndefined()
+      expect(observeCurrentDisplay(store, T0 + 1000)).toEqual({
+        tabs: ['active'],
+        sidebar: [],
+        workspace: 'active',
+        dashboard: []
+      })
+      applyHostSnapshot(store, before, T0 + 2000, { expectChange: false })
+      expect(store.getState().agentStatusByPaneKey[key]).toBeUndefined()
+    }
+  )
+
   it.each(['mirror-first', 'exit-first'] as const)(
     'preserves PTY-end history with %s callback order and a pending handle',
     (order) => {
@@ -155,6 +234,7 @@ export function registerHostStatusRetirementTests({
         hostAgentStatusTabIds: [KEEP_TAB],
         hostAgentStatusState: 'done'
       })
+      done.tabs[0]!.agentStatus!.terminalHandle = done.tabs[0]!.terminal
       applyHostSnapshot(store, done, T0)
       const key = mirrorPaneKey(KEEP_TAB, KEEP_LEAF)
       const previous = replayRetainedAgentsSync(store, new Map(), T0)
@@ -178,10 +258,20 @@ export function registerHostStatusRetirementTests({
       expect(store.getState().retentionSuppressedPaneKeys[key]).toBeUndefined()
       expect(store.getState().retainedAgentsByPaneKey[key]?.entry.state).toBe('done')
       expect(observeCurrentDisplay(store, T0 + 1000).workspace).toBe('done')
+      const history = store.getState().retainedAgentsByPaneKey[key]
+      const replacement = makeShellSnapshot({
+        snapshotVersion: 3,
+        hostTabIds: [KEEP_TAB],
+        hostNow: T0 + 2000
+      })
+      replacement.tabs[0]!.terminal = 'replacement-terminal'
+      // A confirmed PTY-end result is history, unlike a stale live row whose exit was missed.
+      applyHostSnapshot(store, replacement, T0 + 2000, { expectChange: false })
+      expect(store.getState().retainedAgentsByPaneKey[key]).toBe(history)
     }
   )
 
-  it('preserves generic results, other hosts and a reused terminal handle while retiring only the matching agent', () => {
+  it('preserves generic results, native sessions and other hosts while retiring the omitted agent', () => {
     const store = seedPairedClientStore()
     const done = makeHostSnapshot({
       snapshotVersion: 1,
@@ -204,7 +294,6 @@ export function registerHostStatusRetirementTests({
     store.setState({
       agentStatusByPaneKey: {
         ...live,
-        [key]: { ...live[key]!, terminalHandle: 'successor-terminal' },
         [other]: { ...live[other]!, connectionId: 'another-host' },
         [nativeKey]: native
       }
@@ -216,10 +305,9 @@ export function registerHostStatusRetirementTests({
         hostTabIds: [KEEP_TAB, RETRACTED_TAB],
         hostNow: T0 + 1000
       }),
-      T0 + 1000,
-      { expectChange: false }
+      T0 + 1000
     )
-    expect(store.getState().agentStatusByPaneKey[key]?.terminalHandle).toBe('successor-terminal')
+    expect(store.getState().agentStatusByPaneKey[key]).toBeUndefined()
     expect(store.getState().agentStatusByPaneKey[other]?.connectionId).toBe('another-host')
     expect(store.getState().agentStatusByPaneKey[nativeKey]).toBe(native)
     const generic = {
@@ -233,14 +321,24 @@ export function registerHostStatusRetirementTests({
         observedAt: T0
       }
     }
-    store.setState({ agentStatusByPaneKey: { [key]: generic } })
+    const genericSnapshot = makeHostSnapshot({
+      snapshotVersion: 3,
+      hostTabIds: [KEEP_TAB],
+      hostNow: T0 + 1000,
+      hostAgentStatusTabIds: [KEEP_TAB]
+    })
+    genericSnapshot.tabs[0]!.agentStatus = generic
+    applyHostSnapshot(store, genericSnapshot, T0 + 1000)
     const previous = replayRetainedAgentsSync(store, new Map(), T0 + 1000)
     applyHostSnapshot(
       store,
-      makeHostSnapshot({ snapshotVersion: 3, hostTabIds: [KEEP_TAB], hostNow: T0 + 2000 }),
+      makeHostSnapshot({ snapshotVersion: 4, hostTabIds: [KEEP_TAB], hostNow: T0 + 2000 }),
       T0 + 2000
     )
     replayRetainedAgentsSync(store, previous, T0 + 2000)
-    expect(store.getState().retainedAgentsByPaneKey[key]?.entry).toEqual(generic)
+    expect(store.getState().retainedAgentsByPaneKey[key]?.entry).toEqual({
+      ...generic,
+      mirroredEvidenceReceivedAt: T0 + 1000
+    })
   })
 }

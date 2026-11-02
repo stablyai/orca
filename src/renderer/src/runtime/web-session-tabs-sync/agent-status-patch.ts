@@ -32,10 +32,7 @@ import {
   isMirroredCommandCodeTurnBump,
   writableWebSessionTabsRecord
 } from './state-equality-core'
-import {
-  buildMirroredAgentRetentionPatch,
-  matchesMirroredTerminal
-} from './agent-status-retention-patch'
+import { buildMirroredAgentRetentionPatch } from './agent-status-retention-patch'
 
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
@@ -141,10 +138,19 @@ export function buildMirroredAgentStatusPatch(
     const accepted =
       nextEntry === entry ? entry : withHostProgramStatus(nextEntry, entry.programStatus)
     const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
+    // Omission ended the prior display session; its pinned state clock cannot date a returning row.
+    const datedEntry =
+      !existing && !retained && state.retentionSuppressedPaneKeys?.[entry.paneKey]
+        ? {
+            ...accepted,
+            firstStateStartedAt:
+              accepted.firstStateStartedAt ?? accepted.evidenceObservedAt ?? accepted.updatedAt
+          }
+        : accepted
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,
       firstStateStartedAt: resolveAgentSessionStartedAt({
-        entry: accepted,
+        entry: datedEntry,
         previous: existing ?? retained?.entry,
         previousStartedAt: retained?.startedAt
       })
@@ -187,10 +193,6 @@ export function buildMirroredAgentStatusPatch(
     }
     // Host omission cannot prove OSC-driven exit. Retain owned rows through staleness so wake decays them like local panes instead of erasing them (STA-3107).
     if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
-      continue
-    }
-    const surface = readySurfaces.get(paneKey)
-    if (surface && !matchesMirroredTerminal(state.agentStatusByPaneKey[paneKey]!, surface)) {
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {

@@ -267,7 +267,10 @@ export function collectRetainedAgentsOnDisappear(args: {
         ? ownerPaneKey
         : null
     if (suppressedPaneKey) {
-      consumedSuppressedPaneKeys.push(suppressedPaneKey)
+      // The mirror clears its marker on the next accepted row, which also re-derives session dating.
+      if (prev.row.entry.mirroredEvidenceReceivedAt === undefined) {
+        consumedSuppressedPaneKeys.push(suppressedPaneKey)
+      }
       continue
     }
     // Retain under the current owner after pane transfer, including PTY exits before the next sync.
