@@ -75,11 +75,14 @@ describe('selected-runtime conditional refresh', () => {
   })
 
   it.each(['all', 'local', 'ssh:one'] as const)(
-    'keeps %s refreshes on the full-response path',
+    'opts %s into conditional refresh initially and on subsequent refreshes',
     async (scope) => {
       const list = transport().mockResolvedValue(previous)
-      await refreshAiVaultSessionList({ ...request, executionHostScope: scope }, options)
-      expect(list.mock.calls[0]?.[0]).not.toHaveProperty('afterFingerprint')
+      const scopedRequest = { ...request, executionHostScope: scope }
+      await refreshAiVaultSessionList(scopedRequest, options)
+      expect(list.mock.calls[0]?.[0]).toHaveProperty('afterFingerprint', null)
+      await refreshAiVaultSessionList(scopedRequest, options, { fingerprint, result: previous })
+      expect(list.mock.calls[1]?.[0]).toHaveProperty('afterFingerprint', fingerprint)
     }
   )
 
