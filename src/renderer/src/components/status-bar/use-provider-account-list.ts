@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import {
   fetchProviderAccountsSnapshot,
   getProviderAccountsOwnerKey,
+  invalidateProviderAccountsSnapshot,
   type ProviderAccountsSnapshot
 } from '@/runtime/runtime-provider-accounts-client'
 import { observedProviderAccounts } from '@/runtime/observed-provider-accounts'
@@ -24,7 +25,7 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     [environmentId]
   )
   const ownerKey = `${getProviderAccountsOwnerKey(ownerTarget)}:${provider}`
-  const mountedRef = useMemo(() => ({ current: true, ownerKey }), [ownerKey])
+  const mountedRef = useMemo(() => ({ current: true, ownerKey, requestVersion: 0 }), [ownerKey])
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -55,6 +56,8 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
       if (!mountedRef.current) {
         return
       }
+      mountedRef.requestVersion += 1
+      invalidateProviderAccountsSnapshot(ownerTarget)
       if (observing) {
         observation.setAccounts(next)
       } else {
@@ -65,20 +68,25 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
         }))
       }
     },
-    [mountedRef, observing, observation, ownerKey]
+    [mountedRef, observing, observation, ownerKey, ownerTarget]
   )
   const loadAccounts = useCallback(async () => {
+    if (!mountedRef.current) {
+      return
+    }
+    const requestVersion = ++mountedRef.requestVersion
     const snapshot = await fetchProviderAccountsSnapshot(ownerTarget)
+    if (!mountedRef.current || mountedRef.requestVersion !== requestVersion) {
+      return
+    }
     if (snapshot.failedProviders?.includes(provider)) {
       console.error(`${provider} account list failed; keeping previous state.`)
       return
     }
-    if (mountedRef.current) {
-      if (observing) {
-        observation.setAccounts(snapshot[provider])
-      } else {
-        setLocal({ ownerKey, accounts: snapshot[provider], known: true })
-      }
+    if (observing) {
+      observation.setAccounts(snapshot[provider])
+    } else {
+      setLocal({ ownerKey, accounts: snapshot[provider], known: true })
     }
   }, [provider, ownerTarget, ownerKey, observing, observation, mountedRef])
   useEffect(() => {

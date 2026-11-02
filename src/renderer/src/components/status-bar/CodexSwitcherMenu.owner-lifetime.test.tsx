@@ -9,6 +9,8 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import { toast } from 'sonner'
+import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 
 const mocks = vi.hoisted(() => ({ load: vi.fn(), select: vi.fn(), reauthenticate: vi.fn() }))
@@ -26,7 +28,22 @@ vi.mock('@/lib/windows-terminal-capabilities', () => ({
   getWindowsTerminalCapabilityOwnerKey: () => 'local'
 }))
 vi.mock('./ProviderDetailsMenu', () => ({
-  ProviderDetailsMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>
+  ProviderDetailsMenu: ({
+    children,
+    open,
+    onOpenChange
+  }: {
+    children: ReactNode
+    open: boolean
+    onOpenChange: (open: boolean) => void
+  }) => (
+    <div>
+      <button aria-expanded={open} onClick={() => onOpenChange(!open)}>
+        Toggle details
+      </button>
+      {children}
+    </div>
+  )
 }))
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -178,6 +195,14 @@ it.each([
     await act(async () => pending.resolve(snapshot('stale-owner')))
     expect(screen.queryByText('stale-owner@example.com')).toBeNull()
     expect(row(nextOwner).getAttribute('aria-disabled')).toBe('false')
+    if (operation === 'select') {
+      expect(markLiveCodexSessionsForRestart).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: { kind: 'environment', environmentId: 'remote-a' },
+          target: { runtime: 'host', wslDistro: null }
+        })
+      )
+    }
     mocks.select.mockResolvedValueOnce(accounts(nextOwner))
     fireEvent.click(row(nextOwner))
     await act(async () => {})
@@ -239,6 +264,17 @@ it.each(['resolve', 'reject'] as const)(
     })
     expect(screen.queryByText('stale-owner@example.com')).toBeNull()
     expect(row('remote-b').getAttribute('aria-disabled')).toBe('false')
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    if (settlement === 'resolve') {
+      expect(useAppStore.getState().fetchSettings).toHaveBeenCalledTimes(1)
+      expect(markLiveCodexSessionsForRestart).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: { kind: 'local' },
+          target: { runtime: 'host', wslDistro: null }
+        })
+      )
+    }
     mocks.select.mockResolvedValueOnce(accounts('remote-b'))
     fireEvent.click(row('remote-b'))
     await act(async () => {})
@@ -249,3 +285,135 @@ it.each(['resolve', 'reject'] as const)(
     errorSpy.mockRestore()
   }
 )
+
+it('preserves an open menu and pending action across unrelated settings updates', async () => {
+  const pending = deferred<CodexRateLimitAccountsState>()
+  mocks.load.mockResolvedValue(snapshot('remote-a'))
+  mocks.select.mockReturnValueOnce(pending.promise)
+  configureOwner('remote-a')
+  render(<CodexSwitcherMenu codex={usage} compact iconOnly />)
+  await act(async () => {})
+  fireEvent.click(screen.getByRole('button', { name: 'Toggle details' }))
+  fireEvent.click(row('remote-a'))
+  expect(row('remote-a').getAttribute('aria-disabled')).toBe('true')
+
+  await act(async () =>
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, skipCodexRateLimitResetConfirm: true }
+    }))
+  )
+  expect(screen.getByRole('button', { name: 'Toggle details' }).getAttribute('aria-expanded')).toBe(
+    'true'
+  )
+  expect(row('remote-a').getAttribute('aria-disabled')).toBe('true')
+  expect(mocks.load).toHaveBeenCalledTimes(1)
+
+  await act(async () =>
+    pending.resolve({ ...accounts('remote-a'), activeAccountId: 'remote-a-other' })
+  )
+  expect(row('remote-a').getAttribute('aria-disabled')).toBe('true')
+  expect(
+    screen
+      .getByText('remote-a@example.com')
+      .closest('[role="menuitem"]')
+      ?.getAttribute('aria-disabled')
+  ).toBe('false')
+})
+
+it('keeps a completed selection when an older same-owner list resolves later', async () => {
+  const pending = deferred<ProviderAccountsSnapshot>()
+  mocks.load.mockResolvedValueOnce(snapshot('remote-a')).mockReturnValueOnce(pending.promise)
+  configureOwner('remote-a')
+  render(<CodexSwitcherMenu codex={usage} compact iconOnly />)
+  await act(async () => {})
+  await act(async () =>
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, activeCodexManagedAccountId: 'local-other' }
+    }))
+  )
+  mocks.select.mockResolvedValueOnce({ ...accounts('remote-a'), activeAccountId: 'remote-a-other' })
+  fireEvent.click(row('remote-a'))
+  await act(async () => {})
+  expect(row('remote-a').getAttribute('aria-disabled')).toBe('true')
+  await act(async () => pending.resolve(snapshot('remote-a')))
+  expect(row('remote-a').getAttribute('aria-disabled')).toBe('true')
+  expect(
+    screen
+      .getByText('remote-a@example.com')
+      .closest('[role="menuitem"]')
+      ?.getAttribute('aria-disabled')
+  ).toBe('false')
+})
+
+it('retires busy state when moving between WSL distros with the same local account target', async () => {
+  const pending = deferred<CodexRateLimitAccountsState>()
+  const wslAccounts: CodexRateLimitAccountsState = {
+    accounts: ['Ubuntu', 'Debian'].flatMap((distro) =>
+      accounts(distro).accounts.map((account) => ({
+        ...account,
+        managedHomeRuntime: 'wsl' as const,
+        wslDistro: distro
+      }))
+    ),
+    activeAccountId: null,
+    activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'Ubuntu', Debian: 'Debian' } }
+  }
+  mocks.load.mockResolvedValue({ ...snapshot('local'), codex: wslAccounts })
+  mocks.select.mockReturnValueOnce(pending.promise)
+  configureOwner('wsl-ubuntu')
+  useAppStore.setState((state) => ({
+    settings: {
+      ...state.settings!,
+      codexManagedAccounts: wslAccounts.accounts.map((account) => ({
+        ...account,
+        managedHomePath: '/unused'
+      })),
+      activeCodexManagedAccountId: null,
+      activeCodexManagedAccountIdsByRuntime: wslAccounts.activeAccountIdsByRuntime
+    },
+    rateLimits: { ...state.rateLimits, codexTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' } },
+    runtimeEnvironments: ['Ubuntu', 'Debian'].map((distro) => ({
+      id: `wsl-${distro.toLowerCase()}`,
+      name: distro,
+      createdAt: 1,
+      updatedAt: 1,
+      lastUsedAt: null,
+      runtimeId: null,
+      endpoints: [
+        { id: 'local', kind: 'websocket', label: 'Local bridge', endpoint: 'ws://127.0.0.1:7001' }
+      ],
+      preferredEndpointId: 'local',
+      orcadDeployment: { kind: 'wsl', distro, localPort: 7001, remotePort: 6768 }
+    }))
+  }))
+  render(<CodexSwitcherMenu codex={usage} compact iconOnly />)
+  await act(async () => {})
+  fireEvent.click(screen.getByRole('button', { name: 'Toggle details' }))
+  fireEvent.click(row('Ubuntu'))
+  expect(row('Ubuntu').getAttribute('aria-disabled')).toBe('true')
+  await act(async () =>
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, activeRuntimeEnvironmentId: 'wsl-debian' },
+      rateLimits: { ...state.rateLimits, codexTarget: { runtime: 'wsl', wslDistro: 'Debian' } }
+    }))
+  )
+  expect(screen.getByRole('button', { name: 'Toggle details' }).getAttribute('aria-expanded')).toBe(
+    'false'
+  )
+  expect(row('Debian').getAttribute('aria-disabled')).toBe('false')
+  await act(async () => pending.resolve(wslAccounts))
+  expect(row('Debian').getAttribute('aria-disabled')).toBe('false')
+  mocks.select.mockResolvedValueOnce(wslAccounts)
+  fireEvent.click(row('Debian'))
+  await act(async () => {})
+  expect(mocks.select).toHaveBeenNthCalledWith(
+    1,
+    { kind: 'local' },
+    { accountId: 'Ubuntu-other', runtime: 'wsl', wslDistro: 'Ubuntu' }
+  )
+  expect(mocks.select).toHaveBeenNthCalledWith(
+    2,
+    { kind: 'local' },
+    { accountId: 'Debian-other', runtime: 'wsl', wslDistro: 'Debian' }
+  )
+})

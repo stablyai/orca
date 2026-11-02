@@ -188,6 +188,11 @@ export function watchProviderAccounts(
   }
 }
 
+// Reads after a mutation must not join a snapshot started before it completed.
+export function invalidateProviderAccountsSnapshot(target: RuntimeClientTarget): void {
+  pendingProviderAccountsSnapshots.delete(getProviderAccountsOwnerKey(target))
+}
+
 // One-shot account snapshot for status-bar switcher menus.
 export function fetchProviderAccountsSnapshot(
   target: RuntimeClientTarget

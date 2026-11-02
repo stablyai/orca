@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type * as OriginalModule0 from '../../../shared/app-environment'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useProviderAccountList } from '@/components/status-bar/use-provider-account-list'
 import { accountHost, accountTransport } from './provider-account-observation.test-fixture'
@@ -170,3 +170,43 @@ it('keeps timeout/error loss separate from equal healthy answers and fences reti
   await act(async () => {})
   expect(transport.streams.every((stream) => stream.close.mock.calls.length === 1)).toBe(true)
 })
+
+it.each(['before', 'after'] as const)(
+  'keeps mutation results when an earlier shared read resolves %s a fresh read',
+  async (order) => {
+    const host = accountHost()
+    const transport = accountTransport({ [order]: host }, false)
+    const target = { kind: 'environment', environmentId: order } as const
+    const { result } = renderHook(() =>
+      useProviderAccountList('codex', target, '', emptyCodexAccountsState())
+    )
+    await act(async () => {})
+    const staleRead = transport.streams[0]
+    const selected = { ...host.snapshot.codex, activeAccountId: 'selected' }
+    act(() => result.current.setAccounts(selected))
+    expect(result.current.accounts.activeAccountId).toBe('selected')
+
+    const reload = result.current.loadAccounts()
+    await act(async () => {})
+    expect(transport.streams).toHaveLength(2)
+    const freshRead = transport.streams[1]
+    const stale = { ...host.snapshot, codex: { ...host.snapshot.codex, activeAccountId: 'stale' } }
+    if (order === 'before') {
+      await act(async () => staleRead.send(stale))
+      expect(result.current.accounts.activeAccountId).toBe('selected')
+    }
+    // Retiring the old request must not evict the newer request from deduplication.
+    const sharedReload = result.current.loadAccounts()
+    await act(async () => {})
+    expect(transport.streams).toHaveLength(2)
+    await act(async () => {
+      freshRead.send({ ...host.snapshot, codex: selected })
+      await Promise.all([reload, sharedReload])
+    })
+    if (order === 'after') {
+      await act(async () => staleRead.send(stale))
+    }
+    expect(result.current.accounts.activeAccountId).toBe('selected')
+    expect(result.current.accountsLoaded).toBe(true)
+  }
+)
