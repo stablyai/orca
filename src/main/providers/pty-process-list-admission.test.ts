@@ -9,6 +9,41 @@ import {
 } from './pty-process-list-admission'
 
 describe('PtyProcessListAdmission', () => {
+  const evidence = {
+    verdict: 'live' as const,
+    processName: 'codex',
+    authorityGeneration: 'relay-generation',
+    observationEpoch: 4,
+    capturedAgeMs: 12
+  }
+
+  it('rejects malformed foreground evidence instead of stripping it', () => {
+    expect(() =>
+      new PtyProcessListAdmission().admit({
+        id: 'pty-1',
+        cwd: '/repo',
+        title: 'shell',
+        foregroundProcessEvidence: { ...evidence, verdict: 'wat' }
+      } as never)
+    ).toThrow('invalid_pty_process_list')
+  })
+
+  it('admits diagnostic provenance and rejects malformed routing evidence', () => {
+    const session = {
+      id: 'pty',
+      cwd: '/',
+      title: 'shell',
+      inventorySourceId: 'source',
+      routed: false
+    }
+    expect(new PtyProcessListAdmission().admit(session)).toEqual(session)
+    Reflect.set(session, 'routed', 'yes')
+    expect(() => new PtyProcessListAdmission().admit(session)).toThrow('invalid_pty_process_list')
+    Reflect.set(session, 'routed', false)
+    Reflect.set(session, 'inventorySourceId', 1)
+    expect(() => new PtyProcessListAdmission().admit(session)).toThrow('invalid_pty_process_list')
+  })
+
   it('strips unknown provider payloads from admitted process metadata', () => {
     const admission = new PtyProcessListAdmission()
 

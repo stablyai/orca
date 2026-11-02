@@ -9,10 +9,6 @@ import { encodeLogBatch, encodeLogHeader } from './terminal-history-log'
 import { getHistorySessionDirName } from './history-paths'
 import type { PendingOutputRecord } from './types'
 
-// End-to-end coverage for incremental checkpoint persistence and cold-restore
-// replay (issue #5096): HistoryManager appends take batches to output.log;
-// HistoryReader replays checkpoint base + log tail through a scratch emulator.
-
 const SESSION_ID = 'wt@@incremental-test'
 
 let dir: string
@@ -91,12 +87,16 @@ describe('incremental terminal history restore', () => {
 
   it('ignores a stale log whose generation predates the checkpoint', async () => {
     await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'stale tail\r\n' }])
-    // Simulate a crash between checkpoint rename and log reset: write the
-    // checkpoint with a newer generation while the gen-0 log stays on disk.
+    // Simulate a crash after checkpoint rename but before the old log generation is reset.
     const checkpoint = JSON.parse(JSON.stringify(snapshotOf(['base content\r\n'])))
     writeFileSync(
       sessionFile('checkpoint.json'),
-      JSON.stringify({ ...checkpoint, cwd: '/home/user', generation: 1 })
+      JSON.stringify({
+        ...checkpoint,
+        cwd: '/home/user',
+        generation: 1,
+        checkpointedAt: new Date().toISOString()
+      })
     )
 
     const restore = await reader.detectColdRestore(SESSION_ID)
@@ -109,7 +109,7 @@ describe('incremental terminal history restore', () => {
     const checkpoint = JSON.parse(JSON.stringify(snapshotOf(['old format base\r\n'])))
     writeFileSync(
       sessionFile('checkpoint.json'),
-      JSON.stringify({ ...checkpoint, cwd: '/home/user' })
+      JSON.stringify({ ...checkpoint, cwd: '/home/user', checkpointedAt: new Date().toISOString() })
     )
     writeFileSync(
       sessionFile('output.log'),
@@ -215,8 +215,7 @@ describe('incremental terminal history restore', () => {
     expect(await manager.appendIncrements(SESSION_ID, 1, [bigRecord])).toBe('ok')
     expect(await manager.appendIncrements(SESSION_ID, 2, [bigRecord])).toBe('ok')
     expect(await manager.appendIncrements(SESSION_ID, 3, [bigRecord])).toBe('needs-checkpoint')
-    // Why: the rejected batch is subsumed by the snapshot the caller takes
-    // next; checkpoint() resets the log for the new generation.
+    // The next snapshot subsumes the rejected batch and resets the log.
     await manager.checkpoint(SESSION_ID, snapshotOf(['compacted\r\n']))
     expect(
       await manager.appendIncrements(SESSION_ID, 4, [{ kind: 'output', data: 'fresh\r\n' }])
@@ -239,7 +238,6 @@ describe('incremental terminal history restore', () => {
   it('continues an existing log after a warm registerWriter', async () => {
     await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'before relaunch\r\n' }])
 
-    // Simulate app relaunch: a fresh HistoryManager attaches to the same dir.
     const relaunched = new HistoryManager(dir)
     relaunched.registerWriter(SESSION_ID)
     await relaunched.appendIncrements(SESSION_ID, 2, [
@@ -273,14 +271,16 @@ describe('incremental terminal history restore', () => {
     const firstReplay = reader.detectColdRestore(SESSION_ID)
     const secondReplay = reader.detectColdRestore(secondSessionId)
     try {
+      // Drain by yield because awaiting the session that loses the replay-slot race deadlocks.
       await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
-
       pendingYields.shift()!()
-      expect((await firstReplay)?.scrollbackAnsi).toContain('😀second')
+
       await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
-
       pendingYields.shift()!()
-      expect((await secondReplay)?.scrollbackAnsi).toContain('😀second')
+
+      for (const restore of await Promise.all([firstReplay, secondReplay])) {
+        expect(restore?.scrollbackAnsi).toContain('😀second')
+      }
       expect(pendingYields).toHaveLength(0)
     } finally {
       for (const resume of pendingYields.splice(0)) {

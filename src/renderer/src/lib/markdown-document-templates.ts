@@ -1,10 +1,9 @@
-import type { DirEntry, GlobalSettings } from '../../../shared/types'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import {
-  readRuntimeDirectory,
-  readRuntimeFileContent,
-  runtimePathExists
-} from '@/runtime/runtime-file-client'
+import type { DirEntry } from '../../../shared/filesystem-entry-types'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
+import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import { basename, joinPath, normalizeRelativePath } from './path'
 
 const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'
@@ -47,8 +46,7 @@ function titleFromName(name: string): string {
   return stem.charAt(0).toUpperCase() + stem.slice(1)
 }
 
-// Why: template names can originate from pasted/remote filenames; title display
-// only needs collapsed whitespace, not a whole-string whitespace regex pass.
+// Template names may be large pasted/remote filenames; collapse only enough whitespace for display.
 function foldMarkdownTemplateTitleWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
@@ -126,7 +124,7 @@ export function applyMarkdownTemplatePlaceholders(
   }
 
   return content.replace(/\{\{\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*\}\}/g, (match, key: string) => {
-    return Object.prototype.hasOwnProperty.call(replacements, key) ? replacements[key] : match
+    return Object.hasOwn(replacements, key) ? replacements[key] : match
   })
 }
 
@@ -137,8 +135,7 @@ export async function listMarkdownDocumentTemplates(
   const templates: MarkdownDocumentTemplate[] = []
   const rootPath = joinPath(worktreePath, MARKDOWN_TEMPLATE_ROOT)
 
-  // Why: missing template directories are the normal case. Probe quietly first
-  // so Electron does not log an IPC handler error for an optional feature.
+  // Missing template directories are normal; probe quietly to avoid optional-feature IPC errors.
   if (!(await runtimePathExists(context, rootPath))) {
     return []
   }
@@ -210,14 +207,14 @@ export async function listMarkdownDocumentTemplates(
 
 export async function readMarkdownDocumentTemplateContent(
   context: {
-    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+    target: RuntimeClientTarget
     worktreeId: string
     connectionId?: string
   },
   template: MarkdownDocumentTemplate
 ): Promise<string> {
   const result = await readRuntimeFileContent({
-    settings: context.settings,
+    target: context.target,
     filePath: template.filePath,
     relativePath: template.relativePath,
     worktreeId: context.worktreeId,

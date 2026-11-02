@@ -1,9 +1,14 @@
-export type RepoKind = 'git' | 'folder'
-
 export type GitAvailability = 'checking' | 'available' | 'unavailable' | 'unknown'
 
 function pathSeparatorFor(pathValue: string): '/' | '\\' {
   return pathValue.includes('\\') ? '\\' : '/'
+}
+
+/** Use ~ only for recognized OS home layouts; suffix-matching arbitrary orca/projects paths would mislabel them. */
+function isHomeProjectsFallback(pathValue: string): boolean {
+  return /^(?:\/(?:Users|home)\/[^/]+|[A-Za-z]:[\\/]Users[\\/][^\\/]+)[\\/]orca[\\/]projects$/.test(
+    pathValue
+  )
 }
 
 function trimTrailingSeparators(pathValue: string): string {
@@ -83,7 +88,13 @@ export function formatCreateProjectParentSummary({
   if (!trimmedParent) {
     return runtimeEnvironmentId || isRemoteHost ? missingServerLocationLabel : missingLocationLabel
   }
-  if (defaultParent && trimmedParent === defaultParent && !runtimeEnvironmentId && !isRemoteHost) {
+  if (
+    defaultParent &&
+    trimmedParent === defaultParent &&
+    !runtimeEnvironmentId &&
+    !isRemoteHost &&
+    isHomeProjectsFallback(trimmedParent)
+  ) {
     return '~/orca/projects'
   }
   return trimmedParent

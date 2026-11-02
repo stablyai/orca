@@ -1,6 +1,10 @@
 import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
+import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
 import { useAppStore } from '@/store'
+import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
+import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
 import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from './useDashboardData'
 
@@ -23,7 +27,6 @@ function getIndexedTab(
   return tabIndex.get(tabId)
 }
 
-/** The row's conversation name, or null when nothing usable exists. */
 export function useAgentRowConversationName(agent: DashboardAgentRow): string | null {
   const parentPaneKey = agent.entry.orchestration?.parentPaneKey
   const usesParentTab =
@@ -39,10 +42,40 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
       ? undefined
       : getIndexedTab(s.tabsByWorktree[agent.tab.worktreeId], agent.tab.id)
   )
+  const structuredTab = useAppStore((s) =>
+    cannotOwnTabName
+      ? undefined
+      : structuredChatTabById(s.unifiedTabsByWorktree, agent.tab.worktreeId, agent.tab.id)
+  )
+  const conversationName = useStructuredChatTabConversationName(structuredTab)
+  // Parse once per render; selectors run on every store write and must stay allocation-free.
+  const ownLeafId = cannotOwnTabName ? null : parsePaneKey(agent.paneKey)?.leafId
+  // Select this split pane’s primitive title so sibling focus/title changes cannot rename or re-render its row.
+  const paneLiveTitle = useAppStore((s) =>
+    cannotOwnTabName
+      ? undefined
+      : resolveAgentRowPaneLiveTitle(
+          s.terminalLayoutsByTabId?.[agent.tab.id],
+          s.runtimePaneTitlesByTabId?.[agent.tab.id],
+          ownLeafId
+        )
+  )
   // Why: synthetic and same-tab child rows do not own the parent tab's name.
   if (cannotOwnTabName) {
     return null
   }
+  const structuredName =
+    structuredTab &&
+    structuredChatDisplayName(structuredTab.customLabel, conversationName, structuredTab.label)
+  if (structuredName) {
+    return structuredName
+  }
   // Why: retained row snapshots need a fallback after their live tab disappears.
-  return getAgentRowConversationName(liveTab ?? agent.tab, agent.agentType, generatedTitlesEnabled)
+  return getAgentRowConversationName(
+    liveTab ?? agent.tab,
+    agent.agentType,
+    generatedTitlesEnabled,
+    paneLiveTitle,
+    agent.entry.providerSession?.id
+  )
 }

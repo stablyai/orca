@@ -1,15 +1,17 @@
 import { Eraser, Monitor, Smartphone } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
-import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
-import { getMobileNativeChatToggleActions } from './mobile-native-chat-toggle-action'
+import { translate } from '../i18n/mobile-i18n'
+import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
+import { getMobileNativeChatToggleActions } from './native-chat/mobile-native-chat-toggle-action'
 
 type TerminalTab = MobileNativeChatTab & { id: string; terminal: string | null }
 
-/** Builds the terminal long-press menu without adding another action block to the
- *  already dense session route. Native chat stays first as the view switch. */
-export function getMobileTerminalActionSheetActions<Target extends { handle: string }>(args: {
+export function getMobileTerminalActionSheetActions<
+  Target extends { handle: string },
+  Tab extends TerminalTab
+>(args: {
   target: Target | null
-  tabs: readonly TerminalTab[]
+  tabs: readonly Tab[]
   isTabChatView: (tabId: string) => boolean
   nativeChatTranscriptIsLocalReadable: boolean
   onDismiss: () => void
@@ -18,13 +20,20 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
   onToggleDisplayMode: (handle: string) => void
   onRename: (target: Target) => void
   onClear: (target: Target) => void
+  /** Fallback for a live handle with no matching session tab. */
   onClose: (target: Target) => void
+  /** Preferred path runs host teardown and records the local tombstone. */
+  onCloseSessionTab: (tab: Tab) => void
+  bulkCloseActions?: (anchorTabId: string | undefined) => ActionSheetAction[]
+  /** Allow Auto-Close, on a worker the user kept open. */
+  workerActions?: ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args
   if (!target) {
     return []
   }
   const phoneMode = args.isPhoneMode(target.handle)
+  const sessionTab = args.tabs.find((tab) => tab.terminal === target.handle)
   return [
     ...getMobileNativeChatToggleActions({
       terminalHandle: target.handle,
@@ -35,7 +44,10 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
       onToggle: args.onToggleChat
     }),
     {
-      label: phoneMode ? 'Switch to Desktop' : 'Switch to Phone',
+      id: 'toggleDisplayMode',
+      label: phoneMode
+        ? translate('session.terminalActionSheetActions.switchToDesktop', 'Switch to Desktop')
+        : translate('session.terminalActionSheetActions.switchToPhone', 'Switch to Phone'),
       icon: phoneMode ? Monitor : Smartphone,
       onPress: () => {
         args.onDismiss()
@@ -43,27 +55,36 @@ export function getMobileTerminalActionSheetActions<Target extends { handle: str
       }
     },
     {
-      label: 'Rename',
+      id: 'rename',
+      label: translate('session.terminalActionSheetActions.rename', 'Rename'),
       closeBeforePress: true,
       onPress: () => {
         args.onRename(target)
       }
     },
     {
-      label: 'Clear Terminal',
+      id: 'clearTerminal',
+      label: translate('session.terminalActionSheetActions.clearTerminal', 'Clear Terminal'),
       icon: Eraser,
       onPress: () => {
         args.onDismiss()
         args.onClear(target)
       }
     },
+    ...(args.workerActions ?? []),
     {
-      label: 'Close',
+      id: 'close',
+      label: translate('common.close', 'Close'),
       destructive: true,
       onPress: () => {
         args.onDismiss()
+        if (sessionTab) {
+          args.onCloseSessionTab(sessionTab)
+          return
+        }
         args.onClose(target)
       }
-    }
+    },
+    ...(args.bulkCloseActions?.(sessionTab?.id) ?? [])
   ]
 }

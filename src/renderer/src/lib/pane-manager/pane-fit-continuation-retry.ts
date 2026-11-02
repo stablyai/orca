@@ -1,4 +1,5 @@
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { getLivePaneCensus } from './pane-manager-registry'
 import type { ManagedPane } from './pane-manager-types'
 
 const MAX_RETRY_FRAMES = 40
@@ -18,14 +19,29 @@ const retryByPane = new WeakMap<ManagedPane, RetryState>()
 function scheduleRetryTick(run: () => void): RetrySchedule {
   if (typeof requestAnimationFrame === 'function') {
     let cancelled = false
+    let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
+    const finish = (): void => {
+      if (cancelled || settled) {
+        return
+      }
+      settled = true
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(rafId)
+      }
+      run()
+    }
     const rafId = requestAnimationFrame(() => {
-      if (!cancelled) {
-        // Why: FitAddon must observe committed CSS, and synchronous rAF test
-        // shims must not recursively consume the whole retry budget inline.
-        timer = setTimeout(run, LAYOUT_SETTLE_MS)
+      if (!cancelled && !settled) {
+        // Wait for committed CSS and avoid recursive budget exhaustion with synchronous rAF test shims.
+        if (timer !== null) {
+          clearTimeout(timer)
+        }
+        timer = setTimeout(finish, LAYOUT_SETTLE_MS)
       }
     })
+    // Hidden Electron windows can throttle rAF indefinitely; the budget must still release deferred PTY output.
+    timer = setTimeout(finish, LAYOUT_SETTLE_MS * 2)
     return {
       cancel: () => {
         cancelled = true
@@ -75,8 +91,13 @@ export function armPaneFitContinuationRetry(
     }
     state.attempts += 1
     if (state.attempts >= MAX_RETRY_FRAMES) {
+      // Pane IDs restart per manager; include leaf ID and census so coalesced crumbs distinguish one looping pane from many exhausted panes.
+      const census = getLivePaneCensus()
       recordRendererCrashBreadcrumb('terminal_safe_fit_retry_exhausted', {
-        paneId: pane.id
+        paneId: pane.id,
+        leafId: pane.leafId,
+        livePanes: census.panes,
+        livePaneManagers: census.managers
       })
       clearPaneFitContinuationRetry(pane)
       state.onExhausted()

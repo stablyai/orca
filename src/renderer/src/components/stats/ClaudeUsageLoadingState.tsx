@@ -1,4 +1,6 @@
 import { RefreshCw } from 'lucide-react'
+import { SwitchIndicator } from '../ui/switch'
+import { translate } from '@/i18n/i18n'
 
 type ClaudeUsageLoadingStateProps = {
   title?: string
@@ -7,7 +9,7 @@ type ClaudeUsageLoadingStateProps = {
 }
 
 export function ClaudeUsageLoadingState({
-  title = 'Claude Usage Tracking',
+  title,
   summaryCardCount = 8,
   summaryGridClassName = 'md:grid-cols-2 xl:grid-cols-4'
 }: ClaudeUsageLoadingStateProps): React.JSX.Element {
@@ -15,14 +17,22 @@ export function ClaudeUsageLoadingState({
     <div className="space-y-4 rounded-lg border border-border/60 bg-card/30 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {title ??
+              translate(
+                'auto.components.stats.ClaudeUsagePane.6afacbee37',
+                'Claude Usage Tracking'
+              )}
+          </h3>
           <div className="mt-2 h-3 w-40 animate-pulse rounded bg-muted/70" />
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">
           <RefreshCw className="size-3.5 animate-spin text-muted-foreground" />
-          <div className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent bg-foreground/80">
-            <span className="pointer-events-none block size-3.5 translate-x-4 rounded-full bg-background shadow-sm" />
-          </div>
+          <SwitchIndicator
+            checked
+            className="data-[state=checked]:bg-foreground/80"
+            thumbClassName="transition-none"
+          />
         </div>
       </div>
 

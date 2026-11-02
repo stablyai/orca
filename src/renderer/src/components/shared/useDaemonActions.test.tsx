@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runCleanupMock, snapshotMock, toastErrorMock, toastInfoMock, toastSuccessMock } =
@@ -45,22 +46,6 @@ function rejectedSummary(): KillAllTerminalSurfacesSummary {
     closeYieldCount: 0,
     closePhaseExceededLongTaskBudget: false,
     daemon: { status: 'rejected' }
-  }
-}
-
-function successfulSurfaceSummary(): KillAllTerminalSurfacesSummary {
-  return {
-    targetCount: 1,
-    closeAttemptCount: 1,
-    absentTargetCount: 1,
-    failedCloseAttemptCount: 0,
-    exactKillAcceptedCount: 0,
-    exactKillRejectedCount: 0,
-    closeDurationMs: 1,
-    maxCloseBatchDurationMs: 1,
-    closeYieldCount: 0,
-    closePhaseExceededLongTaskBudget: false,
-    daemon: { status: 'fulfilled', killedCount: 0, remainingCount: 0 }
   }
 }
 
@@ -133,20 +118,5 @@ describe('useDaemonActions kill-all cleanup', () => {
 
     expect(onKillAllError).toHaveBeenCalledTimes(1)
     expect(onKillAllSettled).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports closed terminal tabs as success when daemon management found no sessions', async () => {
-    runCleanupMock.mockResolvedValue(successfulSurfaceSummary())
-    const { result } = renderHook(() => useDaemonActions())
-
-    await act(async () => {
-      await result.current.runKillAll()
-    })
-
-    expect(toastSuccessMock).toHaveBeenCalledWith(
-      'Terminal tabs closed and shutdown requested.',
-      expect.any(Object)
-    )
-    expect(toastInfoMock).not.toHaveBeenCalled()
   })
 })

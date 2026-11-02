@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 
 const appStateListeners = new Set<() => void>()
-let currentAppState: AppStateStatus | null = AppState.currentState
+// Read on first subscribe, so importing this module never touches AppState.
+let currentAppState: AppStateStatus | null = null
 let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null
 
 function subscribeToAppState(listener: () => void): () => void {
@@ -28,9 +29,14 @@ function isAppActive(): boolean {
   return (appStateSubscription ? currentAppState : AppState.currentState) === 'active'
 }
 
+/** True while the app (or the page's document) is in the foreground. */
+export function useAppActive(): boolean {
+  return useSyncExternalStore(subscribeToAppState, isAppActive, isAppActive)
+}
+
 // A list-level caller's single tick drives every visible relative-time label.
 export function useNow(intervalMs = 30_000, enabled = true): number {
-  const appActive = useSyncExternalStore(subscribeToAppState, isAppActive, isAppActive)
+  const appActive = useAppActive()
   const running = appActive && enabled
   const [now, setNow] = useState(() => Date.now())
   const wasRunningRef = useRef(running)

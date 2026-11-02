@@ -99,7 +99,11 @@ describe('Azure DevOps hosted review integration', () => {
       )
 
       await expect(
-        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/azure' })
+        getHostedReviewForBranch({
+          executionHostId: 'local',
+          repoPath,
+          branch: 'refs/heads/feature/azure'
+        })
       ).resolves.toEqual({
         provider: 'azure-devops',
         number: 31,
@@ -204,7 +208,11 @@ describe('Azure DevOps hosted review integration', () => {
       )
 
       await expect(
-        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/azure' })
+        getHostedReviewForBranch({
+          executionHostId: 'local',
+          repoPath,
+          branch: 'refs/heads/feature/azure'
+        })
       ).resolves.toMatchObject({
         provider: 'azure-devops',
         number: 41,

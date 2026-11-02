@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+minimumReleaseAge: 4320
+engineStrict: false
+
+# pnpm 10 skipped this unlisted build script; keep the binary-only install it produced.
+allowBuilds:
+  esbuild: false
+
+overrides:
+  vite@>=8.0.0 <8.1.6: 8.3.4

@@ -4,10 +4,6 @@ export const DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX = 50_000
 export const DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS = [5_000, 10_000, 25_000, 50_000] as const
 
 export const LEGACY_TERMINAL_SCROLLBACK_BYTES_1_MB = 1_000_000
-export const LEGACY_TERMINAL_SCROLLBACK_BYTES_10_MB = 10_000_000
-export const LEGACY_TERMINAL_SCROLLBACK_BYTES_25_MB = 25_000_000
-export const LEGACY_TERMINAL_SCROLLBACK_BYTES_50_MB = 50_000_000
-export const LEGACY_TERMINAL_SCROLLBACK_BYTES_100_MB = 100_000_000
 
 export const LEGACY_TERMINAL_SCROLLBACK_BUCKET_5K_MAX_BYTES = 17_500_000
 export const LEGACY_TERMINAL_SCROLLBACK_BUCKET_10K_MAX_BYTES = 37_500_000
@@ -28,12 +24,7 @@ export function normalizeDesktopTerminalScrollbackRows(value: unknown): number {
   return clampRows(value, DESKTOP_TERMINAL_SCROLLBACK_ROWS_MIN)
 }
 
-// Why the backlog cap scales with scrollback: pending-output caps exist to
-// bound memory while a starved display catches up, but a user who raised
-// scrollback to 50k rows can retain more history than the flat 2 MB floor —
-// dropping at the floor would discard lines their scrollback would have kept.
-// 120 chars/row ≈ 80-col text plus escape-sequence overhead; the cap is a
-// memory bound, not an exact retention guarantee.
+// Scale beyond the floor so large scrollbacks retain more backlog. 120 chars/row estimates text plus escapes; this is a memory bound, not exact retention.
 export const TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS = 2 * 1024 * 1024
 const OUTPUT_BACKLOG_CHARS_PER_SCROLLBACK_ROW = 120
 

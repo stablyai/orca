@@ -2,7 +2,10 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
 import { useFileDeletion } from '@/components/right-sidebar/useFileDeletion'
@@ -23,7 +26,9 @@ const fsDeletePath = vi.fn()
 const fsRenamePath = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 
-vi.mock('@/components/confirmation-dialog', () => ({ useConfirmationDialog: () => confirm }))
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => confirm
+}))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'Delete' }))
 vi.mock('@/components/editor/editor-autosave', () => ({
   requestEditorFileSave: vi.fn().mockResolvedValue(undefined),
@@ -428,8 +433,7 @@ describe('file explorer deletion owner provenance', () => {
     })
 
     await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
-    // Why: unresolved deletes throw before any confirm, so the batch must not
-    // pop a destructive prompt for operations that provably cannot succeed.
+    // Unresolved deletes fail before confirmation; impossible batches must not show destructive prompts.
     expect(confirm).not.toHaveBeenCalled()
     expect(fsDeletePath).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()

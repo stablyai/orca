@@ -1,35 +1,28 @@
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
   CodexManagedAccount,
-  CodexManagedAccountRuntimeSelection,
-  GlobalSettings
-} from '../../shared/types'
+  CodexManagedAccountRuntimeSelection
+} from '../../shared/managed-account-types'
+// Share lane keys so renderer switch guards agree with launch routing.
+import {
+  getWslSelectionKey,
+  normalizeCodexAccountSelectionTarget,
+  type CodexAccountSelectionTarget
+} from '../../shared/codex-selection-lane'
 
-export type CodexAccountSelectionTarget = {
-  runtime?: 'host' | 'wsl'
-  wslDistro?: string | null
-}
-
-export type NormalizedCodexAccountSelectionTarget = {
-  runtime: 'host' | 'wsl'
-  wslDistro: string | null
-}
-
-export function normalizeCodexAccountSelectionTarget(
-  target?: CodexAccountSelectionTarget | null
-): NormalizedCodexAccountSelectionTarget {
-  if (target?.runtime === 'wsl') {
-    return {
-      runtime: 'wsl',
-      wslDistro: normalizeWslDistro(target.wslDistro)
-    }
-  }
-  return { runtime: 'host', wslDistro: null }
-}
+export {
+  getCodexSelectionLaneKey,
+  getWslSelectionKey,
+  normalizeCodexAccountSelectionTarget
+} from '../../shared/codex-selection-lane'
+export type {
+  CodexAccountSelectionTarget,
+  NormalizedCodexAccountSelectionTarget
+} from '../../shared/codex-selection-lane'
 
 export function normalizeCodexRuntimeSelection(
-  settings: Pick<
-    GlobalSettings,
-    'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
+  settings: Partial<
+    Pick<GlobalSettings, 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'>
   >
 ): CodexManagedAccountRuntimeSelection {
   return {
@@ -134,13 +127,4 @@ export function getCodexSelectionTargetForAccount(
     return { runtime: 'wsl', wslDistro: account.wslDistro ?? null }
   }
   return { runtime: 'host' }
-}
-
-export function getWslSelectionKey(wslDistro: string | null | undefined): string {
-  return normalizeWslDistro(wslDistro) ?? '__default__'
-}
-
-function normalizeWslDistro(wslDistro: string | null | undefined): string | null {
-  const trimmed = wslDistro?.trim()
-  return trimmed ? trimmed : null
 }

@@ -133,6 +133,7 @@ function createPane(id: number, container: FakeElement): ManagedPaneInternal {
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     webglAddon: null,
+    imageAddon: null,
     ligaturesAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -262,6 +263,7 @@ describe('attachPaneDrag', () => {
       [targetPane.id, targetPane]
     ])
     const onDragActiveChange = vi.fn()
+    const onLayoutChanged = vi.fn()
     const state = createDragReorderState()
 
     attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
@@ -273,6 +275,7 @@ describe('attachPaneDrag', () => {
       applyPaneOpacity: vi.fn(),
       applyDividerStyles: vi.fn(),
       refitPanesUnder: vi.fn(),
+      onLayoutChanged,
       onDragActiveChange
     })
 
@@ -292,6 +295,7 @@ describe('attachPaneDrag', () => {
     expect(state.currentExternalDropTarget).toBeNull()
     expect(state.cleanupActiveDrag).toBeNull()
     expect(onDragActiveChange).toHaveBeenLastCalledWith(false)
+    expect(onLayoutChanged).toHaveBeenCalledOnce()
   })
 
   it('drops onto an external target when no pane target is under the pointer', () => {
@@ -404,7 +408,7 @@ describe('attachPaneDrag', () => {
     expect(handle.listenerCount('lostpointercapture')).toBe(0)
     expect(handle.hasPointerCapture(1)).toBe(false)
     expect(state.cleanupActiveDrag).toBeNull()
-    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function), true)
+    expect(window.removeEventListener).toHaveBeenCalledWith('blur', expect.any(Function))
   })
 
   it('ignores context-menu pointer buttons so the pane menu can open', () => {

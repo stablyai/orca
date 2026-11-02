@@ -1,15 +1,32 @@
+// COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
+import {
+  buildSkillCommandForRuntime,
+  buildSkillSetupTerminalCommand
+} from '@/components/settings/CliSkillRuntimeSetup'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  // Missing WSL distros fall back to the Windows host; this ungated auto-paste still needs npx preflight.
+  const skillCommand = buildSkillCommandForRuntime(
+    ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
+    activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
+  )
+  const terminalRuntime = activeSkillRuntime.installDisabledReason
+    ? undefined
+    : activeSkillRuntime.agentRuntime
+  const prepareCommandForShell = (command: string, effectiveShell: string | undefined): string =>
+    buildSkillSetupTerminalCommand(command, effectiveShell, terminalRuntime)
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND)
+      await window.api.ui.writeClipboardText(skillCommand)
       toast.success(
         translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.b8ad063571',
@@ -32,7 +49,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/35 px-3 py-2">
         <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-          {ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
+          {skillCommand}
         </code>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -58,7 +75,8 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
         </Tooltip>
       </div>
       <OnboardingInlineCommandTerminal
-        command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
+        command={skillCommand}
+        prepareCommandForShell={prepareCommandForShell}
         title={translate(
           'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
           'Skill setup'
@@ -76,6 +94,8 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
         descriptionPaddingClassName="px-4 py-2"
         autoScrollIntoView={false}
         worktreeId="feature-tip-cli-skills-terminal"
+        shellOverride={activeSkillRuntime.terminalShellOverride}
+        forceHostRuntime={Boolean(activeSkillRuntime.installDisabledReason)}
       />
     </div>
   )

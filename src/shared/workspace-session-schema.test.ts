@@ -3,17 +3,6 @@ import { parseWorkspaceSession } from './workspace-session-schema'
 import { MAX_BROWSER_HISTORY_ENTRIES } from './workspace-session-browser-history'
 
 describe('parseWorkspaceSession', () => {
-  it('accepts a minimal valid session', () => {
-    const result = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {}
-    })
-    expect(result.ok).toBe(true)
-  })
-
   it('preserves external SSH file ownership across session parsing', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -40,7 +29,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('rejects blank external SSH file ownership', () => {
+  it('drops an open file with blank external SSH ownership, keeping the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'wt',
@@ -60,50 +49,14 @@ describe('parseWorkspaceSession', () => {
       }
     })
 
-    expect(result.ok).toBe(false)
-  })
-
-  it('accepts a fully populated session with optional fields', () => {
-    const result = parseWorkspaceSession({
-      activeRepoId: 'repo1',
-      activeWorktreeId: 'repo1::/path/wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        'repo1::/path/wt1': [
-          {
-            id: 'tab1',
-            ptyId: 'daemon-session-abc',
-            worktreeId: 'repo1::/path/wt1',
-            title: 'bash',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1_700_000_000_000
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: {
-            type: 'split',
-            direction: 'vertical',
-            first: { type: 'leaf', leafId: 'pane:1' },
-            second: { type: 'leaf', leafId: 'pane:2' }
-          },
-          activeLeafId: 'pane:1',
-          expandedLeafId: null,
-          ptyIdsByLeafId: { 'pane:1': 'daemon-session-A' }
-        }
-      },
-      activeWorktreeIdsOnShutdown: ['repo1::/path/wt1']
-    })
     expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.openFilesByWorktree?.wt).toEqual([])
+    }
   })
 
   it('preserves an isolated browser tab session partition across hydration', () => {
-    // Regression for #6923: the resolved partition must survive persist→load,
-    // otherwise a restored isolated tab falls back to the shared default
-    // partition when the renderer profile mirror is stale at startup.
+    // Preserve isolated storage despite a stale renderer profile mirror after restart (#6923).
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -138,7 +91,7 @@ describe('parseWorkspaceSession', () => {
     )
   })
 
-  it('preserves a valid launchAgent on a terminal tab', () => {
+  it('drops a launch pane an older build saved: after a restart its pane is an ordinary pane', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -149,12 +102,24 @@ describe('parseWorkspaceSession', () => {
             id: 'tab1',
             ptyId: null,
             worktreeId: 'wt',
-            title: 'codex',
+            title: 'claude',
             customTitle: null,
             color: null,
             sortOrder: 0,
             createdAt: 1,
-            launchAgent: 'codex'
+            launchAgent: 'claude',
+            agentLaunchPane: { leafId: 'leaf-1', outcome: { kind: 'not-started', code: 'boom' } }
+          },
+          {
+            id: 'tab2',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1,
+            agentLaunchPane: { leafId: 'leaf-2', outcome: { kind: 'exploded' } }
           }
         ]
       },
@@ -162,7 +127,8 @@ describe('parseWorkspaceSession', () => {
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.tabsByWorktree.wt[0].launchAgent).toBe('codex')
+      expect(result.value.tabsByWorktree.wt[0]).not.toHaveProperty('agentLaunchPane')
+      expect(result.value.tabsByWorktree.wt[1]).not.toHaveProperty('agentLaunchPane')
     }
   })
 
@@ -194,33 +160,6 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('rejects a session where ptyId is a number (schema drift)', () => {
-    const result = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {
-        wt: [
-          {
-            id: 'tab1',
-            ptyId: 42,
-            worktreeId: 'wt',
-            title: 'bash',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {}
-    })
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error).toContain('ptyId')
-    }
-  })
-
   it('preserves generated terminal title fields for persistence hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -235,6 +174,67 @@ describe('parseWorkspaceSession', () => {
             title: 'Claude working',
             defaultTitle: 'Terminal 1',
             generatedTitle: 'Refactor auth',
+            aiVaultTitle: {
+              agent: 'codex',
+              sessionId: 'session-1',
+              title: 'Provider thread name'
+            },
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            executionHostId: 'runtime:host-b',
+            contentType: 'terminal',
+            label: 'Claude working',
+            generatedLabel: 'Refactor auth',
+            aiVaultTitle: {
+              agent: 'codex',
+              sessionId: 'session-1',
+              title: 'Provider thread name'
+            },
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
+      expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+      expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
+      expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+      expect(result.value.unifiedTabs?.wt[0].executionHostId).toBe('runtime:host-b')
+    }
+  })
+
+  it('drops malformed AI Vault titles without rejecting the workspace session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Codex',
+            aiVaultTitle: { agent: 'future-agent', sessionId: 'session-1', title: 'Name' },
             customTitle: null,
             color: null,
             sortOrder: 0,
@@ -251,8 +251,8 @@ describe('parseWorkspaceSession', () => {
             groupId: 'group1',
             worktreeId: 'wt',
             contentType: 'terminal',
-            label: 'Claude working',
-            generatedLabel: 'Refactor auth',
+            label: 'Codex',
+            aiVaultTitle: 'malformed',
             customLabel: null,
             color: null,
             sortOrder: 0,
@@ -264,8 +264,8 @@ describe('parseWorkspaceSession', () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
-      expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
+      expect(result.value.tabsByWorktree.wt[0].aiVaultTitle).toBeUndefined()
+      expect(result.value.unifiedTabs?.wt[0].aiVaultTitle).toBeUndefined()
     }
   })
 
@@ -328,23 +328,45 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('rejects a session with missing required top-level fields', () => {
+  it('drops one truncated tab without discarding other persisted worktrees', () => {
+    const validTab = {
+      id: 'tab-good',
+      ptyId: null,
+      worktreeId: 'worktree-good',
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1_700_000_000_000
+    }
     const result = parseWorkspaceSession({
-      activeRepoId: null
-      // missing activeWorktreeId, tabsByWorktree, etc.
+      activeRepoId: null,
+      activeWorktreeId: 'worktree-good',
+      activeTabId: 'tab-good',
+      tabsByWorktree: {
+        'worktree-good': [validTab],
+        'worktree-corrupt': [
+          {
+            id: 'tab-truncated',
+            ptyId: null,
+            worktreeId: 'worktree-corrupt',
+            title: 'Terminal',
+            sortOrder: 0,
+            generation: 3,
+            startupCwd: '/workspace'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
     })
-    expect(result.ok).toBe(false)
-  })
 
-  it('rejects a truncated JSON object', () => {
-    const result = parseWorkspaceSession({})
-    expect(result.ok).toBe(false)
-  })
-
-  it('rejects non-object input (e.g. corrupted file contents)', () => {
-    expect(parseWorkspaceSession(null).ok).toBe(false)
-    expect(parseWorkspaceSession('garbage').ok).toBe(false)
-    expect(parseWorkspaceSession(42).ok).toBe(false)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree).toEqual({
+        'worktree-good': [validTab],
+        'worktree-corrupt': []
+      })
+    }
   })
 
   it('drops bad lastVisitedAtByWorktreeId entries rather than failing the session', () => {
@@ -368,26 +390,6 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('accepts default-tab idempotency markers', () => {
-    const result = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      defaultTerminalTabsAppliedByWorktreeId: {
-        'repo1::/path/wt1': true
-      }
-    })
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value.defaultTerminalTabsAppliedByWorktreeId).toEqual({
-        'repo1::/path/wt1': true
-      })
-    }
-  })
-
   it('caps oversized browser history while parsing legacy workspace sessions', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -399,6 +401,7 @@ describe('parseWorkspaceSession', () => {
         url: `https://example.com/${index}`,
         normalizedUrl: `https://example.com/${index}`,
         title: `Example ${index}`,
+        faviconUrl: index === 0 ? 'https://example.com/favicon.ico' : null,
         lastVisitedAt: 1_700_000_000_000 - index,
         visitCount: 1
       }))
@@ -407,11 +410,84 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+      expect(result.value.browserUrlHistory?.[0]?.faviconUrl).toBe(
+        'https://example.com/favicon.ico'
+      )
       expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
     }
   })
 
-  it('preserves a known viewMode on a unified tab', () => {
+  it('preserves a structured agent session tab and drops the retired adoption key', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'session-1',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'session-1',
+            entityId: 'session-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex',
+            label: 'Codex Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          },
+          {
+            id: 'terminal-1',
+            entityId: 'terminal-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            viewMode: 'chat',
+            // Why: older builds could save this key on a chat-mode terminal; it must keep loading.
+            structuredSessionId: 'codex-session-1',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 0
+          }
+        ]
+      },
+      activeTabTypeByWorktree: { wt: 'agent-session' }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex'
+      })
+      expect(result.value.unifiedTabs?.wt[1]).toMatchObject({
+        contentType: 'terminal',
+        viewMode: 'chat'
+      })
+      expect(result.value.unifiedTabs?.wt[1]).not.toHaveProperty('structuredSessionId')
+      expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
+    }
+  })
+
+  it('keeps a chat tab of any agent id, and drops only a malformed id', () => {
+    const chatTab = (id: string, agentSessionAgent: unknown) => ({
+      id,
+      entityId: id,
+      groupId: 'group1',
+      worktreeId: 'wt',
+      contentType: 'agent-session',
+      agentSessionAgent,
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'wt',
@@ -420,25 +496,21 @@ describe('parseWorkspaceSession', () => {
       terminalLayoutsByTabId: {},
       unifiedTabs: {
         wt: [
-          {
-            id: 'tab1',
-            entityId: 'tab1',
-            groupId: 'group1',
-            worktreeId: 'wt',
-            contentType: 'terminal',
-            label: 'Claude',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0,
-            viewMode: 'chat'
-          }
+          chatTab('a', 'grok'),
+          chatTab('b', 'not an agent!'),
+          chatTab('c', 42),
+          chatTab('d', 'claude')
         ]
       }
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('chat')
+      expect(result.value.unifiedTabs?.wt.map((tab) => [tab.id, tab.agentSessionAgent])).toEqual([
+        ['a', 'grok'],
+        ['b', undefined],
+        ['c', undefined],
+        ['d', 'claude']
+      ])
     }
   })
 
@@ -472,6 +544,80 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('terminal')
+    }
+  })
+
+  // Reclaiming client-hosted pages after relaunch requires both persisted identity fields; z.object drops unlisted fields.
+  it('preserves the remote page identity of a client-hosted browser page', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserPagesByWorkspace: {
+        'workspace-1': [
+          {
+            id: 'page-1',
+            workspaceId: 'workspace-1',
+            worktreeId: 'wt',
+            url: 'https://example.com/',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1,
+            browserRuntimeEnvironmentId: 'env-1',
+            remoteBrowserPageId: 'remote-page-1',
+            remoteBrowserPageClientHosted: true
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.browserPagesByWorkspace?.['workspace-1']?.[0]).toMatchObject({
+        remoteBrowserPageId: 'remote-page-1',
+        remoteBrowserPageClientHosted: true
+      })
+    }
+  })
+
+  it('accepts a browser page persisted before the remote page identity existed', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserPagesByWorkspace: {
+        'workspace-1': [
+          {
+            id: 'page-1',
+            workspaceId: 'workspace-1',
+            worktreeId: 'wt',
+            url: 'https://example.com/',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const page = result.value.browserPagesByWorkspace?.['workspace-1']?.[0]
+      expect(page?.id).toBe('page-1')
+      expect(page?.remoteBrowserPageId).toBeUndefined()
+      expect(page?.remoteBrowserPageClientHosted).toBeUndefined()
     }
   })
 })

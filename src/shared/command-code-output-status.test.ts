@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
+import { stripTerminalControl } from './terminal-control-stripping'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -26,7 +27,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
     })
 
     expect(detector.observe('Thinking about unrelated shell output')).toBe(false)
-    expect(detector.observe('# Command Code v0.27.2')).toBe(false)
+    expect(detector.observe('# Command Code v0.27.2\r\n')).toBe(false)
     expect(detector.observe('⌘ Parsing...')).toBe(true)
 
     expect(onWorking).toHaveBeenCalledWith('')
@@ -40,7 +41,23 @@ describe('createCommandCodeOutputStatusDetector', () => {
     })
 
     expect(detector.observe('# Command')).toBe(false)
-    expect(detector.observe(' Code v0.27.2')).toBe(false)
+    expect(detector.observe(' Code v0.27.2\r\n')).toBe(false)
+    expect(detector.observe('⌘ Parsing...')).toBe(true)
+
+    expect(onWorking).toHaveBeenCalledWith('')
+  })
+
+  it('detects the banner after chunks that carry no banner characters at all', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: null,
+      onWorking
+    })
+
+    // Ordinary agent output with no '#': the raw prefilter skips these without building a window.
+    expect(detector.observe('Codex is editing the file and rendering a diff\r\n')).toBe(false)
+    expect(detector.observe('Codex wrote 12 lines\r\n')).toBe(false)
+    expect(detector.observe('# Command Code v0.27.2\r\n')).toBe(false)
     expect(detector.observe('⌘ Parsing...')).toBe(true)
 
     expect(onWorking).toHaveBeenCalledWith('')
@@ -53,7 +70,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
       onWorking
     })
 
-    expect(detector.observe('# C\x1b[35mommand Co\x1b[0mde v0.27.2')).toBe(false)
+    expect(detector.observe('# C\x1b[35mommand Co\x1b[0mde v0.27.2\r\n')).toBe(false)
     expect(detector.observe('⌘ Parsing...')).toBe(true)
 
     expect(onWorking).toHaveBeenCalledWith('')
@@ -70,6 +87,59 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
     expect(onWorking).not.toHaveBeenCalled()
   })
+
+  it('does not arm when another agent merely discusses Command Code', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: null,
+      onWorking
+    })
+
+    expect(detector.observe('// Why: Command Code exposes transcript prompts')).toBe(false)
+    expect(detector.observe('\r\n✻ Thinking...')).toBe(false)
+
+    expect(onWorking).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    '# Command Code v1.2\r\n',
+    '# Command Code v1.2.3.4\r\n',
+    '# Command Code v01.2.3\r\n',
+    '# Command Code v1.2.3suffix\r\n',
+    '#\nCommand Code v1.2.3\r\n'
+  ])('does not arm for noncanonical banner %j', (banner) => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({ startupCommand: null, onWorking })
+
+    expect(detector.observe(banner)).toBe(false)
+    expect(detector.observe('✻ Thinking...')).toBe(false)
+
+    expect(onWorking).not.toHaveBeenCalled()
+  })
+
+  it('does not arm from a four-part version split at a PTY chunk boundary', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({ startupCommand: null, onWorking })
+
+    expect(detector.observe('# Command Code v1.2.3')).toBe(false)
+    expect(detector.observe('.4\r\n')).toBe(false)
+    expect(detector.observe('✻ Thinking...')).toBe(false)
+
+    expect(onWorking).not.toHaveBeenCalled()
+  })
+
+  it.each(['# Command Code v1.2.3\r\n', '# Command Code v1.2.3-beta.1+build.9\n'])(
+    'arms for canonical banner %j',
+    (banner) => {
+      const onWorking = vi.fn()
+      const detector = createCommandCodeOutputStatusDetector({ startupCommand: null, onWorking })
+
+      expect(detector.observe(banner)).toBe(false)
+      expect(detector.observe('✻ Thinking...')).toBe(true)
+
+      expect(onWorking).toHaveBeenCalledWith('')
+    }
+  )
 
   it.each([
     'Pondering',
@@ -315,3 +385,59 @@ function maxStringContextLength(contexts: unknown[]): number {
     ...contexts.map((context) => (typeof context === 'string' ? context.length : 0))
   )
 }
+
+describe('terminal control stripping', () => {
+  function promptFrom(raw: string): string | null {
+    let captured: string | null = null
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: 'command-code',
+      onWorking: (prompt) => {
+        captured = prompt
+      }
+    })
+    detector.observe(raw)
+    return captured
+  }
+
+  it('strips control bytes wherever they sit around the prompt text', () => {
+    expect(promptFrom('❯ plain prompt\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe('plain prompt')
+    expect(promptFrom('\x07❯ leading control\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
+      'leading control'
+    )
+    expect(promptFrom('❯ trailing control\x07\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
+      'trailing control'
+    )
+    expect(promptFrom('❯ adjacent\x07\x01\x02controls\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
+      'adjacentcontrols'
+    )
+  })
+
+  it('preserves multi-byte text and newlines while stripping', () => {
+    expect(promptFrom('❯ 日本語 \u{1f389} prompt\r\n\x1b[35m✻ Thinking...\x1b[0m')).toBe(
+      '日本語 \u{1f389} prompt'
+    )
+  })
+
+  it.each([
+    { data: '', expected: '' },
+    { data: 'plain text', expected: 'plain text' },
+    { data: '\x1b[35mstyled\x1b[0m', expected: 'styled' },
+    { data: 'prompt\x1b[35', expected: 'prompt' },
+    { data: '\x00leading', expected: 'leading' },
+    { data: 'trailing\x9f', expected: 'trailing' },
+    { data: '\x01\x02adjacent\x7f\x80', expected: 'adjacent' },
+    { data: 'keep\r\nline breaks', expected: 'keep\r\nline breaks' },
+    { data: '日本語 🎉 \ud83d \ude00', expected: '日本語 🎉 \ud83d \ude00' },
+    { data: '\x01'.repeat(31) + 'a'.repeat(33), expected: 'a'.repeat(33) },
+    { data: '\x01'.repeat(32) + 'a'.repeat(32), expected: 'a'.repeat(32) },
+    { data: `${'a'.repeat(32) + '\x01'.repeat(31)}a`, expected: 'a'.repeat(33) },
+    {
+      data: `${'\x01'.repeat(31) + 'a'.repeat(33) + '\x01'.repeat(32)}z`,
+      expected: `${'a'.repeat(33)}z`
+    },
+    { data: `${'a'.repeat(192) + '\x01'.repeat(32)}tail`, expected: `${'a'.repeat(192)}tail` },
+    { data: `${'a\x01'.repeat(2048)}tail`, expected: `${'a'.repeat(2048)}tail` }
+  ])('strips controls while preserving printable text (case %#)', ({ data, expected }) => {
+    expect(stripTerminalControl(data)).toBe(expected)
+  })
+})

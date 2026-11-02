@@ -1,6 +1,7 @@
-import { copyFileSync, mkdtempSync, rmSync, statSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { copyFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 
 const SNAPSHOT_ATTEMPTS = 5
 
@@ -22,8 +23,7 @@ type ChromiumCookieSnapshotOptions = {
 }
 
 function removeSnapshotDirectory(path: string): void {
-  // Why: Windows can briefly retain SQLite handles after close; bounded retries
-  // keep cleanup reliable without ever touching the live browser directory.
+  // Windows may retain SQLite handles briefly after close; retry snapshot cleanup.
   rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })
 }
 
@@ -83,12 +83,13 @@ function copyStableAttempt(sourcePath: string, databasePath: string): boolean {
   }
 
   removeAttemptFiles(databasePath)
-  copyFileSync(sourcePath, databasePath)
+  // Retry transient Windows AV/EDR locks; thrown copy errors bypass the snapshot attempt loop.
+  copyFileWithWindowsRetry(sourcePath, databasePath)
 
   if (walBefore) {
     try {
-      // Why: SQLite only discovers a WAL whose basename exactly matches the DB.
-      copyFileSync(sourceWalPath, `${databasePath}-wal`)
+      // SQLite discovers WAL files only under the matching database basename.
+      copyFileWithWindowsRetry(sourceWalPath, `${databasePath}-wal`)
     } catch (error) {
       if (isMissingFileError(error)) {
         return false
@@ -96,8 +97,7 @@ function copyStableAttempt(sourcePath: string, databasePath: string): boolean {
       throw error
     }
   }
-  // Why: SHM is a transient mmap WAL index that may be locked or mid-update.
-  // SQLite safely rebuilds a matching Cookies-shm beside the private WAL copy.
+  // Skip the mutable SHM index; SQLite rebuilds it beside the copied WAL.
 
   const databaseAfter = readFileState(sourcePath)
   const walAfter = readFileState(sourceWalPath)

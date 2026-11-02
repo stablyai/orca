@@ -1,0 +1,108 @@
+import type { Notification } from 'electron'
+
+const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
+const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
+const WINDOWS_NOTIFICATION_HISTORY_LIMIT = 256
+const retainedWindowsNotifications = new Map<Notification, () => void>()
+
+// Keep strong references so GC cannot discard displayed notifications and click handlers.
+export const activeNotifications = new Set<Notification>()
+export const activeNotificationsById = new Map<
+  string,
+  { notification: Notification; release: () => void }
+>()
+
+export function retainNotificationUntilRelease(
+  notification: Notification,
+  onRelease?: () => void
+): () => void {
+  activeNotifications.add(notification)
+  let released = false
+  let releaseTimer: ReturnType<typeof setTimeout> | null = null
+
+  function release(): void {
+    if (released) {
+      return
+    }
+    released = true
+    activeNotifications.delete(notification)
+    notification.removeListener('close', onClose)
+    retainedWindowsNotifications.delete(notification)
+    if (releaseTimer) {
+      clearTimeout(releaseTimer)
+      releaseTimer = null
+    }
+    onRelease?.()
+  }
+
+  function onClose(details?: Electron.NotificationCloseEventParams): void {
+    // Windows hides the banner before the notification leaves Action Center.
+    if (process.platform === 'win32' && details?.reason === 'timedOut') {
+      return
+    }
+    release()
+  }
+
+  notification.on('close', onClose)
+  if (process.platform === 'win32') {
+    retainedWindowsNotifications.set(notification, release)
+    if (retainedWindowsNotifications.size > WINDOWS_NOTIFICATION_HISTORY_LIMIT) {
+      const oldest = retainedWindowsNotifications.entries().next().value
+      if (oldest) {
+        // Remove the toast too, so history never contains a target whose handler we discarded.
+        oldest[0].close()
+        oldest[1]()
+      }
+    }
+  } else {
+    releaseTimer = setTimeout(release, NOTIFICATION_RELEASE_FALLBACK_MS)
+    if (typeof releaseTimer.unref === 'function') {
+      releaseTimer.unref()
+    }
+  }
+
+  return release
+}
+
+export function waitForNotificationDisplay(notification: Notification): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    function cleanup(): void {
+      notification.removeListener('show', onShow)
+      notification.removeListener('failed', onFailed)
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+    }
+
+    function settle(displayed: boolean): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve(displayed)
+    }
+
+    function onShow(): void {
+      settle(true)
+    }
+
+    function onFailed(): void {
+      settle(false)
+    }
+
+    notification.once('show', onShow)
+    notification.once('failed', onFailed)
+    timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
+  })
+}
+
+export function logNativeNotificationFailure(context: string, error?: string): void {
+  console.warn(
+    `[notifications] ${context} notification failed to show${error ? `: ${error}` : '.'}`
+  )
+}

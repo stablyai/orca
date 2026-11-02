@@ -1,10 +1,20 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
+import {
+  consumeShutdownCheckpointFailureReason,
+  publishShutdownCheckpointFailureReason
+} from '../../../shared/renderer-shutdown-events'
+
 import {
   dispatchWindowCloseRequest,
-  getWindowCloseRequestHandler,
+  isWindowCloseCheckpointInProgress,
   registerWindowCloseGuard,
+  runWithWindowCloseCheckpointScope,
   setWindowCloseRequestHandler
 } from './window-close-request-coordinator'
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 describe('window-close-request-coordinator', () => {
   const confirmWindowClose = vi.fn()
@@ -16,41 +26,53 @@ describe('window-close-request-coordinator', () => {
 
   beforeEach(() => {
     confirmWindowClose.mockClear()
-    // Why: dispatch falls back to the preload bridge when no rich handler is
-    // registered; stub just the surface it touches.
-    ;(
-      globalThis as unknown as { window: { api: { ui: { confirmWindowClose: () => void } } } }
-    ).window = { api: { ui: { confirmWindowClose } } }
+    vi.mocked(toast.error).mockClear()
+    // Without a rich close handler, dispatch uses only this preload fallback surface.
+    const windowTarget = new EventTarget() as EventTarget & {
+      api: { ui: { confirmWindowClose: () => void } }
+    }
+    windowTarget.api = { ui: { confirmWindowClose } }
+    ;(globalThis as unknown as { window: typeof windowTarget }).window = windowTarget
   })
 
   afterEach(() => {
     setWindowCloseRequestHandler(null)
     unregisterFns.splice(0).forEach((fn) => fn())
+    consumeShutdownCheckpointFailureReason()
   })
 
-  it('has no handler by default, so the App root falls back to confirming the close', () => {
-    // Why: on the no-workspace landing page Terminal is not mounted, so no rich
-    // handler is registered and the App-root subscription must close directly.
-    expect(getWindowCloseRequestHandler()).toBeNull()
-  })
+  it('runs the Terminal-less close checkpoint in the degradable close scope', async () => {
+    const beforeUnload = vi.fn((event: Event) => {
+      expect(isWindowCloseCheckpointInProgress()).toBe(true)
+      event.preventDefault()
+    })
+    window.addEventListener('beforeunload', beforeUnload, { once: true })
 
-  it('returns the registered handler so the App root delegates to Terminal', () => {
-    const handler = vi.fn()
-    setWindowCloseRequestHandler(handler)
-    expect(getWindowCloseRequestHandler()).toBe(handler)
-  })
-
-  it('clears the handler on unmount so a stale Terminal closure cannot run', () => {
-    setWindowCloseRequestHandler(vi.fn())
-    setWindowCloseRequestHandler(null)
-    expect(getWindowCloseRequestHandler()).toBeNull()
-  })
-
-  // The #5144 contract: a close request must always be acted on.
-  it('confirms the close directly when no rich handler is registered (no-workspace path)', async () => {
     await dispatchWindowCloseRequest({ isQuitting: true })
 
-    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+    expect(beforeUnload).toHaveBeenCalledTimes(1)
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(isWindowCloseCheckpointInProgress()).toBe(false)
+  })
+
+  it('surfaces the checkpoint failure reason when the Terminal-less close is vetoed', async () => {
+    window.addEventListener(
+      'beforeunload',
+      (event) => {
+        publishShutdownCheckpointFailureReason('sendSync payload rejected')
+        event.preventDefault()
+      },
+      { once: true }
+    )
+
+    await dispatchWindowCloseRequest({ isQuitting: true })
+
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith(
+      'Quit canceled: the session snapshot could not be saved (sendSync payload rejected).'
+    )
+    expect(consumeShutdownCheckpointFailureReason()).toBeNull()
   })
 
   it('delegates to the rich handler and does NOT confirm directly when one is registered', async () => {
@@ -60,12 +82,10 @@ describe('window-close-request-coordinator', () => {
     await dispatchWindowCloseRequest({ isQuitting: false })
 
     expect(handler).toHaveBeenCalledWith({ isQuitting: false })
-    // Why: confirmation is the rich handler's responsibility (after save dialogs
-    // / running-process checks) — dispatch must not short-circuit it.
+    // Only the rich handler confirms after save/process guards; dispatch must not bypass them.
     expect(confirmWindowClose).not.toHaveBeenCalled()
   })
 
-  // Pre-close guards (e.g. unsaved Settings prompt drafts).
   it('cancels the close — no confirm, no handler — when a guard vetoes', async () => {
     const handler = vi.fn()
     setWindowCloseRequestHandler(handler)
@@ -75,6 +95,7 @@ describe('window-close-request-coordinator', () => {
 
     expect(confirmWindowClose).not.toHaveBeenCalled()
     expect(handler).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('proceeds to confirm when all guards allow the close', async () => {
@@ -108,7 +129,6 @@ describe('window-close-request-coordinator', () => {
     addGuard(guard)
 
     const first = dispatchWindowCloseRequest({ isQuitting: true })
-    // Second request arrives while the first guard's dialog is still open.
     await dispatchWindowCloseRequest({ isQuitting: true })
     expect(guard).toHaveBeenCalledTimes(1)
 
@@ -126,5 +146,14 @@ describe('window-close-request-coordinator', () => {
 
     expect(guard).not.toHaveBeenCalled()
     expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the window-close checkpoint flag when the wrapped dispatch throws', () => {
+    expect(() =>
+      runWithWindowCloseCheckpointScope(() => {
+        throw new Error('listener exploded')
+      })
+    ).toThrow('listener exploded')
+    expect(isWindowCloseCheckpointInProgress()).toBe(false)
   })
 })

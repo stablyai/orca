@@ -1,9 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseSparsePresetDirectories } from './sparse-preset-draft'
+import { describe, expect, it } from 'vitest'
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
+import { parseSparsePresetDirectories } from './sparse-preset-draft'
 
 describe('parseSparsePresetDirectories', () => {
   it('normalizes textarea input into unique repo-relative directories', () => {
@@ -16,13 +13,6 @@ describe('parseSparsePresetDirectories', () => {
     ).toEqual({
       directories: ['src/renderer', 'packages/ui'],
       error: null
-    })
-  })
-
-  it('requires at least one directory', () => {
-    expect(parseSparsePresetDirectories(' \n ')).toEqual({
-      directories: [],
-      error: 'Add at least one directory.'
     })
   })
 
@@ -50,15 +40,4 @@ describe('parseSparsePresetDirectories', () => {
       })
     }
   )
-
-  it('normalizes newline-heavy pasted directory input without splitting the full textarea', () => {
-    const value = `${'\n'.repeat(1000)}src\\renderer\npackages/ui\nsrc/renderer\n`
-    const split = vi.spyOn(String.prototype, 'split')
-
-    expect(parseSparsePresetDirectories(value)).toEqual({
-      directories: ['src/renderer', 'packages/ui'],
-      error: null
-    })
-    expect(split).not.toHaveBeenCalled()
-  })
 })

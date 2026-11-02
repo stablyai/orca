@@ -1,37 +1,43 @@
 import { useMemo } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { buildMobileCreatePrAction } from './mobile-create-pr-action'
 import { useMobileHostedReviewEligibility } from './use-mobile-hosted-review-eligibility'
-import type { MobileGitStatusResult } from './mobile-git-status'
+import {
+  getMobileBranchCommitsAhead,
+  type MobileSourceControlPrimaryActionArgs
+} from './mobile-source-control-primary-action'
 
 type Params = {
   client: Parameters<typeof useMobileHostedReviewEligibility>[0]['client']
   connState: Parameters<typeof useMobileHostedReviewEligibility>[0]['connState']
+  hostId: string
   worktreeId: string
-  status: MobileGitStatusResult | null
-  hasUncommittedChanges: boolean
-  busyAction: string | null
+  // The commit area's inputs also decide whether Create PR can prepare the branch first.
+  commitArea: MobileSourceControlPrimaryActionArgs
   createPr: (pushFirst: boolean) => void
 }
 
 export function useMobileSourceControlCreatePrAction({
   client,
   connState,
+  hostId,
   worktreeId,
-  status,
-  hasUncommittedChanges,
-  busyAction,
+  commitArea,
   createPr
 }: Params) {
+  const t = useMobileTranslation()
+  const { status, busyAction } = commitArea
   const upstream = status?.upstreamStatus
   const eligibilityState = useMobileHostedReviewEligibility({
     client,
     connState,
+    hostId,
     worktreeId,
     branch: status?.branch,
     hasUpstream: upstream?.hasUpstream,
     ahead: upstream?.ahead,
     behind: upstream?.behind,
-    hasUncommittedChanges
+    hasUncommittedChanges: (status?.entries.length ?? 0) > 0
   })
 
   return useMemo(
@@ -40,8 +46,16 @@ export function useMobileSourceControlCreatePrAction({
         branch: status?.branch,
         eligibilityState,
         busyAction,
+        prepareInputs: {
+          stagedCount: commitArea.stagedCount,
+          hasStageableChanges: commitArea.stageablePaths.length > 0,
+          hasMessage: commitArea.commitMessage.trim().length > 0,
+          hasUnresolvedConflicts: commitArea.hasUnresolvedConflicts,
+          upstreamStatus: upstream,
+          branchCommitsAhead: getMobileBranchCommitsAhead(commitArea)
+        },
         onCreatePr: createPr
       }),
-    [busyAction, createPr, eligibilityState, status?.branch]
+    [busyAction, commitArea, createPr, eligibilityState, status?.branch, upstream, t]
   )
 }

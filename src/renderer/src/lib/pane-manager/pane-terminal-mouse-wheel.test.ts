@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   attachTerminalMouseWheelMultiplier,
   createTerminalTuiMouseWheelDistanceState,
   normalizeTerminalTuiMouseWheelMultiplier,
@@ -77,10 +76,6 @@ function wheelEvent(
 describe('terminal mouse wheel multiplier', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  it('uses a one-report multiplier for TUI mouse wheel scrolling', () => {
-    expect(TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER).toBe(1)
   })
 
   it('normalizes TUI wheel multipliers to the supported report range', () => {
@@ -271,6 +266,95 @@ describe('terminal mouse wheel multiplier', () => {
     )
 
     expect(reports).toEqual([1, 1, 1, 2, 1, 1, 0, 1])
+  })
+
+  it('keeps a Mac trackpad flick linear once its wheelDelta reaches notch size', () => {
+    const state = createTerminalTuiMouseWheelDistanceState()
+    // Chromium on macOS reports wheelDeltaY = -3 * deltaY for continuous devices.
+    const flick = [8, 16, 24, 32, 40, 48, 56, 48, 40, 32, 24, 16, 8]
+
+    const reports = flick.map((deltaY, index) =>
+      resolveTerminalTuiMouseWheelReportCount(
+        { deltaY, deltaMode: DOM_DELTA_PIXEL, wheelDeltaY: -3 * deltaY, timeStamp: index * 8 },
+        1,
+        state,
+        { cellHeight: 16 }
+      )
+    )
+
+    expect(reports).toEqual([0, 1, 2, 2, 2, 3, 4, 3, 2, 2, 2, 1, 0])
+  })
+
+  it.each([
+    ['Mac', { deltaY: -4, wheelDeltaY: 120 }],
+    // Chromium divides both deltas by browser zoom, which the page cannot always know.
+    ['Mac at 110% browser zoom', { deltaY: 4 / 1.1, wheelDeltaY: -109 }],
+    ['Windows', { deltaY: 100, wheelDeltaY: -120 }]
+  ])('treats a %s notched wheel right after trackpad input as discrete', (_platform, notch) => {
+    const afterTrackpad = createTerminalTuiMouseWheelDistanceState()
+    resolveTerminalTuiMouseWheelReportCount(
+      { deltaY: 8, deltaMode: DOM_DELTA_PIXEL, wheelDeltaY: -24, timeStamp: 0 },
+      1,
+      afterTrackpad,
+      { cellHeight: 16 }
+    )
+    const fresh = createTerminalTuiMouseWheelDistanceState()
+    const notchReports = (state: ReturnType<typeof createTerminalTuiMouseWheelDistanceState>) =>
+      [100, 200, 300].map((timeStamp) =>
+        resolveTerminalTuiMouseWheelReportCount(
+          { ...notch, deltaMode: DOM_DELTA_PIXEL, timeStamp },
+          5,
+          state,
+          { cellHeight: 16 }
+        )
+      )
+
+    expect(notchReports(afterTrackpad)).toEqual(notchReports(fresh))
+  })
+
+  it('keeps a long hard Mac flick at its 1:1 row distance through the momentum', () => {
+    const state = createTerminalTuiMouseWheelDistanceState()
+    // Real gestures start small; 16 ms apart, it peaks at 150 px and stays above 34 px for over 600 ms.
+    const flick = [8, 75, 150]
+    while (flick.at(-1)! >= 1) {
+      flick.push(flick.at(-1)! * 0.97)
+    }
+
+    const total = flick.reduce(
+      (sum, deltaY, index) =>
+        sum +
+        resolveTerminalTuiMouseWheelReportCount(
+          {
+            deltaY,
+            deltaMode: DOM_DELTA_PIXEL,
+            wheelDeltaY: -Math.trunc(3 * deltaY),
+            timeStamp: index * 16
+          },
+          1,
+          state,
+          { cellHeight: 16 }
+        ),
+      0
+    )
+
+    const linearRows = flick.reduce((sum, deltaY) => sum + deltaY, 0) / 16
+    expect(Math.abs(total - linearRows)).toBeLessThanOrEqual(1)
+  })
+
+  it('keeps a touchpad flick linear when wheelDelta tracks deltaY one to one', () => {
+    const state = createTerminalTuiMouseWheelDistanceState()
+    const flick = [20, 60, 120, 160, 120, 60, 20]
+
+    const reports = flick.map((deltaY, index) =>
+      resolveTerminalTuiMouseWheelReportCount(
+        { deltaY, deltaMode: DOM_DELTA_PIXEL, wheelDeltaY: -deltaY, timeStamp: index * 8 },
+        1,
+        state,
+        { cellHeight: 16 }
+      )
+    )
+
+    expect(reports).toEqual([1, 4, 7, 10, 8, 3, 2])
   })
 
   it('drops pending trackpad distance on each direction change', () => {

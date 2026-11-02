@@ -1,22 +1,18 @@
-// Resolve an SFTP transfer path when the SSH shell and the SFTP subsystem expose
-// different absolute namespaces for the same directory (e.g. Synology DSM's
-// /var/services/homes/alice shell home vs. /homes/alice SFTP start directory).
-//
-// See: docs/ssh-relay-sftp-namespace.md
+// Map differing shell/SFTP namespaces, such as Synology /var/services/homes/alice vs /homes/alice. See docs/ssh-relay-sftp-namespace.md.
 
 import type { SFTPWrapper } from 'ssh2'
 import { assertSafeRemotePathSegment, isWindowsRemoteHost } from './ssh-remote-platform'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
-import { redactRelayInstallMarkerTokens } from './ssh-relay-install-marker'
+import { redactRelayInstallMarkerTokens } from '../managed-server/install/remote-install-marker'
 
 export type SftpNamespacePathMapping = {
+  homeRelativeNamespaceRoot: string
   homeRelativePath: string
   shellProbePath: string
   homeRelativeProbePath: string
 }
 
-// SSH_FX_NO_SUCH_FILE. The only status that definitively proves a path is absent;
-// permission denied, generic failure, and code-less errors are inconclusive.
+// Only SSH_FX_NO_SUCH_FILE proves absence; permission/generic/code-less failures stay unknown.
 const SFTP_STATUS_NO_SUCH_FILE = 2
 
 type MarkerProbe =
@@ -72,14 +68,13 @@ function assertMappingIdentity(shellAbsolutePath: string, mapping: SftpNamespace
     throw new Error('SFTP namespace transfer and marker must share one shell namespace prefix')
   }
 
-  const lockSegmentIndex = probeSegments.length - 2
-  const relayDir = probeSegments.slice(0, lockSegmentIndex).join('/')
+  const namespaceRoot = mapping.homeRelativeNamespaceRoot
   if (
-    lockSegmentIndex < 1 ||
-    probeSegments[lockSegmentIndex] !== '.install-lock' ||
-    (mapping.homeRelativePath !== relayDir && !mapping.homeRelativePath.startsWith(`${relayDir}/`))
+    (mapping.homeRelativePath !== namespaceRoot &&
+      !mapping.homeRelativePath.startsWith(`${namespaceRoot}/`)) ||
+    !mapping.homeRelativeProbePath.startsWith(`${namespaceRoot}/`)
   ) {
-    throw new Error('SFTP namespace marker must be inside the transfer relay install lock')
+    throw new Error('SFTP namespace transfer and marker must be inside one namespace root')
   }
 }
 
@@ -116,8 +111,7 @@ function realpathSftp(sftp: SFTPWrapper, remotePath: string): Promise<string> {
   })
 }
 
-// Why: sftpPathExists collapses "absent" and "could not tell" into one boolean;
-// namespace selection must never treat an inconclusive probe as absence.
+// Preserve unknown lstat results; uncertainty cannot authorize namespace redirect.
 function probeMarkerPath(sftp: SFTPWrapper, remotePath: string): Promise<MarkerProbe> {
   return new Promise((resolve) => {
     sftp.lstat(remotePath, (err) => {
@@ -145,13 +139,7 @@ function logRetainedShellPath(operation: string, detail: string, shellAbsolutePa
   )
 }
 
-/**
- * Pick the path this SFTP session should transfer to.
- *
- * Returns `shellAbsolutePath` unless the session both fails to see the install
- * owner's marker there and does see it under its own start directory. Discovery
- * failures degrade to the shell path rather than inventing a namespace error.
- */
+/** Redirect only when the owner marker is proven absent at the shell path and present under SFTP start. Uncertain discovery keeps the original path. */
 export async function resolveSftpTransferPath(
   sftp: SFTPWrapper,
   shellAbsolutePath: string,
@@ -159,6 +147,7 @@ export async function resolveSftpTransferPath(
 ): Promise<string> {
   assertAbsolutePosixPath('transfer path', shellAbsolutePath)
   assertAbsolutePosixPath('marker path', mapping.shellProbePath)
+  assertHomeRelativePosixPath('relative namespace root', mapping.homeRelativeNamespaceRoot)
   assertHomeRelativePosixPath('relative transfer path', mapping.homeRelativePath)
   assertHomeRelativePosixPath('relative marker path', mapping.homeRelativeProbePath)
   assertMappingIdentity(shellAbsolutePath, mapping)
@@ -209,16 +198,12 @@ export async function resolveSftpTransferPath(
   return shellAbsolutePath
 }
 
-export type SftpTransferPathOptions = {
+type SftpTransferPathOptions = {
   hostPlatform?: RemoteHostPlatform
   sftpNamespace?: SftpNamespacePathMapping
 }
 
-/**
- * Namespace-resolve a transfer path only when a mapping was supplied and the host
- * is not Windows, whose SFTP drive paths (`/C:/Users/...`) break the POSIX prefix
- * contract. Callers without a mapping issue no REALPATH or LSTAT.
- */
+/** Map only explicitly supplied POSIX namespaces; Windows /C:/ drive paths violate prefix rules. Unmapped calls issue no discovery requests. */
 export function resolveSftpTransferPathIfMapped(
   sftp: SFTPWrapper,
   shellAbsolutePath: string,

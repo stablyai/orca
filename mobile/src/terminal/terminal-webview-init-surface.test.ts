@@ -1,23 +1,17 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { XTERM_HTML } from './terminal-webview-html'
-
-function iifeSource(): string {
-  const start = XTERM_HTML.indexOf('(function() {')
-  const end = XTERM_HTML.lastIndexOf('})();')
-  return XTERM_HTML.slice(start, end + '})();'.length)
-}
+import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
+import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 
 function bodyMarkup(): string {
-  const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
-  const end = XTERM_HTML.indexOf('<script>', start)
-  return XTERM_HTML.slice(start, end)
+  return TERMINAL_DOCUMENT_MARKUP
 }
 
 type TerminalStub = ReturnType<typeof makeTerminal>
 type TerminalOptions = {
   cursorInactiveStyle?: string
   cursorStyle?: string
+  showCursorImmediately?: boolean
 }
 type RegisteredWindowListener = {
   listener: EventListenerOrEventListenerObject
@@ -25,7 +19,8 @@ type RegisteredWindowListener = {
   type: string
 }
 
-function makeTerminal(writeCallbacks: Array<() => void>) {
+function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
+  const dimensions = { css: { cell: { width: 8, height: 15 } } }
   const terminal = {
     cols: 80,
     rows: 24,
@@ -33,7 +28,16 @@ function makeTerminal(writeCallbacks: Array<() => void>) {
     modes: {},
     element: null as HTMLElement | null,
     disposed: false,
-    _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } },
+    _core: {
+      _renderService: {
+        get dimensions(): typeof dimensions {
+          if (terminal.disposed) {
+            throw new Error('Renderer dimensions are unavailable after terminal disposal')
+          }
+          return dimensions
+        }
+      }
+    },
     buffer: {
       active: {
         viewportY: 0,
@@ -44,7 +48,8 @@ function makeTerminal(writeCallbacks: Array<() => void>) {
         getLine: () => null
       }
     },
-    write(_data: string, callback?: () => void) {
+    write(data: string, callback?: () => void) {
+      writes.push(data)
       if (callback) {
         writeCallbacks.push(callback)
       }
@@ -92,6 +97,7 @@ describe('terminal WebView init surface replacement', () => {
   let terminalOptions: TerminalOptions[]
   let terminals: TerminalStub[]
   let writeCallbacks: Array<() => void>
+  let writes: string[]
 
   beforeEach(() => {
     animationFrames = []
@@ -99,6 +105,7 @@ describe('terminal WebView init surface replacement', () => {
     terminalOptions = []
     terminals = []
     writeCallbacks = []
+    writes = []
     const addWindowEventListener = window.addEventListener.bind(window)
     vi.spyOn(window, 'addEventListener').mockImplementation(((
       type: string,
@@ -120,14 +127,13 @@ describe('terminal WebView init surface replacement', () => {
     }
     webWindow.Terminal = function (options: TerminalOptions) {
       terminalOptions.push(options)
-      const terminal = makeTerminal(writeCallbacks)
+      const terminal = makeTerminal(writeCallbacks, writes)
       terminals.push(terminal)
       return terminal
     } as unknown as new (options: TerminalOptions) => TerminalStub
     webWindow.ReactNativeWebView = { postMessage: vi.fn() }
     document.body.innerHTML = bodyMarkup()
-    // eslint-disable-next-line no-new-func
-    new Function(iifeSource())()
+    new Function(TERMINAL_DOCUMENT_SCRIPT)()
   })
 
   afterEach(() => {
@@ -146,14 +152,21 @@ describe('terminal WebView init surface replacement', () => {
     for (const options of terminalOptions) {
       expect(options).toMatchObject({
         cursorStyle: 'bar',
-        cursorInactiveStyle: 'bar'
+        cursorInactiveStyle: 'block',
+        showCursorImmediately: true
       })
     }
   })
 
+  it('grounds the initial replay without clearing the host live pen', () => {
+    dispatchInit(80, '\x1b[1mBOLD-RUN-LEFT-OPEN')
+    animationFrames.shift()?.()
+
+    expect(writes).toEqual(['\x1b[0m\x1b[1mBOLD-RUN-LEFT-OPEN'])
+  })
+
   it('commits only the newest surface when phone-fit init calls overlap', () => {
-    // Why: restored terminals can receive desktop scrollback, a phone resize,
-    // and phone scrollback before any xterm replay callback has completed.
+    // Restored terminals may receive desktop replay, resize and phone replay before any xterm write completes.
     dispatchInit(120, 'desktop')
     animationFrames.shift()?.()
     dispatchInit(51, 'phone-resize')

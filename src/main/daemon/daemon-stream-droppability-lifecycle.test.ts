@@ -1,13 +1,15 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonServer } from './daemon-server'
+import type { ConnectedDaemonClient } from './daemon-client-connections'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import type { BackgroundTransientFactRelay } from './daemon-background-transient-facts'
 import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { DaemonRequest } from './types'
 
 type MockSubprocess = SubprocessHandle & {
@@ -16,22 +18,14 @@ type MockSubprocess = SubprocessHandle & {
 }
 
 type DaemonLifecyclePrivate = {
-  clients: Map<
-    string,
-    {
-      clientId: string
-      controlSocket: Socket
-      streamSocket: Socket | null
-      authenticatedPairEstablished: boolean
-    }
-  >
-  host: {
-    getPartialEscapeTailAnsi(sessionId: string): string
+  connections: { clients: Map<string, ConnectedDaemonClient> }
+  host: { getPartialEscapeTailAnsi(sessionId: string): string }
+  requestRouter: {
+    route(clientId: string, request: DaemonRequest): Promise<unknown>
   }
-  routeRequest(clientId: string, request: DaemonRequest): Promise<unknown>
   streamDataBatcher: DaemonStreamDataBatcher
   transientFactRelay: BackgroundTransientFactRelay
-  streamClientIdBySessionId: Map<string, string>
+  attachments: { clientIdBySessionId: Map<string, string> }
 }
 
 function createMockSubprocess(): MockSubprocess {
@@ -43,6 +37,7 @@ function createMockSubprocess(): MockSubprocess {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => onExit?.(0)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExit?.(137)),
     signal: vi.fn(),
     onData(callback) {
@@ -94,7 +89,7 @@ function addClient(
     write: ReturnType<typeof vi.fn>
     writableLength: number
   }
-  daemon.clients.set('client-1', {
+  daemon.connections.clients.set('client-1', {
     clientId: 'client-1',
     controlSocket,
     streamSocket,
@@ -133,7 +128,7 @@ describe('daemon stream droppability lifecycle', () => {
     server = harness.server
     const { daemon } = harness
     addClient(daemon)
-    daemon.streamClientIdBySessionId.set('session-toggle', 'client-1')
+    daemon.attachments.clientIdBySessionId.set('session-toggle', 'client-1')
     vi.spyOn(daemon.host, 'getPartialEscapeTailAnsi').mockReturnValue('')
     const lifecycle: string[] = []
     vi.spyOn(daemon.streamDataBatcher, 'refreshSessionDroppability').mockImplementation(
@@ -151,7 +146,7 @@ describe('daemon stream droppability lifecycle', () => {
       }
     )
 
-    await daemon.routeRequest('client-1', {
+    await daemon.requestRouter.route('client-1', {
       id: 'background',
       type: 'setSessionBackground',
       payload: { sessionId: 'session-toggle', background: true }
@@ -159,7 +154,7 @@ describe('daemon stream droppability lifecycle', () => {
     expect(lifecycle).toEqual(['refresh:true', 'marker:true'])
 
     lifecycle.length = 0
-    await daemon.routeRequest('client-1', {
+    await daemon.requestRouter.route('client-1', {
       id: 'duplicate-background',
       type: 'setSessionBackground',
       payload: { sessionId: 'session-toggle', background: true }
@@ -167,12 +162,43 @@ describe('daemon stream droppability lifecycle', () => {
     expect(lifecycle).toEqual(['refresh:true'])
 
     lifecycle.length = 0
-    await daemon.routeRequest('client-1', {
+    await daemon.requestRouter.route('client-1', {
       id: 'foreground',
       type: 'setSessionBackground',
       payload: { sessionId: 'session-toggle', background: false }
     })
     expect(lifecycle).toEqual(['refresh:false', 'marker:false'])
+  })
+
+  it('returns a provisional 2031 subscribe with the foreground handoff marker', async () => {
+    const harness = createServerHarness()
+    server = harness.server
+    const { daemon } = harness
+    addClient(daemon)
+    daemon.attachments.clientIdBySessionId.set('session-toggle', 'client-1')
+    daemon.transientFactRelay.setSessionBackground('session-toggle', true)
+    daemon.transientFactRelay.onSessionData('session-toggle', '\x1b[?2031h\x1b[?')
+    vi.spyOn(daemon.host, 'getPartialEscapeTailAnsi').mockReturnValue('\x1b[?')
+    const enqueue = vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent')
+
+    await daemon.requestRouter.route('client-1', {
+      id: 'foreground',
+      type: 'setSessionBackground',
+      payload: { sessionId: 'session-toggle', background: false }
+    })
+
+    expect(enqueue).toHaveBeenCalledWith(
+      'client-1',
+      'session-toggle',
+      expect.objectContaining({
+        event: 'sessionBackgroundMarker',
+        payload: {
+          background: false,
+          scanSeedAnsi: '\x1b[?',
+          mode2031PendingSubscribe: true
+        }
+      })
+    )
   })
 
   it('routes an attached session before refresh and emits its background marker after', async () => {
@@ -184,7 +210,9 @@ describe('daemon stream droppability lifecycle', () => {
     const lifecycle: string[] = []
     vi.spyOn(daemon.streamDataBatcher, 'refreshSessionDroppability').mockImplementation(
       (sessionId) => {
-        lifecycle.push(`refresh:${daemon.streamClientIdBySessionId.get(sessionId) ?? 'unrouted'}`)
+        lifecycle.push(
+          `refresh:${daemon.attachments.clientIdBySessionId.get(sessionId) ?? 'unrouted'}`
+        )
       }
     )
     vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent').mockImplementation(
@@ -193,7 +221,7 @@ describe('daemon stream droppability lifecycle', () => {
       }
     )
 
-    await daemon.routeRequest('client-1', {
+    await daemon.requestRouter.route('client-1', {
       id: 'attach',
       type: 'createOrAttach',
       payload: { sessionId: 'session-attach', cols: 80, rows: 24 }
@@ -209,7 +237,7 @@ describe('daemon stream droppability lifecycle', () => {
     addClient(daemon, 128 * 1024)
     daemon.transientFactRelay.setSessionBackground('session-exit', true)
 
-    await daemon.routeRequest('client-1', {
+    await daemon.requestRouter.route('client-1', {
       id: 'attach',
       type: 'createOrAttach',
       payload: { sessionId: 'session-exit', cols: 80, rows: 24 }
@@ -230,6 +258,6 @@ describe('daemon stream droppability lifecycle', () => {
       payload: { code: 42 }
     })
     expect(daemon.transientFactRelay.isBackgrounded('session-exit')).toBe(false)
-    expect(daemon.streamClientIdBySessionId.has('session-exit')).toBe(false)
+    expect(daemon.attachments.clientIdBySessionId.has('session-exit')).toBe(false)
   })
 })

@@ -1,0 +1,86 @@
+import {
+  normalizeAgentStatusPayload,
+  type ParsedAgentStatusPayload
+} from '../../agent-status-types'
+import type { HookListenerState } from '../listener-state'
+import {
+  resolvePrompt,
+  resolveToolState,
+  shouldIgnoreCompactContinuationUserPromptSubmit
+} from '../prompt-fields'
+import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
+import { readString } from '../tool-input-preview'
+
+// Auto-allowed AskUserQuestion still blocks a human on PreToolUse.
+export function isKimiUserInputTool(toolName: string | undefined): boolean {
+  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
+}
+
+// Normalize Claude-shaped events while retaining Kimi attribution.
+export function normalizeKimiEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
+    return null
+  }
+  if (eventName === 'SessionStart') {
+    // Why: a resumed session's only pre-prompt signal, so its id stays resumable at the next quit
+    // (#31311); `startup` fires mid-submit of the first message, so it is not an idle boundary.
+    return hookPayload['source'] === 'resume'
+      ? normalizeAgentStatusPayload({
+          state: 'done',
+          prompt: '',
+          agentType: 'kimi',
+          sessionBoundary: true
+        })
+      : null
+  }
+
+  const toolName = readString(hookPayload, 'tool_name')
+  const isUserInputTool = isKimiUserInputTool(toolName)
+
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure' ||
+    (eventName === 'PreToolUse' && !isUserInputTool)
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Stop' || eventName === 'StopFailure') {
+    stateName = 'done'
+  }
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('kimi', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('kimi', eventName) }
+  )
+
+  const interrupted =
+    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('kimi', eventName)
+    }),
+    agentType: 'kimi',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    interrupted
+  })
+}

@@ -8,9 +8,11 @@ import {
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
-  resolveCreatePrIntentRemoteStep
-} from './source-control-create-pr-intent-flow'
-import type { GitStatusEntry } from '../../../../shared/types'
+  resolveCreatePrIntentGeneratedReviewFields,
+  shouldAttemptCreateHostedReviewForIntent,
+  shouldGenerateHostedReviewDetailsForIntent
+} from './source-control/review/create-pr-intent-flow'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 describe('source-control Create PR intent flow helpers', () => {
   it('matches async completions only to the original repo, worktree, path, branch, and base', () => {
@@ -21,7 +23,9 @@ describe('source-control Create PR intent flow helpers', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         branch: 'feature',
-        baseRef: 'origin/main'
+        provider: 'github',
+        baseRef: 'origin/main',
+        pinnedCopy: null
       })
 
       expect(token.startedAt).toBe(123)
@@ -44,7 +48,9 @@ describe('source-control Create PR intent flow helpers', () => {
       repoId: 'repo-1',
       worktreeId: 'wt-1',
       worktreePath: '/repo',
-      branch: 'feature/pr'
+      branch: 'feature/pr',
+      provider: 'github',
+      pinnedCopy: null
     })
 
     expect(createPrIntentGitStatusMatchesToken(token, { branch: 'refs/heads/feature/pr' })).toBe(
@@ -63,7 +69,9 @@ describe('source-control Create PR intent flow helpers', () => {
       repoId: 'repo-1',
       worktreeId: 'wt-1',
       worktreePath: wt1Path,
-      branch: 'feature/pr'
+      branch: 'feature/pr',
+      provider: 'github',
+      pinnedCopy: null
     })
 
     expect(
@@ -92,7 +100,9 @@ describe('source-control Create PR intent flow helpers', () => {
       worktreeId: 'wt-1',
       worktreePath,
       branch: 'feature/pr',
-      baseRef: 'refs/remotes/origin/main'
+      provider: 'github',
+      baseRef: 'refs/remotes/origin/main',
+      pinnedCopy: null
     })
 
     expect(
@@ -144,10 +154,7 @@ describe('source-control Create PR intent flow helpers', () => {
   })
 
   it('prefers the remote-validated eligibility default so it cannot diverge from the composer', () => {
-    // Why: the intent flow's eligibility is recomputed from the same compare
-    // base right before creation, so its default already corrects a local-only
-    // stacked parent to the repo default. The one-click path must target that
-    // same base as the composer, not the raw (possibly unpushable) compare base.
+    // Match the composer's remote-validated base default so one-click creation cannot target an unpushable local stack parent.
     expect(
       resolveCreatePrIntentReviewBase({
         currentBaseRef: 'stacked-parent',
@@ -166,9 +173,7 @@ describe('source-control Create PR intent flow helpers', () => {
   })
 
   it('falls back to the compare base when eligibility supplies no default', () => {
-    // Why: never blank the base. If the main process could not resolve a default
-    // (no candidate on remote and repo default unavailable), keep the user's
-    // compare base rather than dropping to an empty target.
+    // If eligibility has no remote default, preserve the selected compare base instead of an empty target.
     expect(
       resolveCreatePrIntentReviewBase({
         currentBaseRef: 'refs/remotes/origin/release',
@@ -178,109 +183,119 @@ describe('source-control Create PR intent flow helpers', () => {
     ).toBe('release')
   })
 
-  it('resolves safe remote steps for publish, push, and patch-equivalent force-push', () => {
+  it('generates details while main preflight remains the final lookup authority', () => {
+    const unavailable = {
+      provider: 'github' as const,
+      review: null,
+      canCreate: false,
+      blockedReason: null,
+      nextAction: null,
+      reviewLookupOutcome: 'unavailable' as const,
+      head: 'feature-branch'
+    }
+    expect(shouldAttemptCreateHostedReviewForIntent(unavailable)).toBe(true)
+    // Loading placeholders share the unavailable/null-reason shape but carry no branch.
+    expect(shouldAttemptCreateHostedReviewForIntent({ ...unavailable, head: undefined })).toBe(
+      false
+    )
+    expect(shouldGenerateHostedReviewDetailsForIntent(unavailable)).toBe(true)
+    expect(shouldGenerateHostedReviewDetailsForIntent({ ...unavailable, head: undefined })).toBe(
+      false
+    )
     expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
-        branchCommitsAhead: 2,
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'no_upstream',
-          nextAction: 'publish',
-          reviewLookupOutcome: 'not_found'
-        }
+      shouldGenerateHostedReviewDetailsForIntent({
+        ...unavailable,
+        canCreate: true,
+        reviewLookupOutcome: 'not_found'
       })
-    ).toBe('publish')
-
+    ).toBe(true)
     expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_push',
-          nextAction: 'push',
-          reviewLookupOutcome: 'not_found'
-        }
+      shouldAttemptCreateHostedReviewForIntent({
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'needs_push',
+        nextAction: 'push',
+        reviewLookupOutcome: 'unavailable'
       })
-    ).toBe('push')
-
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: {
-          hasUpstream: true,
-          ahead: 3,
-          behind: 2,
-          behindCommitsArePatchEquivalent: true
-        },
-        branchCommitsAhead: 3,
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_sync',
-          nextAction: 'sync',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('force_push')
+    ).toBe(false)
   })
 
-  it('fast-forwards behind-only branches, blocks diverged and unpublished-without-commits branches', () => {
-    // Genuinely diverged (local + non-equivalent remote commits): auto-merging
-    // would reconcile without consent, so the intent flow keeps the explicit stop.
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 1 },
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_sync',
-          nextAction: 'sync',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('blocked')
-
-    // Behind with no local commits: pure --ff-only (never plain merge sync).
-    expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 },
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_sync',
-          nextAction: 'sync',
-          reviewLookupOutcome: 'not_found'
-        }
-      })
-    ).toBe('fast_forward')
+  it('keeps generated review fields fail-closed', () => {
+    const current = {
+      base: 'main',
+      title: 'Feature branch',
+      body: '',
+      draft: false
+    }
 
     expect(
-      resolveCreatePrIntentRemoteStep({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
-        branchCommitsAhead: 0,
-        hasCurrentBranch: true,
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'no_upstream',
-          nextAction: 'publish',
-          reviewLookupOutcome: 'not_found'
+      resolveCreatePrIntentGeneratedReviewFields(current, {
+        success: false,
+        error: 'Agent timed out.'
+      })
+    ).toEqual({ ok: false, error: 'Agent timed out.' })
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(current, {
+        success: true,
+        fields: {
+          base: 'other-base',
+          title: 'Generated title',
+          body: '## Problem\n\nDetails',
+          draft: true
         }
       })
-    ).toBe('blocked')
+    ).toEqual({
+      ok: true,
+      fields: {
+        base: 'main',
+        title: 'Generated title',
+        body: '## Problem\n\nDetails',
+        draft: true
+      }
+    })
+  })
+
+  it('accepts generated review fields with an empty description', () => {
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(
+        { base: 'main', title: 'Feature branch', body: '', draft: false },
+        {
+          success: true,
+          fields: { base: 'main', title: 'chore: add new app config', body: '', draft: false }
+        }
+      )
+    ).toEqual({
+      ok: true,
+      fields: { base: 'main', title: 'chore: add new app config', body: '', draft: false }
+    })
+  })
+
+  it('falls back to the current title when the generated title is blank and the body is empty', () => {
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(
+        { base: 'main', title: 'Feature branch', body: '', draft: false },
+        { success: true, fields: { base: 'main', title: '  ', body: '   ', draft: true } }
+      )
+    ).toEqual({
+      ok: true,
+      fields: { base: 'main', title: 'Feature branch', body: '   ', draft: true }
+    })
+  })
+
+  it('never downgrades a "Create as draft" choice to a ready review', () => {
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(
+        { base: 'main', title: 'Feature branch', body: '', draft: true },
+        {
+          success: true,
+          fields: { base: 'main', title: 'Generated title', body: 'Details', draft: false }
+        }
+      )
+    ).toEqual({
+      ok: true,
+      fields: { base: 'main', title: 'Generated title', body: 'Details', draft: true }
+    })
   })
 
   it('surfaces the commit failure summary in the Create PR intent notice', () => {

@@ -11,13 +11,6 @@ function createRelay() {
 }
 
 describe('BackgroundTransientFactRelay', () => {
-  it('emits a bell fact for a backgrounded session', () => {
-    const { relay, emitted } = createRelay()
-    relay.setSessionBackground('s1', true)
-    relay.onSessionData('s1', 'build output\x07more')
-    expect(emitted).toEqual([{ sessionId: 's1', fact: { kind: 'bell' } }])
-  })
-
   it('keeps OSC escape state across chunks — a title terminator BEL is not a bell', () => {
     const { relay, emitted } = createRelay()
     relay.setSessionBackground('s1', true)
@@ -26,27 +19,27 @@ describe('BackgroundTransientFactRelay', () => {
     expect(emitted).toEqual([])
   })
 
-  it('emits nothing for sessions that are not backgrounded', () => {
+  it('preserves a provisional 2031 subscribe when scan authority moves to the daemon', () => {
     const { relay, emitted } = createRelay()
-    relay.onSessionData('s1', 'ding\x07')
-    expect(emitted).toEqual([])
-  })
-
-  it('emits command-finished with the OSC 133;D exit code', () => {
-    const { relay, emitted } = createRelay()
+    relay.onSessionData('s1', '\x1b[?2031h\x1b[?')
     relay.setSessionBackground('s1', true)
-    relay.onSessionData('s1', '\x1b]133;D;0\x07')
-    expect(emitted).toEqual([{ sessionId: 's1', fact: { kind: 'command-finished', exitCode: 0 } }])
+    relay.seedSessionScanState('s1', '\x1b[?')
+    relay.onSessionData('s1', '25h')
+
+    expect(emitted).toEqual([{ sessionId: 's1', fact: { kind: '2031-subscribe' } }])
   })
 
-  it('stops emitting after un-background and reports the toggle as a state change', () => {
-    const { relay, emitted } = createRelay()
-    expect(relay.setSessionBackground('s1', true)).toBe(true)
-    expect(relay.setSessionBackground('s1', true)).toBe(false)
-    expect(relay.setSessionBackground('s1', false)).toBe(true)
-    expect(relay.setSessionBackground('s1', false)).toBe(false)
-    relay.onSessionData('s1', 'ding\x07')
-    expect(emitted).toEqual([])
+  it('exposes a provisional 2031 subscribe when scan authority returns to main', () => {
+    const { relay } = createRelay()
+    relay.setSessionBackground('s1', true)
+    relay.seedSessionScanState('s1', '')
+    relay.onSessionData('s1', '\x1b[?2031h\x1b[?')
+    relay.setSessionBackground('s1', false)
+
+    expect(relay.getMode2031ReplyScanState('s1')).toEqual({
+      tail: '\x1b[?',
+      pendingSubscribe: true
+    })
   })
 
   it('drops the tracker on session exit', () => {
@@ -63,8 +56,7 @@ describe('BackgroundTransientFactRelay', () => {
     try {
       const { relay, emitted } = createRelay()
       relay.setSessionBackground('s1', true)
-      // A working-spinner title followed by title-less output would arm the
-      // 3s stale timer if titles were being tracked.
+      // Title-less output after a working title would arm the stale timer if title scanning ran.
       relay.onSessionData('s1', '\x1b]0;⠋ Claude\x07')
       relay.onSessionData('s1', 'output without titles')
       expect(vi.getTimerCount()).toBe(0)

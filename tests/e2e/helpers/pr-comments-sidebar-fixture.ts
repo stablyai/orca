@@ -1,5 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { PRComment, PRInfo } from '../../../src/shared/types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import { getDefaultSourceControlAiSettings } from '../../../src/shared/source-control-ai'
 
 export type PRCommentsSidebarSeed = {
   worktreeId: string
@@ -10,13 +12,15 @@ export type PRCommentsSidebarSeed = {
 export const FIXTURE_COMMENTS: PRComment[] = [
   {
     id: 101,
-    author: 'alice',
+    author: 'coderabbitai',
     authorAvatarUrl: '',
     body: 'Please update this handler before merge.',
     createdAt: '2026-05-14T10:00:00.000Z',
     url: 'https://github.com/acme/orca/pull/73#discussion_r101',
+    reactionSubjectId: 'PRRC_101',
     threadId: 'thread-open',
     path: 'src/handler.ts',
+    isBot: true,
     isResolved: false
   },
   {
@@ -25,7 +29,8 @@ export const FIXTURE_COMMENTS: PRComment[] = [
     authorAvatarUrl: '',
     body: 'LGTM on the overall approach.',
     createdAt: '2026-05-14T11:00:00.000Z',
-    url: 'https://github.com/acme/orca/pull/73#issuecomment-102'
+    url: 'https://github.com/acme/orca/pull/73#issuecomment-102',
+    reactionSubjectId: 'IC_102'
   },
   {
     id: 103,
@@ -42,7 +47,11 @@ export const FIXTURE_COMMENTS: PRComment[] = [
 
 /** Seed an open PR on e2e-secondary with mixed comment triage states for sidebar tests. */
 export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommentsSidebarSeed> {
-  return page.evaluate(async (fixtureComments: PRComment[]) => {
+  const seed = {
+    fixtureComments: FIXTURE_COMMENTS,
+    sourceControlAiDefaults: getDefaultSourceControlAiSettings()
+  }
+  return page.evaluate(async ({ fixtureComments, sourceControlAiDefaults }) => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
@@ -72,7 +81,8 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       url: `https://github.com/acme/orca/pull/${prNumber}`,
       checksStatus: 'pending',
       updatedAt: '2026-05-15T00:00:00.000Z',
-      mergeable: 'MERGEABLE'
+      mergeable: 'MERGEABLE',
+      prRepo: { owner: 'acme', repo: 'orca' }
     }
     const prCacheEntries = {
       [`${repo.id}::${branch}`]: {
@@ -112,12 +122,13 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
         ? {
             ...current.settings,
             sourceControlAi: {
+              ...sourceControlAiDefaults,
               ...current.settings.sourceControlAi,
               enabled: true
             }
           }
         : current.settings,
-      fetchPRForBranch: async (repoPath: string, targetBranch: string) => {
+      fetchPRForBranch: async (_repoPath: string, targetBranch: string) => {
         if (targetBranch !== branch) {
           return null
         }
@@ -131,12 +142,14 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       },
       fetchPRChecks: async () => [],
       fetchPRComments: async () => comments,
-      fetchUpstreamStatus: async () => undefined,
+      setPRCommentReaction: async () => true,
+      fetchUpstreamStatus: async (worktreeId) =>
+        store.getState().remoteStatusesByWorktree[worktreeId] ?? null,
       setUpstreamStatus: () => undefined
     }))
 
     window.localStorage.setItem('orca:pr-comment-presentation', 'cards')
 
     return { worktreeId: worktree.id, branch, prNumber }
-  }, FIXTURE_COMMENTS)
+  }, seed)
 }

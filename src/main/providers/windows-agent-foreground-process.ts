@@ -6,12 +6,12 @@ import {
   type RecognizedAgentProcess
 } from '../../shared/agent-process-recognition'
 import {
-  resolveOuterWrapperForegroundProcess,
+  resolveOuterWrapperForegroundIdentity,
   shouldInspectOuterWrapperForegroundProcess
 } from '../../shared/foreground-wrapper-agent'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import {
-  queryWindowsProcessDescendants,
+  queryWindowsPaneProcessInventory,
   type WindowsProcessCandidate,
   type WindowsProcessRow
 } from './windows-foreground-process-rows'
@@ -23,12 +23,25 @@ export type AgentForegroundResolutionOptions = {
   /** Force confirmation scans even when node-pty reports a recognized name. */
   forceProcessScan?: boolean
   /** Lazily proves which global descendants still belong to this ConPTY. */
-  readWindowsConptyProcessIds?: () => Promise<ReadonlySet<number> | null>
+  readWindowsConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
+  /** A contradictory full-table command line proves cached anchor PID reuse. */
+  anchorProcessId?: number
+  /** The cached agent name the anchor pid is supposed to prove. */
+  anchorProcessName?: string
 }
 
 export type WindowsAgentForegroundResolution = {
   available: boolean
   processName: string | null
+  /** Unambiguous recognized-name anchor; use the outer wrapper PID so embedded-child restarts do not imply exit. */
+  processId?: number
+  /** True when the scan proves `anchorProcessId` now belongs to a non-agent. */
+  anchorPidForeign?: boolean
+}
+
+type WindowsForegroundIdentity = {
+  processName: string | null
+  processId?: number
 }
 
 export function shouldInspectWindowsAgentForeground(fallbackProcess: string): boolean {
@@ -40,51 +53,49 @@ export function shouldInspectWindowsAgentForeground(fallbackProcess: string): bo
   )
 }
 
-export async function resolveWindowsAgentForegroundProcess(
-  shellPid: number,
-  fallbackProcess: string,
-  options: AgentForegroundResolutionOptions
-): Promise<string | null> {
-  return (
-    await resolveWindowsAgentForegroundProcessWithAvailability(shellPid, fallbackProcess, options)
-  ).processName
-}
-
 export async function resolveWindowsAgentForegroundProcessWithAvailability(
   shellPid: number,
   fallbackProcess: string,
   options: AgentForegroundResolutionOptions
 ): Promise<WindowsAgentForegroundResolution> {
-  const candidates = await queryWindowsProcessDescendants(
-    shellPid,
-    options.fresh === true ? { fresh: true } : {}
-  )
-  if (!candidates) {
+  const inventory = await queryWindowsPaneProcessInventory(shellPid, {
+    ...(options.fresh === true ? { fresh: true } : {}),
+    ...(options.anchorProcessId !== undefined ? { anchorPid: options.anchorProcessId } : {})
+  })
+  if (!inventory) {
     return { available: false, processName: null }
   }
-  // Resolve membership before applying the global ambiguity rule. A detached
-  // agent can otherwise make an attached Droid look ambiguous and suppress
-  // the only identity that is actually able to receive this PTY's input.
+  const candidates = inventory.candidates
+  // Filter console membership before ambiguity checks so detached agents cannot suppress the attached input owner.
   const hasRecognizedCandidate = windowsCandidatesContainRecognizedAgent(
     candidates,
     fallbackProcess,
     options.contextPaths
   )
   let filteredCandidates = candidates
-  if (hasRecognizedCandidate && options.readWindowsConptyProcessIds) {
-    const conptyProcessIds = await options.readWindowsConptyProcessIds()
-    if (!conptyProcessIds) {
+  if (hasRecognizedCandidate && options.readWindowsConsoleAttachedProcessIds) {
+    // Job membership retains detached descendants; only console attachment can exclude their byte authority.
+    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds()
+    if (!consoleProcessIds) {
       return { available: false, processName: null }
     }
-    filteredCandidates = candidates.filter((candidate) => conptyProcessIds.has(candidate.pid))
+    filteredCandidates = candidates.filter((candidate) => consoleProcessIds.has(candidate.pid))
   }
+  // Orphaned job members can hold recycled PIDs outside the descendant walk; inspect the full-table anchor.
+  const anchorRow = inventory.anchorRow
+  const anchorRecognized = anchorRow === null ? null : recognizeWindowsProcessCandidate(anchorRow)
+  const anchorPidForeign =
+    anchorRow !== null &&
+    (anchorRecognized !== null
+      ? // A recognized row is foreign when it names a DIFFERENT agent.
+        options.anchorProcessName !== undefined &&
+        anchorRecognized.processName !== options.anchorProcessName
+      : // Query-denied command === name is inconclusive, never foreign proof.
+        anchorRow.command !== anchorRow.name)
   return {
     available: true,
-    processName: resolveWindowsProcessName(
-      filteredCandidates,
-      fallbackProcess,
-      options.contextPaths
-    )
+    ...resolveWindowsForegroundIdentity(filteredCandidates, fallbackProcess, options.contextPaths),
+    ...(anchorPidForeign ? { anchorPidForeign: true } : {})
   }
 }
 
@@ -105,11 +116,11 @@ function windowsCandidatesContainRecognizedAgent(
     )
 }
 
-function resolveWindowsProcessName(
+export function resolveWindowsForegroundIdentity(
   candidates: readonly WindowsProcessCandidate[],
   fallbackProcess: string,
   contextPaths: readonly string[] | undefined
-): string | null {
+): WindowsForegroundIdentity {
   if (isShellProcess(fallbackProcess)) {
     return resolveShellForegroundProcessFromWindowsCandidates(candidates, contextPaths)
   }
@@ -128,15 +139,15 @@ function resolveWindowsProcessName(
     recognizeAgentProcessFromCommandLine(candidate.command) ??
     recognizeAgentProcessFromCommandLine(candidate.name)
   if (recognized) {
-    return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
+    return resolveOuterWrapperForegroundIdentity(recognized, candidate, candidates)
   }
-  return null
+  return { processName: null }
 }
 
 function resolveShellForegroundProcessFromWindowsCandidates(
   candidates: readonly WindowsProcessCandidate[],
   contextPaths: readonly string[] | undefined
-): string | null {
+): WindowsForegroundIdentity {
   const recognizedCandidates = createRecognizedWindowsProcessCandidates(candidates, contextPaths)
   const contextCandidates = recognizedCandidates.filter((candidate) => candidate.contextMatch)
   if (contextCandidates.length > 0) {
@@ -149,14 +160,14 @@ function resolveWrapperForegroundProcessFromWindowsCandidates(
   candidates: readonly WindowsProcessCandidate[],
   allCandidates: readonly WindowsProcessCandidate[],
   contextPaths: readonly string[] | undefined
-): string | null {
+): WindowsForegroundIdentity {
   const contextCandidates = createRecognizedWindowsProcessCandidates(
     candidates,
     contextPaths
   ).filter((candidate) => candidate.contextMatch)
   return contextCandidates.length > 0
     ? resolveRecognizedWindowsProcessCandidates(contextCandidates, allCandidates)
-    : null
+    : { processName: null }
 }
 
 type RecognizedWindowsProcessCandidate = WindowsProcessRow & {
@@ -190,9 +201,9 @@ function createRecognizedWindowsProcessCandidates(
 function resolveRecognizedWindowsProcessCandidates(
   recognizedCandidates: readonly RecognizedWindowsProcessCandidate[],
   allCandidates: readonly WindowsProcessCandidate[]
-): string | null {
+): WindowsForegroundIdentity {
   if (recognizedCandidates.length === 0) {
-    return null
+    return { processName: null }
   }
   const candidatesByPid = new Map(allCandidates.map((candidate) => [candidate.pid, candidate]))
   const leafCandidates = recognizedCandidates.filter(
@@ -203,14 +214,21 @@ function resolveRecognizedWindowsProcessCandidates(
           windowsCandidateIsAncestor(candidate, other, candidatesByPid)
       )
   )
-  const leafProcessNames = new Set(
-    leafCandidates.map((candidate) =>
-      resolveOuterWrapperForegroundProcess(candidate.recognized, candidate, allCandidates)
-    )
+  const leafIdentities = leafCandidates.map((candidate) =>
+    resolveOuterWrapperForegroundIdentity(candidate.recognized, candidate, allCandidates)
   )
-  // Why: Windows lacks a cheap PTY foreground marker like POSIX '+'. A single
-  // recognized lineage leaf is strong enough; sibling agent leaves are not.
-  return leafProcessNames.size === 1 ? [...leafProcessNames][0] : null
+  const leafProcessNames = new Set(leafIdentities.map((identity) => identity.processName))
+  // Windows lacks POSIX foreground markers; disagreeing recognized lineage leaves cannot prove one agent.
+  if (leafProcessNames.size !== 1) {
+    return { processName: null }
+  }
+  // Anchor the named outer wrapper; its embedded child may exit/restart while the wrapper stays live.
+  const anchorProcessIds = new Set(leafIdentities.map((identity) => identity.processId))
+  return {
+    processName: [...leafProcessNames][0],
+    // Distinct anchors agreeing on one name still leave no single liveness anchor.
+    ...(anchorProcessIds.size === 1 ? { processId: [...anchorProcessIds][0] } : {})
+  }
 }
 
 function windowsCandidateIsAncestor(
@@ -250,9 +268,7 @@ function candidateMatchesContextPath(
   if (normalizedContextPaths.length === 0) {
     return false
   }
-  const haystack = normalizePathForCommandMatch(
-    [candidate.command, candidate.executablePath].filter(Boolean).join('\n')
-  )
+  const haystack = normalizePathForCommandMatch(candidate.command)
   return normalizedContextPaths.some((contextPath) =>
     commandLineContainsPath(haystack, contextPath)
   )

@@ -1,0 +1,167 @@
+import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
+import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat/native-chat-stream-unsubscribe'
+import {
+  parseRuntimeNativeChatReadSessionResult,
+  parseRuntimeNativeChatTurnLifecycle
+} from '@/components/native-chat/native-chat-runtime-contract'
+import { translate } from '@/i18n/i18n'
+import { callRuntimeResult } from './web-runtime-calls'
+import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'
+
+export function createWebNativeChatApi(): NativeChatApi {
+  return {
+    // The full output stays on the host that ran the agent; the web client shows the message.
+    getConversationNameFailureOutput: async () => null,
+    readSession: async (agent, sessionId, limit, transcriptPath) =>
+      parseRuntimeNativeChatReadSessionResult(
+        await callRuntimeResult<unknown>('nativeChat.readSession', {
+          agent,
+          sessionId,
+          limit,
+          transcriptPath,
+          capabilities: { transcriptSourceOrder: 1 }
+        })
+      ),
+    subscribe: (args, onFrame) => {
+      // No paired runtime yet: return a no-op teardown so the chat view mounts cleanly; only the not-paired case is swallowed.
+      const environment = requireActiveEnvironmentOrNull()
+      if (!environment) {
+        onFrame({
+          type: 'snapshot',
+          messages: [],
+          hasMore: false,
+          error: translate(
+            'components.native-chat.state.pairHost',
+            'Pair a host to view agent chat history.'
+          )
+        })
+        return () => {}
+      }
+      let handle: { unsubscribe: () => void } | null = null
+      let cancelled = false
+      let receivedInitial = false
+      void getClientForEnvironment(environment)
+        .subscribe(
+          'nativeChat.subscribe',
+          {
+            agent: args.agent,
+            sessionId: args.sessionId,
+            subscriptionId: args.subscriptionId,
+            transcriptPath: args.transcriptPath,
+            limit: args.limit,
+            capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
+          },
+          {
+            onResponse: (response) => {
+              if (cancelled) {
+                return
+              }
+              if (!response.ok) {
+                if (!receivedInitial) {
+                  receivedInitial = true
+                  onFrame({
+                    type: 'snapshot',
+                    messages: [],
+                    hasMore: false,
+                    error: response.error.message
+                  })
+                }
+                return
+              }
+              const result = response.result as {
+                type?: string
+                messages?: NativeChatAppendedMessages
+                hasMore?: boolean
+                error?: string
+                lifecycle?: unknown
+                pending?: boolean
+              }
+              const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
+              // No transcript behind this window yet — forwarded so the view can stop spinning, but it is not the settled initial read.
+              const pending = result?.pending === true
+              if (
+                (result?.type === 'appended' ||
+                  result?.type === 'snapshot' ||
+                  result?.type === 'replacement') &&
+                Array.isArray(result.messages)
+              ) {
+                if (!receivedInitial) {
+                  if (!pending) {
+                    receivedInitial = true
+                  }
+                  onFrame({
+                    type: 'snapshot',
+                    messages: result.messages,
+                    hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
+                    ...(result.error ? { error: result.error } : {}),
+                    ...(lifecycle ? { lifecycle } : {}),
+                    ...(pending ? { pending: true } : {})
+                  })
+                } else if (result.type === 'snapshot') {
+                  onFrame({
+                    type: 'snapshot',
+                    messages: result.messages,
+                    hasMore: result.hasMore ?? false,
+                    ...(result.error ? { error: result.error } : {}),
+                    ...(lifecycle ? { lifecycle } : {}),
+                    ...(pending ? { pending: true } : {})
+                  })
+                } else {
+                  onFrame(
+                    result.type === 'replacement'
+                      ? {
+                          type: 'replacement',
+                          messages: result.messages,
+                          hasMore: result.hasMore ?? false,
+                          ...(lifecycle ? { lifecycle } : {})
+                        }
+                      : {
+                          type: 'appended',
+                          messages: result.messages,
+                          ...(lifecycle ? { lifecycle } : {})
+                        }
+                  )
+                }
+              } else if (!receivedInitial) {
+                // Unknown ok payloads otherwise never set receivedInitial, leaving the view loading forever.
+                receivedInitial = true
+                onFrame({
+                  type: 'snapshot',
+                  messages: [],
+                  hasMore: false,
+                  ...(result?.error ? { error: result.error } : {})
+                })
+              }
+            }
+          },
+          {
+            // Unsubscribe reaps the watcher on view toggle; pane tokens prevent cross-pane teardown.
+            buildUnsubscribe: () =>
+              buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
+          }
+        )
+        .then((h) => {
+          if (cancelled) {
+            h.unsubscribe()
+          } else {
+            handle = h
+          }
+        })
+        .catch((err: unknown) => {
+          if (!cancelled && !receivedInitial) {
+            receivedInitial = true
+            onFrame({
+              type: 'snapshot',
+              messages: [],
+              hasMore: false,
+              error: err instanceof Error ? err.message : String(err)
+            })
+          }
+        })
+      return () => {
+        cancelled = true
+        handle?.unsubscribe()
+      }
+    }
+  }
+}

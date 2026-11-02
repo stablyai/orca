@@ -2,7 +2,13 @@ import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
 } from '../../../src/shared/ws-outbound-backpressure-queue'
+import {
+  classifyPairedE2EEV2AuthReply,
+  pairedE2EEV2TokenAuth
+} from '../../../src/shared/paired-e2ee-client-handshake'
 import type { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
+import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
+import { inflateCompressedFrame } from './compressed-frame-inflate'
 
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'
 type OutboundItem = { kind: 'text'; plaintext: string } | { kind: 'binary'; plaintext: Uint8Array }
@@ -23,7 +29,7 @@ export type MobileE2EEV2Socket = {
 export class MobileE2EEV2PhysicalChannel {
   private state: ChannelState = 'awaiting-ready'
   private generation = 0
-  private inboundChain: Promise<void> = Promise.resolve()
+  private readonly inbound: WsInboundMessageQueue
   private readonly outboundQueue: WsOutboundBackpressureQueue<OutboundItem>
 
   constructor(
@@ -32,12 +38,17 @@ export class MobileE2EEV2PhysicalChannel {
       socket: MobileE2EEV2Socket
       deviceToken: string
       decodeBinary: (raw: unknown) => Promise<Uint8Array | null>
+      onReadyAccepted?: () => void
       onAuthenticated: () => void
       onText: (plaintext: string) => void
       onBinary: (plaintext: Uint8Array) => void
       onError: (error: Error) => void
     }
   ) {
+    this.inbound = new WsInboundMessageQueue(
+      (raw) => this.processMessage(raw, this.generation),
+      (error) => args.onError(error instanceof Error ? error : new Error(String(error)))
+    )
     this.outboundQueue = createWsOutboundBackpressureQueue<OutboundItem>({
       // Why: encryption happens only when an admitted item reaches the wire,
       // so a bounded-queue rejection cannot burn an ordered v2 counter.
@@ -63,15 +74,7 @@ export class MobileE2EEV2PhysicalChannel {
   }
 
   handleMessage(raw: unknown): Promise<void> {
-    const generation = this.generation
-    this.inboundChain = this.inboundChain
-      .then(() => this.processMessage(raw, generation))
-      .catch((error: unknown) => {
-        if (generation === this.generation) {
-          this.args.onError(error instanceof Error ? error : new Error(String(error)))
-        }
-      })
-    return this.inboundChain
+    return this.inbound.enqueue(raw)
   }
 
   sendText(plaintext: string): boolean {
@@ -84,6 +87,7 @@ export class MobileE2EEV2PhysicalChannel {
 
   dispose(): void {
     this.generation++
+    this.inbound.dispose()
     this.outboundQueue.dispose()
   }
 
@@ -115,7 +119,12 @@ export class MobileE2EEV2PhysicalChannel {
     } else if (typeof plaintext === 'string') {
       this.args.onText(plaintext)
     } else {
-      this.args.onBinary(plaintext)
+      const inflated = inflateCompressedFrame(plaintext)
+      if (inflated?.kind === 'text') {
+        this.args.onText(inflated.text)
+      } else {
+        this.args.onBinary(inflated?.bytes ?? plaintext)
+      }
     }
   }
 
@@ -133,14 +142,12 @@ export class MobileE2EEV2PhysicalChannel {
       throw new Error('Invalid E2EE v2 ready')
     }
     this.state = 'awaiting-authenticated'
+    this.args.onReadyAccepted?.()
     this.outboundQueue.enqueue({
       kind: 'text',
-      plaintext: JSON.stringify({
-        type: 'e2ee_auth',
-        v: 2,
-        transcriptHashB64: this.args.session.transcriptHashB64,
-        deviceToken: this.args.deviceToken
-      })
+      plaintext: JSON.stringify(
+        pairedE2EEV2TokenAuth(this.args.session.transcriptHashB64, this.args.deviceToken)
+      )
     })
   }
 
@@ -154,12 +161,9 @@ export class MobileE2EEV2PhysicalChannel {
 
   private isAuthenticated(plaintext: string): boolean {
     try {
-      const message = JSON.parse(plaintext) as Record<string, unknown>
       return (
-        Object.keys(message).sort().join(',') === 'transcriptHashB64,type,v' &&
-        message.type === 'e2ee_authenticated' &&
-        message.v === 2 &&
-        message.transcriptHashB64 === this.args.session.transcriptHashB64
+        classifyPairedE2EEV2AuthReply(JSON.parse(plaintext), this.args.session.transcriptHashB64)
+          .kind === 'authenticated'
       )
     } catch {
       return false

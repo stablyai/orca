@@ -1,9 +1,13 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { createPaneDOM } from './pane-dom-creation'
+import { terminalMouseEncodingRestoreAnsi } from './terminal-mouse-encoding-tracker'
+
+const csiHandlers = vi.hoisted(() => new Map<string, (params: (number | number[])[]) => boolean>())
 
 const webLinksAddonMock = vi.hoisted(() => ({
+  handler: null as ((event: MouseEvent, uri: string) => void) | null,
   options: null as { hover?: (event: MouseEvent, uri: string) => void; leave?: () => void } | null
 }))
 
@@ -32,7 +36,8 @@ vi.mock('@xterm/addon-unicode11', () => ({
 }))
 
 vi.mock('@xterm/addon-web-links', () => ({
-  WebLinksAddon: vi.fn().mockImplementation(function WebLinksAddon(_handler, options) {
+  WebLinksAddon: vi.fn().mockImplementation(function WebLinksAddon(handler, options) {
+    webLinksAddonMock.handler = handler
     webLinksAddonMock.options = options
     return {}
   })
@@ -43,92 +48,59 @@ vi.mock('@xterm/xterm', () => ({
     return {
       options: {},
       loadAddon: vi.fn(),
-      open: vi.fn()
+      registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
+      open: vi.fn(),
+      parser: {
+        registerCsiHandler: vi.fn(
+          (id: { final: string }, handler: (params: (number | number[])[]) => boolean) => {
+            csiHandlers.set(id.final, handler)
+            return { dispose: vi.fn() }
+          }
+        ),
+        registerEscHandler: vi.fn(() => ({ dispose: vi.fn() }))
+      }
     }
   })
 }))
 
-function setPlatform(userAgent: string): void {
-  vi.stubGlobal('navigator', { userAgent })
-}
+describe('createPaneDOM link tooltips', () => {
+  // Require caller hint wiring at compile time instead of silently falling back to stale copy.
+  it('re-resolves the caller hint on every hover so setting changes apply live', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+    let hint = 'first hint'
+    const pane = createPaneDOM(
+      1,
+      leafId,
+      { linkOpenHint: () => hint },
+      { active: null } as never,
+      {} as never,
+      vi.fn(),
+      vi.fn()
+    )
 
-afterEach(() => {
-  vi.unstubAllGlobals()
+    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
+    expect(pane.linkTooltip.textContent).toBe('http://localhost:5180/ (first hint)')
+
+    hint = 'second hint'
+    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
+    expect(pane.linkTooltip.textContent).toBe('http://localhost:5180/ (second hint)')
+  })
 })
 
-describe('createPaneDOM link tooltips', () => {
-  it('anchors WebLinks hover text to the unpadded terminal window corner', () => {
+describe('createPaneDOM mouse encoding', () => {
+  it('tracks the encoding the pane terminal parses so its snapshot can carry it', () => {
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
     const pane = createPaneDOM(
       1,
       leafId,
-      {},
+      { linkOpenHint: () => 'open hint' },
       { active: null } as never,
       {} as never,
       vi.fn(),
       vi.fn()
     )
 
-    // Why: corner offsets live in .pane-link-tooltip (terminal.css); JS only
-    // toggles visibility so padding/offset cannot drift back into inline styles.
-    expect(pane.linkTooltip.classList.contains('pane-link-tooltip')).toBe(true)
-    expect(pane.linkTooltip.style.left).toBe('')
-    expect(pane.linkTooltip.style.bottom).toBe('')
-    expect(pane.linkTooltip.style.display).toBe('none')
-  })
-
-  it('uses desktop modifier-click text for WebLinks hover hints', () => {
-    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
-
-    setPlatform('Macintosh')
-    const macPane = createPaneDOM(
-      1,
-      leafId,
-      {},
-      { active: null } as never,
-      {} as never,
-      vi.fn(),
-      vi.fn()
-    )
-    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
-    expect(macPane.linkTooltip.textContent).toBe(
-      'http://localhost:5180/ (⌘+click to open or ⇧⌘+click for system browser)'
-    )
-
-    setPlatform('Windows')
-    const windowsPane = createPaneDOM(
-      2,
-      leafId,
-      {},
-      { active: null } as never,
-      {} as never,
-      vi.fn(),
-      vi.fn()
-    )
-    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
-    expect(windowsPane.linkTooltip.textContent).toBe(
-      'http://localhost:5180/ (Ctrl+click to open or Shift+Ctrl+click for system browser)'
-    )
-  })
-
-  it('lets callers replace WebLinks hover text for display-only labels', async () => {
-    const labeledText = 'http://main.orca.localhost:60016/ (localhost:5180; click to open)'
-    const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
-    const pane = createPaneDOM(
-      1,
-      leafId,
-      {
-        formatLinkTooltip: async () => labeledText
-      },
-      { active: null } as never,
-      {} as never,
-      vi.fn(),
-      vi.fn()
-    )
-
-    webLinksAddonMock.options?.hover?.({} as MouseEvent, 'http://localhost:5180/')
-    await Promise.resolve()
-
-    expect(pane.linkTooltip.textContent).toBe(labeledText)
+    expect(csiHandlers.get('h')?.([1003, 1006])).toBe(false)
+    expect(terminalMouseEncodingRestoreAnsi(pane.terminal)).toBe('\x1b[?1006h')
   })
 })

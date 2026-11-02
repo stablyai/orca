@@ -107,8 +107,22 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
       expected: null
     },
     {
-      name: 'invite beyond ten minutes is invalid',
-      payload: { ...directOffer, relay: { ...relay, inviteExpiresAt: now + 10 * 60 * 1000 + 1 } },
+      name: 'full-TTL invite from a cell clock up to 30s ahead is valid',
+      payload: {
+        ...directOffer,
+        relay: { ...relay, inviteExpiresAt: now + 10 * 60 * 1000 + 30 * 1000 }
+      },
+      expected: {
+        ...directOffer,
+        relay: { ...relay, inviteExpiresAt: now + 10 * 60 * 1000 + 30 * 1000 }
+      }
+    },
+    {
+      name: 'invite beyond ten minutes plus skew leeway is invalid',
+      payload: {
+        ...directOffer,
+        relay: { ...relay, inviteExpiresAt: now + 10 * 60 * 1000 + 30 * 1000 + 1 }
+      },
       expected: null
     },
     {

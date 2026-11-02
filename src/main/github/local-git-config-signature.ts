@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import type { GitHubRepoContext } from './github-repository-identity'
 
 type LocalGitConfigPaths = {
@@ -8,31 +9,45 @@ type LocalGitConfigPaths = {
   worktreeConfigPath: string
 }
 
-const localGitConfigSignatureInFlight = new Map<string, Promise<string | undefined>>()
+// A dead mount can stall stat before the bounded Git probe; missing signatures use shorter cache lifetimes.
+const CONFIG_SIGNATURE_DEADLINE_MS = 2_000
+
+const localGitConfigSignatureInFlight: CoalescedProbes<string | undefined> = new Map()
 
 export async function readLocalGitConfigSignature(
   context: GitHubRepoContext
 ): Promise<string | undefined> {
   if (context.connectionId || context.wslDistro) {
-    // Why: this signature only covers host filesystem config files; remote
-    // runtimes are already separated by cache key and probed through git.
+    // Remote runtimes have separate cache keys; this signature covers host filesystem config only.
     return undefined
   }
-  const cacheKey = context.repoPath
-  const inFlight = localGitConfigSignatureInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
-  }
+  // Deadline only the caller: keep the in-flight read shared so a hung mount cannot accumulate more reads.
+  return withConfigSignatureDeadline(
+    runCoalescedProbe(localGitConfigSignatureInFlight, context.repoPath, () =>
+      readUncachedLocalGitConfigSignature(context.repoPath)
+    )
+  )
+}
 
-  const read = readUncachedLocalGitConfigSignature(context.repoPath)
-  localGitConfigSignatureInFlight.set(cacheKey, read)
-  try {
-    return await read
-  } finally {
-    if (localGitConfigSignatureInFlight.get(cacheKey) === read) {
-      localGitConfigSignatureInFlight.delete(cacheKey)
+function withConfigSignatureDeadline(
+  read: Promise<string | undefined>
+): Promise<string | undefined> {
+  return new Promise((settle) => {
+    const timer = setTimeout(() => settle(undefined), CONFIG_SIGNATURE_DEADLINE_MS)
+    if (typeof timer === 'object' && 'unref' in timer) {
+      timer.unref()
     }
-  }
+    void read.then(
+      (signature) => {
+        clearTimeout(timer)
+        settle(signature)
+      },
+      () => {
+        clearTimeout(timer)
+        settle(undefined)
+      }
+    )
+  })
 }
 
 export function __resetLocalGitConfigSignatureCacheForTests(): void {
@@ -227,7 +242,7 @@ async function resolveLocalGitConfigPaths(repoPath: string): Promise<LocalGitCon
         commonGitDir = resolve(gitDir, commonDir)
       }
     } catch {
-      // Fall back to the linked worktree gitdir below.
+      // Try the linked-worktree gitdir instead.
     }
     return {
       commonConfigPath: join(commonGitDir, 'config'),

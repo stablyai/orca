@@ -35,7 +35,6 @@ const RESTRICTED_ENV_KEYS = [
   'HOMEPATH',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
-  'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
   'ORCA_E2E_HOME_DIR',
   'ORCA_E2E_USER_DATA_DIR',
   'ORCA_USER_DATA_PATH',
@@ -69,7 +68,7 @@ async function resolveRealPath(candidate) {
   }
 }
 
-export function createValidationEnv(inheritedEnv, layout, options = {}) {
+export function createValidationEnv(inheritedEnv, layout) {
   const env = { ...inheritedEnv }
   for (const key of RESTRICTED_ENV_KEYS) {
     delete env[key]
@@ -81,12 +80,7 @@ export function createValidationEnv(inheritedEnv, layout, options = {}) {
     NODE_ENV: 'development',
     ORCA_E2E_HOME_DIR: layout.homeDir,
     ORCA_E2E_USER_DATA_DIR: layout.userDataDir,
-    ORCA_USER_DATA_PATH: layout.userDataDir,
-    // Why: flag OFF pins every codex spawn to an explicit managed CODEX_HOME,
-    // so native codex never resolves the OS profile — the only Windows
-    // configuration where strict zero-event containment is reachable. It also
-    // exercises the emergency kill-switch lane users fall back to.
-    ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: options.systemDefaultRealHome === 'off' ? '0' : '1'
+    ORCA_USER_DATA_PATH: layout.userDataDir
   }
 }
 
@@ -94,15 +88,12 @@ export async function createValidationLayout(options = {}) {
   const primaryHome = path.resolve(options.primaryHome ?? os.homedir())
   const envTempParent = process.env.ORCA_CODEX_VALIDATION_TEMP_PARENT?.trim()
   const tempParent = path.resolve(options.tempParent ?? (envTempParent || os.tmpdir()))
-  // Why: guards must compare canonical paths — a symlinked temp parent must
-  // not smuggle the disposable root inside the primary home.
+  // Canonicalize containment paths so symlinked temp parent cannot place disposable root inside primary home.
   const [primaryHomeReal, tempParentReal] = await Promise.all([
     resolveRealPath(primaryHome),
     resolveRealPath(tempParent)
   ])
-  // Why: on Windows the default %TEMP% lives inside %USERPROFILE%, which the
-  // disposable-home guard below rightly refuses. Fail before creating anything
-  // and point at the overrides instead of aborting with an opaque guard error.
+  // Windows TEMP usually lies inside USERPROFILE, violating disposable-home containment; reject before creation with override guidance.
   if (samePath(tempParentReal, primaryHomeReal) || isWithin(tempParentReal, primaryHomeReal)) {
     throw new Error(
       `Refusing to place the disposable validation root inside the primary home (${primaryHome}). ` +
@@ -124,8 +115,7 @@ export async function createValidationLayout(options = {}) {
 }
 
 async function seedCompletedProfile(layout) {
-  // Why: the validation is about account routing, so first-run education and
-  // telemetry overlays must not obscure the account controls under test.
+  // Suppress first-run education/telemetry overlays so account controls remain testable.
   const profile = {
     settings: {
       telemetry: {
@@ -149,8 +139,7 @@ async function installCodexConfigTemplate(layout, templatePath) {
   }
   const resolvedTemplate = await realpath(path.resolve(templatePath))
   const primaryCodexHome = path.join(layout.primaryHome, '.codex')
-  // Why: validation must never bootstrap itself from the user's live Codex
-  // configuration, even when a caller passes that path accidentally.
+  // Never bootstrap validation from user’s live Codex config, even when supplied accidentally.
   if (isWithin(resolvedTemplate, primaryCodexHome)) {
     throw new Error('Refusing to copy a config template from the primary ~/.codex')
   }
@@ -268,8 +257,7 @@ function parseArgs(argv) {
     primaryHome: os.homedir(),
     configTemplate: null,
     tempParent: null,
-    laneAwareContainment: false,
-    systemDefaultRealHome: 'on'
+    laneAwareContainment: false
   }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
@@ -299,22 +287,12 @@ function parseArgs(argv) {
       options.skipBuild = true
     } else if (arg === '--keep') {
       options.keep = true
-    } else if (arg === '--system-default-real-home') {
-      const value = readValue()
-      if (value !== 'on' && value !== 'off') {
-        throw new Error('--system-default-real-home must be "on" or "off"')
-      }
-      options.systemDefaultRealHome = value
     } else if (arg === '--lane-aware-containment') {
-      // Why: on Windows the flag-ON system-default lane cannot be env-sandboxed
-      // (native codex ignores USERPROFILE), so strict zero-event containment is
-      // structurally unreachable there. This mode records codex's designed
-      // volatile churn without aborting while every other real-home write stays
-      // a hard failure. The absolute zero-event claim is carried by macOS runs.
+      // Windows native Codex ignores USERPROFILE, preventing zero-event real-home isolation; allow only documented volatile churn, fail other writes. macOS proves zero events.
       options.laneAwareContainment = true
     } else if (arg === '--help') {
       console.log(
-        'Usage: node config/scripts/run-codex-real-account-validation.mjs [--scenario mixed|managed-only|codex-lb] [--config-template <path>] [--temp-parent <dir>] [--skip-build] [--dry-run] [--close-after-launch] [--keep] [--lane-aware-containment] [--system-default-real-home on|off] [--report <path>]'
+        'Usage: node config/scripts/run-codex-real-account-validation.mjs [--scenario mixed|managed-only|codex-lb] [--config-template <path>] [--temp-parent <dir>] [--skip-build] [--dry-run] [--close-after-launch] [--keep] [--lane-aware-containment] [--report <path>]'
       )
       process.exit(0)
     } else {
@@ -330,11 +308,7 @@ function parseArgs(argv) {
   return options
 }
 
-// Why: `npx` resolves to a .cmd shim on Windows that execFileSync cannot launch
-// (ENOENT), so the harness could not build its own app there. Run the
-// repository-local electron-vite JS entry with the current Node binary instead;
-// process.execPath + a resolved .js path behaves identically on macOS, Linux,
-// and Windows without a shell.
+// Run local electron-vite JS with current Node; Windows npx.cmd cannot launch through execFileSync without shell.
 export function resolveElectronViteBuildCommand(repoRoot) {
   const electronViteEntry = path.join(
     repoRoot,
@@ -416,8 +390,7 @@ async function runInteractiveSession(context) {
   }
   const prompt = readline.createInterface({ input: process.stdin, output: process.stdout })
   const closePrompt = () => prompt.close()
-  // Why: redirected stdin can close before `question()` consumes a command.
-  // Race the prompt so EOF still unwinds through app and credential cleanup.
+  // Race question against stdin EOF so redirected input still unwinds app/credential cleanup.
   const inputClosed = new Promise((resolve) => prompt.once('close', () => resolve(null)))
   context.signal.addEventListener('abort', closePrompt, { once: true })
   console.log('Commands: checkpoint <label>, probe <terminal-handle>, status, done')
@@ -480,7 +453,7 @@ async function main() {
   const reportPath =
     options.reportPath ??
     path.join(os.tmpdir(), `orca-codex-real-account-${options.scenario}-${Date.now()}.json`)
-  const launchEnv = createValidationEnv(process.env, layout, options)
+  const launchEnv = createValidationEnv(process.env, layout)
   let app = null
   let tripwire = null
   const abortController = new AbortController()
@@ -533,7 +506,11 @@ async function main() {
 
     if (!options.dryRun) {
       const mainPath = buildAppIfNeeded(repoRoot, options.skipBuild)
-      app = await electron.launch({ args: [mainPath], env: launchEnv })
+      app = await electron.launch({
+        args: [mainPath],
+        // Why: a validation run must not pull the window over the developer's work.
+        env: { ...launchEnv, ORCA_BACKGROUND_LAUNCH: '1' }
+      })
       report.electronPaths = await app.evaluate(({ app: electronApp }) => ({
         home: electronApp.getPath('home'),
         userData: electronApp.getPath('userData'),
@@ -578,8 +555,7 @@ async function main() {
         if (options.keep) {
           console.warn(`Credential-bearing disposable root kept at ${layout.tempRoot}`)
         } else {
-          // Why: a detached codex descendant can briefly hold a Windows handle
-          // in the disposable home; retry so cleanup never strands credentials.
+          // Retry removal: detached Codex descendant can briefly lock disposable home on Windows; never strand credentials.
           await rm(layout.tempRoot, {
             recursive: true,
             force: true,

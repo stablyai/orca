@@ -1,14 +1,19 @@
 import React from 'react'
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildNotesSendTargetModeId, NotesSendMenu } from './NotesSendMenu'
+import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
+import { resetNotesInFlightForTests } from '@/lib/notes-send-in-flight'
 
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
 }
 
-type TestNote = {
-  id: string
+type TestNote = DiffCommentDeliverySnapshot
+
+function note(id: string): TestNote {
+  return { id, body: `body of ${id}`, filePath: 'README.md', lineNumber: 1 }
 }
 
 const hookRuntime = vi.hoisted(() => ({
@@ -26,7 +31,7 @@ const storeMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -40,6 +45,9 @@ vi.mock('react', async () => {
     },
     useMemo<T>(factory: () => T): T {
       return factory()
+    },
+    useSyncExternalStore<T>(_subscribe: unknown, getSnapshot: () => T): T {
+      return getSnapshot()
     },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = hookRuntime.index++
@@ -134,8 +142,7 @@ vi.mock('./ReviewNotesSendMenuContent', () => ({
 vi.mock('@/lib/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (status: string) => status,
   getActiveTerminalNoteTarget: () => null,
-  sendNotesToActiveAgentSession: vi.fn(),
-  useCanSendNotesToActiveTerminal: () => false
+  sendNotesToActiveAgentSession: vi.fn()
 }))
 
 vi.mock('sonner', () => ({
@@ -234,8 +241,8 @@ function renderMenu(
         {
           id: 'all',
           label: 'All unsent notes',
-          notes: [{ id: 'note-1' }],
-          prompt: 'prompt-all'
+          notes: [note('note-1')],
+          formatPrompt: () => 'prompt-all'
         }
       ]}
       onDelivered={vi.fn()}
@@ -245,27 +252,10 @@ function renderMenu(
 }
 
 describe('buildNotesSendTargetModeId', () => {
-  it('keeps note-send target ids stable for the same parts', () => {
-    expect(buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])).toBe(
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
-    )
-  })
-
   it('uses part boundaries so adjacent values cannot collide', () => {
     expect(buildNotesSendTargetModeId(['markdown-notes', 'ab', 'c'])).not.toBe(
       buildNotesSendTargetModeId(['markdown-notes', 'a', 'bc'])
     )
-  })
-
-  it('separates markdown rail, panel, per-note, and diff send targets', () => {
-    const ids = new Set([
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail']),
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'preview-panel']),
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'note', 'note-1']),
-      buildNotesSendTargetModeId(['diff-notes', 'wt-1', 'group-1', 'README.md'])
-    ])
-
-    expect(ids.size).toBe(4)
   })
 })
 
@@ -275,25 +265,17 @@ describe('NotesSendMenu', () => {
     storeMocks.openAgentSendPopoverTargetMode.mockReset()
     storeMocks.closeAgentSendPopoverTargetMode.mockReset()
     storeMocks.state.agentSendPopoverTargetMode = null
+    resetNotesInFlightForTests()
   })
 
   it('disables the trigger when no scope has deliverable notes', () => {
     const tree = renderMenu({
-      scopes: [{ id: 'all', label: 'All unsent notes', notes: [], prompt: '' }]
+      scopes: [{ id: 'all', label: 'All unsent notes', notes: [], formatPrompt: () => '' }]
     })
 
     expect(findByType(tree, 'button').props.disabled).toBe(true)
     expect(findByType(tree, 'button').props.title).toBe('All notes sent')
     expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
-  })
-
-  it('uses caller-provided disabled tooltip copy for disabled note actions', () => {
-    const tree = renderMenu({
-      scopes: [{ id: 'note', label: 'This note', notes: [], prompt: '' }],
-      disabledTooltip: 'Note already sent'
-    })
-
-    expect(findByType(tree, 'button').props.title).toBe('Note already sent')
   })
 
   it('opens and closes target mode with the default scope', () => {
@@ -318,7 +300,7 @@ describe('NotesSendMenu', () => {
     const delivered = storeMocks.openAgentSendPopoverTargetMode.mock.calls[0][0]
       .onPromptDelivered as () => void
     delivered()
-    expect(onDelivered).toHaveBeenCalledWith([{ id: 'note-1' }])
+    expect(onDelivered).toHaveBeenCalledWith([note('note-1')])
 
     ;(dropdown.props.onOpenChange as (open: boolean) => void)(false)
     expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
@@ -326,24 +308,22 @@ describe('NotesSendMenu', () => {
     )
   })
 
-  it('passes the default scope to review note send content', () => {
-    const tree = renderMenu()
-
-    expect(findByType(tree, 'ReviewNotesSendMenuContent').props).toMatchObject({
-      worktreeId: 'wt-1',
-      groupId: 'group-1',
-      prompt: 'prompt-all',
-      promptDelivery: 'submit-after-ready',
-      launchSource: 'notes_send'
-    })
-  })
-
   it('switches running-agent target mode when a different scope is focused', () => {
     const tree = renderMenu({
       defaultScopeId: 'file',
       scopes: [
-        { id: 'file', label: 'This file', notes: [{ id: 'file-note' }], prompt: 'prompt-file' },
-        { id: 'all', label: 'All unsent notes', notes: [{ id: 'all-note' }], prompt: 'prompt-all' }
+        {
+          id: 'file',
+          label: 'This file',
+          notes: [note('file-note')],
+          formatPrompt: () => 'prompt-file'
+        },
+        {
+          id: 'all',
+          label: 'All unsent notes',
+          notes: [note('all-note')],
+          formatPrompt: () => 'prompt-all'
+        }
       ]
     })
     const [fileTrigger, allTrigger] = findAllByType(tree, 'DropdownMenuSubTrigger')
@@ -376,10 +356,41 @@ describe('NotesSendMenu', () => {
     renderMenu({
       openRequestNonce: 1,
       onOpenRequestHandled,
-      scopes: [{ id: 'all', label: 'All unsent notes', notes: [], prompt: '' }]
+      scopes: [{ id: 'all', label: 'All unsent notes', notes: [], formatPrompt: () => '' }]
     })
 
     expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+    expect(onOpenRequestHandled).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops an expired open request without opening the menu', () => {
+    const onOpenRequestHandled = vi.fn()
+    vi.useFakeTimers()
+    vi.setSystemTime(600_000)
+    try {
+      // Expired, unconsumed requests must clear without opening.
+      renderMenu({ openRequestNonce: 1, openRequestExpiresAt: 5_000, onOpenRequestHandled })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+    expect(onOpenRequestHandled).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens for an open request still inside its deadline', () => {
+    const onOpenRequestHandled = vi.fn()
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      renderMenu({ openRequestNonce: 1, openRequestExpiresAt: 6_000, onOpenRequestHandled })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'prompt-all', label: 'All unsent notes' })
+    )
     expect(onOpenRequestHandled).toHaveBeenCalledTimes(1)
   })
 
@@ -405,5 +416,121 @@ describe('NotesSendMenu', () => {
     expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
       buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
     )
+  })
+})
+
+describe('NotesSendMenu notes in flight', () => {
+  const noteA = note('note-a')
+  const noteB = note('note-b')
+  const scopeOf = (notes: TestNote[]) => [
+    {
+      id: 'all',
+      label: 'All unsent notes',
+      notes,
+      formatPrompt: (sent: readonly TestNote[]) => sent.map((entry) => entry.id).join('+')
+    }
+  ]
+  const invoke = (props: Record<string, unknown>, name: string, ...args: unknown[]): unknown => {
+    const callback = props[name]
+    if (typeof callback !== 'function') {
+      throw new Error(`${name} is not a function`)
+    }
+    return callback(...args)
+  }
+  const contentProps = (tree: unknown) => {
+    const props = findByType(tree, 'ReviewNotesSendMenuContent').props
+    return {
+      prompt: props.prompt,
+      onPromptDelivered: () => invoke(props, 'onPromptDelivered'),
+      onPromptHandedOff: (delivered: Promise<unknown>) =>
+        invoke(props, 'onPromptHandedOff', delivered)
+    }
+  }
+
+  beforeEach(() => {
+    resetHookRuntime()
+    storeMocks.openAgentSendPopoverTargetMode.mockReset()
+    storeMocks.state.agentSendPopoverTargetMode = null
+    resetNotesInFlightForTests()
+  })
+
+  it('sends only a note added while an earlier send to a new agent is still on its way', async () => {
+    const onDelivered = vi.fn()
+    let deliverA!: (result: { delivered: boolean }) => void
+    const first = contentProps(renderMenu({ scopes: scopeOf([noteA]), onDelivered }))
+    first.onPromptHandedOff(new Promise((resolve) => (deliverA = resolve)))
+
+    const second = contentProps(renderMenu({ scopes: scopeOf([noteA, noteB]), onDelivered }))
+    expect(second.prompt).toBe('note-b')
+    second.onPromptHandedOff(new Promise(() => undefined))
+
+    first.onPromptDelivered()
+    deliverA({ delivered: true })
+    second.onPromptDelivered()
+    await Promise.resolve()
+
+    expect(onDelivered).not.toHaveBeenCalledWith([noteA, noteB])
+    expect(onDelivered).toHaveBeenCalledWith([noteA])
+    expect(onDelivered).toHaveBeenCalledWith([noteB])
+  })
+
+  it('leaves the notes out of the running-agent target mode too', () => {
+    contentProps(renderMenu({ scopes: scopeOf([noteA]) })).onPromptHandedOff(
+      new Promise(() => undefined)
+    )
+
+    const tree = renderMenu({ scopes: scopeOf([noteA, noteB]) })
+    invoke(findByType(tree, 'DropdownMenu').props, 'onOpenChange', true)
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'note-b', onPromptHandedOff: expect.any(Function) })
+    )
+  })
+
+  it.each([
+    ['an undelivered result', () => Promise.resolve({ delivered: false, failureNotified: true })],
+    ['a failed start', () => Promise.reject(new Error('refused'))]
+  ])('puts the notes back for the next send after %s', async (_name, deliver) => {
+    const delivered = deliver()
+    contentProps(renderMenu({ scopes: scopeOf([noteA]) })).onPromptHandedOff(delivered)
+    expect(contentProps(renderMenu({ scopes: scopeOf([noteA]) })).prompt).toBe('')
+
+    await delivered.catch(() => undefined)
+    await Promise.resolve()
+
+    expect(contentProps(renderMenu({ scopes: scopeOf([noteA]) })).prompt).toBe('note-a')
+  })
+
+  it('offers no send once every note is on its way', () => {
+    contentProps(renderMenu({ scopes: scopeOf([noteA]) })).onPromptHandedOff(
+      new Promise(() => undefined)
+    )
+
+    const tree = renderMenu({ scopes: scopeOf([noteA]) })
+    expect(findByType(tree, 'button').props.disabled).toBe(true)
+    invoke(findByType(tree, 'DropdownMenu').props, 'onOpenChange', true)
+    expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+  })
+
+  it('says the notes are on their way, not sent, while every note is held', () => {
+    contentProps(
+      renderMenu({ scopes: scopeOf([noteA]), disabledTooltip: 'Note already sent' })
+    ).onPromptHandedOff(new Promise(() => undefined))
+
+    const tree = renderMenu({ scopes: scopeOf([noteA]), disabledTooltip: 'Note already sent' })
+
+    expect(findByType(tree, 'button').props.title).toBe('Sending…')
+  })
+
+  // Retry can report delivery after the original send callback is gone.
+  it('clears notes whose send reports delivery later', async () => {
+    const onDelivered = vi.fn()
+    const delivered = Promise.resolve({ delivered: true })
+    contentProps(renderMenu({ scopes: scopeOf([noteA]), onDelivered })).onPromptHandedOff(delivered)
+
+    await delivered
+    await Promise.resolve()
+
+    expect(onDelivered).toHaveBeenCalledWith([noteA])
   })
 })

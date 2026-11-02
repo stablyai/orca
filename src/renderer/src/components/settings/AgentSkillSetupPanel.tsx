@@ -1,218 +1,141 @@
-import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from 'react'
-import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
-import { toast } from 'sonner'
+import { bundledSkillSetupActionLabel } from './bundled-skill-setup-copy'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
+import { WslAgentSkillSetupPanel } from './WslAgentSkillSetupPanel'
+import { useCallback } from 'react'
+import { Download, Loader2, RefreshCw } from 'lucide-react'
 import { IntegrationStatusPill } from '../integration-status-pill'
-import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
-import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
+import { SkillPlanStatusPill, SkillUnsupportedStatusPill } from '../skills/SkillFreshnessStatusPill'
+import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
+import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
 import { Button } from '../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
-import { useMountedRef } from '@/hooks/useMountedRef'
-import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
+import {
+  bundledSkillInstallNeedsAttention,
+  useBundledSkillInstall
+} from '@/hooks/use-bundled-skill-install'
+import {
+  recheckSurfacesAfterAgentSkillInstall,
+  syncSurfacesAfterAgentSkillRecheck
+} from './agent-skill-recheck-surface-sync'
+import { useBundledSkillInstallAction } from '@/hooks/use-bundled-skill-install-action'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
-type AgentSkillSetupPanelVariant = 'card' | 'inline'
-type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
-
-type AgentSkillSetupPanelProps = {
-  title: string
-  description: ReactNode
-  command: string
-  installedCommand?: string
-  terminalTitle: string
-  terminalAriaLabel: string
-  terminalWorktreeId: string
-  installed: boolean
-  loading: boolean
-  error: string | null
-  installDisabled?: boolean
-  terminalHeightPx?: number
-  terminalShellOverride?: string
-  leading?: ReactNode
-  icon?: ReactNode
-  variant?: AgentSkillSetupPanelVariant
-  className?: string
-  // Why: when an enclosing surface (e.g. a modal) already shows the title and
-  // status, hide the panel's own header row to avoid a duplicate heading.
-  hideHeader?: boolean
-  preInstallNotice?: ReactNode
-  getPrerequisiteStatus?: () => Promise<SkillPrerequisiteStatus>
-  isPrerequisiteAvailable?: (status: SkillPrerequisiteStatus) => boolean
-  onBeforeOpenTerminal?: () => void | Promise<void>
-  showInstallWhenInstalled?: boolean
-  showRecheckWhenInstalled?: boolean
-  installLabel?: string
-  installedInstallLabel?: string
-  // Why: defaults to 'outline' so settings panels stay unchanged; modals that make
-  // Install the sole footer CTA pass 'default' for a filled primary hierarchy.
-  installVariant?: ComponentProps<typeof Button>['variant']
-  actionHint?: ReactNode
-  openingHint?: ReactNode
-  footer?: ReactNode
-  onRecheck: () => void | Promise<unknown>
-  // Why: when set, the installed pill reflects skill freshness and Re-check also
-  // refreshes the freshness inventory. Callers omit it for non-local runtimes,
-  // which the local-host-only freshness scan cannot vouch for.
-  freshnessSkillName?: string
-}
-
-export function AgentSkillSetupPanel({
+function BundledAgentSkillSetupPanel({
   title,
   description,
-  command,
-  installedCommand,
-  terminalTitle,
-  terminalAriaLabel,
-  terminalWorktreeId,
+  skillNames,
+  target,
+  installedSkillNames,
   installed,
   loading,
   error,
   installDisabled = false,
-  terminalHeightPx,
-  terminalShellOverride,
   leading,
   icon,
   variant = 'card',
   className,
   hideHeader = false,
-  preInstallNotice,
-  getPrerequisiteStatus,
-  isPrerequisiteAvailable = isOrcaCliAvailableOnPath,
-  onBeforeOpenTerminal,
+  onBeforeInstall,
   showInstallWhenInstalled = true,
   showRecheckWhenInstalled = true,
-  installLabel = 'Install',
-  installedInstallLabel = 'Update',
+  installLabel,
+  installedInstallLabel,
   installVariant = 'outline',
   actionHint,
-  openingHint,
   footer,
   onRecheck,
   freshnessSkillName
 }: AgentSkillSetupPanelProps): React.JSX.Element {
-  const [terminalOpen, setTerminalOpen] = useState(false)
-  const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
-  const [terminalOpening, setTerminalOpening] = useState(false)
-  const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(
-    Boolean(preInstallNotice && !installed)
+  const resolvedInstallLabel =
+    installLabel ??
+    translate('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+  const resolvedInstalledInstallLabel =
+    installedInstallLabel ??
+    translate('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
+  const recheckAfterInstall = useCallback(
+    () => recheckSurfacesAfterAgentSkillInstall(onRecheck, freshnessSkillName),
+    [freshnessSkillName, onRecheck]
   )
-  const mountedRef = useMountedRef()
-  const readPrerequisiteStatus = useCallback(
-    () => (getPrerequisiteStatus ?? window.api.cli.getInstallStatus)(),
-    [getPrerequisiteStatus]
-  )
-  const activeCommand = installed ? (installedCommand ?? command) : command
-  // Why: the inline terminal auto-inserts when its command changes, so keep an
-  // already-open terminal pinned to the command selected by the user's click.
-  const openTerminalCommand = terminalCommand ?? activeCommand
+  const skillInstall = useBundledSkillInstall({ onFinished: recheckAfterInstall, target })
+  const { state, ready, install } = skillInstall
+  const installing = state.kind === 'installing'
+  const activeSkillNames = installed ? (installedSkillNames ?? skillNames) : skillNames
+  const action = useBundledSkillInstallAction(activeSkillNames, {
+    enabled: true,
+    refreshKey: state.kind,
+    target
+  })
+  const effectivelyInstalled = installed || action.kind === 'none'
+  const unsupported = action.kind === 'unsupported' ? action.reason : undefined
+  const failed =
+    !unsupported && (bundledSkillInstallNeedsAttention(state) || action.kind === 'attention')
+  const installedButton: 'update' | 'replace' | null =
+    action.kind === 'run' ? 'update' : action.kind === 'replace' ? 'replace' : null
 
-  useEffect(() => {
-    if (!preInstallNotice) {
-      setPreInstallNoticeVisible(false)
+  const plan = 'plan' in action ? action.plan : undefined
+  const freshnessPill = unsupported ? (
+    <SkillUnsupportedStatusPill reason={unsupported} />
+  ) : action.kind === 'loading' || action.kind === 'unknown' ? (
+    <IntegrationStatusPill tone={action.kind === 'loading' ? 'neutral' : 'attention'}>
+      {action.kind === 'loading'
+        ? translate('auto.components.skills.SkillFreshnessStatusPill.checking', 'Checking...')
+        : translate('auto.components.skills.SkillFreshnessStatusPill.checkFailed', 'Check failed')}
+    </IntegrationStatusPill>
+  ) : (
+    <SkillPlanStatusPill
+      skillName={freshnessSkillName ?? activeSkillNames[0]}
+      plan={plan ?? null}
+      target={target}
+    />
+  )
+
+  const startInstall = (): void => {
+    if (installing) {
       return
     }
-
-    let canceled = false
-    const refreshCliNotice = async (): Promise<void> => {
+    void (async () => {
       try {
-        const status = await readPrerequisiteStatus()
-        if (!canceled) {
-          setPreInstallNoticeVisible(!isPrerequisiteAvailable(status))
-        }
+        await onBeforeInstall?.()
       } catch {
-        if (!canceled) {
-          setPreInstallNoticeVisible(true)
-        }
+        return
       }
-    }
-
-    void refreshCliNotice()
-    window.addEventListener('focus', refreshCliNotice)
-    return () => {
-      canceled = true
-      window.removeEventListener('focus', refreshCliNotice)
-    }
-  }, [isPrerequisiteAvailable, preInstallNotice, readPrerequisiteStatus])
-
-  const refreshPreInstallNotice = async (): Promise<void> => {
-    if (!preInstallNotice) {
-      return
-    }
-    try {
-      const status = await readPrerequisiteStatus()
-      if (mountedRef.current) {
-        setPreInstallNoticeVisible(!isPrerequisiteAvailable(status))
-      }
-    } catch {
-      if (mountedRef.current) {
-        setPreInstallNoticeVisible(true)
-      }
-    }
-  }
-
-  const copyActiveCommand = async (): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(openTerminalCommand)
-      toast.success(
-        translate('auto.components.settings.AgentSkillSetupPanel.copiedCommand', 'Copied command.')
-      )
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : translate(
-              'auto.components.settings.AgentSkillSetupPanel.failedToCopyCommand',
-              'Failed to copy command.'
-            )
-      )
-    }
+      await install(activeSkillNames, action.kind === 'replace' ? action.paths : undefined)
+    })()
   }
 
   const actionRow = (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      {!installed || showInstallWhenInstalled ? (
+      {action.kind !== 'none' &&
+      action.kind !== 'unknown' &&
+      !unsupported &&
+      (!installed || (showInstallWhenInstalled && installedButton)) &&
+      !failed ? (
         <Button
           type="button"
           variant={installVariant}
           size="sm"
-          onClick={() => {
-            if (terminalOpening) {
-              return
-            }
-            const nextCommand = activeCommand
-            setTerminalOpening(true)
-            void (async () => {
-              let shouldOpenTerminal = false
-              try {
-                await onBeforeOpenTerminal?.()
-                await refreshPreInstallNotice()
-                shouldOpenTerminal = true
-              } catch {
-                shouldOpenTerminal = false
-              } finally {
-                if (mountedRef.current) {
-                  setTerminalOpening(false)
-                  if (shouldOpenTerminal) {
-                    setTerminalCommand(nextCommand)
-                    setTerminalOpen(true)
-                  }
-                }
-              }
-            })()
-          }}
-          disabled={terminalOpen || installDisabled || terminalOpening}
+          onClick={startInstall}
+          disabled={installDisabled || installing || !ready || action.kind === 'loading'}
         >
-          {terminalOpening ? (
+          {installing ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            <Terminal className="size-3.5" />
+            <Download className="size-3.5" />
           )}
-          {terminalOpening
-            ? translate('auto.components.settings.AgentSkillSetupPanel.5f818f12ab', 'Preparing...')
-            : installed
-              ? installedInstallLabel
-              : installLabel}
+          {installing
+            ? translate('auto.components.settings.AgentSkillSetupPanel.installing', 'Installing...')
+            : installedButton === 'replace'
+              ? translate(
+                  'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
+                  "Replace with Orca's copy"
+                )
+              : action.kind === 'run' && action.changes
+                ? bundledSkillSetupActionLabel(action.changes)
+                : installed
+                  ? resolvedInstalledInstallLabel
+                  : resolvedInstallLabel}
         </Button>
       ) : null}
       {!installed || showRecheckWhenInstalled ? (
@@ -222,10 +145,9 @@ export function AgentSkillSetupPanel({
           size="sm"
           className="gap-1.5"
           onClick={() => {
-            void onRecheck()
-            if (freshnessSkillName) {
-              notifyInstalledAgentSkillsChanged()
-            }
+            void Promise.resolve(onRecheck()).then(() => {
+              syncSurfacesAfterAgentSkillRecheck(freshnessSkillName)
+            })
           }}
           disabled={loading}
         >
@@ -233,15 +155,14 @@ export function AgentSkillSetupPanel({
           {translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
       ) : null}
-      {terminalOpening ? (
+      {ready ? null : (
         <p className="basis-full text-[12px] leading-snug text-muted-foreground">
-          {openingHint ??
-            translate(
-              'auto.components.settings.AgentSkillSetupPanel.4c05b9d7cb',
-              'Preparing setup terminal.'
-            )}
+          {translate(
+            'auto.components.settings.AgentSkillSetupPanel.hostUnavailable',
+            "Orca can't install skills on this workspace's machine yet."
+          )}
         </p>
-      ) : null}
+      )}
     </div>
   )
 
@@ -253,16 +174,24 @@ export function AgentSkillSetupPanel({
         className
       )}
     >
-      <div
-        className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : 'pt-1.5'}
-      >
+      <div className={variant === 'card' ? 'p-5' : 'pt-1.5'}>
         {hideHeader ? (
-          error ? (
-            <p className="text-[12px] text-destructive">{error}</p>
-          ) : null
+          <>
+            {error ? <p className="text-[12px] text-destructive">{error}</p> : null}
+            {/* hideHeader drops the title row; keep freshness so guided hubs still surface updates. */}
+            {(effectivelyInstalled ||
+              unsupported ||
+              action.kind === 'loading' ||
+              action.kind === 'unknown') &&
+            !failed ? (
+              <div className="mb-2">{freshnessPill}</div>
+            ) : null}
+          </>
         ) : (
           <div className="flex items-center gap-4">
-            {leading}
+            {typeof leading === 'function'
+              ? leading(effectivelyInstalled && action.kind === 'none' && !failed)
+              : leading}
             {icon ? (
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
                 {icon}
@@ -271,24 +200,24 @@ export function AgentSkillSetupPanel({
             <div className="min-w-0 flex-1 self-center">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
-                {loading && !installed ? (
+                {unsupported || action.kind === 'loading' || action.kind === 'unknown' ? (
+                  freshnessPill
+                ) : failed ? (
+                  <IntegrationStatusPill tone="attention">
+                    {translate(
+                      'auto.components.skills.skillPlanOpCopy.needsAttention',
+                      'Needs attention'
+                    )}
+                  </IntegrationStatusPill>
+                ) : loading && !installed ? (
                   <IntegrationStatusPill tone="neutral">
                     {translate(
                       'auto.components.settings.AgentSkillSetupPanel.68a468752e',
                       'Checking...'
                     )}
                   </IntegrationStatusPill>
-                ) : installed ? (
-                  freshnessSkillName ? (
-                    <SkillFreshnessStatusPill skillName={freshnessSkillName} />
-                  ) : (
-                    <IntegrationStatusPill tone="connected">
-                      {translate(
-                        'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
-                        'Installed'
-                      )}
-                    </IntegrationStatusPill>
-                  )
+                ) : effectivelyInstalled ? (
+                  freshnessPill
                 ) : (
                   <IntegrationStatusPill tone="attention">
                     {translate(
@@ -303,76 +232,76 @@ export function AgentSkillSetupPanel({
           </div>
         )}
         <div className={cn('max-w-none', hideHeader ? null : 'mt-3')}>
-          <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
+          {description != null ? (
+            <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
+          ) : null}
           {actionRow}
-          {actionHint ? <div className="mt-2">{actionHint}</div> : null}
-          {!installed && preInstallNotice && preInstallNoticeVisible ? (
-            <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
-              {preInstallNotice}
+          {hideHeader && action.kind === 'none' && state.kind === 'idle' ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {translate('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
             </p>
           ) : null}
+          <BundledSkillInstallStatus
+            install={skillInstall}
+            unsupported={unsupported}
+            attention={
+              action.kind === 'attention'
+                ? { retry: startInstall, message: action.attentionMessage }
+                : undefined
+            }
+            className="mt-2"
+          />
+          {actionHint ? <div className="mt-2">{actionHint}</div> : null}
         </div>
         {footer ? (
-          <div
-            className={cn('border-t border-border/60', terminalOpen ? 'mt-2 pt-4' : 'mt-5 pt-5')}
-          >
-            {footer}
+          <div className="mt-5 border-t border-border/60 pt-5">
+            {typeof footer === 'function'
+              ? footer('plan' in action ? action.plan : undefined)
+              : footer}
           </div>
         ) : null}
       </div>
-      {terminalOpen ? (
-        <div
-          className={cn(
-            'min-w-0 max-w-full overflow-hidden',
-            variant === 'card' ? 'px-5 pb-5' : 'mt-2'
-          )}
-        >
-          <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border border-border bg-muted/35 px-3 py-2">
-            <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-              {openTerminalCommand}
-            </code>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0"
-                  aria-label={translate(
-                    'auto.components.settings.AgentSkillSetupPanel.copyCommandAria',
-                    'Copy command'
-                  )}
-                  onClick={() => void copyActiveCommand()}
-                >
-                  <Copy className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.settings.AgentSkillSetupPanel.ed197f59a2',
-                  'Copy command'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <OnboardingInlineCommandTerminal
-            worktreeId={terminalWorktreeId}
-            command={openTerminalCommand}
-            title={terminalTitle}
-            description={translate(
-              'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
-              'Press Enter to run the command.'
-            )}
-            ariaLabel={terminalAriaLabel}
-            terminalHeightPx={terminalHeightPx}
-            shellOverride={terminalShellOverride}
-            terminalTopMarginPx={8}
-            descriptionPaddingClassName="px-4 py-2"
-            autoScrollIntoView={false}
-            onTerminalExit={notifyInstalledAgentSkillsChanged}
-          />
-        </div>
-      ) : null}
     </div>
   )
+}
+
+export function AgentSkillSetupPanel(props: AgentSkillSetupPanelProps): React.JSX.Element {
+  const activeRuntime = useActiveProjectSkillRuntime()
+  const runtime =
+    props.terminalRuntime ?? (props.target === undefined ? activeRuntime.agentRuntime : undefined)
+  // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
+  if (runtime?.runtime === 'wsl') {
+    return (
+      <WslAgentSkillSetupPanel
+        {...props}
+        leading={
+          typeof props.leading === 'function' ? props.leading(props.installed) : props.leading
+        }
+        footer={typeof props.footer === 'function' ? props.footer(undefined) : props.footer}
+        command={buildSkillCommandForRuntime(
+          buildAgentFeatureSkillInstallCommand(props.skillNames),
+          runtime
+        )}
+        installedCommand={
+          props.installedSkillNames
+            ? buildSkillCommandForRuntime(
+                buildAgentFeatureSkillInstallCommand(props.installedSkillNames),
+                runtime
+              )
+            : undefined
+        }
+        terminalTitle={props.title}
+        terminalAriaLabel={props.title}
+        terminalWorktreeId={`wsl-agent-skill-setup-${props.skillNames.join('-')}`}
+        terminalRuntime={runtime}
+        terminalShellOverride="powershell.exe"
+        installDisabled={
+          props.installDisabled ||
+          (props.terminalRuntime === undefined && Boolean(activeRuntime.installDisabledReason))
+        }
+        onBeforeOpenTerminal={props.onBeforeInstall}
+      />
+    )
+  }
+  return <BundledAgentSkillSetupPanel {...props} />
 }

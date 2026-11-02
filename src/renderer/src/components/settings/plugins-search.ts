@@ -1,0 +1,33 @@
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { translate } from '@/i18n/i18n'
+import type { SettingsSearchEntry } from './settings-search'
+
+export const getPluginsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('auto.components.settings.plugins.search.title', 'Plugins'),
+    description: translate(
+      'auto.components.settings.plugins.search.description',
+      'Install and manage Orca plugins (Alpha).'
+    ),
+    keywords: [
+      translate('auto.components.settings.plugins.search.install', 'install plugin'),
+      translate('auto.components.settings.plugins.search.permissions', 'plugin permissions'),
+      translate('auto.components.settings.plugins.search.logs', 'plugin logs'),
+      translate('auto.components.settings.plugins.search.development', 'development plugins'),
+      // Why one string: substring search finds mod/mods and extension/extensions alike.
+      translate('auto.components.settings.plugins.search.aliases', 'plugins mods extensions')
+    ]
+  }
+])
+
+export function getPluginsSectionPresentation() {
+  return {
+    title: translate('auto.components.settings.PluginsSettingsSection.title', 'Plugins'),
+    badge: translate('auto.components.settings.PluginsSettingsSection.alpha', 'Alpha'),
+    description: translate(
+      'auto.components.settings.PluginsSettingsSection.description',
+      'Themes, languages, commands, and more.'
+    ),
+    searchEntries: getPluginsPaneSearchEntries()
+  }
+}

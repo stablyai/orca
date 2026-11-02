@@ -1,4 +1,4 @@
-import type { SpriteAnimation } from '../../shared/types'
+import type { SpriteAnimation } from '../../shared/pet-types'
 import {
   CODEX_PET_ANIMATIONS,
   CODEX_PET_DEFAULT_ANIMATION,
@@ -8,8 +8,7 @@ import {
   codexAnimationsAtUniformFps
 } from '../../shared/codex-pet-sprite-defaults'
 
-// Re-exported so main-side consumers keep their import path. The tables live
-// in shared/ so the renderer can reuse the same fingerprint for upgrades.
+// Preserve main import paths while sharing upgrade fingerprints with the renderer.
 export {
   CODEX_PET_ANIMATIONS,
   CODEX_PET_DEFAULT_ANIMATION,
@@ -62,9 +61,7 @@ export function applyCodexPetDefaults<T extends PetManifestLike>(
     frame: manifest.frame ?? CODEX_PET_FRAME,
     fps: manifest.fps ?? CODEX_PET_DEFAULT_FPS,
     defaultAnimation: manifest.defaultAnimation ?? CODEX_PET_DEFAULT_ANIMATION,
-    // Why: with no fps, bake Codex's intended uneven pacing; with an explicit
-    // fps, bake that as uniform durations so it is honored instead of being
-    // overridden by the timed table (and stays out of the legacy retiming path).
+    // Explicit fps overrides Codex timing with uniform durations and avoids legacy retiming.
     animations:
       manifest.animations ??
       (manifest.fps === undefined

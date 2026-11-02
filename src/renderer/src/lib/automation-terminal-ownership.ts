@@ -1,16 +1,24 @@
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import '@/store/slices/agent-status/agent-status'
+import { collectSleepingAgentSessionRecordsForWorktree } from '@/store/slices/agent-status/agent-status-recovery-collection'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { readLastTerminalInputAt } from './terminal-input-activity-coalescing'
 
 export type AutomationTerminalOwnershipStore = {
   getState: () => AppState
   subscribe: (listener: (state: AppState, previousState: AppState) => void) => () => void
 }
 
+/** How finalize retired the run's terminal; null when it left the terminal as it was. */
+export type AutomationTerminalRetirement = 'closed' | 'hibernated' | null
+
 export type AutomationTerminalOwnership = {
-  finalize: () => boolean
+  /** `preservePane` sleeps a resumable pane in place instead of closing its tab. */
+  finalize: (options: { preservePane: boolean }) => Promise<AutomationTerminalRetirement>
   release: () => void
 }
 
@@ -68,19 +76,39 @@ function isOwnedTabIdentityCurrent(
   return layoutPtyId === undefined || layoutPtyId === args.ptyId
 }
 
+function canHibernateOwnedPane(
+  state: AppState,
+  args: Pick<CreateAutomationTerminalOwnershipArgs, 'worktreeId' | 'tabId' | 'paneKey' | 'ptyId'>
+): boolean {
+  // Why: a run that ended by exiting has no process left to stop in place.
+  if (!(state.ptyIdsByTabId[args.tabId] ?? []).includes(args.ptyId)) {
+    return false
+  }
+  return Boolean(
+    collectSleepingAgentSessionRecordsForWorktree(state, args.worktreeId, {
+      paneKeys: [args.paneKey],
+      captureMode: 'completed-agent-hibernation'
+    })[args.paneKey]
+  )
+}
+
 export function createAutomationTerminalOwnership(
   args: CreateAutomationTerminalOwnershipArgs
 ): AutomationTerminalOwnership {
   let consumed = false
   let userTookOver = false
-  const inputAtLaunch = args.store.getState().lastTerminalInputAtByPaneKey[args.paneKey]
+  // Include coalesced pending keystrokes or a recent user takeover can be missed.
+  const inputAtLaunch = readLastTerminalInputAt(
+    args.store.getState().lastTerminalInputAtByPaneKey,
+    args.paneKey
+  )
   const observeTakeover = (): void => {
     const state = args.store.getState()
     if (
       (state.activeWorktreeId === args.worktreeId &&
         state.activeTabId === args.tabId &&
         state.activeTabType === 'terminal') ||
-      state.lastTerminalInputAtByPaneKey[args.paneKey] !== inputAtLaunch
+      readLastTerminalInputAt(state.lastTerminalInputAtByPaneKey, args.paneKey) !== inputAtLaunch
     ) {
       userTookOver = true
     }
@@ -98,33 +126,47 @@ export function createAutomationTerminalOwnership(
 
   return {
     release,
-    finalize: () => {
+    finalize: async ({ preservePane }) => {
       if (consumed) {
-        return false
+        return null
       }
-      // Why: completion and exit can race; consume before any identity check so
-      // only the first successful-result path can retire this exact session.
+      // Consume before identity checks: completion and exit can race to retire the same session.
       consumed = true
       unsubscribe()
       observeTakeover()
-      if (args.runtimeKind !== 'desktop' || args.ptyId.startsWith('remote:') || userTookOver) {
-        return false
+      if (args.runtimeKind !== 'desktop' || isRemoteRuntimePtyId(args.ptyId) || userTookOver) {
+        return null
       }
       const state = args.store.getState()
-      if (!isOwnedTabIdentityCurrent(state, args)) {
-        return false
+      const leafId = parsePaneKey(args.paneKey)?.leafId
+      if (!leafId || !isOwnedTabIdentityCurrent(state, args)) {
+        return null
+      }
+      if (preservePane && canHibernateOwnedPane(state, args)) {
+        try {
+          // Why: sleeping keeps the tab and its resume record, so opening the run resumes it.
+          await state.shutdownCompletedAgentPaneForHibernation(args.worktreeId, {
+            paneKey: args.paneKey,
+            tabId: args.tabId,
+            leafId,
+            ptyId: args.ptyId
+          })
+        } catch (error) {
+          // Failed stop rolls back to a live agent; closing would discard the session it preserved.
+          console.error('[automations] Failed to hibernate owned automation terminal:', error)
+          return null
+        }
+        return 'hibernated'
       }
       try {
-        // Why: closeTab centrally owns provider shutdown and pane removal; a
-        // direct kill here would create a second teardown authority.
+        // Use closeTab’s provider/pane teardown authority rather than adding a second direct-kill path.
         state.closeTab(args.tabId, { recordInteraction: false, reason: 'cleanup' })
       } catch (error) {
-        // Why: a throwing close leaves the terminal alive; report not-closed so
-        // the run keeps its (still-valid) terminal identity and no stale clear runs.
+        // A throwing close leaves the terminal live; retain its valid identity and report not-closed.
         console.error('[automations] Failed to close owned automation terminal:', error)
-        return false
+        return null
       }
-      return true
+      return 'closed'
     }
   }
 }

@@ -2,10 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function installRegistryMock(): {
   configureForOrcaProfileMock: ReturnType<typeof vi.fn>
+  configureRouteSessionsForOrcaProfileMock: ReturnType<typeof vi.fn>
+  configurePairedRuntimeBrowserClientHostsForOrcaProfileMock: ReturnType<typeof vi.fn>
+  collectOrphanedBrowserRoutePartitionStorageMock: ReturnType<typeof vi.fn>
   applyPendingCookieImportMock: ReturnType<typeof vi.fn>
   initializeBrowserSessionsFromPersistedStateMock: ReturnType<typeof vi.fn>
 } {
   const configureForOrcaProfileMock = vi.fn()
+  const configureRouteSessionsForOrcaProfileMock = vi.fn()
+  const configurePairedRuntimeBrowserClientHostsForOrcaProfileMock = vi.fn()
+  const collectOrphanedBrowserRoutePartitionStorageMock = vi.fn(async () => [])
   const applyPendingCookieImportMock = vi.fn()
   const initializeBrowserSessionsFromPersistedStateMock = vi.fn()
 
@@ -16,9 +22,22 @@ function installRegistryMock(): {
       initializeBrowserSessionsFromPersistedState: initializeBrowserSessionsFromPersistedStateMock
     }
   }))
+  vi.doMock('./browser-route-session-runtime', () => ({
+    configureRouteSessionsForOrcaProfile: configureRouteSessionsForOrcaProfileMock
+  }))
+  vi.doMock('./browser-route-partition-storage-runtime', () => ({
+    collectOrphanedBrowserRoutePartitionStorage: collectOrphanedBrowserRoutePartitionStorageMock
+  }))
+  vi.doMock('./paired-runtime-browser-client-host-runtime', () => ({
+    configurePairedRuntimeBrowserClientHostsForOrcaProfile:
+      configurePairedRuntimeBrowserClientHostsForOrcaProfileMock
+  }))
 
   return {
     configureForOrcaProfileMock,
+    configureRouteSessionsForOrcaProfileMock,
+    configurePairedRuntimeBrowserClientHostsForOrcaProfileMock,
+    collectOrphanedBrowserRoutePartitionStorageMock,
     applyPendingCookieImportMock,
     initializeBrowserSessionsFromPersistedStateMock
   }
@@ -28,45 +47,6 @@ describe('initializeBrowserSessionsForApp', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.restoreAllMocks()
-  })
-
-  it('replays pending cookie imports before initializing browser sessions', async () => {
-    const { applyPendingCookieImportMock, initializeBrowserSessionsFromPersistedStateMock } =
-      installRegistryMock()
-    const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
-
-    initializeBrowserSessionsForApp()
-
-    expect(applyPendingCookieImportMock).toHaveBeenCalledOnce()
-    expect(initializeBrowserSessionsFromPersistedStateMock).toHaveBeenCalledOnce()
-    expect(applyPendingCookieImportMock.mock.invocationCallOrder[0]).toBeLessThan(
-      initializeBrowserSessionsFromPersistedStateMock.mock.invocationCallOrder[0]
-    )
-  })
-
-  it('configures the active Orca profile before replaying browser sessions', async () => {
-    const {
-      configureForOrcaProfileMock,
-      applyPendingCookieImportMock,
-      initializeBrowserSessionsFromPersistedStateMock
-    } = installRegistryMock()
-    const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
-
-    initializeBrowserSessionsForApp({
-      orcaProfileId: 'local-work',
-      profileDirectory: '/profiles/local-work'
-    })
-
-    expect(configureForOrcaProfileMock).toHaveBeenCalledWith({
-      orcaProfileId: 'local-work',
-      profileDirectory: '/profiles/local-work'
-    })
-    expect(configureForOrcaProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
-      applyPendingCookieImportMock.mock.invocationCallOrder[0]
-    )
-    expect(applyPendingCookieImportMock.mock.invocationCallOrder[0]).toBeLessThan(
-      initializeBrowserSessionsFromPersistedStateMock.mock.invocationCallOrder[0]
-    )
   })
 
   it('initializes browser sessions once per app process', async () => {

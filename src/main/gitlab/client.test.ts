@@ -50,6 +50,9 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
         username: 'alice',
         email: 'alice@example.com'
       })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['api', 'user'])
+      expect(acquireMock).toHaveBeenCalledOnce()
+      expect(releaseMock).toHaveBeenCalledOnce()
     })
 
     it('coerces a missing email to null', async () => {
@@ -65,6 +68,7 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
     it('returns null when glab fails', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('not authenticated'))
       await expect(getAuthenticatedViewer()).resolves.toBeNull()
+      expect(releaseMock).toHaveBeenCalledOnce()
     })
 
     it('returns null when username is empty', async () => {
@@ -243,10 +247,7 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
     })
 
     it('coerces non-pending state values to pending (defensive)', async () => {
-      // Why: we filter to state=pending in the request, but if a future
-      // glab change leaks a different state through, the type's narrow
-      // 'pending' | 'done' union should still hold — anything not 'done'
-      // collapses to 'pending' rather than violating the type.
+      // Preserve the pending/done union even if future API output ignores the pending filter.
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify([
           { id: 2, action_name: 'mentioned', target_type: 'Issue', state: 'weird' }
@@ -262,9 +263,7 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
     })
 
     it('handles missing target / project / author fields gracefully', async () => {
-      // Why: GitLab Todos for Commit / Note targets sometimes omit
-      // `target` entirely — defaults must keep the record well-formed
-      // so the renderer doesn't choke on .title access.
+      // Commit/Note todos can omit target; retain a well-formed display record.
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify([{ id: 3, action_name: 'build_failed', target_type: 'Commit' }])
       })

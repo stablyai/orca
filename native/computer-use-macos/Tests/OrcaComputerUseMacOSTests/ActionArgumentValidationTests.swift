@@ -54,6 +54,24 @@ final class ActionArgumentValidationTests: XCTestCase {
         )
     }
 
+    func testMouseButtonDefaultsToLeftAndAcceptsEveryButton() {
+        XCTAssertEqual(try ActionArgumentValidation.mouseButton(nil).get(), .left)
+        XCTAssertEqual(try ActionArgumentValidation.mouseButton("left").get(), .left)
+        XCTAssertEqual(try ActionArgumentValidation.mouseButton("right").get(), .right)
+        XCTAssertEqual(try ActionArgumentValidation.mouseButton("middle").get(), .middle)
+    }
+
+    func testMouseButtonRejectsUnknownButtons() {
+        XCTAssertEqual(
+            failureMessage(ActionArgumentValidation.mouseButton("primary")),
+            "unsupported mouse button 'primary'"
+        )
+        XCTAssertEqual(
+            failureMessage(ActionArgumentValidation.mouseButton("")),
+            "unsupported mouse button ''"
+        )
+    }
+
     func testScrollDirectionRejectsUnknownDirections() {
         XCTAssertEqual(try ActionArgumentValidation.scrollDirection("down").get(), "down")
         XCTAssertEqual(

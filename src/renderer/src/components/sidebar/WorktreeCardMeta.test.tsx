@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
+import { WorktreeCardDetailsHover, WorktreeCardMetaBadges } from './WorktreeCardMeta'
 
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -27,27 +27,6 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 describe('WorktreeCardDetailsHover', () => {
-  it('wraps workspace and branch identity so long names stay readable in the hover panel', () => {
-    const markup = renderToStaticMarkup(
-      <WorktreeCardDetailsHover
-        branchName="bug-hold-to-talk-speech-to-text-option-no-longer-works"
-        workspaceTitle="[Bug]: Hold-to-talk speech-to-text option no longer works"
-        issue={null}
-        linearIssue={null}
-        review={null}
-        comment={null}
-        onEditIssue={vi.fn()}
-        onEditComment={vi.fn()}
-      >
-        <span>Workspace card</span>
-      </WorktreeCardDetailsHover>
-    )
-
-    expect(markup).toContain('break-words')
-    expect(markup).not.toContain('truncate font-mono')
-    expect(markup).not.toContain('truncate text-[13px]')
-  })
-
   it('puts workspace title before branch identity and metadata details', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
@@ -78,40 +57,7 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup.indexOf('feature/local-branch')).toBeLessThan(markup.indexOf('PR #456'))
   })
 
-  it('keeps the hover title unruled and inline editable while section bodies stay inset', () => {
-    const markup = renderToStaticMarkup(
-      <WorktreeCardDetailsHover
-        branchName="feature/local-branch"
-        workspaceTitle="Fix stale GH PR"
-        issue={{
-          number: 5518,
-          title: 'Agent monitor lists ephemeral headless subprocesses',
-          state: 'open',
-          url: 'https://github.com/acme/orca/issues/5518',
-          labels: []
-        }}
-        linearIssue={null}
-        review={null}
-        comment={null}
-        onRenameWorkspaceTitle={vi.fn()}
-        onEditIssue={vi.fn()}
-        onEditComment={vi.fn()}
-      >
-        <span>Fix stale GH PR</span>
-      </WorktreeCardDetailsHover>
-    )
-    const identityHeaderTag =
-      markup.match(/<div[^>]*data-worktree-hover-identity-header=""[^>]*>/)?.[0] ?? ''
-
-    expect(identityHeaderTag).not.toContain('border-l')
-    expect(identityHeaderTag).not.toContain('pl-2')
-    expect(markup).toContain('data-worktree-title-inline-rename=""')
-    expect(markup).toContain('cursor-text text-[13px] font-semibold')
-    expect(markup).toContain('Fix stale GH PR')
-    expect(markup).toContain('border-l border-border/70 pl-3')
-  })
-
-  it('puts unlink behind the first PR actions menu and keeps GitHub last', () => {
+  it('puts review-only actions after the metadata and adds references from the header', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
         issue={null}
@@ -130,27 +76,38 @@ describe('WorktreeCardDetailsHover', () => {
         onEditIssue={vi.fn()}
         onEditComment={vi.fn()}
         onOpenReviewInOrca={vi.fn()}
+        onOpenReviewInBrowser={vi.fn()}
         onUnlinkReview={vi.fn()}
+        onManageLinks={vi.fn()}
       >
         <span>Linked PR</span>
       </WorktreeCardDetailsHover>
     )
 
-    const moreActionsIndex = markup.indexOf('aria-label="More PR actions"')
-    const openInOrcaIndex = markup.indexOf('aria-label="Open in Orca"')
-    const viewOnGitHubIndex = markup.indexOf('aria-label="View on GitHub"')
-
-    expect(moreActionsIndex).toBeGreaterThan(-1)
-    expect(markup).toContain('More PR actions')
-    expect(markup).toContain('Copy link')
-    expect(markup).toContain('Unlink PR')
-    expect(moreActionsIndex).toBeLessThan(openInOrcaIndex)
-    expect(openInOrcaIndex).toBeLessThan(viewOnGitHubIndex)
-    expect(markup).not.toContain('aria-label="Unlink PR"')
-    expect(markup.indexOf('Copy link')).toBeLessThan(markup.indexOf('Unlink PR'))
+    expect(markup).toContain('Reviews · 1')
+    expect(markup).toContain('aria-label="More PR actions"')
+    expect(markup.indexOf('PR #456</span>')).toBeGreaterThan(-1)
+    expect(markup.indexOf('PR #456</span>')).toBeLessThan(
+      markup.indexOf('aria-label="Checks: Passing"')
+    )
+    expect(markup.indexOf('role="img" aria-label="GitHub"')).toBeLessThan(
+      markup.indexOf('PR #456</span>')
+    )
+    expect(markup).not.toContain('· GitHub')
+    expect(markup).toContain('aria-label="Add reference"')
+    expect(markup).not.toContain('Manage links…')
+    expect(markup).toContain('href="https://github.com/acme/orca/pull/456"')
+    expect(markup).toContain('Open in Orca')
+    expect(markup).toContain('Unlink PR from workspace')
+    expect(markup).toContain(
+      'Orca will hide PR #456 details for this workspace. The PR and branch on GitHub won’t be changed.'
+    )
+    expect(markup).not.toContain('Copy link')
+    expect(markup).not.toContain('Open in Orca browser')
+    expect(markup).not.toContain('View on GitHub')
   })
 
-  it('puts issue copy menu before edit and open actions and keeps GitHub last', () => {
+  it('groups issue actions into one row menu ordered from open to copy', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
         issue={{
@@ -166,24 +123,19 @@ describe('WorktreeCardDetailsHover', () => {
         onEditIssue={vi.fn()}
         onEditComment={vi.fn()}
         onOpenGitHubIssueInOrca={vi.fn()}
+        onOpenIssueInBrowser={vi.fn()}
       >
         <span>Linked issue</span>
       </WorktreeCardDetailsHover>
     )
 
-    const moreActionsIndex = markup.indexOf('aria-label="More issue actions"')
-    const copyLinkIndex = markup.indexOf('Copy link')
-    const editIssueIndex = markup.indexOf('aria-label="Edit issue"')
-    const openInOrcaIndex = markup.indexOf('aria-label="Open in Orca"')
-    const viewOnGitHubIndex = markup.indexOf('aria-label="View on GitHub"')
-
-    expect(moreActionsIndex).toBeGreaterThan(-1)
-    expect(copyLinkIndex).toBeGreaterThan(-1)
-    expect(editIssueIndex).toBeGreaterThan(-1)
-    expect(moreActionsIndex).toBeLessThan(editIssueIndex)
-    expect(copyLinkIndex).toBeLessThan(editIssueIndex)
-    expect(editIssueIndex).toBeLessThan(openInOrcaIndex)
-    expect(openInOrcaIndex).toBeLessThan(viewOnGitHubIndex)
+    const order = ['Open in Orca', 'Open in Orca browser', 'Edit issue', 'Copy link'].map((label) =>
+      markup.indexOf(`${label}</div>`)
+    )
+    expect(markup).toContain('aria-label="More issue actions"')
+    expect(markup).toContain('aria-label="State: Closed"')
+    expect(order.every((index) => index > -1)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
   })
 
   it('labels GitLab unlink actions with MR terminology', () => {
@@ -203,14 +155,65 @@ describe('WorktreeCardDetailsHover', () => {
         onEditIssue={vi.fn()}
         onEditComment={vi.fn()}
         onUnlinkReview={vi.fn()}
+        onOpenReviewInBrowser={vi.fn()}
       >
         <span>Linked MR</span>
       </WorktreeCardDetailsHover>
     )
 
     expect(markup).toContain('aria-label="More MR actions"')
-    expect(markup).toContain('Unlink MR')
-    expect(markup).toContain('View on GitLab')
+    expect(markup).toContain('Unlink MR from workspace')
+    expect(markup).toContain(
+      'Orca will hide MR !77 details for this workspace. The MR and branch on GitLab won’t be changed.'
+    )
+    expect(markup).toContain('href="https://gitlab.com/acme/orca/-/merge_requests/77"')
+    expect(markup).not.toContain('Open in Orca browser')
+  })
+
+  it('hides the embedded-browser action when a linked review has no URL', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={null}
+        linearIssue={null}
+        review={{
+          provider: 'github',
+          number: 456,
+          title: 'Loading PR...',
+          state: 'open'
+        }}
+        comment={null}
+        onOpenReviewInBrowser={vi.fn()}
+      >
+        <span>Linked PR</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(markup).not.toContain('Open in Orca browser')
+  })
+
+  it('keeps the title link for unsupported review URLs', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={null}
+        linearIssue={null}
+        review={{
+          provider: 'unsupported',
+          number: 12,
+          title: 'Review from an unsupported provider',
+          state: 'open',
+          url: 'https://code.example.test/reviews/12',
+          status: 'neutral',
+          updatedAt: '2026-05-17T00:00:00.000Z',
+          mergeable: 'UNKNOWN'
+        }}
+        comment={null}
+        onOpenReviewInBrowser={vi.fn()}
+      >
+        <span>Linked review</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(markup).toContain('href="https://code.example.test/reviews/12"')
   })
 
   it('displays Linear issue details with link', () => {
@@ -237,8 +240,42 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('ENG-123')
     expect(markup).toContain('Add Linear ticket display feature')
     expect(markup).toContain('https://linear.app/acme/issue/ENG-123')
-    expect(markup).toContain('View on Linear')
-    expect(markup).toContain('In Progress')
+    expect(markup).toContain('aria-label="More Linear actions"')
+    expect(markup).toContain('aria-label="State: In Progress"')
+  })
+
+  it('shows the Jira icon badge and linked issue details', () => {
+    const jiraIssue = {
+      identifier: 'KAN-1',
+      title: 'Test Jira card icon',
+      url: 'https://company.atlassian.net/browse/KAN-1'
+    }
+    const badgeMarkup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        jiraIssue={jiraIssue}
+        review={null}
+        comment={null}
+      />
+    )
+    const hoverMarkup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={null}
+        linearIssue={null}
+        jiraIssue={jiraIssue}
+        review={null}
+        comment={null}
+      >
+        <span>KAN-1</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(badgeMarkup).toContain('<svg')
+    expect(badgeMarkup).toContain('Linked Jira KAN-1')
+    expect(hoverMarkup).toContain('Test Jira card icon')
+    expect(hoverMarkup).toContain('aria-label="More Jira actions"')
+    expect(hoverMarkup).toContain('https://company.atlassian.net/browse/KAN-1')
   })
 
   it('shows identifier when Linear issue URL is unavailable', () => {
@@ -284,6 +321,5 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('ENG-123')
     expect(markup).toContain('Loading Linear issue...')
     expect(markup).toContain('https://linear.app/acme/issue/ENG-123')
-    expect(markup).toContain('View on Linear')
   })
 })

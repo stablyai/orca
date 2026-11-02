@@ -1,0 +1,170 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Dirent } from 'node:fs'
+import type * as NodeFsPromisesModule from 'node:fs/promises'
+import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+
+const fsMocks = vi.hoisted(() => ({ readdir: vi.fn(), stat: vi.fn() }))
+
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFsPromisesModule>()),
+  readdir: fsMocks.readdir,
+  stat: fsMocks.stat
+}))
+
+import {
+  resetWslTranscriptFsGateForTests,
+  WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
+  WslTranscriptFsError
+} from '../native-chat/wsl-transcript-fs-gate'
+import { discoverFiles, walkSessionFiles } from './session-scanner-discovery'
+
+const SLOW_MESSAGE =
+  'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
+
+// UNC child serialization reads every Dirent kind flag.
+function dirent(name: string): Dirent {
+  return {
+    name,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isDirectory: () => false,
+    isFIFO: () => false,
+    isFile: () => true,
+    isSocket: () => false,
+    isSymbolicLink: () => false
+  } as Dirent
+}
+
+let releaseStall: (() => void) | undefined
+
+function stalls<T>(): Promise<T> {
+  return new Promise<T>((resolve) => {
+    releaseStall = () => resolve(undefined as T)
+  })
+}
+
+beforeEach(() => {
+  resetWslTranscriptFsGateForTests()
+  fsMocks.readdir.mockReset()
+  fsMocks.stat.mockReset()
+  fsMocks.readdir.mockResolvedValue([])
+  releaseStall = undefined
+})
+
+// Settle stalled calls to release permits before the next test.
+afterEach(async () => {
+  if (!vi.isFakeTimers()) {
+    return
+  }
+  releaseStall?.()
+  await vi.advanceTimersByTimeAsync(0)
+  vi.useRealTimers()
+})
+
+describe('walkSessionFiles WSL gate refusals', () => {
+  it('rethrows gate refusals instead of reporting an empty tree', async () => {
+    const refusal = new WslTranscriptFsError('timeout', 'slow share')
+    await expect(
+      walkSessionFiles('\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions', 'codex', [], {
+        extensions: new Set(['.jsonl']),
+        readDirectory: async () => {
+          throw refusal
+        }
+      })
+    ).rejects.toBe(refusal)
+  })
+
+  it('still treats ordinary readdir failures as an empty tree', async () => {
+    await expect(
+      walkSessionFiles('/missing/root', 'codex', [], {
+        extensions: new Set(['.jsonl']),
+        readDirectory: async () => {
+          throw Object.assign(new Error('no such directory'), { code: 'ENOENT' })
+        }
+      })
+    ).resolves.toEqual([])
+  })
+})
+
+describe('discoverFiles containment for a stalled WSL root', () => {
+  const UNC_ROOT = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions'
+
+  it('contains a stalled readdir to one root so a Promise.all fan-out still resolves', async () => {
+    vi.useFakeTimers()
+    {
+      fsMocks.readdir.mockImplementation((dir: string) =>
+        dir === UNC_ROOT ? stalls<Dirent[]>() : Promise.resolve([])
+      )
+      const issues: AiVaultScanIssue[] = []
+      const discovery = discoverFiles({
+        rootDir: UNC_ROOT,
+        limit: 10,
+        agent: 'codex',
+        issues,
+        extensions: ['.jsonl']
+      })
+      const healthy = discoverFiles({
+        rootDir: '/home/ada/.codex/sessions',
+        limit: 10,
+        agent: 'codex',
+        issues: [],
+        extensions: ['.jsonl']
+      })
+
+      await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
+
+      await expect(Promise.all([discovery, healthy])).resolves.toEqual([
+        { agent: 'codex', rootDir: UNC_ROOT, files: [] },
+        { agent: 'codex', rootDir: '/home/ada/.codex/sessions', files: [] }
+      ])
+      expect(issues).toEqual([
+        {
+          agent: 'codex',
+          path: UNC_ROOT,
+          message: SLOW_MESSAGE,
+          messageCode: 'wslTranscriptFsSlow'
+        }
+      ])
+    }
+  })
+
+  it('reports every stalled file without spending one deadline per file', async () => {
+    vi.useFakeTimers()
+    {
+      const names = ['a', 'b', 'c', 'd', 'e'].map((name) => dirent(`${name}.jsonl`))
+      fsMocks.readdir.mockResolvedValue(names)
+      fsMocks.stat.mockImplementation(stalls)
+      const issues: AiVaultScanIssue[] = []
+      const discovery = discoverFiles({
+        rootDir: UNC_ROOT,
+        limit: 10,
+        agent: 'codex',
+        issues,
+        extensions: ['.jsonl']
+      })
+
+      // Route quarantine makes later stats fail fast; only the first stalled operations reach deadlines.
+      await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS * 2 + 2)
+
+      await expect(discovery).resolves.toEqual({ agent: 'codex', rootDir: UNC_ROOT, files: [] })
+      expect(issues).toHaveLength(names.length)
+      expect(issues.every((issue) => issue.path.startsWith(UNC_ROOT))).toBe(true)
+    }
+  })
+})
+
+it('execution admission preserves native access errors while confirmed missing roots remain absent', async () => {
+  for (const code of ['EACCES', 'ENOENT']) {
+    const failure = Object.assign(new Error(code), { code })
+    const search = walkSessionFiles('/account/sessions', 'codex', [], {
+      extensions: new Set(['.jsonl']),
+      strictErrors: true,
+      readDirectory: async () => {
+        throw failure
+      }
+    })
+    await (code === 'ENOENT'
+      ? expect(search).resolves.toEqual([])
+      : expect(search).rejects.toBe(failure))
+  }
+})

@@ -1,7 +1,7 @@
 import type { OrcaProfileAuthStatus } from '../../shared/orca-profiles'
 import type { ActiveOrcaProfileState } from './profile-index-store'
 import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-cloud-auth-config'
-import { readOrcaCloudSession } from './profile-cloud-session-store'
+import { readCloudSession } from './profile-cloud-session-owner'
 
 export function getOrcaProfileAuthStatusFromProfile(
   active: ActiveOrcaProfileState,
@@ -21,7 +21,7 @@ export function getOrcaProfileAuthStatusFromProfile(
     }
   }
 
-  const session = readOrcaCloudSession(active.profile.id, userDataPath)
+  const session = readCloudSession(active.profile.id, userDataPath)
   if (!configured) {
     return {
       activeProfileId: active.profile.id,
@@ -29,7 +29,10 @@ export function getOrcaProfileAuthStatusFromProfile(
       state: 'unconfigured',
       persistence: session.status === 'found' ? session.persistence : 'none',
       cloud,
-      credentialError: session.status === 'decrypt-failed' ? session.error : undefined,
+      credentialError:
+        session.status === 'decrypt-failed' || session.status === 'unreadable'
+          ? session.error
+          : undefined,
       setupMessage: configState.setupMessage
     }
   }
@@ -51,6 +54,9 @@ export function getOrcaProfileAuthStatusFromProfile(
     state: 'reconnect-required',
     persistence: 'none',
     cloud,
-    credentialError: session.status === 'decrypt-failed' ? session.error : undefined
+    credentialError:
+      session.status === 'decrypt-failed' || session.status === 'unreadable'
+        ? session.error
+        : undefined
   }
 }

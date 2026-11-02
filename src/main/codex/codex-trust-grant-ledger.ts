@@ -1,14 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { dirname, join } from 'node:path'
-import { getOrcaManagedCodexHomePath } from './codex-home-paths'
+import { resolveOrcaManagedCodexHomePath } from './codex-home-paths'
 import { normalizeCodexProjectPathForLookup } from './config-toml-trust'
 
-// Why: a grant session blocks launch prep, so it must not run on every pane
-// launch. This ledger records what a *verified* codex-side grant left behind
-// (per runtime home): the hook identity that was granted, the Codex-computed
-// hash, and the codex binary that computed it. Install skips the RPC while
-// all three still hold; any drift (hook edit, config wipe, codex upgrade)
-// re-triggers a grant before the pane launches.
+// Cache verified grants per home to avoid repeating launch-blocking RPCs.
 
 export type CodexTrustGrantBinaryStamp =
   | { kind: 'native'; path: string; size: number; mtimeMs: number }
@@ -32,21 +28,26 @@ type CodexTrustGrantLedgerFile = {
   homes: Record<string, CodexTrustGrantLedgerHome>
 }
 
+// Reading grants must not create Orca's managed home.
 export function getCodexTrustGrantLedgerPath(): string {
-  return join(dirname(getOrcaManagedCodexHomePath()), 'trust-grant-ledger.json')
+  return join(dirname(resolveOrcaManagedCodexHomePath()), 'trust-grant-ledger.json')
 }
 
 export function getCodexTrustGrantHomeKey(runtimeHomePath: string): string {
   return normalizeCodexProjectPathForLookup(runtimeHomePath)
 }
 
-function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
+/** Return null on read errors so writes cannot erase other homes' unreadable grants. */
+function readLedgerFileOrNull(ledgerPath: string): CodexTrustGrantLedgerFile | null {
   const empty: CodexTrustGrantLedgerFile = { version: 1, homes: {} }
-  if (!existsSync(ledgerPath)) {
-    return empty
+  let rawLedger: string
+  try {
+    rawLedger = readFileSync(ledgerPath, 'utf-8')
+  } catch (error) {
+    return isDefinitiveAbsence(error) ? empty : null
   }
   try {
-    const parsed: unknown = JSON.parse(readFileSync(ledgerPath, 'utf-8'))
+    const parsed: unknown = JSON.parse(rawLedger)
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -61,10 +62,13 @@ function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
     }
     return { version: 1, homes }
   } catch {
-    // Why: a corrupt ledger only costs one extra grant session; never let it
-    // block hook install.
+    // Corruption costs another grant session but must not block hook installation.
     return empty
   }
+}
+
+function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
+  return readLedgerFileOrNull(ledgerPath) ?? { version: 1, homes: {} }
 }
 
 function persistLedgerFile(ledgerPath: string, file: CodexTrustGrantLedgerFile): void {
@@ -94,7 +98,10 @@ export function writeCodexTrustGrantLedgerHome(
   home: CodexTrustGrantLedgerHome,
   ledgerPath = getCodexTrustGrantLedgerPath()
 ): void {
-  const file = readLedgerFile(ledgerPath)
+  const file = readLedgerFileOrNull(ledgerPath)
+  if (!file) {
+    return
+  }
   file.homes[getCodexTrustGrantHomeKey(runtimeHomePath)] = home
   persistLedgerFile(ledgerPath, file)
 }
@@ -112,22 +119,12 @@ export function removeCodexTrustGrantLedgerHome(
   persistLedgerFile(ledgerPath, file)
 }
 
-export function buildNativeCodexBinaryStamp(binaryPath: string): CodexTrustGrantBinaryStamp | null {
-  try {
-    const stat = statSync(binaryPath)
-    return { kind: 'native', path: binaryPath, size: stat.size, mtimeMs: stat.mtimeMs }
-  } catch {
-    return null
-  }
-}
-
 export function binaryStampsMatch(
   recorded: CodexTrustGrantBinaryStamp | null,
   current: CodexTrustGrantBinaryStamp | null
 ): boolean {
   if (recorded === null || current === null) {
-    // Why: an unresolvable binary stamp must not wedge installs into
-    // re-granting forever; the config/signature checks still gate the skip.
+    // Two unavailable stamps avoid endless re-grants; config and signature checks still apply.
     return recorded === null && current === null
   }
   if (recorded.kind === 'wsl' || current.kind === 'wsl') {

@@ -12,8 +12,7 @@ export type PetAnimationName =
 
 export type PetDragAnimation = 'running-right' | 'running-left' | null
 
-// Why: direction tracks horizontal travel only; `accepted` (advance the baseline)
-// fires only on a >=4px horizontal move so slow diagonal drags still accumulate.
+// Advance horizontal hysteresis only after accepted travel so slow diagonal drags accumulate.
 export function nextPetDragAnimation(
   current: PetDragAnimation,
   deltaX: number
@@ -53,7 +52,7 @@ function agentStateAnimation(
     if (entry.state === 'blocked' || entry.state === 'waiting') {
       return 'waiting'
     }
-    if (entry.state === 'working') {
+    if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
       hasWorking = true
     } else if (entry.state === 'done') {
       hasDone = true
@@ -79,8 +78,7 @@ export function selectPetAnimationName({
   staleAfterMs
 }: PetAnimationInput): PetAnimationName {
   const base = agentStateAnimation(entries, retainedCount, now, staleAfterMs)
-  // Why: aligned with Codex. A horizontal drag runs toward the pointer,
-  // grab-and-hold keeps the live agent state, and only a plain hover jumps.
+  // Horizontal drags run toward the pointer; stationary grabs retain live agent state, and plain hover jumps.
   if (dragging) {
     return dragAnimation ?? base
   }

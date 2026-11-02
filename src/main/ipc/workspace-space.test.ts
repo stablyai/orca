@@ -4,13 +4,15 @@ import type {
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
 } from '../../shared/workspace-space-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const {
   handlers,
   analyzeWorkspaceSpaceMock,
   removeHandlerMock,
   handleMock,
+  persistAnalysisSnapshotMock,
+  readAnalysisSnapshotMock,
   WorkspaceSpaceScanCancelledErrorMock
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
@@ -21,6 +23,8 @@ const {
     handleMock: vi.fn((channel: string, handler: (...args: unknown[]) => Promise<unknown>) => {
       handlers.set(channel, handler)
     }),
+    persistAnalysisSnapshotMock: vi.fn(),
+    readAnalysisSnapshotMock: vi.fn(),
     WorkspaceSpaceScanCancelledErrorMock: class WorkspaceSpaceScanCancelledError extends Error {}
   }
 })
@@ -35,6 +39,11 @@ vi.mock('electron', () => ({
 vi.mock('../workspace-space-analysis', () => ({
   WorkspaceSpaceScanCancelledError: WorkspaceSpaceScanCancelledErrorMock,
   analyzeWorkspaceSpace: analyzeWorkspaceSpaceMock
+}))
+
+vi.mock('../workspace-space-analysis-snapshot', () => ({
+  persistWorkspaceSpaceAnalysisSnapshot: persistAnalysisSnapshotMock,
+  readWorkspaceSpaceAnalysisSnapshot: readAnalysisSnapshotMock
 }))
 
 import { registerWorkspaceSpaceHandlers } from './workspace-space'
@@ -65,13 +74,19 @@ function createEvent() {
   }
 }
 
+function createStore(): Store {
+  return { getProfileStorageDirectory: () => '/profile-a' } as Store
+}
+
 describe('registerWorkspaceSpaceHandlers', () => {
   beforeEach(() => {
     analyzeWorkspaceSpaceMock.mockReset()
+    persistAnalysisSnapshotMock.mockReset().mockResolvedValue(undefined)
+    readAnalysisSnapshotMock.mockReset().mockResolvedValue(null)
   })
 
   it('shares an in-flight analysis request', async () => {
-    const store = {} as Store
+    const store = createStore()
     let resolveFirstScan: (analysis: WorkspaceSpaceAnalysis) => void = () => {}
     const firstScan = new Promise<WorkspaceSpaceAnalysis>((resolve) => {
       resolveFirstScan = resolve
@@ -108,38 +123,65 @@ describe('registerWorkspaceSpaceHandlers', () => {
     expect(analyzeWorkspaceSpaceMock).toHaveBeenCalledTimes(2)
   })
 
-  it('forwards scan progress to the requesting renderer', async () => {
-    const store = {} as Store
+  it('batches completed measurements without dropping throttled rows', async () => {
+    const store = createStore()
     let onProgress: ((progress: WorkspaceSpaceScanProgress) => void) | undefined
+    let resolveScan!: (analysis: WorkspaceSpaceAnalysis) => void
     analyzeWorkspaceSpaceMock.mockImplementationOnce((_store, options) => {
       onProgress = options.onProgress
-      return Promise.resolve(createAnalysis(1))
+      return new Promise<WorkspaceSpaceAnalysis>((resolve) => {
+        resolveScan = resolve
+      })
     })
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
 
-    registerWorkspaceSpaceHandlers(store)
-    const event = createEvent()
-    const handler = handlers.get('workspaceSpace:analyze')
-    const promise = handler!(event)
-    const progress: WorkspaceSpaceScanProgress = {
-      scanId: 'scan-1',
-      state: 'running',
-      startedAt: 1,
-      updatedAt: 1,
-      totalRepoCount: 1,
-      scannedRepoCount: 0,
-      totalWorktreeCount: 2,
-      scannedWorktreeCount: 1,
-      currentRepoDisplayName: 'orca',
-      currentWorktreeDisplayName: 'feature'
+    try {
+      registerWorkspaceSpaceHandlers(store)
+      const event = createEvent()
+      const promise = handlers.get('workspaceSpace:analyze')!(event)
+      const base = {
+        scanId: 'scan-1',
+        state: 'running' as const,
+        startedAt: 1,
+        updatedAt: 1,
+        totalRepoCount: 1,
+        scannedRepoCount: 0,
+        totalWorktreeCount: 2,
+        currentRepoDisplayName: 'orca',
+        currentWorktreeDisplayName: 'feature'
+      }
+      onProgress?.({ ...base, scannedWorktreeCount: 0 })
+      onProgress?.({
+        ...base,
+        scannedWorktreeCount: 1,
+        completedMeasurements: [{ worktreeId: 'a', status: 'ok', sizeBytes: 10 }]
+      })
+      onProgress?.({
+        ...base,
+        scannedWorktreeCount: 2,
+        completedMeasurements: [{ worktreeId: 'b', status: 'ok', sizeBytes: 20 }]
+      })
+      resolveScan(createAnalysis(1))
+      await promise
+
+      expect(event.sender.send).toHaveBeenCalledTimes(2)
+      expect(event.sender.send).toHaveBeenLastCalledWith(
+        'workspaceSpace:progress',
+        expect.objectContaining({
+          scannedWorktreeCount: 2,
+          completedMeasurements: [
+            { worktreeId: 'a', status: 'ok', sizeBytes: 10 },
+            { worktreeId: 'b', status: 'ok', sizeBytes: 20 }
+          ]
+        })
+      )
+    } finally {
+      now.mockRestore()
     }
-    onProgress?.(progress)
-    await promise
-
-    expect(event.sender.send).toHaveBeenCalledWith('workspaceSpace:progress', progress)
   })
 
   it('cancels the in-flight scan', async () => {
-    const store = {} as Store
+    const store = createStore()
     let signal: AbortSignal | undefined
     analyzeWorkspaceSpaceMock.mockImplementationOnce((_store, options) => {
       signal = options.signal
@@ -157,12 +199,13 @@ describe('registerWorkspaceSpaceHandlers', () => {
   })
 
   it('returns a normal cancelled result instead of rejecting expected cancellation', async () => {
-    const store = {} as Store
+    const store = createStore()
     analyzeWorkspaceSpaceMock.mockRejectedValueOnce(new WorkspaceSpaceScanCancelledErrorMock())
 
     registerWorkspaceSpaceHandlers(store)
     const analyzeHandler = handlers.get('workspaceSpace:analyze')
 
     await expect(analyzeHandler!(createEvent())).resolves.toEqual({ ok: false, cancelled: true })
+    expect(persistAnalysisSnapshotMock).not.toHaveBeenCalled()
   })
 })

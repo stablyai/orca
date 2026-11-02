@@ -1,0 +1,281 @@
+import type { AutomationDefinitionOperations } from './automation-definition-operations'
+import type { WorkspaceRunContext } from '../../../shared/task-source-context'
+import type {
+  Automation,
+  AutomationPrecheckResult,
+  AutomationRun,
+  AutomationRunOutputSnapshot,
+  AutomationSchedulerOwner
+} from '../../../shared/automations-types'
+import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
+import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { hasExtraAgentArgs } from '../../../shared/automation-extra-agent-args'
+import { getAutomationLegacyRepoId } from '../../../shared/automation-run-identity'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import {
+  buildTaskSourceContextFromRepo,
+  buildWorkspaceRunContext
+} from '../../../shared/task-source-context'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+
+export function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+export function normalizeAutomationRunTerminalPaneKey(
+  value: string | null | undefined
+): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed && parsePaneKey(trimmed) ? trimmed : null
+}
+
+export function normalizeAutomationRunTerminalPtyId(
+  value: string | null | undefined
+): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed || null
+}
+
+export function normalizeAutomationRunOutputSnapshot(
+  value: AutomationRunOutputSnapshot | null | undefined
+): AutomationRunOutputSnapshot | null {
+  if (!value || value.format !== 'plain_text') {
+    return null
+  }
+  const content = typeof value.content === 'string' ? value.content : ''
+  if (!content.trim()) {
+    return null
+  }
+  return {
+    format: 'plain_text',
+    content,
+    capturedAt:
+      typeof value.capturedAt === 'number' && Number.isFinite(value.capturedAt)
+        ? value.capturedAt
+        : Date.now(),
+    truncated: value.truncated === true
+  }
+}
+
+export function normalizeAutomationPrecheckResult(
+  value: AutomationPrecheckResult | null | undefined
+): AutomationPrecheckResult | null {
+  if (!value || typeof value.command !== 'string' || !value.command.trim()) {
+    return null
+  }
+  const startedAt =
+    typeof value.startedAt === 'number' && Number.isFinite(value.startedAt)
+      ? value.startedAt
+      : Date.now()
+  const completedAt =
+    typeof value.completedAt === 'number' && Number.isFinite(value.completedAt)
+      ? value.completedAt
+      : startedAt
+  return {
+    command: value.command.trim(),
+    exitCode:
+      typeof value.exitCode === 'number' && Number.isFinite(value.exitCode) ? value.exitCode : null,
+    timedOut: value.timedOut === true,
+    durationMs:
+      typeof value.durationMs === 'number' && Number.isFinite(value.durationMs)
+        ? Math.max(0, value.durationMs)
+        : Math.max(0, completedAt - startedAt),
+    stdout: typeof value.stdout === 'string' ? value.stdout : '',
+    stderr: typeof value.stderr === 'string' ? value.stderr : '',
+    stdoutTruncated: value.stdoutTruncated === true,
+    stderrTruncated: value.stderrTruncated === true,
+    error: typeof value.error === 'string' && value.error.trim() ? value.error : null,
+    startedAt,
+    completedAt
+  }
+}
+
+export function normalizeAutomationSessionReuse(automation: Automation): Automation {
+  const setupDecision = normalizeAutomationSetupDecisionForWorkspaceMode(
+    automation.workspaceMode,
+    automation.setupDecision
+  )
+  const { extraAgentArgs, ...rest } = automation
+  return {
+    ...rest,
+    ...(hasExtraAgentArgs(extraAgentArgs) ? { extraAgentArgs } : {}),
+    precheck: normalizeAutomationPrecheck(automation.precheck),
+    setupDecision,
+    reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
+  }
+}
+
+export function normalizeAutomationSetupDecisionForWorkspaceMode(
+  workspaceMode: Automation['workspaceMode'],
+  setupDecision: unknown
+): Automation['setupDecision'] {
+  return workspaceMode === 'new_per_run' && (setupDecision === 'run' || setupDecision === 'skip')
+    ? setupDecision
+    : undefined
+}
+
+export function getAutomationContextsForRepo(
+  repo: Repo | undefined,
+  projectHostSetups: readonly ProjectHostSetup[]
+): Pick<Automation, 'runContext' | 'sourceContext'> {
+  if (!repo) {
+    return {
+      runContext: null,
+      sourceContext: null
+    }
+  }
+  const projection = projectHostSetupProjectionFromRepos([repo])
+  const projectedProject = projection.projects[0]
+  const projectedSetup = projection.setups[0]
+  // Shared repo IDs require host-scoped context lookup.
+  const repoHostId = getRepoExecutionHostId(repo)
+  const setup =
+    projectHostSetups.find(
+      (candidate) => candidate.repoId === repo.id && candidate.hostId === repoHostId
+    ) ?? projectedSetup
+  const runContext = setup
+    ? buildWorkspaceRunContext({
+        projectId: setup.projectId,
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: repo.id,
+        path: setup.path
+      })
+    : null
+  const providerIdentity = projectedProject?.providerIdentity
+  const sourceContext = providerIdentity
+    ? buildTaskSourceContextFromRepo({
+        provider: providerIdentity.provider,
+        projectId: providerIdentity.provider === 'github' ? (setup?.projectId ?? repo.id) : repo.id,
+        repo,
+        projectHostSetupId: setup?.id,
+        providerIdentity
+      })
+    : null
+  return {
+    runContext,
+    sourceContext
+  }
+}
+
+export function getAutomationSchedulerOwner(repo: Repo | undefined): AutomationSchedulerOwner {
+  if (!repo) {
+    return 'local_host_service'
+  }
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'ssh') {
+    return 'ssh_bridge'
+  }
+  if (host?.kind === 'runtime') {
+    return 'remote_host_service'
+  }
+  return 'local_host_service'
+}
+
+export function backfillLegacyAutomationContexts(
+  state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'>
+): {
+  state: Pick<PersistedState, 'automations' | 'automationRuns' | 'repos' | 'projectHostSetups'>
+  changed: boolean
+} {
+  let changed = false
+  const contextsByAutomationId = new Map<string, Pick<Automation, 'runContext' | 'sourceContext'>>()
+  // Ambiguous same-ID repos remain unresolved so dispatch can refuse safely.
+  const reposById = new Map<string, Repo | undefined>()
+  for (const repo of state.repos ?? []) {
+    reposById.set(repo.id, reposById.has(repo.id) ? undefined : repo)
+  }
+  const automations = (state.automations ?? []).map((automation) => {
+    const contexts = getAutomationContextsForRepo(
+      reposById.get(getAutomationLegacyRepoId(automation)),
+      state.projectHostSetups ?? []
+    )
+    const next: Automation = { ...automation }
+    if (!Object.hasOwn(next, 'runContext')) {
+      // Backfill legacy repo-only targets once so dispatch/precheck no longer infer ownership.
+      next.runContext = contexts.runContext
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'sourceContext')) {
+      next.sourceContext = contexts.sourceContext
+      changed = true
+    }
+    contextsByAutomationId.set(next.id, {
+      runContext: next.runContext ?? null,
+      sourceContext: next.sourceContext ?? null
+    })
+    return next
+  })
+  const automationRuns = (state.automationRuns ?? []).map((run) => {
+    const automationContexts = contextsByAutomationId.get(run.automationId)
+    const next: AutomationRun = { ...run }
+    if (!Object.hasOwn(next, 'runContext')) {
+      next.runContext = automationContexts?.runContext ?? null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'sourceContext')) {
+      next.sourceContext = automationContexts?.sourceContext ?? null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'terminalPaneKey')) {
+      next.terminalPaneKey = null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'terminalPtyId')) {
+      next.terminalPtyId = null
+      changed = true
+    }
+    return next
+  })
+  if (!changed) {
+    return { state, changed: false }
+  }
+  return {
+    state: {
+      ...state,
+      automations,
+      automationRuns
+    },
+    changed: true
+  }
+}
+
+/**
+ * Writes the run target a legacy record resolved to, once: a record that already has one keeps it,
+ * so a stamp can never retarget an automation the user or a migration placed.
+ */
+export function stampLegacyAutomationRunContext(
+  operations: AutomationDefinitionOperations,
+  id: string,
+  runContext: WorkspaceRunContext
+): boolean {
+  const current = (operations.state.automations ?? []).find((entry) => entry.id === id)
+  if (!current || current.runContext) {
+    return false
+  }
+  // Replaced, not patched in place: the list projection caches on array identity.
+  operations.state.automations = operations.state.automations.map((entry) =>
+    entry.id === id ? { ...entry, runContext } : entry
+  )
+  operations.flush()
+  return true
+}
+
+export function automationContextAfterUpdate<T>(
+  saved: T | null | undefined,
+  update: T | null | undefined,
+  registry: T | null | undefined,
+  retargeted: boolean
+): T | null | undefined {
+  return update === null
+    ? null
+    : retargeted
+      ? (registry ?? update ?? null)
+      : saved === undefined
+        ? registry
+        : saved
+}

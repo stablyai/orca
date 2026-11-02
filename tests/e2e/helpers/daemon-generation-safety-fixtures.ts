@@ -35,6 +35,7 @@ export type DaemonGeneration = {
 export type GenerationCanary = {
   generation: DaemonGeneration
   role: 'live' | 'stale-mirror'
+  worktreeId: string
   sessionId: string
   rootIdentity: RecordedProcessIdentity
   descendantIdentity: RecordedProcessIdentity
@@ -165,13 +166,13 @@ export async function spawnGenerationCanary(options: {
   runtime: DaemonGenerationRuntime
   generation: DaemonGeneration
   role: GenerationCanary['role']
+  worktreeId?: string
 }): Promise<GenerationCanary> {
-  const { runtime, generation, role } = options
+  const { runtime, generation, role, worktreeId = DAEMON_GENERATION_WORKTREE_ID } = options
   const label = `${generation.label}-${role}`
   const nonce = randomUUID()
-  // Why: production daemon inventory infers ownership from the durable prefix;
-  // keep the fixture on that path so live-host adjudication cannot degrade to unknown.
-  const sessionId = `${DAEMON_GENERATION_WORKTREE_ID}@@orca-9749-${label}-${randomUUID().slice(0, 8)}`
+  // Use production’s durable ownership prefix so live-host adjudication cannot degrade to unknown.
+  const sessionId = `${worktreeId}@@orca-9749-${label}-${randomUUID().slice(0, 8)}`
   const adapter = new DaemonPtyAdapter({
     socketPath: generation.socketPath,
     tokenPath: generation.tokenPath,
@@ -212,6 +213,7 @@ export async function spawnGenerationCanary(options: {
   return {
     generation,
     role,
+    worktreeId,
     sessionId,
     rootIdentity,
     descendantIdentity,

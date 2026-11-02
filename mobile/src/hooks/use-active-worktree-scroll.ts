@@ -3,20 +3,19 @@ import type { SectionList, SectionListData } from 'react-native'
 
 type WithId = { worktreeId: string; isActive?: boolean }
 
-// Scrolls the desktop-focused worktree into view when the active selection
-// changes, so the mobile list mirrors the desktop's current workspace. Fires
-// only on a *change* of active id (not every re-render) so it never yanks the
-// list while the user scrolls or searches. Returns the ref to attach to the
-// SectionList and the onScrollToIndexFailed handler it needs for rows that
-// aren't measured yet (variable heights from the inline agent list).
+// Scroll only when the active workspace changes; revealing the same workspace after search/unfold must not yank the list. Retry unmeasured variable-height rows.
 export function useActiveWorktreeScroll<T extends WithId, S>(
-  sections: ReadonlyArray<SectionListData<T, S> & { data: readonly T[] }>
+  sections: readonly (SectionListData<T, S> & { data: readonly T[] })[],
+  collapsedGroups?: ReadonlySet<string>
 ): {
   sectionListRef: React.RefObject<SectionList<T, S> | null>
   onScrollToIndexFailed: (info: { averageItemLength: number }) => void
 } {
   const sectionListRef = useRef<SectionList<T, S>>(null)
   const lastScrolledActiveIdRef = useRef<string | null>(null)
+  // The last workspace highlighted, scrolled to or not: a hidden row coming back is no change.
+  const seenActiveIdRef = useRef<string | null>(null)
+  const collapsedGroupsRef = useRef(collapsedGroups)
 
   const activeWorktreeId = useMemo(() => {
     for (const section of sections) {
@@ -28,8 +27,7 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
     return null
   }, [sections])
 
-  // Live mirror of the current active id so the deferred retry can bail if the
-  // selection changed during its timeout (avoids a brief scroll to a stale row).
+  // Use the current active id to reject deferred retries after selection changes.
   const activeWorktreeIdRef = useRef<string | null>(activeWorktreeId)
   activeWorktreeIdRef.current = activeWorktreeId
 
@@ -37,7 +35,7 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
     (worktreeId: string): boolean => {
       for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
         const itemIndex = sections[sectionIndex].data.findIndex((w) => w.worktreeId === worktreeId)
-        if (itemIndex >= 0) {
+        if (itemIndex !== -1) {
           sectionListRef.current?.scrollToLocation({
             sectionIndex,
             itemIndex,
@@ -53,13 +51,16 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
   )
 
   useEffect(() => {
-    if (!activeWorktreeId || activeWorktreeId === lastScrolledActiveIdRef.current) {
+    const folded = collapsedGroupsRef.current !== collapsedGroups
+    collapsedGroupsRef.current = collapsedGroups
+    if (!activeWorktreeId || activeWorktreeId === seenActiveIdRef.current) {
       return
     }
-    if (scrollToWorktree(activeWorktreeId)) {
+    seenActiveIdRef.current = activeWorktreeId
+    if (!folded && scrollToWorktree(activeWorktreeId)) {
       lastScrolledActiveIdRef.current = activeWorktreeId
     }
-  }, [activeWorktreeId, scrollToWorktree])
+  }, [collapsedGroups, activeWorktreeId, scrollToWorktree])
 
   const onScrollToIndexFailed = useCallback(
     (info: { averageItemLength: number }) => {
@@ -69,8 +70,6 @@ export function useActiveWorktreeScroll<T extends WithId, S>(
       }
       setTimeout(
         () => {
-          // Bail if the active selection moved on while we waited — otherwise we'd
-          // scroll to a now-stale row before the effect corrects it.
           if (activeWorktreeIdRef.current === target) {
             scrollToWorktree(target)
           }

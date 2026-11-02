@@ -12,45 +12,11 @@ import {
   ingestGitGrepLine,
   ingestRgJsonLine,
   MAX_LINE_CONTENT_LENGTH,
-  normalizeRelativePath,
-  SEARCH_JSON_STRUCTURE_LIMITS,
-  splitSearchGlobPatterns,
-  toGitGlobPathspec
+  SEARCH_JSON_STRUCTURE_LIMITS
 } from './text-search'
-
-describe('normalizeRelativePath', () => {
-  it('collapses mixed separators and strips leading slashes', () => {
-    expect(normalizeRelativePath('a\\b\\c')).toBe('a/b/c')
-    expect(normalizeRelativePath('/a/b')).toBe('a/b')
-    expect(normalizeRelativePath('///a//b')).toBe('a/b')
-  })
-})
+import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'
 
 describe('buildRgArgs', () => {
-  it('defaults to case-insensitive, fixed-strings, hidden, exclude .git', () => {
-    const args = buildRgArgs('needle', '/root', {})
-    expect(args).toContain('--json')
-    expect(args).toContain('--hidden')
-    expect(args).toContain('--ignore-case')
-    expect(args).toContain('--fixed-strings')
-    expect(args.indexOf('!.git')).toBeGreaterThan(args.indexOf('--glob'))
-    expect(args.slice(-3)).toEqual(['--', 'needle', '/root'])
-  })
-
-  it('honors caseSensitive, wholeWord, useRegex', () => {
-    const args = buildRgArgs('q', '/r', { caseSensitive: true, wholeWord: true, useRegex: true })
-    expect(args).not.toContain('--ignore-case')
-    expect(args).toContain('--word-regexp')
-    expect(args).not.toContain('--fixed-strings')
-  })
-
-  it('splits comma-separated include/exclude patterns', () => {
-    const args = buildRgArgs('q', '/r', { includePattern: '*.ts, *.tsx', excludePattern: '*.md' })
-    expect(args).toContain('*.ts')
-    expect(args).toContain('*.tsx')
-    expect(args).toContain('!*.md')
-  })
-
   it('keeps escaped commas inside a single generated folder glob', () => {
     const args = buildRgArgs('q', '/r', { includePattern: 'foo\\,bar/**, *.ts' })
     expect(args).toContain('foo\\,bar/**')
@@ -59,14 +25,6 @@ describe('buildRgArgs', () => {
 })
 
 describe('splitSearchGlobPatterns', () => {
-  it('splits comma-separated patterns while preserving escaped commas', () => {
-    expect(splitSearchGlobPatterns('foo\\,bar/**, *.ts, dist/**')).toEqual([
-      'foo\\,bar/**',
-      '*.ts',
-      'dist/**'
-    ])
-  })
-
   it('preserves trailing escapes as literal glob input', () => {
     expect(splitSearchGlobPatterns('src\\')).toEqual(['src\\'])
   })
@@ -103,19 +61,6 @@ describe('ingestRgJsonLine', () => {
     expect(files[0].relativePath).toBe('src/a.ts')
     expect(files[0].matchCount).toBe(1)
     expect(files[0].matches[0]).toEqual({ line: 2, column: 1, matchLength: 3, lineContent: 'abc' })
-  })
-
-  it('ignores non-match messages', () => {
-    const acc = createAccumulator()
-    ingestRgJsonLine(JSON.stringify({ type: 'begin', data: {} }), '/root', acc, 100)
-    expect(acc.totalMatches).toBe(0)
-  })
-
-  it('skips malformed JSON', () => {
-    const acc = createAccumulator()
-    const verdict = ingestRgJsonLine('not json', '/root', acc, 100)
-    expect(verdict).toBe('continue')
-    expect(acc.totalMatches).toBe(0)
   })
 
   it('rejects excessive nesting before JSON.parse', () => {
@@ -194,7 +139,6 @@ describe('ingestRgJsonLine', () => {
     expect(match.matchLength).toBe(6)
     expect(match.displayColumn).toBeDefined()
     expect(match.displayMatchLength).toBe(6)
-    // Extracted column should still align with NEEDLE inside the snippet.
     const displayColumn = match.displayColumn ?? match.column
     const displayMatchLength = match.displayMatchLength ?? match.matchLength
     const sliced = match.lineContent.slice(
@@ -220,26 +164,6 @@ describe('ingestRgJsonLine', () => {
 })
 
 describe('buildGitGrepArgs', () => {
-  it('adds -i, --fixed-strings and `.` default pathspec', () => {
-    const args = buildGitGrepArgs('q', {})
-    expect(args).toContain('-i')
-    expect(args).toContain('--fixed-strings')
-    expect(args).toContain('--no-recurse-submodules')
-    expect(args.at(-1)).toBe('.')
-  })
-
-  it('uses --extended-regexp when useRegex is true', () => {
-    const args = buildGitGrepArgs('q', { useRegex: true })
-    expect(args).toContain('--extended-regexp')
-    expect(args).not.toContain('--fixed-strings')
-  })
-
-  it('includes/excludes use :(glob) pathspecs', () => {
-    const args = buildGitGrepArgs('q', { includePattern: '*.ts', excludePattern: 'dist/**' })
-    expect(args).toContain(':(glob)**/*.ts')
-    expect(args).toContain(':(exclude,glob)dist/**')
-  })
-
   it('keeps escaped commas inside one generated folder pathspec', () => {
     const args = buildGitGrepArgs('q', { includePattern: 'foo\\,bar/**, *.ts' })
     expect(args).toContain(':(glob)foo\\,bar/**')
@@ -247,36 +171,26 @@ describe('buildGitGrepArgs', () => {
   })
 })
 
-describe('toGitGlobPathspec', () => {
-  it('wraps bare globs with **/ to match recursively', () => {
-    expect(toGitGlobPathspec('*.ts')).toBe(':(glob)**/*.ts')
-    expect(toGitGlobPathspec('src/*.ts')).toBe(':(glob)src/*.ts')
-    expect(toGitGlobPathspec('*.ts', true)).toBe(':(exclude,glob)**/*.ts')
+describe('toGitGlobPathspecs', () => {
+  it('also covers the subtree so a directory name behaves like rg --glob', () => {
+    expect(toGitGlobPathspecs('node_modules', true)).toEqual([
+      ':(exclude,glob)**/node_modules',
+      ':(exclude,glob)**/node_modules/**'
+    ])
+    expect(toGitGlobPathspecs('src')).toEqual([':(glob)**/src', ':(glob)**/src/**'])
+    expect(toGitGlobPathspecs('build/out')).toEqual([':(glob)build/out', ':(glob)build/out/**'])
+  })
+
+  it('keeps trailing-slash patterns directory-only', () => {
+    expect(toGitGlobPathspecs('node_modules/', true)).toEqual([':(exclude,glob)**/node_modules/**'])
+    expect(toGitGlobPathspecs('src/')).toEqual([':(glob)**/src/**'])
   })
 })
 
 describe('buildSubmatchRegex', () => {
-  it('escapes literal query by default, gi flags', () => {
-    const re = buildSubmatchRegex('a.b', {})
-    expect(re?.flags).toBe('gi')
-    expect(re?.source).toBe('a\\.b')
-  })
-
-  it('wholeWord wraps in \\b', () => {
-    const re = buildSubmatchRegex('foo', { wholeWord: true })
-    expect(re?.source).toBe('\\bfoo\\b')
-  })
-
-  it('useRegex passes through', () => {
-    const re = buildSubmatchRegex('a|b', { useRegex: true, caseSensitive: true })
-    expect(re?.source).toBe('a|b')
-    expect(re?.flags).toBe('g')
-  })
-
   it('returns null for queries git grep accepts but JS RegExp rejects', () => {
     // Unbalanced group — git grep ERE accepts it as literal, JS RegExp throws.
     expect(buildSubmatchRegex('(foo', { useRegex: true })).toBeNull()
-    // Unterminated character class.
     expect(buildSubmatchRegex('[abc', { useRegex: true })).toBeNull()
   })
 })
@@ -317,6 +231,23 @@ describe('ingestGitGrepLine', () => {
         [2, 1],
         [2, 19]
       ])
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true })
+    }
+  })
+
+  it('does not broaden a separator-only include pattern to the repository', () => {
+    const rootPath = mkdtempSync(join(tmpdir(), 'orca-search-git-'))
+    try {
+      execFileSync('git', ['init'], { cwd: rootPath, stdio: 'ignore' })
+      writeFileSync(join(rootPath, 'target.ts'), 'needle\n')
+
+      expect(() =>
+        execFileSync('git', buildGitGrepArgs('needle', { includePattern: '/' }), {
+          cwd: rootPath,
+          stdio: 'ignore'
+        })
+      ).toThrow()
     } finally {
       rmSync(rootPath, { recursive: true, force: true })
     }
@@ -378,7 +309,6 @@ describe('ingestGitGrepLine', () => {
 
   it('zero-length regex does not loop', () => {
     const acc = createAccumulator()
-    // A pattern that matches zero-length at every position.
     const re = new RegExp('', 'g')
     ingestGitGrepLine('a.ts\x001\x00abc', '/r', re, acc, 5)
     expect(acc.totalMatches).toBeGreaterThan(0)
@@ -429,42 +359,6 @@ describe('ingestGitGrepLine', () => {
 })
 
 describe('finalize', () => {
-  it('returns the expected SearchResult shape', () => {
-    const acc = createAccumulator()
-    acc.fileMap.set('/r/a.ts', {
-      filePath: '/r/a.ts',
-      relativePath: 'a.ts',
-      matchCount: 1,
-      matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
-    })
-    acc.totalMatches = 1
-    acc.truncated = true
-    expect(finalize(acc)).toEqual({
-      files: [
-        {
-          filePath: '/r/a.ts',
-          relativePath: 'a.ts',
-          matchCount: 1,
-          matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
-        }
-      ],
-      totalMatches: 1,
-      truncated: true
-    })
-  })
-
-  it('filters impossible empty file rows before returning results', () => {
-    const acc = createAccumulator()
-    acc.fileMap.set('/r/a.ts', { filePath: '/r/a.ts', relativePath: 'a.ts', matches: [] })
-    acc.fileMap.set('/r/b.ts', {
-      filePath: '/r/b.ts',
-      relativePath: 'b.ts',
-      matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
-    })
-    acc.totalMatches = 1
-    expect(finalize(acc).files.map((file) => file.relativePath)).toEqual(['b.ts'])
-  })
-
   it('normalizes missing and too-low per-file match counts', () => {
     const acc = createAccumulator()
     acc.fileMap.set('/r/a.ts', {

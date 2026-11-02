@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { SparsePreset } from '../../../../shared/types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { translate } from '@/i18n/i18n'
 
 const ERROR_TOAST_DURATION = 60_000
@@ -9,8 +9,7 @@ const ERROR_TOAST_DURATION = 60_000
 export type SparsePresetsLoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
 
 export type SparsePresetsSlice = {
-  /** Per-repo preset list. Lazily populated by `fetchSparsePresets`; missing
-   *  key means "not yet fetched", empty array means "fetched, none exist". */
+  /** Missing means unfetched; [] means fetched with no presets. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
   /** Per-repo fetch guard so missing preset buckets keep their loading meaning. */
   sparsePresetsLoadingByRepo: Record<string, boolean>
@@ -34,11 +33,7 @@ type SparsePresetsMaps = Pick<
   | 'sparsePresetsErrorByRepo'
 >
 
-// Why: the four per-repo sparse-preset maps are populated lazily per repo but
-// were never pruned when a repo was removed, so orphaned entries accumulated for
-// the renderer's whole session. Call this from the repo-removal reducers to drop
-// entries for repos that no longer exist. Returns only the maps that changed so
-// unrelated selectors don't re-run.
+// Repo removal prunes all four lazy preset maps; return only changed maps to preserve unrelated selectors.
 export function omitSparsePresetsForRepos(
   s: SparsePresetsMaps,
   removedRepoIds: Iterable<string>
@@ -145,7 +140,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
       set((s) => {
         const existing = s.sparsePresetsByRepo[args.repoId]
         if (existing === undefined) {
-          return {}
+          return s
         }
         const without = existing.filter((preset) => preset.id !== saved.id)
         return {

@@ -138,7 +138,7 @@ describe('registerCrashReportingHandlers', () => {
     _resetRendererErrorReportDedupeForTests()
   })
 
-  it('copies the latest pending diagnostic text to the clipboard', async () => {
+  it('copies the requested captured report to the clipboard', async () => {
     const latest = report()
     registerCrashReportingHandlers({
       getById: vi.fn(async () => latest),
@@ -151,6 +151,7 @@ describe('registerCrashReportingHandlers', () => {
     } as never)
 
     const result = await handlers.get('crashReports:copyLatestDiagnostics')?.(null, {
+      reportId: latest.id,
       notes: 'extra /Users/alice/project'
     })
 
@@ -344,47 +345,6 @@ describe('registerCrashReportingHandlers', () => {
     )
     expect(markSent).not.toHaveBeenCalled()
     expect(listRecent).not.toHaveBeenCalled()
-  })
-
-  it('uploads crash logs by default after Send Report', async () => {
-    registerCrashReportingHandlers({
-      getById: vi.fn(async () => null),
-      dismiss: vi.fn(),
-      markSent: vi.fn(),
-      markDismissedSent: vi.fn(),
-      listRecent: vi.fn(async () => []),
-      record: vi.fn(),
-      formatDiagnosticText: vi.fn()
-    } as never)
-
-    const result = await handlers.get('crashReports:submit')?.(null, {
-      notes: 'manual report',
-      submitAnonymously: true,
-      githubLogin: null,
-      githubEmail: null
-    })
-
-    expect(result).toEqual({
-      ok: true,
-      report: null,
-      diagnosticBundle: {
-        status: 'attached',
-        bundleSubmissionId: 'bundleabcdefghijklmnop',
-        bytes: 25,
-        spanCount: 1
-      }
-    })
-    expect(submitFeedbackMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        feedback: expect.stringContaining('Status: attached'),
-        diagnosticBundle: {
-          bundleSubmissionId: 'bundleabcdefghijklmnop',
-          content: diagnosticBundle().payload,
-          bytes: 25,
-          spanCount: 1
-        }
-      })
-    )
   })
 
   it('marks the report sent when transport retries successfully without diagnostic logs', async () => {

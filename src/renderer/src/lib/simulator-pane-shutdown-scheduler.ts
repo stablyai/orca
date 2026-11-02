@@ -9,7 +9,7 @@ type SimulatorTabReference = {
 
 type SimulatorPaneShutdownOptions = {
   getTabsForWorktree?: (worktreeId: string) => SimulatorTabReference[]
-  shutdownManagedSimulator?: (worktreeId: string) => Promise<unknown> | unknown
+  shutdownManagedSimulator?: (worktreeId: string) => unknown
 }
 
 type ScheduleSimulatorPaneShutdownOptions = SimulatorPaneShutdownOptions & {
@@ -72,8 +72,7 @@ export function scheduleSimulatorPaneManagedShutdown(
     if (!shouldShutdownSimulatorForPaneUnmountFromTabs(getTabsForWorktree(worktreeId))) {
       return
     }
-    // Why: closing/reopening or moving a simulator tab briefly unmounts the pane.
-    // Delaying avoids killing a stream that the replacement pane is about to reuse.
+    // Delay shutdown across brief close/reopen/move unmounts so replacement panes can reuse the stream.
     void shutdownManagedSimulatorIfNoPane(worktreeId, undefined, {
       getTabsForWorktree,
       shutdownManagedSimulator: shutdown

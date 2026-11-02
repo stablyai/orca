@@ -1,14 +1,9 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import {
-  addPreviewContent,
-  addPreviewMessage,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
+import { addSessionContent, addSessionText } from './session-scanner-messages'
 import {
   kimiPrimaryAgentWirePath,
   kimiSessionIdFromStatePath,
@@ -16,28 +11,32 @@ import {
   readKimiWorkDirBySessionId
 } from './session-scanner-kimi-paths'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   asRecord,
   extractContentText,
   extractString,
-  normalizePreviewText,
   normalizeTitleText,
   numberValue,
   parseJsonObject
 } from './session-scanner-values'
 
-// Parses a Kimi Code `state.json` plus its sibling `agents/<id>/wire.jsonl`
-// transcript into an AI Vault session. Metadata (title, timestamps, last prompt)
-// comes from state.json; the work directory comes from the top-level
-// session_index.jsonl; model/messages/tokens come from the wire transcript.
+// State supplies metadata, session_index supplies cwd, and the wire transcript supplies messages and usage.
 export async function parseKimiSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   let stateRecord: Record<string, unknown> | null
   try {
-    stateRecord = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
-  } catch {
+    stateRecord = asRecord(
+      JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
+    )
+  } catch (error) {
+    // Propagate WSL refusal so an unreachable state file is not cached as no session.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return null
   }
   if (!stateRecord) {
@@ -45,11 +44,9 @@ export async function parseKimiSessionFile(
   }
 
   const sessionId = kimiSessionIdFromStatePath(file.path)
-  const accumulator = createAccumulator({ agent: 'kimi', file, sessionId })
+  const accumulator = createAccumulator({ agent: 'kimi', file, sessionId, messages })
 
-  // Why: Kimi sessions are work-dir-scoped — the resume command must `cd` into
-  // the original directory or the CLI rejects it. That path lives only in the
-  // top-level session_index.jsonl, keyed by the (prefixed) session id.
+  // Kimi resume requires the indexed work directory; session IDs alone are not sufficient.
   const workDirBySessionId = await readKimiWorkDirBySessionId(
     kimiSessionIndexPathFromStatePath(file.path)
   )
@@ -71,23 +68,17 @@ async function consumeKimiWireTranscript(
 ): Promise<void> {
   let pendingAssistantText: string[] = []
   const flushAssistant = (): void => {
-    // Why: previews use the 220-char limit (normalizePreviewText), not the
-    // 96-char title limit — assistant replies are shown in full preview width
-    // like every other agent's. Join raw chunks first so inter-chunk spacing
-    // survives; normalizePreviewText then collapses whitespace and caps length.
-    const text = normalizePreviewText(pendingAssistantText.join(''))
+    const text = pendingAssistantText.join('')
     pendingAssistantText = []
     if (text) {
       accumulator.messageCount++
-      addPreviewMessage(accumulator, { role: 'assistant', text })
+      addSessionText(accumulator, { role: 'assistant', text })
     }
   }
 
+  const input = openTranscriptReadStream(wirePath, { encoding: 'utf-8' }, 'scan')
+  const lines = createInterface({ input, crlfDelay: Infinity })
   try {
-    const lines = createInterface({
-      input: createReadStream(wirePath, { encoding: 'utf-8' }),
-      crlfDelay: Infinity
-    })
     for await (const line of lines) {
       const record = parseJsonObject(line)
       if (!record) {
@@ -111,25 +102,28 @@ async function consumeKimiWireTranscript(
           break
       }
     }
-  } catch {
-    // No transcript yet (session created but never ran a turn) — metadata-only
-    // sessions still belong in the panel.
+  } catch (error) {
+    // Metadata-only sessions may list, but WSL refusal must propagate so missing wire content remains retryable.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
+  } finally {
+    // readline.close() leaves its input open; destroy the gated stream after read failures too.
+    lines.close()
+    input.destroy()
   }
   flushAssistant()
 }
 
 function consumeKimiUserMessage(accumulator: SessionAccumulator, value: unknown): void {
   const message = asRecord(value)
-  // Why: only real user turns count. Kimi injects synthetic `role: "user"`
-  // messages (origin.kind === "injection") for system reminders like the
-  // auto-permission notice; those are not user activity.
+  // Kimi also labels injected reminders as user-role messages; origin.kind distinguishes real input.
   if (!message || message.role !== 'user' || asRecord(message.origin)?.kind !== 'user') {
     return
   }
   accumulator.messageCount++
-  // Title uses the 96-char title limit; the preview uses the 220-char limit.
   accumulator.title ??= extractContentText(message.content)
-  addPreviewContent(accumulator, 'user', message.content)
+  addSessionContent(accumulator, 'user', message.content)
 }
 
 function consumeKimiLoopEvent(
@@ -143,23 +137,19 @@ function consumeKimiLoopEvent(
   }
   if (event.type === 'content.part') {
     const part = asRecord(event.part)
-    // Push the raw chunk text; flushAssistant normalizes the joined result so
-    // multi-chunk spacing is not lost to per-chunk trimming.
+    // Normalize after joining chunks so per-chunk trimming cannot erase spacing.
     if (part?.type === 'text' && typeof part.text === 'string') {
       pendingAssistantText.push(part.text)
     }
     return
   }
-  // A step end closes one assistant turn; flush its accumulated text as a single
-  // preview message so streamed `content.part` chunks collapse into one entry.
+  // Collapse streamed text chunks into one preview per assistant turn.
   if (event.type === 'step.end') {
     flushAssistant()
   }
 }
 
-// Kimi reports per-turn usage as {inputOther, output, inputCacheRead,
-// inputCacheCreation}; sum all four for a session total. Skip any future
-// cumulative ("session"-scoped) record so turn deltas are not double-counted.
+// Sum turn usage buckets; ignore session-scoped totals to avoid double-counting cumulative usage.
 function kimiUsageTotal(value: unknown, usageScope: unknown): number {
   if (usageScope === 'session') {
     return 0

@@ -1,7 +1,8 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
-import type { FolderWorkspace, Worktree } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   canGoBackWorktreeHistory,
@@ -81,7 +82,6 @@ describe('worktree-nav-history slice: recordWorktreeVisit', () => {
     store.getState().recordWorktreeVisit('a')
     store.getState().recordWorktreeVisit('b')
     store.getState().recordWorktreeVisit('a')
-    // A repeated activation of the current entry is a no-op
     store.getState().recordWorktreeVisit('a')
 
     expect(store.getState().worktreeNavHistory).toEqual(['a', 'b', 'a'])
@@ -93,9 +93,7 @@ describe('worktree-nav-history slice: recordWorktreeVisit', () => {
     store.getState().recordWorktreeVisit('a')
     store.getState().recordWorktreeVisit('b')
     store.getState().recordWorktreeVisit('c')
-    // Move index back to 'a' (simulate two back presses)
     store.setState({ worktreeNavHistoryIndex: 0 })
-    // New navigation truncates 'b' and 'c' from the forward stack
     store.getState().recordWorktreeVisit('d')
 
     expect(store.getState().worktreeNavHistory).toEqual(['a', 'd'])
@@ -109,7 +107,6 @@ describe('worktree-nav-history slice: recordWorktreeVisit', () => {
     }
     const state = store.getState()
     expect(state.worktreeNavHistory).toHaveLength(50)
-    // Oldest 10 are evicted; the head is the most recent.
     expect(state.worktreeNavHistory[0]).toBe('w10')
     expect(state.worktreeNavHistory[49]).toBe('w59')
     expect(state.worktreeNavHistoryIndex).toBe(49)
@@ -117,15 +114,13 @@ describe('worktree-nav-history slice: recordWorktreeVisit', () => {
 })
 
 describe('worktree-nav-history slice: goBack / goForward', () => {
-  // Why: reset the module-level activator after every test so a mid-test
-  // throw cannot leak mock state into sibling tests in the same worker.
+  // Reset module activator after every case, including throws, to prevent sibling-test contamination.
   afterEach(() => {
     setWorktreeNavActivator(null)
   })
 
   it('moves the index without mutating the history array on success', () => {
     const store = createHistoryStore(['a', 'b', 'c'])
-    // Install activator that simulates a successful activation.
     setWorktreeNavActivator(() => ({ primaryTabId: null }))
 
     store.getState().recordWorktreeVisit('a')
@@ -154,7 +149,6 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
   })
 
   it('skips deleted worktrees when searching for the prev live entry', () => {
-    // Only 'a' and 'c' remain in worktreesByRepo; 'b' was deleted.
     const store = createHistoryStore(['a', 'c'])
     const activated: string[] = []
     setWorktreeNavActivator((id) => {
@@ -192,7 +186,6 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
   })
 
   it('no-ops when the entire direction is dead', () => {
-    // All prior entries point at deleted worktrees.
     const store = createHistoryStore(['c'])
     const activated: string[] = []
     setWorktreeNavActivator((id) => {

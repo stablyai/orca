@@ -20,6 +20,39 @@ function bmpHeader(width: number, height: number): Buffer {
   return bmp
 }
 
+/** SOI, then `metadataBytes` of APP2 padding (plus `extraSegments` empty ones), then SOF0. */
+function jpegWithMetadata(
+  metadataBytes: number,
+  width: number,
+  height: number,
+  extraSegments = 0
+): Buffer {
+  const parts = [Buffer.from([0xff, 0xd8])]
+  for (let written = 0; written < metadataBytes;) {
+    // A JPEG segment length field is 16 bits, so real files chain many segments to carry a profile.
+    const size = Math.min(65_533, metadataBytes - written)
+    const header = Buffer.alloc(4)
+    header.writeUInt16BE(0xffe2)
+    header.writeUInt16BE(size + 2, 2)
+    parts.push(header, Buffer.alloc(size))
+    written += size
+  }
+  for (let index = 0; index < extraSegments; index += 1) {
+    const empty = Buffer.alloc(4)
+    empty.writeUInt16BE(0xffe2)
+    empty.writeUInt16BE(2, 2)
+    parts.push(empty)
+  }
+  const sof = Buffer.alloc(11)
+  sof.writeUInt16BE(0xffc0)
+  sof.writeUInt16BE(8, 2)
+  sof[4] = 8
+  sof.writeUInt16BE(height, 5)
+  sof.writeUInt16BE(width, 7)
+  parts.push(sof)
+  return Buffer.concat(parts)
+}
+
 function icoWithPayload(payload: Buffer, width = 1, height = 1): Buffer {
   const header = Buffer.alloc(22)
   header.writeUInt16LE(1, 2)
@@ -59,4 +92,30 @@ describe('readRasterImageDimensions', () => {
     expect(readRasterImageDimensions(truncated)).toBeNull()
     expect(readRasterImageDimensions(bmpHeader(0, 16))).toBeNull()
   })
+
+  it('reads a JPEG whose frame header sits behind large chained metadata', () => {
+    // Real ICC/MPF profiles span chained 64KiB segments before SOF; these valid images must still yield dimensions.
+    expect(readRasterImageDimensions(jpegWithMetadata(1_400 * 1024, 4_000, 3_000))).toEqual({
+      width: 4_000,
+      height: 3_000
+    })
+    expect(readRasterImageDimensions(jpegWithMetadata(0, 640, 480, 6_000))).toEqual({
+      width: 640,
+      height: 480
+    })
+  })
+
+  it.each(['c00011081770177003011100021100031100', 'c0001108000c001003011100021100031100'])(
+    'reads the real JPEG frame after stray bytes: %s',
+    (strayHex) => {
+      const jpeg = jpegWithMetadata(0, 640, 480)
+      const prefixed = Buffer.concat([
+        jpeg.subarray(0, 2),
+        Buffer.from(strayHex, 'hex'),
+        jpeg.subarray(2)
+      ])
+
+      expect(readRasterImageDimensions(prefixed)).toEqual({ width: 640, height: 480 })
+    }
+  )
 })

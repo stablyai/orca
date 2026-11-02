@@ -16,6 +16,8 @@ vi.mock('electron', () => ({
   net: { fetch: (...args: unknown[]) => fetchMock(...args) }
 }))
 
+import { MAX_FEEDBACK_IMAGE_RESPONSE_BYTES } from './feedback-image-attachments'
+import { MAX_FEEDBACK_IMAGE_TOTAL_BYTES } from '../../shared/feedback-image-limits'
 import { registerFeedbackHandlers, submitFeedback } from './feedback'
 
 function okResponse(): Response {
@@ -238,17 +240,6 @@ describe('submitFeedback', () => {
     expect(postedBody(1)).not.toHaveProperty('diagnosticBundle')
   })
 
-  it('retries a proxy-rejected diagnostic attachment as website JSON', async () => {
-    fetchMock.mockResolvedValueOnce(errorResponse(403)).mockResolvedValueOnce(okResponse())
-
-    await expect(submitFeedback(diagnosticSubmitArgs())).resolves.toEqual({
-      ok: true,
-      diagnosticBundleFailure: { status: 403, error: 'status 403' }
-    })
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
-    expect(requestInit(1).body).not.toBeInstanceOf(FormData)
-  })
-
   it.each([401, 409, 429])(
     'does not retry a diagnostic attachment rejected with status %s',
     async (status) => {
@@ -363,18 +354,6 @@ describe('submitFeedback', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('posts to the website API first so crash reports use the snippet-capable route', async () => {
-    await submitFeedback({
-      feedback: '[Crash Report]',
-      submissionType: 'crash',
-      submitAnonymously: true,
-      githubLogin: null,
-      githubEmail: null
-    } as Parameters<typeof submitFeedback>[0])
-
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
-  })
-
   it('forces renderer IPC submissions onto the feedback lane', async () => {
     registerFeedbackHandlers()
     await handlers.get('feedback:submit')?.(null, {
@@ -390,6 +369,244 @@ describe('submitFeedback', () => {
       submissionType: 'feedback',
       githubLogin: 'trusted-user',
       githubEmail: null
+    })
+  })
+
+  describe('image attachments', () => {
+    function pngImage(bytes = 8): { contentType: string; data: Uint8Array } {
+      return { contentType: 'image/png', data: new Uint8Array(bytes).fill(1) }
+    }
+
+    function imageSubmitArgs(
+      images: { contentType: string; data: Uint8Array }[]
+    ): Parameters<typeof submitFeedback>[0] {
+      return {
+        feedback: 'images attached',
+        submissionType: 'feedback',
+        githubLogin: 'someone',
+        githubEmail: null,
+        images
+      }
+    }
+
+    function jsonResponse(body: unknown): Response {
+      return Response.json(body, { status: 202 })
+    }
+
+    it('sends attached images as multipart form parts', async () => {
+      await submitFeedback(imageSubmitArgs([pngImage(), pngImage()]))
+
+      const body = requestInit().body as FormData
+      expect(body).toBeInstanceOf(FormData)
+      expect(body.getAll('feedbackImage')).toHaveLength(2)
+      expect(body.get('feedback')).toBe('images attached')
+      expect(body.get('submissionType')).toBe('feedback')
+      expect(body.get('appVersion')).toBe('1.2.3-test')
+    })
+
+    it('keeps the JSON lane when nothing is attached', async () => {
+      await submitFeedback(imageSubmitArgs([]))
+
+      expect(requestInit().body).not.toBeInstanceOf(FormData)
+      expect(postedBody().feedback).toBe('images attached')
+    })
+
+    it('reports partial delivery when the server could not attach the images', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true, imagesDelivered: false }))
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false
+      })
+    })
+
+    it('accepts the production atomic-success response when it omits the image result', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: true
+      })
+    })
+
+    it('reports unconfirmed delivery for a settled non-JSON 2xx', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 202,
+        json: async () => {
+          throw new SyntaxError('Unexpected token')
+        }
+      } as unknown as Response)
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false
+      })
+    })
+
+    it('bounds the image-delivery response body', async () => {
+      fetchMock.mockResolvedValue(
+        new Response('x'.repeat(MAX_FEEDBACK_IMAGE_RESPONSE_BYTES + 1), { status: 202 })
+      )
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false
+      })
+    })
+
+    it('fails a stalled delivery response body at the attachment timeout', async () => {
+      vi.useFakeTimers()
+      fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
+        Promise.resolve({
+          ok: true,
+          status: 202,
+          json: () =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new Error('body aborted')))
+            })
+        } as unknown as Response)
+      )
+
+      const result = submitFeedback(imageSubmitArgs([pngImage()]))
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      await expect(result).resolves.toEqual({
+        ok: false,
+        status: null,
+        error: 'request timed out after 60 seconds'
+      })
+      expect(requestInit().signal).toMatchObject({ aborted: true })
+    })
+
+    it('resends the report as text-only JSON when the host rejects the image payload', async () => {
+      fetchMock.mockResolvedValueOnce(errorResponse(413)).mockResolvedValueOnce(okResponse())
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage(), pngImage()]))).resolves.toEqual({
+        ok: true,
+        imagesDelivered: false,
+        imagesFailure: { status: 413, error: 'status 413' }
+      })
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(requestInit(0).body).toBeInstanceOf(FormData)
+      expect(fetchMock.mock.calls[1]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
+      expect(requestInit(1).headers).toEqual({ 'Content-Type': 'application/json' })
+      expect(postedBody(1)).toMatchObject({
+        feedback: 'images attached',
+        submissionType: 'feedback',
+        githubLogin: 'someone'
+      })
+      expect(postedBody(1)).not.toHaveProperty('images')
+    })
+
+    it('keeps both failures when the text-only resend also fails', async () => {
+      fetchMock.mockResolvedValueOnce(errorResponse(413)).mockResolvedValueOnce(errorResponse(503))
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: false,
+        status: 503,
+        error: 'status 413; retry: status 503'
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it.each([401, 429, 500, 502])(
+      'does not resend an image submission rejected with status %s',
+      async (status) => {
+        fetchMock.mockResolvedValueOnce(errorResponse(status))
+
+        await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+          ok: false,
+          status,
+          error: `status ${status}`
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+      }
+    )
+
+    it('does not resend an image submission after a network error', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('upload network failed'))
+
+      await expect(submitFeedback(imageSubmitArgs([pngImage()]))).resolves.toEqual({
+        ok: false,
+        status: null,
+        error: 'upload network failed'
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects an image set over the total byte budget before any request is made', async () => {
+      const half = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / 2
+
+      const result = await submitFeedback(
+        imageSubmitArgs([pngImage(half), pngImage(half), pngImage(1)])
+      )
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: `Image attachments must total ${MAX_FEEDBACK_IMAGE_TOTAL_BYTES} bytes or fewer.`
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    // Enforce MIME ownership at IPC even if a renderer bypasses its own checks.
+    it('rejects a prototype member posing as a content type over IPC', async () => {
+      registerFeedbackHandlers()
+      const result = (await handlers.get('feedback:submit')?.(null, {
+        feedback: 'images attached',
+        githubLogin: null,
+        githubEmail: null,
+        images: [{ contentType: 'constructor', data: new Uint8Array(4).fill(1) }]
+      })) as { ok: boolean; error?: string }
+
+      expect(result).toMatchObject({ ok: false, error: 'Unsupported image type.' })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects malformed IPC bytes before typed-array normalization', async () => {
+      registerFeedbackHandlers()
+      const result = (await handlers.get('feedback:submit')?.(null, {
+        feedback: 'images attached',
+        githubLogin: null,
+        githubEmail: null,
+        images: [{ contentType: 'image/png', data: '8388608' }]
+      })) as { ok: boolean; error?: string }
+
+      expect(result).toMatchObject({ ok: false, error: 'Invalid image attachment bytes.' })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects oversized IPC batches before normalizing their entries', async () => {
+      registerFeedbackHandlers()
+      const result = (await handlers.get('feedback:submit')?.(null, {
+        feedback: 'images attached',
+        githubLogin: null,
+        githubEmail: null,
+        images: Array.from({ length: 5 }, () => ({
+          contentType: 'image/png',
+          data: '8388608'
+        }))
+      })) as { ok: boolean; error?: string }
+
+      expect(result).toMatchObject({ ok: false, error: 'Attach 4 images or fewer.' })
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('does not fail a crash report over images it was never going to send', async () => {
+      // Crash submissions discard images; invalid unused images must not block delivery.
+      await submitFeedback({
+        ...diagnosticSubmitArgs(),
+        images: Array.from({ length: 9 }, () => ({
+          contentType: 'application/pdf',
+          data: new Uint8Array(0)
+        }))
+      } as Parameters<typeof submitFeedback>[0])
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = requestInit().body as FormData
+      expect(body.getAll('feedbackImage')).toHaveLength(0)
+      expect(body.get('submissionType')).toBe('crash')
     })
   })
 })

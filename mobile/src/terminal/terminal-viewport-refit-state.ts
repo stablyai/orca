@@ -1,4 +1,5 @@
 import type { RpcResponse } from '../transport/types'
+import { isMethodNotFoundRefusal } from '../transport/rpc-acceptance-policies'
 
 export type TerminalUpdateViewportCapability = 'unknown' | 'supported' | 'unsupported'
 
@@ -13,19 +14,7 @@ export type TerminalViewportRefitTargetState = {
   currentRunSeq: number
 }
 
-export function isTerminalUpdateViewportUpdated(response: RpcResponse): boolean {
-  if (!response.ok || typeof response.result !== 'object' || response.result == null) {
-    return false
-  }
-  return (response.result as { updated?: unknown }).updated === true
-}
-
-export function isTerminalUpdateViewportApplied(response: RpcResponse): boolean {
-  if (!response.ok || typeof response.result !== 'object' || response.result == null) {
-    return false
-  }
-  return (response.result as { applied?: unknown }).applied === true
-}
+export type TerminalViewportUpdateOutcome = { updated: boolean; applied: boolean }
 
 export function resolveTerminalUpdateViewportCapability(
   response: RpcResponse
@@ -33,11 +22,10 @@ export function resolveTerminalUpdateViewportCapability(
   if (response.ok) {
     return 'supported'
   }
-  return response.error.code === 'method_not_found' ? 'unsupported' : 'unknown'
+  return isMethodNotFoundRefusal(response) ? 'unsupported' : 'unknown'
 }
 
-// Why: defer height refits while typing, then coalesce every skipped layout
-// change into one correction after the keyboard closes.
+// Defer typing-time height refits and coalesce them into one correction after keyboard close.
 export type TerminalFrameHeightRefitState = {
   frameHeight: number
   keyboardVisible: boolean
@@ -54,9 +42,7 @@ export function reduceTerminalFrameHeightRefit(
   event: TerminalFrameHeightRefitEvent
 ): { state: TerminalFrameHeightRefitState; shouldRefit: boolean } {
   if (event.type === 'refit-committed') {
-    // Why: the debounced height refit is firing. The keyboard can reopen during
-    // the debounce window, so re-check here and re-defer rather than reflow the
-    // PTY mid-keystroke; it runs on the next keyboard close.
+    // Keyboard may reopen during debounce; defer again instead of reflowing mid-keystroke.
     if (state.keyboardVisible) {
       return { state: { ...state, pending: true }, shouldRefit: false }
     }

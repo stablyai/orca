@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { findCreatedWorktree } from './created-worktree-reconciliation'
-import { areWorktreePathsEqual } from './worktree-path-comparison'
+import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 
 type ListedWorktree = { path: string; branch?: string }
 

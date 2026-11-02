@@ -1,7 +1,4 @@
-// Leaf module (imports nothing from the store) holding the consumed
-// agent-startup-delivery guard set, so store slices can purge it on tab/worktree
-// removal without creating a store → agent-startup-delayed-delivery → store
-// import cycle.
+// Keep consumed guards store-free so tab/worktree teardown can purge them without a delayed-delivery/store import cycle.
 
 export function agentStartupDeliveryKey(delivery: {
   worktreeId: string
@@ -29,10 +26,7 @@ export function clearConsumedAgentStartupDeliveriesForTests(): void {
   consumedAgentStartupDeliveries.clear()
 }
 
-// Why: one consumed guard is recorded per launch that reached delivery and is
-// never released on the happy path, so guards for removed tabs/worktrees would
-// accumulate for the renderer's whole session. Drop them when the owning tab is
-// closed or its worktree is removed.
+// Successful guards persist until teardown; purge removed tabs/worktrees to bound session-long accumulation.
 export function forgetAgentStartupDeliveriesForTabs(tabIds: Iterable<string>): void {
   const tabIdSet = tabIds instanceof Set ? tabIds : new Set(tabIds)
   if (tabIdSet.size === 0) {

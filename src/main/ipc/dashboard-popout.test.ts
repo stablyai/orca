@@ -53,6 +53,24 @@ const mainSender = { id: 1, send: vi.fn() }
 const popoutSender = { id: 2, send: vi.fn() }
 const untrustedSender = { id: 3, send: vi.fn() }
 const SNAPSHOT = { generatedAt: 1, cards: [] }
+const CARD = {
+  paneKey: 'tab-1:leaf-1',
+  ptyId: 'pty-1',
+  agentType: 'codex',
+  bucket: 'working',
+  dotState: 'working',
+  task: 'Ship it',
+  repoId: 'repo-1',
+  worktreeId: 'worktree-1',
+  tabId: 'tab-1',
+  leafId: 'leaf-1',
+  repoName: 'Orca',
+  worktreeName: 'Dashboard',
+  startedAt: 1,
+  finishedAt: null,
+  stateChangedAt: 1,
+  unseen: false
+}
 
 function makeWindow(sender: typeof mainSender) {
   return {
@@ -78,6 +96,14 @@ function makeStore(enabled = true) {
       )
   }
 }
+
+// These cases exercise foreground behavior against Electron mocks.
+beforeEach(() => {
+  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', undefined)
+  vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
+  vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
+})
+afterEach(() => vi.unstubAllEnvs())
 
 describe('registerDashboardPopoutHandlers', () => {
   let store: ReturnType<typeof makeStore>
@@ -106,14 +132,9 @@ describe('registerDashboardPopoutHandlers', () => {
 
     store.getSettings.mockReturnValue({ experimentalAgentDashboardPopout: true })
     handlers.get('dashboardPopout:open')!({ sender: mainSender } as never)
-    expect(createPopoutMock).toHaveBeenCalledWith(store, undefined, {
+    expect(createPopoutMock).toHaveBeenCalledWith(store, {
       getKeybindings: expect.any(Function)
     })
-  })
-
-  it('auto-closes the popout when the feature is disabled', () => {
-    store.fireSettingsChanged(false)
-    expect(closePopoutMock).toHaveBeenCalledOnce()
   })
 
   it('caches and forwards only valid trusted snapshots', () => {
@@ -131,6 +152,27 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', SNAPSHOT)
   })
 
+  // Invalid cards must not silently freeze the rest of the board.
+  it('keeps publishing the board when one card is invalid, and says so', () => {
+    const popout = makeWindow(popoutSender)
+    getPopoutMock.mockReturnValue(popout)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const good = { ...CARD, paneKey: 'tab-1:leaf-1' }
+    const bad = { ...CARD, paneKey: 'tab-2:leaf-2', conversationName: 'x'.repeat(1_025) }
+
+    handlers.get('dashboard:publishSnapshot')!({ sender: mainSender } as never, {
+      generatedAt: 2,
+      cards: [good, bad]
+    })
+
+    expect(popoutSender.send).toHaveBeenCalledWith('dashboard:snapshot', {
+      generatedAt: 2,
+      cards: [good]
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('dropped 1 invalid card'))
+    warn.mockRestore()
+  })
+
   it('replays the cached snapshot only to the popout and nudges only the trusted main renderer', () => {
     const popout = makeWindow(popoutSender)
     getPopoutMock.mockReturnValue(popout)
@@ -144,14 +186,6 @@ describe('registerDashboardPopoutHandlers', () => {
     expect(sendToTrustedMock).toHaveBeenCalledWith('dashboard:snapshotRequested', null)
   })
 
-  it('reports open state only to the trusted main renderer', () => {
-    getPopoutMock.mockReturnValue(makeWindow(popoutSender))
-    expect(handlers.get('dashboard:getPopoutOpen')!({ sender: untrustedSender } as never)).toBe(
-      false
-    )
-    expect(handlers.get('dashboard:getPopoutOpen')!({ sender: mainSender } as never)).toBe(true)
-  })
-
   it('relays valid seen acknowledgements from only the popout', () => {
     handlers.get('dashboardPopout:ackAgent')!({ sender: untrustedSender } as never, {
       paneKey: 'tab1:leaf1'
@@ -162,7 +196,14 @@ describe('registerDashboardPopoutHandlers', () => {
     handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
       paneKey: 'tab1:leaf1'
     })
-    expect(sendToTrustedMock).toHaveBeenCalledWith('ui:ackDashboardAgent', 'tab1:leaf1')
+    handlers.get('dashboardPopout:ackAgent')!({ sender: popoutSender } as never, {
+      paneKey: 'tab1:leaf1',
+      intent: 'explicit'
+    })
+    expect(sendToTrustedMock.mock.calls).toEqual([
+      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'view' }],
+      ['ui:ackDashboardAgent', { paneKey: 'tab1:leaf1', intent: 'explicit' }]
+    ])
   })
 
   it('reveals an agent in only the trusted main window', () => {

@@ -4,14 +4,13 @@ import {
   createWorktreePaletteRequestGuard,
   getNextWorktreePaletteSelection,
   getWorktreePaletteSelectionItemIds,
-  getWorktreePaletteCreateActionState
+  getWorktreePaletteCreateActionState,
+  isWorktreePaletteCreateActivationAllowed
 } from './worktree-palette-create-action'
-import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from './worktree-palette-query-bounds'
 
 describe('worktree-palette-create-action', () => {
   it('shows create for typed queries with workspace matches but selects the first workspace row', () => {
     const state = getWorktreePaletteCreateActionState({
-      canCreateWorktree: true,
       query: 'feature'
     })
 
@@ -29,9 +28,8 @@ describe('worktree-palette-create-action', () => {
     ).toBe('worktree:one')
   })
 
-  it('selects create when it appears before actions, settings, and browser rows', () => {
+  it('skips create for free text even when it is listed before every other row', () => {
     const state = getWorktreePaletteCreateActionState({
-      canCreateWorktree: true,
       query: 'opencode-issue'
     })
 
@@ -48,33 +46,52 @@ describe('worktree-palette-create-action', () => {
         ],
         showCreateAction: state.showCreateAction
       })
-    ).toBe(CREATE_WORKTREE_ITEM_ID)
+    ).toBe('settings:ai-provider-accounts')
   })
 
-  it('selects create when it appears before a browser-only match', () => {
+  it('selects create ahead of other rows only for a recognized task URL', () => {
+    const selectableItemIds = [CREATE_WORKTREE_ITEM_ID, 'browser-page:one']
+
     expect(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
         queryChanged: true,
-        selectableItemIds: [CREATE_WORKTREE_ITEM_ID, 'browser-page:one'],
+        selectableItemIds,
         showCreateAction: true
+      })
+    ).toBe('browser-page:one')
+    expect(
+      getNextWorktreePaletteSelection({
+        currentSelectedItemId: '',
+        queryChanged: true,
+        selectableItemIds,
+        showCreateAction: true,
+        autoSelectCreateAction: true
       })
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
 
-  it('defaults to create for typed queries with no real matches', () => {
+  it('leaves Enter unarmed for typed queries with no real matches', () => {
     const state = getWorktreePaletteCreateActionState({
-      canCreateWorktree: true,
       query: 'new-workspace'
     })
 
-    expect(state.showCreateAction).toBe(true)
+    expect(state).toEqual({ createWorktreeName: 'new-workspace', showCreateAction: true })
     expect(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
         queryChanged: true,
         selectableItemIds: [],
         showCreateAction: state.showCreateAction
+      })
+    ).toBe('')
+    expect(
+      getNextWorktreePaletteSelection({
+        currentSelectedItemId: '',
+        queryChanged: true,
+        selectableItemIds: [],
+        showCreateAction: state.showCreateAction,
+        autoSelectCreateAction: true
       })
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
@@ -134,30 +151,23 @@ describe('worktree-palette-create-action', () => {
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
 
-  it('shows create even when no project is available so the composer can guide setup', () => {
-    expect(
-      getWorktreePaletteCreateActionState({
-        canCreateWorktree: false,
-        query: 'new-workspace'
-      }).showCreateAction
-    ).toBe(true)
-  })
-
   it('hides create for an empty query', () => {
     expect(
       getWorktreePaletteCreateActionState({
-        canCreateWorktree: true,
         query: '   '
       }).showCreateAction
     ).toBe(false)
   })
 
   it('hides create for oversized pasted queries without echoing the payload', () => {
-    const oversizedQuery = 'secret-create-worktree-name'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)
+    const oversizedQuery = 'a'.repeat(2049)
+    expect(getWorktreePaletteCreateActionState({ query: 'a'.repeat(2048) })).toEqual({
+      createWorktreeName: 'a'.repeat(2048),
+      showCreateAction: true
+    })
 
     expect(
       getWorktreePaletteCreateActionState({
-        canCreateWorktree: true,
         query: oversizedQuery
       })
     ).toEqual({
@@ -166,7 +176,7 @@ describe('worktree-palette-create-action', () => {
     })
   })
 
-  it('derives selection ids from rendered entries while skipping headers and hints', () => {
+  it('derives selection ids from rendered entries while skipping headers', () => {
     expect(
       getWorktreePaletteSelectionItemIds([
         { id: '__header_worktrees__', type: 'section-header' },
@@ -182,10 +192,25 @@ describe('worktree-palette-create-action', () => {
     ).toEqual([
       'worktree:one',
       CREATE_WORKTREE_ITEM_ID,
+      '__hint_worktree_cap__',
       'settings:ai-provider-accounts',
       'quick-action:new-terminal',
       'browser-page:one'
     ])
+  })
+
+  it('names the rendered render key so a duplicate row is reachable by keyboard', () => {
+    // cmdk selects deduplicated render keys; bare IDs omit duplicate rows and snap keyboard highlight back to top.
+    expect(
+      getWorktreePaletteSelectionItemIds(
+        [
+          { id: '__header_worktrees__', type: 'section-header' },
+          { id: 'worktree:shared', type: 'worktree' },
+          { id: 'worktree:shared', type: 'worktree' }
+        ],
+        ['__header_worktrees__', 'worktree:shared', 'worktree:shared#dup1']
+      )
+    ).toEqual(['worktree:shared', 'worktree:shared#dup1'])
   })
 
   it('falls back deterministically when the selected row disappears', () => {
@@ -197,6 +222,37 @@ describe('worktree-palette-create-action', () => {
         showCreateAction: true
       })
     ).toBe('browser-page:first')
+  })
+
+  it('allows Enter for a typed create name without requiring arrow navigation', () => {
+    expect(
+      isWorktreePaletteCreateActivationAllowed({
+        hasTaskUrlIntent: false,
+        hasCreateName: true,
+        selectionMovedByUser: false
+      })
+    ).toBe(true)
+    expect(
+      isWorktreePaletteCreateActivationAllowed({
+        hasTaskUrlIntent: false,
+        hasCreateName: false,
+        selectionMovedByUser: true
+      })
+    ).toBe(true)
+    expect(
+      isWorktreePaletteCreateActivationAllowed({
+        hasTaskUrlIntent: true,
+        hasCreateName: false,
+        selectionMovedByUser: false
+      })
+    ).toBe(true)
+    expect(
+      isWorktreePaletteCreateActivationAllowed({
+        hasTaskUrlIntent: false,
+        hasCreateName: false,
+        selectionMovedByUser: false
+      })
+    ).toBe(false)
   })
 
   it('invalidates stale async create lookups', () => {

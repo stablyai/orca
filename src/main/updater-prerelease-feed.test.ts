@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installNetRequestFetchAdapter } from './updater-net-request.fixture'
 
 const ORIGINAL_PLATFORM = process.platform
+const ORIGINAL_ARCH = process.arch
 
-const { netFetchMock } = vi.hoisted(() => ({
-  netFetchMock: vi.fn()
+const { netFetchMock, netRequestMock } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
+  netRequestMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
-  net: { fetch: netFetchMock }
+  net: { fetch: netFetchMock, request: netRequestMock }
 }))
 
 function buildAtomFeed(tags: string[]): string {
@@ -34,10 +37,12 @@ function buildManifest(tag: string): string {
 function respondWithAtom(
   tags: string[],
   missingManifestTags: string[] = [],
-  missingAssetTags: string[] = []
+  missingAssetTags: string[] = [],
+  unavailableManifestTags: string[] = []
 ): void {
   const missingManifests = new Set(missingManifestTags)
   const missingAssets = new Set(missingAssetTags)
+  const unavailableManifests = new Set(unavailableManifestTags)
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
       return Promise.resolve({
@@ -46,11 +51,19 @@ function respondWithAtom(
       })
     }
 
-    const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
+    const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z0-9-]+)?\.yml$/)
     if (manifestMatch) {
       const tag = decodeURIComponent(manifestMatch[1])
+      if (unavailableManifests.has(tag)) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          text: () => Promise.resolve('')
+        })
+      }
       return Promise.resolve({
         ok: !missingManifests.has(tag),
+        status: missingManifests.has(tag) ? 404 : 200,
         text: () => Promise.resolve(buildManifest(tag))
       })
     }
@@ -59,6 +72,7 @@ function respondWithAtom(
     if (assetMatch && init?.method === 'HEAD') {
       return Promise.resolve({
         ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
+        status: missingAssets.has(decodeURIComponent(assetMatch[1])) ? 404 : 200,
         text: () => Promise.resolve('')
       })
     }
@@ -74,14 +88,21 @@ function setPlatformForTest(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { value: platform })
 }
 
+function setArchForTest(arch: NodeJS.Architecture): void {
+  Object.defineProperty(process, 'arch', { value: arch })
+}
+
 describe('fetchNewerReleaseTag', () => {
   beforeEach(() => {
     vi.resetModules()
     netFetchMock.mockReset()
+    netRequestMock.mockReset()
+    installNetRequestFetchAdapter(netRequestMock, netFetchMock)
   })
 
   afterEach(() => {
     setPlatformForTest(ORIGINAL_PLATFORM)
+    setArchForTest(ORIGINAL_ARCH)
   })
 
   it('returns the newest stable tag when the user is on an RC and a newer stable exists', async () => {
@@ -103,13 +124,15 @@ describe('fetchNewerReleaseTag', () => {
   })
 
   it.each([
-    ['darwin', 'latest-mac.yml'],
-    ['linux', 'latest-linux.yml'],
-    ['win32', 'latest.yml']
-  ] satisfies [NodeJS.Platform, string][])(
-    'probes the %s platform manifest',
-    async (platform, manifestName) => {
+    ['darwin', 'arm64', 'latest-mac.yml'],
+    ['linux', 'x64', 'latest-linux.yml'],
+    ['linux', 'arm64', 'latest-linux-arm64.yml'],
+    ['win32', 'x64', 'latest.yml']
+  ] satisfies [NodeJS.Platform, NodeJS.Architecture, string][])(
+    'probes the %s %s platform manifest',
+    async (platform, arch, manifestName) => {
       setPlatformForTest(platform)
+      setArchForTest(arch)
       const manifestUrls: string[] = []
       const assetUrls: string[] = []
 
@@ -147,6 +170,7 @@ describe('fetchNewerReleaseTag', () => {
       expect(assetUrls).toEqual([
         'https://github.com/stablyai/orca/releases/download/v1.4.1/Orca-1.4.1-arm64-mac.zip'
       ])
+      expect(netRequestMock).toHaveBeenCalledTimes(platform === 'win32' ? 1 : 0)
     }
   )
 
@@ -181,7 +205,7 @@ describe('fetchNewerReleaseTag', () => {
   })
 
   it('picks semver-newest across a mixed-order feed', async () => {
-    // atom feed sort by publish time, not version — verify we pick by semver
+    // Atom order follows publish time, not semver.
     respondWithAtom(['v1.2.0', 'v1.3.19', 'v1.3.19-rc.6', 'v1.3.20-rc.1', 'v1.3.18'])
     const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
     expect(await fetchNewerReleaseTag('1.3.19-rc.6')).toBe('v1.3.20-rc.1')
@@ -287,6 +311,18 @@ describe('fetchNewerReleaseTag', () => {
       tags: [],
       state: 'not-ready',
       lastGoodTag: 'v1.4.1-rc.2'
+    })
+  })
+
+  it('reports manifest transport failures as unavailable', async () => {
+    respondWithAtom(['v1.4.2'], [], [], ['v1.4.2'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.0', 1)).resolves.toEqual({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'manifest'
     })
   })
 

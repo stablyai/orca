@@ -2,9 +2,14 @@ import type { GitHistoryItem, GitHistoryItemRef } from './git-history-types'
 import { iterateNulDelimitedFields } from './nul-delimited-fields'
 
 const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
+const GIT_HISTORY_LEGACY_DECORATION_SEPARATOR = ', '
 
+// Git <2.43 echoes %(decorate:...) with exit 0, requiring %D fallback. Both need --decorate=full for parseable refs.
 export const GIT_HISTORY_COMMIT_FORMAT =
-  '%H%n%aN%n%aE%n%at%n%ct%n%P%n%(decorate:prefix=,suffix=,separator=%x1f)%n%B'
+  '%H%n%aN%n%aE%n%at%n%ct%n%P%n%(decorate:prefix=,suffix=,separator=%x1f)%n%D%n%B'
+
+// Why exact-match: no ref name may contain the \x1f an old Git echoes here.
+const UNEXPANDED_DECORATE_PLACEHOLDER = `%(decorate:prefix=,suffix=,separator=${GIT_HISTORY_DECORATION_SEPARATOR})`
 
 export function shortGitHash(hash: string): string {
   return hash.slice(0, 7)
@@ -15,17 +20,18 @@ function commitSubject(message: string): string {
   return firstLine || '(no commit message)'
 }
 
-function parseGitDecorationRefs(raw: string, revision: string): GitHistoryItemRef[] {
+function parseGitDecorationRefs(
+  raw: string,
+  revision: string,
+  separator: string
+): GitHistoryItemRef[] {
   if (!raw.trim()) {
     return []
   }
 
   const refs: GitHistoryItemRef[] = []
-  // Why: Git permits commas in ref names, so Orca's git log format uses a
-  // control-character separator that Git ref names cannot contain.
-  const parts = raw.includes(GIT_HISTORY_DECORATION_SEPARATOR)
-    ? raw.split(GIT_HISTORY_DECORATION_SEPARATOR)
-    : raw.split(',')
+  // Why passed in: a lone decoration carries no separator, so sniffing `raw` split `feat,one`.
+  const parts = raw.split(separator)
 
   for (const part of parts) {
     const ref = part.trim()
@@ -97,15 +103,45 @@ export function compareGitHistoryItemRefsByCategory(
   return categoryOrder || ref1.name.localeCompare(ref2.name)
 }
 
+// With -z, --shortstat prints after a record's NUL, so it leads the next record (or trails the last).
+const SHORTSTAT_PREFIX =
+  /^ *(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?[^\n]*\n*/
+
+function takeLeadingShortstat(record: string, previous: GitHistoryItem | undefined): string {
+  const match = SHORTSTAT_PREFIX.exec(record)
+  if (!match) {
+    return record
+  }
+  if (previous) {
+    previous.statistics = {
+      files: Number(match[1]),
+      insertions: Number(match[2] ?? 0),
+      deletions: Number(match[3] ?? 0)
+    }
+  }
+  return record.slice(match[0].length)
+}
+
 export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
   const items: GitHistoryItem[] = []
   for (const rawRecord of iterateNulDelimitedFields(stdout)) {
-    const record = rawRecord.replace(/^\n+/, '')
+    const record = takeLeadingShortstat(rawRecord.replace(/^\n+/, ''), items.at(-1))
     if (!record.trim()) {
       continue
     }
 
-    const lines = record.split('\n')
+    const lines: string[] = []
+    let messageStart = 0
+    for (let field = 0; field < 8; field += 1) {
+      const newline = record.indexOf('\n', messageStart)
+      if (newline === -1) {
+        lines.push(record.slice(messageStart))
+        messageStart = record.length
+        break
+      }
+      lines.push(record.slice(messageStart, newline))
+      messageStart = newline + 1
+    }
     const hash = lines[0]?.trim() ?? ''
     if (!/^[0-9a-fA-F]{40,64}$/.test(hash)) {
       continue
@@ -115,8 +151,10 @@ export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
     const authorEmail = lines[2] ?? ''
     const authorDateSeconds = Number.parseInt(lines[3] ?? '', 10)
     const parents = (lines[5] ?? '').trim()
-    const decorations = lines[6] ?? ''
-    const message = lines.slice(7).join('\n').replace(/\n$/, '')
+    const decorateField = lines[6] ?? ''
+    const isLegacyGit = decorateField === UNEXPANDED_DECORATE_PLACEHOLDER
+    const decorations = isLegacyGit ? (lines[7] ?? '') : decorateField
+    const message = record.slice(messageStart).replace(/\n$/, '')
 
     items.push({
       id: hash,
@@ -127,7 +165,11 @@ export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
       authorEmail: authorEmail || undefined,
       displayId: shortGitHash(hash),
       timestamp: Number.isFinite(authorDateSeconds) ? authorDateSeconds * 1000 : undefined,
-      references: parseGitDecorationRefs(decorations, hash)
+      references: parseGitDecorationRefs(
+        decorations,
+        hash,
+        isLegacyGit ? GIT_HISTORY_LEGACY_DECORATION_SEPARATOR : GIT_HISTORY_DECORATION_SEPARATOR
+      )
     })
   }
   return items
@@ -140,13 +182,33 @@ export function gitHistoryRefFromFullName(
 ): GitHistoryItemRef {
   const id = fullName || fallbackName
   if (id.startsWith('refs/heads/')) {
-    return { id, name: id.slice('refs/heads/'.length), revision, category: 'branches' }
+    return {
+      id,
+      name: id.slice('refs/heads/'.length),
+      revision,
+      category: 'branches'
+    }
   }
   if (id.startsWith('refs/remotes/')) {
-    return { id, name: id.slice('refs/remotes/'.length), revision, category: 'remote branches' }
+    return {
+      id,
+      name: id.slice('refs/remotes/'.length),
+      revision,
+      category: 'remote branches'
+    }
   }
   if (id.startsWith('refs/tags/')) {
-    return { id, name: id.slice('refs/tags/'.length), revision, category: 'tags' }
+    return {
+      id,
+      name: id.slice('refs/tags/'.length),
+      revision,
+      category: 'tags'
+    }
   }
-  return { id, name: fallbackName || shortGitHash(revision), revision, category: 'commits' }
+  return {
+    id,
+    name: fallbackName || shortGitHash(revision),
+    revision,
+    category: 'commits'
+  }
 }

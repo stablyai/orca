@@ -1,16 +1,24 @@
-import { isPathEqualOrDescendant } from './file-explorer-paths'
+import {
+  createNormalizedPathInsideOrEqualMatcher,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
 import type { TreeNode } from './file-explorer-types'
 
-// Why: skip descendants of other selected directories — deleting a parent
-// already removes the child, and issuing both requests races on the
-// now-missing path and produces spurious errors.
+// Delete selected ancestors only; separate descendant requests would race missing paths and report spurious errors.
 export function selectDeletionRoots(nodes: TreeNode[]): TreeNode[] {
-  return nodes.filter(
-    (n) =>
-      !nodes.some(
-        (other) => other !== n && other.isDirectory && isPathEqualOrDescendant(n.path, other.path)
-      )
-  )
+  const directories = nodes
+    .filter((node) => node.isDirectory)
+    .map((node) => ({
+      node,
+      matches: createNormalizedPathInsideOrEqualMatcher(node.path)
+    }))
+  if (directories.length === 0) {
+    return [...nodes]
+  }
+  return nodes.filter((node) => {
+    const candidate = normalizeRuntimePathForComparison(node.path)
+    return !directories.some((other) => other.node !== node && other.matches(candidate))
+  })
 }
 
 type RunBatchDeletionParams = {
@@ -20,9 +28,7 @@ type RunBatchDeletionParams = {
   deleteNode: (node: TreeNode) => Promise<boolean>
 }
 
-// Why: confirm the whole batch once up front — per-node confirmation inside
-// the delete path would prompt once per selected item. Returns the deleted
-// roots, or null when the user cancels the batch.
+// Confirm once for the whole selection; return deleted roots or null on cancellation.
 export async function runBatchDeletion({
   roots,
   needsConfirmation,
@@ -32,9 +38,7 @@ export async function runBatchDeletion({
   if (needsConfirmation && !(await confirmBatch())) {
     return null
   }
-  // Why: process sequentially in the caller's tree order so each delete
-  // fully settles before the next begins — this avoids concurrent writes
-  // to the same parent directory and makes failure toasts deterministic.
+  // Delete sequentially in tree order to avoid concurrent parent-directory writes and nondeterministic failure toasts.
   const deleted: TreeNode[] = []
   for (const node of roots) {
     if (await deleteNode(node)) {

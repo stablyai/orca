@@ -5,6 +5,8 @@ import {
   resolveLiveAgentStatusConnectionRouting,
   type AgentStatusConnectionRouting
 } from './agent-status-connection-ownership'
+import { rendererAgentStatusObservations } from './renderer-agent-status-observations'
+import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
 
 export function createBackgroundAgentStatusConsumer(args: {
   paneKey: string
@@ -17,6 +19,8 @@ export function createBackgroundAgentStatusConsumer(args: {
 }): {
   consume: (data: string) => void
   resolveRouting: () => AgentStatusConnectionRouting | undefined
+  /** Stamp launch-origin evidence under this pane’s existing byte-ingress ownership (STA-4293). */
+  observeLaunchIngress: () => AgentStatusObservation
 } {
   const processAgentStatus = createAgentStatusOscProcessor()
   const resolveRouting = (): AgentStatusConnectionRouting | undefined => {
@@ -35,18 +39,33 @@ export function createBackgroundAgentStatusConsumer(args: {
     for (const payload of processed.payloads) {
       if (!args.mainOwnsAgentStatusWrites) {
         const routing = resolveRouting()
-        // Why: hidden callbacks can outlive tab reuse; only the exact current
-        // pane-to-PTY binding may update its status ownership.
+        // Hidden callbacks can outlive tab reuse; only the exact current pane/PTY binding may update ownership.
         if (routing) {
-          useAppStore
-            .getState()
-            .setAgentStatus(args.paneKey, payload, undefined, undefined, routing, {
-              launchToken: args.launchToken
-            })
+          useAppStore.getState().setAgentStatus(
+            args.paneKey,
+            {
+              ...payload,
+              observation: rendererAgentStatusObservations.observe(args.paneKey, {
+                origin: 'osc',
+                observedAt: Date.now(),
+                kind: 'snapshot'
+              })
+            },
+            undefined,
+            undefined,
+            routing,
+            { launchToken: args.launchToken }
+          )
         }
       }
       args.onAgentStatus?.(payload)
     }
   }
-  return { consume, resolveRouting }
+  const observeLaunchIngress = (): AgentStatusObservation =>
+    rendererAgentStatusObservations.observe(args.paneKey, {
+      origin: 'launch',
+      observedAt: Date.now(),
+      kind: 'transition'
+    })
+  return { consume, resolveRouting, observeLaunchIngress }
 }

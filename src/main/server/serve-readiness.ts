@@ -1,4 +1,6 @@
-import type { PairingOfferUnavailableReason } from '../runtime/runtime-rpc'
+import type { PairingOfferUnavailableReason } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
+import type { OrcadHealth } from '../orcad/orcad-health'
+import { describePtyProcessCeiling } from '../../shared/pty-process-ceiling-state'
 
 export type ServePairingUnavailableReason = PairingOfferUnavailableReason | 'disabled_by_operator'
 
@@ -24,6 +26,8 @@ export type ServeReadiness = {
   advertisedEndpoint: string | null
   managedWslCliReconciliation: 'pending' | 'settled' | 'failed'
   pairing: ServePairingReadiness
+  /** Optional for older/Electron hosts: absence means unreported, never healthy. Carries build identity, Node ABI and terminal-daemon self-test. */
+  health?: OrcadHealth
 }
 
 export type ServeReadinessOutput =
@@ -77,7 +81,8 @@ export function renderServeReadiness(
       boundEndpoint: readiness.boundEndpoint,
       advertisedEndpoint: readiness.advertisedEndpoint,
       managedWslCliReconciliation: readiness.managedWslCliReconciliation,
-      pairing: readiness.pairing
+      pairing: readiness.pairing,
+      ...(readiness.health ? { health: readiness.health } : {})
     })
   }
   return renderHumanReadiness(readiness)
@@ -89,6 +94,21 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
     `Bound endpoint: ${readiness.boundEndpoint ?? 'websocket unavailable'}`,
     `Advertised endpoint: ${readiness.advertisedEndpoint ?? 'unavailable'}`
   ]
+  if (readiness.health) {
+    const daemon = readiness.health.terminalDaemon
+    lines.push(
+      `Build: ${readiness.health.buildVersion} (${readiness.health.buildHash}), Node ` +
+        `${readiness.health.nodeVersion} ABI ${readiness.health.nodeAbi}`
+    )
+    lines.push(
+      `Terminal daemon: ${daemon.state} — PTY self-test ${daemon.selfTest.ok ? 'passed' : 'FAILED'}` +
+        ` (${daemon.selfTest.coverage}: ${daemon.selfTest.verdict})` +
+        `; terminals survive an orcad restart: ${daemon.ownsFreshSessions ? 'yes' : 'NO'}`
+    )
+    if (daemon.processCeiling !== undefined) {
+      lines.push(`Terminal process ceiling: ${describePtyProcessCeiling(daemon.processCeiling)}`)
+    }
+  }
   if (readiness.pairing.available) {
     if (readiness.pairing.webClientUrl) {
       lines.push(`Web client URL: ${readiness.pairing.webClientUrl}`)

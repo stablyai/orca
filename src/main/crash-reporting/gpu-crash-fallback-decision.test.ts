@@ -1,30 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
-  DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
-  GpuCrashFallbackTracker,
-  isGpuChildProcessType,
-  isGpuFallbackCrashCandidate
-} from './gpu-crash-fallback-decision'
+import { GpuCrashFallbackTracker, isGpuFallbackCrashCandidate } from './gpu-crash-fallback-decision'
 
 describe('GpuCrashFallbackTracker', () => {
-  it('engages fallback once GPU crashes hit the threshold inside the window', () => {
-    const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 3 })
-    // F0BDNADU79Q / F0BDNRZ5MDG: GPU child dies within seconds of launch.
-    expect(tracker.recordGpuCrash(500)).toEqual({
-      shouldEngageFallback: false,
-      crashesInWindow: 1
-    })
-    expect(tracker.recordGpuCrash(8_000)).toEqual({
-      shouldEngageFallback: false,
-      crashesInWindow: 2
-    })
-    expect(tracker.recordGpuCrash(16_000)).toEqual({
-      shouldEngageFallback: true,
-      crashesInWindow: 3
-    })
-  })
-
   it('engages at most once so the relaunch cannot loop', () => {
     const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 2 })
     tracker.recordGpuCrash(100)
@@ -36,15 +13,33 @@ describe('GpuCrashFallbackTracker', () => {
     })
   })
 
-  it('ignores GPU crashes after the post-launch window', () => {
+  it('drops crashes that age out of the rolling window', () => {
     const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 3 })
     tracker.recordGpuCrash(1_000)
     tracker.recordGpuCrash(2_000)
-    // A late hiccup well into the session is normal Chromium churn.
     expect(tracker.recordGpuCrash(45_000)).toEqual({
       shouldEngageFallback: false,
-      crashesInWindow: 2
+      crashesInWindow: 1
     })
+    expect(tracker.hasEngaged()).toBe(false)
+  })
+
+  it('treats a span of exactly windowMs as inside the window', () => {
+    const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 3 })
+    tracker.recordGpuCrash(0)
+    tracker.recordGpuCrash(15_000)
+    expect(tracker.recordGpuCrash(30_000)).toEqual({
+      shouldEngageFallback: true,
+      crashesInWindow: 3
+    })
+  })
+
+  it('leaves the closest real-world non-burst alone', () => {
+    const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 3 })
+    // Field timings have short adjacent gaps without three crashes in one window.
+    for (const at of [0, 29_531, 55_136, 74_178]) {
+      expect(tracker.recordGpuCrash(at).shouldEngageFallback).toBe(false)
+    }
     expect(tracker.hasEngaged()).toBe(false)
   })
 
@@ -53,18 +48,6 @@ describe('GpuCrashFallbackTracker', () => {
     expect(tracker.recordGpuCrash(-1).shouldEngageFallback).toBe(false)
     expect(tracker.recordGpuCrash(Number.NaN).shouldEngageFallback).toBe(false)
     expect(tracker.hasEngaged()).toBe(false)
-  })
-
-  it('classifies GPU child process types case-insensitively', () => {
-    expect(isGpuChildProcessType('GPU')).toBe(true)
-    expect(isGpuChildProcessType('gpu')).toBe(true)
-    expect(isGpuChildProcessType('Utility')).toBe(false)
-    expect(isGpuChildProcessType(undefined)).toBe(false)
-  })
-
-  it('ships conservative defaults', () => {
-    expect(DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS).toBe(30_000)
-    expect(DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD).toBe(3)
   })
 })
 

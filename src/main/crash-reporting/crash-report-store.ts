@@ -67,8 +67,7 @@ async function runCrashReportFileOperationWithWindowsRecovery<T>(
       if (!repairedAcl && isPermissionError(error)) {
         repairedAcl = true
         try {
-          // Why: Chromium can reset userData ACLs before startup capture or
-          // recovery, so both the crash write and next prompt must repair it.
+          // Chromium can reset userData ACLs; repair them for both capture and prompt recovery.
           await grantDirAclAsync(directory)
         } catch {
           // The bounded retry below still handles transient file locks.
@@ -96,12 +95,35 @@ export class CrashReportStore {
         createdAt: new Date().toISOString(),
         status: 'pending',
         details: sanitizeCrashReportDetails(input.details),
-        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)
+        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)?.map(
+          ({ origin: _origin, ...breadcrumb }) => breadcrumb
+        )
       }
       return {
         reports: [report, ...reports].slice(0, MAX_REPORTS),
         result: report
       }
+    })
+  }
+
+  /** Crashpad may finish writing after process-gone; merge its signature into the existing report. */
+  async attachDetails(
+    id: string,
+    extraDetails: Record<string, unknown>
+  ): Promise<CrashReportRecord | null> {
+    return this.withWrite(async (reports) => {
+      let result: CrashReportRecord | null = null
+      const nextReports = reports.map((report) => {
+        if (report.id !== id) {
+          return report
+        }
+        result = {
+          ...report,
+          details: { ...report.details, ...sanitizeCrashReportDetails(extraDetails) }
+        }
+        return result
+      })
+      return { reports: nextReports, result }
     })
   }
 
@@ -154,9 +176,7 @@ export class CrashReportStore {
       const anchor = reports.find((report) => report.id === id)
       const nextReports = reports.map((report) => {
         if (report.id !== id) {
-          // Why: one Electron crash can emit GPU/Network/renderer exits in a
-          // burst. Once one report is handled, sibling pending records should
-          // not re-open the crash prompt as separate crashes.
+          // Dismiss related exit-burst records so handling one crash does not reopen sibling prompts.
           if (anchor && anchor.status === from && isRelatedCrashEvent(anchor, report)) {
             return { ...report, status: 'dismissed' as const }
           }
@@ -177,8 +197,7 @@ export class CrashReportStore {
     mutate: (reports: CrashReportRecord[]) => Promise<{ reports: CrashReportRecord[]; result: T }>
   ): Promise<T> {
     const run = this.writeChain.then(async () => {
-      // Why: awaiting writeChain from inside its own callback would deadlock;
-      // this writer already has exclusive ownership and can read disk directly.
+      // Reading directly avoids waiting on the write chain this callback already owns.
       const reports = await this.readReportsFromDisk()
       const { reports: nextReports, result } = await mutate(reports)
       await this.writeReports(nextReports)
@@ -192,8 +211,7 @@ export class CrashReportStore {
   }
 
   private async readReports(): Promise<CrashReportRecord[]> {
-    // Why: renderer recovery can query the one-shot startup prompt while the
-    // crash write is still in flight. Wait so a successful capture is visible.
+    // Recovery may query before capture finishes; wait until the crash write is visible.
     await this.writeChain
     return this.readReportsFromDisk()
   }
@@ -224,8 +242,7 @@ export class CrashReportStore {
         await fs.rename(tmpPath, this.filePath)
       })
     } finally {
-      // Why: disk-full and terminal rename failures must not accumulate a new
-      // orphaned multi-report temp file after every crash.
+      // Failed writes and renames must not accumulate orphaned report temp files.
       await fs.rm(tmpPath, { force: true }).catch(() => {})
     }
   }

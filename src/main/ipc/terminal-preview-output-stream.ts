@@ -1,6 +1,9 @@
 import type { WebContents } from 'electron'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
-import type { TerminalPreviewDataPayload } from '../../shared/terminal-preview'
+import type {
+  TerminalPreviewDataPayload,
+  TerminalPreviewReplayChunk
+} from '../../shared/terminal-preview'
 
 const OUTPUT_BATCH_MS = 5
 export const TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES = 64 * 1024
@@ -16,22 +19,30 @@ export type TerminalPreviewOutputMeta = {
 
 type PendingOutput = { data: string; bytes: number; meta?: TerminalPreviewOutputMeta }
 
-function outputAfterSnapshotSeq(output: PendingOutput, snapshotSeq?: number): string | null {
+/** Only sequence-proven suffixes use live kitty stack semantics; uncertain redelivery must not duplicate pushes. */
+function outputAfterSnapshotSeq(
+  output: PendingOutput,
+  snapshotSeq?: number
+): TerminalPreviewReplayChunk | null {
   if (
     typeof snapshotSeq !== 'number' ||
     typeof output.meta?.seq !== 'number' ||
     typeof output.meta.rawLength !== 'number'
   ) {
-    return output.data
+    return { data: output.data, mode: 'replay' }
   }
   if (output.meta.seq <= snapshotSeq) {
     return null
   }
   const startSeq = output.meta.seq - output.meta.rawLength
-  if (startSeq >= snapshotSeq || output.meta.transformed === true) {
-    return output.data
+  if (startSeq >= snapshotSeq) {
+    return { data: output.data, mode: 'live' }
   }
-  return output.data.slice(snapshotSeq - startSeq)
+  if (output.meta.transformed === true) {
+    // Transformed bytes cannot be split by raw offsets; retain uncertain redelivery.
+    return { data: output.data, mode: 'replay' }
+  }
+  return { data: output.data.slice(snapshotSeq - startSeq), mode: 'live' }
 }
 
 /** Owns one preview's bounded snapshot/live output queue and acknowledgements. */
@@ -101,10 +112,13 @@ export class TerminalPreviewOutputStream {
     return true
   }
 
-  completeSnapshot(snapshotSeq?: number): string[] {
-    const replay = this.initialPending.flatMap((output) => {
+  completeSnapshot(snapshotSeq?: number): TerminalPreviewReplayChunk[] {
+    const replay: TerminalPreviewReplayChunk[] = []
+    this.initialPending.forEach((output) => {
       const uncovered = outputAfterSnapshotSeq(output, snapshotSeq)
-      return uncovered ? [uncovered] : []
+      if (uncovered && uncovered.data.length > 0) {
+        replay.push(uncovered)
+      }
     })
     this.initialPending = []
     this.initialPendingBytes = 0
@@ -112,9 +126,7 @@ export class TerminalPreviewOutputStream {
     return replay
   }
 
-  // Why: the PTY grid changed under this stream (viewer fit, host reclaim,
-  // phone takeover) — buffered bytes were parsed for the old grid, so drop
-  // them and hand the renderer a fresh authoritative snapshot instead.
+  // Grid changes invalidate buffered parsing; resync from a snapshot at the new width.
   requestResync(): void {
     if (this.isDisposed || this.awaitingReconnect || this.resyncPending) {
       return
@@ -206,7 +218,7 @@ export class TerminalPreviewOutputStream {
     this.pendingBatches.push({ data, bytes })
     this.pendingBatchBytes += bytes
     if (this.pendingBatchBytes > OUTPUT_PENDING_MAX_BYTES) {
-      // Why: a stuck renderer heals from a fresh authoritative snapshot instead of retaining output without bound.
+      // Bound stuck-renderer memory by reconnecting from a fresh snapshot.
       this.pendingBatches = []
       this.pendingBatchBytes = 0
       this.resyncPending = true

@@ -50,6 +50,7 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
       return
     }
     if (isLazyChunkLoadError(error)) {
+      // Contained by this fallback; recovery breadcrumbs live on the load path.
       return
     }
     void reportReactErrorBoundaryCrash({

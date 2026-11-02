@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CodexManagedAccount } from '../../shared/types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as CodexAccountFs from './fs-utils'
 
 const writeFailure = vi.hoisted(() => ({ failNextAuthWrite: false }))
@@ -311,7 +311,6 @@ describe('legacy shared Codex MCP credentials migration (#8440)', () => {
       JSON.stringify({ MCP_OAUTH: { 'server-a': { access_token: 'tok-a' } } })
     )
 
-    // Ambiguous identity: neither account is a unique match, so nothing is carried.
     fixture.migrate([account1, account2], account1.id)
 
     expect(existsSync(fixture.accountCredentialsPath(account1))).toBe(false)

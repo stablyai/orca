@@ -1,18 +1,41 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../codex/config-toml-trust'
+import { writeCodexStateDbBackfillStatus } from '../codex/codex-state-db-test-fixture'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
 
+vi.mock('../codex/codex-hook-trust-derivation', async (importOriginal) =>
+  (await import('../codex/codex-hook-trust-derivation.test-fixture')).answeringCodexForTests(
+    await importOriginal()
+  )
+)
 vi.mock('electron', () => ({ app: { getPath: () => testState.userData } }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userData }))
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
   return { ...actual, homedir: () => testState.home }
+})
+// Prevent the selection-triggered history bridge from spawning a real app-server.
+vi.mock('../codex/codex-account-session-index-heal', () => {
+  const upToDate = async () => ({
+    outcome: 'up-to-date',
+    healedThreads: 0,
+    missingThreads: 0,
+    failedThreads: 0
+  })
+  return {
+    createCodexAccountStateDb: async () => false,
+    healCodexAccountSessionIndex: upToDate,
+    healPendingCodexAccountThreads: upToDate
+  }
 })
 
 beforeEach(() => {
@@ -21,7 +44,6 @@ beforeEach(() => {
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-e-home-'))
   for (const key of [
     'ORCA_USER_DATA_PATH',
-    'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
     'ORCA_DISABLE_CODEX_TRUST_RPC',
     'CODEX_HOME',
     'ORCA_CODEX_HOME'
@@ -74,6 +96,8 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const { CodexHookService } = await import('../codex/hook-service')
+    const { startCodexHookHashLookup } = await import('../codex/codex-hook-hash-lookup')
+    startCodexHookHashLookup(Promise.resolve())
     const service = new CodexRuntimeHomeService(store as never)
     const hookService = new CodexHookService()
 
@@ -95,7 +119,7 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       const config = readFileSync(join(account.managedHomePath, 'config.toml'), 'utf8')
       expect(config).toContain('model = "fixture-model"')
       expect(config).not.toContain('[hooks.state')
-      expect(hookService.install(account.managedHomePath).state).toBe('installed')
+      expect((await hookService.install(account.managedHomePath)).state).toBe('installed')
       expect(readFileSync(join(account.managedHomePath, 'hooks.json'), 'utf8')).toContain(
         process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
       )
@@ -136,7 +160,10 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
-    expect(service.prepareForRateLimitFetch()).toBe(account.managedHomePath)
+    expect(service.prepareForRateLimitFetch()).toEqual({
+      kind: 'ready',
+      codexHomePath: account.managedHomePath
+    })
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
@@ -157,7 +184,10 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
 
     expect(service.prepareForCodexLaunch()).toBeNull()
-    expect(service.prepareForRateLimitFetch()).toBe(systemHome())
+    expect(service.prepareForRateLimitFetch()).toEqual({
+      kind: 'ready',
+      codexHomePath: systemHome()
+    })
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(fresh)
     expect(readFileSync(sharedAuthPath(), 'utf-8')).toBe(mismatch)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
@@ -179,11 +209,55 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     rmSync(accountAuthPath)
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
 
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
+    expect(service.prepareForRateLimitFetch()).toEqual({
+      kind: 'ready',
+      codexHomePath: account.managedHomePath
+    })
     expect(existsSync(accountAuthPath)).toBe(false)
-    expect(settings.activeCodexManagedAccountId).toBeNull()
+    expect(settings.activeCodexManagedAccountId).toBe(account.id)
     expect(readFileSync(sharedAuthPath(), 'utf-8')).toBe(laterShared)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
+  })
+
+  it('bridges real-home and sibling-account history into the launched account home', async () => {
+    const accountOne = createManagedAccount(
+      'account-1',
+      'acct-1',
+      createAuth('one@example.com', 'acct-1', 'one', 1_000)
+    )
+    const accountTwo = createManagedAccount(
+      'account-2',
+      'acct-2',
+      createAuth('two@example.com', 'acct-2', 'two', 2_000),
+      'two@example.com'
+    )
+    const systemRollout = join('2026', '07', '20', 'rollout-2026-07-20T10-00-00-aaaa.jsonl')
+    const siblingRollout = join('2026', '07', '21', 'rollout-2026-07-21T10-00-00-bbbb.jsonl')
+    writeRollout(systemHome(), systemRollout, '{"session":"real-home"}\n')
+    writeRollout(accountOne.managedHomePath, siblingRollout, '{"session":"account-one"}\n')
+    // History bridging requires the new home to be indexed first (#20669).
+    writeCodexStateDbBackfillStatus(accountTwo.managedHomePath, 'complete')
+    const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const bridge = await import('../codex/codex-account-session-bridge')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    selectManagedAccount(settings, accountTwo.id)
+    service.syncForCurrentSelection()
+    expect(service.prepareForCodexLaunch()).toBe(accountTwo.managedHomePath)
+    await bridge.startCodexAccountSessionBridgeInBackground({
+      targetCodexHomePath: accountTwo.managedHomePath,
+      sourceCodexHomePaths: [systemHome(), accountOne.managedHomePath]
+    })
+
+    expect(readFileSync(join(accountTwo.managedHomePath, 'sessions', systemRollout), 'utf-8')).toBe(
+      '{"session":"real-home"}\n'
+    )
+    expect(
+      readFileSync(join(accountTwo.managedHomePath, 'sessions', siblingRollout), 'utf-8')
+    ).toBe('{"session":"account-one"}\n')
+    expect(existsSync(join(systemHome(), 'sessions', siblingRollout))).toBe(false)
   })
 
   it('does not expose an untrusted persisted home through rollout discovery', async () => {
@@ -256,6 +330,12 @@ function managedAccountRecord(
 function selectManagedAccount(settings: GlobalSettings, accountId: string): void {
   settings.activeCodexManagedAccountId = accountId
   settings.activeCodexManagedAccountIdsByRuntime = { host: accountId, wsl: {} }
+}
+
+function writeRollout(homePath: string, relativePath: string, contents: string): void {
+  const filePath = join(homePath, 'sessions', relativePath)
+  mkdirSync(join(filePath, '..'), { recursive: true })
+  writeFileSync(filePath, contents, 'utf-8')
 }
 
 function systemHome(): string {

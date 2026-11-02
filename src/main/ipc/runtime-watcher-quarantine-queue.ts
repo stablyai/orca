@@ -1,4 +1,4 @@
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
 
 type QuarantineWaiter<T> = {
   dir: string
@@ -33,7 +33,7 @@ export class RuntimeWatcherQuarantineQueue<T> {
         }
         settled = true
         const index = this.waiters.indexOf(waiter)
-        if (index >= 0) {
+        if (index !== -1) {
           this.waiters.splice(index, 1)
         }
         callback()

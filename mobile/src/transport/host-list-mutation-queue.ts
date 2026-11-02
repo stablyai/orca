@@ -1,0 +1,39 @@
+import * as hostListLoads from './host-list-load-sharing'
+import { readStoredHostProfilesForMutation, writeStoredHostProfiles } from './host-metadata-store'
+import type { StoredHostProfile } from './types'
+
+// Why: serialize host metadata RMW so concurrent writers cannot drop updates.
+let hostListMutation: Promise<void> = Promise.resolve()
+
+/** Settles once every mutation queued so far has, so a reader never sees a half-written list. */
+export function hostListMutationsSettled(): Promise<void> {
+  return hostListMutation
+}
+
+export function enqueueHostListMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const mutation = hostListMutation.then(operation)
+  hostListMutation = mutation.then(
+    () => {},
+    () => {}
+  )
+  return mutation
+}
+
+export async function mutateStoredHosts(
+  update: (hosts: StoredHostProfile[]) => StoredHostProfile[] | Promise<StoredHostProfile[]>
+): Promise<void> {
+  return enqueueHostListMutation(async () => {
+    const current = await readStoredHostProfilesForMutation()
+    const next = await update(current)
+    // Identity-preserving updates must not rewrite storage or invalidate shared loads on each descriptor read.
+    if (next === current) {
+      return
+    }
+    await writeStoredHostProfiles(next)
+    hostListLoads.dropSharedHostListLoad()
+  })
+}
+
+export function resetHostListMutationQueueForTests(): void {
+  hostListMutation = Promise.resolve()
+}

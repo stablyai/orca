@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DiffComment } from '../../../src/shared/types'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import {
   clearSentMobileDiffComments,
   countUnsentMobileDiffComments,
@@ -33,6 +33,7 @@ describe('mobile diff comment editing', () => {
 
     expect(result.comment).toMatchObject({ id: 'a', body: 'updated', updatedAt: 200 })
     expect(result.comment?.sentAt).toBeUndefined()
+    expect(result.comments).toEqual([result.comment])
   })
 
   it('marks notes sent and excludes them from unsent counts', () => {

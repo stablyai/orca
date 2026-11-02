@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 describe('lifecycle reconciliation', () => {
   let db: OrchestrationDb
@@ -9,15 +10,16 @@ describe('lifecycle reconciliation', () => {
 
   it('rejects handle churn when neither side has stable pane identity', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_before_restart')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_before_restart')
     const logs: string[] = []
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_after_restart',
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
     })
 
     expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
@@ -29,21 +31,21 @@ describe('lifecycle reconciliation', () => {
     expect(logs.some((line) => line.includes('expected handle'))).toBe(true)
   })
 
-  // Real leaf UUIDs: pane keys are `${tabId}:${leafUuid}` and only the leaf
-  // half is identity (the tab half changes on pane break-out).
+  // Leaf UUIDs survive pane break-out; the tab half of paneKey can change.
   const LEAF_A = '11111111-1111-1111-8111-111111111111'
   const LEAF_B = '22222222-2222-4222-9222-222222222222'
 
   it('completes worker_done from the dispatched pane after a handle remint', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_before_restart', `tab_w:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_before_restart', `tab_w:${LEAF_A}`)
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_after_restart',
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' }),
       senderPaneKey: `tab_w:${LEAF_A}`
     })
 
@@ -51,18 +53,171 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.status).toBe('completed')
   })
 
+  it('completes an exact-authority worker_done after an uncertain worker start', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
+    const paneKey = `tab_worker:${LEAF_A}`
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey,
+      processIncarnation: 'worker:1',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    db.markWorkerStartUnknown(started.dispatch.id, 'agent_readiness', 'connection lost')
+
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done after reconnect',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: started.dispatch.id,
+        outcome: 'succeeded'
+      }),
+      senderPaneKey: paneKey
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toEqual({
+      action: 'completed',
+      taskId: task.id,
+      dispatchId: started.dispatch.id
+    })
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(started.dispatch.id)?.status).toBe('completed')
+    expect(db.getWorkerDispatch(started.dispatch.id)?.state).toBe('succeeded')
+  })
+
+  it('fails both the dispatch and task from an authenticated failed worker report', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Failed: tests cannot start',
+      body: 'I attempted the work. The required service is unavailable. No files changed.',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'failed',
+        filesModified: []
+      }),
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toEqual({
+      action: 'failed',
+      taskId: task.id,
+      dispatchId: dispatch.id
+    })
+    expect(db.getTask(task.id)).toMatchObject({ status: 'failed' })
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ status: 'failed' })
+    expect(JSON.parse(db.getTask(task.id)?.result ?? '{}')).toMatchObject({
+      provenance: 'worker_report',
+      outcome: 'failed',
+      messageId: message.id
+    })
+  })
+
+  it('keeps worker report settlement nested in its caller transaction', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    db.db.exec('BEGIN IMMEDIATE')
+
+    expect(
+      db.settleWorkerReport({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'succeeded',
+        result: 'done'
+      })
+    ).toMatchObject({ action: 'settled', duplicate: false })
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    db.db.exec('ROLLBACK')
+
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+  })
+
+  it('replays an identical terminal outcome without mutating settled state', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    const makeMessage = () =>
+      db.insertMessage({
+        runId: 'run_legacy_local',
+        from: 'term_worker',
+        to: 'term_coordinator',
+        subject: 'Done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
+      })
+
+    expect(reconcileLifecycleMessage(db, makeMessage()).action).toBe('completed')
+    const result = db.getTask(task.id)?.result
+    expect(reconcileLifecycleMessage(db, makeMessage()).action).toBe('completed')
+    expect(db.getTask(task.id)?.result).toBe(result)
+  })
+
+  it.each([
+    { payload: undefined, code: 'invalid_payload' },
+    { payload: '{', code: 'invalid_payload' },
+    {
+      payload: JSON.stringify({ dispatchId: 'ctx_1', outcome: 'succeeded' }),
+      code: 'missing_task_id'
+    },
+    {
+      payload: JSON.stringify({ taskId: 'task_1', outcome: 'succeeded' }),
+      code: 'missing_dispatch_id'
+    },
+    {
+      payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1', outcome: 'maybe' }),
+      code: 'invalid_outcome'
+    }
+  ])('rejects malformed worker reports with $code', ({ payload, code }) => {
+    db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({ action: 'rejected', code })
+    expect(db.getMessageById(message.id)).toMatchObject({
+      priority: 'high',
+      subject: 'Rejected worker_done: Done'
+    })
+  })
+
   it('completes worker_done from the same leaf after a pane break-out changed the tab half', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    // Dispatch recorded the post-break-out pane key; the worker shell still
-    // holds the spawn-time key with the old tab id.
-    const dispatch = db.createDispatchContext(task.id, 'term_before_restart', `tab_new:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    // The Dispatch has the new tab key, but the worker still carries its spawn-time key.
+    const dispatch = createRootDispatch(db, task.id, 'term_before_restart', `tab_new:${LEAF_A}`)
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_after_restart',
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' }),
       senderPaneKey: `tab_old:${LEAF_A}`
     })
 
@@ -72,14 +227,15 @@ describe('lifecycle reconciliation', () => {
 
   it('rejects mismatched opaque pane keys instead of treating them as legacy', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w:${LEAF_A}`)
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_reminted',
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' }),
       senderPaneKey: 'tab_w:42'
     })
 
@@ -89,14 +245,15 @@ describe('lifecycle reconciliation', () => {
 
   it('rejects worker_done from a foreign pane that claims the assignee handle', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w1:${LEAF_A}`)
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_owner',
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' }),
       senderPaneKey: `tab_w2:${LEAF_B}`
     })
 
@@ -125,16 +282,16 @@ describe('lifecycle reconciliation', () => {
       action: 'rejected',
       code: 'sender_not_assignee'
     })
-    // Why: the send-path conversion logs nothing (no-op logger), so the
-    // coordinator's re-read must still surface the rejection to its log stream.
+    // Send-path conversion has no logger; coordinator reread must still surface rejection.
     expect(rereadLogs.some((line) => line.includes('worker_done rejected'))).toBe(true)
   })
 
   it('does not let a caller-supplied rejection marker turn completion into success', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', `tab_w:${LEAF_A}`)
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_worker',
       to: 'term_coordinator',
       subject: 'Done',
@@ -142,6 +299,7 @@ describe('lifecycle reconciliation', () => {
       payload: JSON.stringify({
         taskId: task.id,
         dispatchId: dispatch.id,
+        outcome: 'succeeded',
         _orcaLifecycleRejection: {
           code: 'sender_not_assignee',
           reason: 'caller supplied'
@@ -160,14 +318,15 @@ describe('lifecycle reconciliation', () => {
 
   it('rejects a coordinator completion for a pane-bound dispatch', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', `tab_w:${LEAF_A}`)
     const message = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_coordinator',
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
     })
 
     expect(reconcileLifecycleMessage(db, message)).toMatchObject({
@@ -179,25 +338,41 @@ describe('lifecycle reconciliation', () => {
 
   it('uses exact handle equality only for a legacy dispatch without a pane key', () => {
     db = new OrchestrationDb(':memory:')
-    const acceptedTask = db.createTask({ spec: 'legacy work' })
-    const acceptedDispatch = db.createDispatchContext(acceptedTask.id, 'term_legacy')
+    const acceptedTask = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'legacy work'
+    })
+    const acceptedDispatch = createRootDispatch(db, acceptedTask.id, 'term_legacy')
     const accepted = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy',
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: acceptedTask.id, dispatchId: acceptedDispatch.id })
+      payload: JSON.stringify({
+        taskId: acceptedTask.id,
+        dispatchId: acceptedDispatch.id,
+        outcome: 'succeeded'
+      })
     })
     expect(reconcileLifecycleMessage(db, accepted).action).toBe('completed')
 
-    const rejectedTask = db.createTask({ spec: 'other legacy work' })
-    const rejectedDispatch = db.createDispatchContext(rejectedTask.id, 'term_other_legacy')
+    const rejectedTask = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'other legacy work'
+    })
+    const rejectedDispatch = createRootDispatch(db, rejectedTask.id, 'term_other_legacy')
     const rejected = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_foreign',
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: rejectedTask.id, dispatchId: rejectedDispatch.id })
+      payload: JSON.stringify({
+        taskId: rejectedTask.id,
+        dispatchId: rejectedDispatch.id,
+        outcome: 'succeeded'
+      })
     })
     expect(reconcileLifecycleMessage(db, rejected)).toMatchObject({
       action: 'rejected',
@@ -208,12 +383,21 @@ describe('lifecycle reconciliation', () => {
 
   it('does not release a dependent when a foreign completion wins the arrival race', () => {
     db = new OrchestrationDb(':memory:')
-    const parent = db.createTask({ spec: 'parent' })
-    const child = db.createTask({ spec: 'child', deps: [parent.id] })
-    const dispatch = db.createDispatchContext(parent.id, 'term_worker', `tab_w:${LEAF_A}`)
-    const payload = JSON.stringify({ taskId: parent.id, dispatchId: dispatch.id })
+    const parent = db.createTask({ runId: 'run_legacy_local', spec: 'parent' })
+    const child = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'child',
+      deps: [parent.id]
+    })
+    const dispatch = createRootDispatch(db, parent.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const payload = JSON.stringify({
+      taskId: parent.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded'
+    })
 
     const foreign = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_coordinator',
       to: 'term_coordinator',
       subject: 'Done',
@@ -228,6 +412,7 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(child.id)?.status).toBe('pending')
 
     const owner = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_worker_reminted',
       to: 'term_coordinator',
       subject: 'Done',
@@ -241,10 +426,15 @@ describe('lifecycle reconciliation', () => {
 
   it('does not let a foreign replay overwrite an authorized completion', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
-    const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const payload = JSON.stringify({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded'
+    })
     const owner = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_worker',
       to: 'term_coordinator',
       subject: 'Done',
@@ -256,6 +446,7 @@ describe('lifecycle reconciliation', () => {
     const result = db.getTask(task.id)?.result
 
     const replay = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_foreign',
       to: 'term_coordinator',
       subject: 'Forged replay',
@@ -270,34 +461,12 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.result).toBe(result)
   })
 
-  it('surfaces worker_done sent from a different pane as rejected', () => {
-    db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
-    const logs: string[] = []
-    const message = db.insertMessage({
-      from: 'term_other_worker',
-      to: 'term_coordinator',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
-      senderPaneKey: `tab_w2:${LEAF_B}`
-    })
-
-    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
-      action: 'rejected',
-      code: 'sender_not_assignee'
-    })
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
-    expect(logs.some((line) => line.includes('worker_done rejected'))).toBe(true)
-  })
-
   it('surfaces a heartbeat sent from a different pane without recording liveness', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w1:${LEAF_A}`)
     const heartbeat = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_other_worker',
       to: 'term_coordinator',
       subject: 'alive',
@@ -315,8 +484,7 @@ describe('lifecycle reconciliation', () => {
       type: 'heartbeat',
       subject: 'Rejected heartbeat: alive'
     })
-    // Why: the coordinator's re-read of the already-converted heartbeat must
-    // still log the rejection, since the send-path conversion logged nothing.
+    // Log the rejection on coordinator reread even after send-path conversion.
     const persisted = db.getMessageById(heartbeat.id)
     const rereadLogs: string[] = []
     expect(
@@ -329,9 +497,10 @@ describe('lifecycle reconciliation', () => {
 
   it('surfaces a foreign heartbeat that claims the assignee handle', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w1:${LEAF_A}`)
     const heartbeat = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_owner',
       to: 'term_coordinator',
       subject: 'alive',
@@ -349,9 +518,10 @@ describe('lifecycle reconciliation', () => {
 
   it('records a heartbeat whose pane key drifted only in the tab half', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_new:${LEAF_A}`)
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_new:${LEAF_A}`)
     const heartbeat = db.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_owner',
       to: 'term_coordinator',
       subject: 'alive',
@@ -365,48 +535,5 @@ describe('lifecycle reconciliation', () => {
       dispatchId: dispatch.id
     })
     expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).not.toBeNull()
-  })
-
-  it('suppresses same-dispatch heartbeats once worker_done is reconciled', () => {
-    db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'work' })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker')
-    const otherTask = db.createTask({ spec: 'other work' })
-    const otherDispatch = db.createDispatchContext(otherTask.id, 'term_other')
-    const insertHeartbeat = (dispatchId: string, from: string) =>
-      db.insertMessage({
-        from,
-        to: 'term_coordinator',
-        subject: 'alive',
-        type: 'heartbeat',
-        payload: JSON.stringify({ dispatchId })
-      })
-    const staleHeartbeat = insertHeartbeat(dispatch.id, 'term_worker')
-    const otherHeartbeat = insertHeartbeat(otherDispatch.id, 'term_other')
-    reconcileLifecycleMessage(db, staleHeartbeat)
-    reconcileLifecycleMessage(db, otherHeartbeat)
-    const done = db.insertMessage({
-      from: 'term_worker',
-      to: 'term_coordinator',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
-    })
-
-    reconcileLifecycleMessage(db, done)
-
-    expect(db.getUnreadMessages('term_coordinator', ['heartbeat']).map((row) => row.id)).toEqual([
-      otherHeartbeat.id
-    ])
-    const archived = db
-      .getAllMessagesForHandle('term_coordinator')
-      .find((row) => row.id === staleHeartbeat.id)
-    expect(archived).toMatchObject({ read: 1 })
-    expect(archived?.delivered_at).not.toBeNull()
-
-    const lateHeartbeat = insertHeartbeat(dispatch.id, 'term_worker')
-    expect(reconcileLifecycleMessage(db, lateHeartbeat)).toEqual({ action: 'suppressed' })
-    expect(db.getMessageById(lateHeartbeat.id)).toMatchObject({ read: 1 })
-    expect(db.getMessageById(lateHeartbeat.id)?.delivered_at).not.toBeNull()
   })
 })

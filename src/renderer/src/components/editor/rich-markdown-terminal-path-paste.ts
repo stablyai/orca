@@ -14,7 +14,7 @@ function readClipboardText(event: ClipboardEvent, type: string): string {
 function getWindowsPathBasename(filePath: string): string {
   const normalized = filePath.replaceAll('/', '\\')
   const separatorIndex = normalized.lastIndexOf('\\')
-  return separatorIndex >= 0 ? normalized.slice(separatorIndex + 1) : normalized
+  return separatorIndex !== -1 ? normalized.slice(separatorIndex + 1) : normalized
 }
 
 function extractClipboardAnchors(html: string): ClipboardAnchor[] {
@@ -87,8 +87,7 @@ export function handleRichMarkdownTerminalPathPaste(
   }
 
   event.preventDefault()
-  // Why: terminal link metadata can point at a synthetic basename URL; the
-  // clipboard plain text is the only source that keeps the Windows path intact.
+  // Use clipboard plain text because synthetic terminal basename URLs lose Windows path information.
   editor.view.dispatch(editor.state.tr.insertText(plainText))
   return true
 }

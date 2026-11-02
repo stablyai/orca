@@ -1,15 +1,9 @@
-import type { GitHubOwnerRepo } from '../../shared/types'
+import { normalizeGitHubRemoteHost } from '../../shared/git-remote-host-alias'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 
 export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
 
-export function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  // Why: GitHub documents ssh.github.com as SSH-over-HTTPS for github.com repos.
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
-}
-
-// Why: HTTP ports identify the GHES web/API endpoint; SSH and git ports are
-// transport-only and must not leak into gh's host identity.
+// HTTP ports identify API endpoints; SSH/git ports are transport-only.
 function hostFromRemoteUrl(url: URL): string {
   const protocol = url.protocol.toLowerCase()
   return protocol === 'http:' || protocol === 'https:' ? url.host : url.hostname
@@ -32,14 +26,19 @@ function parseGitHubRemotePath(path: string): Pick<GitHubRemoteIdentity, 'owner'
 export function remoteUrlUsesSshTransport(remoteUrl: string): boolean {
   const trimmed = remoteUrl.trim().toLowerCase()
   return (
-    trimmed.startsWith('git@') || trimmed.startsWith('ssh://') || trimmed.startsWith('git+ssh://')
+    isScpStyleRemote(trimmed) || trimmed.startsWith('ssh://') || trimmed.startsWith('git+ssh://')
   )
+}
+
+/** GitHub SSH certificate users can be org-<id>, not just git. */
+function isScpStyleRemote(remoteUrl: string): boolean {
+  return /^[^@\s/:]+@[^:\s/]+:[^\s]+$/.test(remoteUrl)
 }
 
 /** SSH transport host as written, preserving SCP alias case. */
 export function rawSshTransportHost(remoteUrl: string): string | null {
   const trimmed = remoteUrl.trim()
-  const scpMatch = trimmed.match(/^git@([^:]+):/i)
+  const scpMatch = trimmed.match(/^[^@\s/:]+@([^:]+):/i)
   if (scpMatch) {
     return scpMatch[1]
   }
@@ -68,7 +67,7 @@ export function gitHubSshConfigHostAlias(remoteUrl: string): string | null {
 
 export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdentity | null {
   const trimmed = remoteUrl.trim()
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
+  const sshMatch = trimmed.match(/^[^@\s/:]+@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
   if (sshMatch) {
     return { host: normalizeGitHubRemoteHost(sshMatch[1]), owner: sshMatch[2], repo: sshMatch[3] }
   }

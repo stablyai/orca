@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 
 type RichMarkdownSearchBarProps = {
@@ -57,8 +58,7 @@ export function RichMarkdownSearchBar({
   onToggleReplaceMode,
   onToggleWholeWord
 }: RichMarkdownSearchBarProps): React.JSX.Element | null {
-  // Why: surface the same replace shortcut the source editor uses so the toggle
-  // is discoverable; reads the user's effective binding, formatted per platform.
+  // Show the effective source-editor replace binding, including user remaps and platform formatting.
   const replaceShortcut = useOptionalShortcutLabel('editor.replace')
   const readOnlyExplanationId = React.useId()
 
@@ -67,9 +67,7 @@ export function RichMarkdownSearchBar({
   }
 
   const keepSearchFocus = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    // Why: rich-mode find drives navigation through the ProseMirror selection.
-    // Letting the toolbar buttons take focus interrupts that selection flow and
-    // makes mouse-based next/previous navigation appear broken.
+    // Keep focus in search so ProseMirror selection navigation continues across next/previous clicks.
     event.preventDefault()
   }
 
@@ -111,6 +109,10 @@ export function RichMarkdownSearchBar({
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
               onKeyDown={(event) => {
+                // IME Enter/Escape confirm or cancel composition; they must not navigate matches or dismiss search.
+                if (isImeCompositionKeyDown(event)) {
+                  return
+                }
                 if (event.key === 'Enter' && event.shiftKey) {
                   event.preventDefault()
                   onMoveToMatch(-1)
@@ -247,6 +249,10 @@ export function RichMarkdownSearchBar({
                 value={replaceQuery}
                 onChange={(event) => onReplaceQueryChange(event.target.value)}
                 onKeyDown={(event) => {
+                  // IME Enter/Escape belong to candidate confirmation/cancellation, not replacement or search dismissal.
+                  if (isImeCompositionKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
                     event.preventDefault()
                     onReplaceCurrent()

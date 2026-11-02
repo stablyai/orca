@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getHostedReviewForBranch } from './hosted-review'
+import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
 
 const {
   getProjectSlugMock,
@@ -27,8 +29,7 @@ const {
 vi.mock('../gitlab/client', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no PR found".
+  // Preserve provider errors as unavailable rather than false review absence.
   getMergeRequestForBranchOrThrow: getMergeRequestForBranchMock,
   getMergeRequest: vi.fn()
 }))
@@ -36,14 +37,14 @@ vi.mock('../gitlab/client', () => ({
 vi.mock('../github/client', () => ({
   getRepoSlug: getRepoSlugMock,
   getPRForBranchOutcome: getPRForBranchOutcomeMock,
+  getGitHubPRLookupRateLimitBlock: vi.fn(async () => null),
   createGitHubPullRequest: vi.fn()
 }))
 
 vi.mock('../bitbucket/client', () => ({
   getBitbucketRepoSlug: getBitbucketRepoSlugMock,
   getBitbucketPullRequestForBranch: getBitbucketPullRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no PR found".
+  // Preserve provider errors as unavailable rather than false review absence.
   getBitbucketPullRequestForBranchOrThrow: getBitbucketPullRequestForBranchMock,
   getBitbucketPullRequest: vi.fn()
 }))
@@ -51,8 +52,7 @@ vi.mock('../bitbucket/client', () => ({
 vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock,
   getAzureDevOpsPullRequestForBranch: getAzureDevOpsPullRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no PR found".
+  // Preserve provider errors as unavailable rather than false review absence.
   getAzureDevOpsPullRequestForBranchOrThrow: getAzureDevOpsPullRequestForBranchMock,
   getAzureDevOpsPullRequest: vi.fn()
 }))
@@ -60,13 +60,10 @@ vi.mock('../azure-devops/client', () => ({
 vi.mock('../gitea/client', () => ({
   getGiteaRepoSlug: getGiteaRepoSlugMock,
   getGiteaPullRequestForBranch: getGiteaPullRequestForBranchMock,
-  // Why: forge-provider resolves branch reviews via the OrThrow variant so
-  // lookup failures surface as unavailable instead of "no PR found".
+  // Preserve provider errors as unavailable rather than false review absence.
   getGiteaPullRequestForBranchOrThrow: getGiteaPullRequestForBranchMock,
   getGiteaPullRequest: vi.fn()
 }))
-
-import { getHostedReviewForBranch } from './hosted-review'
 
 describe('getHostedReviewForBranch', () => {
   beforeEach(() => {
@@ -80,6 +77,43 @@ describe('getHostedReviewForBranch', () => {
     getAzureDevOpsPullRequestForBranchMock.mockReset()
     getGiteaRepoSlugMock.mockReset()
     getGiteaPullRequestForBranchMock.mockReset()
+    // Clear process-wide answers so one test cannot satisfy another's lookup.
+    __resetHostedReviewBranchCacheForTests()
+  })
+
+  it('refreshes a self-managed GitLab MR through the provider while old metadata is pending', async () => {
+    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.example.test', path: 'g/p' })
+    const old = {
+      number: 7,
+      title: 'MR',
+      state: 'opened',
+      url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+      pipelineStatus: 'success',
+      updatedAt: '2026-05-10T00:00:00.000Z',
+      mergeable: 'MERGEABLE'
+    }
+    let finishOld: (value: typeof old) => void = () => {}
+    getMergeRequestForBranchMock
+      .mockReturnValueOnce(
+        new Promise<typeof old>((resolve) => {
+          finishOld = resolve
+        })
+      )
+      .mockResolvedValueOnce({ ...old, state: 'merged' })
+    const input = {
+      repoPath: '/repo',
+      executionHostId: 'ssh:ssh-1',
+      branch: 'feature',
+      force: true
+    } as const
+    const before = getHostedReviewForBranch(input)
+    await vi.waitFor(() => expect(getMergeRequestForBranchMock).toHaveBeenCalledTimes(1))
+    const click = getHostedReviewForBranch({ ...input, userRefresh: true })
+    finishOld(old)
+    await before
+    await expect(click).resolves.toMatchObject({ provider: 'gitlab', state: 'merged', number: 7 })
+    expect(getMergeRequestForBranchMock).toHaveBeenCalledTimes(2)
+    expect(getMergeRequestForBranchMock).toHaveBeenLastCalledWith('/repo', 'feature', null, 'ssh-1')
   })
 
   it('maps GitLab merge requests into the hosted review surface', async () => {
@@ -97,7 +131,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'refs/heads/feature'
       })
     ).resolves.toEqual({
@@ -134,6 +168,7 @@ describe('getHostedReviewForBranch', () => {
 
     await expect(
       getHostedReviewForBranch({
+        executionHostId: 'local',
         repoPath: '/repo',
         branch: 'feature',
         linkedGitHubPR: 3
@@ -143,7 +178,7 @@ describe('getHostedReviewForBranch', () => {
       number: 3,
       status: 'pending'
     })
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature', 3, undefined, null, {
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature', 3, null, null, {
       currentHeadOid: null
     })
   })
@@ -164,6 +199,7 @@ describe('getHostedReviewForBranch', () => {
 
     await expect(
       getHostedReviewForBranch({
+        executionHostId: 'local',
         repoPath: '/repo',
         branch: 'feature/wsl',
         linkedBitbucketPR: 22,
@@ -176,14 +212,14 @@ describe('getHostedReviewForBranch', () => {
     })
 
     const executionOptions = { localGitExecOptions: { wslDistro: 'Ubuntu' } }
-    expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
-    expect(getRepoSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
-    expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
+    expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', null, executionOptions)
+    expect(getRepoSlugMock).toHaveBeenCalledWith('/repo', null, executionOptions)
+    expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith('/repo', null, executionOptions)
     expect(getBitbucketPullRequestForBranchMock).toHaveBeenCalledWith(
       '/repo',
       'feature/wsl',
       22,
-      undefined,
+      null,
       executionOptions
     )
   })
@@ -207,6 +243,7 @@ describe('getHostedReviewForBranch', () => {
 
     await expect(
       getHostedReviewForBranch({
+        executionHostId: 'local',
         repoPath: '/repo',
         branch: '',
         fallbackGitHubPR: 42
@@ -216,7 +253,7 @@ describe('getHostedReviewForBranch', () => {
       number: 42,
       status: 'success'
     })
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', '', null, undefined, 42, {
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', '', null, null, 42, {
       acceptMergedFallbackPR: true,
       currentHeadOid: null
     })
@@ -240,7 +277,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/bitbucket',
         linkedBitbucketPR: 11
       })
@@ -288,7 +325,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/gitea',
         linkedGiteaPR: 14
       })
@@ -336,7 +373,7 @@ describe('getHostedReviewForBranch', () => {
     await expect(
       getHostedReviewForBranch({
         repoPath: '/repo',
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/azure',
         linkedAzureDevOpsPR: 21
       })

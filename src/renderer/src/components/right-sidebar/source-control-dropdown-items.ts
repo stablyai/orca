@@ -1,556 +1,170 @@
-/* eslint-disable max-lines -- Why: this dropdown state machine keeps every action row in one table so priority and disabled-state regressions stay visible in tests. */
-// Why: split from source-control-primary-action — primary and dropdown are independent derivations with different priority ladders.
+// Primary and dropdown actions have independent priority ladders.
 
-import type { PrimaryActionInputs } from './source-control-primary-action'
-import { canSubmitCommit, resolveCommitDisabledReason } from './source-control-commit-eligibility'
-import type { GitConflictOperation } from '../../../../shared/types'
-import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
-import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'
 import { translate } from '@/i18n/i18n'
 import {
-  localizedHostedReviewCopy,
-  resolveSupportedHostedReviewCopyProvider
-} from '@/i18n/hosted-review-localized-copy'
+  COMMIT_MESSAGE_REQUIRED_REASON,
+  type CommitDisabledReason
+} from '../../../../shared/source-control-commit-eligibility'
+import type {
+  DropdownActionInputs,
+  DropdownEntry
+} from '../../../../shared/source-control-dropdown-item-types'
+import { deriveDropdownActionContext } from '../../../../shared/source-control-dropdown-action-context'
 import {
-  canClickBlockedCreateReviewReason,
-  resolveHostedReviewAuthInstruction
-} from './source-control-create-review-blocked-action'
+  buildCommitDropdownItems,
+  type CommitDropdownCopy
+} from '../../../../shared/source-control-dropdown-commit-items'
+import { buildRemoteDropdownItems } from '../../../../shared/source-control-dropdown-remote-items'
+import { localizedRemoteCopy } from './source-control-dropdown-remote-localized-copy'
+import { buildHostedReviewDropdownItems } from './source-control-dropdown-review-items'
 
-export type DropdownActionInputs = PrimaryActionInputs & {
-  conflictOperation?: GitConflictOperation
-  isPullRequestOperationActive?: boolean
-  rebaseBaseRef?: string | null
-}
-
-export type DropdownActionKind =
-  | 'commit'
-  | 'commit_push'
-  | 'commit_sync'
-  | 'abort_merge'
-  | 'abort_rebase'
-  | 'create_pr'
-  | 'push_create_pr'
-  | 'push'
-  | 'force_push'
-  | 'pull'
-  | 'fast_forward'
-  | 'sync'
-  | 'rebase_base'
-  | 'fetch'
-  | 'publish'
-
-export type DropdownItem = {
-  kind: DropdownActionKind
-  label: string
-  title: string
-  disabled: boolean
-  hint?: string
-  variant?: 'default' | 'destructive'
-}
-
-export type DropdownSeparator = { kind: 'separator' }
-
-export type DropdownEntry = DropdownItem | DropdownSeparator
-
-function describePushCount(ahead: number): string {
-  return `Push ${ahead} commit${ahead === 1 ? '' : 's'}`
-}
-
-function describePullCount(behind: number): string {
-  return `Pull ${behind} commit${behind === 1 ? '' : 's'}`
-}
-
-function describeFastForwardCount(behind: number): string {
-  return `Fast-forward ${behind} commit${behind === 1 ? '' : 's'}`
-}
-
-function describeSyncCounts(ahead: number, behind: number): string {
-  return `Pull ${behind}, push ${ahead}`
-}
-
-function formatCountLabel(base: string, count: number): string {
-  return count > 0 ? `${base} (${count})` : base
-}
-
-function formatSyncLabel(base: string, ahead: number, behind: number): string {
-  if (ahead === 0 && behind === 0) {
-    return base
+function localizedCommitDisabledReason(reason: CommitDisabledReason): string {
+  switch (reason) {
+    case 'Resolve conflicts before committing':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.a6457b46a7',
+        'Resolve conflicts before committing'
+      )
+    case 'Stage at least one file to commit':
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.fa3bd4f40c',
+        'Stage at least one file to commit'
+      )
+    case COMMIT_MESSAGE_REQUIRED_REASON:
+      return translate(
+        'auto.components.right.sidebar.source.control.primary.action.f01f16d77f',
+        'Enter a commit message to commit'
+      )
   }
-  return `${base} (↓${behind} ↑${ahead})`
 }
 
-function formatForcePushTitle(branchCommitsAhead: number | undefined, upstreamName?: string) {
-  const countText =
-    branchCommitsAhead && branchCommitsAhead > 0
-      ? `${branchCommitsAhead} branch commit${branchCommitsAhead === 1 ? '' : 's'}`
-      : 'this branch'
-  return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
-}
-
-function formatManualForcePushTitle(ahead: number, behind: number, upstreamName?: string): string {
-  const commitText = ahead === 1 ? '1 local commit' : `${ahead} local commits`
-  if (behind > 0) {
-    return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'} and replace remote-only commits.`
-  }
-  return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'}.`
-}
-
-function formatUnpublishedForcePushTitle(branchCommitsAhead: number | undefined): string {
-  const countText =
-    branchCommitsAhead && branchCommitsAhead > 0
-      ? `${branchCommitsAhead} branch commit${branchCommitsAhead === 1 ? '' : 's'}`
-      : 'this branch'
-  return `Force push ${countText} with lease and set an upstream if needed.`
-}
-
-function formatRebaseBaseRef(baseRef: string): string {
-  return baseRef.replace(/^refs\/remotes\//, '').replace(/^remotes\//, '')
-}
-
-function reviewCopy(
-  provider: NonNullable<PrimaryActionInputs['hostedReviewCreation']>['provider'] | undefined
-): ReturnType<typeof localizedHostedReviewCopy> & {
-  authInstruction: string
-} {
+function localizedCommitCopy(): CommitDropdownCopy {
   return {
-    ...localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider)),
-    authInstruction: resolveHostedReviewAuthInstruction(provider ?? 'github')
-  }
-}
-
-/**
- * Resolve the chevron dropdown items. Every row is always rendered — disabled with a
- * tooltip reason rather than hidden — so the menu shape stays stable across states.
- */
-export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
-  const {
-    stagedCount,
-    hasPartiallyStagedChanges,
-    hasMessage,
-    hasUnresolvedConflicts,
-    isCommitting,
-    isRemoteOperationActive,
-    upstreamStatus,
-    prState,
-    isPRStateLoading,
-    hostedReviewCreation,
-    conflictOperation = 'unknown',
-    branchCommitsAhead,
-    hasCurrentBranch = true,
-    canPushLinkedReviewWithoutUpstream = false,
-    rebaseBaseRef,
-    isPullRequestOperationActive = false
-  } = inputs
-
-  const hasStaged = stagedCount > 0
-  const hasDirtyLocalChanges = hasStaged || inputs.hasUnstagedChanges
-  // Why: undefined upstreamStatus means loading (transient after a worktree switch), not unpublished — treating it as hasUpstream=false would re-enable Publish Branch and clobber the real upstream.
-  const upstreamLoading = upstreamStatus === undefined
-  const hasUpstream = upstreamStatus?.hasUpstream ?? false
-  const hasOpenHostedReview = prState === 'open' || prState === 'draft'
-  const canPushUntrackedHostedReview =
-    !hasUpstream &&
-    hasOpenHostedReview &&
-    hasCurrentBranch &&
-    branchCommitsAhead !== 0 &&
-    canPushLinkedReviewWithoutUpstream
-  // Why: only a missing review head hard-blocks; branchCommitsAhead === 0 still means the target is known, so Push stays available.
-  const pushBlockedByOpenHostedReviewTarget =
-    !hasUpstream && hasOpenHostedReview && !canPushLinkedReviewWithoutUpstream
-  const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
-  const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
-  const publishBlockedByOpenHostedReview = !hasUpstream && hasOpenHostedReview
-  const publishBlockedByDetachedHead = !hasUpstream && !hasCurrentBranch
-  const ahead = upstreamStatus?.ahead ?? 0
-  const behind = upstreamStatus?.behind ?? 0
-  const shouldForcePushWithLease = shouldForcePushWithLeaseForUpstream(upstreamStatus)
-  // Why: prefer branch-compare for force-push counts — unpublished/loading branches report ahead=0 and patch-equivalent rewrites inflate upstream ahead.
-  const pushLabelCount =
-    branchCommitsAhead !== undefined &&
-    branchCommitsAhead > 0 &&
-    (shouldForcePushWithLease || !hasUpstream)
-      ? branchCommitsAhead
-      : ahead
-  const forcePushTitle = formatForcePushTitle(branchCommitsAhead, upstreamStatus?.upstreamName)
-  const createReviewCopy = reviewCopy(hostedReviewCreation?.provider)
-
-  // Why: lock the whole menu during any in-flight op so a second click can't queue on a stale status snapshot.
-  const globalBusy = isCommitting || isRemoteOperationActive || isPullRequestOperationActive
-
-  const commitDisabledReason = resolveCommitDisabledReason({
-    stagedCount,
-    hasPartiallyStagedChanges,
-    hasMessage,
-    hasUnresolvedConflicts
-  })
-  const canCommit =
-    !globalBusy &&
-    canSubmitCommit({
-      stagedCount,
-      hasPartiallyStagedChanges,
-      hasMessage,
-      hasUnresolvedConflicts,
-      isCommitting,
-      isRemoteOperationActive,
-      isPullRequestOperationActive
-    })
-  const commitItem: DropdownItem = {
-    kind: 'commit',
-    label: translate(
+    commit: translate(
       'auto.components.right.sidebar.source.control.dropdown.items.2b8e6595fd',
       'Commit'
     ),
-    title: commitDisabledReason ?? 'Commit staged changes',
-    disabled: !canCommit
-  }
-
-  // Why: compound commit labels omit counts — the commit itself changes ahead/behind, so pre-commit numbers would mislead.
-  const commitPushTitle = upstreamLoading
-    ? 'Checking branch status…'
-    : publishBlockedByPRLoading
-      ? 'Checking PR status…'
-      : publishBlockedByMergedPR
-        ? 'PR is already merged'
-        : publishBlockedByDetachedHead
-          ? 'Check out a branch before pushing commits'
-          : pushBlockedByOpenHostedReviewTarget
-            ? 'Linked review branch target is unavailable'
-            : !hasUpstream && !(hasOpenHostedReview && canPushLinkedReviewWithoutUpstream)
-              ? 'Publish the branch first to push commits'
-              : (commitDisabledReason ??
-                (shouldForcePushWithLease
-                  ? 'Commit staged changes and force push with lease'
-                  : behind > 0
-                    ? 'Commit staged changes and try to push'
-                    : 'Commit staged changes and push'))
-  const commitPushItem: DropdownItem = {
-    kind: 'commit_push',
-    label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
-    title: commitPushTitle,
-    // Why: match explicit Push — only an open linked review with a known head can commit+push without a git upstream.
-    disabled:
-      globalBusy ||
-      upstreamLoading ||
-      (!hasUpstream && !(hasOpenHostedReview && canPushLinkedReviewWithoutUpstream)) ||
-      publishBlockedByDetachedHead ||
-      publishBlockedByPRLoading ||
-      publishBlockedByMergedPR ||
-      commitDisabledReason !== null
-  }
-
-  const commitSyncTitle = (() => {
-    if (upstreamLoading) {
-      return 'Checking branch status…'
-    }
-    if (publishBlockedByPRLoading) {
-      return 'Checking PR status…'
-    }
-    if (publishBlockedByMergedPR) {
-      return 'PR is already merged'
-    }
-    if (publishBlockedByDetachedHead) {
-      return 'Check out a branch before syncing commits'
-    }
-    if (!hasUpstream) {
-      // Why: direct the user to Publish Branch (the primary action) rather than naming a nonexistent compound action.
-      return 'Publish the branch first to sync commits'
-    }
-    if (shouldForcePushWithLease) {
-      return (
-        commitDisabledReason ??
-        'Use Commit & Force Push — remote only has older copies of local commits'
-      )
-    }
-    return commitDisabledReason ?? 'Commit, then pull and push'
-  })()
-  const commitSyncItem: DropdownItem = {
-    kind: 'commit_sync',
-    label: translate(
+    commitStagedChanges: translate(
+      'auto.components.right.sidebar.source.control.primary.action.ab41fb926b',
+      'Commit staged changes'
+    ),
+    commitPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.commitPush',
+      'Commit & Push'
+    ),
+    commitForcePush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.commitForcePush',
+      'Commit & Force Push'
+    ),
+    commitSync: translate(
       'auto.components.right.sidebar.source.control.dropdown.items.323bb614aa',
       'Commit & Sync'
     ),
-    title: commitSyncTitle,
-    disabled:
-      globalBusy ||
-      upstreamLoading ||
-      !hasUpstream ||
-      publishBlockedByDetachedHead ||
-      shouldForcePushWithLease ||
-      commitDisabledReason !== null
-  }
-
-  const pushItem: DropdownItem = {
-    kind: 'push',
-    label: formatCountLabel('Push', ahead),
-    title: publishBlockedByDetachedHead
-      ? 'Check out a branch before pushing commits'
-      : pushBlockedByOpenHostedReviewTarget
-        ? 'Linked review branch target is unavailable'
-        : upstreamLoading
-          ? 'Push this branch and set an upstream if needed'
-          : canPushUntrackedHostedReview
-            ? 'Push updates to the linked review branch'
-            : !hasUpstream
-              ? 'Push this branch and set an upstream if needed'
-              : shouldForcePushWithLease
-                ? 'Try a regular push; git may require force push'
-                : behind > 0 && ahead > 0
-                  ? 'Push local commits; git may require syncing first'
-                  : ahead === 0
-                    ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-                    : describePushCount(ahead),
-    // Why: Push stays available without an upstream (git resolves --set-upstream) and under force-with-lease; only detached HEAD and unknown review targets block.
-    disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
-  }
-
-  const forcePushItem: DropdownItem = {
-    kind: 'force_push',
-    label: formatCountLabel('Force Push', pushLabelCount),
-    title: publishBlockedByDetachedHead
-      ? 'Check out a branch before force pushing commits'
-      : pushBlockedByOpenHostedReviewTarget
-        ? 'Linked review branch target is unavailable'
-        : upstreamLoading
-          ? formatUnpublishedForcePushTitle(branchCommitsAhead)
-          : !hasUpstream
-            ? formatUnpublishedForcePushTitle(branchCommitsAhead)
-            : pushLabelCount === 0
-              ? `Nothing to force push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-              : shouldForcePushWithLease
-                ? forcePushTitle
-                : formatManualForcePushTitle(pushLabelCount, behind, upstreamStatus?.upstreamName),
-    // Why: same target-safety gate as Push — force-with-lease to a wrong review head is worse than blocking; stays available without an upstream.
-    disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
-  }
-
-  const pullItem: DropdownItem = {
-    kind: 'pull',
-    label: formatCountLabel('Pull', behind),
-    title: upstreamLoading
-      ? 'Checking branch status…'
-      : publishBlockedByPRLoading
-        ? 'Checking PR status…'
-        : publishBlockedByMergedPR
-          ? 'PR is already merged'
-          : publishBlockedByDetachedHead
-            ? 'Check out a branch before pulling commits'
-            : !hasUpstream
-              ? 'Publish the branch first to pull commits'
-              : shouldForcePushWithLease
-                ? 'Nothing new to pull — remote only has older copies of local commits'
-                : behind === 0
-                  ? 'Nothing to pull'
-                  : describePullCount(behind),
-    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
-  }
-
-  const fastForwardItem: DropdownItem = {
-    kind: 'fast_forward',
-    label: formatCountLabel('Fast-forward', behind),
-    title: upstreamLoading
-      ? 'Checking branch status…'
-      : publishBlockedByPRLoading
-        ? 'Checking PR status…'
-        : publishBlockedByMergedPR
-          ? 'PR is already merged'
-          : publishBlockedByDetachedHead
-            ? 'Check out a branch before fast-forwarding'
-            : !hasUpstream
-              ? 'Publish the branch first to fast-forward'
-              : shouldForcePushWithLease
-                ? 'Nothing new to fast-forward — remote only has older copies of local commits'
-                : behind === 0
-                  ? 'Nothing to fast-forward'
-                  : ahead > 0
-                    ? 'Try a fast-forward pull; git may reject local commits'
-                    : describeFastForwardCount(behind),
-    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
-  }
-
-  const syncItem: DropdownItem = {
-    kind: 'sync',
-    label: formatSyncLabel('Sync', ahead, behind),
-    title: upstreamLoading
-      ? 'Checking branch status…'
-      : publishBlockedByPRLoading
-        ? 'Checking PR status…'
-        : publishBlockedByMergedPR
-          ? 'PR is already merged'
-          : publishBlockedByDetachedHead
-            ? 'Check out a branch before syncing commits'
-            : !hasUpstream
-              ? 'Publish the branch first to sync commits'
-              : shouldForcePushWithLease
-                ? 'Use Force Push — remote only has older copies of local commits'
-                : ahead === 0 && behind === 0
-                  ? 'Branch is up to date'
-                  : describeSyncCounts(ahead, behind),
-    disabled:
-      globalBusy ||
-      upstreamLoading ||
-      !hasUpstream ||
-      publishBlockedByDetachedHead ||
-      shouldForcePushWithLease
-  }
-
-  const rebaseBaseLabel = rebaseBaseRef ? formatRebaseBaseRef(rebaseBaseRef) : null
-  const hasRemoteBaseRef = rebaseBaseLabel?.includes('/') === true
-  const rebaseItem: DropdownItem = {
-    kind: 'rebase_base',
-    label: rebaseBaseLabel ? `Rebase from ${rebaseBaseLabel}` : 'Rebase from Base',
-    title: (() => {
-      if (!rebaseBaseLabel || !hasRemoteBaseRef) {
-        return 'Choose a remote base branch to rebase from'
-      }
-      if (hasDirtyLocalChanges) {
-        return 'Try rebasing; git may require committing or stashing local changes first'
-      }
-      return `Rebase current branch with latest commits from ${rebaseBaseLabel}`
-    })(),
-    disabled: globalBusy || !rebaseBaseRef || !hasRemoteBaseRef
-  }
-
-  const fetchItem: DropdownItem = {
-    kind: 'fetch',
-    label: translate(
-      'auto.components.right.sidebar.source.control.dropdown.items.226b85a3a7',
-      'Fetch'
+    checkingBranchStatus: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.checkingBranchStatus',
+      'Checking branch status…'
     ),
-    title: translate(
-      'auto.components.right.sidebar.source.control.dropdown.items.04d709801d',
-      'Fetch from remote without merging'
+    checkingPrStatus: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCheckingPrStatus',
+      'Checking PR status…'
     ),
-    disabled: globalBusy
-  }
-
-  const publishItem: DropdownItem = {
-    kind: 'publish',
-    label:
-      publishBlockedByMergedPR || publishBlockedByPRLoading
-        ? 'PR Status'
-        : publishBlockedByOpenHostedReview
-          ? 'Linked Review'
-          : publishBlockedByDetachedHead
-            ? 'No Branch'
-            : 'Publish Branch',
-    title: upstreamLoading
-      ? 'Checking branch status…'
-      : publishBlockedByPRLoading
-        ? 'Checking PR status…'
-        : publishBlockedByMergedPR
-          ? 'PR is already merged'
-          : publishBlockedByOpenHostedReview
-            ? canPushLinkedReviewWithoutUpstream
-              ? 'Linked review branch already exists'
-              : 'Linked review branch target is unavailable'
-            : publishBlockedByDetachedHead
-              ? 'Check out a branch before publishing commits'
-              : hasUpstream
-                ? 'Branch is already published'
-                : 'Publish this branch to origin',
-    disabled:
-      globalBusy ||
-      upstreamLoading ||
-      hasUpstream ||
-      publishBlockedByPRLoading ||
-      publishBlockedByMergedPR ||
-      publishBlockedByOpenHostedReview ||
-      publishBlockedByDetachedHead
-  }
-
-  const createBlockedHint = (() => {
-    switch (hostedReviewCreation?.blockedReason) {
-      case 'dirty':
-        return 'Commit changes first'
-      case 'detached_head':
-        return 'Check out a branch first'
-      case 'default_branch':
-        return 'Switch to a feature branch'
-      case 'no_upstream':
-        return 'Publish Branch'
-      case 'needs_push':
-        return 'Push first'
-      case 'needs_sync':
-        return shouldForcePushWithLease ? 'Force Push first' : 'Sync first'
-      case 'auth_required':
-        return `${createReviewCopy.authInstruction} in this environment`
-      case 'unsupported_provider':
-        return 'Unsupported provider'
-      case 'existing_review':
-        return `A ${createReviewCopy.reviewLabel} already exists`
-      case 'fork_head_unsupported':
-        return 'Fork head unsupported'
-      case 'base_not_on_remote':
-        return 'Base branch is not on the remote'
-      case null:
-      case undefined:
-        return upstreamLoading ? 'Checking branch status…' : 'Branch is not ready'
-    }
-  })()
-
-  const createPRItem: DropdownItem = {
-    kind: 'create_pr',
-    label: translate(
-      'auto.components.right.sidebar.source.control.dropdown.items.9e779995dd',
-      'Create {{value0}}',
-      { value0: createReviewCopy.shortLabel }
+    prAlreadyMerged: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titlePrAlreadyMerged',
+      'PR is already merged'
     ),
-    title: hostedReviewCreation?.canCreate
-      ? `Create a ${createReviewCopy.reviewLabel} for this branch`
-      : createBlockedHint,
-    hint: hostedReviewCreation?.canCreate ? undefined : createBlockedHint,
-    disabled:
-      globalBusy ||
-      !supportsHostedReviewCreation(hostedReviewCreation?.provider) ||
-      (!hostedReviewCreation?.canCreate &&
-        !canClickBlockedCreateReviewReason(hostedReviewCreation?.blockedReason))
+    checkOutBranchToPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCheckOutBranchToPush',
+      'Check out a branch before pushing commits'
+    ),
+    linkedReviewTargetUnavailable: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleLinkedReviewTargetUnavailable',
+      'Linked review branch target is unavailable'
+    ),
+    publishBranchFirstToPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titlePublishBranchFirstToPush',
+      'Publish the branch first to push commits'
+    ),
+    commitAndForcePush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCommitAndForcePush',
+      'Commit staged changes and force push with lease'
+    ),
+    commitAndTryPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCommitAndTryPush',
+      'Commit staged changes and try to push'
+    ),
+    commitAndPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCommitAndPush',
+      'Commit staged changes and push'
+    ),
+    checkOutBranchToSync: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCheckOutBranchToSync',
+      'Check out a branch before syncing commits'
+    ),
+    publishBranchFirstToSync: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titlePublishBranchFirst',
+      'Publish the branch first to sync commits'
+    ),
+    useCommitAndForcePush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleUseForcePush',
+      'Use Commit & Force Push — remote only has older copies of local commits'
+    ),
+    commitThenPullPush: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.titleCommitThenPullPush',
+      'Commit, then pull and push'
+    ),
+    commitDisabledReason: localizedCommitDisabledReason
   }
+}
 
-  const canPushAndCreate =
-    !globalBusy &&
-    !upstreamLoading &&
-    supportsHostedReviewCreation(hostedReviewCreation?.provider) &&
-    (hostedReviewCreation.blockedReason === 'needs_push' ||
-      (hostedReviewCreation.blockedReason === 'needs_sync' && shouldForcePushWithLease))
-  const pushCreatePRItem: DropdownItem = {
-    kind: 'push_create_pr',
-    label: shouldForcePushWithLease
-      ? `Force Push before ${createReviewCopy.shortLabel}`
-      : `Push before ${createReviewCopy.shortLabel}`,
-    title: canPushAndCreate
-      ? shouldForcePushWithLease
-        ? `Force push with lease before creating a ${createReviewCopy.reviewLabel}`
-        : `Push local commits before creating a ${createReviewCopy.reviewLabel}`
-      : createBlockedHint,
-    hint: canPushAndCreate ? undefined : createBlockedHint,
-    disabled: !canPushAndCreate
-  }
+/** Keep menu shape stable across states: render every row, disabling blocked actions with tooltip reasons. */
+export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
+  const ctx = deriveDropdownActionContext(inputs)
+  const { commit, commitPush, commitSync } = buildCommitDropdownItems(ctx, localizedCommitCopy())
+  const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish } =
+    buildRemoteDropdownItems(ctx, localizedRemoteCopy())
+  const { createPR, pushCreatePR } = buildHostedReviewDropdownItems(ctx)
+  const { conflictOperation, isPullRequestOperationActive, globalBusy } = ctx
 
   const entries: DropdownEntry[] = [
-    commitItem,
-    commitPushItem,
-    commitSyncItem,
-    { kind: 'separator' },
-    pushItem,
-    forcePushItem,
-    createPRItem,
-    pushCreatePRItem,
-    pullItem,
-    fastForwardItem,
-    syncItem,
-    rebaseItem,
-    fetchItem,
-    publishItem
+    commit,
+    commitPush,
+    commitSync,
+    { kind: 'separator', id: 'before-remote' },
+    push,
+    forcePush,
+    createPR,
+    pushCreatePR,
+    pull,
+    fastForward,
+    sync,
+    rebase,
+    fetch,
+    publish
   ]
   if (conflictOperation === 'merge' || conflictOperation === 'rebase') {
     const isRebase = conflictOperation === 'rebase'
-    const label = isRebase ? 'Abort rebase' : 'Abort merge'
+    const label = isRebase
+      ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+      : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')
     entries.push(
-      { kind: 'separator' },
+      { kind: 'separator', id: 'before-abort' },
       {
         kind: isRebase ? 'abort_rebase' : 'abort_merge',
         label,
-        title: globalBusy ? 'Operation in progress…' : `Abort the ${conflictOperation} in progress`,
+        title: globalBusy
+          ? translate(
+              'auto.components.right.sidebar.source.control.dropdown.items.titleOperationInProgress',
+              'Operation in progress…'
+            )
+          : isRebase
+            ? translate(
+                'auto.components.right.sidebar.source.control.dropdown.items.titleAbortRebaseInProgress',
+                'Abort the rebase in progress'
+              )
+            : translate(
+                'auto.components.right.sidebar.source.control.dropdown.items.titleAbortMergeInProgress',
+                'Abort the merge in progress'
+              ),
         disabled: globalBusy,
         variant: 'destructive'
       }

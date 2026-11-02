@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import type { DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import {
@@ -10,16 +10,15 @@ import {
   onDashboardPopoutOpenChanged
 } from '../window/dashboard-popout-window'
 import { safelyRevealWindow } from '../window/focus-existing-window'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRenderer } from './ui'
 import {
+  admitDashboardSnapshot,
   isDashboardPaneKey,
-  isDashboardRevealAgentArgs,
-  isDashboardSnapshot
+  isDashboardRevealAgentArgs
 } from './dashboard-payload-validation'
 
-// The most recent snapshot the main renderer published, replayed to the popout
-// the instant it mounts so the board paints without waiting for the next tick.
-// Cleared on close so a reopened popout never flashes a previous session.
+// Replay immediately on mount; clear on close to avoid showing a previous session.
 let lastSnapshot: DashboardSnapshot | null = null
 
 function isDashboardEnabled(store: Store): boolean {
@@ -56,26 +55,33 @@ export function registerDashboardPopoutHandlers(
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    createOrFocusDashboardPopout(store, undefined, {
+    createOrFocusDashboardPopout(store, {
       getKeybindings: () => keybindings?.getOverrides()
     })
   })
 
-  // Relay: the main renderer publishes derived snapshots; forward to the popout.
   ipcMain.handle('dashboard:publishSnapshot', (event, snapshot: unknown): void => {
-    if (
-      !isTrustedUIRenderer(event.sender) ||
-      !isDashboardEnabled(store) ||
-      !isDashboardSnapshot(snapshot)
-    ) {
+    if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    lastSnapshot = snapshot
-    getDashboardPopoutWindow()?.webContents.send('dashboard:snapshot', snapshot)
+    const admitted = admitDashboardSnapshot(snapshot)
+    // Explain stale replays instead of silently discarding malformed snapshots.
+    if (!admitted) {
+      console.warn('[dashboard] rejected malformed snapshot; pop-out keeps its previous board')
+      return
+    }
+    if (admitted.droppedCardCount > 0) {
+      console.warn(`[dashboard] dropped ${admitted.droppedCardCount} invalid card(s) from snapshot`)
+    }
+    // Retain omitted unchanged icons for newly mounting popouts; live forwards stay sparse.
+    lastSnapshot =
+      admitted.snapshot.repoIconsByRepoId === undefined && lastSnapshot?.repoIconsByRepoId
+        ? { ...admitted.snapshot, repoIconsByRepoId: lastSnapshot.repoIconsByRepoId }
+        : admitted.snapshot
+    getDashboardPopoutWindow()?.webContents.send('dashboard:snapshot', admitted.snapshot)
   })
 
-  // The popout asks for a snapshot on mount: replay the cache immediately, then
-  // nudge the main renderer to publish a fresh one.
+  // Replay immediately, then request fresh renderer state.
   ipcMain.handle('dashboard:requestSnapshot', (event): void => {
     if (!isDashboardPopoutRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
@@ -92,22 +98,23 @@ export function registerDashboardPopoutHandlers(
       : false
   )
 
-  // Seen-sync: opening a card's terminal dialog acknowledges the agent in the
-  // main renderer's store — the same ack that mutes its sidebar row.
+  // Acknowledge in the main store so popout views also mute sidebar rows.
   ipcMain.handle('dashboardPopout:ackAgent', (event, args: unknown): void => {
+    const ack = args && typeof args === 'object' ? args : {}
+    const paneKey = 'paneKey' in ack ? ack.paneKey : undefined
     if (
       !isDashboardPopoutRenderer(event.sender) ||
       !isDashboardEnabled(store) ||
-      !args ||
-      typeof args !== 'object' ||
-      !isDashboardPaneKey((args as { paneKey?: unknown }).paneKey)
+      !isDashboardPaneKey(paneKey)
     ) {
       return
     }
-    sendToTrustedUIRenderer('ui:ackDashboardAgent', (args as { paneKey: string }).paneKey)
+    sendToTrustedUIRenderer('ui:ackDashboardAgent', {
+      paneKey,
+      intent: 'intent' in ack && ack.intent === 'explicit' ? 'explicit' : 'view'
+    })
   })
 
-  // Click-to-focus: raise the main window and route it to the agent's pane.
   ipcMain.handle('dashboardPopout:revealAgent', (event, args: unknown): void => {
     if (
       !isDashboardPopoutRenderer(event.sender) ||
@@ -122,10 +129,12 @@ export function registerDashboardPopoutHandlers(
     }
     safelyRevealWindow(mainWindow)
     mainWindow.webContents.send('ui:revealDashboardAgent', args)
-    try {
-      app.focus({ steal: true })
-    } catch {
-      // Best-effort; the per-window focus above may still bring it forward.
+    if (!isBackgroundLaunch()) {
+      try {
+        app.focus({ steal: true })
+      } catch {
+        // Best-effort; the per-window focus above may still bring it forward.
+      }
     }
   })
 }

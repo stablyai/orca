@@ -17,8 +17,16 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { barColor, ProviderExtraUsageSection } from './provider-extra-usage-section'
 
-// Re-exported from its shared home so status-bar callers keep a single import.
+export {
+  barColor,
+  getExtraUsageLabel,
+  USAGE_URGENT_PERCENT,
+  USAGE_WARNING_PERCENT
+} from './provider-extra-usage-section'
+
 export { clampUsedPercent }
 
 export {
@@ -27,25 +35,22 @@ export {
   getProviderUsageStatusLabel
 } from './usage-error-copy'
 
-// ---------------------------------------------------------------------------
-// Formatting helpers
-// ---------------------------------------------------------------------------
-
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return 'just now'
+    return translate('auto.components.status.bar.tooltip.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return `${mins}m ago`
+    return translate('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
+      minutes: mins
+    })
   }
   const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
+  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
 }
 
-// Re-export so existing tooltip consumers/tests keep their import path; the
-// implementation is shared with mobile in src/shared/rate-limit-reset-format.
+// Preserve tooltip imports while sharing countdown formatting with mobile.
 export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
@@ -70,10 +75,6 @@ export function formatResetCreditExpiry(
       })
 }
 
-// ---------------------------------------------------------------------------
-// Shared icon component
-// ---------------------------------------------------------------------------
-
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
@@ -95,6 +96,12 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
+  }
+  if (provider === 'zcode') {
+    return <AgentIcon agent="zcode" size={13} />
+  }
+  if (provider === 'cursor') {
+    return <AgentIcon agent="cursor" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -134,10 +141,6 @@ function ErrorMessage({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Window section derivation
-// ---------------------------------------------------------------------------
-
 export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
@@ -145,6 +148,18 @@ export function getWindowSections(
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
     return [
       ...bucketSections,
+      // Include Cursor’s monthly plan total because pools can understate proximity to its cap.
+      ...(p.monthly
+        ? [
+            {
+              label:
+                p.provider === 'cursor'
+                  ? translate('auto.components.status.bar.tooltip.cursor.plan', 'Plan')
+                  : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
+              window: p.monthly
+            }
+          ]
+        : []),
       {
         label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
         window: p.weekly
@@ -169,32 +184,58 @@ export function getWindowSections(
   }
   if (p.monthly !== undefined && p.monthly !== null) {
     sections.push({
-      label: translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
+      label:
+        p.provider === 'zcode'
+          ? translate('auto.components.status.bar.tooltip.zcode.mcp', 'MCP')
+          : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
       window: p.monthly
     })
   }
   return sections
 }
 
-// ---------------------------------------------------------------------------
-// Tooltip — progress bar section for a single window
-// ---------------------------------------------------------------------------
+// Tooltips invert the theme; use background text tokens for legible primary and secondary content.
 
-// Why: the base tooltip component uses `bg-foreground text-background` which
-// inverts the color scheme (light bg in dark mode). These rich tooltips use
-// `text-background` for primary text and `text-background/50` for secondary
-// to stay readable inside the inverted tooltip container.
+function ProviderRateLimitWindowSection({
+  window,
+  label,
+  textClass,
+  mutedClass,
+  emptyBarClass,
+  usagePercentageDisplay,
+  now
+}: {
+  window: RateLimitWindow | null
+  label: string
+  textClass: string
+  mutedClass: string
+  emptyBarClass: string
+  usagePercentageDisplay: UsagePercentageDisplay
+  now: number
+}): React.JSX.Element | null {
+  if (!window) {
+    return null
+  }
+  const usedPct = clampUsedPercent(window.usedPercent)
+  const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
+  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
 
-// Why: urgency color tracks % used even when fill represents % remaining;
-// low usage stays neutral so persistent chrome stays quiet.
-export function barColor(usedPct: number): string {
-  if (usedPct < 60) {
-    return 'bg-muted-foreground/40'
-  }
-  if (usedPct < 80) {
-    return 'bg-yellow-500'
-  }
-  return 'bg-red-500'
+  return (
+    <div className="space-y-1">
+      <div className={`font-medium ${textClass}`}>{label}</div>
+      <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+        {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
+        <div
+          className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
+          style={{ width: `${displayedPct}%` }}
+        />
+      </div>
+      <div className={`flex justify-between ${mutedClass}`}>
+        <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
+        {resetLabel && <span>{resetLabel}</span>}
+      </div>
+    </div>
+  )
 }
 
 export function ProviderPanel({
@@ -202,19 +243,24 @@ export function ProviderPanel({
   inverted = false,
   className,
   showResetCredits = true,
-  usagePercentageDisplay = 'used'
+  usagePercentageDisplay = 'used',
+  embedded = false
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
   usagePercentageDisplay?: UsagePercentageDisplay
+  /** Inside an account card that already names the provider; tracks must contrast with the card. */
+  embedded?: boolean
 }): React.JSX.Element {
+  const windowSections = p ? getWindowSections(p) : []
+  const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
   const dividerClass = inverted ? 'border-background/15' : 'border-border/70'
-  const emptyBarClass = inverted ? 'bg-background/20' : 'bg-muted'
+  const emptyBarClass = inverted ? 'bg-background/20' : embedded ? 'bg-foreground/10' : 'bg-muted'
 
   if (!p) {
     return (
@@ -229,10 +275,12 @@ export function ProviderPanel({
   if (p.status === 'unavailable') {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
-        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
+        {embedded ? null : (
+          <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
+          </div>
+        )}
         <div className={mutedClass}>
           {p.error ?? translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
         </div>
@@ -243,11 +291,13 @@ export function ProviderPanel({
   if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
-        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className="mt-2">
+        {embedded ? null : (
+          <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
+          </div>
+        )}
+        <div className={embedded ? undefined : 'mt-2'}>
           <ErrorMessage
             label={getProviderUsageStatusLabel(p)}
             message={getProviderUsageErrorMessage(p)}
@@ -258,7 +308,11 @@ export function ProviderPanel({
     )
   }
 
-  const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
+  const updatedAgo = p.updatedAt
+    ? translate('auto.components.status.bar.tooltip.updatedAgo', 'Updated {{time}}', {
+        time: formatTimeAgo(p.updatedAt)
+      })
+    : translate('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')
   const resetCreditCount =
     showResetCredits && p.provider === 'codex'
       ? (p.rateLimitResetCredits?.availableCount ?? null)
@@ -268,68 +322,57 @@ export function ProviderPanel({
       ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
       : null
 
-  const PanelWindowSection = ({
-    w,
-    label
-  }: {
-    w: RateLimitWindow | null
-    label: string
-  }): React.JSX.Element | null => {
-    if (!w) {
-      return null
-    }
-    const usedPct = clampUsedPercent(w.usedPercent)
-    const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-    const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
-
-    return (
-      <div className="space-y-1">
-        <div className={`font-medium ${textClass}`}>{label}</div>
-        <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
-          {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
-          <div
-            className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
-            style={{ width: `${displayedPct}%` }}
-          />
-        </div>
-        <div className={`flex justify-between ${mutedClass}`}>
-          <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
-          {resetLabel && <span>{resetLabel}</span>}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
-      <div>
-        <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className={faintClass}>{updatedAgo}</div>
-        {resetCreditCount !== null && resetCreditCount !== undefined ? (
-          <div className={mutedClass}>
-            {resetCreditCount === 1
-              ? translate(
-                  'auto.components.status.bar.tooltip.45198c7d95',
-                  '1 rate-limit reset available'
-                )
-              : translate(
-                  'auto.components.status.bar.tooltip.bce421cba3',
-                  '{{value0}} rate-limit resets available',
-                  { value0: resetCreditCount }
-                )}
+      {!embedded ? (
+        <div>
+          <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
           </div>
-        ) : null}
-        {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
-      </div>
+          <div className={faintClass}>{updatedAgo}</div>
+          {resetCreditCount !== null && resetCreditCount !== undefined ? (
+            <div className={mutedClass}>
+              {translate(
+                'auto.components.status.bar.tooltip.rateLimitResetsAvailable',
+                '{{count}} rate-limit resets available',
+                {
+                  count: resetCreditCount,
+                  defaultValue_one: '{{count}} rate-limit reset available'
+                }
+              )}
+            </div>
+          ) : null}
+          {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
+        </div>
+      ) : null}
 
-      <div className={`border-t ${dividerClass}`} />
+      {embedded ? null : <div className={`border-t ${dividerClass}`} />}
 
-      {getWindowSections(p).map((s) => (
-        <PanelWindowSection key={s.label} w={s.window} label={s.label} />
+      {windowSections.map((s) => (
+        <ProviderRateLimitWindowSection
+          key={s.label}
+          window={s.window}
+          label={s.label}
+          textClass={textClass}
+          mutedClass={mutedClass}
+          emptyBarClass={emptyBarClass}
+          usagePercentageDisplay={usagePercentageDisplay}
+          now={now}
+        />
       ))}
+
+      {p.extraUsage ? (
+        <ProviderExtraUsageSection
+          balance={p.extraUsage}
+          provider={p.provider}
+          textClass={textClass}
+          mutedClass={mutedClass}
+          faintClass={faintClass}
+          emptyBarClass={emptyBarClass}
+          usagePercentageDisplay={usagePercentageDisplay}
+        />
+      ) : null}
 
       {p.error ? (
         <ErrorMessage

@@ -6,7 +6,7 @@ import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,
   type BrowserFocusRequestDetail
-} from '../components/browser-pane/browser-focus'
+} from '../components/browser-pane/host-guest/browser-focus'
 import {
   resolveModalReturnFocusAction,
   type ModalReturnFocusSurface
@@ -16,15 +16,7 @@ function isRestorableFocusedElement(element: HTMLElement | null): element is HTM
   return element !== null && element !== document.body && element !== document.documentElement
 }
 
-/**
- * Restores keyboard focus to the surface that was active before a modal opened.
- *
- * Why: Radix dialogs (QuickOpen, Cmd+J) prevent the default close-time focus
- * restoration to avoid landing on a stale trigger, but must then return focus
- * themselves — otherwise dismissing the dialog with Esc leaves the active
- * terminal/editor/browser panel unfocused. Capture happens on open because
- * Radix moves document focus into the dialog before the close fires.
- */
+/** Restore the pre-open surface after Radix’s default return is canceled; capture before modal focus steals document.activeElement. */
 export function useModalReturnFocus(visible: boolean): {
   captureReturnFocus: () => void
   skipReturnFocus: () => void
@@ -81,8 +73,7 @@ export function useModalReturnFocus(visible: boolean): {
     [cancelFrames]
   )
 
-  // Why: a double rAF lets the dialog finish unmounting and the destination
-  // surface settle before we focus it; editor surfaces own varied focusable DOM.
+  // Wait two frames for dialog unmount and destination DOM to settle before focusing.
   const focusEditorSurface = useCallback((): void => {
     if (focusCapturedElement()) {
       return
@@ -129,8 +120,7 @@ export function useModalReturnFocus(visible: boolean): {
     const terminalLeafId = terminalTabId
       ? (state.terminalLayoutsByTabId[terminalTabId]?.activeLeafId ?? null)
       : null
-    // Why: this can be called from Radix onOpenAutoFocus, before focus moves
-    // into the dialog, preserving address-bar/editor/simulator identity.
+    // Capture from onOpenAutoFocus before Radix changes focus, preserving address-bar/editor/simulator identity.
     const browserTarget =
       tabType === 'browser' && activeElement?.closest('[data-orca-browser-address-bar="true"]')
         ? 'address-bar'
@@ -186,8 +176,7 @@ export function useModalReturnFocus(visible: boolean): {
     requestBrowserFocus
   ])
 
-  // Why: callers invoke this when the close itself moves focus (e.g. opening a
-  // file focuses the editor) so we don't yank focus back to the prior surface.
+  // Skip restoration when close already moves focus, such as opening a file.
   const skipReturnFocus = useCallback((): void => {
     skipRef.current = true
   }, [])

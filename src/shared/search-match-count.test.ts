@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeSearchFileMatchCount, normalizeSearchResult } from './search-match-count'
-import type { SearchFileResult } from './types'
+import type { SearchFileResult } from './code-search-types'
 
 const match = { line: 1, column: 1, matchLength: 3, lineContent: 'foo' }
 
@@ -27,6 +27,7 @@ describe('normalizeSearchFileMatchCount', () => {
     )
     expect(normalizeSearchFileMatchCount(makeFile({ matchCount: 1.5 }))).toBe(1)
     expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: legacy wire input deliberately supplies a non-number count.
       normalizeSearchFileMatchCount(makeFile({ matchCount: 'invalid' as unknown as number }))
     ).toBe(1)
   })
@@ -37,13 +38,32 @@ describe('normalizeSearchFileMatchCount', () => {
 })
 
 describe('normalizeSearchResult', () => {
-  it('drops empty file rows even when a malformed count claims matches', () => {
+  it('drops empty file rows while preserving and normalizing populated rows', () => {
     const result = normalizeSearchResult({
-      files: [makeFile({ matchCount: 3, matches: [] })],
-      totalMatches: 3,
-      truncated: false
+      files: [
+        makeFile({ matchCount: 3, matches: [] }),
+        makeFile({
+          filePath: '/r/kept.ts',
+          relativePath: 'kept.ts',
+          matches: [match, match],
+          matchCount: 0
+        })
+      ],
+      totalMatches: 2,
+      truncated: true
     })
 
-    expect(result.files).toEqual([])
+    expect(result).toEqual({
+      files: [
+        {
+          filePath: '/r/kept.ts',
+          relativePath: 'kept.ts',
+          matches: [match, match],
+          matchCount: 2
+        }
+      ],
+      totalMatches: 2,
+      truncated: true
+    })
   })
 })

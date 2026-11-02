@@ -1,6 +1,8 @@
 import { useRef } from 'react'
 import type React from 'react'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
@@ -17,10 +19,11 @@ import {
   type CommitMessageModelCapability
 } from '../../../../shared/commit-message-agent-spec'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
-import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
+import { getRuntimeGitScope } from '../../runtime/runtime-git-client-context'
 import { useAppStore } from '../../store'
-import { Input } from '../ui/input'
+import { CustomAgentCommandField } from './CustomAgentCommandField'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { SearchableSetting } from './SearchableSetting'
 import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
 import { matchesSettingsSearch } from './settings-search'
@@ -80,12 +83,12 @@ export function mergeDiscoveredModelsIntoCommitMessageConfig(
 }
 
 export function getCommitMessageSettingsPaneDiscoveryHostKey(
-  settings: GlobalSettings,
+  target: RuntimeClientTarget,
   activeConnectionId: string | null | undefined,
   hasActiveWorktree: boolean
 ): string {
   const runtimeScope = hasActiveWorktree
-    ? getRuntimeGitScope(settings, activeConnectionId)
+    ? getRuntimeGitScope(target, activeConnectionId)
     : activeConnectionId
   return getCommitMessageModelDiscoveryHostKeyForScope(runtimeScope)
 }
@@ -102,7 +105,8 @@ export function CommitMessageAiPane({
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSettings(settings)
   const ownership = getSettingOwnershipSummary('sourceControlAiDefaults')
-  const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const settingsWriteQueueRef = useRef<Promise<void>>(undefined!)
+  settingsWriteQueueRef.current ??= Promise.resolve()
 
   const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
     const next = settingsWriteQueueRef.current
@@ -123,19 +127,25 @@ export function CommitMessageAiPane({
   }
   const writeConfig = writeSourceControlAiSettings ?? localWriteConfig
 
+  const writeImmediateConfig = (patch: SourceControlAiSettingsPatch): void => {
+    void writeConfig(patch).catch((error: unknown) => {
+      console.error('Failed to update settings:', error)
+    })
+  }
+
   const onToggleEnabled = (): void => {
-    void writeConfig({ enabled: !config.enabled })
+    writeImmediateConfig({ enabled: !config.enabled })
   }
 
   const onCustomCommandChange = (value: string): void => {
-    void writeConfig({ customAgentCommand: value })
+    writeImmediateConfig({ customAgentCommand: value })
   }
 
   const onPrDefaultChange = (
     key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>,
     value: boolean
   ): void => {
-    void writeConfig((current) => ({
+    writeImmediateConfig((current) => ({
       prCreationDefaults: {
         ...current.prCreationDefaults,
         [key]: value
@@ -199,20 +209,14 @@ export function CommitMessageAiPane({
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={config.enabled}
-          onClick={onToggleEnabled}
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            config.enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              config.enabled ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        <Switch
+          aria-label={translate(
+            'auto.components.settings.CommitMessageAiPane.d5b45a3628',
+            'Show Source Control AI actions'
+          )}
+          checked={config.enabled}
+          onCheckedChange={onToggleEnabled}
+        />
       </SearchableSetting>
     )
   }
@@ -265,36 +269,10 @@ export function CommitMessageAiPane({
         keywords={['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']}
         className="space-y-2 py-2"
       >
-        <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-custom-command">
-            {translate('auto.components.settings.CommitMessageAiPane.47e45cbd5a', 'Custom command')}
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.CommitMessageAiPane.4f722a5f53',
-              'Used by commit-message, pull-request, and branch-name recipes that select Custom command. Use'
-            )}{' '}
-            <code className="font-mono">
-              {translate('auto.components.settings.CommitMessageAiPane.b8b6fd55b4', '{prompt}')}
-            </code>{' '}
-            {translate(
-              'auto.components.settings.CommitMessageAiPane.3f1b26cc91',
-              'to pass the command input as an argument; otherwise Orca pipes it on stdin.'
-            )}
-          </p>
-        </div>
-        <Input
+        <CustomAgentCommandField
           id="source-control-ai-custom-command"
-          spellCheck={false}
-          autoCorrect="off"
-          autoCapitalize="off"
           value={config.customAgentCommand}
-          onChange={(event) => onCustomCommandChange(event.target.value)}
-          placeholder={translate(
-            'auto.components.settings.CommitMessageAiPane.15b60d54b2',
-            'e.g. ollama run llama3.1 {prompt}'
-          )}
-          className="h-8 font-mono text-xs"
+          onChange={onCustomCommandChange}
         />
       </SearchableSetting>
     )

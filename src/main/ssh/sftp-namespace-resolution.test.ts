@@ -1,5 +1,4 @@
-// Why: picking the wrong SFTP path silently installs the relay somewhere the shell
-// will never launch it, so every discovery outcome needs a pinned decision.
+// A wrong namespace installs bytes outside the shell's launch path; pin every discovery outcome.
 
 import type { SFTPWrapper } from 'ssh2'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,6 +14,7 @@ const RELAY_DIR = '.orca-remote/relay-0.1.0+hash'
 const MARKER = '.install-lock/.sftp-namespace-deadbeef'
 
 const mapping: SftpNamespacePathMapping = {
+  homeRelativeNamespaceRoot: RELAY_DIR,
   homeRelativePath: RELAY_DIR,
   shellProbePath: `${SHELL_HOME}/${RELAY_DIR}/${MARKER}`,
   homeRelativeProbePath: `${RELAY_DIR}/${MARKER}`
@@ -26,7 +26,7 @@ function statusError(code: number): Error {
   return Object.assign(new Error(`SFTP status ${code}`), { code })
 }
 
-// A marker probe must care only about "the call succeeded", never about the reported type or size.
+// Marker identity requires only successful lstat, not reported type/size.
 const MARKER_STATS = {
   isDirectory: () => false,
   isSymbolicLink: () => true,
@@ -34,10 +34,7 @@ const MARKER_STATS = {
   size: 0
 }
 
-function makeSftp(options: {
-  startPath?: string | Error | unknown
-  lstat?: (path: string) => LstatOutcome
-}): {
+function makeSftp(options: { startPath?: unknown; lstat?: (path: string) => LstatOutcome }): {
   sftp: SFTPWrapper
   realpathCalls: string[]
   lstatCalls: string[]
@@ -164,7 +161,7 @@ describe('resolveSftpTransferPath', () => {
     expect(lstatCalls).toEqual([mapping.shellProbePath])
   })
 
-  // Why: only SSH_FX_NO_SUCH_FILE proves absence; anything else must not license a redirect.
+  // Only SSH_FX_NO_SUCH_FILE proves absence; uncertainty must never authorize redirect.
   it.each([
     ['generic failure', { code: 4 } as LstatOutcome],
     ['permission denied', { code: 3 } as LstatOutcome],
@@ -249,12 +246,12 @@ describe('resolveSftpTransferPath', () => {
       'marker paths must share one marker basename'
     ],
     [
-      'a marker outside the install lock',
+      'a marker at the namespace root',
       {
-        shellProbePath: `${SHELL_HOME}/${RELAY_DIR}/other-lock/.sftp-namespace-deadbeef`,
-        homeRelativeProbePath: `${RELAY_DIR}/other-lock/.sftp-namespace-deadbeef`
+        shellProbePath: `${SHELL_HOME}/${RELAY_DIR}`,
+        homeRelativeProbePath: RELAY_DIR
       },
-      'inside the transfer relay install lock'
+      'inside one namespace root'
     ],
     [
       'a marker under another relay tree',
@@ -262,7 +259,7 @@ describe('resolveSftpTransferPath', () => {
         shellProbePath: `${SHELL_HOME}/other/.install-lock/.sftp-namespace-deadbeef`,
         homeRelativeProbePath: 'other/.install-lock/.sftp-namespace-deadbeef'
       },
-      'inside the transfer relay install lock'
+      'inside one namespace root'
     ]
   ])('rejects %s before issuing any SFTP request', async (_label, overrides, expected) => {
     const { shell, ...mappingOverrides } = overrides as Record<string, string>
@@ -282,6 +279,7 @@ describe('resolveSftpTransferPath', () => {
     const token = 'a'.repeat(32)
     const secretMarker = `.install-lock/.sftp-namespace-${token}`
     const secretMapping: SftpNamespacePathMapping = {
+      homeRelativeNamespaceRoot: RELAY_DIR,
       homeRelativePath: RELAY_DIR,
       shellProbePath: `${SHELL_HOME}/${RELAY_DIR}/${secretMarker}`,
       homeRelativeProbePath: `${RELAY_DIR}/${secretMarker}`
@@ -312,7 +310,7 @@ describe('resolveSftpTransferPathIfMapped', () => {
     expect(lstatCalls).toEqual([])
   })
 
-  // Why: Windows SFTP reports drive paths like /C:/Users/alice, which break the POSIX prefix contract.
+  // Windows /C:/ SFTP paths violate POSIX prefix mapping.
   it('ignores a mapping on a Windows host', async () => {
     const { sftp, realpathCalls } = makeSftp({
       startPath: '/homes/alice',

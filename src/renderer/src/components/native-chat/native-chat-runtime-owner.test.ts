@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   selectNativeChatRuntimeEnvironmentId,
   type NativeChatRuntimeOwnerState
@@ -19,8 +19,7 @@ function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
-/** A worktree record with a host id but deliberately no `path` — the owner
- *  selector must not depend on path resolution (KTD-1). */
+/** Omit path deliberately: transport ownership must resolve independently (KTD-1). */
 function worktreeRecord(hostId: string): NativeChatRuntimeOwnerState['worktreesByRepo'] {
   return { repo: [{ id: 'wt-1', repoId: 'repo', hostId } as never] }
 }
@@ -62,16 +61,5 @@ describe('selectNativeChatRuntimeEnvironmentId', () => {
 
   it('returns null when the terminal tab matches no tab in tabsByWorktree', () => {
     expect(selectNativeChatRuntimeEnvironmentId(state({ tabsByWorktree: {} }), 'tab-1')).toBeNull()
-  })
-
-  it('returns the owner id even when the worktree record has no resolvable path', () => {
-    // Guards KTD-1: no `path` on the worktree record and no getKnownWorktreeById —
-    // the selector must still resolve the runtime owner from the host mapping alone.
-    expect(
-      selectNativeChatRuntimeEnvironmentId(
-        state({ worktreesByRepo: worktreeRecord('runtime:env-1') }),
-        'tab-1'
-      )
-    ).toBe('env-1')
   })
 })

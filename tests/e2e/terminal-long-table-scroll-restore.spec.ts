@@ -1,3 +1,4 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -195,7 +196,9 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
       }
     }
 
-    const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+    const xterm = pane.terminal as XtermWithRenderDimensions
+    const cellWidth = xterm._core?._renderService?.dimensions?.css?.cell?.width ?? 0
     const maxRight = screenRect.right + Math.max(1, cellWidth * 0.5)
     const offenders = Array.from(rows.querySelectorAll<HTMLElement>('span'))
       .map((span) => {
@@ -270,7 +273,9 @@ async function readTerminalBoxTableWrapDiagnostics(page: Page): Promise<{
 async function closeFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
-    store?.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+    store
+      ?.getState()
+      .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation', 'agent-session-search'])
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
@@ -347,7 +352,12 @@ test.describe('Terminal long table scroll restore repro', () => {
     await orcaPage.evaluate(() => {
       window.__store
         ?.getState()
-        .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+        .markFeatureTipsSeen([
+          'orca-cli',
+          'cmd-j-palette',
+          'voice-dictation',
+          'agent-session-search'
+        ])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
@@ -409,7 +419,12 @@ test.describe('Terminal long table scroll restore repro', () => {
     await orcaPage.evaluate(() => {
       window.__store
         ?.getState()
-        .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+        .markFeatureTipsSeen([
+          'orca-cli',
+          'cmd-j-palette',
+          'voice-dictation',
+          'agent-session-search'
+        ])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
@@ -482,7 +497,12 @@ test.describe('Terminal long table scroll restore repro', () => {
     await orcaPage.evaluate(() => {
       window.__store
         ?.getState()
-        .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+        .markFeatureTipsSeen([
+          'orca-cli',
+          'cmd-j-palette',
+          'voice-dictation',
+          'agent-session-search'
+        ])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(

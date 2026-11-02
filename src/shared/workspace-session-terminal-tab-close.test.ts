@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from './constants'
-import type { Tab, TerminalTab, WorkspaceSessionState } from './types'
+import type { Tab } from './tab-types'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { closeTerminalTabInWorkspaceSession } from './workspace-session-terminal-tab-close'
 
 const WORKTREE_ID = 'worktree-1'
@@ -202,30 +204,45 @@ describe('closeTerminalTabInWorkspaceSession', () => {
     expect(result).toEqual({ session: current, ptyIdsToKill: [], closed: false, pinned: true })
   })
 
-  it('has no bounded replay window after more than 32 closes', () => {
-    let current = getDefaultWorkspaceSession()
-    for (let index = 0; index < 40; index += 1) {
-      const id = `terminal-${index}`
-      current = {
-        ...current,
-        tabsByWorktree: {
-          ...current.tabsByWorktree,
-          [WORKTREE_ID]: [terminalTab(id, `pty-${index}`)]
-        },
-        terminalLayoutsByTabId: {
-          ...current.terminalLayoutsByTabId,
-          [id]: {
-            root: { type: 'leaf', leafId: `leaf-${index}` },
-            activeLeafId: `leaf-${index}`,
-            expandedLeafId: null,
-            ptyIdsByLeafId: { [`leaf-${index}`]: `pty-${index}` }
-          }
-        }
-      }
-      current = closeTerminalTabInWorkspaceSession(current, WORKTREE_ID, id).session
-    }
+  it('preserves first-occurrence neighbor semantics for duplicate legacy order entries', () => {
+    const initial = session()
+    initial.tabGroups![WORKTREE_ID][0].tabOrder = ['a', 'terminal-1', 'a', 'b']
+    initial.tabGroups![WORKTREE_ID][0].recentTabIds = ['absent', 'terminal-1']
+    const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+    expect(result.session.tabGroups![WORKTREE_ID][0].activeTabId).toBe('b')
+    expect(result.session.tabGroups![WORKTREE_ID][0].tabOrder).toEqual(['a', 'a', 'b'])
+    expect(result.session.tabGroups![WORKTREE_ID][0].recentTabIds).toEqual([])
+  })
 
-    expect(current.tabsByWorktree[WORKTREE_ID]).toEqual([])
-    expect(current.terminalLayoutsByTabId).toEqual({})
+  it.each([
+    { name: 'first of three', order: ['terminal-1', 'b', 'c'], expected: 'b' },
+    { name: 'middle of three', order: ['a', 'terminal-1', 'c'], expected: 'c' },
+    { name: 'last of three', order: ['a', 'b', 'terminal-1'], expected: 'b' }
+  ])(
+    'picks the documented neighbor with no MRU history when closing the $name',
+    ({ order, expected }) => {
+      const initial = session()
+      initial.tabGroups![WORKTREE_ID]![0]!.tabOrder = order
+      initial.tabGroups![WORKTREE_ID]![0]!.recentTabIds = []
+      const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+      expect(result.session.tabGroups![WORKTREE_ID]![0]!.activeTabId).toBe(expected)
+    }
+  )
+
+  it('prefers the most recent surviving tab over the order neighbor', () => {
+    const initial = session()
+    initial.tabGroups![WORKTREE_ID]![0]!.tabOrder = ['a', 'terminal-1', 'c']
+    initial.tabGroups![WORKTREE_ID]![0]!.recentTabIds = ['c', 'a']
+    const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+    expect(result.session.tabGroups![WORKTREE_ID]![0]!.activeTabId).toBe('a')
+  })
+
+  it('leaves the active tab alone when a background tab closes', () => {
+    const initial = session()
+    initial.tabGroups![WORKTREE_ID]![0]!.tabOrder = ['a', 'terminal-1', 'c']
+    initial.tabGroups![WORKTREE_ID]![0]!.activeTabId = 'c'
+    initial.tabGroups![WORKTREE_ID]![0]!.recentTabIds = ['a']
+    const result = closeTerminalTabInWorkspaceSession(initial, WORKTREE_ID, 'terminal-1')
+    expect(result.session.tabGroups![WORKTREE_ID]![0]!.activeTabId).toBe('c')
   })
 })

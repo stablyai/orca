@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { link, lstat, mkdir } from 'node:fs/promises'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import { isPerAccountManagedCodexHome } from '../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter
@@ -17,6 +19,8 @@ import {
   isAtomicNoReplaceUnsupportedError
 } from './codex-session-backfill-copy'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
+import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'
@@ -26,11 +30,16 @@ const materializations = new Map<string, Promise<void>>()
 export async function prepareLegacySharedCodexSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
   options: {
-    isHostSystemDefaultRealHome: () => boolean
+    isHostSystemDefaultRealHomeSelected: () => boolean
+    getSelectedHostAccountCodexHomePath?: () => string | null
     legacyCodexHomePath?: string
     systemCodexHomePath?: string
   }
 ): Promise<AiVaultPrepareSessionResumeResult> {
+  const substituteCodexHome = await resolveSelectedAccountCodexHomeForResume(args, options)
+  if (substituteCodexHome) {
+    return { useRealCodexHome: false, substituteCodexHome }
+  }
   const paths = resolveCodexSessionBackfillPaths(options.systemCodexHomePath)
   const legacyCodexHomePath = options.legacyCodexHomePath ?? dirname(paths.managedSessionsRoot)
   const managedSessionsRoot = join(legacyCodexHomePath, 'sessions')
@@ -39,14 +48,15 @@ export async function prepareLegacySharedCodexSessionResume(
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
     !sameRuntimePath(args.codexHome, legacyCodexHomePath) ||
-    !options.isHostSystemDefaultRealHome()
+    !options.isHostSystemDefaultRealHomeSelected()
   ) {
     return { useRealCodexHome: false }
   }
 
   const sourcePath = resolve(args.filePath)
-  const relativePath = relative(resolve(managedSessionsRoot), sourcePath)
-  if (!isLegacyRolloutRelativePath(relativePath)) {
+  // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
+  const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
+  if (!relativePath) {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
   const targetPath = join(paths.systemSessionsRoot, relativePath)
@@ -76,6 +86,75 @@ export async function prepareLegacySharedCodexSessionResume(
     throw new Error(RETRYABLE_RESUME_ERROR, { cause: error })
   }
   return { useRealCodexHome: true }
+}
+
+/** Explicit account restarts must move the verified rollout before changing credentials. */
+export async function prepareCodexAccountRestartResume(args: {
+  sourceHome: string
+  transcriptPath: string
+  targetHome: string
+  systemCodexHomePath: string
+}): Promise<string> {
+  if (sameRuntimePath(args.sourceHome, args.targetHome)) {
+    return args.targetHome
+  }
+  const relativePath = codexDatedRolloutRelativePath(
+    join(args.sourceHome, 'sessions'),
+    resolve(args.transcriptPath)
+  )
+  if (!relativePath) {
+    throw new Error(RETRYABLE_RESUME_ERROR)
+  }
+  const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
+  await materializeLegacyRollout(
+    args.transcriptPath,
+    join(args.targetHome, 'sessions', relativePath),
+    paths.auditLogPath
+  )
+  return args.targetHome
+}
+
+/**
+ * Vault dedup may choose any account's bridge alias; prefer selected credentials when its rollout exists.
+ * Return null for unbridged/unsupported layouts; transient read failures must not switch credentials.
+ */
+async function resolveSelectedAccountCodexHomeForResume(
+  args: AiVaultPrepareSessionResumeArgs,
+  options: { getSelectedHostAccountCodexHomePath?: () => string | null }
+): Promise<string | null> {
+  if (
+    args.agent !== 'codex' ||
+    args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
+    !args.codexHome ||
+    parseWslUncPath(args.codexHome) !== null ||
+    !isPerAccountManagedCodexHome(args.codexHome)
+  ) {
+    return null
+  }
+  const selectedCodexHome = options.getSelectedHostAccountCodexHomePath?.() ?? null
+  if (!selectedCodexHome || sameRuntimePath(selectedCodexHome, args.codexHome)) {
+    return null
+  }
+  const relativePath = codexDatedRolloutRelativePath(
+    join(args.codexHome, 'sessions'),
+    resolve(args.filePath)
+  )
+  if (!relativePath) {
+    return null
+  }
+  const candidatePath = join(selectedCodexHome, 'sessions', relativePath)
+  try {
+    const candidateStat = await lstat(candidatePath)
+    // The async bridge may not have populated this account yet.
+    return candidateStat.isFile() && !candidateStat.isSymbolicLink() ? selectedCodexHome : null
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return null
+    }
+    // STA-4607: only definitive absence permits fallback; transient errors must not switch accounts.
+    throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
+  }
 }
 
 async function materializeLegacyRollout(
@@ -150,20 +229,6 @@ async function fileDigest(filePath: string): Promise<string> {
     hash.update(chunk as Buffer)
   }
   return hash.digest('hex')
-}
-
-function isLegacyRolloutRelativePath(relativePath: string): boolean {
-  if (!relativePath || relativePath.startsWith('..') || resolve(relativePath) === relativePath) {
-    return false
-  }
-  const parts = relativePath.split(sep)
-  return (
-    parts.length === 4 &&
-    /^\d{4}$/.test(parts[0] ?? '') &&
-    /^\d{2}$/.test(parts[1] ?? '') &&
-    /^\d{2}$/.test(parts[2] ?? '') &&
-    /^rollout-.+\.jsonl(?:\.zst)?$/.test(parts[3] ?? '')
-  )
 }
 
 function sameRuntimePath(left: string, right: string): boolean {

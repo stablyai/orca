@@ -48,30 +48,20 @@ describe('queueHookCommandsForFirstWorktreeTab', () => {
     expect(deliver).toHaveBeenCalledTimes(1)
   })
 
-  it('delivers immediately when the worktree already has a tab at queue time', () => {
+  it('keeps every delivery queued for the same worktree', () => {
+    // Setup/issue commands and agent seeds must coexist while awaiting the same mirrored terminal.
     markWorktreeKnown('wt-1')
-    setStorePartial({ tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] } })
-    const deliver = vi.fn()
+    setStorePartial({ tabsByWorktree: {} })
+    const deliverFirst = vi.fn()
+    const deliverSecond = vi.fn()
 
-    queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-1', deliver })
+    queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-1', deliver: deliverFirst })
+    queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-1', deliver: deliverSecond })
 
-    expect(deliver).toHaveBeenCalledTimes(1)
-    expect(deliver).toHaveBeenCalledWith(expect.anything(), 'tab-1')
-  })
+    setStorePartial({ tabsByWorktree: { 'wt-1': [{ id: 'mirror-tab-1' }] } })
 
-  it('drops the pending delivery when the worktree is no longer known', () => {
-    setStorePartial({
-      tabsByWorktree: {},
-      getKnownWorktreeById: (() => undefined) as unknown as AppState['getKnownWorktreeById']
-    })
-    const deliver = vi.fn()
-
-    queueHookCommandsForFirstWorktreeTab({ worktreeId: 'wt-gone', deliver })
-
-    // A tab appearing later (e.g. an id reused by mirror churn) must not
-    // deliver commands for a worktree that was dropped while unknown.
-    markWorktreeKnown('wt-gone')
-    setStorePartial({ tabsByWorktree: { 'wt-gone': [{ id: 'tab-1' }] } })
-    expect(deliver).not.toHaveBeenCalled()
+    expect(deliverFirst).toHaveBeenCalledTimes(1)
+    expect(deliverSecond).toHaveBeenCalledTimes(1)
+    expect(deliverSecond).toHaveBeenCalledWith(expect.anything(), 'mirror-tab-1')
   })
 })

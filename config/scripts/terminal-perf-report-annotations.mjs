@@ -34,8 +34,7 @@ export function collectTerminalPerfRows(report, source, options = {}) {
           }
           rows.push({
             ...parseAnnotationDescription(annotation.description ?? ''),
-            // Why: annotation descriptions are artifact-controlled; keep the
-            // trusted report source and annotation type from being relabeled.
+            // Artifact-controlled descriptions must not relabel trusted report source or annotation type.
             source,
             scenario: annotation.type
           })

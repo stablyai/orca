@@ -62,8 +62,7 @@ describe('isMainTerminalSideEffectAuthorityForPty', () => {
     expect(
       isMainTerminalSideEffectAuthorityForPty({ settings: {}, runtimeEnvironmentId: null })
     ).toBe(true)
-    // Why: settings hydrate asynchronously; the default-on switch must not
-    // flip authority off during the null-settings startup window.
+    // Null startup settings must not disable default-on authority before hydration.
     expect(
       isMainTerminalSideEffectAuthorityForPty({ settings: null, runtimeEnvironmentId: null })
     ).toBe(true)
@@ -88,9 +87,7 @@ describe('isMainTerminalSideEffectAuthorityForPty', () => {
   })
 
   it('honors the persisted kill switch before settings hydrate', () => {
-    // Why: the authority decision is made once at transport creation; a pane
-    // bound during startup must not pick main authority when the user
-    // persisted the switch off.
+    // Creation-time authority must honor the persisted off switch even before settings hydrate.
     setPersistedSettingsSync({ terminalMainSideEffectAuthority: false })
 
     expect(
@@ -152,10 +149,20 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 
   it('routes live facts to the registered consumer in batch order', () => {
     const { callbacks, events } = createCallbackRecorder()
-    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        ...callbacks,
+        onAgentStatus: (payload) => events.push(['status', payload.state, payload.agentType])
+      }
+    })
 
     _dispatchTerminalSideEffectBatchForTest(
       batch([
+        {
+          kind: 'agent-status',
+          payload: { state: 'working', prompt: 'fix it', agentType: 'codex' }
+        },
         { kind: 'title', normalizedTitle: '⠋ Claude', rawTitle: '⠋ Claude' },
         { kind: 'agent-working' },
         { kind: 'title', normalizedTitle: '✳ Claude', rawTitle: '✳ Claude' },
@@ -165,6 +172,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     )
 
     expect(events).toEqual([
+      ['status', 'working', 'codex'],
       ['title', '⠋ Claude', '⠋ Claude'],
       ['working'],
       ['title', '✳ Claude', '✳ Claude'],
@@ -229,8 +237,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('never replays command-code scrape facts', () => {
-    // Why: a replayed working/done seed would resurrect a finished turn's
-    // status row — replay batches restore title state only.
+    // Replay is title-only; agent status seeds would resurrect finished turns.
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
@@ -256,9 +263,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('routes 2031-subscribe facts to the registered consumer but never replays them', () => {
-    // Why: the fact lets hidden-delivery-gated views answer the color-scheme
-    // query without byte access; a replayed subscribe would re-answer a query
-    // the snapshot already satisfied.
+    // Live subscription facts enable hidden-view theme pushes; replay must not re-answer a satisfied query.
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
@@ -284,8 +289,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   })
 
   it('never replays command-finished or pr-link facts', () => {
-    // Why: like bells and agent transitions, command/PR facts are attention
-    // signals — replay snapshots restore title state only.
+    // Command/PR facts are attention too; snapshots restore only title state.
     const events: unknown[][] = []
     registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
@@ -342,7 +346,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     )
 
     expect(events).toEqual([
-      ['idle', 'Codex done', undefined],
+      ['idle', 'Codex done', {}],
       ['title', 'Codex', { staleWorkingTitleClear: true }],
       ['idle', 'Codex', { staleWorkingTitleClear: true }]
     ])
@@ -429,6 +433,134 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     expect(events).toEqual([])
   })
 
+  it('hands off facts emitted between the parked watcher unregistering and the pane registering', () => {
+    // Reveal unregisters watchers before async pane registration; title-only replay cannot recover live bells/completions lost in that gap.
+    const watcher = createCallbackRecorder()
+    const disposeWatcher = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: watcher.callbacks
+    })
+    disposeWatcher()
+
+    const events: unknown[][] = []
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'bell' }, { kind: 'command-code-done', prompt: 'Fix the spinner' }], {
+        seq: 7
+      })
+    )
+    // A PTY that never had a consumer stays dropped — no buffer was opened.
+    _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }], { ptyId: 'never-consumed' }))
+
+    expect(events).toEqual([])
+    expect(watcher.events).toEqual([])
+
+    const neverConsumed = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({
+      ptyId: 'never-consumed',
+      callbacks: neverConsumed.callbacks
+    })
+    expect(neverConsumed.events).toEqual([])
+
+    const dispose = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onBell: () => events.push(['bell']),
+        onCommandCodeDone: (prompt) => events.push(['cc-done', prompt])
+      }
+    })
+
+    expect(events).toEqual([['bell'], ['cc-done', 'Fix the spinner']])
+    expect(watcher.events).toEqual([])
+
+    // Drained exactly once: a later registration gets nothing.
+    dispose()
+    const later: unknown[][] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onBell: () => later.push(['bell']),
+        onCommandCodeDone: (prompt) => later.push(['cc-done', prompt])
+      }
+    })
+
+    expect(later).toEqual([])
+  })
+
+  it('does not buffer replay batches across a handoff', () => {
+    // New consumers request fresh snapshots; buffered replay could regress restored titles.
+    const dispose = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: createCallbackRecorder().callbacks
+    })
+    dispose()
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'title', normalizedTitle: 'stale', rawTitle: 'stale' }], {
+        replay: true,
+        seq: 5
+      })
+    )
+
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    expect(events).toEqual([])
+  })
+
+  it('drains the handoff buffer before the register snapshot, so the replay is stale', async () => {
+    // Drain live titles before the async snapshot so sequence comparison rejects its stale predecessor.
+    const snapshot = batch([{ kind: 'title', normalizedTitle: 'snapshot', rawTitle: 'snapshot' }], {
+      replay: true,
+      seq: 20
+    })
+    ;(globalThis as { window: unknown }).window = {
+      api: { pty: { getSideEffectSnapshot: vi.fn(async () => snapshot) } }
+    }
+
+    const dispose = registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: createCallbackRecorder().callbacks
+    })
+    dispose()
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'title', normalizedTitle: 'live', rawTitle: 'live' }], { seq: 20 })
+    )
+
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks,
+      restoreTitleOnRegister: true
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(events).toEqual([['title', 'live', 'live']])
+  })
+
+  it('drops a handoff-buffered batch once the buffer TTL expires', () => {
+    vi.useFakeTimers()
+    try {
+      const dispose = registerTerminalSideEffectFactConsumer({
+        ptyId: PTY_ID,
+        callbacks: createCallbackRecorder().callbacks
+      })
+      dispose()
+      _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }]))
+      expect(vi.getTimerCount()).toBe(1)
+
+      vi.advanceTimersByTime(15_001)
+      expect(vi.getTimerCount()).toBe(0)
+
+      const { callbacks, events } = createCallbackRecorder()
+      registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+      expect(events).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('subscribes to the channel once and routes IPC batches', () => {
     let channelCallback: ((batch: TerminalSideEffectBatch) => void) | null = null
     const onSideEffect = vi.fn((callback: (batch: TerminalSideEffectBatch) => void) => {
@@ -470,8 +602,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     })
     expect(getSideEffectSnapshot).toHaveBeenCalledWith(PTY_ID)
 
-    // Replace before the snapshot resolves: the slow snapshot must not fire
-    // into the superseded registration.
+    // Slow snapshots must not reach replacement registrations.
     const second = createCallbackRecorder()
     registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks: second.callbacks })
     resolveSnapshot(

@@ -1,8 +1,29 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import {
+  getNestedWorkerDepthDescription,
+  getNestedWorkerDepthSearchKeywords,
+  getNestedWorkerDepthTitle
+} from './nested-worker-depth-copy'
+import {
+  getWorkerAutoReleaseDescription,
+  getWorkerAutoReleaseSearchKeywords,
+  getWorkerAutoReleaseTitle
+} from './worker-auto-release-copy'
 
-export const getOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
+type OrchestrationPaneSearchOptions = {
+  includeLocalRuntimeSettings?: boolean
+}
+
+const NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID = 'nested-worker-depth'
+const WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID = 'worker-auto-release'
+const LOCAL_RUNTIME_SEARCH_ENTRY_IDS: ReadonlySet<string | undefined> = new Set([
+  NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID,
+  WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID
+])
+
+const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
       'auto.components.settings.orchestration.search.c34045764e',
@@ -68,5 +89,26 @@ export const getOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
         'child agents'
       )
     ]
+  },
+  {
+    id: NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID,
+    title: getNestedWorkerDepthTitle(),
+    description: getNestedWorkerDepthDescription(),
+    keywords: getNestedWorkerDepthSearchKeywords()
+  },
+  {
+    id: WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID,
+    title: getWorkerAutoReleaseTitle(),
+    description: getWorkerAutoReleaseDescription(),
+    keywords: getWorkerAutoReleaseSearchKeywords()
   }
 ])
+
+export function getOrchestrationPaneSearchEntries({
+  includeLocalRuntimeSettings = true
+}: OrchestrationPaneSearchOptions = {}) {
+  const entries = getAllOrchestrationPaneSearchEntries()
+  return includeLocalRuntimeSettings
+    ? entries
+    : entries.filter((entry) => !('id' in entry) || !LOCAL_RUNTIME_SEARCH_ENTRY_IDS.has(entry.id))
+}

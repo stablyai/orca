@@ -1,0 +1,95 @@
+import {
+  execDockerSshHostTargetCommand,
+  execDockerSshHostTargetControlCommand,
+  writeDockerSshHostTargetFile,
+  type DockerSshHostTarget
+} from './docker-ssh-host-target'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
+
+// Only the SSH container can resolve and reach this loopback origin; rendering its marker proves tunneled egress.
+export const SSH_REMOTE_ONLY_HOST = 'remote-only.internal'
+export const SSH_REMOTE_ONLY_PORT = 18_080
+export const SSH_REMOTE_ONLY_ORIGIN = `http://${SSH_REMOTE_ONLY_HOST}:${SSH_REMOTE_ONLY_PORT}`
+export const SSH_REMOTE_ONLY_COOKIE_NAME = 'sta4150ssh'
+export const SSH_REMOTE_ONLY_COOKIE_VALUE = 'survivor'
+
+const SERVER_PATH = '/tmp/sta-4150-ssh-browser-fixture.js'
+const REQUEST_LOG_PATH = '/tmp/sta-4150-ssh-browser-requests.log'
+
+export type SshRemoteOnlyRequest = { path: string; cookie: string | null }
+
+const SERVER_SOURCE = [
+  'const http = require("node:http")',
+  'const fs = require("node:fs")',
+  `const log = ${JSON.stringify(REQUEST_LOG_PATH)}`,
+  'http',
+  '  .createServer((request, response) => {',
+  '    const url = new URL(request.url || "/", "http://fixture.invalid")',
+  '    const cookie = request.headers.cookie || null',
+  '    fs.appendFileSync(log, JSON.stringify({ path: url.pathname, cookie }) + "\\n")',
+  '    const isLogin = url.pathname === "/login"',
+  '    const marker = isLogin ? "login-marker" : "cookie:" + (cookie || "none")',
+  '    const headers = {',
+  '      "cache-control": "no-store",',
+  '      "content-type": "text/html; charset=utf-8"',
+  '    }',
+  '    if (isLogin) {',
+  `      headers["set-cookie"] = ${JSON.stringify(
+    `${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}; Max-Age=3600; Path=/; SameSite=Lax`
+  )}`,
+  '    }',
+  '    response.writeHead(200, headers)',
+  '    response.end(',
+  '      "<!doctype html><html><head><title>" +',
+  '        marker +',
+  '        "</title></head><body><h1 id=\\"marker\\">" +',
+  '        marker +',
+  '        "</h1></body></html>"',
+  '    )',
+  '  })',
+  `  .listen(${SSH_REMOTE_ONLY_PORT}, "127.0.0.1")`
+].join('\n')
+
+export function startSshRemoteOnlyBrowserFixture(target: DockerSshHostTarget): void {
+  execDockerSshHostTargetCommand(
+    target,
+    `grep -q ${quotePosixShell(SSH_REMOTE_ONLY_HOST)} /etc/hosts || printf '127.0.0.1 %s\\n' ${quotePosixShell(
+      SSH_REMOTE_ONLY_HOST
+    )} >> /etc/hosts`
+  )
+  writeDockerSshHostTargetFile(target, SERVER_PATH, SERVER_SOURCE)
+  execDockerSshHostTargetCommand(
+    target,
+    `rm -f ${quotePosixShell(REQUEST_LOG_PATH)}; nohup node ${quotePosixShell(
+      SERVER_PATH
+    )} >/tmp/sta-4150-ssh-browser-fixture.log 2>&1 </dev/null &`
+  )
+  const waitForServer = [
+    'const net = require("node:net")',
+    'const deadline = Date.now() + 15000',
+    'const probe = () => {',
+    `  const socket = net.connect(${SSH_REMOTE_ONLY_PORT}, "127.0.0.1")`,
+    '  socket.once("connect", () => { socket.destroy(); process.exit(0) })',
+    '  socket.once("error", () => {',
+    '    socket.destroy()',
+    '    if (Date.now() >= deadline) { process.exit(1) }',
+    '    setTimeout(probe, 50)',
+    '  })',
+    '}',
+    'probe()'
+  ].join('\n')
+  writeDockerSshHostTargetFile(target, '/tmp/sta-4150-ssh-browser-wait.js', waitForServer)
+  execDockerSshHostTargetCommand(target, 'node /tmp/sta-4150-ssh-browser-wait.js')
+}
+
+/** Every request the remote-only origin served, in order, with the `Cookie` header it saw. */
+export function readSshRemoteOnlyRequests(target: DockerSshHostTarget): SshRemoteOnlyRequest[] {
+  const contents = execDockerSshHostTargetControlCommand(
+    target,
+    `cat ${quotePosixShell(REQUEST_LOG_PATH)} 2>/dev/null || true`
+  )
+  return contents
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as SshRemoteOnlyRequest)
+}

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
   getWorkspaceStatusColorOptions,
   getWorkspaceStatusIconOptions,
@@ -108,7 +108,7 @@ export default function WorkspaceStatusAppearancePopover({
                   className="size-8"
                   onClick={() => onChangeIcon(status.id, icon.id)}
                   aria-label={translate(
-                    'auto.components.sidebar.WorkspaceStatusAppearancePopover.514be2f569',
+                    'auto.components.sidebar.WorkspaceStatusAppearancePopover.setStatusIcon',
                     'Set {{value0}} icon to {{value1}}',
                     { value0: status.label, value1: icon.label }
                   )}

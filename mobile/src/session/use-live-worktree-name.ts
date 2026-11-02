@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
-import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
-import { getLiveWorktreeDisplayName, type WorktreeDisplayNameSource } from './worktree-display-name'
-import { FLOATING_WORKSPACE_TITLE, isFloatingWorkspaceWorktreeId } from './floating-workspace'
+import type { ConnectionState } from '../transport/types'
+import { sessionWorktreeRecordRead } from './mobile-session-read-operations'
+import { getLiveWorktreeDisplayName } from './worktree-display-name'
+import { getFloatingWorkspaceTitle, isFloatingWorkspaceWorktreeId } from './floating-workspace'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import {
+  classifyWorktreeShowResponse,
+  type WorktreeShowResolution
+} from '../worktree/worktree-show-resolution'
 
 const WORKTREE_NAME_FALLBACK_POLL_MS = 3000
 
@@ -16,15 +22,37 @@ type Params = {
   worktreeId: string
 }
 
-export function useLiveWorktreeName({ client, connState, routeName, worktreeId }: Params): string {
-  // Why: the floating sentinel has no worktree record, so worktree.show would
-  // fail forever and keep the 3s fallback poll alive; its title is fixed.
+export type LiveWorktreeName = {
+  name: string
+  /** Where the worktree lives on its host; null until the host's record arrives. */
+  path: string | null
+  hostId: string | null
+  resolution: WorktreeShowResolution
+}
+
+export function useLiveWorktreeName({
+  client,
+  connState,
+  routeName,
+  worktreeId
+}: Params): LiveWorktreeName {
+  useMobileTranslation()
+  // Floating workspaces have no worktree record; probing would keep fallback polling forever.
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
   const routeNameHint = routeName?.trim() ?? ''
-  const [worktreeName, setWorktreeName] = useState(() => ({
-    worktreeId,
-    name: routeNameHint
-  }))
+  const [worktreeName, setWorktreeName] = useState<{
+    worktreeId: string
+    name: string
+    path?: string | null
+    hostId?: string | null
+  }>(() => ({ worktreeId, name: routeNameHint }))
+  // Key verdicts by route so a previous workspace’s deletion cannot escape into the new one.
+  const [resolved, setResolved] = useState<{
+    worktreeId: string
+    resolution: WorktreeShowResolution
+  }>(() => ({ worktreeId, resolution: 'unknown' }))
+  // Repo-scan failures can misreport live workspaces as missing; require a confirming fallback read.
+  const missingStreakRef = useRef({ worktreeId, count: 0 })
 
   useEffect(() => {
     setWorktreeName((current) =>
@@ -33,6 +61,12 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
         : { worktreeId, name: routeNameHint }
     )
   }, [routeNameHint, worktreeId])
+
+  useEffect(() => {
+    setResolved((current) =>
+      current.worktreeId === worktreeId ? current : { worktreeId, resolution: 'unknown' }
+    )
+  }, [worktreeId])
 
   useFocusEffect(
     useCallback(() => {
@@ -53,27 +87,48 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
         }
       }
       const refreshWorktreeName = async (): Promise<void> => {
-        // Why: an event-driven refresh can overtake a slow fallback request;
-        // only the newest read may publish or stop the retry poll.
+        // Only the newest request may publish or stop polling; events can overtake slow fallback reads.
         const generation = ++refreshGeneration
         try {
-          const response = await client.sendRequest('worktree.show', {
+          const response = await sessionWorktreeRecordRead.request(client, {
             worktree: `id:${worktreeId}`
           })
-          if (stale || generation !== refreshGeneration || !response.ok) {
+          if (stale || generation !== refreshGeneration) {
             return
           }
-          const result = (response as RpcSuccess).result as {
-            worktree?: WorktreeDisplayNameSource
+          const classified = classifyWorktreeShowResponse(response)
+          const streak = missingStreakRef.current
+          missingStreakRef.current = {
+            worktreeId,
+            count:
+              classified === 'missing'
+                ? (streak.worktreeId === worktreeId ? streak.count : 0) + 1
+                : 0
           }
-          const liveName = result.worktree
-            ? getLiveWorktreeDisplayName([result.worktree], worktreeId)
-            : null
+          const resolution =
+            classified === 'missing' && missingStreakRef.current.count < 2 ? 'unknown' : classified
+          setResolved((current) =>
+            current.worktreeId === worktreeId && current.resolution === resolution
+              ? current
+              : { worktreeId, resolution }
+          )
+          // Read selector_not_found before skip interpretation; only its confirmed code proves deletion.
+          const accepted = sessionWorktreeRecordRead.interpret(response)
+          if (!accepted.accepted) {
+            return
+          }
+          const worktree = accepted.value
+          const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
           if (liveName) {
+            const path = worktree?.path || null
+            const hostId = worktree?.hostId ?? null
             setWorktreeName((current) =>
-              current.worktreeId === worktreeId && current.name === liveName
+              current.worktreeId === worktreeId &&
+              current.name === liveName &&
+              current.path === path &&
+              current.hostId === hostId
                 ? current
-                : { worktreeId, name: liveName }
+                : { worktreeId, name: liveName, path, hostId }
             )
           }
           hasSuccessfulRefresh = true
@@ -116,8 +171,7 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
               stopFallbackPoll()
             }
             if (replayedAfterReconnect) {
-              // Why: client events are not queued while disconnected, so replay
-              // readiness must re-read the title once to close that event gap.
+              // Reconnect must reread once because disconnected clients miss title invalidations.
               invalidateAndRefresh()
             }
             return
@@ -135,9 +189,7 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
           }
         }
       )
-      // Why: route params are only an entry hint. The desktop/runtime owns
-      // displayName. Modern runtimes push invalidations; the poll remains only
-      // until that stream proves available, preserving older-runtime behavior.
+      // Runtime displayName owns the title; retain fallback polling until invalidations prove available on this host.
       void refreshWorktreeName()
       return () => {
         stale = true
@@ -148,7 +200,12 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
   )
 
   if (isFloatingWorkspace) {
-    return FLOATING_WORKSPACE_TITLE
+    return { name: getFloatingWorkspaceTitle(), path: null, hostId: 'local', resolution: 'unknown' }
   }
-  return worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint
+  return {
+    name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
+    path: worktreeName.worktreeId === worktreeId ? (worktreeName.path ?? null) : null,
+    hostId: worktreeName.worktreeId === worktreeId ? (worktreeName.hostId ?? null) : null,
+    resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'
+  }
 }

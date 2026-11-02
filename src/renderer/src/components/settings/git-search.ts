@@ -18,6 +18,23 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.git.search.jiraIssueKeyCasingTitle',
+      'Jira Key Casing'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.jiraIssueKeyCasingDescription',
+      'Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.git.search.jira', 'jira'),
+      ...translateSearchKeyword('auto.components.settings.git.search.issueKey', 'issue key'),
+      ...translateSearchKeyword('auto.components.settings.git.search.f83c8937c4', 'branch naming'),
+      ...translateSearchKeyword('auto.components.settings.git.search.uppercase', 'uppercase'),
+      ...translateSearchKeyword('auto.components.settings.git.search.lowercase', 'lowercase')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.git.search.f8bda25f29',
       'Keep Local Main Up to Date'
     ),
@@ -50,7 +67,7 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.git.search.sourceControlGroupOrderDescription',
-      'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+      'Choose whether Staged Changes or Changes appear first in Source Control.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.git.search.groupOrder', 'group order'),
@@ -121,22 +138,5 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
-  ...getAutoRenameBranchSearchEntries(),
-  {
-    title: translate('auto.components.settings.git.search.bc7d9f69ce', 'Orca Attribution'),
-    description: translate(
-      'auto.components.settings.git.search.118c23484b',
-      'Add Orca attribution to commits, PRs, and issues.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.git.search.d088806071', 'github'),
-      ...translateSearchKeyword('auto.components.settings.git.search.16f53f7323', 'gh'),
-      ...translateSearchKeyword('auto.components.settings.git.search.6bdea421bb', 'pr'),
-      ...translateSearchKeyword('auto.components.settings.git.search.af0a144bfb', 'issue'),
-      ...translateSearchKeyword('auto.components.settings.git.search.61f9f5d1fc', 'co-author'),
-      ...translateSearchKeyword('auto.components.settings.git.search.8461c908ae', 'coauthored'),
-      ...translateSearchKeyword('auto.components.settings.git.search.1b93c1143c', 'attribution'),
-      ...translateSearchKeyword('auto.components.settings.git.search.61eab13403', 'orca')
-    ]
-  }
+  ...getAutoRenameBranchSearchEntries()
 ])

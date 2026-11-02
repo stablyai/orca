@@ -3,7 +3,7 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isSidebarLabelTruncated, TruncatedSidebarLabel } from './truncated-sidebar-label'
+import { TruncatedSidebarLabel } from './truncated-sidebar-label'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -14,17 +14,6 @@ vi.mock('@/components/ui/tooltip', () => ({
   ),
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
-
-describe('isSidebarLabelTruncated', () => {
-  it('returns false when the label fits', () => {
-    expect(isSidebarLabelTruncated({ clientWidth: 120, scrollWidth: 120 })).toBe(false)
-    expect(isSidebarLabelTruncated({ clientWidth: 120, scrollWidth: 119 })).toBe(false)
-  })
-
-  it('returns true when the label overflows', () => {
-    expect(isSidebarLabelTruncated({ clientWidth: 120, scrollWidth: 121 })).toBe(true)
-  })
-})
 
 describe('TruncatedSidebarLabel', () => {
   let container: HTMLDivElement
@@ -95,14 +84,37 @@ describe('TruncatedSidebarLabel', () => {
     expect(container.querySelector('[data-tooltip-content]')).toBeNull()
   })
 
-  it('keeps the nested tooltip disabled when a parent hover owns the full identity', async () => {
-    await act(async () => {
-      root.render(
-        <TruncatedSidebarLabel text="feature/really-long-branch-name" tooltipEnabled={false} />
-      )
-    })
+  it('keeps one ResizeObserver across a label text change', async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    let constructed = 0
+    let disconnected = 0
+    class CountingResizeObserver {
+      constructor(_callback: ResizeObserverCallback) {
+        constructed += 1
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {
+        disconnected += 1
+      }
+    }
+    globalThis.ResizeObserver = CountingResizeObserver as unknown as typeof ResizeObserver
 
-    expect(container.textContent).toContain('feature/really-long-branch-name')
-    expect(container.querySelector('[data-tooltip-content]')).toBeNull()
+    try {
+      await act(async () => {
+        root.render(<TruncatedSidebarLabel text="feature/short" />)
+      })
+      expect(constructed).toBe(1)
+
+      await act(async () => {
+        root.render(<TruncatedSidebarLabel text="fix/short" />)
+      })
+
+      expect(container.textContent).toBe('fix/short')
+      expect(constructed).toBe(1)
+      expect(disconnected).toBe(0)
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
   })
 })

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { useLiveWorktreeName } from './use-live-worktree-name'
+import { useLiveWorktreeName, type LiveWorktreeName } from './use-live-worktree-name'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
@@ -13,20 +13,9 @@ vi.mock('expo-router', async () => {
   }
 })
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 describe('useLiveWorktreeName request volume', () => {
   let renderer: ReactTestRenderer | null = null
+  let live: LiveWorktreeName | undefined
   let eventListener: ((payload: unknown) => void) | null = null
   const unsubscribeStream = vi.fn()
   const sendRequest = vi.fn().mockResolvedValue({
@@ -45,7 +34,7 @@ describe('useLiveWorktreeName request volume', () => {
 
   async function mountHarness(): Promise<void> {
     function Harness(): null {
-      useLiveWorktreeName({
+      live = useLiveWorktreeName({
         client,
         connState: 'connected',
         routeName: 'Route name',
@@ -54,15 +43,10 @@ describe('useLiveWorktreeName request volume', () => {
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness))
-        await Promise.resolve()
-      })
-    } finally {
-      restoreConsoleError()
-    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+    })
   }
 
   async function emitEvent(payload: unknown): Promise<void> {
@@ -75,7 +59,6 @@ describe('useLiveWorktreeName request volume', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     eventListener = null
     sendRequest.mockClear().mockResolvedValue({
       id: 'worktree-show',
@@ -94,7 +77,21 @@ describe('useLiveWorktreeName request volume', () => {
   })
 
   it('cuts thirty-second idle request volume from eleven calls to one', async () => {
+    sendRequest.mockResolvedValue({
+      id: 'worktree-show',
+      ok: true,
+      result: {
+        worktree: {
+          id: 'repo-1::/worktree',
+          displayName: 'Live name',
+          path: '/srv/project ',
+          hostId: 'ssh:target'
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
     await mountHarness()
+    expect(live).toMatchObject({ name: 'Live name', path: '/srv/project ', hostId: 'ssh:target' })
     expect(subscribe).toHaveBeenCalledWith(
       'runtime.clientEvents.subscribe',
       null,
@@ -107,7 +104,6 @@ describe('useLiveWorktreeName request volume', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
-    // The retired 3s interval made one initial request plus ten idle ticks here.
     expect(sendRequest).toHaveBeenCalledTimes(1)
 
     await emitEvent({ type: 'worktreesChanged', repoId: 'repo-2' })
@@ -175,19 +171,14 @@ describe('useLiveWorktreeName request volume', () => {
         connState: 'connected',
         routeName: undefined,
         worktreeId: 'global-floating-terminal'
-      })
+      }).name
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(FloatingHarness))
-        await Promise.resolve()
-      })
-    } finally {
-      restoreConsoleError()
-    }
+    await act(async () => {
+      renderer = create(createElement(FloatingHarness))
+      await Promise.resolve()
+    })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
@@ -202,7 +193,7 @@ describe('useLiveWorktreeName request volume', () => {
     let renderer: ReactTestRenderer | null = null
 
     function RouteHarness(props: { routeName?: string; worktreeId: string }): null {
-      const name = useLiveWorktreeName({
+      const { name } = useLiveWorktreeName({
         client,
         connState: 'connected',
         routeName: props.routeName,
@@ -214,7 +205,6 @@ describe('useLiveWorktreeName request volume', () => {
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(
@@ -241,11 +231,60 @@ describe('useLiveWorktreeName request volume', () => {
         )
       })
     } finally {
-      restoreConsoleError()
       act(() => renderer?.unmount())
     }
 
     expect(firstNameByWorktree.get('global-floating-terminal')).toBe('Floating Workspace')
     expect(firstNameByWorktree.get('repo-2::/worktree')).toBe('Next workspace')
+  })
+
+  // The missing-workspace bounce shares this poll, so failure must publish a verdict rather than return silently.
+  it('reports the host-proven verdict from the same poll', async () => {
+    let resolution = ''
+    function VerdictHarness(): null {
+      resolution = useLiveWorktreeName({
+        client,
+        connState: 'connected',
+        routeName: 'Route name',
+        worktreeId: 'repo-1::/worktree'
+      }).resolution
+      return null
+    }
+    const mount = async (): Promise<void> => {
+      await act(async () => {
+        renderer = create(createElement(VerdictHarness))
+        await Promise.resolve()
+      })
+    }
+
+    await mount()
+    expect(resolution).toBe('present')
+
+    act(() => renderer?.unmount())
+    renderer = null
+    sendRequest.mockResolvedValue({
+      id: 'worktree-show',
+      ok: false,
+      error: { code: 'selector_not_found', message: 'Selector not found' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await mount()
+    // A transient repo-scan rejection also reports selector_not_found; require a confirming poll.
+    expect(resolution).toBe('unknown')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(resolution).toBe('missing')
+
+    act(() => renderer?.unmount())
+    renderer = null
+    sendRequest.mockResolvedValue({
+      id: 'worktree-show',
+      ok: false,
+      error: { code: 'runtime_busy', message: 'Runtime busy' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await mount()
+    expect(resolution).toBe('unknown')
   })
 })

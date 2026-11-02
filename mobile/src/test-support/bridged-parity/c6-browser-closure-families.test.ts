@@ -1,0 +1,52 @@
+import { describe, expect, it } from 'vitest'
+import { C1_PAGE_CLOSURE } from './c1-page-closure'
+import { C2_PAGE_CLOSURE } from './c2-page-closure'
+import { C3_PAGE_CLOSURE } from './c3-page-closure'
+import { C5_PAGE_CLOSURE } from './c5-page-closure'
+import { C6_BROWSER_CLOSURE_FAMILIES } from './c6-browser-closure-families'
+import { pageClosureTotals } from './page-closure'
+
+describe('the C6 browser closure half', () => {
+  it('assigns each pinned golden to one closure family', () => {
+    const goldens = Object.values(C6_BROWSER_CLOSURE_FAMILIES).flatMap((family) =>
+      Object.keys(family)
+    )
+    expect(new Set(goldens).size).toBe(goldens.length)
+  })
+
+  // Totals catch a table that is internally consistent but derived incorrectly.
+  it('pins six byte-identical goldens and nine in one named class', () => {
+    expect(pageClosureTotals(C6_BROWSER_CLOSURE_FAMILIES)).toEqual({
+      identical: 6,
+      'result-absent-settlement': 9
+    })
+  })
+
+  // Each added family must include byte-identical evidence, beyond merely naming its divergence.
+  it('leaves no family excluded whole', () => {
+    for (const [family, goldens] of Object.entries(C6_BROWSER_CLOSURE_FAMILIES)) {
+      expect({ family, identical: Object.values(goldens).includes('identical') }).toEqual({
+        family,
+        identical: true
+      })
+    }
+  })
+
+  /**
+   * No family here is pinned by another series, so a golden pinned twice is pinned once.
+   *
+   * The four are the pane's own and nothing else imports its call sites; `session.browser-tab-create`
+   * is recorded at the session screen and belongs to C7.
+   */
+  it('shares no family with C1, C2, C3 or C5', () => {
+    const others = new Set([
+      ...Object.keys(C1_PAGE_CLOSURE),
+      ...Object.keys(C2_PAGE_CLOSURE),
+      ...Object.keys(C3_PAGE_CLOSURE),
+      ...Object.keys(C5_PAGE_CLOSURE)
+    ])
+    expect(Object.keys(C6_BROWSER_CLOSURE_FAMILIES).filter((family) => others.has(family))).toEqual(
+      []
+    )
+  })
+})

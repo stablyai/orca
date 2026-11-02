@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
+import type {
+  TerminalCommandQuickCommand,
+  TerminalAgentQuickCommand
+} from '../../../src/shared/terminal-quick-command-types'
 import {
   buildMobileQuickCommandLaunch,
   getQuickCommandDisplayPreview,
@@ -7,7 +10,9 @@ import {
   supportsMobileQuickCommands
 } from './quick-commands'
 
-function command(overrides: Partial<TerminalQuickCommand> = {}): TerminalQuickCommand {
+function command(
+  overrides: Partial<TerminalCommandQuickCommand> = {}
+): TerminalCommandQuickCommand {
   return {
     id: 'command',
     label: 'Command',
@@ -16,7 +21,18 @@ function command(overrides: Partial<TerminalQuickCommand> = {}): TerminalQuickCo
     appendEnter: true,
     scope: { type: 'global' },
     ...overrides
-  } as TerminalQuickCommand
+  }
+}
+
+function agentCommand(prompt: string): TerminalAgentQuickCommand {
+  return {
+    id: 'agent-command',
+    label: 'Command',
+    action: 'agent-prompt',
+    agent: 'codex',
+    prompt,
+    scope: { type: 'global' }
+  }
 }
 
 describe('mobile quick-command launch', () => {
@@ -28,8 +44,6 @@ describe('mobile quick-command launch', () => {
   })
 
   it('joins multiline runnable commands with "; " to match desktop', () => {
-    // Parity with desktop flattenTerminalQuickCommand: the same saved command
-    // must run identically on desktop and mobile.
     expect(
       buildMobileQuickCommandLaunch(command({ command: 'cd app\nnpm install\nnpm test' }))
     ).toEqual({
@@ -59,29 +73,20 @@ describe('mobile quick-command launch', () => {
   })
 
   it('injects supported agent prompts into the host-built launch command', () => {
-    expect(
-      buildMobileQuickCommandLaunch(
-        command({
-          action: 'agent-prompt',
-          agent: 'codex',
-          prompt: 'Review this diff'
-        })
-      )
-    ).toEqual({ agent: 'codex', options: { agentPrompt: 'Review this diff' } })
+    expect(buildMobileQuickCommandLaunch(agentCommand('Review this diff'))).toEqual({
+      agent: 'codex',
+      options: { agentPrompt: 'Review this diff' }
+    })
   })
 
   it('bounds native row text without truncating searchable or executable content', () => {
     const longPrompt = `Review ${'x'.repeat(5993)}`
-    const agentCommand = command({
-      action: 'agent-prompt',
-      agent: 'codex',
-      prompt: longPrompt
-    })
+    const savedCommand = agentCommand(longPrompt)
 
-    expect(getQuickCommandDisplayPreview(agentCommand)).toHaveLength(240)
-    expect(getQuickCommandDisplayPreview(agentCommand)).toMatch(/^Codex: Review .*…$/)
-    expect(getQuickCommandPreview(agentCommand)).toBe(`Codex: ${longPrompt}`)
-    expect(buildMobileQuickCommandLaunch(agentCommand)).toEqual({
+    expect(getQuickCommandDisplayPreview(savedCommand)).toHaveLength(240)
+    expect(getQuickCommandDisplayPreview(savedCommand)).toMatch(/^Codex: Review .*…$/)
+    expect(getQuickCommandPreview(savedCommand)).toBe(`Codex: ${longPrompt}`)
+    expect(buildMobileQuickCommandLaunch(savedCommand)).toEqual({
       agent: 'codex',
       options: { agentPrompt: longPrompt }
     })

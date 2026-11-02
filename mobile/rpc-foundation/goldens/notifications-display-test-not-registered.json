@@ -1,0 +1,197 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "notifications.display-test-screen",
+  "family": "notifications.display-test-screen",
+  "namedDeltas": [],
+  "values": {
+    "0bfc5a373e4d": {
+      "name": "notifications.testPush#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.testPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "12b4ebc0841b": {
+      "name": "notifications.testPush#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.testPush"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true,
+            "timeoutMs": 20000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "accepted": false,
+            "reason": "not_registered"
+          }
+        }
+      }
+    },
+    "8a172d4948a9": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronRight": 1,
+        "Pressable": 2,
+        "Text": 4,
+        "View": 7
+      },
+      "labels": ["Send test notification", "Troubleshooting"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Send test notification",
+        "Troubleshooting",
+        "Test push delivery, or a local notification when push is unavailable."
+      ]
+    },
+    "933633d0fbce": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronRight": 1,
+        "Pressable": 2,
+        "Text": 5,
+        "View": 7
+      },
+      "labels": ["Send test notification", "Troubleshooting"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Send test notification",
+        "Troubleshooting",
+        "Test push delivery, or a local notification when push is unavailable.",
+        "Push registration is not ready on this desktop. Try again shortly. Local test scheduled. Check for the notification. This checks display only; it does not verify agent alert delivery."
+      ]
+    },
+    "9585b40ac04d": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronRight": 1,
+        "Pressable": 2,
+        "Text": 5,
+        "View": 7
+      },
+      "labels": ["Sending…", "Troubleshooting"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Send test notification",
+        "Sending…",
+        "Troubleshooting",
+        "Test push delivery, or a local notification when push is unavailable."
+      ]
+    },
+    "b23af609a818": {
+      "name": "notification.schedule",
+      "ordinal": 3,
+      "value": {
+        "content": {
+          "body": "Local notification test from this phone.",
+          "sound": "default",
+          "title": "Test notification"
+        },
+        "trigger": {
+          "channelId": "orca-desktop"
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f68b017d64bd": {
+      "name": "notifications.testPush#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.testPush\",\"params\":null}"
+    }
+  },
+  "recording": {
+    "scenario": "notifications-display-test-not-registered",
+    "checkpoints": [
+      {
+        "id": "mounted",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "8a172d4948a9",
+          "effects": []
+        }
+      },
+      {
+        "id": "sending",
+        "observation": {
+          "sender": ["0bfc5a373e4d"],
+          "payloads": ["f68b017d64bd"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "press": "eb79a9b3682a"
+          },
+          "state": "9585b40ac04d",
+          "effects": []
+        }
+      },
+      {
+        "id": "not-registered",
+        "observation": {
+          "sender": ["12b4ebc0841b"],
+          "payloads": ["f68b017d64bd"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "press": "eb79a9b3682a"
+          },
+          "state": "933633d0fbce",
+          "effects": ["b23af609a818"]
+        }
+      }
+    ]
+  }
+}

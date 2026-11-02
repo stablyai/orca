@@ -51,6 +51,7 @@ describe('showDeleteWorktreeFailureToast', () => {
   it('uses a persistent in-body action footer when force delete is available', () => {
     const onViewChanges = vi.fn()
     const onForceDelete = vi.fn()
+    const onDeleteAnyway = vi.fn()
 
     showDeleteWorktreeFailureToast({
       error: 'branch has changes',
@@ -58,6 +59,7 @@ describe('showDeleteWorktreeFailureToast', () => {
       forceDeleteReason: 'dirty',
       onViewChanges,
       onForceDelete,
+      onDeleteAnyway,
       worktreeId: 'wt-1',
       worktreeName: 'feature/foo'
     })
@@ -65,7 +67,7 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(toast.info).toHaveBeenCalledWith(
       'Failed to delete workspace feature/foo',
       expect.objectContaining({
-        id: 'delete-worktree-failure:wt-1',
+        id: 'delete-worktree-failure:|wt-1',
         dismissible: true,
         duration: Infinity
       })
@@ -80,83 +82,40 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(body.textContent).toContain('It has changed files.')
 
     clickButton(body, 'View')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-1')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-1')
     expect(onViewChanges).toHaveBeenCalled()
 
     clickButton(body, 'Force Delete')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-1')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-1')
     expect(onForceDelete).toHaveBeenCalled()
   })
 
-  it('keeps non-forceable failures destructive without a force action', () => {
-    const onViewChanges = vi.fn()
+  it('offers Delete Anyway when the archive hook refused the removal', () => {
+    const onDeleteAnyway = vi.fn()
 
     showDeleteWorktreeFailureToast({
-      error: 'permission denied',
+      error: 'Archive hook failed for worktree: /w/feature — exited 23.',
       canForceDelete: false,
       forceDeleteReason: null,
-      onViewChanges,
+      canWaiveArchiveHook: true,
+      onViewChanges: vi.fn(),
       onForceDelete: vi.fn(),
-      worktreeId: 'wt-2',
-      worktreeName: 'feature/bar'
+      onDeleteAnyway,
+      worktreeId: 'wt-archive',
+      worktreeName: 'feature/archive'
     })
 
     expect(toast.error).toHaveBeenCalledWith(
-      'Failed to delete workspace feature/bar',
-      expect.objectContaining({
-        id: 'delete-worktree-failure:wt-2',
-        dismissible: true,
-        duration: 10000
-      })
+      'Failed to delete workspace feature/archive',
+      expect.objectContaining({ duration: Infinity })
     )
 
     const body = renderToastBody('error')
-    expect(body.textContent).toContain('permission denied')
+    expect(body.textContent).toContain('Delete Anyway')
     expect(body.textContent).not.toContain('Force Delete')
 
-    clickButton(body, 'View')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:wt-2')
-    expect(onViewChanges).toHaveBeenCalled()
-  })
-
-  it('offers neither force delete nor View for a locked workspace', () => {
-    const onViewChanges = vi.fn()
-
-    showDeleteWorktreeFailureToast({
-      error: 'Worktree is locked by Git.',
-      canForceDelete: false,
-      forceDeleteReason: null,
-      onViewChanges,
-      onForceDelete: vi.fn(),
-      worktreeId: 'wt-locked',
-      worktreeName: 'feature/locked'
-    })
-
-    const body = renderToastBody('info')
-    expect(body.textContent).toContain('This workspace is locked by Git.')
-    expect(body.textContent).toContain(
-      'Run git worktree unlock <worktree-path> from its repository, then retry deletion'
-    )
-    expect(body.textContent).not.toContain('Force Delete')
-    expect(body.textContent).not.toContain('View')
-    expect(onViewChanges).not.toHaveBeenCalled()
-  })
-
-  it('keeps View for a locked workspace when changed files are known', () => {
-    showDeleteWorktreeFailureToast({
-      error: 'Worktree is locked by Git.',
-      canForceDelete: false,
-      forceDeleteReason: null,
-      lockReason: 'active agent session',
-      hasKnownChanges: true,
-      onViewChanges: vi.fn(),
-      onForceDelete: vi.fn(),
-      worktreeId: 'wt-locked-dirty',
-      worktreeName: 'feature/locked-dirty'
-    })
-
-    const body = renderToastBody('info')
-    expect(body.textContent).toContain('Git reported: active agent session')
-    expect(body.textContent).toContain('View')
+    clickButton(body, 'Delete Anyway')
+    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-archive')
+    expect(onDeleteAnyway).toHaveBeenCalled()
   })
 })

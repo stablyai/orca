@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
-  createMobileFilePreviewRequest,
   formatPreviewByteLength,
   loadMobileFilePreview,
-  normalizeMobileFilePreviewResponse,
   saveMobileTerminalArtifactPreview
 } from './mobile-file-preview-request'
+import {
+  normalizeMobileFilePreviewResult,
+  previewErrorFromRefusal
+} from './mobile-file-preview-response'
+import { RPC_INCOMPATIBLE_REPLY_CODE } from '../transport/rpc-incompatible-reply-error'
 
 function ok(result: unknown): RpcSuccess {
   return { id: '1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -29,37 +32,58 @@ function clientWithResponses(responses: RpcResponse[]) {
 }
 
 describe('mobile-file-preview-request', () => {
-  it('selects readPreview for raster images and read for text-like files', () => {
-    expect(createMobileFilePreviewRequest('wt-1', 'assets/logo.png')).toEqual({
-      method: 'files.readPreview',
-      params: { worktree: 'id:wt-1', relativePath: 'assets/logo.png' }
-    })
-    expect(createMobileFilePreviewRequest('wt-1', 'docs/readme.md')).toEqual({
-      method: 'files.read',
-      params: { worktree: 'id:wt-1', relativePath: 'docs/readme.md' }
-    })
-    expect(createMobileFilePreviewRequest('wt-1', 'public/index.html')).toEqual({
-      method: 'files.read',
-      params: { worktree: 'id:wt-1', relativePath: 'public/index.html' }
-    })
-  })
-
-  it('loads images through readPreview and never calls files.open', async () => {
-    const client = clientWith(
-      ok({ content: 'aW1hZ2U=', isBinary: true, isImage: true, mimeType: 'image/png' })
-    )
-
-    await expect(loadMobileFilePreview(client, 'wt-1', 'assets/logo.png')).resolves.toEqual({
+  it('prepares a media descriptor without asking the host to buffer a whole file', async () => {
+    const client = clientWith(fail('Unexpected whole-file read'))
+    await expect(loadMobileFilePreview(client, 'folder-project', 'movie.mp4')).resolves.toEqual({
       status: 'ready',
-      kind: 'image',
-      dataUri: 'data:image/png;base64,aW1hZ2U='
+      kind: 'media',
+      media: { worktreeId: 'folder-project', relativePath: 'movie.mp4', mimeType: 'video/mp4' }
     })
-    expect(client.sendRequest).toHaveBeenCalledWith('files.readPreview', {
-      worktree: 'id:wt-1',
-      relativePath: 'assets/logo.png'
-    })
-    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
+    expect(client.sendRequest).not.toHaveBeenCalled()
   })
+
+  it.each([
+    {
+      relativePath: 'assets/logo.png',
+      method: 'files.readPreview',
+      payload: { content: 'aW1hZ2U=', isBinary: true, isImage: true, mimeType: 'image/png' },
+      expected: { status: 'ready', kind: 'image', dataUri: 'data:image/png;base64,aW1hZ2U=' }
+    },
+    {
+      relativePath: 'docs/readme.md',
+      method: 'files.read',
+      payload: { content: '# Notes', truncated: false, byteLength: 7 },
+      expected: {
+        status: 'ready',
+        kind: 'markdown',
+        content: '# Notes',
+        truncated: false,
+        byteLength: 7
+      }
+    },
+    {
+      relativePath: 'public/index.html',
+      method: 'files.read',
+      payload: { content: '<h1>hi</h1>', truncated: false, byteLength: 11 },
+      expected: {
+        status: 'ready',
+        kind: 'html',
+        content: '<h1>hi</h1>',
+        truncated: false,
+        byteLength: 11
+      }
+    }
+  ])(
+    'loads $relativePath through the matching read without opening a desktop tab',
+    async ({ relativePath, method, payload, expected }) => {
+      const client = clientWith(ok(payload))
+      await expect(loadMobileFilePreview(client, 'wt-1', relativePath)).resolves.toEqual(expected)
+      expect(client.sendRequest).toHaveBeenCalledExactlyOnceWith(method, {
+        worktree: 'id:wt-1',
+        relativePath
+      })
+    }
+  )
 
   it('loads terminal artifacts through grant-scoped artifact RPCs', async () => {
     const client = clientWith(ok({ content: '{"ok":true}', truncated: false, byteLength: 11 }))
@@ -113,7 +137,7 @@ describe('mobile-file-preview-request', () => {
           cwd: '/tmp/run'
         },
         undefined,
-        { onTerminalArtifactSourceRefreshed }
+        { onTerminalArtifactSourceRefreshed, isCurrent: () => true }
       )
     ).resolves.toMatchObject({ status: 'ready', kind: 'text', content: '{"ok":true}' })
 
@@ -133,6 +157,7 @@ describe('mobile-file-preview-request', () => {
       absolutePath: '/tmp/result.json',
       grantId: 'grant-2'
     })
+    expect(client.sendRequest).toHaveBeenCalledTimes(3)
     expect(onTerminalArtifactSourceRefreshed).toHaveBeenCalledWith({
       source: 'terminalArtifact',
       worktreeId: 'wt-1',
@@ -177,6 +202,47 @@ describe('mobile-file-preview-request', () => {
       pathText: '/tmp/result.json',
       terminal: 'term-1'
     })
+  })
+
+  it('refreshes a native-chat artifact grant with the same transcript provenance', async () => {
+    const client = clientWithResponses([
+      fail('terminal_file_grant_expired'),
+      ok({
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          absolutePath: '/Users/ada/orca-plans/result.html',
+          grantId: 'grant-2',
+          readOnly: true
+        }
+      }),
+      ok({ content: '<h1>Result</h1>', truncated: false, byteLength: 15 })
+    ])
+
+    const onTerminalArtifactSourceRefreshed = vi.fn()
+    await loadMobileFilePreview(
+      client,
+      {
+        source: 'terminalArtifact',
+        worktreeId: 'wt-1',
+        absolutePath: '/Users/ada/orca-plans/result.html',
+        grantId: 'grant-1',
+        pathText: '~/orca-plans/result.html',
+        nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
+      },
+      undefined,
+      { onTerminalArtifactSourceRefreshed }
+    )
+
+    expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'files.resolveTerminalPath', {
+      worktree: 'id:wt-1',
+      pathText: '~/orca-plans/result.html',
+      nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
+    })
+    expect(onTerminalArtifactSourceRefreshed).toHaveBeenCalledWith(
+      expect.objectContaining({ grantId: 'grant-2', readOnly: true })
+    )
   })
 
   it.each([
@@ -240,6 +306,25 @@ describe('mobile-file-preview-request', () => {
       grantId: 'grant-1',
       content: '{"ok":false}'
     })
+  })
+
+  it('does not send writes for read-only native-chat artifacts', async () => {
+    const client = clientWith(ok({ ok: true }))
+
+    await expect(
+      saveMobileTerminalArtifactPreview(
+        client,
+        {
+          source: 'terminalArtifact',
+          worktreeId: 'wt-1',
+          absolutePath: '/Users/ada/orca-plans/result.html',
+          grantId: 'grant-1',
+          readOnly: true
+        },
+        '<h1>Changed</h1>'
+      )
+    ).resolves.toMatchObject({ status: 'error' })
+    expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
   it('does not refresh and retry a failed terminal artifact save without a base content check', async () => {
@@ -438,7 +523,7 @@ describe('mobile-file-preview-request', () => {
     })
   })
 
-  it('reports a malformed refreshed artifact read instead of treating it as changed desktop content', async () => {
+  it('names the unreadable reply on a refreshed artifact read instead of treating it as changed desktop content', async () => {
     const client = clientWithResponses([
       fail('terminal_file_grant_stale'),
       ok({
@@ -469,10 +554,9 @@ describe('mobile-file-preview-request', () => {
         '{"ok":false}',
         { baseContent: '{"ok":true}' }
       )
-    ).resolves.toEqual({
-      status: 'error',
-      message: 'Unable to load preview',
-      reconnect: false
+    ).rejects.toMatchObject({
+      code: RPC_INCOMPATIBLE_REPLY_CODE,
+      method: 'files.readTerminalArtifact'
     })
 
     expect(client.sendRequest).toHaveBeenCalledTimes(3)
@@ -532,7 +616,7 @@ describe('mobile-file-preview-request', () => {
     ['missing mimeType', { content: 'aW1hZ2U=', isBinary: true, isImage: true }],
     ['empty content', { content: '', isBinary: true, isImage: true, mimeType: 'image/png' }]
   ])('rejects invalid image preview results: %s', (_label, result) => {
-    expect(normalizeMobileFilePreviewResponse('assets/logo.png', ok(result))).toEqual({
+    expect(normalizeMobileFilePreviewResult('assets/logo.png', result)).toEqual({
       status: 'error',
       message: 'Binary preview unavailable',
       reconnect: false
@@ -541,10 +625,11 @@ describe('mobile-file-preview-request', () => {
 
   it('normalizes markdown, html, text, empty, and truncated reads', () => {
     expect(
-      normalizeMobileFilePreviewResponse(
-        'README.md',
-        ok({ content: '# Hi', truncated: false, byteLength: 4 })
-      )
+      normalizeMobileFilePreviewResult('README.md', {
+        content: '# Hi',
+        truncated: false,
+        byteLength: 4
+      })
     ).toEqual({
       status: 'ready',
       kind: 'markdown',
@@ -553,16 +638,18 @@ describe('mobile-file-preview-request', () => {
       byteLength: 4
     })
     expect(
-      normalizeMobileFilePreviewResponse(
-        'index.html',
-        ok({ content: '<h1>Hi</h1>', truncated: false, byteLength: 11 })
-      )
+      normalizeMobileFilePreviewResult('index.html', {
+        content: '<h1>Hi</h1>',
+        truncated: false,
+        byteLength: 11
+      })
     ).toMatchObject({ status: 'ready', kind: 'html' })
     expect(
-      normalizeMobileFilePreviewResponse(
-        'src/app.ts',
-        ok({ content: 'const a = 1', truncated: true, byteLength: 700_000 })
-      )
+      normalizeMobileFilePreviewResult('src/app.ts', {
+        content: 'const a = 1',
+        truncated: true,
+        byteLength: 700_000
+      })
     ).toEqual({
       status: 'ready',
       kind: 'text',
@@ -571,10 +658,11 @@ describe('mobile-file-preview-request', () => {
       byteLength: 700_000
     })
     expect(
-      normalizeMobileFilePreviewResponse(
-        'empty.txt',
-        ok({ content: '', truncated: false, byteLength: 0 })
-      )
+      normalizeMobileFilePreviewResult('empty.txt', {
+        content: '',
+        truncated: false,
+        byteLength: 0
+      })
     ).toEqual({ status: 'empty', kind: 'text' })
   })
 
@@ -591,7 +679,7 @@ describe('mobile-file-preview-request', () => {
     ['terminal_file_grant_stale', 'Reload preview before saving', false],
     ['permission denied', 'Unable to load preview', false]
   ])('maps preview failure %s', (message, expected, reconnect) => {
-    expect(normalizeMobileFilePreviewResponse('src/app.ts', fail(message))).toEqual({
+    expect(previewErrorFromRefusal(fail(message).error)).toEqual({
       status: 'error',
       message: expected,
       reconnect

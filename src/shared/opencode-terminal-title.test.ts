@@ -4,20 +4,29 @@ import { isMeaningfulOpenCodeTerminalTitle, isOpenCodeNativeTitle } from './open
 describe('OpenCode terminal titles', () => {
   it('recognizes native session titles', () => {
     expect(isMeaningfulOpenCodeTerminalTitle('OC | Native Stable Session')).toBe(true)
-    expect(isMeaningfulOpenCodeTerminalTitle('  OC|Session  ')).toBe(true)
+    expect(isMeaningfulOpenCodeTerminalTitle('  OC | Session  ')).toBe(true)
     expect(isOpenCodeNativeTitle('OC | Understand about the plugin')).toBe(true)
     expect(isOpenCodeNativeTitle('tmux | OC | ses_123')).toBe(true)
+    expect(isOpenCodeNativeTitle('ssh build-host | OC | ses_123')).toBe(true)
+    expect(isOpenCodeNativeTitle('user@host: ~/code | OC | ses_123')).toBe(true)
+    expect(isOpenCodeNativeTitle('▣ OC | ses_123')).toBe(true)
+    expect(isOpenCodeNativeTitle('⠋ OC | ses_123')).toBe(true)
+    expect(isOpenCodeNativeTitle('ssh build-host | ⠋ OC | ses_123')).toBe(true)
+    expect(isOpenCodeNativeTitle('OC |   ses_123')).toBe(true)
+    expect(isOpenCodeNativeTitle('OC |\tses_123')).toBe(true)
   })
 
   it('rejects generic, incomplete, embedded, and lookalike titles', () => {
     expect(isMeaningfulOpenCodeTerminalTitle('OpenCode')).toBe(false)
     expect(isMeaningfulOpenCodeTerminalTitle('OpenCode ready')).toBe(false)
     expect(isMeaningfulOpenCodeTerminalTitle('OC |')).toBe(false)
+    // Native markers space separators; accepting OC|Session could turn another tool’s title into an OpenCode send target.
+    expect(isMeaningfulOpenCodeTerminalTitle('OC|Session')).toBe(false)
+    expect(isMeaningfulOpenCodeTerminalTitle('OC |Session')).toBe(false)
     expect(isMeaningfulOpenCodeTerminalTitle(undefined)).toBe(false)
-    // Why: lowercase is not OpenCode's native marker; avoid "oc |" cwd/task noise.
+    // Lowercase oc is ordinary cwd/task text, not a native marker.
     expect(isOpenCodeNativeTitle('oc | Understand about the plugin')).toBe(false)
     // Why: mid-title OC must not steal another agent's braille/task frame.
     expect(isOpenCodeNativeTitle('⠋ Fix foo | OC | bar')).toBe(false)
-    expect(isOpenCodeNativeTitle('my session | OC | task')).toBe(false)
   })
 })

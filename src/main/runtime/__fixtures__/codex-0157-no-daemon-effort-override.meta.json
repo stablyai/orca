@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-09-27T20:48:19.864Z",
+  "platform": "darwin",
+  "command": [
+    "codex",
+    "--no-daemon",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "-m",
+    "gpt-6-sol",
+    "-c",
+    "model_reasoning_effort=high"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.1 with --no-daemon, -m and -c model_reasoning_effort. No startup warning; header fills in from `loading`. Worktree-path leaf redacted by the recorder scan.",
+  "exitCode": 0
+}

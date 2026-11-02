@@ -1,69 +1,130 @@
-// Why this module exists: xterm's public onData stream mixes real keystrokes
-// with the parser's synthetic replies to terminal queries a program embedded in
-// its output (CPR/DSR cursor + device-status reports, DA device attributes,
-// DECRPM mode reports, window/cell pixel-size reports, OSC 10/11 color reports,
-// kitty keyboard flag reports, DCS-framed DECRQSS/XTVERSION reports).
-// A querying program (e.g. starship/orb) reads these replies synchronously in
-// raw mode with a short timeout, so on the remote path they must NOT sit behind
-// the input debounce — a late reply lands on the shell prompt in cooked mode,
-// which echoes it literally and splices it into the next typed line (#7329).
-// This classifier lets the transport send replies immediately while keeping
-// ordinary typed input (including bursty arrow-key auto-repeat) coalesced.
+// xterm onData mixes keys and synthetic replies. Querying programs wait with short raw-mode timeouts; debounce can deliver replies to a cooked prompt and corrupt later input (#7329).
+// Classify complete replies for immediate transport delivery while ordinary input stays coalesced.
 
 const ESC = String.fromCharCode(0x1b)
 
-// Built via new RegExp from \u-escaped strings so no literal control
-// characters appear in the source. // Final bytes of xterm's own query-reply grammars:
-//   R  — CPR / DECXCPR cursor position report (answer to CSI 6n / CSI ? 6n)
-//   n  — DSR device status report (answer to CSI 5n → CSI 0n)
-//   c  — DA1/DA2/DA3 device attributes (answer to CSI c / CSI > c / CSI = c)
-//   t  — window/cell pixel-size + text-area-size reports (CSI 14t/16t/18t)
-//   y  — DECRPM mode report (answer to CSI ? Ps $ p), body ends "$y"
-//   u  — kitty keyboard flags report (answer to CSI ? u), carries "?"
+// Build regexes from escaped strings to keep literal controls out of source.
 /* oxlint-disable no-control-regex -- grammars match terminal ESC/BEL sequences by definition */
-// Known accepted collision: xterm.js encodes MODIFIED F3 (Shift/Ctrl/Alt+F3) as
-// `CSI 1 ; <mod> R`, which is indistinguishable from a CPR report (a classic
-// VT ambiguity). Such a keystroke is sent immediately instead of debounced —
-// byte order is still preserved (the immediate path flushes pending input
-// first), it just skips input-intent/activity bookkeeping. Harmless, so we
-// keep the reply grammar complete rather than special-casing it.
-const CPR_OR_DSR_RE = new RegExp('^\\u001b\\[\\??[0-9;]*[Rn]$')
-const DEVICE_ATTRIBUTES_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c$')
+// Modified F3 is byte-identical to CPR. Accept immediate delivery/reply-budget shedding and echo-deferral reordering rather than omit a valid reply grammar.
+const CPR_OR_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\??[0-9;]*[Rn]')
+const DEVICE_ATTRIBUTES_PREFIX_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c')
 // 4/6 = pixel-size reports, 8 = text-area size in characters (answer to CSI 18t).
-const WINDOW_SIZE_REPORT_RE = new RegExp('^\\u001b\\[[468];[0-9]+;[0-9]+t$')
+const WINDOW_SIZE_REPORT_PREFIX_RE = new RegExp('^\\u001b\\[[468];[0-9]+;[0-9]+t')
 // `?` optional: private-mode reports carry it (DECRPM), ANSI-mode reports don't.
-const DECRPM_RE = new RegExp('^\\u001b\\[\\??[0-9;]*\\$y$')
-// Kitty keyboard protocol flags report: CSI ? flags u. The `?` distinguishes it
-// from kitty-protocol *keystrokes* (CSI code;mods u), which must stay batched.
-const KITTY_FLAGS_RE = new RegExp('^\\u001b\\[\\?[0-9]+u$')
+const DECRPM_PREFIX_RE = new RegExp('^\\u001b\\[\\??[0-9;]*\\$y')
+// The ? distinguishes Kitty flag replies from Kitty keystrokes, which must stay batched.
+const KITTY_FLAGS_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9]+u')
+// Kitty graphics acknowledgements must bypass user-input activity and debounce.
+const KITTY_GRAPHICS_PREFIX_RE = new RegExp(
+  '^\\u001b_Gi=[0-9]+(?:,p=[0-9]+)?;(?:OK|E[A-Z]+:[^\\u0000-\\u001f]*)\\u001b\\\\'
+)
 // OSC color/title responses: ESC ] Ps ; body ST (ST = BEL or ESC backslash).
-const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)$')
+const OSC_RESPONSE_PREFIX_RE = new RegExp(
+  '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
+)
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
-const DCS_RESPONSE_RE = new RegExp('^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\$')
+const DCS_RESPONSE_PREFIX_RE = new RegExp(
+  '^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\'
+)
+// Private-mode DSR (CSI ? … n) — e.g. color-scheme `?997;1n` — often lands cooked.
+// Prefix form peels consecutive replies out of one coalesced payload.
+const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n')
+const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
+  '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
+)
+// fish queries XTVERSION at startup; a gated reply would reach the launched agent instead (#16489).
+const COOKED_ECHO_RISK_XTVERSION_PREFIX_RE = new RegExp('^\\u001bP>\\|[^\\u001b]*\\u001b\\\\')
+const QUERY_REPLY_PREFIX_RES = [
+  CPR_OR_DSR_PREFIX_RE,
+  DEVICE_ATTRIBUTES_PREFIX_RE,
+  WINDOW_SIZE_REPORT_PREFIX_RE,
+  DECRPM_PREFIX_RE,
+  KITTY_FLAGS_PREFIX_RE,
+  KITTY_GRAPHICS_PREFIX_RE,
+  OSC_RESPONSE_PREFIX_RE,
+  DCS_RESPONSE_PREFIX_RE
+] as const
 /* oxlint-enable no-control-regex */
 
-/**
- * True when `data` (from xterm.onData) is a synthetic reply the emulator
- * generated in response to a query — not something the user typed. These are
- * latency-critical and must bypass input coalescing on the remote transport.
- *
- * Conservative by design: matches only complete, well-formed reply grammars so
- * ordinary keystrokes and navigation sequences (arrows CSI A/B/C/D, Home/End,
- * function keys ending in ~, kitty CSI-u keystrokes) are never misclassified
- * as replies — with the single documented modified-F3/CPR collision above.
- */
-export function isTerminalQueryReply(data: string): boolean {
-  if (data.length < 3 || data[0] !== ESC) {
-    return false
+function terminalQueryReplyEnd(data: string, start: number): number {
+  if (start >= data.length || data[start] !== ESC) {
+    return -1
   }
-  return (
-    CPR_OR_DSR_RE.test(data) ||
-    DEVICE_ATTRIBUTES_RE.test(data) ||
-    WINDOW_SIZE_REPORT_RE.test(data) ||
-    DECRPM_RE.test(data) ||
-    KITTY_FLAGS_RE.test(data) ||
-    OSC_RESPONSE_RE.test(data) ||
-    DCS_RESPONSE_RE.test(data)
-  )
+  const slice = data.slice(start)
+  for (const re of QUERY_REPLY_PREFIX_RES) {
+    const match = re.exec(slice)
+    if (match?.[0]) {
+      return start + match[0].length
+    }
+  }
+  return -1
+}
+
+/** Recognize one complete synthetic reply for immediate delivery; keep navigation/keystrokes batched except the documented modified-F3/CPR ambiguity. */
+export function isTerminalQueryReply(data: string): boolean {
+  return data.length >= 3 && terminalQueryReplyEnd(data, 0) === data.length
+}
+
+/** End index (exclusive) of one cooked-echo-risk reply at `start`, else -1. */
+function cookedEchoSafeReplyEnd(data: string, start: number): number {
+  if (start >= data.length || data[start] !== ESC) {
+    return -1
+  }
+  const slice = data.slice(start)
+  const dsr = COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE.exec(slice)
+  if (dsr?.[0]) {
+    return start + dsr[0].length
+  }
+  const osc = COOKED_ECHO_RISK_OSC_PREFIX_RE.exec(slice)
+  if (osc?.[0]) {
+    return start + osc[0].length
+  }
+  const xtversion = COOKED_ECHO_RISK_XTVERSION_PREFIX_RE.exec(slice)
+  if (xtversion?.[0]) {
+    return start + xtversion[0].length
+  }
+  return -1
+}
+
+/** Split cooked-echo-risk-only payloads, including old-client 2031 answers and rapid theme flips; mixed key/reply payloads fall through to raw write. */
+export function extractOnlyCookedEchoSafeQueryReplies(data: string): string[] | null {
+  if (data.length < 4 || data[0] !== ESC) {
+    return null
+  }
+  const replies: string[] = []
+  let offset = 0
+  while (offset < data.length) {
+    const end = cookedEchoSafeReplyEnd(data, offset)
+    if (end === -1) {
+      return null
+    }
+    replies.push(data.slice(offset, end))
+    offset = end
+  }
+  return replies.length > 0 ? replies : null
+}
+
+export function extractOnlyTerminalQueryReplies(data: string): string[] | null {
+  if (data.length < 3 || data[0] !== ESC) {
+    return null
+  }
+  const replies: string[] = []
+  let offset = 0
+  while (offset < data.length) {
+    const end = terminalQueryReplyEnd(data, offset)
+    if (end === -1) {
+      return null
+    }
+    replies.push(data.slice(offset, end))
+    offset = end
+  }
+  return replies.length > 0 ? replies : null
+}
+
+/** Single replies needing POSIX ECHO protection to avoid painting bytes on cooked prompts (#13137). CPR/public DSR stay immediate.
+ * Use extractOnlyCookedEchoSafeQueryReplies for coalesced payloads. */
+export function needsCookedEchoSafeQueryReply(data: string): boolean {
+  const replies = extractOnlyCookedEchoSafeQueryReplies(data)
+  return replies !== null && replies.length === 1
 }

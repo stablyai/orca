@@ -146,8 +146,7 @@ export function recordSetupGuideStepCompletionTelemetry(args: {
   args.state.previousDone = { ...args.progress.stepDone }
   const emitted = args.state.emitted
   if (!previousDone || !args.setupGuideVisible) {
-    // Why: hidden async refresh can flip already-complete setup state from false
-    // to true; only visible guide actions are attributable enough to event.
+    // Hidden refreshes cannot be attributed to guide actions; update baselines without emitting completion.
     persistCompletedSetupGuideStepBaselines(args.progress.stepDone, emitted)
     return
   }

@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import {
   MobileRelayHostOverlaySchema,
+  toStoredMobileRelayHostOverlay,
   type MobileRelayHostOverlay
 } from './mobile-relay-host-overlay'
 
@@ -28,8 +30,7 @@ function parseOverlays(raw: string | null): MobileRelayHostOverlay[] | null {
 async function readOverlaysForMutation(): Promise<MobileRelayHostOverlay[]> {
   const overlays = parseOverlays(await AsyncStorage.getItem(OVERLAY_STORAGE_KEY))
   if (!overlays) {
-    // Why: never rewrite an unreadable v2 namespace as an empty list; doing so
-    // would destroy relay recovery data during an unrelated host mutation.
+    // Never rewrite unreadable v2 data as empty; unrelated host edits must preserve relay recovery.
     throw new Error('mobile relay host overlay storage unreadable')
   }
   return overlays
@@ -37,51 +38,55 @@ async function readOverlaysForMutation(): Promise<MobileRelayHostOverlay[]> {
 
 async function mutateOverlays(
   update: (overlays: MobileRelayHostOverlay[]) => MobileRelayHostOverlay[]
-): Promise<void> {
+): Promise<boolean> {
   const mutation = overlayMutation.then(async () => {
     const current = await readOverlaysForMutation()
     const next = update(current)
-    // Why: direct-only saves commonly have no overlay to remove; avoid a full
-    // AsyncStorage write when cleanup leaves the durable list unchanged.
-    if (next !== current) {
-      await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(next))
+    // Skip storage for identity-preserving updates.
+    if (next === current) {
+      return false
     }
+    await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(next))
+    return true
   })
-  overlayMutation = mutation.catch(() => {})
+  overlayMutation = mutation.then(
+    () => {},
+    () => {}
+  )
   return mutation
 }
 
-export async function loadMobileRelayHostOverlays(
+export async function loadMobileRelayHostRoutingState(
   existingHostIds: ReadonlySet<string>
-): Promise<Map<string, MobileRelayHostOverlay>> {
-  return (await loadMobileRelayHostOverlayState(existingHostIds)).overlays
-}
-
-export async function loadMobileRelayHostOverlayState(
-  existingHostIds: ReadonlySet<string>
-): Promise<{ overlays: Map<string, MobileRelayHostOverlay>; orphanHostIds: string[] }> {
+): Promise<{ relays: Map<string, MobileRelayEndpoint>; orphanHostIds: string[] }> {
   await overlayMutation
   const overlays = parseOverlays(await AsyncStorage.getItem(OVERLAY_STORAGE_KEY)) ?? []
-  const active = new Map<string, MobileRelayHostOverlay>()
+  const relays = new Map<string, MobileRelayEndpoint>()
   const orphanHostIds: string[] = []
   for (const overlay of overlays) {
-    // Why: an older app can remove the legacy base without knowing this
-    // namespace; never let the retained overlay resurrect that host later.
-    if (existingHostIds.has(overlay.hostId)) {
-      active.set(overlay.hostId, overlay)
-    } else {
+    // Older builds may remove base hosts without this namespace; retained overlays must not resurrect them.
+    if (!existingHostIds.has(overlay.hostId)) {
       orphanHostIds.push(overlay.hostId)
+    } else if (overlay.relay) {
+      relays.set(overlay.hostId, overlay.relay)
     }
   }
-  return { overlays: active, orphanHostIds }
+  return { relays, orphanHostIds }
 }
 
-export async function saveMobileRelayHostOverlay(overlay: MobileRelayHostOverlay): Promise<void> {
-  const validated = MobileRelayHostOverlaySchema.parse(overlay)
+export function saveMobileRelayHostRouting(
+  hostId: string,
+  relay: MobileRelayEndpoint
+): Promise<boolean> {
+  const validated = toStoredMobileRelayHostOverlay(hostId, relay)
   return mutateOverlays((overlays) => {
-    const index = overlays.findIndex(({ hostId }) => hostId === validated.hostId)
-    if (index < 0) {
+    const index = overlays.findIndex((overlay) => overlay.hostId === hostId)
+    if (index === -1) {
       return [...overlays, validated]
+    }
+    // Skip identical routing writes during repeated resolution; schema-normalized outputs have stable key order.
+    if (JSON.stringify(overlays[index]) === JSON.stringify(validated)) {
+      return overlays
     }
     const next = overlays.slice()
     next[index] = validated
@@ -89,26 +94,18 @@ export async function saveMobileRelayHostOverlay(overlay: MobileRelayHostOverlay
   })
 }
 
-export function removeMobileRelayHostOverlay(hostId: string): Promise<void> {
-  return removeMobileRelayHostOverlays([hostId])
+export function removeMobileRelayHostRouting(hostId: string): Promise<void> {
+  return removeMobileRelayHostRoutings([hostId])
 }
 
-export function removeMobileRelayHostOverlays(hostIds: readonly string[]): Promise<void> {
+export async function removeMobileRelayHostRoutings(hostIds: readonly string[]): Promise<void> {
   const targets = new Set(hostIds)
-  let removed = false
-  return mutateOverlays((overlays) => {
-    const next = overlays.filter((overlay) => {
-      if (!targets.has(overlay.hostId)) {
-        return true
-      }
-      removed = true
-      return false
-    })
-    return removed ? next : overlays
+  await mutateOverlays((overlays) => {
+    const next = overlays.filter((overlay) => !targets.has(overlay.hostId))
+    return next.length === overlays.length ? overlays : next
   })
 }
 
-/** Test-only: drain the module mutation chain between cases. */
 export function resetMobileRelayHostOverlayStoreForTests(): void {
   overlayMutation = Promise.resolve()
 }

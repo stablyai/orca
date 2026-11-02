@@ -1,14 +1,16 @@
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   getDuplicateProjectDetailsById,
   type ProjectSetupDirectory
 } from './new-workspace-duplicate-project-details'
 
 export const NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX = 'project-group:'
-export const NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX = 'folder-source:'
 
 export type NewWorkspaceProjectOption =
   | {
@@ -29,13 +31,6 @@ export type NewWorkspaceProjectOption =
       parentPath: string
       connectionId: string | null
     }
-
-type NewWorkspaceProjectOptionBase = {
-  id: string
-  displayName: string
-  badgeColor: string
-  detail: string
-}
 
 export const NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES = 2 * 1024
 
@@ -92,11 +87,16 @@ export function buildNewWorkspaceProjectOptions(
   const { projects, projectHostSetups } = getProjectModel(input)
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
   const hostLabelById = new Map((input.hosts ?? []).map((host) => [host.id, host.label]))
+  const liveHostIds = input.hosts ? new Set(input.hosts.map((host) => host.id)) : null
   const readySetupCountsByProjectId = new Map<string, number>()
   const setupDirectoriesByProjectId = new Map<string, ProjectSetupDirectory[]>()
 
   for (const setup of projectHostSetups) {
-    if (setup.setupState !== 'ready' || !eligibleRepoIds.has(setup.repoId)) {
+    if (
+      setup.setupState !== 'ready' ||
+      !eligibleRepoIds.has(setup.repoId) ||
+      (liveHostIds && !liveHostIds.has(setup.hostId))
+    ) {
       continue
     }
     readySetupCountsByProjectId.set(
@@ -138,16 +138,6 @@ function getProjectGroupOptionId(projectGroupId: string): string {
   return `${NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX}${projectGroupId}`
 }
 
-function getFolderSourceOptionId(repoId: string): string {
-  return `${NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX}${repoId}`
-}
-
-export function getRepoIdFromNewWorkspaceFolderSourceOptionId(optionId: string): string | null {
-  return optionId.startsWith(NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX)
-    ? optionId.slice(NEW_WORKSPACE_FOLDER_SOURCE_OPTION_PREFIX.length)
-    : null
-}
-
 export function getProjectGroupIdFromNewWorkspaceOptionId(optionId: string): string | null {
   return optionId.startsWith(NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX)
     ? optionId.slice(NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX.length)
@@ -158,19 +148,31 @@ function getProjectGroupDetail(group: ProjectGroup): string {
   return group.parentPath?.trim() || 'Repo group'
 }
 
-export function buildNewWorkspaceFolderSourceOptions(
-  repos: readonly Repo[]
-): NewWorkspaceProjectOption[] {
-  return repos
-    .map((repo) => ({
-      kind: 'project' as const,
-      id: getFolderSourceOptionId(repo.id),
-      projectId: repo.id,
-      displayName: repo.displayName,
-      badgeColor: repo.badgeColor,
-      detail: repo.path
-    }))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
+export function getNewWorkspaceProjectGroupHostId(group: ProjectGroup): ExecutionHostId {
+  return getRepoExecutionHostId(group)
+}
+
+/** Require actionable hosts for folder selection, draft restore and retention of an existing pick. */
+export function findActionableFolderProjectGroup({
+  projectGroups,
+  groupId,
+  actionableHostIds
+}: {
+  projectGroups: readonly ProjectGroup[]
+  groupId: string | null | undefined
+  actionableHostIds: ReadonlySet<ExecutionHostId>
+}): ProjectGroup | null {
+  if (!groupId) {
+    return null
+  }
+  return (
+    projectGroups.find(
+      (group) =>
+        group.id === groupId &&
+        Boolean(group.parentPath?.trim()) &&
+        actionableHostIds.has(getNewWorkspaceProjectGroupHostId(group))
+    ) ?? null
+  )
 }
 
 export function buildNewWorkspaceCreateTargetOptions({
@@ -178,8 +180,13 @@ export function buildNewWorkspaceCreateTargetOptions({
   ...projectInput
 }: BuildNewWorkspaceCreateTargetOptionsInput): NewWorkspaceProjectOption[] {
   const projectOptions = buildNewWorkspaceProjectOptions(projectInput)
+  const liveHostIds = projectInput.hosts ? new Set(projectInput.hosts.map((host) => host.id)) : null
   const groupOptions = projectGroups
-    .filter((group) => Boolean(group.parentPath?.trim()))
+    .filter(
+      (group) =>
+        Boolean(group.parentPath?.trim()) &&
+        (!liveHostIds || liveHostIds.has(getNewWorkspaceProjectGroupHostId(group)))
+    )
     .map((group) => ({
       kind: 'project-group' as const,
       id: getProjectGroupOptionId(group.id),
@@ -196,21 +203,5 @@ export function buildNewWorkspaceCreateTargetOptions({
       a.displayName.localeCompare(b.displayName) ||
       a.detail.localeCompare(b.detail) ||
       a.id.localeCompare(b.id)
-  )
-}
-
-export function searchNewWorkspaceProjectOptions(
-  options: readonly NewWorkspaceProjectOption[],
-  rawQuery: string
-): NewWorkspaceProjectOption[] {
-  if (isNewWorkspaceProjectOptionQueryTooLarge(rawQuery)) {
-    return []
-  }
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) {
-    return [...options]
-  }
-  return options.filter((option: NewWorkspaceProjectOptionBase) =>
-    [option.displayName, option.detail].some((value) => value.toLowerCase().includes(query))
   )
 }

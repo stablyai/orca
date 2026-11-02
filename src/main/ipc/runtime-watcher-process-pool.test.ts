@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { WatcherProcessFailure } from './filesystem/watcher-process/parcel-watcher-process-failure'
+import type { WatcherProcessSubscribeOptions } from './filesystem/watcher-process/parcel-watcher-process-protocol'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
   WatcherProcessSubscription
-} from './parcel-watcher-process-subscription'
+} from './filesystem/watcher-process/parcel-watcher-process-subscription'
 import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
 
 type InstalledSubscription = {
@@ -29,7 +30,7 @@ class FakeSupervisor {
   async subscribe(
     dir: string,
     _callback: WatcherProcessCallback,
-    _opts: object,
+    _opts: WatcherProcessSubscribeOptions,
     hooks: WatcherProcessHooks
   ): Promise<WatcherProcessSubscription> {
     if (this.subscribeError) {

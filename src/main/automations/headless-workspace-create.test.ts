@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 
 const repoPath = path.join('tmp', 'orca')
@@ -13,6 +13,11 @@ const repo: Repo = {
   badgeColor: '#000',
   addedAt: 1,
   kind: 'git',
+  hookSettings: {
+    mode: 'auto',
+    scripts: { setup: 'echo setup', archive: '' },
+    setupRunPolicy: 'ask'
+  },
   executionHostId: 'ssh:ssh-target-1'
 }
 
@@ -65,7 +70,7 @@ describe('headless automation workspace create args', () => {
     })
 
     expect(args).toMatchObject({
-      repoSelector: 'repo-1',
+      repoSelector: { selector: 'id:repo-1', hostId: 'ssh:ssh-target-1' },
       name: 'auto-nightly-review-run-20260102T0304',
       baseBranch: 'origin/main',
       setupDecision: 'skip',
@@ -89,18 +94,16 @@ describe('headless automation workspace create args', () => {
       }
     })
   })
-
-  it('falls back to skip for legacy automations without a saved setup decision', () => {
-    const args = buildHeadlessAutomationWorktreeCreateArgs({
-      automation: { ...automation, setupDecision: undefined },
-      run: {
-        id: 'run-1',
-        title: 'Nightly review run',
-        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
-      },
-      repo
-    })
-
-    expect(args.setupDecision).toBe('skip')
-  })
+  it.each(['run', 'skip', undefined] as const)(
+    'forwards saved %s for Terminal creation, retaining legacy skip',
+    (setupDecision) => {
+      const args = buildHeadlessAutomationWorktreeCreateArgs({
+        automation: { ...automation, setupDecision },
+        repo,
+        run: { id: 'run-1', title: 'Nightly review', scheduledFor: 1 },
+        createdAt: 1
+      })
+      expect(args.setupDecision).toBe(setupDecision ?? 'skip')
+    }
+  )
 })

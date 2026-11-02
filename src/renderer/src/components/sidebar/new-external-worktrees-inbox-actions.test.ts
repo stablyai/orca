@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   importNewExternalWorktreeInboxPaths,
   keepNewExternalWorktreeInboxHidden,

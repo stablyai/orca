@@ -5,6 +5,7 @@ import {
   writeHooksJson,
   writeManagedScript
 } from '../agent-hooks/installer-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readTextFileRemote,
   writeHooksJsonRemote,
@@ -12,9 +13,10 @@ import {
 } from '../agent-hooks/installer-utils-remote'
 import {
   buildPosixHookPayloadCapture,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
+  buildPosixHookSpoolLines,
+  buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import {
   applyDevinManagedHooks,
   DEVIN_EVENTS,
@@ -31,7 +33,9 @@ import {
   mergeHookInstallDetail,
   parseDevinHooksConfigText,
   readConfigFromOrcaOverlapDetail,
-  readDevinHooksConfig
+  readDevinHooksConfig,
+  readDevinHooksSource,
+  serializeDevinHooksConfig
 } from './hook-config-json'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -39,12 +43,11 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: endpoint file holds the live port/token; a PTY that outlives an Orca restart carries stale env, so `call` it to refresh (else PTY env).
+      // Refresh endpoint credentials for PTYs that outlive an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('devin'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -52,17 +55,19 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
-    // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race or CRLF-mangled line can't leak shell parse errors into agent transcripts (fail-open).
+    ...buildPosixHookSpoolLines('devin'),
+    // Refresh endpoint credentials for PTYs that outlive an Orca restart.
+    // Keep endpoint-file races and parse errors out of agent transcripts.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: worktreeId embeds a filesystem path, so hand-building JSON in shell is unsafe (quotes/newlines); post as form fields instead.
-    // Why: pipe payload to curl's stdin (payload@-) not an inline arg, so large tool output stays off the command line (EDR false positives).
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/devin" \\',
+    // Form encoding handles filesystem paths containing quotes or newlines.
+    // stdin keeps large payloads off the command line to avoid EDR false positives.
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/devin" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -72,13 +77,17 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
   ].join('\n')
 }
 
 export class DevinHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getDevinManagedScriptPath(), getManagedScript())
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
     const scriptPath = getDevinManagedScriptPath()
@@ -93,7 +102,6 @@ export class DevinHookService {
       }
     }
 
-    // Why: report `partial` when only some managed events are registered, so the sidebar shows a degraded install instead of a false `installed`.
     const command = getDevinManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
@@ -135,8 +143,8 @@ export class DevinHookService {
   install(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
     const scriptPath = getDevinManagedScriptPath()
-    const config = readDevinHooksConfig(configPath)
-    if (!config) {
+    const source = readDevinHooksSource(configPath)
+    if (!source) {
       return {
         agent: 'devin',
         state: 'error',
@@ -147,21 +155,24 @@ export class DevinHookService {
     }
 
     const command = getDevinManagedCommand(scriptPath)
-    const nextConfig = applyDevinManagedHooks(config, command, getDevinManagedScriptFileName())
+    const nextConfig = applyDevinManagedHooks(
+      source.config,
+      command,
+      getDevinManagedScriptFileName()
+    )
     writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, nextConfig)
+    writeHooksJson(configPath, nextConfig, {
+      serialized: serializeDevinHooksConfig(source.text, nextConfig)
+    })
     return this.getStatus()
   }
 
-  // Why: install the Devin hook on the remote box (SFTP handle + resolved remote $HOME); POSIX-only by design.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    // Why: remote-Windows is out of scope for v1; process.platform here is the local box, not the remote, so assume POSIX.
+    // Remote hook scripts use POSIX syntax regardless of the local platform.
     const remoteConfigPath = getDevinRemoteConfigPath(remoteHome)
     const remoteScriptFileName = getDevinPosixManagedScriptFileName()
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
-    // Why: SFTP I/O fails far more often than local fs; wrap the flow so failures surface as a structured error, not an unhandled rejection.
     try {
-      // Why: Devin config.json is JSONC (comments), so JSON.parse rejects it; parse via jsonc-parser.
       const body = await readTextFileRemote(sftp, remoteConfigPath)
       const config =
         body === null ? {} : parseDevinHooksConfigText(body, 'remote Devin config.json')
@@ -175,14 +186,14 @@ export class DevinHookService {
         }
       }
 
-      // Why: the POSIX wrapper body is path-independent, so reuse the same helper.
       const command = getDevinRemoteManagedCommand(remoteScriptPath)
       const nextConfig = applyDevinManagedHooks(config, command, remoteScriptFileName)
 
-      // Why: write script before settings so a mid-install failure never leaves settings.json referencing a missing script.
-      // Why: SSH remotes use POSIX `.sh` hooks even when Orca runs on Windows; never derive remote script syntax from local OS.
+      // Publish the script before its config so partial installs cannot reference a missing script.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
+      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig, {
+        serialized: serializeDevinHooksConfig(body, nextConfig)
+      })
 
       return {
         agent: 'devin',
@@ -204,8 +215,8 @@ export class DevinHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
-    const config = readDevinHooksConfig(configPath)
-    if (!config) {
+    const source = readDevinHooksSource(configPath)
+    if (!source) {
       return {
         agent: 'devin',
         state: 'error',
@@ -215,11 +226,13 @@ export class DevinHookService {
       }
     }
     const { config: nextConfig, changed } = removeDevinManagedHooks(
-      config,
+      source.config,
       getDevinManagedScriptFileName()
     )
     if (changed) {
-      writeHooksJson(configPath, nextConfig)
+      writeHooksJson(configPath, nextConfig, {
+        serialized: serializeDevinHooksConfig(source.text, nextConfig)
+      })
     }
     return this.getStatus()
   }

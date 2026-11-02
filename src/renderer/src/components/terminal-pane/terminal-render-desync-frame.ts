@@ -7,9 +7,9 @@ export type SentinelDivergence = {
 
 export type SentinelRendererState = {
   atlasPages: number
-  atlasClearModelGeneration: number | null
+  atlasPageLayoutVersion: number | null
   atlasPageVersions: number[]
-  glyphLastSeenClearModelGeneration: number | null
+  glyphLastSeenPageLayoutVersion: number | null
   glyphTextureVersions: number[]
   modelLineLengths: number[]
   vertexCount: number | null
@@ -56,14 +56,15 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
             value?: {
               _canvas?: HTMLCanvasElement
               _charAtlas?: {
-                clearModelGeneration?: number
+                pageLayoutVersion?: number
+                _pageLayoutVersion?: number
                 pages?: { version?: number }[]
               }
               _model?: { lineLengths?: number[] | Uint32Array }
               _glyphRenderer?: {
                 value?: {
                   _activeBuffer?: number
-                  _lastSeenClearModelGeneration?: number
+                  _lastSeenPageLayoutVersion?: number
                   _atlasTextures?: { version?: number }[]
                   _vertices?: { count?: number }
                 }
@@ -98,8 +99,7 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
       canvas: renderer._canvas,
       cellWidth: cell.width,
       cellHeight: cell.height,
-      // xterm packs colors as RRGGBBAA; compare against the active theme so
-      // light terminals do not make every background pixel look like glyph ink.
+      // Compare RRGGBBAA against live theme background so light terminals do not classify all background pixels as ink.
       backgroundRgb: [
         backgroundRgba >>> 24,
         (backgroundRgba >>> 16) & 255,
@@ -107,9 +107,10 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
       ],
       rendererState: {
         atlasPages: renderer._charAtlas.pages?.length ?? -1,
-        atlasClearModelGeneration: renderer._charAtlas.clearModelGeneration ?? null,
+        atlasPageLayoutVersion:
+          renderer._charAtlas.pageLayoutVersion ?? renderer._charAtlas._pageLayoutVersion ?? null,
         atlasPageVersions: renderer._charAtlas.pages?.map((page) => page.version ?? -1) ?? [],
-        glyphLastSeenClearModelGeneration: glyphRenderer?._lastSeenClearModelGeneration ?? null,
+        glyphLastSeenPageLayoutVersion: glyphRenderer?._lastSeenPageLayoutVersion ?? null,
         glyphTextureVersions:
           glyphRenderer?._atlasTextures?.map((texture) => texture.version ?? -1) ?? [],
         modelLineLengths: Array.from(renderer._model?.lineLengths ?? []),
@@ -220,8 +221,7 @@ function getReadbackContext(width: number, height: number): CanvasRenderingConte
 }
 
 export function releaseRenderDesyncReadback(): void {
-  // Why: the diagnostic reuses one backing store during its burst, then drops
-  // the potentially multi-megabyte canvas instead of retaining it for the app lifetime.
+  // Reuse backing storage during a burst, then release its potentially large canvas.
   if (readbackCanvas) {
     readbackCanvas.width = 0
     readbackCanvas.height = 0

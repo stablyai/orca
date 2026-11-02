@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
-import { layoutCoversLeaves, resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
+import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 
 const verticalSplit: TerminalPaneLayoutNode = {
   type: 'split',
@@ -9,25 +9,9 @@ const verticalSplit: TerminalPaneLayoutNode = {
   second: { type: 'leaf', leafId: 'b' }
 }
 
-describe('layoutCoversLeaves', () => {
-  it('is true when the tree has exactly the leaves', () => {
-    expect(layoutCoversLeaves(verticalSplit, ['a', 'b'])).toBe(true)
-  })
-  it('is false when a leaf is missing from the tree', () => {
-    expect(layoutCoversLeaves({ type: 'leaf', leafId: 'a' }, ['a', 'b'])).toBe(false)
-  })
-  it('is false when the tree has an extra leaf', () => {
-    expect(layoutCoversLeaves(verticalSplit, ['a'])).toBe(false)
-  })
-  it('is false for a null tree', () => {
-    expect(layoutCoversLeaves(null, ['a'])).toBe(false)
-  })
-})
-
 describe('resolveTerminalLayoutRoot', () => {
   it('uses the authoritative tree verbatim — direction is preserved', () => {
-    // Why: the "Split Right renders as down" bug was re-deriving direction
-    // instead of trusting the host tree. The authoritative tree must win.
+    // Host split direction must win; re-derivation once turned Split Right into down.
     const root = resolveTerminalLayoutRoot({
       authoritativeRoot: verticalSplit,
       leafIds: ['a', 'b']
@@ -37,8 +21,7 @@ describe('resolveTerminalLayoutRoot', () => {
   })
 
   it('falls back to the prior client tree (keeping direction) when authoritative does not cover the leaves', () => {
-    // A transitional snapshot where the host tree is momentarily stale/partial
-    // must NOT collapse to a guessed direction — keep the known-good tree.
+    // Stale/partial host trees must retain known directions rather than guess.
     const root = resolveTerminalLayoutRoot({
       authoritativeRoot: { type: 'leaf', leafId: 'a' }, // stale single-leaf
       existingRoot: verticalSplit,
@@ -47,26 +30,75 @@ describe('resolveTerminalLayoutRoot', () => {
     expect(root).toBe(verticalSplit)
   })
 
-  it('never invents a split direction: synthesis only fires (and is reported) when no tree covers the leaves', () => {
+  it('prunes a superset tree to the live leaves instead of re-guessing its directions', () => {
+    // Extra stale leaves must not make exact-cover failure replace the whole known tree with guessed directions.
     const onSynthesize = vi.fn()
-    resolveTerminalLayoutRoot({
-      authoritativeRoot: undefined,
-      existingRoot: undefined,
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: {
+        type: 'split',
+        direction: 'horizontal',
+        first: verticalSplit,
+        second: { type: 'leaf', leafId: 'stale' }
+      },
       leafIds: ['a', 'b'],
       onSynthesize
     })
-    expect(onSynthesize).toHaveBeenCalledWith(2)
-  })
-
-  it('does not report synthesis for a single leaf (direction is irrelevant)', () => {
-    const onSynthesize = vi.fn()
-    const root = resolveTerminalLayoutRoot({ leafIds: ['a'], onSynthesize })
-    expect(root).toEqual({ type: 'leaf', leafId: 'a' })
+    expect(root).toEqual(verticalSplit)
     expect(onSynthesize).not.toHaveBeenCalled()
   })
 
-  it('returns null for no leaves', () => {
-    expect(resolveTerminalLayoutRoot({ leafIds: [] })).toBeNull()
+  it('collapses a split that loses one child and keeps the outer direction', () => {
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: {
+        type: 'split',
+        direction: 'vertical',
+        first: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: 'a' },
+          second: { type: 'leaf', leafId: 'b' }
+        },
+        second: { type: 'leaf', leafId: 'c' }
+      },
+      leafIds: ['a', 'c']
+    })
+    expect(root).toEqual({
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: 'a' },
+      second: { type: 'leaf', leafId: 'c' }
+    })
+  })
+
+  it('grafts a genuinely new leaf without disturbing the directions already known', () => {
+    // Only the new leaf's placement is a guess; the vertical split must survive it.
+    const onSynthesize = vi.fn()
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: verticalSplit,
+      leafIds: ['a', 'b', 'c'],
+      onSynthesize
+    })
+    expect(root).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: verticalSplit,
+      second: { type: 'leaf', leafId: 'c' }
+    })
+    expect(onSynthesize).toHaveBeenCalledWith(1)
+  })
+
+  it('keeps the prior client tree when the host tree places fewer of the leaves', () => {
+    const root = resolveTerminalLayoutRoot({
+      authoritativeRoot: { type: 'leaf', leafId: 'a' },
+      existingRoot: verticalSplit,
+      leafIds: ['a', 'b', 'c']
+    })
+    expect(root).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: verticalSplit,
+      second: { type: 'leaf', leafId: 'c' }
+    })
   })
 
   it('prefers authoritative over an also-covering existing tree', () => {

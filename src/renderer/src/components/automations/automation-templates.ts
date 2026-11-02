@@ -1,5 +1,5 @@
 import type { AutomationSchedulePreset } from '../../../../shared/automations-types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 

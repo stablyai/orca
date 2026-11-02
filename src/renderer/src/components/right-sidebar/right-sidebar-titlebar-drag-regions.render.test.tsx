@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type * as ReactModule from 'react'
 import { act, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -11,6 +12,7 @@ import {
   RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME
 } from './right-sidebar-titlebar-drag-regions'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const mockAppState = vi.hoisted(() => ({
   rightSidebarOpen: true,
@@ -60,7 +62,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 }))
 
 vi.mock('@/store', async () => {
-  const React = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const React = await vi.importActual<typeof ReactModule>('react')
   const getSnapshot = (selector: (state: Record<string, unknown>) => unknown): unknown => {
     if (mockAppState.snapshotCache.has(selector)) {
       return mockAppState.snapshotCache.get(selector)
@@ -74,6 +76,7 @@ vi.mock('@/store', async () => {
       rightSidebarRouteRequestId: mockAppState.rightSidebarRouteRequestId,
       setRightSidebarTab: mockAppState.setRightSidebarTab,
       showRightSidebarFiles: mockAppState.showRightSidebarFiles,
+      setRightSidebarEffectiveTab: vi.fn(),
       toggleRightSidebar: vi.fn(),
       activeWorktreeId: mockAppState.activeWorktreeId,
       getKnownWorktreeById: getMockKnownWorktree,
@@ -198,6 +201,7 @@ function expectNoDrag(tag: string): void {
 }
 
 function setRendererPlatform(platform: NodeJS.Platform): void {
+  resetRendererAppPlatformCacheForTests()
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {

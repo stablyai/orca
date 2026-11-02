@@ -1,39 +1,24 @@
-/**
- * Phase 5 of the terminal model/view architecture: main-side terminal query
- * authority.
- *
- * The delivery decision is the reply decision: main answers a query iff the
- * hidden-delivery gate dropped the chunk that carried it. This module owns
- * the responder kill-switch predicate and the main-side mirror of the
- * renderer's native-Windows-ConPTY determination, recorded per PTY at spawn
- * so the runtime emulator can register the DA1 override before byte zero.
- */
-import type { GlobalSettings } from '../../shared/types'
+/** Main answers only queries in chunks hidden delivery dropped; capture ownership at ingestion. Record native Windows ConPTY at spawn to install DA1 override before bytes arrive. */
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   isHiddenPtyDeliveryGateEnabled,
   shouldDropHiddenRendererPtyData
-} from '../ipc/pty-hidden-delivery-gate'
+} from '../ipc/pty/delivery/pty-hidden-delivery-gate'
 
 export type TerminalModelQueryAuthoritySettings = Pick<
   GlobalSettings,
   'terminalMainSideEffectAuthority' | 'terminalHiddenDeliveryGate' | 'terminalModelQueryAuthority'
 >
 
-/** Responder kill switch: requires BOTH Phase-4 gate switches (no marks/drops
- *  exist without them) plus the Phase-5-specific independent off switch. */
+/** Require both hidden-delivery switches plus the independent responder switch; otherwise no authoritative drop marks exist. */
 export function isTerminalModelQueryAuthorityEnabled(
   settings: TerminalModelQueryAuthoritySettings | null | undefined
 ): boolean {
   return isHiddenPtyDeliveryGateEnabled(settings) && settings?.terminalModelQueryAuthority !== false
 }
 
-/** Per-chunk reply-ownership predicate, evaluated once at ingestion in
- *  OrcaRuntimeService.onPtyData — the same module state and tick as the
- *  hidden-gate drop sites, so "chunk dropped" and "main answers" cannot
- *  diverge for live chunks. Remote view subscribers (mobile/web/remote
- *  desktop xterms on the multiplexed stream) keep view authority, so main
- *  yields while one is attached. */
+/** Capture ownership in the ingestion tick deciding drops; unpaused remote views answer delivered queries, while paused streams drop chunks and yield to main. */
 export function shouldModelAnswerHiddenPtyQueries(opts: {
   ptyId: string
   settings: TerminalModelQueryAuthoritySettings | null | undefined
@@ -46,9 +31,7 @@ export function shouldModelAnswerHiddenPtyQueries(opts: {
   )
 }
 
-/** Main-side mirror of the renderer's isLocalNativeWindowsPty
- *  (windows-pty-compatibility.ts), computed from spawn-time facts: local or
- *  daemon provider (no SSH connection), win32 host, and not a WSL shell. */
+/** Mirror renderer native-Windows detection from spawn facts: win32 local/daemon provider, without SSH or WSL. */
 export function isNativeWindowsLocalPtySpawn(opts: {
   connectionId: string | null | undefined
   cwd: string | null | undefined
@@ -70,16 +53,10 @@ export function isNativeWindowsLocalPtySpawn(opts: {
   return true
 }
 
-// Why module state (pattern of pty-hidden-delivery-gate.ts): pty.ts records
-// the determination at spawn, the runtime consults it at emulator creation.
-// Daemon-adopted PTYs from a previous app run carry no mark — acceptable:
-// ConPTY's blocking DA1 only fires at spawn, which happened in a prior life.
+// Spawn records and emulator creation share this state. Adopted PTYs need no mark: blocking ConPTY DA1 already happened at their spawn.
 const nativeWindowsConptyPtys = new Set<string>()
 
-// Why installers: the mark lands after the awaited spawn response, but daemon
-// stream data (warm-reattach flush) can lazy-create the runtime emulator
-// first. The runtime registers an installer so marking retrofits the DA1
-// override onto an existing emulator; installation is idempotent emulator-side.
+// Warm reattach data can create the emulator before the spawn response marks it; installers retrofit the idempotent DA1 override.
 type ConptyDa1OverrideInstaller = (ptyId: string) => void
 const conptyDa1OverrideInstallers = new Set<ConptyDa1OverrideInstaller>()
 

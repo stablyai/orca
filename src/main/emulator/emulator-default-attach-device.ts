@@ -1,21 +1,32 @@
 import type { EmulatorBridge } from './emulator-bridge'
-import { pickDefaultSimulatorDevice } from './emulator-availability'
+import type { EmulatorDevice } from './backends/emulator-backend'
+import { EmulatorError } from './emulator-errors'
+import { emulatorFailureText } from '../../shared/emulator-failure-copy'
 
-// Resolves a default device to attach when none is specified: the iOS default
-// picker first (booted iPhone etc. on macOS), else the first booted (else first)
-// device across host backends, e.g. Android on Windows/Linux.
+const isIphone = (device: EmulatorDevice): boolean =>
+  device.backend === 'ios' && /iPhone/i.test(device.name)
+
+// The workspace's still-booted device, then the configured default, then any running device.
 export async function resolveDefaultAttachDevice(
-  bridge: EmulatorBridge
-): Promise<string | undefined> {
-  let iosDefault: string | undefined
-  try {
-    iosDefault = pickDefaultSimulatorDevice(await bridge.listSimulators())?.udid
-  } catch {
-    iosDefault = undefined
-  }
-  if (iosDefault) {
-    return iosDefault
+  bridge: Pick<EmulatorBridge, 'listAllDevices'>,
+  { current, configured }: { current?: string; configured?: string } = {}
+): Promise<string> {
+  if (!current && configured) {
+    return configured
   }
   const all = await bridge.listAllDevices()
-  return (all.find((row) => row.state === 'booted') ?? all[0])?.id
+  const available = all.filter((device) => device.isAvailable)
+  const booted = available.filter((device) => device.state === 'booted')
+  if (current && booted.some((device) => device.id === current)) {
+    return current
+  }
+  if (configured) {
+    return configured
+  }
+  const device =
+    booted.find(isIphone) ?? booted[0] ?? available.find(isIphone) ?? available[0] ?? all[0]
+  if (!device) {
+    throw new EmulatorError('emulator_device_not_found', emulatorFailureText('noDeviceSpecified'))
+  }
+  return device.id
 }

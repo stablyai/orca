@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal-quick-command-host-prompt-limit'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   createTerminalQuickCommandDraft,
@@ -10,32 +11,40 @@ import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
 } from '../../../../shared/terminal-quick-commands'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
-import type { TerminalQuickCommand } from '../../../../shared/types'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
+import {
+  flattenTerminalQuickCommandHosts,
+  type HostedTerminalQuickCommand,
+  useTerminalQuickCommandHosts
+} from '@/hooks/use-terminal-quick-command-hosts'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { useProjectHostSetupProjection } from '@/store/selectors'
+import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
 
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
   groupId: string
+  isFocused: boolean
 }
 
 export function TabBarQuickCommandsButton({
   worktreeId,
-  groupId
+  groupId,
+  isFocused
 }: TabBarQuickCommandsButtonProps): React.JSX.Element | null {
-  const allCommands = useAppStore((s) => s.settings?.terminalQuickCommands)
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
-  const updateSettings = useAppStore((s) => s.updateSettings)
   const repos = useAppStore((s) => s.repos)
+  const projectHostSetupProjection = useProjectHostSetupProjection()
+  const { executionHostId, hosts, refreshRemoteHost, remoteHostLoadFailed, remoteHostPending } =
+    useTerminalQuickCommandHosts(worktreeId)
   const confirm = useConfirmationDialog()
-  // Why: floating terminals share a synthetic worktree id (`global-floating-terminal`)
-  // that has no separator, so naive `getRepoIdFromWorktreeId` would return that
-  // sentinel as a "repo id" and the button would point at a repo that doesn't
-  // exist. Resolve to a real repo from the workspace; otherwise hide the button.
+  // Floating terminals have a synthetic workspace ID without a repo; never treat that sentinel as a run target.
   const repoId = useMemo(() => {
     if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       return null
@@ -45,31 +54,40 @@ export function TabBarQuickCommandsButton({
   }, [worktreeId, repos])
 
   const { repoCommands, globalCommands } = useMemo(() => {
-    const repoList: TerminalQuickCommand[] = []
-    const globalList: TerminalQuickCommand[] = []
-    for (const command of allCommands ?? []) {
+    const repoList: HostedTerminalQuickCommand[] = []
+    const globalList: HostedTerminalQuickCommand[] = []
+    for (const entry of flattenTerminalQuickCommandHosts(hosts)) {
+      const { command } = entry
       if (!isTerminalQuickCommandComplete(command)) {
         continue
       }
       const scope = getTerminalQuickCommandScope(command)
       if (scope.type === 'global') {
-        globalList.push(command)
-      } else if (scope.type === 'repo' && repoId !== null && scope.repoId === repoId) {
-        repoList.push(command)
+        globalList.push(entry)
+      } else if (
+        scope.type === 'repo' &&
+        terminalQuickCommandMatchesWorkspaceProject(command, {
+          commandHostId: entry.hostId,
+          projectHostSetups: projectHostSetupProjection.setups,
+          targetHostId: executionHostId,
+          targetRepoId: repoId
+        })
+      ) {
+        repoList.push(entry)
       }
     }
     return { repoCommands: repoList, globalCommands: globalList }
-  }, [allCommands, repoId])
+  }, [executionHostId, hosts, projectHostSetupProjection.setups, repoId])
 
   const recentId = recentByGroup[groupId] ?? null
-  // Why: split-button label prefers the most recently used command for this
-  // group regardless of scope, then falls back to the first repo command (so
-  // repo-scoped is preferred over global on first run), then to the first
-  // global one if no repo commands exist.
+  // Prefer group history across scopes, then the first repo command, then a global command.
   const mostRecent = useMemo(() => {
     if (recentId) {
       const match =
-        repoCommands.find((c) => c.id === recentId) ?? globalCommands.find((c) => c.id === recentId)
+        repoCommands.find((entry) => entry.key === recentId) ??
+        globalCommands.find((entry) => entry.key === recentId) ??
+        repoCommands.find((entry) => entry.command.id === recentId) ??
+        globalCommands.find((entry) => entry.command.id === recentId)
       if (match) {
         return match
       }
@@ -78,29 +96,30 @@ export function TabBarQuickCommandsButton({
   }, [repoCommands, globalCommands, recentId])
 
   const [editor, setEditor] = useState<
-    | { mode: 'add'; command: TerminalQuickCommand }
-    | { mode: 'edit'; command: TerminalQuickCommand }
+    | { mode: 'add'; command: TerminalQuickCommand; hostId: ExecutionHostId }
+    | { mode: 'edit'; command: TerminalQuickCommand; hostId: ExecutionHostId }
     | null
   >(null)
 
   const totalVisible = repoCommands.length + globalCommands.length
   const hasAnyCommands = totalVisible > 0
+  const defaultHostId = hosts.some((host) => host.hostId === executionHostId)
+    ? executionHostId
+    : hosts[0].hostId
 
-  const addRepoCommand = (): void => {
+  const addRepoCommand = (hostId: ExecutionHostId): void => {
     setEditor({
       mode: 'add',
+      hostId,
       command: createTerminalQuickCommandDraft({ type: 'repo', repoId: repoId ?? '' })
     })
   }
 
-  const handleSaveCommand = (next: TerminalQuickCommand): void => {
-    const current = useAppStore.getState().settings?.terminalQuickCommands ?? []
-    const isEdit = current.some((c) => c.id === next.id)
-    const nextList = isEdit ? current.map((c) => (c.id === next.id ? next : c)) : [...current, next]
-    void updateSettings({ terminalQuickCommands: nextList })
-  }
+  const handleSaveCommand = async (next: TerminalQuickCommand): Promise<boolean> =>
+    editor ? await useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next) : false
 
-  const handleDeleteCommand = async (command: TerminalQuickCommand): Promise<void> => {
+  const handleDeleteCommand = async (entry: HostedTerminalQuickCommand): Promise<void> => {
+    const { command } = entry
     const confirmed = await confirm({
       title: translate(
         'auto.components.tab.bar.TabBarQuickCommandsButton.e8e1a52edb',
@@ -120,31 +139,37 @@ export function TabBarQuickCommandsButton({
     if (!confirmed) {
       return
     }
-    const current = useAppStore.getState().settings?.terminalQuickCommands ?? []
-    void updateSettings({ terminalQuickCommands: current.filter((c) => c.id !== command.id) })
+    void useAppStore.getState().deleteTerminalQuickCommand(entry.hostId, command.id)
   }
 
-  const handleRun = (command: TerminalQuickCommand): void => {
-    runQuickCommandInNewTab({ command, worktreeId, groupId })
+  const handleRun = (entry: HostedTerminalQuickCommand): void => {
+    runQuickCommandInNewTab({
+      command: entry.command,
+      worktreeId,
+      groupId,
+      historyId: entry.key
+    })
   }
+  const editorPromptMaxLength = useAppStore((state) =>
+    editor ? getTerminalQuickCommandHostPromptMaxLength(state, editor.hostId) : undefined
+  )
+  const editorRepos = editor?.hostId.startsWith('runtime:')
+    ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)
+    : repos
 
-  // Why: hidden in folder-mode worktrees (no repoId) and floating terminals.
-  // Without a repoId the button can't represent a repo-scoped run target, and
-  // global-only mode would be confusing in a context that doesn't belong to a
-  // repo at all.
+  // Hide without a repo run target, including folder workspaces and floating terminals.
   if (!repoId) {
     return null
   }
 
-  // Empty state: single button that opens the dialog directly.
-  if (!hasAnyCommands) {
+  if (!hasAnyCommands && hosts.length === 1 && !remoteHostPending) {
     return (
       <>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={addRepoCommand}
+              onClick={() => addRepoCommand(defaultHostId)}
               className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label={translate(
                 'auto.components.tab.bar.TabBarQuickCommandsButton.8f1e971966',
@@ -152,7 +177,7 @@ export function TabBarQuickCommandsButton({
               )}
             >
               <Play className="size-3.5" />
-              <span className="text-[12px] font-medium">
+              <span className="text-[12px] font-medium @max-[480px]/tab-strip:hidden">
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
                   'Command'
@@ -171,7 +196,8 @@ export function TabBarQuickCommandsButton({
           open={editor !== null}
           mode={editor?.mode ?? 'add'}
           command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
-          repos={repos}
+          repos={editorRepos}
+          agentPromptMaxLength={editorPromptMaxLength}
           onOpenChange={(open) => !open && setEditor(null)}
           onSave={handleSaveCommand}
         />
@@ -182,19 +208,27 @@ export function TabBarQuickCommandsButton({
   return (
     <>
       <TabBarQuickCommandsMenu
+        isFocused={isFocused}
         repoCommands={repoCommands}
         globalCommands={globalCommands}
         mostRecent={mostRecent}
+        addHosts={hosts}
+        hostLoadFailed={remoteHostLoadFailed}
+        hostOwnershipPending={remoteHostPending}
+        onMenuOpen={refreshRemoteHost}
         onAddCommand={addRepoCommand}
-        onEditCommand={(command) => setEditor({ mode: 'edit', command })}
-        onDeleteCommand={(command) => void handleDeleteCommand(command)}
+        onEditCommand={(entry) =>
+          setEditor({ mode: 'edit', command: entry.command, hostId: entry.hostId })
+        }
+        onDeleteCommand={(entry) => void handleDeleteCommand(entry)}
         onRunCommand={handleRun}
       />
       <TerminalQuickCommandDialog
         open={editor !== null}
         mode={editor?.mode ?? 'add'}
         command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
-        repos={repos}
+        repos={editorRepos}
+        agentPromptMaxLength={editorPromptMaxLength}
         onOpenChange={(open) => !open && setEditor(null)}
         onSave={handleSaveCommand}
       />

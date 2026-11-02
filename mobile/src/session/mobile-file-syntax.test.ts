@@ -9,12 +9,119 @@ import {
 import type { MobileDiffLine } from './mobile-diff-lines'
 
 describe('mobile file syntax highlighting', () => {
+  it.each(['justfile', 'Justfile', '.justfile', 'tasks.just', 'C:\\repo\\TASKS.JUST'])(
+    'highlights shell recipes in %s',
+    (filePath) => {
+      const source = '# Build recipe\nbuild:\n  echo "ready"\n'
+      const result = highlightMobileCode(source, resolveMobileSyntaxLanguage(filePath))
+      expect(result.highlighted).toBe(true)
+      expect(result.segments.map((segment) => segment.text).join('')).toBe(source)
+      expect(result.segments).toEqual(
+        expect.arrayContaining([
+          { text: '# Build recipe', kind: 'comment' },
+          { text: '"ready"', kind: 'string' }
+        ])
+      )
+    }
+  )
+
+  it.each(['terraform.tfvars', 'C:\\repo\\PROD.TFVARS', 'main.tf', 'config.hcl'])(
+    'highlights HCL assignments in %s',
+    (filePath) => {
+      const source = '# Deployment\nregion = "us-west-2"\ncount = 3\n'
+      const language = resolveMobileSyntaxLanguage(filePath)
+      const result = highlightMobileCode(source, language)
+      expect(result.highlighted).toBe(true)
+      expect(result.segments.map((segment) => segment.text).join('')).toBe(source)
+      expect(result.segments).toEqual(
+        expect.arrayContaining([
+          { text: '# Deployment', kind: 'comment' },
+          { text: 'region', kind: 'variable' },
+          { text: '"us-west-2"', kind: 'string' }
+        ])
+      )
+      const [line] = highlightMobileDiffLines([{ text: 'region = "us-west-2"' }], language)
+      expect(line?.highlighted).toBe(true)
+      expect(line?.segments).toContainEqual({ text: '"us-west-2"', kind: 'string' })
+    }
+  )
+
+  it.each([
+    ['.env', 'dotenv'],
+    ['.env.local', 'dotenv'],
+    ['.env.development', 'dotenv'],
+    ['.env.production', 'dotenv'],
+    ['.env.functions.local', 'dotenv'],
+    ['.env.staging', 'dotenv'],
+    ['.env.test.example', 'dotenv'],
+    ['config/.env.development.local', 'dotenv'],
+    ['.ENV', 'dotenv'],
+    ['.ENV.STAGING', 'dotenv'],
+    ['C:\\repo\\.EnV.FUNCTIONS.LOCAL', 'dotenv'],
+    ['\\\\server\\share\\.env.test.example', 'dotenv'],
+    ['.env.sh', 'shell'],
+    ['.ENV.SH', 'shell'],
+    ['.env.json', 'json'],
+    ['.env.local.ts', 'typescript'],
+    ['.env/CMakeLists.txt', 'cmake'],
+    ['C:\\repo\\.env.local\\Dockerfile', 'dockerfile'],
+    ['.envrc', 'shell'],
+    ['.environment', 'plaintext'],
+    ['env.staging', 'plaintext'],
+    ['dev.env', 'dotenv'],
+    ['other.env.local', 'plaintext'],
+    ['..env.local', 'plaintext'],
+    ['.env.staging/readme', 'plaintext'],
+    ['C:\\repo\\.env.local\\notes', 'plaintext'],
+    ['', 'plaintext']
+  ])('detects dotenv names without overriding specific mappings: %s', (filePath, expected) => {
+    expect(detectMobileFileLanguage(filePath)).toBe(expected)
+  })
+
+  it('keeps a mobile language preference ahead of the dotenv fallback', () => {
+    expect(detectMobileFileLanguage('.env.staging', ' JSON ')).toBe('json')
+    expect(detectMobileFileLanguage('.env.staging', ' plaintext ')).toBe('dotenv')
+  })
+
+  it('highlights dotenv file and diff contents with the bundled ini grammar', () => {
+    const language = resolveMobileSyntaxLanguage('.env.functions.local', 'plaintext')
+    const content = '# Local settings\nAPI_URL="https://example.test"\nPORT=54321'
+    expect(language).toBe('ini')
+    const file = highlightMobileCode(content, language)
+    expect(file.highlighted).toBe(true)
+    expect(file.segments.map((segment) => segment.text).join('')).toBe(content)
+    expect(file.segments).toEqual(
+      expect.arrayContaining([
+        { text: '# Local settings', kind: 'comment' },
+        { text: 'API_URL', kind: 'variable' },
+        { text: '"https://example.test"', kind: 'string' }
+      ])
+    )
+    const [line] = highlightMobileDiffLines(
+      [{ kind: 'add', text: 'PORT=54321', newLineNumber: 3 }],
+      language
+    )
+    expect(line).toMatchObject({ kind: 'add', newLineNumber: 3, highlighted: true })
+    expect(line?.segments).toContainEqual({ text: 'PORT', kind: 'variable' })
+  })
+
   it('detects common source languages from file paths', () => {
     expect(detectMobileFileLanguage('src/App.tsx')).toBe('typescript')
+    expect(detectMobileFileLanguage('config/vitest.config.mts')).toBe('typescript')
+    expect(detectMobileFileLanguage('C:\\repo\\scripts\\postinstall.CTS')).toBe('typescript')
     expect(detectMobileFileLanguage('scripts/deploy.sh')).toBe('shell')
     expect(detectMobileFileLanguage('Dockerfile')).toBe('dockerfile')
     expect(resolveMobileSyntaxLanguage('src/App.tsx')).toBe('typescript')
+    expect(resolveMobileSyntaxLanguage('worktrees/feature/build.cts')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
+    expect(resolveMobileSyntaxLanguage('kernels/reduce.cu')).toBe('cpp')
+  })
+
+  it.each(['constructor', '__proto__'])('draws a %s fence tag as plain text', (language) => {
+    expect(highlightMobileCode('x = 1', language)).toEqual({
+      segments: [{ text: 'x = 1', kind: 'plain' }],
+      highlighted: false
+    })
   })
 
   it('emits semantic syntax segments for highlighted code', () => {

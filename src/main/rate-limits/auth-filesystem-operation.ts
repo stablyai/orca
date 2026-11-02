@@ -1,4 +1,5 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 
 const MAX_CONCURRENT_WSL_AUTH_OPERATIONS = 2
 const activeWslOperationDistros = new Set<string>()
@@ -111,9 +112,7 @@ function scheduleAuthFilesystemOperation<T>(
       return operation()
     })
   }
-  // Why: a few disconnected distros must not occupy libuv's entire default
-  // filesystem pool. Distro serialization also folds wsl$/wsl.localhost and
-  // case aliases without forcing healthy local auth reads through the queue.
+  // Share normalized distro lanes so disconnected UNC reads cannot consume the whole libuv fs pool; local auth stays unqueued.
   return scheduleWslAuthFilesystemOperation(
     wslInfo.distro.trim().toLowerCase(),
     neededSignal,
@@ -126,11 +125,7 @@ export type SharedAuthFilesystemOperation<T> = {
   wait: (signal: AbortSignal) => Promise<T>
 }
 
-/**
- * Shares one raw operation with all callers for an auth path. WSL paths also
- * serialize by normalized distro because one stuck UNC request per account can
- * otherwise exhaust libuv's filesystem threadpool.
- */
+/** Share each raw auth-path operation; WSL distro serialization bounds stuck UNC requests in the libuv fs pool. */
 export function createAuthFilesystemOperation<T>(
   authPath: string,
   operation: () => Promise<T>
@@ -139,10 +134,9 @@ export function createAuthFilesystemOperation<T>(
   const waiters = new Set<symbol>()
   let settled = false
   const result = scheduleAuthFilesystemOperation(authPath, neededController.signal, operation)
-  const markSettled = (): void => {
+  const settlementWaiters = new PromiseSettlementWaiters(result, () => {
     settled = true
-  }
-  void result.then(markSettled, markSettled)
+  })
 
   return {
     result,
@@ -156,20 +150,18 @@ export function createAuthFilesystemOperation<T>(
 
       const waiter = Symbol('auth-filesystem-waiter')
       waiters.add(waiter)
-      let onAbort: (() => void) | null = null
-      const aborted = new Promise<never>((_resolve, reject) => {
-        onAbort = () => reject(getAbortReason(signal))
-        signal.addEventListener('abort', onAbort, { once: true })
-      })
-      return Promise.race([result, aborted]).finally(() => {
-        if (onAbort) {
-          signal.removeEventListener('abort', onAbort)
-        }
-        waiters.delete(waiter)
-        if (!settled && waiters.size === 0) {
-          neededController.abort(getAbortReason(signal))
-        }
-      })
+      return settlementWaiters
+        .wait({
+          signal,
+          abortInMicrotask: true,
+          createAbortError: () => getAbortReason(signal)
+        })
+        .finally(() => {
+          waiters.delete(waiter)
+          if (!settled && waiters.size === 0) {
+            neededController.abort(getAbortReason(signal))
+          }
+        })
     }
   }
 }

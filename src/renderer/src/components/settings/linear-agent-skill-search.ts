@@ -7,7 +7,7 @@ export const getLinearAgentSkillPaneSearchEntries = createLocalizedCatalog(() =>
     title: translate('auto.components.settings.linear.agent.skill.search.title', 'Linear'),
     description: translate(
       'auto.components.settings.linear.agent.skill.search.description',
-      'Give agents the skill to read and update your linked Linear tickets.'
+      'Linear skill status, usage examples, and links to Task Sources setup.'
     ),
     keywords: [
       ...translateSearchKeyword(

@@ -1,0 +1,219 @@
+import {
+  parseAgentChildWorkAliasInput,
+  parseAgentChildWorkAliasRecord
+} from './agent-status-child-work-alias'
+import { isBoundedString } from './agent-status-child-work-value-guards'
+import {
+  parseAgentChildWorkInput,
+  parseAgentChildWorkRecord
+} from './agent-status-child-work-codec'
+import {
+  AGENT_STATUS_STORE_SNAPSHOT_VERSION,
+  AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
+  type AgentStatusStoreMutation,
+  type AgentStatusStoreSnapshot,
+  type AgentStatusTombstoneEntity,
+  type AgentStatusTombstoneInput,
+  type AgentStatusTombstoneRecord
+} from './agent-status-store-contract'
+import {
+  parseAgentStatusFactIdentity,
+  parseAgentStatusFactInput,
+  parseAgentStatusFactRecord
+} from './agent-status-store-fact-codec'
+import {
+  parseAgentStatusParentInput,
+  parseAgentStatusParentRecord
+} from './agent-status-store-parent'
+import { parseAgentStatusSubject } from './agent-status-subject'
+
+const MAX_EPOCH_LENGTH = 256
+const MAX_TOMBSTONE_KEY_LENGTH = 32_768
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasOnlyKeys(
+  record: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[] = []
+): boolean {
+  const keys = Object.keys(record)
+  return (
+    required.every((key) => Object.hasOwn(record, key)) &&
+    keys.every((key) => required.includes(key) || optional.includes(key))
+  )
+}
+
+function isRevision(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+export function isAgentStatusStoreEpoch(value: unknown): value is string {
+  return isBoundedString(value, MAX_EPOCH_LENGTH)
+}
+
+function isTombstoneEntity(value: unknown): value is AgentStatusTombstoneEntity {
+  return value === 'parent' || value === 'child' || value === 'alias' || value === 'fact'
+}
+
+export function parseAgentStatusTombstoneInput(value: unknown): AgentStatusTombstoneInput | null {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ['entity', 'key']) ||
+    !isTombstoneEntity(value.entity) ||
+    !isBoundedString(value.key, MAX_TOMBSTONE_KEY_LENGTH)
+  ) {
+    return null
+  }
+  return { entity: value.entity, key: value.key }
+}
+
+export function parseAgentStatusTombstoneRecord(value: unknown): AgentStatusTombstoneRecord | null {
+  if (!isRecord(value) || !isRevision(value.revision)) {
+    return null
+  }
+  const input = { ...value }
+  delete input.revision
+  const tombstone = parseAgentStatusTombstoneInput(input)
+  return tombstone ? { ...tombstone, revision: value.revision } : null
+}
+
+function parseArray<T>(
+  value: unknown,
+  parser: (candidate: unknown) => T | null,
+  maxLength = Number.POSITIVE_INFINITY
+): T[] | null {
+  if (!Array.isArray(value) || value.length > maxLength) {
+    return null
+  }
+  const parsed: T[] = []
+  for (const candidate of value) {
+    const item = parser(candidate)
+    if (!item) {
+      return null
+    }
+    parsed.push(item)
+  }
+  return parsed
+}
+
+function parseStringArray(value: unknown): string[] | null {
+  return parseArray(value, (candidate) =>
+    isBoundedString(candidate, MAX_TOMBSTONE_KEY_LENGTH) ? candidate : null
+  )
+}
+
+export function parseAgentStatusStoreMutation(value: unknown): AgentStatusStoreMutation | null {
+  const optionalKeys = [
+    'parent',
+    'removeParent',
+    'children',
+    'removeChildren',
+    'aliases',
+    'removeAliases',
+    'facts',
+    'removeFacts',
+    'tombstones'
+  ]
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [], optionalKeys) ||
+    Object.keys(value).length === 0
+  ) {
+    return null
+  }
+  const parent = value.parent === undefined ? undefined : parseAgentStatusParentInput(value.parent)
+  const removeParent =
+    value.removeParent === undefined ? undefined : parseAgentStatusSubject(value.removeParent)
+  const children =
+    value.children === undefined ? undefined : parseArray(value.children, parseAgentChildWorkInput)
+  const removeChildren =
+    value.removeChildren === undefined ? undefined : parseStringArray(value.removeChildren)
+  const aliases =
+    value.aliases === undefined
+      ? undefined
+      : parseArray(value.aliases, parseAgentChildWorkAliasInput)
+  const removeAliases =
+    value.removeAliases === undefined ? undefined : parseStringArray(value.removeAliases)
+  const facts =
+    value.facts === undefined ? undefined : parseArray(value.facts, parseAgentStatusFactInput)
+  const removeFacts =
+    value.removeFacts === undefined
+      ? undefined
+      : parseArray(value.removeFacts, parseAgentStatusFactIdentity)
+  const tombstones =
+    value.tombstones === undefined
+      ? undefined
+      : parseArray(value.tombstones, parseAgentStatusTombstoneInput)
+  const parsedValues = [
+    parent,
+    removeParent,
+    children,
+    removeChildren,
+    aliases,
+    removeAliases,
+    facts,
+    removeFacts,
+    tombstones
+  ]
+  const sourceValues = optionalKeys.map((key) => value[key])
+  if (sourceValues.some((item, index) => item !== undefined && !parsedValues[index])) {
+    return null
+  }
+  return {
+    ...(parent ? { parent } : {}),
+    ...(removeParent ? { removeParent } : {}),
+    ...(children ? { children } : {}),
+    ...(removeChildren ? { removeChildren } : {}),
+    ...(aliases ? { aliases } : {}),
+    ...(removeAliases ? { removeAliases } : {}),
+    ...(facts ? { facts } : {}),
+    ...(removeFacts ? { removeFacts } : {}),
+    ...(tombstones ? { tombstones } : {})
+  }
+}
+
+export function parseAgentStatusStoreSnapshot(value: unknown): AgentStatusStoreSnapshot | null {
+  const keys = [
+    'version',
+    'epoch',
+    'revision',
+    'parents',
+    'children',
+    'aliases',
+    'facts',
+    'tombstones'
+  ]
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, keys) ||
+    value.version !== AGENT_STATUS_STORE_SNAPSHOT_VERSION ||
+    !isAgentStatusStoreEpoch(value.epoch) ||
+    !isRevision(value.revision)
+  ) {
+    return null
+  }
+  const parents = parseArray(value.parents, parseAgentStatusParentRecord)
+  const children = parseArray(value.children, parseAgentChildWorkRecord)
+  const aliases = parseArray(value.aliases, parseAgentChildWorkAliasRecord)
+  const facts = parseArray(value.facts, parseAgentStatusFactRecord)
+  const tombstones = parseArray(
+    value.tombstones,
+    parseAgentStatusTombstoneRecord,
+    AGENT_STATUS_STORE_TOMBSTONE_LIMIT
+  )
+  return parents && children && aliases && facts && tombstones
+    ? {
+        version: AGENT_STATUS_STORE_SNAPSHOT_VERSION,
+        epoch: value.epoch,
+        revision: value.revision,
+        parents,
+        children,
+        aliases,
+        facts,
+        tombstones
+      }
+    : null
+}

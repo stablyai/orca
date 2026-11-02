@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { getRepoSlugCached } from './SmartWorkspaceNameField'
+import { getRepoSlugCached } from './smart-workspace-repo-slug'
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClient>()),

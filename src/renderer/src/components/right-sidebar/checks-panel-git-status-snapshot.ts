@@ -1,4 +1,5 @@
-import type { GitPushTarget, GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 export type ChecksPanelGitStatusContextInput = {
   repoId: string | null | undefined
@@ -13,9 +14,7 @@ export type ChecksPanelGitStatusContextInput = {
   runtimeEnvironmentId: string | null
   repoConnectionId: string | null
   pushTarget: GitPushTarget | null | undefined
-  // Local execution host variant (`wsl:{distro}` vs `host`) so a Windows-host
-  // result never authorizes a WSL context (or another distro), and vice versa.
-  // Null for SSH/runtime contexts, which are already scoped by their host ids.
+  // Separate local host/WSL distro contexts; SSH/runtime scopes already use host IDs.
   localExecutionScope?: string | null
 }
 
@@ -46,6 +45,30 @@ export type ChecksPanelRefreshGitIdentitySnapshot =
       head?: string
       branch: string | null
     }
+// Fingerprint HEAD/dirty/upstream/base/execution-host so a stale snapshot can't keep an enabled Create open when any of them move.
+export function buildChecksPanelEligibilityGitFingerprint(input: {
+  headOid: string | null
+  hasUncommittedChanges: boolean | undefined
+  hasUpstream: boolean | undefined
+  ahead: number | undefined
+  behind: number | undefined
+  base: string | null
+  runtimeEnvironmentId: string | null
+  repoConnectionId: string | null
+  localExecutionScope: string | null
+}): string {
+  return JSON.stringify({
+    headOid: input.headOid ?? null,
+    hasUncommittedChanges: input.hasUncommittedChanges ?? null,
+    hasUpstream: input.hasUpstream ?? null,
+    ahead: input.ahead ?? null,
+    behind: input.behind ?? null,
+    base: input.base ?? null,
+    runtimeEnvironmentId: input.runtimeEnvironmentId ?? null,
+    repoConnectionId: input.repoConnectionId ?? null,
+    localExecutionScope: input.localExecutionScope ?? null
+  })
+}
 
 export function buildChecksPanelGitStatusContextKey(
   input: ChecksPanelGitStatusContextInput
@@ -55,8 +78,7 @@ export function buildChecksPanelGitStatusContextKey(
     worktreeId: input.worktreeId ?? '',
     worktreePath: input.worktreePath ?? '',
     branch: input.branch,
-    // Why: this key gates right-sidebar async commits too; link/unlink must
-    // make pre-change PR refreshes stale even when repo/branch are unchanged.
+    // Link/unlink must stale pending PR refreshes even when repo and branch stay unchanged.
     linkedGitHubPR: input.linkedGitHubPR ?? null,
     linkedGitLabMR: input.linkedGitLabMR ?? null,
     linkedBitbucketPR: input.linkedBitbucketPR ?? null,

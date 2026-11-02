@@ -1,22 +1,30 @@
 import { useMemo } from 'react'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
+import { useVisibleWorktreeDiffComments } from '../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
-  NOTEBOOK_VIEW_MODE_METADATA
+  CUSTOM_EDITOR_SOURCE_METADATA,
+  NOTEBOOK_VIEW_MODE_METADATA,
+  SVG_VIEW_MODE_METADATA
 } from './EditorViewToggle'
-import type { EditorToggleValue } from './EditorViewToggle'
+import type { CustomEditorToggleValue, EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
-import { EditorPanelMarkdownActionsMenu } from './EditorPanelMarkdownActionsMenu'
+import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
+import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import { editorArtifactSourceKey } from './editor-artifact-upload'
+
+const NO_CUSTOM_EDITOR_TITLES: Readonly<Record<CustomEditorToggleValue, string>> = {}
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -26,6 +34,9 @@ type EditorPanelHeaderProps = {
   isMarkdown: boolean
   isCsv: boolean
   isNotebook: boolean
+  isSvg?: boolean
+  /** Titles of the file's plugin editors, by toggle value; empty when none apply. */
+  customEditorTitles?: Readonly<Record<CustomEditorToggleValue, string>>
   hasEditorToggle: boolean
   availableEditorToggleModes: readonly EditorToggleValue[]
   effectiveToggleValue: EditorToggleValue
@@ -44,12 +55,12 @@ type EditorPanelHeaderProps = {
   onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
   onOpenPreviewToSide: () => void
   onOpenMarkdownPreview: () => void
-  onOpenContainingFolder: () => void
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  createArtifactRequest?: () => Promise<ArtifactWriteRequest>
 }
 
 export function EditorPanelHeader({
@@ -60,6 +71,8 @@ export function EditorPanelHeader({
   isMarkdown,
   isCsv,
   isNotebook,
+  isSvg = false,
+  customEditorTitles = NO_CUSTOM_EDITOR_TITLES,
   hasEditorToggle,
   availableEditorToggleModes,
   effectiveToggleValue,
@@ -78,18 +91,18 @@ export function EditorPanelHeader({
   onOpenDiffTargetFile,
   onOpenPreviewToSide,
   onOpenMarkdownPreview,
-  onOpenContainingFolder,
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
-  onExportMarkdownToPdf
+  onExportMarkdownToPdf,
+  createArtifactRequest
 }: EditorPanelHeaderProps): React.JSX.Element {
-  const diffComments = useAppStore((s) =>
-    selectWorktreeDiffCommentsOrEmpty(s, activeFile.worktreeId)
-  )
+  const { comments: diffComments } = useVisibleWorktreeDiffComments(activeFile.worktreeId)
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
+  const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
@@ -107,7 +120,6 @@ export function EditorPanelHeader({
         canShowMarkdownPreview={canShowMarkdownPreview}
         onCopyPath={onCopyPath}
         onOpenMarkdownPreview={onOpenMarkdownPreview}
-        onOpenContainingFolder={onOpenContainingFolder}
       />
       {canOpenPreviewToSide && (
         <TooltipProvider delayDuration={300}>
@@ -184,8 +196,6 @@ export function EditorPanelHeader({
         />
       )}
       {isDiffSurface && (
-        // Why: the adjacent diff controls use the same tooltip timing, so they
-        // share one provider instead of creating redundant Radix contexts.
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -263,14 +273,23 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      {hasEditorToggle && (
+      {hasEditorToggle && !activeFile.csvPreviewOnly && (
         <EditorViewToggle
           value={effectiveToggleValue}
           modes={availableEditorToggleModes}
           onChange={onEditorToggleChange}
           metadataOverride={
-            isCsv ? CSV_VIEW_MODE_METADATA : isNotebook ? NOTEBOOK_VIEW_MODE_METADATA : undefined
+            isCsv
+              ? CSV_VIEW_MODE_METADATA
+              : isNotebook
+                ? NOTEBOOK_VIEW_MODE_METADATA
+                : isSvg
+                  ? SVG_VIEW_MODE_METADATA
+                  : Object.keys(customEditorTitles).length > 0
+                    ? CUSTOM_EDITOR_SOURCE_METADATA
+                    : undefined
           }
+          customEditorTitles={customEditorTitles}
         />
       )}
       {canShowMarkdownTableOfContents && (
@@ -309,15 +328,34 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      <EditorPanelMarkdownActionsMenu
-        isMarkdown={isMarkdown}
+      {!isDiffSurface && createArtifactRequest ? (
+        <ArtifactPublishButton
+          sourceKey={editorArtifactSourceKey(activeFile)}
+          className="size-6 [&_svg]:size-3.5!"
+          createRequest={createArtifactRequest}
+        />
+      ) : null}
+      <EditorPanelActionsMenu
+        fileLocationActions={
+          activeFile.mode === 'edit' ||
+          activeFile.mode === 'markdown-preview' ||
+          (isSingleDiff && openFileState.canOpen) ? (
+            <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
+          ) : undefined
+        }
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
+        diffShowWhitespace={diffShowWhitespace}
+        editorWordWrap={editorWordWrap}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
         onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
+        onToggleDiffWhitespace={() =>
+          void updateSettings({ diffShowWhitespace: !diffShowWhitespace })
+        }
+        onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

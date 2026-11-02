@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createHookListenerState, type AgentHookEventPayload } from './agent-hook-listener'
+import { createHookListenerState } from './agent-hook-listener/listener-state'
+import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import { upsertBoundedAgentHookStatus } from './agent-hook-status-cache'
 import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
 
@@ -39,15 +40,15 @@ describe('bounded agent hook status cache', () => {
       maxPanes: 3,
       now
     })
-    upsertBoundedAgentHookStatus(listener, status('stale', 'working', now), {
-      maxPanes: 3,
-      now
-    })
+    upsertBoundedAgentHookStatus(
+      listener,
+      status('stale', 'working', now - AGENT_STATUS_STALE_AFTER_MS - 1),
+      {
+        maxPanes: 3,
+        now
+      }
+    )
     upsertBoundedAgentHookStatus(listener, status('done', 'done', now), { maxPanes: 3, now })
-    const stale = listener.lastStatusByPaneKey.get('stale') as AgentHookEventPayload & {
-      receivedAt: number
-    }
-    stale.receivedAt = now - AGENT_STATUS_STALE_AFTER_MS - 1
     listener.lastPromptByPaneKey.set('stale', 'cached prompt')
     listener.lastToolByPaneKey.set('stale\0tool', {} as never)
 

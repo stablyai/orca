@@ -22,6 +22,16 @@ export type CodexSessionBackfillPaths = {
 }
 
 export type CodexSessionBackfillOptions = CodexSessionBridgeIncrementalOptions & {
-  /** Polled before each target mutation; true stops with progress preserved. */
+  /** Polled between file mutations, preserving progress on opt-out. */
   shouldStop?: () => boolean
+  scanDates?: readonly CodexSessionBackfillDate[]
+  fullScanRequired?: boolean
+  /** Scheduled launch passes still publish new rollouts when nothing is pending. */
+  ignoreCompletionMarker?: boolean
+  /** Keep dates pending while a live pane can still write into them. */
+  retainPendingScanDates?: boolean
+  /** Recheck scheduling after async writes, before certifying completion. */
+  canWriteCompletionMarker?: () => boolean
 }
+
+export type CodexSessionBackfillDate = readonly [year: string, month: string, day: string]

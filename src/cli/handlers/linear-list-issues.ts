@@ -1,7 +1,7 @@
 import type {
   LinearMcpIssueListRequest,
   LinearMcpIssueListResult
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import type { CommandHandler } from '../dispatch'
 import {
   getOptionalNonNegativeIntegerFlag,

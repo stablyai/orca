@@ -1,0 +1,269 @@
+import { getDetachedWorkspaceReviewRequest } from '@/components/sidebar/workspace-detached-review-request'
+import type { AppState } from '../types'
+import {
+  getHostedReviewCacheKey,
+  linkedReviewHintKey
+} from '../slices/hosted-review-cache-identity'
+import {
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
+import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
+import {
+  buildPRRefreshCandidate,
+  findWorktreeReviewOwner,
+  getWorktreeLookupIndex,
+  findWorktreeById
+} from './worktree-refresh'
+import {
+  findIndexedDetectedWorktrees,
+  findIndexedRepoOwnerForHost,
+  worktreeOwnerHostIds
+} from '@/lib/worktree-runtime-owner-index'
+import { findKnownWorktreeById } from '../slices/worktrees/listing/detected-worktree-meta'
+import { getPRRefreshRuntimeRepoTarget } from './repository-routing'
+import type { VisibleHostedReviewRefreshTarget } from './visible-hosted-review-refresh-scheduler'
+import { shouldCoordinateVisibleGitHubReview } from './visible-hosted-review-refresh-ownership'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
+import { isWslHostOffForForge } from './wsl-host-off-forge'
+
+export function* getVisibleHostedReviewWorkspaces(
+  state: AppState,
+  options?: { selectedOnly?: boolean; worktreeIds?: readonly string[] }
+) {
+  const visibleHosts =
+    state.visibleWorkspaceHostIds ??
+    (state.workspaceHostScope && state.workspaceHostScope !== 'all'
+      ? [state.workspaceHostScope]
+      : null)
+  for (const id of options?.worktreeIds ?? state.visibleReviewWorktreeIds) {
+    const lookupIndex = getWorktreeLookupIndex(state)
+    const trackedOwners = lookupIndex.byId.get(id)?.owners
+    const owners = new Set(trackedOwners)
+    for (const detected of findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), id)) {
+      const workspace = findKnownWorktreeById(state, id, detected.hostId ?? 'local')
+      if (workspace) {
+        owners.add(workspace)
+      }
+    }
+    const selectedOwner =
+      id === state.activeWorktreeId
+        ? findWorktreeReviewOwner(
+            state,
+            id,
+            state.activeWorkspaceExecutionHostId ??
+              (owners.size === 1 ? undefined : getSettingsFocusedExecutionHostId(state.settings)),
+            owners.size === (trackedOwners?.length ?? 0)
+              ? lookupIndex
+              : {
+                  ...lookupIndex,
+                  byId: new Map([
+                    [id, { owners: [...owners], unique: owners.size === 1 ? [...owners][0] : null }]
+                  ])
+                }
+          )
+        : null
+    for (const worktree of owners) {
+      if (worktree.isArchived || worktree.isBare) {
+        continue
+      }
+      const candidate = buildPRRefreshCandidate(
+        state,
+        worktree,
+        undefined,
+        selectedOwner?.worktree === worktree ? selectedOwner.repo : undefined
+      )
+      if (
+        !candidate ||
+        candidate.repoKind !== 'git' ||
+        (candidate.connectionId && candidate.connectionState !== 'connected')
+      ) {
+        continue
+      }
+      const hostId = getRepoExecutionHostId(candidate)
+      const repo = findIndexedRepoOwnerForHost(state.repos, worktree.repoId, hostId)
+      if (!repo) {
+        continue
+      }
+      const runtimeHost = parseExecutionHostId(hostId)
+      if (
+        runtimeHost?.kind === 'runtime' &&
+        isWslHostOffForForge(state, runtimeHost.environmentId)
+      ) {
+        continue
+      }
+      const hostIds =
+        worktree.hostId || worktree.runtimeOwnerEnvironmentId
+          ? [...new Set([...worktreeOwnerHostIds(worktree), hostId])]
+          : [hostId]
+      const selected =
+        selectedOwner?.worktree === worktree &&
+        getRepoExecutionHostId(selectedOwner.repo) === hostId
+      if (
+        (options?.selectedOnly && !selected) ||
+        (!selected && visibleHosts && !hostIds.some((hostId) => visibleHosts.includes(hostId)))
+      ) {
+        continue
+      }
+      yield { worktree, repo, candidate: { ...candidate, isSelected: selected }, selected }
+    }
+  }
+}
+
+export function getVisibleHostedReviewRefreshTargets(
+  state: AppState,
+  getState: () => AppState,
+  options?: { selectedOnly?: boolean }
+): VisibleHostedReviewRefreshTarget[] {
+  const targets = new Map<string, VisibleHostedReviewRefreshTarget>()
+  const revisions = new Map<string, Map<string, string>>()
+  for (const { worktree, repo, candidate, selected } of getVisibleHostedReviewWorkspaces(
+    state,
+    options
+  )) {
+    const id = worktree.id
+    const exactRequest = getDetachedWorkspaceReviewRequest(worktree, repo)
+    if ((!candidate.branch || candidate.branch === 'HEAD') && !exactRequest) {
+      continue
+    }
+    const key =
+      exactRequest?.key ??
+      getHostedReviewCacheKey(
+        candidate.repoPath,
+        candidate.branch,
+        state.settings,
+        candidate.repoId,
+        candidate.connectionId,
+        candidate.executionHostId,
+        true
+      )
+    const hostedEntry = state.hostedReviewCache[key]
+    const prEntry = state.prCache[candidate.cacheKey]
+    const hints = {
+      linkedGitHubPR: worktree.linkedPR,
+      linkedGitLabMR: worktree.linkedGitLabMR,
+      linkedBitbucketPR: worktree.linkedBitbucketPR,
+      linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR,
+      linkedGiteaPR: worktree.linkedGiteaPR
+    }
+    const nonGitHub =
+      hints.linkedGitLabMR != null ||
+      hints.linkedBitbucketPR != null ||
+      hints.linkedAzureDevOpsPR != null ||
+      hints.linkedGiteaPR != null ||
+      (hostedEntry?.data != null && hostedEntry.data.provider !== 'github')
+    if (
+      !exactRequest &&
+      findWorktreeById(state, worktree.id, getRepoExecutionHostId(repo)) !== worktree
+    ) {
+      continue
+    }
+    const knownGitHub =
+      !exactRequest && shouldCoordinateVisibleGitHubReview(state, worktree, candidate)
+    const runtime = knownGitHub ? getPRRefreshRuntimeRepoTarget(state, candidate) : null
+    if (knownGitHub && !runtime) {
+      continue
+    }
+    const usePR =
+      knownGitHub &&
+      prEntry !== undefined &&
+      prEntry.fetchedAt >= (hostedEntry?.fetchedAt ?? -Infinity)
+    const review = usePR ? prEntry.data : hostedEntry?.data
+    const fetchedAt = usePR ? prEntry.fetchedAt : (hostedEntry?.fetchedAt ?? null)
+    const target: VisibleHostedReviewRefreshTarget = {
+      key,
+      revision: `${candidate.currentHeadOid ?? ''}|${linkedReviewHintKey(hints)}`,
+      fetchedAt:
+        usePR &&
+        candidate.cachedHeadOid &&
+        candidate.currentHeadOid &&
+        candidate.cachedHeadOid !== candidate.currentHeadOid
+          ? null
+          : fetchedAt,
+      selected,
+      intervalMs: reviewRefreshIntervalMs({
+        state: review?.state,
+        checksStatus: usePR ? prEntry.data?.checksStatus : hostedEntry?.data?.status,
+        hasReview: review ? true : fetchedAt !== null ? false : null,
+        selected
+      }),
+      refresh: async (force = true) => {
+        const before = getState()
+        const beforeFetchedAt = knownGitHub
+          ? before.prCache[candidate.cacheKey]?.fetchedAt
+          : before.hostedReviewCache[key]?.fetchedAt
+        await (runtime
+          ? before.fetchPRForBranch(candidate.repoPath, candidate.branch, {
+              force: true,
+              reason: 'visible',
+              repoId: candidate.repoId,
+              repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
+              worktreeId: id,
+              linkedPRNumber: candidate.linkedPRNumber,
+              fallbackPRNumber: candidate.fallbackPRNumber,
+              fallbackPRSource: candidate.fallbackPRSource
+            })
+          : before.fetchHostedReviewForBranch(candidate.repoPath, candidate.branch, {
+              ...hints,
+              ...(exactRequest ? { exactReviewKey: key } : {}),
+              force,
+              repoId: candidate.repoId,
+              repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
+              fallbackGitHubPR: nonGitHub ? null : candidate.fallbackPRNumber,
+              currentHeadOid: exactRequest ? null : candidate.currentHeadOid,
+              active: selected,
+              admissionTier: selected ? 'interactive' : 'background'
+            }))
+        const after = getState()
+        const afterFetchedAt = knownGitHub
+          ? after.prCache[candidate.cacheKey]?.fetchedAt
+          : after.hostedReviewCache[key]?.fetchedAt
+        return (
+          afterFetchedAt !== undefined &&
+          (beforeFetchedAt === undefined || afterFetchedAt > beforeFetchedAt)
+        )
+      }
+    }
+    const branchRevisions = revisions.get(key) ?? new Map<string, string>()
+    branchRevisions.set(id, target.revision)
+    revisions.set(key, branchRevisions)
+    const previous = targets.get(key)
+    if (!previous || (selected && !previous.selected)) {
+      targets.set(key, target)
+    }
+  }
+  for (const [key, target] of targets) {
+    target.aliasRevisions = revisions.get(key)
+    target.revision = [...(target.aliasRevisions?.values() ?? [])].sort().join(';')
+  }
+  return [...targets.values()]
+}
+
+export function visibleHostedReviewRefreshInputsChanged(
+  state: AppState,
+  previous: AppState
+): boolean {
+  return (
+    state.visibleReviewWorktreeIds !== previous.visibleReviewWorktreeIds ||
+    state.activeWorktreeId !== previous.activeWorktreeId ||
+    state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId ||
+    state.visibleWorkspaceHostIds !== previous.visibleWorkspaceHostIds ||
+    state.workspaceHostScope !== previous.workspaceHostScope ||
+    selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous) ||
+    selectDetectedWorktreesByRepo(state) !== selectDetectedWorktreesByRepo(previous) ||
+    state.repos !== previous.repos ||
+    state.settings !== previous.settings ||
+    state.sshConnectionStates !== previous.sshConnectionStates ||
+    // A WSL host turning ready brings its rows back into the refresh (E9).
+    state.wslHostStatuses !== previous.wslHostStatuses ||
+    state.prCache !== previous.prCache ||
+    state.hostedReviewCache !== previous.hostedReviewCache ||
+    state.tabsByWorktree !== previous.tabsByWorktree ||
+    state.ptyIdsByTabId !== previous.ptyIdsByTabId ||
+    state.browserTabsByWorktree !== previous.browserTabsByWorktree ||
+    state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
+    state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
+    state.agentStatusEpoch !== previous.agentStatusEpoch
+  )
+}

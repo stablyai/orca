@@ -4,7 +4,7 @@ import {
   resolvePrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
-import { resolveCreatePrHeaderAction } from './source-control-primary-create-pr-intent-action'
+import { resolveCreatePrHeaderAction } from './source-control/review/primary-create-pr-intent-action'
 
 function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -177,6 +177,32 @@ describe('resolvePrimaryAction Create PR intent', () => {
     })
   })
 
+  it('returns Create PR intent for a dirty tree when review lookup is unavailable', () => {
+    const input = inputs({
+      hasUnstagedChanges: true,
+      hasStageableChanges: true,
+      upstreamStatus: upstreamInSync,
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'dirty',
+        nextAction: 'commit',
+        defaultBaseRef: 'main',
+        reviewLookupOutcome: 'unavailable'
+      }
+    })
+
+    expect(resolvePrimaryAction(input)).toMatchObject({
+      kind: 'create_pr_intent',
+      disabled: false
+    })
+    expect(resolveCreatePrHeaderAction(input)).toMatchObject({
+      kind: 'create_pr_intent',
+      disabled: false
+    })
+  })
+
   it('returns Create PR intent for staged changes without a message so the flow can request one', () => {
     const input = inputs({
       stagedCount: 1,
@@ -297,6 +323,57 @@ describe('resolvePrimaryAction Create PR intent', () => {
       title: 'Preparing branch for review…',
       disabled: true
     })
+  })
+
+  it('shows waiting feedback across PR preparation actions when another workspace is busy', () => {
+    const input = inputs({
+      isPrIntentInFlight: true,
+      isRemoteOperationActive: true,
+      isRemoteOperationInAnotherWorktree: true,
+      upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+    })
+
+    for (const resolveAction of [resolvePrimaryAction, resolveCreatePrHeaderAction]) {
+      expect(resolveAction(input)).toEqual({
+        kind: 'create_pr_intent',
+        label: 'Git operation running elsewhere',
+        title:
+          "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
+        disabled: true,
+        isWaitingForRemoteOperation: true
+      })
+    }
+    expect(resolveCommitAreaPrimaryAction(input)).toEqual({
+      kind: 'publish',
+      label: 'Git operation running elsewhere',
+      title:
+        "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
+      disabled: true,
+      isWaitingForRemoteOperation: true
+    })
+  })
+
+  it.each([
+    { isRemoteOperationActive: false, isRemoteOperationInAnotherWorktree: true },
+    { isRemoteOperationActive: true, isRemoteOperationInAnotherWorktree: false },
+    {
+      isRemoteOperationActive: true,
+      isRemoteOperationInAnotherWorktree: true,
+      isCommitting: true
+    }
+  ])('keeps preparation feedback when the intent is not waiting elsewhere: %j', (busyState) => {
+    const input = inputs({ isPrIntentInFlight: true, ...busyState })
+    const headerAction = resolveCreatePrHeaderAction(input)
+    expect(headerAction).toMatchObject({
+      kind: 'create_pr_intent',
+      label: 'Create PR',
+      title: 'Preparing branch for review…',
+      disabled: true
+    })
+    expect(headerAction?.isWaitingForRemoteOperation).toBeUndefined()
+    const primaryAction = resolvePrimaryAction(input)
+    expect(primaryAction.isWaitingForRemoteOperation).toBeUndefined()
+    expect(primaryAction.title).toBe('Preparing branch for review…')
   })
 
   it.each(['azure-devops', 'gitea'] as const)(
@@ -502,6 +579,32 @@ describe('resolvePrimaryAction Create PR intent', () => {
       kind: 'create_pr',
       label: 'Create MR',
       title: 'Checking whether this branch can create a merge request…',
+      disabled: true
+    })
+  })
+
+  it('names a failed review lookup instead of calling a ready branch not ready', () => {
+    expect(
+      resolveCreatePrHeaderAction(
+        inputs({
+          upstreamStatus: upstreamInSync,
+          hostedReviewCreation: {
+            provider: 'gitlab',
+            review: null,
+            reviewLookupOutcome: 'unavailable',
+            defaultBaseRef: 'origin/main',
+            head: 'feature',
+            canCreate: false,
+            blockedReason: null,
+            nextAction: null
+          }
+        })
+      )
+    ).toEqual({
+      kind: 'create_pr',
+      label: 'Create MR',
+      title:
+        'Create MR failed: Orca could not confirm whether this branch already has a merge request. Retry once the GitLab lookup succeeds.',
       disabled: true
     })
   })

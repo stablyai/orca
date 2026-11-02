@@ -1,0 +1,142 @@
+import { createHash } from 'node:crypto'
+import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const { darkBuildMarkers } = createRequire(import.meta.url)('../dark-build-switches.cjs')
+
+const projectDir = fileURLToPath(new URL('../..', import.meta.url))
+
+export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1
+export const MOBILE_WEB_BUNDLE_ENTRYPOINT = 'index.html'
+
+const CONTENT_TYPE_BY_EXTENSION = {
+  css: 'text/css; charset=utf-8',
+  html: 'text/html; charset=utf-8',
+  js: 'text/javascript; charset=utf-8',
+  png: 'image/png',
+  // The app bundle emits images as same-origin assets rather than data: URLs, so each one is
+  // content-hashed and served from here, including the terminal's licensed symbol font.
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  woff2: 'font/woff2'
+}
+
+// Keep canonical key/path order byte-identical to src/shared/mobile-web-bundle serializer; buildId must depend only on content.
+export function serializeMobileWebBundleAssets(assets) {
+  return JSON.stringify(
+    [...assets]
+      .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+      .map(({ path, sha256, byteLength, contentType }) => ({
+        path,
+        sha256,
+        byteLength,
+        contentType
+      }))
+  )
+}
+
+export function computeMobileWebBundleBuildId(assets) {
+  return createHash('sha256').update(serializeMobileWebBundleAssets(assets), 'utf8').digest('hex')
+}
+
+export function sha256Hex(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+export function contentTypeForExtension(extension) {
+  const contentType = CONTENT_TYPE_BY_EXTENSION[extension]
+  if (!contentType) {
+    throw new Error(`[mobile-web-bundle-manifest] no content type registered for .${extension}`)
+  }
+  return contentType
+}
+
+export function hashedAsset(bytes, extension) {
+  const sha256 = sha256Hex(bytes)
+  return {
+    bytes,
+    path: `assets/${sha256}.${extension}`,
+    sha256,
+    byteLength: bytes.byteLength,
+    contentType: contentTypeForExtension(extension)
+  }
+}
+
+function readIntegerConstant(source, name, file = 'src/shared/protocol-version.ts') {
+  const match = new RegExp(`export const ${name} = (\\d+)`).exec(source)
+  if (!match) {
+    throw new Error(`[mobile-web-bundle-manifest] ${name} not found in ${file}`)
+  }
+  return Number.parseInt(match[1], 10)
+}
+
+// Parse TS protocol source: packaging runs bare Node before build outputs exist.
+export async function readProtocolWindow() {
+  const source = await readFile(join(projectDir, 'src', 'shared', 'protocol-version.ts'), 'utf8')
+  return {
+    runtimeProtocolVersion: readIntegerConstant(source, 'RUNTIME_PROTOCOL_VERSION'),
+    minCompatibleRuntimeProtocolVersion: readIntegerConstant(
+      source,
+      'MIN_COMPATIBLE_RUNTIME_SERVER_VERSION'
+    )
+  }
+}
+
+export async function readPageVersion() {
+  const file = join('src', 'shared', 'mobile-web-bundle', 'manifest-contract.ts')
+  const source = await readFile(join(projectDir, file), 'utf8')
+  return readIntegerConstant(source, 'MOBILE_WEB_PAGE_VERSION', file)
+}
+
+export async function readDesktopVersion() {
+  const packageJson = JSON.parse(await readFile(join(projectDir, 'package.json'), 'utf8'))
+  if (typeof packageJson.version !== 'string' || packageJson.version.length === 0) {
+    throw new Error('[mobile-web-bundle-manifest] root package.json has no version')
+  }
+  return packageJson.version
+}
+
+// Single manifest producer keeps builder/contract/packaging guard shape aligned.
+export async function writeMobileWebBundleTree({
+  outDir,
+  written,
+  desktopVersion,
+  protocolWindow,
+  // Empty route list makes shell render every screen natively.
+  routes = [],
+  env = process.env
+}) {
+  const assets = written
+    .map(({ path, sha256, byteLength, contentType }) => ({ path, sha256, byteLength, contentType }))
+    .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+  const manifest = {
+    schemaVersion: MOBILE_WEB_BUNDLE_SCHEMA_VERSION,
+    buildId: computeMobileWebBundleBuildId(assets),
+    desktopVersion,
+    minCompatibleRuntimeProtocolVersion: protocolWindow.minCompatibleRuntimeProtocolVersion,
+    runtimeProtocolVersion: protocolWindow.runtimeProtocolVersion,
+    pageVersion: await readPageVersion(),
+    entrypoint: MOBILE_WEB_BUNDLE_ENTRYPOINT,
+    totalBytes: assets.reduce((total, asset) => total + asset.byteLength, 0),
+    assets,
+    routes
+  }
+
+  // Clear entire output or stale unreferenced assets ship inside asar.
+  await rm(outDir, { recursive: true, force: true })
+  await mkdir(join(outDir, 'assets'), { recursive: true })
+  for (const asset of written) {
+    await writeFile(join(outDir, asset.path), asset.bytes)
+  }
+  await writeFile(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  // Keep switch metadata outside manifest so compiled page bytes/buildId remain unchanged.
+  for (const marker of darkBuildMarkers(env)) {
+    await writeFile(join(outDir, marker.fileName), marker.text, 'utf8')
+  }
+  return { manifest, outDir }
+}

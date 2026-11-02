@@ -1,5 +1,5 @@
 import { Minus, Plus } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { SettingsRow } from './SettingsFormControls'
@@ -25,8 +25,6 @@ export function TerminalFontSizeSetting({
       keywords={['terminal', 'typography', 'text size']}
       forceVisible={forceVisible}
     >
-      {/* Why: helper text dropped per the copy audit — "Font Size" + px control
-          is self-evident; the search index keeps the longer description. */}
       <SettingsRow
         label={translate(
           'auto.components.settings.TerminalFontSizeSetting.a4a352b1e9',
@@ -45,6 +43,7 @@ export function TerminalFontSizeSetting({
             >
               <Minus className="size-3" />
             </Button>
+            {/* Hide native spinners that overlap values and duplicate the custom steppers. */}
             <Input
               type="number"
               min={10}
@@ -56,7 +55,7 @@ export function TerminalFontSizeSetting({
                   updateSettings({ terminalFontSize: value })
                 }
               }}
-              className="w-14 text-center tabular-nums"
+              className="number-input-clean w-14 text-center tabular-nums"
             />
             <Button
               variant="outline"

@@ -2,34 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   getActivityThreadStatusPreview,
   getActivityThreadTaskTitle,
-  getActivityThreadWorkspaceTitle,
-  isTerseAgentFollowUpPrompt,
   resolveActivityThreadStatusPreview
 } from './activity-thread-display'
-
-describe('isTerseAgentFollowUpPrompt', () => {
-  it('flags common short follow-ups', () => {
-    expect(isTerseAgentFollowUpPrompt('yes')).toBe(true)
-    expect(isTerseAgentFollowUpPrompt('ok proceed')).toBe(true)
-    expect(isTerseAgentFollowUpPrompt('Looks good.')).toBe(true)
-  })
-
-  it('keeps substantive prompts', () => {
-    expect(isTerseAgentFollowUpPrompt('Compare gpt5 claude prompting')).toBe(false)
-    expect(isTerseAgentFollowUpPrompt('Skill creator codex port')).toBe(false)
-  })
-})
-
-describe('getActivityThreadWorkspaceTitle', () => {
-  it('prefers the stored display name', () => {
-    expect(
-      getActivityThreadWorkspaceTitle({
-        displayName: 'Compound engineering plugin',
-        branch: 'main'
-      })
-    ).toBe('Compound engineering plugin')
-  })
-})
 
 describe('getActivityThreadTaskTitle', () => {
   const tab = {
@@ -38,45 +12,6 @@ describe('getActivityThreadTaskTitle', () => {
     title: 'Claude',
     defaultTitle: 'Claude'
   }
-
-  it('prefers custom title, then sticky orchestration labels', () => {
-    expect(
-      getActivityThreadTaskTitle({
-        entry: {
-          prompt: 'yes',
-          stateHistory: [],
-          orchestration: {
-            taskId: 'task-1',
-            dispatchId: 'ctx-1',
-            displayName: 'Fix checkout race'
-          }
-        },
-        tab: { ...tab, customTitle: 'My rename' },
-        generatedTitlesEnabled: true
-      })
-    ).toBe('My rename')
-
-    expect(
-      getActivityThreadTaskTitle({
-        entry: { prompt: 'yes', stateHistory: [] },
-        tab,
-        generatedTitlesEnabled: true
-      })
-    ).toBe('Refactor auth middleware')
-  })
-
-  it('ignores terse live prompts and uses generated title or history', () => {
-    expect(
-      getActivityThreadTaskTitle({
-        entry: {
-          prompt: 'yes',
-          stateHistory: [{ state: 'working', prompt: 'Skill creator codex port', startedAt: 1 }]
-        },
-        tab: { ...tab, generatedTitle: undefined },
-        generatedTitlesEnabled: true
-      })
-    ).toBe('Skill creator codex port')
-  })
 
   it('picks the most recent substantive prompt from history, not the longest', () => {
     expect(
@@ -96,19 +31,6 @@ describe('getActivityThreadTaskTitle', () => {
         generatedTitlesEnabled: false
       })
     ).toBe('Fix logout')
-  })
-
-  it('ignores the generated title when generated titles are disabled', () => {
-    expect(
-      getActivityThreadTaskTitle({
-        entry: {
-          prompt: 'yes',
-          stateHistory: [{ state: 'working', prompt: 'Wire up the export button', startedAt: 1 }]
-        },
-        tab,
-        generatedTitlesEnabled: false
-      })
-    ).toBe('Wire up the export button')
   })
 
   it('keeps orchestration labels across terse follow-ups but yields to new work', () => {
@@ -134,71 +56,53 @@ describe('getActivityThreadTaskTitle', () => {
       })
     ).toBe('Investigate the flaky login test')
   })
-
-  it('parses dispatch task bodies from history when the live prompt is a follow-up', () => {
-    expect(
-      getActivityThreadTaskTitle({
-        entry: {
-          prompt: 'ok',
-          stateHistory: [
-            {
-              state: 'done',
-              prompt: `You are working inside Orca, a multi-agent IDE. Your task ID is: task-1
-
-=== TASK ===
-Compare gpt5 claude prompting`,
-              startedAt: 1
-            }
-          ]
-        },
-        tab: { ...tab, generatedTitle: undefined },
-        generatedTitlesEnabled: false
-      })
-    ).toBe('Compare gpt5 claude prompting')
-  })
 })
 
 describe('getActivityThreadStatusPreview', () => {
-  it('shows tool activity while working and assistant replies otherwise', () => {
+  it('surfaces a failed turn as failed, not as its last reply', () => {
     expect(
       getActivityThreadStatusPreview({
-        state: 'working',
-        toolName: 'Bash',
-        toolInput: 'pnpm test',
-        prompt: 'Run tests'
+        state: 'done',
+        lastAssistantMessage: 'Done!',
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 },
+        prompt: 'Ship it'
       })
-    ).toBe('Bash: pnpm test')
-
-    expect(
-      getActivityThreadStatusPreview(
-        {
-          state: 'done',
-          prompt: 'yes',
-          lastAssistantMessage: 'Implemented the skill creator port.'
-        },
-        'done'
-      )
-    ).toBe('Implemented the skill creator port.')
+    ).toBe('Failed')
   })
 
-  it('rejects hook previews that echo the live user prompt', () => {
+  it('keeps a resolved tool off a finished row', () => {
+    // Tool fields outlive their turn; showing them after completion implies work is still in flight.
+    for (const state of ['done', 'blocked'] as const) {
+      expect(
+        getActivityThreadStatusPreview({
+          state,
+          toolName: 'bash',
+          toolInput: 'rm -rf build/',
+          prompt: 'Clean the build'
+        })
+      ).toBe('')
+    }
+  })
+
+  it('does not show a prior completed reply while the agent is working', () => {
     expect(
       getActivityThreadStatusPreview({
         state: 'working',
-        prompt: 'yes',
-        lastAssistantMessage: 'yes'
+        prompt: 'Next turn',
+        lastCompletedAssistantMessage: 'Filed 8 issues from the audit.'
       })
     ).toBe('')
   })
 
-  it('surfaces interrupted sessions explicitly', () => {
+  it('falls through to the completed-turn reply when the live preview is only worker_done', () => {
     expect(
       getActivityThreadStatusPreview({
         state: 'done',
-        interrupted: true,
-        prompt: 'Ship it'
+        prompt: 'Fix checkout',
+        lastAssistantMessage: 'Done — worker_done sent with outcome succeeded.',
+        lastCompletedAssistantMessage: 'I updated the tests and checked the activity row.'
       })
-    ).toBe('Interrupted by user')
+    ).toBe('I updated the tests and checked the activity row.')
   })
 })
 

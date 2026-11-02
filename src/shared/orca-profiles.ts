@@ -4,6 +4,9 @@ import type { ExecutionHostId } from './execution-host'
 export const ORCA_PROFILE_INDEX_SCHEMA_VERSION = 1
 export const DEFAULT_LOCAL_ORCA_PROFILE_ID = 'local-default'
 export const DEFAULT_LOCAL_ORCA_PROFILE_NAME = 'Personal'
+/** Main -> renderer push when the stored auth status changed without the renderer asking. */
+export const ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL = 'orcaProfiles:authStatusChanged'
+export const ORCA_PROFILE_SIGN_IN_PROGRESS_CHANGED_CHANNEL = 'orcaProfiles:signInProgressChanged'
 const LEGACY_ORCA_BROWSER_SESSION_PARTITION_PREFIX = 'persist:orca-browser-session-'
 
 export type OrcaProfileAvatar = {
@@ -76,8 +79,7 @@ export type OrcaProfileListState = {
 }
 
 export type OrcaProfileListResult = OrcaProfileListState & {
-  // Why: gates the full multi-profile switcher UI; default builds show a
-  // single-profile account menu instead.
+  // Gate the multi-profile switcher; default builds use one-profile account menus.
   multiProfileUi: boolean
 }
 
@@ -149,6 +151,9 @@ export type TransferOrcaProfileProjectResult =
       duplicateRepoId: string
     }
 
+/** A sign-in in flight; `link` is set only while the browser has not answered yet. */
+export type OrcaCloudSignInProgress = { link: string | null }
+
 export type ConnectCurrentOrcaProfileResult =
   | {
       status: 'connected'
@@ -162,6 +167,10 @@ export type ConnectCurrentOrcaProfileResult =
     }
   | {
       status: 'cancelled'
+      auth: OrcaProfileAuthStatus
+    }
+  | {
+      status: 'timed-out'
       auth: OrcaProfileAuthStatus
     }
   | {
@@ -233,13 +242,11 @@ export type RefreshCurrentOrcaProfileAuthResult =
       error: string
     }
 
-// Why: organization roles are a fixed server-side enum; the desktop UI mirrors
-// exactly these three so role selects can't drift from what the API accepts.
+// Mirror the server’s fixed role enum so UI options cannot drift from accepted API values.
 export type OrcaOrgRole = 'owner' | 'admin' | 'member'
 
 export type OrcaOrgMember = {
-  // Why: null for teammates provisioned server-side who never signed into Orca;
-  // mutation actions are disabled for them since the API keys on a real userId.
+  // Provisioned teammates without sign-in have no userId; disable mutations requiring that key.
   userId: string | null
   email: string
   displayName?: string

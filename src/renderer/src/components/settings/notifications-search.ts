@@ -58,6 +58,35 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.notifications.search.d46216d768',
+      'Agent Needs Input'
+    ),
+    description: translate(
+      'auto.components.settings.notifications.search.c9b2b656e0',
+      'Notify when a coding agent asks for permission or has a question.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.ca8faa40d7',
+        'notifications'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.7fa07e9600',
+        'agent'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.b8bf5471d1',
+        'permission'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.5b9dafd570',
+        'question'
+      ),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.009548060d', 'input')
+    ]
+  },
+  {
     title: translate('auto.components.settings.notifications.search.a5edee1d99', 'Terminal Bell'),
     description: translate(
       'auto.components.settings.notifications.search.d3f1c48677',
@@ -77,6 +106,23 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.notifications.search.a2ab73b325',
         'attention'
       )
+    ]
+  },
+  {
+    title: translate('auto.components.settings.notifications.search.machines', 'Machines'),
+    description: translate(
+      'auto.components.settings.notifications.search.machinesDescription',
+      'Choose which machines can show notifications on this computer, such as SSH machines or paired servers.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.ca8faa40d7',
+        'notifications'
+      ),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.host', 'host'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.remote', 'remote'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.ssh', 'ssh'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.mute', 'mute')
     ]
   },
   {

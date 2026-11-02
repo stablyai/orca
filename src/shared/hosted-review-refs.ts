@@ -1,3 +1,5 @@
+import type { BaseRefSearchResult } from './repo-types'
+
 export function normalizeHostedReviewHeadRef(ref: string): string {
   return ref
     .trim()
@@ -8,4 +10,38 @@ export function normalizeHostedReviewHeadRef(ref: string): string {
 export function normalizeHostedReviewBaseRef(ref: string): string {
   const normalized = normalizeHostedReviewHeadRef(ref)
   return normalized.replace(/^(origin|upstream)\//, '')
+}
+
+/** Exclude only a remote's direct symbolic HEAD, preserving branches like feature/HEAD. */
+export function isRemoteHeadRef(ref: string, remotes: readonly string[] = []): boolean {
+  // Every true result ends in `/HEAD`, so ordinary refs can skip the remote copy+sort.
+  if (!ref.endsWith('/HEAD')) {
+    return false
+  }
+  const shortRef = ref.startsWith('refs/remotes/') ? ref.slice('refs/remotes/'.length) : ref
+  const remote = [...remotes]
+    .sort((left, right) => right.length - left.length)
+    .find((candidate) => shortRef.startsWith(`${candidate}/`))
+  if (remote) {
+    return shortRef.slice(remote.length + 1) === 'HEAD'
+  }
+  // Unconfigured stale remotes are unambiguous only as <remote>/HEAD.
+  return shortRef.split('/').length === 2 && shortRef.endsWith('/HEAD')
+}
+
+export function normalizeCreateReviewBaseSearchResults(
+  results: readonly BaseRefSearchResult[]
+): string[] {
+  const seen = new Set<string>()
+  const branches: string[] = []
+  for (const result of results) {
+    // APIs need branch names; detailed search resolves remote-qualified refs, including slash-containing remote names.
+    const branch = normalizeHostedReviewBaseRef((result.localBranchName || result.refName).trim())
+    if (!branch || seen.has(branch)) {
+      continue
+    }
+    seen.add(branch)
+    branches.push(branch)
+  }
+  return branches
 }

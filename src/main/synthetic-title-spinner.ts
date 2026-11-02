@@ -1,3 +1,12 @@
+import type { AgentStatusClearIpcPayload } from '../shared/agent-status-types'
+
+// Losing an SSH connection does not prove its PTY stopped; only pane-scoped clears stop spinners.
+export function getSyntheticTitleSpinnerPaneKeyToStop(
+  clear: AgentStatusClearIpcPayload
+): string | null {
+  return 'paneKey' in clear ? clear.paneKey : null
+}
+
 export type SyntheticTitleSpinnerEntry<TProfile> = {
   frame: number
   profile: TProfile

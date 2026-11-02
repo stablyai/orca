@@ -1,153 +1,59 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { defineMethod } from '../core'
 import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
 import { LINEAR_ISSUE_LIST_METHOD, LINEAR_MCP_ISSUE_LIST_METHOD } from './linear-issue-list-method'
+import {
+  Connect,
+  CreateIssue,
+  CustomViewContents,
+  CustomViewId,
+  IssueComment,
+  IssueId,
+  IssueUpdate,
+  LinearIssueCommentsParams,
+  ListCustomViews,
+  ListProjects,
+  ProjectId,
+  ProjectIssues,
+  SearchIssues,
+  SelectWorkspace,
+  TeamId,
+  WorkspaceSelection
+} from '../../../../shared/rpc-contract/linear-params'
 
-const VALID_CUSTOM_VIEW_MODELS = ['issue', 'project'] as const
-const LinearPriority = z.number().int().min(0).max(4).optional()
-const LinearLabelIds = z.array(requiredString('Invalid label ID')).optional()
-
-const Connect = z.object({
-  apiKey: requiredString('Invalid API key')
-})
-
-const WorkspaceSelection = z
-  .object({
-    workspaceId: OptionalString
-  })
-  .optional()
-
-const ConcreteWorkspaceId = requiredString('Concrete Linear workspace ID is required').refine(
-  (value) => value !== 'all',
-  'Concrete Linear workspace ID is required'
-)
-
-const SelectWorkspace = z.object({
-  workspaceId: requiredString('Workspace ID is required')
-})
-
-const SearchIssues = z.object({
-  query: requiredString('Missing query'),
-  limit: OptionalFiniteNumber,
-  workspaceId: OptionalString
-})
-
-const CreateIssue = z.object({
-  teamId: requiredString('Team ID is required'),
-  title: requiredString('Title is required'),
-  description: OptionalString,
-  workspaceId: OptionalString,
-  parentIssueId: OptionalString,
-  projectId: z.union([z.string(), z.null()]).optional(),
-  stateId: OptionalString,
-  priority: LinearPriority,
-  assigneeId: z.union([z.string(), z.null()]).optional(),
-  labelIds: LinearLabelIds
-})
-
-const IssueId = z.object({
-  id: requiredString('Issue ID is required'),
-  workspaceId: OptionalString
-})
-
-const IssueComment = z.object({
-  issueId: requiredString('Issue ID is required'),
-  body: requiredString('Comment body is required'),
-  workspaceId: OptionalString
-})
-
-const ListProjects = z
-  .object({
-    query: OptionalString,
-    limit: OptionalFiniteNumber,
-    workspaceId: OptionalString,
-    force: z.boolean().optional()
-  })
-  .optional()
-
-const ProjectId = z.object({
-  id: requiredString('Project ID is required'),
-  workspaceId: ConcreteWorkspaceId,
-  force: z.boolean().optional()
-})
-
-const ProjectIssues = z.object({
-  projectId: requiredString('Project ID is required'),
-  limit: OptionalFiniteNumber,
-  workspaceId: ConcreteWorkspaceId,
-  force: z.boolean().optional()
-})
-
-const ListCustomViews = z.object({
-  model: z.enum(VALID_CUSTOM_VIEW_MODELS),
-  limit: OptionalFiniteNumber,
-  workspaceId: OptionalString,
-  force: z.boolean().optional()
-})
-
-const CustomViewId = z.object({
-  viewId: requiredString('Custom view ID is required'),
-  model: z.enum(VALID_CUSTOM_VIEW_MODELS),
-  workspaceId: ConcreteWorkspaceId,
-  force: z.boolean().optional()
-})
-
-const CustomViewContents = z.object({
-  viewId: requiredString('Custom view ID is required'),
-  limit: OptionalFiniteNumber,
-  workspaceId: ConcreteWorkspaceId,
-  force: z.boolean().optional()
-})
-
-const TeamId = z.object({
-  teamId: requiredString('Team ID is required'),
-  workspaceId: OptionalString
-})
-
-const IssueUpdate = z.object({
-  id: requiredString('Issue ID is required'),
-  workspaceId: OptionalString,
-  updates: z.object({
-    stateId: OptionalString,
-    title: OptionalString,
-    description: z.string().optional(),
-    assigneeId: z.union([z.string(), z.null()]).optional(),
-    estimate: z.union([z.number().int().min(0), z.null()]).optional(),
-    priority: z.number().int().min(0).max(4).optional(),
-    labelIds: z.array(z.string()).optional(),
-    projectId: z.union([z.string(), z.null()]).optional()
-  })
-})
-
-export const LINEAR_METHODS: RpcMethod[] = [
+export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.connect',
+    permission: 'accounts-admin',
     params: Connect,
     handler: async (params, { runtime }) => runtime.linearConnect(params.apiKey.trim())
   }),
   defineMethod({
     name: 'linear.disconnect',
+    permission: 'accounts-admin',
     params: WorkspaceSelection,
     handler: async (params, { runtime }) => runtime.linearDisconnect(params?.workspaceId)
   }),
   defineMethod({
     name: 'linear.selectWorkspace',
+    permission: 'accounts-admin',
     params: SelectWorkspace,
     handler: async (params, { runtime }) => runtime.linearSelectWorkspace(params.workspaceId.trim())
   }),
   defineMethod({
     name: 'linear.status',
+    permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) => runtime.linearStatus()
   }),
   defineMethod({
     name: 'linear.testConnection',
+    permission: 'workspace',
     params: WorkspaceSelection,
     handler: async (params, { runtime }) => runtime.linearTestConnection(params?.workspaceId)
   }),
   defineMethod({
     name: 'linear.searchIssues',
+    permission: 'workspace',
     params: SearchIssues,
     handler: async (params, { runtime }) =>
       runtime.linearSearchIssues(params.query, params.limit, params.workspaceId)
@@ -156,6 +62,7 @@ export const LINEAR_METHODS: RpcMethod[] = [
   LINEAR_MCP_ISSUE_LIST_METHOD,
   defineMethod({
     name: 'linear.createIssue',
+    permission: 'workspace',
     params: CreateIssue,
     handler: async (params, { runtime }) =>
       runtime.linearCreateIssue(
@@ -175,38 +82,41 @@ export const LINEAR_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'linear.getIssue',
+    permission: 'workspace',
     params: IssueId,
     handler: async (params, { runtime }) =>
       runtime.linearGetIssue(params.id.trim(), params.workspaceId)
   }),
   defineMethod({
     name: 'linear.updateIssue',
+    permission: 'workspace',
     params: IssueUpdate,
     handler: async (params, { runtime }) =>
       runtime.linearUpdateIssue(params.id.trim(), params.updates, params.workspaceId)
   }),
   defineMethod({
     name: 'linear.addIssueComment',
+    permission: 'workspace',
     params: IssueComment,
     handler: async (params, { runtime }) =>
       runtime.linearAddIssueComment(params.issueId.trim(), params.body.trim(), params.workspaceId)
   }),
   defineMethod({
     name: 'linear.issueComments',
-    params: z.object({
-      issueId: requiredString('Issue ID is required'),
-      workspaceId: OptionalString
-    }),
+    permission: 'workspace',
+    params: LinearIssueCommentsParams,
     handler: async (params, { runtime }) =>
       runtime.linearIssueComments(params.issueId.trim(), params.workspaceId)
   }),
   defineMethod({
     name: 'linear.listTeams',
+    permission: 'workspace',
     params: WorkspaceSelection,
     handler: async (params, { runtime }) => runtime.linearListTeams(params?.workspaceId)
   }),
   defineMethod({
     name: 'linear.listProjects',
+    permission: 'workspace',
     params: ListProjects,
     handler: async (params, { runtime }) =>
       runtime.linearListProjects(params?.query, params?.limit, params?.workspaceId, params?.force)
@@ -214,12 +124,14 @@ export const LINEAR_METHODS: RpcMethod[] = [
   LINEAR_PROJECT_CREATE_METHOD,
   defineMethod({
     name: 'linear.getProject',
+    permission: 'workspace',
     params: ProjectId,
     handler: async (params, { runtime }) =>
       runtime.linearGetProject(params.id.trim(), params.workspaceId.trim(), params.force)
   }),
   defineMethod({
     name: 'linear.listProjectIssues',
+    permission: 'workspace',
     params: ProjectIssues,
     handler: async (params, { runtime }) =>
       runtime.linearListProjectIssues(
@@ -231,12 +143,14 @@ export const LINEAR_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'linear.listCustomViews',
+    permission: 'workspace',
     params: ListCustomViews,
     handler: async (params, { runtime }) =>
       runtime.linearListCustomViews(params.model, params.limit, params.workspaceId, params.force)
   }),
   defineMethod({
     name: 'linear.getCustomView',
+    permission: 'workspace',
     params: CustomViewId,
     handler: async (params, { runtime }) =>
       runtime.linearGetCustomView(
@@ -248,6 +162,7 @@ export const LINEAR_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'linear.listCustomViewIssues',
+    permission: 'workspace',
     params: CustomViewContents,
     handler: async (params, { runtime }) =>
       runtime.linearListCustomViewIssues(
@@ -259,6 +174,7 @@ export const LINEAR_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'linear.listCustomViewProjects',
+    permission: 'workspace',
     params: CustomViewContents,
     handler: async (params, { runtime }) =>
       runtime.linearListCustomViewProjects(
@@ -270,18 +186,21 @@ export const LINEAR_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'linear.teamStates',
+    permission: 'workspace',
     params: TeamId,
     handler: async (params, { runtime }) =>
       runtime.linearTeamStates(params.teamId.trim(), params.workspaceId)
   }),
   defineMethod({
     name: 'linear.teamLabels',
+    permission: 'workspace',
     params: TeamId,
     handler: async (params, { runtime }) =>
       runtime.linearTeamLabels(params.teamId.trim(), params.workspaceId)
   }),
   defineMethod({
     name: 'linear.teamMembers',
+    permission: 'workspace',
     params: TeamId,
     handler: async (params, { runtime }) =>
       runtime.linearTeamMembers(params.teamId.trim(), params.workspaceId)

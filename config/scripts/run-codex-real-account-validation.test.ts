@@ -46,27 +46,7 @@ describe('Codex real-account validation harness', () => {
     expect(env.CODEX_HOME).toBeUndefined()
     expect(env.ORCA_CODEX_HOME).toBeUndefined()
     expect(env.ZDOTDIR).toBeUndefined()
-    expect(env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME).toBe('1')
     expect(env.SAFE_VALUE).toBe('preserved')
-  })
-
-  it('pins the real-home flag off when the system-default lane is disabled', async () => {
-    const primaryHome = path.join(os.tmpdir(), 'orca-primary-home-sentinel')
-    const { layout, env } = runValidationModule<{
-      layout: { tempRoot: string }
-      env: Record<string, string | undefined>
-    }>(
-      `
-        const { createValidationEnv, createValidationLayout } = await import(process.argv[1])
-        const layout = await createValidationLayout({ primaryHome: process.argv[2] })
-        const env = createValidationEnv({}, layout, { systemDefaultRealHome: 'off' })
-        console.log(JSON.stringify({ layout, env }))
-      `,
-      [primaryHome]
-    )
-    cleanupPaths.push(layout.tempRoot)
-
-    expect(env.ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME).toBe('0')
   })
 
   it('records only fingerprints for system-default and managed auth', async () => {
@@ -96,8 +76,12 @@ describe('Codex real-account validation harness', () => {
     )
     cleanupPaths.push(layout.tempRoot)
 
-    expect(snapshot.throwawayCodex.auth.sha256).toMatch(/^[a-f0-9]{64}$/)
-    expect(snapshot.managedHomes[0].auth.sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(snapshot.throwawayCodex.auth.sha256).toBe(
+      '31f4bbbaf084b1f0219648dd7be0161d92207bf3361edec55c7b5c81ecefa14c'
+    )
+    expect(snapshot.managedHomes[0].auth.sha256).toBe(
+      '0ceece50035d895227dec8d4c57df22e1a666cce3d8f56687b212d64d5d82ab6'
+    )
     expect(JSON.stringify(snapshot)).not.toContain('system-secret')
     expect(JSON.stringify(snapshot)).not.toContain('never-report-me')
   })
@@ -168,9 +152,7 @@ describe('Codex real-account validation harness', () => {
   })
 
   it('builds via process.execPath and the repo-local electron-vite entry, not npx', () => {
-    // Why: raw `npx` resolves to a .cmd shim on Windows that execFileSync cannot
-    // launch (ENOENT), so the build command must use the current Node binary and
-    // the repository-local electron-vite JS entry to stay cross-platform.
+    // Build with current Node/local electron-vite JS because Windows npx.cmd is not directly executable.
     const { command, args, entry } = runValidationModule<{
       command: string
       args: string[]

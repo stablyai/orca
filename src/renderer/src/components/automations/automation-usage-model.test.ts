@@ -55,6 +55,29 @@ describe('automation usage model', () => {
         }
       }),
       makeRun({
+        id: 'run-3',
+        createdAt: 3,
+        dispatchedAt: 3,
+        usage: {
+          status: 'known',
+          provider: 'claude',
+          model: 'sonnet',
+          inputTokens: 200,
+          outputTokens: 700,
+          cacheReadTokens: null,
+          cacheWriteTokens: 50,
+          reasoningOutputTokens: null,
+          totalTokens: 900,
+          estimatedCostUsd: 0.0042,
+          estimatedCostSource: 'api_equivalent',
+          providerSessionId: 'session-3',
+          attribution: 'provider_session_time_window',
+          collectedAt: 3,
+          unavailableReason: null,
+          unavailableMessage: null
+        }
+      }),
+      makeRun({
         id: 'run-2',
         usage: {
           status: 'unavailable',
@@ -78,14 +101,16 @@ describe('automation usage model', () => {
     ])
 
     expect(summary).toEqual({
-      knownRuns: 1,
+      knownRuns: 2,
       unavailableRuns: 1,
-      inputTokens: 1000,
-      outputTokens: 300,
-      cacheTokens: 400,
+      inputTokens: 1200,
+      outputTokens: 1000,
+      cacheTokens: 450,
       reasoningOutputTokens: 50,
-      totalTokens: 1350,
-      estimatedCostUsd: 0.0042
+      totalTokens: 2250,
+      estimatedCostUsd: 0.0084,
+      lastRunStatus: 'completed',
+      lastRunAt: 3
     })
   })
 

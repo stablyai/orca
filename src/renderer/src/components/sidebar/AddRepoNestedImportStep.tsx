@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { NestedRepoChecklist } from '@/components/repo/NestedRepoChecklist'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import { NestedRepoScanLimitNotice } from '../repo/NestedRepoScanLimitNotice'
 import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
@@ -60,20 +60,13 @@ export function AddRepoNestedImportStep({
     setPendingImportMode('folder')
     onOpenAsFolder()
   }
-  const repoCountLabel =
-    scan.repos.length === 1
-      ? translate('auto.components.sidebar.AddRepoNestedImportStep.8401a7a0d0', '1 repository')
-      : translate(
-          'auto.components.sidebar.AddRepoNestedImportStep.d4f1df62ef',
-          '{{value0}} repositories',
-          { value0: scan.repos.length }
-        )
   const foundSentence = translate(
-    'auto.components.sidebar.AddRepoNestedImportStep.b4263a2ac4',
-    'Found {{value0}} in {{value1}}.',
+    'auto.components.sidebar.AddRepoNestedImportStep.foundRepositories',
+    'Found {{count}} repositories in {{path}}.',
     {
-      value0: repoCountLabel,
-      value1: scan.selectedPath
+      count: scan.repos.length,
+      path: scan.selectedPath,
+      defaultValue_one: 'Found {{count}} repository in {{path}}.'
     }
   )
 

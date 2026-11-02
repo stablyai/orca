@@ -1,0 +1,149 @@
+import type { RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
+import { useAppStore } from '@/store'
+import type { OpenFile } from '@/store/slices/editor'
+import type { DirCache } from './file-explorer-types'
+import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
+import { useFileExplorerReveal } from './useFileExplorerReveal'
+
+type UseFileExplorerRowScrollingParams = {
+  visibleRowCount: number
+  inlineInputIndex: number
+  rowProjection: FileExplorerRowProjection
+  scrollRef: RefObject<HTMLDivElement | null>
+  onRevealOutsideRoot?: () => void
+  activeWorktreeId: string | null
+  worktreePath: string | null
+  displayRootPath?: string | null
+  expanded: Set<string>
+  dirCache: Record<string, DirCache>
+  loadingDirPaths: ReadonlySet<string>
+  rootCache: DirCache | undefined
+  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  loadMoreDir?: (dirPath: string) => Promise<void>
+  setSelectedPath: (path: string | null) => void
+  activeFileId: string | null
+  openFiles: OpenFile[]
+}
+
+type UseFileExplorerRowScrollingResult = {
+  virtualizer: Virtualizer<HTMLDivElement, Element>
+  scrollToIndex: (index: number) => void
+  flashingPath: string | null
+  cancelRevealTimers: () => void
+  explorerShellRef: RefObject<HTMLDivElement | null>
+  setExplorerShellRef: (node: HTMLDivElement | null) => void
+}
+
+export function useFileExplorerRowScrolling({
+  onRevealOutsideRoot,
+  visibleRowCount,
+  inlineInputIndex,
+  rowProjection,
+  scrollRef,
+  activeWorktreeId,
+  worktreePath,
+  displayRootPath = worktreePath,
+  expanded,
+  dirCache,
+  loadingDirPaths,
+  rootCache,
+  loadDir,
+  loadMoreDir,
+  setSelectedPath,
+  activeFileId,
+  openFiles
+}: UseFileExplorerRowScrollingParams): UseFileExplorerRowScrollingResult {
+  const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
+  const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
+  const [flashingPath, setFlashingPath] = useState<string | null>(null)
+  /** Include the scrollbar, which is outside Radix’s viewport. */
+  const explorerShellRef = useRef<HTMLDivElement | null>(null)
+  const flashTimeoutRef = useRef<number | null>(null)
+
+  const totalCount = visibleRowCount + (inlineInputIndex >= 0 ? 1 : 0)
+
+  const virtualizer = useVirtualizer({
+    count: totalCount,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 26,
+    overscan: 20,
+    getItemKey: (index) => {
+      if (inlineInputIndex >= 0) {
+        if (index === inlineInputIndex) {
+          return '__inline_input__'
+        }
+        const rowIndex = index > inlineInputIndex ? index - 1 : index
+        return rowProjection.getRowAtIndex(rowIndex)?.path ?? `__fallback_${index}`
+      }
+      return rowProjection.getRowAtIndex(index)?.path ?? `__fallback_${index}`
+    }
+  })
+
+  const cancelRevealTimers = useFileExplorerReveal({
+    onRevealOutsideRoot,
+    activeWorktreeId,
+    worktreePath,
+    displayRootPath,
+    pendingExplorerReveal,
+    clearPendingExplorerReveal,
+    expanded,
+    dirCache,
+    loadingDirPaths,
+    rootCache: displayRootPath ? dirCache[displayRootPath] : rootCache,
+    rowProjection,
+    loadDir,
+    loadMoreDir,
+    setSelectedPath,
+    setFlashingPath,
+    flashTimeoutRef,
+    virtualizer
+  })
+  const setExplorerShellRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      explorerShellRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Cancel shell-owned reveal timers on detach rather than passive unmount cleanup.
+      cancelRevealTimers()
+    },
+    [cancelRevealTimers]
+  )
+
+  useFileExplorerAutoReveal({
+    activeFileId,
+    activeWorktreeId,
+    worktreePath,
+    displayRootPath,
+    pendingExplorerReveal,
+    openFiles,
+    rowProjection,
+    setSelectedPath,
+    virtualizer
+  })
+
+  useEffect(() => {
+    if (inlineInputIndex >= 0) {
+      virtualizer.scrollToIndex(inlineInputIndex, { align: 'auto' })
+    }
+  }, [inlineInputIndex, virtualizer])
+
+  const scrollToIndex = useCallback(
+    (index: number) => {
+      virtualizer.scrollToIndex(index, { align: 'auto' })
+    },
+    [virtualizer]
+  )
+
+  return {
+    virtualizer,
+    scrollToIndex,
+    flashingPath,
+    explorerShellRef,
+    setExplorerShellRef,
+    cancelRevealTimers
+  }
+}

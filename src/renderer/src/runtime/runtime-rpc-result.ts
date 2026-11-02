@@ -1,5 +1,7 @@
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
+// Why: the CLI reads the same flattened tokens, so the matcher lives in shared and both clients use one copy.
+
 export class RuntimeRpcCallError extends Error {
   readonly code: string
   readonly response: RuntimeRpcFailure
@@ -17,4 +19,9 @@ export function unwrapRuntimeRpcResult<TResult>(response: RuntimeRpcResponse<TRe
     throw new RuntimeRpcCallError(response)
   }
   return response.result
+}
+
+// Mobile tokens refuse nonallowlisted methods as forbidden; surface one scope banner instead of empty/retrying UI.
+export function isRuntimeScopeForbiddenError(error: unknown): boolean {
+  return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
 }

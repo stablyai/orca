@@ -1,0 +1,36 @@
+/** Manual Retry carries the same catalog incarnation as scheduled work so its response can pass the commit fence. */
+
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import type { AutomationHostFetchTarget } from './automation-host-scheduler'
+
+export function automationHostAuthorityRef(
+  entry: AutomationHostCatalogEntry,
+  pairingRevision: (environmentId: string) => number
+): AutomationAuthorityRef {
+  if (entry.owner) {
+    return entry.owner.authority
+  }
+  const authority = entry.stableRef.authority
+  return authority.kind === 'desktop'
+    ? { kind: 'desktop' }
+    : {
+        kind: 'runtime',
+        environmentId: authority.environmentId,
+        pairingRevision: pairingRevision(authority.environmentId)
+      }
+}
+
+export function automationHostFetchTarget(
+  entry: AutomationHostCatalogEntry,
+  pairingRevision: (environmentId: string) => number
+): AutomationHostFetchTarget {
+  return {
+    ref: entry.stableRef,
+    authority: automationHostAuthorityRef(entry, pairingRevision),
+    owner: entry.owner,
+    querySupport: entry.querySupport,
+    // A retry is always what the user is waiting on, so it jumps the queue.
+    priority: true
+  }
+}

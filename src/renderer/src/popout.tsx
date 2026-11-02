@@ -1,7 +1,9 @@
+// Install the import-free hook before react-dom reads it during evaluation; the observer below wraps a per-commit property and can load later.
+import './lib/react-devtools-commit-hook-shim'
+import './lib/react-commit-cascade-observer'
 import './assets/main.css'
 
 import { StrictMode, useEffect } from 'react'
-import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -10,29 +12,38 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
+import { resolvePaintedTheme } from './lib/terminal-app-theme'
 import { buildAppFontFamily } from './lib/app-font-family'
+import { applyCodeFontSmoothing } from './lib/code-font-smoothing'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
+import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
-// Why: the pop-out window is a separate BrowserWindow with its own React root,
-// so it must run the same renderer bootstrap as main.tsx (crash diagnostics,
-// theme, i18n, error boundary) rather than inheriting anything from the main
-// window. It shares the preload/window.api but not the DOM or JS context.
+const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
+import.meta.hot?.dispose(disposeOsFileDropGuard)
+const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
+import.meta.hot?.dispose(disposeBodyOverlayAttributes)
+// Each popout has a separate React root/DOM/JS context; run full renderer bootstrap despite sharing preload/window.api.
 recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics('dashboard-popout')
+setReactCommitCascadeRendererSurface('dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
-  applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
+  applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
   document.documentElement.style.setProperty(
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)
   )
+  applyCodeFontSmoothing(settings?.codeFontSmoothing)
 }
 
-// Why: the popout owns a separate renderer store; seed appearance synchronously
-// so a forced light/dark theme does not flash the OS theme before first paint.
+// Seed this separate store synchronously to prevent OS-theme flash before async appearance hydration.
 let startupSettings: GlobalSettings | null = null
 try {
   startupSettings = window.api.settings.getSync()
@@ -50,17 +61,13 @@ if (!rootElement) {
   throw new Error('Pop-out root element not found.')
 }
 
-// The main process loads popout.html with ?view=<name> so a single entry can
-// host different dashboard layouts (kanban, etc.).
-const requestedView = new URLSearchParams(window.location.search).get('view')
-
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
+  useReduceVisualEffects(settings?.reduceVisualEffects)
 
   useEffect(() => {
     let disposed = false
-    // Why: the preview terminal's copy/paste chords honor user keybinding
-    // overrides, which live in a separate file from settings.
+    // Preview-terminal copy/paste overrides live in a separate keybinding file.
     void useAppStore.getState().fetchKeybindings()
     const setSettings = (next: GlobalSettings): void => {
       if (!disposed) {
@@ -89,7 +96,7 @@ function PopoutSettingsSync(): null {
       return
     }
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme('system')
+    const handleChange = (): void => applyDocumentTheme(resolvePaintedTheme(settings))
     media.addEventListener('change', handleChange)
     return () => media.removeEventListener('change', handleChange)
   }, [settings])
@@ -109,12 +116,12 @@ function PopoutRoot(): React.JSX.Element {
         'The dashboard could not finish rendering. Retry to remount it, or reopen it.'
       )}
     >
-      <DashboardPopoutRoot view={requestedView} />
+      <DashboardPopoutRoot />
     </RecoverableRenderErrorBoundary>
   )
 }
 
-createRoot(rootElement).render(
+getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
   <StrictMode>
     <I18nProvider>
       <PopoutSettingsSync />

@@ -1,78 +1,51 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  SkillFreshnessInstallation,
-  SkillFreshnessInventory,
-  SkillFreshnessStatus
-} from '../../../shared/skill-freshness'
-import { getSkillFreshnessDisplayStatus } from './skill-freshness-display-status'
+import type { BundledSkillOp } from '../../../shared/bundled-skill-plan'
+import {
+  planEntry,
+  planOf,
+  planOp
+} from '../components/skills/bundled-skill-plan-fixtures.test-support'
+import {
+  getSkillFreshnessDisplayStatus,
+  hasSkillCopyNeedingAttention
+} from './skill-freshness-display-status'
 
 const SKILL_NAME = 'orca-cli'
+const SHARED = `/home/u/.agents/skills/${SKILL_NAME}`
+const CLAUDE = `/home/u/.claude/skills/${SKILL_NAME}`
 
-function placement(status: SkillFreshnessStatus, index = 0): SkillFreshnessInstallation {
-  return {
-    id: `${SKILL_NAME}-${index}`,
-    name: SKILL_NAME,
-    rootId: 'home-agents',
-    providers: ['agent-skills'],
-    sourceKind: 'home',
-    sourceLabel: 'Agent skills home',
-    unresolvedPath: `/home/.agents/skills/${SKILL_NAME}-${index}`,
-    resolvedPath: `/home/.agents/skills/${SKILL_NAME}-${index}`,
-    physicalIdentity: `physical-${index}`,
-    topology: 'canonical-copy',
-    status,
-    installedReleaseRevision: 1,
-    installedAppVersion: '1.0.0',
-    currentReleaseRevision: 2,
-    currentPackageDigest: 'current',
-    currentAppVersion: '2.0.0',
-    observedPackageDigest: status === 'current' ? 'current' : 'other',
-    errorCategory: null
-  }
-}
-
-function inventory(
-  installations: SkillFreshnessInstallation[],
-  eligibleUpdateNames: string[] = []
-): SkillFreshnessInventory {
-  return { schemaVersion: 1, installations, eligibleUpdateNames, scannedAt: 1 }
+function planWith(...ops: BundledSkillOp[]) {
+  return planOf([planEntry(SKILL_NAME, ops)])
 }
 
 describe('getSkillFreshnessDisplayStatus', () => {
-  it('shows update available when the inventory authorizes an update', () => {
-    expect(
-      getSkillFreshnessDisplayStatus(inventory([placement('outdated')], [SKILL_NAME]), SKILL_NAME)
-    ).toBe('update-available')
+  it('flags an edited copy left alone, and an interrupted update to repair', () => {
+    const edited = planWith(
+      planOp('keep', SHARED),
+      planOp('leave', CLAUDE, { reason: 'edited', replaceable: true })
+    )
+    expect(getSkillFreshnessDisplayStatus(edited, SKILL_NAME)).toBe('needs-attention')
+    expect(hasSkillCopyNeedingAttention(edited, SKILL_NAME)).toBe(true)
+
+    const repair = planWith(planOp('restore', SHARED))
+    expect(getSkillFreshnessDisplayStatus(repair, SKILL_NAME)).toBe('needs-attention')
   })
 
-  it('shows up to date only when every discovered placement is current', () => {
-    expect(
-      getSkillFreshnessDisplayStatus(
-        inventory([placement('current'), placement('current', 1)]),
-        SKILL_NAME
-      )
-    ).toBe('up-to-date')
+  it("does not flag someone else's same-named skill", () => {
+    const plan = planWith(
+      planOp('keep', SHARED),
+      planOp('leave', CLAUDE, { reason: 'other', replaceable: true })
+    )
+    expect(getSkillFreshnessDisplayStatus(plan, SKILL_NAME)).toBe('up-to-date')
+    expect(hasSkillCopyNeedingAttention(plan, SKILL_NAME)).toBe(false)
   })
 
-  it.each([
-    ['before the inventory loads', null],
-    ['when the inventory has no matching placement', inventory([])]
-  ])('reports presence only %s', (_scenario, value) => {
-    // Why: with nothing scanned there is no drift to claim, and flashing attention
-    // on every launch before the first scan would train the user to ignore it.
-    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('installed')
-  })
-
-  it.each([
-    [
-      'when any placement is unrecognized',
-      inventory([placement('current'), placement('unrecognized', 1)])
-    ],
-    ['when a placement is inaccessible', inventory([placement('inaccessible')])],
-    ['when an outdated placement is not eligible', inventory([placement('outdated')])]
-  ])('reports needs attention %s', (_scenario, value) => {
-    // Why: no eligible update is not proof a copy is fine. Green here would read as
-    // all-clear over drift the update command cannot reach and the user cannot see.
-    expect(getSkillFreshnessDisplayStatus(value, SKILL_NAME)).toBe('needs-attention')
+  it('reads an unknown op kind from a newer host as needing attention', () => {
+    const plan = planWith({
+      ...planOp('keep', SHARED),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Simulates a newer host's op kind this build does not know.
+      kind: 'teleport' as BundledSkillOp['kind']
+    })
+    expect(getSkillFreshnessDisplayStatus(plan, SKILL_NAME)).toBe('needs-attention')
   })
 })

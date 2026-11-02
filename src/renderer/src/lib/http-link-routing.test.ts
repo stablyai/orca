@@ -3,28 +3,57 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import {
   openHttpLink,
+  openOwnedHttpLink,
   registerHttpLinkStoreAccessor,
+  registerWorkspaceHttpLinkBrowserOpener,
   resolveLocalhostHttpLinkDisplayUrl
 } from './http-link-routing'
+
+import type { ExecutionHostId } from '../../../shared/execution-host'
+
+const toastErrorMock = vi.hoisted(() => vi.fn())
+
+vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 
 const openUrlMock = vi.fn()
 const registerLocalhostLabelMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
+const setActiveViewMock = vi.fn()
+const openRuntimeBrowserTabMock = vi.fn((): Promise<string | null> => Promise.resolve(null))
+const dispatchEventMock = vi.fn()
+
+function noActiveWorkspace(): {
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+} {
+  return { activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
+}
+
+type LinkTestSettings = {
+  openLinksInApp?: boolean
+  openLinksInAppModifierInverts?: boolean
+  openLinksInAppInBackground?: boolean
+  openLinksInAppPreferencePrompted?: boolean
+  activeRuntimeEnvironmentId?: string | null
+  localhostWorktreeLabelsEnabled?: boolean
+}
+const noSettings = (): LinkTestSettings | undefined => undefined
+const terminalView = (): 'terminal' | 'activity' => 'terminal'
+
+const repos: { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[] = []
+
+const projects: { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[] = []
 
 const storeState = {
-  settings: undefined as
-    | {
-        openLinksInApp?: boolean
-        openLinksInAppPreferencePrompted?: boolean
-        activeRuntimeEnvironmentId?: string | null
-        localhostWorktreeLabelsEnabled?: boolean
-      }
-    | undefined,
+  settings: noSettings(),
   setActiveWorktree: setActiveWorktreeMock,
+  activeView: terminalView(),
+  setActiveView: setActiveViewMock,
+  ...noActiveWorkspace(),
   createBrowserTab: createBrowserTabMock,
-  repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
-  projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
+  repos,
+  projects,
   worktreesByRepo: {} as Record<
     string,
     { id: string; projectId?: string; repoId?: string; displayName?: string }[]
@@ -39,9 +68,13 @@ const storeState = {
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
+  storeState.activeView = 'terminal'
+  Object.assign(storeState, noActiveWorkspace())
   storeState.workspacePortScansByKey = {}
   registerHttpLinkStoreAccessor(() => storeState)
+  registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
   vi.stubGlobal('window', {
+    dispatchEvent: dispatchEventMock,
     api: {
       shell: {
         openUrl: openUrlMock
@@ -54,32 +87,55 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  registerWorkspaceHttpLinkBrowserOpener(null)
   vi.unstubAllGlobals()
 })
 
 describe('openHttpLink', () => {
-  it('routes into Orca when openLinksInApp is on and a worktree is known', () => {
-    storeState.settings = { openLinksInApp: true }
-
-    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
-
-    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1')
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
+  it.each([
+    { kind: 'local' },
+    { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+    { kind: 'ssh', connectionId: 'ssh-1' }
+  ] as const)('opens required owner %j without reading Active Server', (sourceOwner) => {
+    storeState.settings = {
+      openLinksInApp: true,
+      localhostWorktreeLabelsEnabled: true,
+      get activeRuntimeEnvironmentId(): never {
+        throw new Error('An owned link must not read Active Server')
+      }
+    }
+    openOwnedHttpLink('http://localhost:5180/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner
+    })
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: 'wt-1',
+      url: 'http://localhost:5180/',
+      intent: { kind: 'url' },
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) }),
+      ...(sourceOwner.kind === 'runtime'
+        ? { expectedRuntimeEnvironmentId: 'env-1' }
+        : sourceOwner.kind === 'ssh'
+          ? { expectedSshConnectionId: 'ssh-1' }
+          : {})
     })
     expect(openUrlMock).not.toHaveBeenCalled()
+    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
-
-  it('defaults to the system browser when settings have not hydrated', () => {
-    storeState.settings = undefined
+  it('keeps the selected host of the active workspace a link opens in', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
+    storeState.settings = { openLinksInApp: true }
+    storeState.activeWorktreeId = 'wt-1'
+    storeState.activeWorkspaceExecutionHostId = 'ssh:box'
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
 
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1', 'ssh:box')
   })
 
   it('routes floating workspace links into Orca without changing the active repo worktree', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true }
 
     openHttpLink('https://example.com/', { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
@@ -93,26 +149,8 @@ describe('openHttpLink', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
-  it('routes to the system browser when openLinksInApp is off', () => {
-    storeState.settings = { openLinksInApp: false }
-
-    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
-
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('routes to the system browser when a remote runtime environment is active', () => {
-    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
-
-    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
-
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
-  })
-
   it('honors an explicit local document owner despite an unrelated active runtime', () => {
+    registerWorkspaceHttpLinkBrowserOpener(null)
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-other' }
 
     openHttpLink('https://example.com/', {
@@ -126,22 +164,53 @@ describe('openHttpLink', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
-  it('routes explicit runtime and SSH document owners to the exact system URL', () => {
+  it('routes runtime and SSH document owners through their workspace browsers', () => {
     storeState.settings = { openLinksInApp: true, localhostWorktreeLabelsEnabled: true }
 
     openHttpLink('http://localhost:5180/runtime', {
+      allowRemoteInApp: true,
       worktreeId: 'wt-1',
       sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
     })
     openHttpLink('http://localhost:5180/ssh', {
+      allowRemoteInApp: true,
       worktreeId: 'wt-1',
       sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
     })
 
-    expect(openUrlMock).toHaveBeenNthCalledWith(1, 'http://localhost:5180/runtime')
-    expect(openUrlMock).toHaveBeenNthCalledWith(2, 'http://localhost:5180/ssh')
+    expect(openRuntimeBrowserTabMock).toHaveBeenNthCalledWith(1, {
+      workspaceId: 'wt-1',
+      url: 'http://localhost:5180/runtime',
+      intent: { kind: 'url' },
+      expectedRuntimeEnvironmentId: 'env-1',
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) })
+    })
+    expect(openRuntimeBrowserTabMock).toHaveBeenNthCalledWith(2, {
+      workspaceId: 'wt-1',
+      url: 'http://localhost:5180/ssh',
+      intent: { kind: 'url' },
+      expectedSshConnectionId: 'ssh-1',
+      linkContext: expect.objectContaining({ linkIntent: null, canReveal: expect.any(Function) })
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed instead of falling back to the client system browser', async () => {
+    storeState.settings = { openLinksInApp: true }
+    openRuntimeBrowserTabMock.mockRejectedValueOnce(new Error('runtime unavailable'))
+
+    openHttpLink('https://example.com/', {
+      allowRemoteInApp: true,
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
+    })
+
+    await vi.waitFor(() => expect(openRuntimeBrowserTabMock).toHaveBeenCalledOnce())
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith('runtime unavailable')
   })
 
   it('labels explicit local links from the local scan instead of a merged remote port', async () => {
@@ -212,25 +281,6 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
-  it('routes to the system browser when no worktree id is provided', () => {
-    storeState.settings = { openLinksInApp: true }
-
-    openHttpLink('https://example.com/', { worktreeId: '' })
-
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('forceSystemBrowser overrides the setting even when a worktree is active', () => {
-    storeState.settings = { openLinksInApp: true }
-
-    openHttpLink('https://example.com/', { worktreeId: 'wt-1', forceSystemBrowser: true })
-
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
-  })
-
   it('labels localhost links from terminal output before opening the system browser', async () => {
     storeState.settings = { openLinksInApp: false, localhostWorktreeLabelsEnabled: true }
     storeState.repos = [
@@ -293,65 +343,17 @@ describe('openHttpLink', () => {
     expect(openUrlMock).toHaveBeenCalledWith('http://analytics.orca.localhost:60016/episodes')
   })
 
-  it('resolves display URLs for labeled localhost links without opening them', async () => {
-    storeState.settings = { localhostWorktreeLabelsEnabled: true }
-    storeState.repos = [
-      {
-        id: 'repo-1',
-        displayName: 'snapstudio',
-        repoIcon: null,
-        badgeColor: '#f97316'
-      }
-    ]
-    storeState.worktreesByRepo = {
-      'repo-1': [
-        {
-          id: 'wt-main',
-          repoId: 'repo-1',
-          projectId: 'repo-1',
-          displayName: 'main'
-        }
-      ]
-    }
-    storeState.workspacePortScan = {
-      result: {
-        platform: 'darwin',
-        scannedAt: 1,
-        ports: [
-          {
-            id: 'tcp:5180',
-            kind: 'workspace',
-            port: 5180,
-            protocol: 'http',
-            bindHost: '127.0.0.1',
-            connectHost: 'localhost',
-            owner: {
-              repoId: 'repo-1',
-              worktreeId: 'wt-main',
-              displayName: 'main',
-              path: '/repo/main',
-              confidence: 'cwd'
-            }
-          }
-        ]
-      }
-    }
-    registerLocalhostLabelMock.mockResolvedValue({
-      url: 'http://snapstudio-main.orca.localhost:60016/'
-    })
-
-    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/')).resolves.toBe(
-      'http://snapstudio-main.orca.localhost:60016/'
-    )
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('does not label localhost links while a remote runtime is active', async () => {
+  // Hover labels must match clicks: remote loopback opens raw in the system browser, never under a local workspace label.
+  it.each([
+    ['runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' }] as const,
+    ['ssh', { kind: 'ssh', connectionId: 'conn-1' }] as const
+  ])('does not label a %s-owned localhost link without an active runtime', async (_kind, owner) => {
     storeState.settings = {
       localhostWorktreeLabelsEnabled: true,
-      activeRuntimeEnvironmentId: 'web-runtime'
+      activeRuntimeEnvironmentId: null
     }
+    storeState.repos = [{ id: 'repo-1', displayName: 'snapstudio' }]
+    storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-main', projectId: 'repo-1' }] }
     storeState.workspacePortScan = {
       result: {
         platform: 'darwin',
@@ -376,7 +378,9 @@ describe('openHttpLink', () => {
       }
     }
 
-    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/')).resolves.toBe(null)
+    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/', owner)).resolves.toBe(
+      null
+    )
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
   })
 })

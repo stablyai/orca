@@ -1,0 +1,219 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFsPromisesModule from 'node:fs/promises'
+
+const CODEX_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex'
+const CODEX_SESSION_FILE = `${CODEX_HOME}\\sessions\\2026\\01\\01\\rollout-1.jsonl`
+const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+const KIMI_INDEX = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.kimi\\session_index.jsonl'
+
+const mocks = vi.hoisted(() => ({ stat: vi.fn(), open: vi.fn(), readFile: vi.fn() }))
+
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFsPromisesModule>()),
+  stat: mocks.stat,
+  open: mocks.open,
+  readFile: mocks.readFile
+}))
+
+import {
+  readCodexSessionIndexTitle,
+  resetCodexSessionIndexTitleCacheForTests,
+  _hasCodexSessionIndexTitleCacheEntryForTest
+} from './session-scanner-codex-title-index'
+import {
+  clearKimiSessionIndexCache,
+  hasKimiSessionIndexCacheEntryForTests,
+  readKimiWorkDirBySessionId
+} from './session-scanner-kimi-paths'
+import { readJsonObjectIfExists } from './session-scanner-values'
+import {
+  resetWslTranscriptFsGateForTests,
+  WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
+  WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
+  WslTranscriptFsError
+} from '../native-chat/wsl-transcript-fs-gate'
+
+// Keep identity unchanged so recovery proves eviction rather than a signature-based cache miss.
+const INDEX_STATS = { size: 128, mtimeMs: 7, ctimeMs: 7 }
+
+let releaseStall: (() => void) | undefined
+
+function stalls(): Promise<never> {
+  return new Promise<never>((resolve) => {
+    releaseStall = () => resolve(undefined as never)
+  })
+}
+
+function servingHandle(body: string) {
+  const bytes = Buffer.from(body)
+  return {
+    read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+      const slice = bytes.subarray(position, Math.min(position + length, bytes.length))
+      slice.copy(buffer, offset)
+      return { bytesRead: slice.length, buffer }
+    }),
+    close: vi.fn(async () => {})
+  }
+}
+
+// Late results cannot clear quarantine; advance through backoff before retrying.
+async function releaseAndSettle(): Promise<void> {
+  releaseStall?.()
+  releaseStall = undefined
+  await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
+}
+
+beforeEach(() => {
+  resetWslTranscriptFsGateForTests()
+  resetCodexSessionIndexTitleCacheForTests()
+  clearKimiSessionIndexCache()
+  mocks.stat.mockReset()
+  mocks.open.mockReset()
+  mocks.readFile.mockReset()
+  mocks.stat.mockResolvedValue(INDEX_STATS)
+  releaseStall = undefined
+  // performance.now drives the route quarantine clock, so it must be faked too.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
+})
+
+afterEach(async () => {
+  await releaseAndSettle()
+  vi.useRealTimers()
+})
+
+describe('memoized WSL session indexes under a stalled mount', () => {
+  it('shares one cold Codex index read across a concurrent parser batch', async () => {
+    const handles: ReturnType<typeof servingHandle>[] = []
+    mocks.open.mockImplementation(async () => {
+      const handle = servingHandle(
+        `${JSON.stringify({ id: SESSION_ID, thread_name: 'Shared title' })}\n`
+      )
+      handles.push(handle)
+      return handle
+    })
+
+    const titles = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)
+      )
+    )
+
+    expect(titles).toEqual(Array.from({ length: 8 }, () => 'Shared title'))
+    expect(mocks.stat).toHaveBeenCalledTimes(1)
+    expect(mocks.open).toHaveBeenCalledTimes(1)
+    expect(handles).toHaveLength(1)
+    expect(handles[0].close).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps concurrent Codex homes separate even when their file signatures match', async () => {
+    const otherHome = `${CODEX_HOME}-other`
+    mocks.open.mockImplementation(async (path: string) =>
+      servingHandle(
+        `${JSON.stringify({
+          id: SESSION_ID,
+          thread_name: path.includes('-other') ? 'Other home' : 'First home'
+        })}\n`
+      )
+    )
+
+    const titles = await Promise.all(
+      [CODEX_HOME, otherHome].flatMap((home) =>
+        Array.from({ length: 8 }, () =>
+          readCodexSessionIndexTitle(CODEX_SESSION_FILE, home, SESSION_ID)
+        )
+      )
+    )
+
+    expect(titles).toEqual([
+      ...Array.from({ length: 8 }, () => 'First home'),
+      ...Array.from({ length: 8 }, () => 'Other home')
+    ])
+    expect(mocks.open).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares one changed Codex index read and preserves later title updates', async () => {
+    mocks.open.mockImplementation(async () =>
+      servingHandle(`${JSON.stringify({ id: SESSION_ID, thread_name: 'Original title' })}\n`)
+    )
+    expect(await readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)).toBe(
+      'Original title'
+    )
+    mocks.open.mockClear()
+    mocks.stat.mockResolvedValue({ ...INDEX_STATS, mtimeMs: 8 })
+    mocks.open.mockImplementation(async () =>
+      servingHandle(`${JSON.stringify({ id: SESSION_ID, thread_name: 'Updated title' })}\n`)
+    )
+
+    const titles = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)
+      )
+    )
+
+    expect(titles).toEqual(Array.from({ length: 8 }, () => 'Updated title'))
+    expect(mocks.open).toHaveBeenCalledTimes(1)
+
+    mocks.stat.mockResolvedValue({ ...INDEX_STATS, mtimeMs: 9 })
+    mocks.open.mockImplementation(async () =>
+      servingHandle(`${JSON.stringify({ id: SESSION_ID, thread_name: 'Latest title' })}\n`)
+    )
+    expect(await readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)).toBe(
+      'Latest title'
+    )
+    expect(mocks.open).toHaveBeenCalledTimes(2)
+  })
+
+  it('evicts the Codex title index instead of pinning "no titles"', async () => {
+    mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
+    const refused = readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
+
+    expect(await refused).toBeNull()
+    expect(_hasCodexSessionIndexTitleCacheEntryForTest(CODEX_HOME)).toBe(false)
+
+    await releaseAndSettle()
+    mocks.open.mockResolvedValue(
+      servingHandle(`${JSON.stringify({ id: SESSION_ID, thread_name: 'Ship the gate' })}\n`)
+    )
+
+    expect(await readCodexSessionIndexTitle(CODEX_SESSION_FILE, CODEX_HOME, SESSION_ID)).toBe(
+      'Ship the gate'
+    )
+  })
+
+  it('evicts the Kimi work-dir index instead of pinning "no cwd"', async () => {
+    mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
+    const refused = readKimiWorkDirBySessionId(KIMI_INDEX)
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
+
+    expect(await refused).toEqual(new Map())
+    expect(hasKimiSessionIndexCacheEntryForTests(KIMI_INDEX)).toBe(false)
+
+    await releaseAndSettle()
+    mocks.open.mockResolvedValue(
+      servingHandle(`${JSON.stringify({ sessionId: SESSION_ID, workDir: '/repo/app' })}\n`)
+    )
+
+    expect(await readKimiWorkDirBySessionId(KIMI_INDEX)).toEqual(
+      new Map([[SESSION_ID, '/repo/app']])
+    )
+  })
+
+  it('surfaces a refused optional JSON enrichment instead of caching it as absent', async () => {
+    mocks.readFile.mockImplementation(stalls)
+    const pending = readJsonObjectIfExists(`${CODEX_HOME}\\history.json`).catch(
+      (error: unknown) => error
+    )
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
+
+    // WSL rejection must reach the scan issue path instead of caching missing enrichment.
+    expect(await pending).toBeInstanceOf(WslTranscriptFsError)
+  })
+
+  it('still degrades a missing optional JSON file to null', async () => {
+    mocks.readFile.mockRejectedValue(
+      Object.assign(new Error('ENOENT'), { code: 'ENOENT' as const })
+    )
+    await expect(readJsonObjectIfExists(`${CODEX_HOME}\\missing.json`)).resolves.toBeNull()
+  })
+})

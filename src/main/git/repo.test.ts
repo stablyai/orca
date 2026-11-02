@@ -3,10 +3,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 
 import {
   buildSearchBaseRefsArgv,
-  getDefaultBaseRef,
+  getBaseRefDefault,
   getBranchConflictKind,
   getRemoteCount,
   parseAndFilterSearchRefDetails,
@@ -14,8 +15,12 @@ import {
   searchBaseRefDetails,
   searchBaseRefs
 } from './repo'
+import {
+  REPO_SEARCH_REFS_MAX_LIMIT,
+  REPO_SEARCH_REFS_MAX_SCAN_LIMIT
+} from '../../shared/repo-search-limits'
 
-// Why: use real git state (not mocked) because the bug is in the for-each-ref glob shape a mock would miss.
+// Real Git exercises ref globs that mocks cannot validate.
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
@@ -23,14 +28,13 @@ function git(cwd: string, args: string[]): string {
 
 function initRepo(dir: string): void {
   git(dir, ['init', '--quiet'])
-  // Why: `--initial-branch=main` needs git >= 2.28; symbolic-ref before the first commit forces `main` on any git version.
+  // symbolic-ref selects main before the first commit on Git < 2.28 too.
   git(dir, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   git(dir, ['config', 'user.email', 'test@test.com'])
   git(dir, ['config', 'user.name', 'Test'])
   git(dir, ['commit', '--allow-empty', '-m', 'initial', '--quiet'])
 }
 
-/** Create a remote-tracking ref via `update-ref`, avoiding a live remote. */
 function createRemoteRef(mainDir: string, shortName: string, sha: string): void {
   git(mainDir, ['update-ref', `refs/remotes/${shortName}`, sha])
 }
@@ -43,7 +47,7 @@ describe('buildSearchBaseRefsArgv', () => {
   it('caps broad local ref searches before parsing results', () => {
     const argv = buildSearchBaseRefsArgv('feature', 25)
 
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--exclude=refs/remotes/*/HEAD')
     expect(argv).toContain('--count=100')
     expect(argv).toContain('refs/heads/**/*feature*')
     expect(argv).toContain('refs/remotes/**/*feature*/**')
@@ -52,12 +56,25 @@ describe('buildSearchBaseRefsArgv', () => {
   it('keeps segmented display-format searches bounded', () => {
     const argv = buildSearchBaseRefsArgv('upstream/main', 10)
 
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--exclude=refs/remotes/*/HEAD')
     expect(argv).toContain('--count=40')
     expect(argv).toContain('refs/remotes/*upstream*/*main*')
     expect(argv).toContain('refs/heads/*upstream*/*main*')
     expect(argv).toContain('refs/remotes/*/upstream/main*')
     expect(argv).toContain('refs/heads/upstream/main*')
+  })
+
+  it('keeps remote HEAD excludes compact when many remotes are configured', () => {
+    const ordinaryRemotes = Array.from({ length: 200 }, (_, index) => `remote-${index}`)
+    const argv = buildSearchBaseRefsArgv('feature', 10, {
+      remoteNames: [...ordinaryRemotes, 'origin', 'upstream', 'origin', 'foo/bar', 'foo/bar']
+    })
+    const excludes = argv.filter((arg) => arg.startsWith('--exclude='))
+
+    expect(excludes).toEqual([
+      '--exclude=refs/remotes/*/HEAD',
+      '--exclude=refs/remotes/foo/bar/HEAD'
+    ])
   })
 
   it('anchors local-branch-name searches below configured remotes', () => {
@@ -154,13 +171,12 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(results).toContain('local-only')
   })
 
-  // Why: fnmatch `*` doesn't cross `/`, so a single-word query needs `**` to match any segment of a slashed name.
   it('finds a local slashed branch when the query lands in a deep segment', async () => {
     git(tmpDir, ['branch', 'feature/login'])
 
     const results = await searchBaseRefs(tmpDir, 'login')
 
-    expect(results).toContain('feature/login')
+    expect(results).toContain('refs/heads/feature/login')
   })
 
   it('finds a local slashed branch when the query lands in an ancestor segment', async () => {
@@ -168,7 +184,7 @@ describe('searchBaseRefs (widened glob)', () => {
 
     const results = await searchBaseRefs(tmpDir, 'feature')
 
-    expect(results).toContain('feature/login')
+    expect(results).toContain('refs/heads/feature/login')
   })
 
   it('finds a remote slashed branch when the query lands in a deep segment', async () => {
@@ -208,13 +224,248 @@ describe('searchBaseRefs (widened glob)', () => {
     const results = await searchBaseRefDetails(tmpDir, 'feature/something')
 
     expect(results).toContainEqual({
-      refName: 'feature/something',
+      refName: 'refs/heads/feature/something',
       localBranchName: 'feature/something'
     })
   })
 
+  it('recovers complete Unicode ref names when Git splits a short ref byte sequence', () => {
+    const branch = 'feature/运动记录及预约详情页优化'
+    const results = parseAndFilterSearchRefDetails(
+      [
+        `refs/heads/${branch}\0feature/运动记录及预约详�`,
+        `refs/remotes/origin/${branch}\0origin/feature/运动记录及预约详�`
+      ].join('\n'),
+      10,
+      ['origin']
+    )
+
+    expect(results).toEqual([
+      { refName: `refs/heads/${branch}`, localBranchName: branch },
+      { refName: `refs/remotes/origin/${branch}`, localBranchName: branch }
+    ])
+  })
+
+  it('preserves namespace disambiguation while recovering colliding Unicode refs', () => {
+    const branch = 'origin/feature/运动记录及预约详情页优化'
+    const results = parseAndFilterSearchRefDetails(
+      [
+        `refs/heads/${branch}\0origin/feature/运动记录及预约详�`,
+        `refs/remotes/${branch}\0origin/feature/运动记录及预约详�`
+      ].join('\n'),
+      10,
+      ['origin']
+    )
+
+    expect(results).toEqual([
+      { refName: `refs/heads/${branch}`, localBranchName: branch },
+      {
+        refName: `refs/remotes/${branch}`,
+        localBranchName: 'feature/运动记录及预约详情页优化'
+      }
+    ])
+  })
+
+  it('distinguishes literal U+FFFD from a later decoder-introduced truncation marker', () => {
+    const literal = 'feature/�'
+    const fullyQualifiedLiteral = 'feature/fully-qualified/�'
+    const truncated = 'feature/�运动记录及预约详情页优化'
+    const results = parseAndFilterSearchRefDetails(
+      [
+        `refs/heads/${literal}\0${literal}`,
+        `refs/heads/${fullyQualifiedLiteral}\0refs/heads/${fullyQualifiedLiteral}`,
+        `refs/heads/${truncated}\0feature/�运动记录及预约详�`
+      ].join('\n'),
+      10
+    )
+
+    expect(results).toEqual([
+      { refName: `refs/heads/${literal}`, localBranchName: literal },
+      {
+        refName: `refs/heads/${fullyQualifiedLiteral}`,
+        localBranchName: fullyQualifiedLiteral
+      },
+      { refName: `refs/heads/${truncated}`, localBranchName: truncated }
+    ])
+  })
+
+  it.each(['feature/运动记录及预约详情页优化', 'feature/运动记录及预约详情页优化加', 'feature/加'])(
+    'returns intact Unicode ref names from real Git: %s',
+    async (branch) => {
+      const sha = getHeadSha(tmpDir)
+      git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+      git(tmpDir, ['branch', branch])
+      createRemoteRef(tmpDir, `origin/${branch}`, sha)
+
+      const results = await searchBaseRefDetails(tmpDir, branch.slice('feature/'.length))
+
+      const refNames = results.map(({ refName }) => refName)
+      expect(refNames.some((ref) => ref === branch || ref === `refs/heads/${branch}`)).toBe(true)
+      expect(
+        refNames.some(
+          (ref) => ref === `origin/${branch}` || ref === `refs/remotes/origin/${branch}`
+        )
+      ).toBe(true)
+      expect(results.every(({ localBranchName }) => localBranchName === branch)).toBe(true)
+      expect(results.every(({ refName }) => !refName.includes('\uFFFD'))).toBe(true)
+      expect(
+        results.every(
+          ({ refName }) => git(tmpDir, ['rev-parse', '--verify', refName]).trim() === sha
+        )
+      ).toBe(true)
+    }
+  )
+
+  it('creates worktrees from intact local and remote Unicode search selectors', async () => {
+    const branch = 'feature/加'
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['branch', branch])
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, `origin/${branch}`, sha)
+    const results = await searchBaseRefDetails(tmpDir, '加')
+    expect(results).toHaveLength(2)
+    const worktreeRoot = mkdtempSync(path.join(tmpdir(), 'orca-unicode-worktrees-'))
+    try {
+      for (const [index, result] of results.entries()) {
+        const worktreePath = path.join(worktreeRoot, String(index))
+        git(tmpDir, ['worktree', 'add', '-b', `recovered-${index}`, worktreePath, result.refName])
+        expect(git(worktreePath, ['rev-parse', 'HEAD']).trim()).toBe(sha)
+        expect(result.localBranchName).toBe(branch)
+      }
+    } finally {
+      rmSync(worktreeRoot, { recursive: true, force: true })
+      git(tmpDir, ['worktree', 'prune'])
+    }
+  })
+
+  it.each(['feature./valid', 'feature./运动记录', 'feature./加'])(
+    'keeps valid dotted components searchable: %s',
+    async (branch) => {
+      const sha = getHeadSha(tmpDir)
+      git(tmpDir, ['branch', branch])
+      git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+      createRemoteRef(tmpDir, `origin/${branch}`, sha)
+      const results = await searchBaseRefDetails(tmpDir, branch)
+      expect(results).toHaveLength(2)
+      expect(results.every(({ localBranchName }) => localBranchName === branch)).toBe(true)
+      expect(
+        results.map(({ refName }) => git(tmpDir, ['rev-parse', '--verify', refName]).trim())
+      ).toEqual([sha, sha])
+    }
+  )
+
+  it.each([true, false])(
+    'keeps colliding local and remote selectors distinct in loose mode with configured remote %s',
+    async (configured) => {
+      const branch = 'origin/feature'
+      const localSha = getHeadSha(tmpDir)
+      git(tmpDir, ['branch', branch])
+      if (configured) {
+        git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+      }
+      git(tmpDir, ['commit', '--allow-empty', '-m', 'remote target', '--quiet'])
+      const remoteSha = getHeadSha(tmpDir)
+      createRemoteRef(tmpDir, branch, remoteSha)
+      git(tmpDir, ['config', 'core.warnAmbiguousRefs', 'false'])
+      const results = await searchBaseRefDetails(tmpDir, branch)
+      expect(results).toContainEqual({ refName: `refs/heads/${branch}`, localBranchName: branch })
+      for (const result of results) {
+        const base = await resolveWorktreeAddBaseRef(result.refName, async (ref) => {
+          try {
+            git(tmpDir, ['rev-parse', '--verify', ref])
+            return true
+          } catch {
+            return false
+          }
+        })
+        expect(git(tmpDir, ['rev-parse', '--verify', base]).trim()).toBe(
+          result.localBranchName === branch ? localSha : remoteSha
+        )
+      }
+    }
+  )
+
+  it.each(['branch', 'tag'])(
+    'preserves a nested remote HEAD against a colliding %s',
+    async (kind) => {
+      const remoteSha = getHeadSha(tmpDir)
+      git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+      createRemoteRef(tmpDir, 'origin/feature/HEAD', remoteSha)
+      git(tmpDir, ['commit', '--allow-empty', '-m', 'collision target', '--quiet'])
+      git(tmpDir, [kind, 'origin/feature/HEAD'])
+      const results = await searchBaseRefDetails(tmpDir, 'feature/HEAD')
+      expect(results).toContainEqual({
+        refName: 'refs/remotes/origin/feature/HEAD',
+        localBranchName: 'feature/HEAD'
+      })
+      expect(
+        git(tmpDir, ['rev-parse', '--verify', 'refs/remotes/origin/feature/HEAD']).trim()
+      ).toBe(remoteSha)
+    }
+  )
+
+  it.each(['refs/heads/topic', 'refs/remotes/origin/topic'])(
+    'preserves the local namespace for a branch named %s',
+    async (branch) => {
+      git(tmpDir, ['branch', branch])
+      const results = await searchBaseRefDetails(tmpDir, branch)
+      expect(results).toEqual([{ refName: `refs/heads/${branch}`, localBranchName: branch }])
+    }
+  )
+
+  it('returns distinct resolvable names for real colliding Unicode refs', async () => {
+    const branch = 'origin/运动记录及预约详情页优化'
+    const localSha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    git(tmpDir, ['branch', branch, localSha])
+    git(tmpDir, ['commit', '--allow-empty', '-m', 'remote ref', '--quiet'])
+    const remoteSha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, branch, remoteSha)
+
+    const results = await searchBaseRefDetails(tmpDir, 'origin/运动')
+
+    expect(results).toHaveLength(2)
+    expect(
+      Object.fromEntries(
+        results.map(({ refName, localBranchName }) => [
+          localBranchName,
+          git(tmpDir, ['rev-parse', '--verify', refName]).trim()
+        ])
+      )
+    ).toEqual({
+      [branch]: localSha,
+      运动记录及预约详情页优化: remoteSha
+    })
+  })
+
+  it('resolves a Unicode branch rather than a same-name tag', async () => {
+    const branch = 'feature/运动记录及预约详情页优化'
+    const branchSha = getHeadSha(tmpDir)
+    git(tmpDir, ['branch', branch, branchSha])
+    git(tmpDir, ['commit', '--allow-empty', '-m', 'tag target', '--quiet'])
+    git(tmpDir, ['tag', branch])
+
+    const results = await searchBaseRefDetails(tmpDir, '运动记录')
+
+    expect(results).toHaveLength(1)
+    expect(results[0]?.refName).toBe(`refs/heads/${branch}`)
+    expect(results[0]?.localBranchName).toBe(branch)
+    expect(git(tmpDir, ['rev-parse', '--verify', results[0]?.refName ?? '']).trim()).toBe(branchSha)
+
+    const worktreeDir = mkdtempSync(path.join(tmpdir(), 'orca-ref-worktree-test-'))
+    rmSync(worktreeDir, { recursive: true })
+    try {
+      git(tmpDir, ['worktree', 'add', '--quiet', worktreeDir, results[0]?.localBranchName ?? ''])
+      expect(git(worktreeDir, ['symbolic-ref', 'HEAD']).trim()).toBe(`refs/heads/${branch}`)
+    } finally {
+      rmSync(worktreeDir, { recursive: true, force: true })
+      git(tmpDir, ['worktree', 'prune'])
+    }
+  })
+
   it('allows creating a local branch from the selected matching remote base ref', async () => {
     const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
 
     const result = await getBranchConflictKind(
@@ -226,14 +477,48 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(result).toBeNull()
   })
 
-  it('still reports a remote conflict for a different tracking ref with the same branch name', async () => {
+  it('allows checking out a remote branch that another remote also carries (#26344)', async () => {
     const sha = getHeadSha(tmpDir)
+    // Configure owners so these are tracking refs rather than orphan prefixes.
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    git(tmpDir, ['remote', 'add', 'upstream', 'https://example.invalid/upstream.git'])
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
     createRemoteRef(tmpDir, 'upstream/feature/something', sha)
 
     expect(
       await getBranchConflictKind(tmpDir, 'feature/something', 'origin/feature/something')
-    ).toBe('remote')
+    ).toBeNull()
+    expect(await getBranchConflictKind(tmpDir, 'feature/something', 'origin/main')).toBe('remote')
+  })
+
+  it('ignores a ref whose prefix matches no configured remote', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'mimic-fork/my-task', sha)
+
+    expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBeNull()
+  })
+
+  it('stops treating leftover refs from a removed remote as conflicts', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    git(tmpDir, ['remote', 'add', 'fork', 'https://example.invalid/fork.git'])
+    createRemoteRef(tmpDir, 'fork/my-task', sha)
+    expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBe('remote')
+
+    // Remove config only: remote remove would also prune the orphan ref this test needs.
+    git(tmpDir, ['config', '--remove-section', 'remote.fork'])
+
+    expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBeNull()
+  })
+
+  it('still reports a local conflict when an unrelated ref shares the name', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'mimic-fork/my-task', sha)
+    git(tmpDir, ['branch', 'my-task'])
+
+    expect(await getBranchConflictKind(tmpDir, 'my-task', 'origin/main')).toBe('local')
   })
 
   it('reports remote conflicts when the remote name contains a slash', async () => {
@@ -248,6 +533,19 @@ describe('searchBaseRefs (widened glob)', () => {
     )
 
     expect(result).toBe('remote')
+  })
+
+  it('keeps a remote named refs/heads distinct from a fully qualified local ref', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'refs/heads', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'refs/heads/feature-example', sha)
+
+    const results = await searchBaseRefDetails(tmpDir, 'feature-example')
+
+    expect(results).toContainEqual({
+      refName: 'refs/remotes/refs/heads/feature-example',
+      localBranchName: 'feature-example'
+    })
   })
 
   it('uses the longest configured remote name when deriving local branch names', () => {
@@ -284,7 +582,7 @@ describe('searchBaseRefs (widened glob)', () => {
   it('caps broad ref-search argv before git output is captured', () => {
     const argv = buildSearchBaseRefsArgv('', 12)
 
-    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--exclude=refs/remotes/*/HEAD')
     expect(argv).toContain('--count=48')
   })
 
@@ -294,12 +592,26 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(argv).toContain('--count=2400')
   })
 
-  it('returns [] for invalid search limits instead of running an uncapped search', async () => {
-    await expect(searchBaseRefs(tmpDir, '', 0.5)).resolves.toEqual([])
-    await expect(searchBaseRefs(tmpDir, '', Number.NaN)).resolves.toEqual([])
+  it('clamps oversized limits before constructing an unbounded Git count', () => {
+    expect(buildSearchBaseRefsArgv('', REPO_SEARCH_REFS_MAX_LIMIT)).toContain('--count=4000')
+    expect(buildSearchBaseRefsArgv('', REPO_SEARCH_REFS_MAX_SCAN_LIMIT)).toContain('--count=4004')
+    expect(buildSearchBaseRefsArgv('', REPO_SEARCH_REFS_MAX_SCAN_LIMIT + 1)).toContain(
+      '--count=4004'
+    )
+    expect(buildSearchBaseRefsArgv('', Number.MAX_SAFE_INTEGER)).toContain('--count=4004')
+    expect(() => buildSearchBaseRefsArgv('', Number.MAX_VALUE)).toThrow('invalid_limit')
   })
 
-  // Why: users retype the displayed `<remote>/<branch>` format, so a slashed query must still match.
+  it('rejects malformed limits instead of running an uncapped search', async () => {
+    await expect(searchBaseRefs(tmpDir, '', 0.5)).resolves.toEqual([])
+    await expect(searchBaseRefs(tmpDir, '', Number.NaN)).resolves.toEqual([])
+    await expect(
+      searchBaseRefs(tmpDir, '', REPO_SEARCH_REFS_MAX_SCAN_LIMIT + 1)
+    ).resolves.toContain('main')
+    await expect(searchBaseRefs(tmpDir, '', Number.MAX_SAFE_INTEGER)).resolves.toContain('main')
+    await expect(searchBaseRefs(tmpDir, '', Number.MAX_VALUE)).resolves.toEqual([])
+  })
+
   it('finds the ref when the query is in display format `<remote>/<branch>`', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
@@ -319,7 +631,6 @@ describe('searchBaseRefs (widened glob)', () => {
 
     expect(results).toContain('upstream/feature-x')
     expect(results).toContain('upstream/feature-y')
-    // Why: `upstream/feat` pins the remote segment to *upstream*, so origin/feature-x must not leak in.
     expect(results).not.toContain('origin/feature-x')
   })
 
@@ -327,7 +638,6 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    // Why: each token is pinned to its own segment (remote vs branch), so `main/upstream` must not match `upstream/main`.
     const results = await searchBaseRefs(tmpDir, 'main/upstream')
 
     expect(results).not.toContain('upstream/main')
@@ -338,17 +648,55 @@ describe('searchBaseRefs (widened glob)', () => {
     createRemoteRef(tmpDir, 'upstream/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/main'])
 
-    // Why: the HEAD filter runs after the glob match, so display-format queries must still drop the pseudo-ref.
     const results = await searchBaseRefs(tmpDir, 'upstream/HEAD')
 
     expect(results).not.toContain('upstream/HEAD')
+  })
+
+  it('keeps nested branches whose final component is HEAD', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'upstream', 'https://example.invalid/upstream.git'])
+    createRemoteRef(tmpDir, 'upstream/main', sha)
+    createRemoteRef(tmpDir, 'upstream/feature/HEAD', sha)
+    git(tmpDir, ['symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/main'])
+
+    const results = await searchBaseRefs(tmpDir, 'feature/HEAD')
+
+    const nestedRef = results.find(
+      (ref) => ref.endsWith('/upstream/feature/HEAD') || ref === 'upstream/feature/HEAD'
+    )
+    expect(nestedRef).toBeDefined()
+    expect(git(tmpDir, ['rev-parse', '--verify', nestedRef ?? '']).trim()).toBe(sha)
+    expect(results).not.toContain('upstream/HEAD')
+  })
+
+  it('preserves Git disambiguation prefixes for colliding local and remote refs', () => {
+    const results = parseAndFilterSearchRefDetails(
+      [
+        'refs/heads/origin/main\0heads/origin/main',
+        'refs/remotes/origin/main\0remotes/origin/main'
+      ].join('\n'),
+      10,
+      ['origin']
+    )
+
+    expect(results).toEqual([
+      { refName: 'refs/heads/origin/main', localBranchName: 'origin/main' },
+      { refName: 'refs/remotes/origin/main', localBranchName: 'main' }
+    ])
+  })
+
+  it('keeps a disambiguated local branch attached to its real branch name', () => {
+    const branch = 'feature/colliding-tag'
+    const results = parseAndFilterSearchRefDetails(`refs/heads/${branch}\0heads/${branch}`, 10)
+
+    expect(results).toEqual([{ refName: `refs/heads/${branch}`, localBranchName: branch }])
   })
 
   it('tolerates trailing, leading, and doubled slashes in the query', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    // Why: empty tokens from stray slashes would degrade to `**` and match nothing, so they're filtered out.
     expect(await searchBaseRefs(tmpDir, 'upstream/')).toContain('upstream/main')
     expect(await searchBaseRefs(tmpDir, '/upstream')).toContain('upstream/main')
     expect(await searchBaseRefs(tmpDir, 'upstream//main')).toContain('upstream/main')
@@ -433,11 +781,11 @@ describe('searchBaseRefs (widened glob)', () => {
 
     const results = await searchBaseRefs(tmpDir, 'plan/unified-brainstorm-plan-docs')
 
-    expect(results).toContain('plan/unified-brainstorm-plan-docs')
+    expect(results).toContain('refs/heads/plan/unified-brainstorm-plan-docs')
   })
 })
 
-describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
+describe('getBaseRefDefault (regression — unchanged behavior)', async () => {
   let tmpDir: string
 
   beforeEach(() => {
@@ -449,107 +797,108 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('returns origin/main when both origin/main and upstream/main exist (origin wins)', () => {
+  it('returns origin/main when both origin/main and upstream/main exist (origin wins)', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('returns the target of origin/HEAD when set', () => {
+  it('returns the target of origin/HEAD when set', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('falls through from a stale origin/HEAD target to an existing primary ref', () => {
+  it('falls through from a stale origin/HEAD target to an existing primary ref', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/master'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/main')
   })
 
-  it('falls through from a stale origin/HEAD primary target to another existing default ref', () => {
+  it('falls through from a stale origin/HEAD primary target to another existing default ref', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/master', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
     expect(result).toBe('origin/master')
   })
 
-  it('does NOT fall through to upstream/main when origin/* is absent', () => {
-    // Why: default probe order is origin-only by design; upstream-aware defaulting is deferred.
+  it('resolves symbolic chains to a default branch outside the primary candidates', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/release/stable', sha)
+    git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/alias', 'refs/remotes/origin/release/stable'])
+    git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/alias'])
+
+    await expect(getBaseRefDefault(tmpDir)).resolves.toBe('origin/release/stable')
+  })
+
+  it('ignores descendants of primary candidates', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/main/topic', sha)
+    createRemoteRef(tmpDir, 'origin/master', sha)
+
+    await expect(getBaseRefDefault(tmpDir)).resolves.toBe('origin/master')
+  })
+
+  it('does NOT fall through to upstream/main when origin/* is absent', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    const result = getDefaultBaseRef(tmpDir)
+    const result = await getBaseRefDefault(tmpDir)
 
-    // initRepo creates a local `main`, so with no origin/* we expect it — not `upstream/main`.
     expect(result).toBe('main')
     expect(result).not.toBe('upstream/main')
   })
 })
 
 describe('resolveDefaultBaseRefViaExec', () => {
-  it('falls through from a stale origin/HEAD target to the probe list', async () => {
+  it('resolves the primary fallback ordering with one exact ref query', async () => {
     const calls: string[][] = []
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
-      if (argv[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/master\n' }
+      return {
+        stdout: 'refs/heads/main\0\nrefs/remotes/origin/master\0\nrefs/remotes/origin/main\0\n'
       }
-      if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/remotes/origin/main') {
-        return { stdout: 'main-sha\n' }
-      }
-      throw new Error('missing ref')
     }
 
     await expect(resolveDefaultBaseRefViaExec(exec)).resolves.toBe('origin/main')
-
     expect(calls).toEqual([
-      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/master'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main']
+      [
+        'for-each-ref',
+        '--format=%(refname)%00%(symref)',
+        'refs/remotes/origin/HEA[D]',
+        'refs/remotes/origin/mai[n]',
+        'refs/remotes/origin/maste[r]',
+        'refs/heads/mai[n]',
+        'refs/heads/maste[r]'
+      ]
     ])
   })
 
-  it('verifies origin/HEAD even when it points at origin/main', async () => {
-    const calls: string[][] = []
-    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
-      calls.push(argv)
-      if (argv[0] === 'symbolic-ref') {
-        return { stdout: 'refs/remotes/origin/main\n' }
-      }
-      if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/remotes/origin/master') {
-        return { stdout: 'master-sha\n' }
-      }
-      throw new Error('missing ref')
-    }
-
-    await expect(resolveDefaultBaseRefViaExec(exec)).resolves.toBe('origin/master')
-
-    expect(calls).toEqual([
-      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
-      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/master']
-    ])
+  it('returns null if the host cannot read the ref table', async () => {
+    await expect(
+      resolveDefaultBaseRefViaExec(async () => {
+        throw new Error('unavailable host')
+      })
+    ).resolves.toBeNull()
   })
 })
 
-describe('getRemoteCount', () => {
+describe('getRemoteCount', async () => {
   let tmpDir: string
 
   beforeEach(() => {

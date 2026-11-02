@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { SettingsSwitch } from '../settings/SettingsFormControls'
-import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import WorkspaceStatusAppearancePopover from './WorkspaceStatusAppearancePopover'
 import { translate } from '@/i18n/i18n'
@@ -120,7 +121,7 @@ export default function WorkspaceKanbanSettingsMenu({
               >
                 <div className="flex items-center gap-1">
                   <meta.icon className={cn('size-3.5 shrink-0', meta.tone)} />
-                  <input
+                  <ImeInput
                     defaultValue={status.label}
                     onBlur={(event) => onRenameStatus(status.id, event.target.value)}
                     onKeyDown={(event) => {
@@ -164,7 +165,7 @@ export default function WorkspaceKanbanSettingsMenu({
                     disabled={index === workspaceStatuses.length - 1}
                     onClick={() => onMoveStatus(status.id, 1)}
                     aria-label={translate(
-                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.b45b350eb0',
+                      'auto.components.sidebar.WorkspaceKanbanSettingsMenu.moveStatusRight',
                       'Move {{value0}} right',
                       { value0: status.label }
                     )}

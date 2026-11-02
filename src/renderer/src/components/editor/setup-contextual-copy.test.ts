@@ -29,6 +29,8 @@ vi.mock('@/lib/primary-selection', () => ({
   setPrimarySelectionText: () => {}
 }))
 
+vi.mock('./editor-shortcuts', () => ({ editorShortcutMatches: () => true }))
+
 describe('setupContextualCopy', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -85,9 +87,16 @@ describe('setupContextualCopy', () => {
     expect(setInterval).not.toHaveBeenCalled()
   })
 
-  it('polls a focused editor while a contextual copy hint is visible', () => {
-    const setInterval = vi.fn(() => 1)
+  it('refreshes a visible hint without reading selection text and extracts it only on copy', async () => {
+    let refreshHint = (): void => {}
+    let keydown = (_event: KeyboardEvent): void => {}
+    const setInterval = vi.fn((callback: () => void) => {
+      refreshHint = callback
+      return 1
+    })
+    const writeClipboardText = vi.fn(async (_text: string) => {})
     vi.stubGlobal('window', {
+      api: { ui: { writeClipboardText } },
       clearInterval: vi.fn(),
       clearTimeout: vi.fn(),
       setInterval,
@@ -111,16 +120,24 @@ describe('setupContextualCopy', () => {
       getStartPosition: () => ({ lineNumber: 1, column: 1 }),
       getEndPosition: () => ({ lineNumber: 2, column: 4 })
     }
+    const selectedText = `${'x'.repeat(4 * 1024 * 1024)}\ntwo`
+    const getValueInRange = vi.fn(() => selectedText)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The editor stub implements every method setupContextualCopy invokes in this scenario.
     const editorInstance = {
       addContentWidget: vi.fn(),
       getContainerDomNode: () => ({
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn()
+        addEventListener: (type: string, callback: (event: KeyboardEvent) => void) => {
+          if (type === 'keydown') {
+            keydown = callback
+          }
+        },
+        removeEventListener: vi.fn(),
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: 500 })
       }),
       getLayoutInfo: () => ({ height: 500 }),
       getModel: () => ({
         getLineMaxColumn: () => 4,
-        getValueInRange: () => 'one\ntwo'
+        getValueInRange
       }),
       getScrolledVisiblePosition: () => ({ top: 20, left: 8, height: 16 }),
       getSelection: () => selection,
@@ -148,6 +165,20 @@ describe('setupContextualCopy', () => {
     })
 
     expect(setInterval).toHaveBeenCalledTimes(1)
+    for (let tick = 0; tick < 20; tick += 1) {
+      refreshHint()
+    }
+    expect(getValueInRange).not.toHaveBeenCalled()
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Shortcut matching is mocked; the handler reads only these event methods.
+    keydown({ preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as KeyboardEvent)
+    await Promise.resolve()
+    expect(getValueInRange).toHaveBeenCalledTimes(1)
+    expect(writeClipboardText).toHaveBeenCalledWith(
+      `File: src/example.ts\nLines: 1-2\n\n\`\`\`ts\n${selectedText}\n\`\`\``
+    )
+    refreshHint()
+    expect(getValueInRange).toHaveBeenCalledTimes(1)
   })
 
   it('clears editor-scoped contextual copy cleanup on dispose', () => {

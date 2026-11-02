@@ -1,8 +1,7 @@
-import type { OrcaHooks } from '../../../../shared/types'
 import { DEFAULT_APP_FONT_FAMILY, getDefaultRepoHookSettings } from '../../../../shared/constants'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS } from '../../../../shared/terminal-scrollback-policy'
+import { uiZoomFactorFromLevel } from '../../../../shared/ui-zoom-level'
 
-export type HookName = keyof OrcaHooks['scripts']
 export const DEFAULT_REPO_HOOK_SETTINGS = getDefaultRepoHookSettings()
 export const MAX_THEME_RESULTS = 80
 export const SCROLLBACK_PRESETS_ROWS = DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS
@@ -13,15 +12,14 @@ export {
 } from '../../../../shared/ui-zoom-level'
 
 export function zoomLevelToPercent(level: number): number {
-  return Math.round(100 * Math.pow(1.2, level))
+  return Math.round(100 * uiZoomFactorFromLevel(level))
 }
 
 export function mergeFontSuggestions(
   systemFonts: readonly string[],
   previousFonts: readonly string[]
 ): string[] {
-  // Why: picker rendering can be capped later, but the source list must keep
-  // every installed font searchable/selectable.
+  // Keep every installed font searchable even if rendering is capped later.
   return Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...systemFonts, ...previousFonts]))
 }
 

@@ -1,12 +1,17 @@
 import React from 'react'
 import { Pin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import type { Repo, WorkspaceStatus, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import WorktreeCard from './WorktreeCard'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type WorkspaceKanbanCardProps = {
   worktree: Worktree
+  // Virtualization breaks DOM-index ordering; drop math needs the full lane position.
+  laneIndex: number
   repo: Repo | undefined
   isActive: boolean
   isSelected: boolean
@@ -23,6 +28,7 @@ type WorkspaceKanbanCardProps = {
 
 function WorkspaceKanbanCard({
   worktree,
+  laneIndex,
   repo,
   isActive,
   isSelected,
@@ -33,13 +39,17 @@ function WorkspaceKanbanCard({
   onContextMenuSelect,
   onAssignWorkspaceStatus
 }: WorkspaceKanbanCardProps): React.JSX.Element {
+  useUiLanguageRevision()
+  const worktreeIdentity = getWorktreeHostIdentity(worktree)
   const contextWorktrees =
     isSelected && selectedWorktrees && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
 
   return (
     <div
       className="relative rounded-lg data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-worktree-sidebar-ring/40"
-      data-workspace-board-card-id={worktree.id}
+      data-workspace-board-card-id={worktreeIdentity}
+      data-workspace-board-worktree-id={worktree.id}
+      data-workspace-board-card-index={laneIndex}
       data-workspace-board-card-mode="detailed"
       data-workspace-board-card-selected={isSelected ? 'true' : 'false'}
       data-workspace-board-pointer-draggable={nativeDragEnabled ? undefined : 'true'}
@@ -61,7 +71,7 @@ function WorkspaceKanbanCard({
         selectedWorktrees={contextWorktrees}
         nativeDragEnabled={nativeDragEnabled}
         onActivate={onActivate}
-        onSelectionGesture={onSelectionGesture}
+        onSelectionGesture={(event) => onSelectionGesture(event, worktreeIdentity)}
         onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
         onAssignWorkspaceStatus={onAssignWorkspaceStatus}
       />

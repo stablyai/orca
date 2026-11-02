@@ -3,17 +3,15 @@ import type { SidebarHostOption } from './sidebar-host-options'
 export function canSelectAddRepoHost(
   host: Pick<SidebarHostOption, 'health' | 'kind' | 'compatibility'>
 ): boolean {
-  // Why: shared-control health overrides the compat verdict in the registry, so a
-  // version-blocked server can read 'connecting'. Keep it unselectable regardless.
-  if (host.compatibility?.kind === 'blocked') {
+  // Projects require a managed server; compatibility can be blocked even while control connects.
+  if (host.kind === 'ssh' || host.compatibility?.kind === 'blocked') {
     return false
   }
   switch (host.health) {
     case 'local':
     case 'available':
       return true
-    // Why: a runtime's 'connecting' describes only its persistent shared-control
-    // channel — the status probe behind it already proved the host reachable.
+    // Shared-control connection state follows a successful runtime status probe.
     case 'connecting':
       return host.kind === 'runtime'
     case 'blocked':
@@ -23,9 +21,12 @@ export function canSelectAddRepoHost(
   }
 }
 
-export function canConnectAddRepoHost(host: Pick<SidebarHostOption, 'health' | 'kind'>): boolean {
+// WSL starts only on explicit connect, matching SSH connection intent.
+export function canConnectAddRepoHost(
+  host: Pick<SidebarHostOption, 'health' | 'kind' | 'wslDistro' | 'wslUnavailable'>
+): boolean {
   return (
-    host.kind === 'ssh' &&
+    (host.kind === 'ssh' || (host.wslDistro !== undefined && !host.wslUnavailable)) &&
     (host.health === 'disconnected' || host.health === 'error' || host.health === 'connecting')
   )
 }

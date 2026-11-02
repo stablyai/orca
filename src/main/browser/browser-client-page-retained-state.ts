@@ -1,0 +1,81 @@
+import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
+import type {
+  BrowserClientPageNetworkRoute,
+  BrowserClientPageRenderer
+} from './browser-client-page-cleanup'
+import type {
+  BrowserRouteGuestLifecycleClaim,
+  BrowserRoutePageGuestIdentity
+} from './browser-route-page-authority'
+import type { BrowserRouteSessionHandle } from './browser-route-session-state'
+import type { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
+
+export type BrowserClientPageLifecycleRegistry = Pick<
+  BrowserRouteWebContentsRegistry,
+  | 'claimGuestLifecycle'
+  | 'registerGuest'
+  | 'grantNavigation'
+  | 'revokeNavigation'
+  | 'navigateGuest'
+  | 'beginGuestRetirement'
+> &
+  Partial<Pick<BrowserRouteWebContentsRegistry, 'rekeyGuestLifecycle' | 'watchPageAvailability'>> &
+  Partial<Pick<BrowserRouteWebContentsRegistry, 'grantReconciledNavigation'>>
+
+export type BrowserClientRetainedPage = {
+  generation: number
+  inventory: BrowserClientHostedPageInventory
+  registration: BrowserRoutePageGuestIdentity
+  lifecycleClaim: BrowserRouteGuestLifecycleClaim
+  renderer: BrowserClientPageRenderer
+  route: BrowserClientPageNetworkRoute
+  routeSession: BrowserRouteSessionHandle
+  retiring: Promise<void> | null
+  reconciling: boolean
+  releaseAvailabilityWatch?: () => void
+}
+
+export function findBrowserClientPageByWebContentsId(
+  pages: Iterable<BrowserClientRetainedPage>,
+  webContentsId: number
+): BrowserClientRetainedPage | undefined {
+  for (const page of pages) {
+    if (page.registration.webContentsId === webContentsId && !page.retiring && !page.reconciling) {
+      return page
+    }
+  }
+  return undefined
+}
+
+export function forgetBrowserClientRetainedPage(
+  pages: Map<string, BrowserClientRetainedPage>,
+  browserPageId: string,
+  page: BrowserClientRetainedPage
+): void {
+  if (pages.get(browserPageId) === page) {
+    pages.delete(browserPageId)
+  }
+}
+
+export async function retireBrowserClientRetainedPage(
+  pages: Map<string, BrowserClientRetainedPage>,
+  failedPages: Map<string, BrowserClientHostedPageInventory>,
+  browserPageId: string,
+  pageHostGeneration: number,
+  cleanupPage: (page: BrowserClientRetainedPage) => Promise<void>
+): Promise<boolean> {
+  const page = pages.get(browserPageId)
+  if (!page || page.generation !== pageHostGeneration) {
+    return false
+  }
+  page.retiring ??= cleanupPage(page)
+  try {
+    await page.retiring
+  } catch (error) {
+    forgetBrowserClientRetainedPage(pages, browserPageId, page)
+    failedPages.set(browserPageId, Object.freeze({ ...page.inventory, state: 'outcomeUnknown' }))
+    throw error
+  }
+  forgetBrowserClientRetainedPage(pages, browserPageId, page)
+  return true
+}

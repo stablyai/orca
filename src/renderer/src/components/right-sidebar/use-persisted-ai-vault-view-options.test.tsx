@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { AI_VAULT_VIEW_OPTIONS_STORAGE_KEY } from './ai-vault-view-options-persistence'
@@ -11,6 +11,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
   window.localStorage.removeItem(AI_VAULT_VIEW_OPTIONS_STORAGE_KEY)
 })
@@ -24,6 +25,7 @@ describe('usePersistedAiVaultViewOptions', () => {
       first.result.current.setSort('created')
       first.result.current.setGroup('folder')
       first.result.current.setHideEmptySessions(true)
+      first.result.current.setSessionLimit('unlimited')
     })
     first.unmount()
 
@@ -32,9 +34,42 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.sort).toBe('created')
     expect(restored.result.current.group).toBe('folder')
     expect(restored.result.current.hideEmptySessions).toBe(true)
+    expect(restored.result.current.sessionLimit).toBe('unlimited')
   })
 
-  it('keeps at least one agent enabled', () => {
+  it("shares view options between panels but keeps a dialog's agent filter to itself", () => {
+    const sidebar = renderHook(() => usePersistedAiVaultViewOptions())
+    const dialog = renderHook(() => usePersistedAiVaultViewOptions(['claude']))
+    expect(dialog.result.current.agents).toEqual(['claude'])
+
+    act(() => sidebar.result.current.setAgentEnabled('codex', false))
+    act(() => dialog.result.current.setSort('created'))
+    act(() => dialog.result.current.setAllAgentsEnabled(true))
+    expect(dialog.result.current.agents).toEqual(AI_VAULT_AGENTS)
+    expect(sidebar.result.current.agents).not.toContain('codex')
+    expect(sidebar.result.current.sort).toBe('created')
+
+    dialog.unmount()
+    sidebar.unmount()
+    const restored = renderHook(() => usePersistedAiVaultViewOptions())
+    expect(restored.result.current.agents).not.toContain('codex')
+    expect(restored.result.current.sort).toBe('created')
+  })
+
+  it('allows clearing every agent so a single agent can be re-enabled', () => {
+    const hook = renderHook(() => usePersistedAiVaultViewOptions())
+
+    act(() => hook.result.current.setAllAgentsEnabled(false))
+    expect(hook.result.current.agents).toEqual([])
+
+    act(() => hook.result.current.setAgentEnabled('claude', true))
+    expect(hook.result.current.agents).toEqual(['claude'])
+
+    act(() => hook.result.current.setAllAgentsEnabled(true))
+    expect(hook.result.current.agents).toEqual([...AI_VAULT_AGENTS])
+  })
+
+  it('allows disabling the last remaining agent', () => {
     const hook = renderHook(() => usePersistedAiVaultViewOptions())
     const lastEnabled = AI_VAULT_AGENTS[0]
 
@@ -46,7 +81,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(hook.result.current.agents).toEqual([lastEnabled])
 
     act(() => hook.result.current.setAgentEnabled(lastEnabled, false))
-    expect(hook.result.current.agents).toEqual([lastEnabled])
+    expect(hook.result.current.agents).toEqual([])
   })
 
   it('keeps in-memory options usable when persistence fails', () => {
@@ -68,6 +103,7 @@ describe('usePersistedAiVaultViewOptions', () => {
       hook.result.current.setSort('created')
       hook.result.current.setGroup('agent')
       hook.result.current.setHideEmptySessions(true)
+      hook.result.current.setSessionLimit(1000)
       hook.result.current.resetViewOptions()
     })
 
@@ -75,6 +111,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(hook.result.current.sort).toBe('updated')
     expect(hook.result.current.group).toBe('project')
     expect(hook.result.current.hideEmptySessions).toBe(false)
+    expect(hook.result.current.sessionLimit).toBe(250)
 
     hook.unmount()
     const restored = renderHook(() => usePersistedAiVaultViewOptions())
@@ -82,5 +119,6 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.sort).toBe('updated')
     expect(restored.result.current.group).toBe('project')
     expect(restored.result.current.hideEmptySessions).toBe(false)
+    expect(restored.result.current.sessionLimit).toBe(250)
   })
 })

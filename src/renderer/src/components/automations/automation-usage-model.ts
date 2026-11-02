@@ -1,62 +1,10 @@
-import type { AutomationRun, AutomationRunUsage } from '../../../../shared/automations-types'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
+import type { AutomationRunUsage } from '../../../../shared/automations-types'
 
-export type AutomationUsageSummary = {
-  knownRuns: number
-  unavailableRuns: number
-  inputTokens: number
-  outputTokens: number
-  cacheTokens: number
-  reasoningOutputTokens: number
-  totalTokens: number
-  estimatedCostUsd: number | null
-}
-
-export function summarizeAutomationRunUsage(
-  runs: readonly AutomationRun[]
-): AutomationUsageSummary {
-  let knownRuns = 0
-  let unavailableRuns = 0
-  let inputTokens = 0
-  let outputTokens = 0
-  let cacheTokens = 0
-  let reasoningOutputTokens = 0
-  let totalTokens = 0
-  let estimatedCostUsd = 0
-  let hasKnownCost = false
-
-  for (const run of runs) {
-    const usage = run.usage
-    if (!usage) {
-      unavailableRuns++
-      continue
-    }
-    if (usage.status !== 'known') {
-      unavailableRuns++
-      continue
-    }
-    knownRuns++
-    inputTokens += usage.inputTokens ?? 0
-    outputTokens += usage.outputTokens ?? 0
-    cacheTokens += (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
-    reasoningOutputTokens += usage.reasoningOutputTokens ?? 0
-    totalTokens += usage.totalTokens ?? 0
-    if (usage.estimatedCostUsd !== null) {
-      estimatedCostUsd += usage.estimatedCostUsd
-      hasKnownCost = true
-    }
-  }
-
-  return {
-    knownRuns,
-    unavailableRuns,
-    inputTokens,
-    outputTokens,
-    cacheTokens,
-    reasoningOutputTokens,
-    totalTokens,
-    estimatedCostUsd: hasKnownCost ? estimatedCostUsd : null
-  }
-}
+// Keep retained-run summaries shared across owning authorities; only display formatting belongs to the renderer.
+export type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
+export { summarizeAutomationRunUsage } from '../../../../shared/automation-usage-summary'
 
 export function formatAutomationTokens(value: number | null | undefined): string {
   if (!value) {
@@ -68,12 +16,12 @@ export function formatAutomationTokens(value: number | null | undefined): string
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(getIntlLocale())
 }
 
 export function formatAutomationCost(value: number | null | undefined): string {
   if (value === null || value === undefined) {
-    return 'n/a'
+    return translate('auto.components.automations.usage.costUnavailable', 'n/a')
   }
   if (value > 0 && value < 0.01) {
     return `$${value.toFixed(4)}`
@@ -85,9 +33,48 @@ export function getAutomationUsageStatusLabel(
   usage: AutomationRunUsage | null | undefined
 ): string {
   if (!usage || usage.status === 'unavailable') {
-    return usage?.unavailableMessage ?? 'Usage unavailable'
+    return (
+      usage?.unavailableMessage ??
+      translate('auto.components.automations.AutomationsPage.usageUnavailable', 'Usage unavailable')
+    )
   }
-  const cost = formatAutomationCost(usage.estimatedCostUsd)
-  const tokens = formatAutomationTokens(usage.totalTokens)
-  return `${tokens} tokens · ${cost}`
+  const count = usage.totalTokens ?? 0
+  // count drives CLDR plural selection; tokens is the compact display form.
+  return translate(
+    'auto.components.automations.usage.tokensAndCost',
+    '{{tokens}} tokens · {{cost}}',
+    {
+      count,
+      tokens: formatAutomationTokens(usage.totalTokens),
+      cost: formatAutomationCost(usage.estimatedCostUsd),
+      defaultValue_one: '{{tokens}} token · {{cost}}'
+    }
+  )
+}
+
+export function formatAutomationUsageSummary(summary: AutomationUsageSummary | undefined): string {
+  if (!summary || summary.unavailableRuns > 0) {
+    return summary?.knownRuns
+      ? usageAmountText(summary)
+      : translate(
+          'auto.components.automations.AutomationsPage.usageUnavailable',
+          'Usage unavailable'
+        )
+  }
+  return summary.knownRuns > 0
+    ? usageAmountText(summary)
+    : translate('auto.components.automations.AutomationsPage.noRunUsageYet', 'No run usage yet')
+}
+
+function usageAmountText(summary: AutomationUsageSummary): string {
+  return translate(
+    'auto.components.automations.AutomationsPage.runUsageSummaryTokens',
+    '{{cost}} est. · {{tokens}} tokens',
+    {
+      count: summary.totalTokens,
+      cost: formatAutomationCost(summary.estimatedCostUsd),
+      tokens: formatAutomationTokens(summary.totalTokens),
+      defaultValue_one: '{{cost}} est. · {{tokens}} token'
+    }
+  )
 }

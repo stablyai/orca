@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
 import { useAppStore } from '@/store'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
-// Why: leave a short quiet window after agents finish so the prompt does not
-// interrupt follow-up typing or status churn from the completed run.
+// Leave a quiet window after completion so prompts cannot interrupt follow-up typing or status churn.
 const QUIET_WINDOW_MS = 1200
 const CHECK_DELAY_MS = 1200
 const ACTIVE_AGENT_STATES = new Set(['working', 'waiting', 'blocked'])
@@ -33,7 +34,11 @@ function hasSuccessfulDoneTransition(
       previousEntry &&
       previousEntry.state !== 'done' &&
       entry.state === 'done' &&
-      !entry.interrupted &&
+      // Session-boundary done is idle connection, not completed work; resume must not trigger a launch-time nag.
+      entry.sessionBoundary !== true &&
+      !agentTurnEndedUncleanly(entry) &&
+      // A new done, not a return to one dated before the work it ended (a command at rest).
+      entry.stateStartedAt >= previousEntry.stateStartedAt &&
       hasMeaningfulPrompt(entry)
     ) {
       return true
@@ -47,12 +52,7 @@ function isTypingKeyEvent(event: KeyboardEvent): boolean {
 }
 
 export function StarNagAgentValueMomentObserver(): null {
-  // Why: agentStatusByPaneKey is re-spread to a new object on every status ping
-  // (including high-frequency still-working pings that never change what we
-  // detect), so subscribing to the map re-rendered this always-mounted observer
-  // — and re-ran the app-wide done-transition scan — on every ping. agentStatusEpoch
-  // bumps on exactly the state transitions we care about, so drive off the epoch
-  // and read the map imperatively via getState().
+  // Subscribe to state/freshness epochs and read snapshots imperatively so same-state pings cannot rescan every agent.
   const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
   const previousEntriesRef = useRef<AgentStatusSnapshot | null>(null)
   const pendingRef = useRef(false)
@@ -111,10 +111,10 @@ export function StarNagAgentValueMomentObserver(): null {
       }
       lastTypingAtRef.current = Date.now()
     }
-    window.addEventListener('keydown', markTyping, true)
+    addAppKeyListener('keydown', markTyping)
     window.addEventListener('input', markTyping, true)
     return () => {
-      window.removeEventListener('keydown', markTyping, true)
+      removeAppKeyListener('keydown', markTyping)
       window.removeEventListener('input', markTyping, true)
     }
   }, [])

@@ -1,25 +1,29 @@
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import type { Worktree } from '../../../../shared/types'
-import type { HostSectionRow } from './host-section-rows'
 import {
-  PINNED_GROUP_KEY,
-  type PinnedWorktreeDisplayPolicy,
-  type WorktreeRow
-} from './worktree-list-groups'
+  getFolderWorkspaceHostIdentity,
+  folderWorkspaceToWorktree
+} from '../../../../shared/folder-workspace-worktree'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
+import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  WorktreeRow
+} from '../../../../shared/sidebar-list/row-types'
 
 export function getPreferredWorktreeRows(
   rows: readonly WorktreeRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): WorktreeRow[] {
-  // Why: duplicated pinned rows represent one workspace to navigation and selection.
-  // Prefer its natural-group copy, falling back to Pinned when that copy is hidden.
+  // Navigation/selection treat pinned duplicates as one workspace, preferring a visible natural-group occurrence.
   if (pinnedDisplayPolicy === 'single-location') {
     const seen = new Set<string>()
     return rows.filter((row) => {
-      if (seen.has(row.worktree.id)) {
+      const identity = getWorktreeHostIdentity(row.worktree)
+      if (seen.has(identity)) {
         return false
       }
-      seen.add(row.worktree.id)
+      seen.add(identity)
       return true
     })
   }
@@ -27,38 +31,55 @@ export function getPreferredWorktreeRows(
   const preferredRows: WorktreeRow[] = []
   const seen = new Set<string>()
   for (const row of rows) {
-    if (row.sectionKey === PINNED_GROUP_KEY || seen.has(row.worktree.id)) {
+    const identity = getWorktreeHostIdentity(row.worktree)
+    if (row.sectionKey === PINNED_GROUP_KEY || seen.has(identity)) {
       continue
     }
     preferredRows.push(row)
-    seen.add(row.worktree.id)
+    seen.add(identity)
   }
   for (const row of rows) {
-    if (seen.has(row.worktree.id)) {
+    const identity = getWorktreeHostIdentity(row.worktree)
+    if (seen.has(identity)) {
       continue
     }
     preferredRows.push(row)
-    seen.add(row.worktree.id)
+    seen.add(identity)
   }
   return preferredRows
+}
+
+export type RenderedWorkspaceRow = Pick<WorktreeRow, 'worktree' | 'repo' | 'rowKey'>
+
+export function getRenderedWorkspaceRowsInSidebarOrder(
+  rows: readonly HostSectionRow[],
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+): RenderedWorkspaceRow[] {
+  const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
+  const preferredRowKeys = new Set(
+    getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.rowKey)
+  )
+  const renderedRows: RenderedWorkspaceRow[] = []
+
+  for (const row of rows) {
+    if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
+      renderedRows.push({ worktree: row.worktree, repo: row.repo, rowKey: row.rowKey })
+    } else if (row.type === 'folder-workspace') {
+      renderedRows.push({
+        worktree: folderWorkspaceToWorktree(row.folderWorkspace),
+        repo: undefined,
+        rowKey: getFolderWorkspaceHostIdentity(row.folderWorkspace)
+      })
+    }
+  }
+  return renderedRows
 }
 
 export function getRenderedWorktreesInSidebarOrder(
   rows: readonly HostSectionRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): Worktree[] {
-  const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
-  const preferredRowKeys = new Set(
-    getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.rowKey)
+  return getRenderedWorkspaceRowsInSidebarOrder(rows, pinnedDisplayPolicy).map(
+    (row) => row.worktree
   )
-  const renderedWorktrees: Worktree[] = []
-
-  for (const row of rows) {
-    if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
-      renderedWorktrees.push(row.worktree)
-    } else if (row.type === 'folder-workspace') {
-      renderedWorktrees.push(folderWorkspaceToWorktree(row.folderWorkspace))
-    }
-  }
-  return renderedWorktrees
 }

@@ -31,6 +31,27 @@ export function displayBrowserUrl(value: string | null | undefined): string {
   return isBlankBrowserUrl(trimmed) ? 'about:blank' : trimmed
 }
 
+export function compactMobileBrowserFileAddress(value: string): string | null {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'file:') {
+      return null
+    }
+    const segments = url.pathname.split('/').filter(Boolean)
+    const encodedFilename = segments.at(-1)
+    if (!encodedFilename) {
+      return 'file:'
+    }
+    try {
+      return `file: …/${decodeURIComponent(encodedFilename)}`
+    } catch {
+      return `file: …/${encodedFilename}`
+    }
+  } catch {
+    return null
+  }
+}
+
 export function isBlankBrowserUrl(value: string | null | undefined): boolean {
   const trimmed = value?.trim() ?? ''
   return !trimmed || trimmed === 'about:blank' || trimmed.startsWith('data:text/html')

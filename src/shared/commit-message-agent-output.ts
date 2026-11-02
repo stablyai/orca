@@ -1,31 +1,80 @@
-/** Strips noise around the agent's output: surrounding whitespace, a single
- *  enclosing fenced code block, and lone "Generating…" preamble lines some
- *  CLIs print before the real answer. */
+/** jcode's `run --json` envelope, narrowed to the field the answer lives in. */
+type JcodeJsonResult = { text?: unknown }
+
+function isJcodeJsonResult(value: unknown): value is JcodeJsonResult {
+  return typeof value === 'object' && value !== null && 'text' in value
+}
+
+/** Remove surrounding whitespace, one enclosing fence, CLI progress preambles and leading reasoning from generated answers. */
 export function cleanGeneratedCommitMessage(raw: string): string {
-  // Why: agent output can include very large generated bodies; normalize and
-  // unwrap by scanning boundaries instead of building newline-sized arrays.
+  // Scan boundaries instead of allocating newline arrays for large generated bodies.
   let text = normalizeGeneratedCommitMessageLineFeeds(raw).trim()
 
-  // Why: real commit messages never start with an ellipsis or the word
-  // "Generating"/"Thinking" — those leak from CLIs that print a status line
-  // before the actual response.
+  // Extract jcode --json text; plain mode mixes thinking and token-usage lines into stdout.
+  if (text.startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(text)
+      if (isJcodeJsonResult(parsed) && typeof parsed.text === 'string') {
+        text = parsed.text.trim()
+      }
+    } catch {
+      // not a JSON envelope; fall through to the plain-text cleanup
+    }
+  }
+
+  // Strip jcode’s trailing [Tokens] usage line before using the answer as a branch/commit name.
+  const tokensUsageIndex = text.search(/\n\[Tokens\]\s/)
+  if (tokensUsageIndex !== -1) {
+    text = text.slice(0, tokensUsageIndex).trimEnd()
+  }
+
+  // Discard CLI progress preambles before the actual answer.
   const firstNewline = text.indexOf('\n')
   if (firstNewline !== -1) {
     const firstLine = text.slice(0, firstNewline)
-    if (/^(generating|thinking)\b/i.test(firstLine) || /^[.…]+$/.test(firstLine.trim())) {
+    if (/^(generating|thinking)\b/i.test(firstLine) || /^[.\u2026]+$/.test(firstLine.trim())) {
       text = text.slice(firstNewline + 1).trim()
     }
   }
+
+  text = stripLeadingReasoningBlock(text)
 
   const fenced = findEnclosingCommitMessageFenceBody(text)
   if (fenced !== null) {
     text = fenced.trim()
   }
 
-  // Why: some CLIs format a one-shot answer as a list item even when the
-  // prompt asks for raw text; a Git subject should not carry that marker.
-  text = text.replace(/^(\s*)(?:[-*•●]\s+|\d+[.)]\s+)/, '$1').trim()
+  // Some CLIs ignore raw-text instructions and emit list markers; keep those out of Git subjects.
+  text = text.replace(/^(\s*)(?:[-*\u2022\u25CF]\s+|\d+[.)]\s+)/, '$1').trim()
 
+  return text
+}
+
+// DeepSeek-R1/Qwen3/Kimi K2 reasoning uses <think>; Kimi-VL-Thinking uses ◁think▷.
+const REASONING_TAGS = [
+  { open: '<think>', close: '</think>' },
+  { open: '◁think▷', close: '◁/think▷' }
+] as const
+
+function stripLeadingReasoningBlock(text: string): string {
+  for (const { open, close } of REASONING_TAGS) {
+    if (!text.startsWith(open)) {
+      continue
+    }
+    const closeIndex = text.indexOf(close, open.length)
+    return closeIndex === -1 ? text : text.slice(closeIndex + close.length).trim()
+  }
+  return text
+}
+
+/** Custom commands only: Qwen3-Thinking/DeepSeek-R1-0528/Kimi K2.5 may prefill the opening reasoning tag, emitting only its close. Other messages can legitimately mention closing tags. */
+export function stripPrefilledReasoningPreamble(text: string): string {
+  for (const { open, close } of REASONING_TAGS) {
+    const closeIndex = text.indexOf(close)
+    if (closeIndex !== -1 && text.lastIndexOf(open, closeIndex) === -1) {
+      return text.slice(closeIndex + close.length).trim()
+    }
+  }
   return text
 }
 
@@ -91,8 +140,7 @@ function isCommitFenceInfoCharacter(code: number): boolean {
 export function stripAnsiControlSequences(value: string): string {
   const esc = String.fromCharCode(27)
   const bel = String.fromCharCode(7)
-  // CSI (colors/cursor) and OSC (titles/hyperlinks) both appear in raw CLI
-  // failure output once it is shown verbatim instead of parsed.
+  // Raw CLI failures can contain both CSI colors/cursor and OSC titles/hyperlinks.
   return value.replace(
     new RegExp(
       `${esc}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${bel}${esc}\\r\\n]*(?:${bel}|${esc}\\\\))`,
@@ -106,26 +154,17 @@ function stripAnsiIfPresent(value: string): string {
   return value.includes(String.fromCharCode(27)) ? stripAnsiControlSequences(value) : value
 }
 
-// Only the two ends of the output are read, like glancing at the first and
-// last lines of a long log.
+// Bound scans to the output’s ends.
 const FAILURE_EXCERPT_SCAN_WINDOW = 8192
 const FAILURE_EXCERPT_HEAD_LINE_COUNT = 2
-// Why: when both ends are shown, the tail gets the larger budget because most
-// CLIs print the operative error last; the head budget covers CLIs that
-// front-load it. A lone excerpt keeps the whole toast/persistence budget.
+// Give the tail more space for typical final diagnostics; preserve head space for CLIs that front-load errors. Single excerpts use the full budget.
 const FAILURE_EXCERPT_HEAD_BUDGET = 100
 const FAILURE_EXCERPT_TAIL_BUDGET = 130
 const FAILURE_EXCERPT_SINGLE_BUDGET = 240
 
-// Why: agent CLIs share no error format, and per-CLI parsing rots every time a
-// vendor rewords a message. Orca deliberately does NOT interpret failure
-// output — it excerpts it positionally (first lines plus last line) so every
-// CLI's real failure text reaches the user. Callers must still sanitize the
-// excerpt before display or persistence.
+// CLI error formats drift; excerpt first/last lines without interpreting vendor wording. Callers must sanitize before display/persistence.
 export function excerptAgentFailureOutput(stdout: string, stderr: string): string | null {
-  // stderr is where CLIs put diagnostics; stdout is the fallback for the ones
-  // that report failures inline (and often echoes the prompt, so it never
-  // overrides a non-blank stderr).
+  // Prefer stderr diagnostics; stdout is fallback and may echo the prompt.
   const source = /\S/.test(stderr) ? stderr : stdout
   if (!/\S/.test(source)) {
     return null
@@ -156,6 +195,33 @@ export function excerptAgentFailureOutput(stdout: string, stderr: string): strin
     return tailLine ? truncateExcerptPart(tailLine, FAILURE_EXCERPT_SINGLE_BUDGET) : null
   }
   return composeTwoEndExcerpt(headLines, tailLine)
+}
+
+export function sanitizeAgentFailureDetail(detail: string | null): string | null {
+  // Cf covers bidi overrides that could visually reorder persisted, client-synced text.
+  const trimmed = detail
+    ?.replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!trimmed) {
+    return null
+  }
+  const redacted = trimmed
+    .replace(
+      /\\\\[^\s"'`<>\\]+\\(?:[^\s"'`<>\\]+(?:\s+[^\s"'`<>\\]+)*(?=\\)\\)*[^\s"'`<>\\]+/g,
+      '[path]'
+    )
+    // JSON may double Windows separators; URL separators must remain single.
+    .replace(
+      /[A-Za-z]:(?:\\+|\/)(?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])(?:\\+|\/))*[^\s"'`<>\\/|:*?]+/g,
+      '[path]'
+    )
+    // Keep single-segment remedies such as /login while redacting filesystem paths.
+    .replace(
+      /(^|[\s"'`(=:,])\/(?:[^\s"'`<>/]+(?:\s+[^\s"'`<>/]+)*(?=\/)\/)+[^\s"'`<>/]+/g,
+      '$1[path]'
+    )
+  return redacted.length > 240 ? `${redacted.slice(0, 240).trimEnd()}...` : redacted
 }
 
 function composeTwoEndExcerpt(headLines: string[], tailLine: string | null): string {

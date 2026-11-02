@@ -1,4 +1,4 @@
-import type { TerminalColorOverrides } from './types'
+import type { TerminalColorOverrides } from './terminal-color-overrides'
 import { HEX_COLOR_RE } from './color-validation'
 
 export type TerminalCustomThemeSource = 'warp' | 'ghostty' | 'manual'
@@ -14,8 +14,6 @@ export type TerminalCustomTheme = {
   sourceLabel?: string
   unsupportedFeatures?: string[]
 }
-
-export type TerminalThemeSelection = string
 
 export type WarpThemeImportSource =
   | { kind: 'auto' }
@@ -45,7 +43,7 @@ export type WarpThemeImportPreview = {
 export const MAX_TERMINAL_CUSTOM_THEMES = 200
 export const CUSTOM_TERMINAL_THEME_PREFIX = 'custom:'
 
-const TERMINAL_COLOR_KEYS = [
+export const TERMINAL_COLOR_KEYS = [
   'foreground',
   'background',
   'cursor',
@@ -71,7 +69,7 @@ const TERMINAL_COLOR_KEYS = [
   'bold'
 ] as const satisfies readonly (keyof TerminalColorOverrides)[]
 
-const TERMINAL_ANSI_COLOR_KEYS = [
+export const TERMINAL_ANSI_COLOR_KEYS = [
   'black',
   'red',
   'green',
@@ -164,6 +162,17 @@ export function normalizeTerminalColorOverrides(value: unknown): TerminalColorOv
     }
   }
   return output
+}
+
+/** Light backgrounds read as light themes; used where an importer has no explicit appearance. */
+export function inferTerminalThemeMode(background: string | undefined): TerminalCustomThemeMode {
+  const hex = background ? normalizeTerminalHexColor(background)?.slice(1) : undefined
+  if (!hex) {
+    return 'unknown'
+  }
+  const channel = (offset: number): number =>
+    Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4) >= 0.55 ? 'light' : 'dark'
 }
 
 export function hasUsableTerminalThemeColors(terminal: TerminalColorOverrides): boolean {

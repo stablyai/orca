@@ -1,12 +1,14 @@
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import type { GitHubPrStartPoint, GlobalSettings } from '../../../shared/types'
-
-type PrStartPointSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { GitHubPrStartPoint } from '../../../shared/worktree/types'
+import type { ReviewStartPointFailure } from '../../../shared/review-start-point-failure-copy'
+import { reviewStartPointErrorText } from '@/lib/code-host-error-copy'
 
 export type GitHubPrStartPointInput = {
   repoId: string
   prNumber: number
-  settings: PrStartPointSettings
+  /** The repo owner's transport; `null` (no routable owner) is refused. */
+  target: RuntimeClientTarget | null
   headRefName?: string
   baseRefName?: string
   isCrossRepository?: boolean
@@ -15,13 +17,17 @@ export type GitHubPrStartPointInput = {
 export async function resolveGitHubPrStartPointForRepo({
   repoId,
   prNumber,
-  settings,
+  target,
   headRefName,
   baseRefName,
   isCrossRepository
 }: GitHubPrStartPointInput): Promise<GitHubPrStartPoint> {
-  const target = getActiveRuntimeTarget(settings)
+  if (!target) {
+    throw new Error('The project host is unresolved. Refresh the project and retry.')
+  }
+  // Creating or launching from a PR is a user act: it may start the repo's stopped WSL distro.
   const prFields = {
+    wakeWslDistro: true,
     prNumber,
     ...(headRefName ? { headRefName } : {}),
     ...(baseRefName ? { baseRefName } : {}),
@@ -30,14 +36,14 @@ export async function resolveGitHubPrStartPointForRepo({
   const result =
     target.kind === 'local'
       ? await window.api.worktrees.resolvePrBase({ repoId, ...prFields })
-      : await callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
+      : await callRuntimeRpc<GitHubPrStartPoint | ReviewStartPointFailure>(
           target,
           'worktree.resolvePrBase',
           { repo: repoId, ...prFields },
           { timeoutMs: 30_000 }
         )
   if ('error' in result) {
-    throw new Error(result.error)
+    throw new Error(reviewStartPointErrorText(result))
   }
   return result
 }

@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-28T08:15:15.356Z",
+  "platform": "darwin",
+  "command": ["freebuff", "--cwd", "/tmp/orca-freebuff-trust"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Freebuff 0.1.2 authenticated, declined repository agent files; waiting for first message",
+  "exitCode": 0
+}

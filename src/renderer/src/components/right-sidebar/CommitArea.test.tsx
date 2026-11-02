@@ -1,13 +1,39 @@
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+import React from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea, ConflictSummaryCard, OperationBanner } from './SourceControl'
+import { fireEvent, render } from '@testing-library/react'
+import { CommitArea } from './source-control/commit/commit-area'
+import {
+  ConflictSummaryCard,
+  OperationBanner
+} from './source-control/listing/conflict-status-cards'
+import { handleSourceControlCommitShortcut } from './source-control/commit/commit-shortcut'
 import {
   resolveCommitAreaPrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionKind } from '../../../../shared/source-control-dropdown-item-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
+import { deriveSourceControlPushRecovery } from './source-control/sync/push-recovery'
+
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>
+}))
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+function setUserAgent(userAgent: string): void {
+  vi.stubGlobal('navigator', { userAgent })
+}
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
@@ -144,6 +170,131 @@ describe('CommitArea', () => {
 
   it('enables the primary button when staged + message + no conflicts', () => {
     expect(hasDisabledAttribute(firstButton(renderCommitArea(baseProps())))).toBe(false)
+  })
+
+  it('renders the Commit shortcut key indicator (⌘Enter) in primary button tooltip on macOS', () => {
+    const props = baseProps()
+    setUserAgent('Macintosh')
+    const markupMac = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
+    })
+    expect(markupMac).toContain('Commit changes')
+    expect(markupMac).toContain('⌘')
+    expect(markupMac).toContain('Enter')
+  })
+
+  it('renders the Commit shortcut key indicator (Ctrl+Enter) in primary button tooltip on Windows/Linux', () => {
+    const props = baseProps()
+    setUserAgent('Windows NT')
+    const markupWin = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
+    })
+    expect(markupWin).toContain('Commit changes')
+    expect(markupWin).toContain('Ctrl')
+    expect(markupWin).toContain('+')
+    expect(markupWin).toContain('Enter')
+  })
+
+  it('renders no tooltip on enabled Stage All — the label already states the action', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: {
+        kind: 'stage',
+        disabled: false,
+        label: 'Stage All',
+        title: 'Stage all changes'
+      }
+    })
+    expect(firstButton(markup)).not.toContain('title=')
+    expect(markup).not.toContain('Stage all changes')
+  })
+
+  it('renders the disabled reason in the primary button tooltip', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: {
+        kind: 'commit',
+        disabled: true,
+        label: 'Commit',
+        title: 'Enter a commit message to commit'
+      }
+    })
+    expect(markup).toContain('Enter a commit message to commit')
+  })
+
+  it('only handles Cmd+Enter when focus is within the Source Control sidebar', () => {
+    setUserAgent('Macintosh')
+    const onPrimaryAction = vi.fn()
+    const primaryAction = {
+      kind: 'commit' as const,
+      disabled: false
+    }
+    const { getByTestId } = render(
+      <>
+        <div
+          data-testid="source-control-sidebar"
+          onKeyDown={(event) =>
+            handleSourceControlCommitShortcut(event, primaryAction, onPrimaryAction)
+          }
+        >
+          <button type="button" data-testid="inside-sidebar">
+            Inside
+          </button>
+        </div>
+        <button type="button" data-testid="outside-sidebar">
+          Outside
+        </button>
+      </>
+    )
+
+    const outside = getByTestId('outside-sidebar')
+    outside.focus()
+    fireEvent.keyDown(outside, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).not.toHaveBeenCalled()
+
+    const inside = getByTestId('inside-sidebar')
+    inside.focus()
+    fireEvent.keyDown(inside, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles Ctrl+Enter, but not Cmd+Enter, inside the sidebar on Windows/Linux', () => {
+    setUserAgent('Linux')
+    const onPrimaryAction = vi.fn()
+    const primaryAction = {
+      kind: 'commit' as const,
+      disabled: false
+    }
+    const { getByRole } = render(
+      <button
+        type="button"
+        onKeyDown={(event) =>
+          handleSourceControlCommitShortcut(event, primaryAction, onPrimaryAction)
+        }
+      >
+        Commit scope
+      </button>
+    )
+    const target = getByRole('button', { name: 'Commit scope' })
+
+    fireEvent.keyDown(target, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(target, { key: 'Enter', ctrlKey: true })
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not render the Commit shortcut keys inside the primary button tooltip when the action is not commit', () => {
+    const props = baseProps()
+    const markup = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'push', disabled: false, label: 'Push', title: 'Push changes' }
+    })
+    expect(markup).not.toContain('Enter')
   })
 
   it('disables the textarea while the commit is in flight', () => {
@@ -359,18 +510,6 @@ describe('CommitArea', () => {
     expect(firstButton(markup)).not.toContain('animate-spin')
   })
 
-  it('shows a spinner on a Commit primary while the commit itself is in flight', () => {
-    const props = baseProps({
-      stagedCount: 1,
-      hasMessage: true,
-      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-      isCommitting: true
-    })
-    expect(firstButton(renderCommitArea({ ...props, isCommitting: true }))).toContain(
-      'animate-spin'
-    )
-  })
-
   it('shows a spinner on a remote primary while the matching remote op is active', () => {
     const markup = renderCommitArea(
       baseProps({
@@ -461,8 +600,8 @@ describe('CommitArea', () => {
     expect(stageAllButton).not.toContain('disabled=""')
     expect(stageAllButton).toContain('lucide-plus')
     expect(stageAllButton).toContain('rounded-r-none')
+    expect(stageAllButton).not.toContain('title=')
     expect(markup).toContain('aria-label="More commit and remote actions"')
-    expect(markup).toContain('Stage all changes')
     expect(
       (markup.match(/<button\b[\s\S]*?<\/button>/g) ?? []).some((button) =>
         button.includes('Commit</button>')
@@ -540,7 +679,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="rebase"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
       />
@@ -555,7 +693,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="merge"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -566,7 +703,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="rebase"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -577,7 +713,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="cherry-pick"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -598,7 +733,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="merge"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -609,7 +743,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="rebase"
         unresolvedCount={1}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onAbortOperation={vi.fn()}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
@@ -628,7 +761,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="merge"
         unresolvedCount={2}
         sourceControlAiActionsVisible={true}
-        isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
       />
@@ -645,7 +777,6 @@ describe('ConflictSummaryCard', () => {
         conflictOperation="merge"
         unresolvedCount={2}
         sourceControlAiActionsVisible={false}
-        isResolvingWithAI={false}
         onResolveWithAI={vi.fn()}
         onReview={vi.fn()}
       />
@@ -685,4 +816,44 @@ describe('OperationBanner', () => {
     expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
     expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
+
+  it('offers Resolve with AI for every in-progress operation only when AI actions are visible', () => {
+    for (const operation of ['merge', 'rebase', 'cherry-pick'] as const) {
+      const visibleMarkup = renderToStaticMarkup(
+        <OperationBanner
+          conflictOperation={operation}
+          sourceControlAiActionsVisible
+          onResolveWithAI={vi.fn()}
+        />
+      )
+      const hiddenMarkup = renderToStaticMarkup(
+        <OperationBanner
+          conflictOperation={operation}
+          sourceControlAiActionsVisible={false}
+          onResolveWithAI={vi.fn()}
+        />
+      )
+      expect(visibleMarkup).toContain('Resolve with AI')
+      expect(hiddenMarkup).not.toContain('Resolve with AI')
+    }
+  })
+})
+
+it('shows waiting feedback without a publish spinner when another workspace publishes', () => {
+  const props = baseProps({
+    stagedCount: 0,
+    hasMessage: false,
+    upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+    isRemoteOperationActive: true,
+    inFlightRemoteOpKind: null,
+    isRemoteOperationInAnotherWorktree: true
+  })
+  const { container, getByRole } = render(<CommitArea {...props} />)
+  expect(
+    getByRole('button', { name: 'Git operation running elsewhere' }).hasAttribute('disabled')
+  ).toBe(true)
+  expect(container.querySelector('.animate-spin')).toBeNull()
+  expect(container.textContent).toContain(
+    'Another workspace is running a Git operation, such as push, pull, or force push.'
+  )
 })

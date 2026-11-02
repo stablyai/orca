@@ -14,10 +14,35 @@ export function resolveChecksPanelHostedReviewHttpOpenOptions(
   isMac: boolean,
   worktreeId: string | null | undefined
 ): OpenHttpLinkOptions {
+  // Use openHttpLink's shared modifier policy for system-browser escape or routing inversion.
   if (isChecksPanelHostedReviewSystemBrowserModifier(event, isMac)) {
-    return { worktreeId, forceSystemBrowser: true }
+    return { worktreeId, allowRemoteInApp: true, modifierHeld: true }
   }
-  return { worktreeId }
+  return { worktreeId, allowRemoteInApp: true }
+}
+
+/** Where a Shift+modifier click lands, or null when it lands where a plain click already does. */
+export type ChecksPanelHostedReviewModifierDestination = 'system-browser' | 'orca' | null
+
+// Mirror routing inputs so inverted modifiers reaching Orca still get a discoverable hint.
+export function resolveChecksPanelHostedReviewModifierDestination(
+  settings:
+    | {
+        openLinksInApp?: boolean
+        openLinksInAppModifierInverts?: boolean
+        activeRuntimeEnvironmentId?: string | null
+      }
+    | null
+    | undefined,
+  hasWorktree: boolean
+): ChecksPanelHostedReviewModifierDestination {
+  if (!hasWorktree) {
+    return null
+  }
+  if (settings?.openLinksInApp === true) {
+    return 'system-browser'
+  }
+  return settings?.openLinksInAppModifierInverts === true ? 'orca' : null
 }
 
 export function openChecksPanelHostedReviewUrl({

@@ -8,21 +8,31 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner,
-  findIndexedRepoOwner,
-  findIndexedWorktreeOwner
+  findIndexedProjectGroupOwner
 } from './worktree-runtime-owner-index'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
+import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,
   folderWorkspaceId: string
 ): ExecutionHostId | null {
-  const folder = findIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
+  const preferredHostId =
+    state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined
+  const folder = findIndexedFolderWorkspaceOwner(
+    state.folderWorkspaces,
+    folderWorkspaceId,
+    preferredHostId
+  )
   const group = folder
-    ? findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId)
+    ? findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId, preferredHostId)
     : null
-  const explicitHost = parseExecutionHostId(group?.executionHostId)
+  const explicitHost = parseExecutionHostId(folder?.executionHostId ?? group?.executionHostId)
   if (explicitHost) {
     return explicitHost.id
   }
@@ -36,13 +46,10 @@ function getResolvedFolderHost(
   if (restoredHost?.kind === 'runtime') {
     return restoredHost.id
   }
-  return folder && group ? LOCAL_EXECUTION_HOST_ID : null
+  return folder && (group || preferredHostId) ? (preferredHostId ?? LOCAL_EXECUTION_HOST_ID) : null
 }
 
-/**
- * Resolves a host only when hydrated ownership proves it. Why: a restored SSH
- * worktree can temporarily collide with a local repo row during catalog load.
- */
+/** Require hydrated ownership: restored SSH worktrees can collide with local repo rows while catalogs load. */
 export function getResolvedExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
@@ -57,23 +64,31 @@ export function getResolvedExecutionHostIdForWorktree(
   if (scope?.type === 'folder') {
     return getResolvedFolderHost(state, scope.folderWorkspaceId)
   }
-  const worktree = findIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
-  const worktreeHost = parseExecutionHostId(worktree?.hostId)
-  if (worktreeHost) {
-    return worktreeHost.id
-  }
-  if (!worktree) {
+  const preferredHostId =
+    state.activeWorktreeId === worktreeId
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined
+  return (
+    resolveQualifiedWorktreeExecutionOwner(
+      selectWorktreesByRepo(state),
+      state.repos,
+      worktreeId,
+      preferredHostId
+    )?.hostId ?? null
+  )
+}
+
+/**
+ * RPC target of the focused workspace's owner row; `null` when nothing is focused, ownership is
+ * unproven, or the owner has no RPC route (direct SSH). Callers pick their own fallback.
+ */
+export function getActiveWorkspaceOwnerTarget(
+  state: WorktreeRuntimeOwnerState
+): RuntimeClientTarget | null {
+  // Without paired servers all RPC owners are this app; skip building the owner index.
+  if (state.runtimeEnvironmentCatalogHydrated && state.runtimeEnvironments?.length === 0) {
     return null
   }
-  const repo = findIndexedRepoOwner(state.repos, worktree.repoId)
-  if (!repo) {
-    return null
-  }
-  const explicitRepoHost = parseExecutionHostId(repo.executionHostId)
-  if (explicitRepoHost) {
-    return explicitRepoHost.id
-  }
-  return repo.connectionId?.trim()
-    ? toSshExecutionHostId(repo.connectionId)
-    : LOCAL_EXECUTION_HOST_ID
+  const hostId = getResolvedExecutionHostIdForWorktree(state, state.activeWorktreeId)
+  return hostId ? runtimeRpcTargetForAuthorityKey(hostId) : null
 }

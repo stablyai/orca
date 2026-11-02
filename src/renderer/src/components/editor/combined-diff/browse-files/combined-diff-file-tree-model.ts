@@ -1,0 +1,181 @@
+import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry, GitStagingArea } from '../../../../../../shared/git-status-types'
+import {
+  buildGitStatusSourceControlTree,
+  buildSourceControlTree,
+  compactSourceControlTree,
+  flattenSourceControlTree,
+  type SourceControlTreeNode
+} from '../../../../../../shared/source-control-tree'
+import {
+  getCombinedDiffFileTreeSectionKey,
+  isGitStatusEntry,
+  type CombinedDiffBranchTreeArea,
+  type CombinedDiffFileTreeEntry,
+  type CombinedDiffFileTreeMode
+} from '../resolve-changes/combined-diff-section-identity'
+import type { CombinedDiffTreeNode } from './combined-diff-file-tree-row'
+import { translate } from '@/i18n/i18n'
+
+const UNCOMMITTED_AREA_ORDER: readonly GitStagingArea[] = ['unstaged', 'staged', 'untracked']
+function uncommittedAreaLabel(area: GitStagingArea): string {
+  switch (area) {
+    case 'unstaged':
+      return translate('auto.components.right.sidebar.SourceControl.d4ef4bafc5', 'Changes')
+    case 'staged':
+      return translate('auto.components.right.sidebar.SourceControl.48a003c1b1', 'Staged Changes')
+    case 'untracked':
+      return translate(
+        'auto.components.editor.CombinedDiffViewer.untrackedFiles',
+        'Untracked Files'
+      )
+  }
+}
+
+export type CombinedDiffTreeGroup = {
+  area: GitStagingArea
+  label: string
+  roots: CombinedDiffTreeNode[]
+}
+
+export type CombinedDiffTreeVisibility = {
+  rows: CombinedDiffTreeNode[]
+  visibleFileCount: number
+  visibleFileCounts: ReadonlyMap<string, number>
+}
+
+export type { CombinedDiffTreeNode }
+
+export function buildCombinedDiffUncommittedTreeGroups(
+  entries: readonly CombinedDiffFileTreeEntry[]
+): CombinedDiffTreeGroup[] {
+  return UNCOMMITTED_AREA_ORDER.map((area) => {
+    const areaEntries = entries.filter(
+      (entry): entry is GitStatusEntry => isGitStatusEntry(entry) && entry.area === area
+    )
+    if (areaEntries.length === 0) {
+      return null
+    }
+
+    const roots = compactSourceControlTree(buildGitStatusSourceControlTree(area, areaEntries))
+    return {
+      area,
+      label: uncommittedAreaLabel(area),
+      roots: roots as CombinedDiffTreeNode[]
+    }
+  }).filter((group): group is CombinedDiffTreeGroup => group !== null)
+}
+
+export function buildCombinedDiffBranchTreeRoots(
+  mode: Extract<CombinedDiffFileTreeMode, 'all' | 'branch' | 'commit'>,
+  entries: readonly CombinedDiffFileTreeEntry[]
+): CombinedDiffTreeNode[] {
+  const branchEntries = entries.filter(
+    (entry): entry is GitBranchChangeEntry => !isGitStatusEntry(entry)
+  )
+  const area: CombinedDiffBranchTreeArea = mode === 'commit' ? 'combined-commit' : 'combined-branch'
+  const roots = compactSourceControlTree(buildSourceControlTree(area, [...branchEntries]))
+  return roots as CombinedDiffTreeNode[]
+}
+
+export function flattenCombinedDiffTreeRoots(
+  roots: readonly CombinedDiffTreeNode[],
+  collapsedDirectoryKeys: ReadonlySet<string>
+): CombinedDiffTreeNode[] {
+  return flattenSourceControlTree(
+    roots as SourceControlTreeNode<CombinedDiffFileTreeEntry, string>[],
+    collapsedDirectoryKeys
+  ) as CombinedDiffTreeNode[]
+}
+
+/** Overlay viewed state in linear time on the sorted tree, avoiding path rebuilds and sorting. */
+export function getViewedCombinedDiffTreeVisibility({
+  roots,
+  collapsedDirectoryKeys,
+  mode,
+  viewedSectionKeys
+}: {
+  roots: readonly CombinedDiffTreeNode[]
+  collapsedDirectoryKeys: ReadonlySet<string>
+  mode: CombinedDiffFileTreeMode
+  viewedSectionKeys: ReadonlySet<string>
+}): CombinedDiffTreeVisibility {
+  const visibleFileCounts = new Map<string, number>()
+  const rows: CombinedDiffTreeNode[] = []
+
+  type VisibleTreeNode = {
+    source: CombinedDiffTreeNode
+    children: VisibleTreeNode[]
+    fileCount: number
+  }
+
+  const projectVisibleTree = (node: CombinedDiffTreeNode): VisibleTreeNode | null => {
+    if (node.type === 'file') {
+      return viewedSectionKeys.has(getCombinedDiffFileTreeSectionKey(mode, node.entry))
+        ? null
+        : { source: node, children: [], fileCount: 1 }
+    }
+    const children = node.children
+      .map((child) => projectVisibleTree(child as CombinedDiffTreeNode))
+      .filter((child): child is VisibleTreeNode => child !== null)
+    if (children.length === 0) {
+      return null
+    }
+    return {
+      source: node,
+      children,
+      fileCount: children.reduce((count, child) => count + child.fileCount, 0)
+    }
+  }
+
+  const compactVisibleTree = (projected: VisibleTreeNode, depth: number): CombinedDiffTreeNode => {
+    if (projected.source.type === 'file') {
+      return { ...projected.source, depth }
+    }
+    const names = [projected.source.name]
+    let compacted = projected
+    // Collapsed directories remain boundaries; filtering must not compact them away and expose hidden children.
+    while (
+      !collapsedDirectoryKeys.has(compacted.source.key) &&
+      compacted.children.length === 1 &&
+      compacted.children[0]?.source.type === 'directory'
+    ) {
+      compacted = compacted.children[0]
+      names.push(compacted.source.name)
+    }
+    const compactedSource = compacted.source
+    if (compactedSource.type !== 'directory') {
+      throw new Error('Combined diff directory projection lost its source node')
+    }
+    const node = {
+      ...compactedSource,
+      name: names.join('/'),
+      depth,
+      fileCount: compacted.fileCount,
+      children: compacted.children.map((child) => compactVisibleTree(child, depth + 1))
+    } satisfies CombinedDiffTreeNode
+    visibleFileCounts.set(node.key, node.fileCount)
+    return node
+  }
+
+  const visit = (node: CombinedDiffTreeNode): void => {
+    rows.push(node)
+    if (node.type === 'directory' && !collapsedDirectoryKeys.has(node.key)) {
+      for (const child of node.children) {
+        visit(child)
+      }
+    }
+  }
+
+  let visibleFileCount = 0
+  for (const root of roots) {
+    const projected = projectVisibleTree(root)
+    if (!projected) {
+      continue
+    }
+    const compacted = compactVisibleTree(projected, 0)
+    visibleFileCount += projected.fileCount
+    visit(compacted)
+  }
+  return { rows, visibleFileCount, visibleFileCounts }
+}

@@ -1,4 +1,5 @@
 import {
+  recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
 } from './agent-process-recognition'
@@ -18,22 +19,35 @@ export function shouldInspectOuterWrapperForegroundProcess(
   return process.agent === 'pi'
 }
 
-/**
- * Collapse a foreground read onto its outermost same-title-group ancestor.
- * Why: OMP embeds Pi, while depth alone cannot distinguish wrappers from sibling jobs.
- */
+/** Same gate for a bare process name, recognizing it first. */
+export function shouldInspectOuterWrapperForegroundName(processName: string | null): boolean {
+  const recognized = recognizeAgentProcess(processName)
+  return recognized !== null && shouldInspectOuterWrapperForegroundProcess(recognized)
+}
+
+/** Collapse to the outermost same-title-group ancestor: OMP embeds Pi, so depth alone cannot distinguish wrappers from siblings. */
 export function resolveOuterWrapperForegroundProcess(
   winner: RecognizedAgentProcess,
   winnerCandidate: ForegroundAgentCandidate,
   descendants: readonly ForegroundAgentCandidate[]
 ): string {
+  return resolveOuterWrapperForegroundIdentity(winner, winnerCandidate, descendants).processName
+}
+
+/** Keep the reported ancestor’s pid with its name so an embedded leaf’s exit does not look like wrapper termination. */
+export function resolveOuterWrapperForegroundIdentity(
+  winner: RecognizedAgentProcess,
+  winnerCandidate: ForegroundAgentCandidate,
+  descendants: readonly ForegroundAgentCandidate[]
+): { processName: string; processId: number } {
   const winnerGroup = getSyntheticAgentTitleProfile(winner.agent)?.titleIdentityGroup
   if (!winnerGroup) {
-    return winner.processName
+    return { processName: winner.processName, processId: winnerCandidate.pid }
   }
   const candidatesByPid = new Map(descendants.map((candidate) => [candidate.pid, candidate]))
   const seen = new Set<number>([winnerCandidate.pid])
   let outerProcessName = winner.processName
+  let outerProcessId = winnerCandidate.pid
   let parentPid = winnerCandidate.ppid
   while (!seen.has(parentPid)) {
     seen.add(parentPid)
@@ -49,8 +63,9 @@ export function resolveOuterWrapperForegroundProcess(
       getSyntheticAgentTitleProfile(recognized.agent)?.titleIdentityGroup === winnerGroup
     ) {
       outerProcessName = recognized.processName
+      outerProcessId = candidate.pid
     }
     parentPid = candidate.ppid
   }
-  return outerProcessName
+  return { processName: outerProcessName, processId: outerProcessId }
 }

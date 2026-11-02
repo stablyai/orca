@@ -1,11 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { GitHubAssignableUser } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 
-/** In-progress "New GitHub issue" composer draft. Session-only (never
- *  `persist`-wrapped, no disk surface): it exists so an accidental dismissal
- *  (outside click / Escape / Cancel) doesn't discard the user's input, and is
- *  cleared on a successful submit or app restart. */
+/** Keep issue draft in session memory across accidental dismissal; clear on successful submit/restart, never persist to disk. */
 export type NewIssueDraft = {
   title: string
   body: string
@@ -16,15 +13,12 @@ export type NewIssueDraft = {
 
 export type NewIssueDraftSlice = {
   newIssueDraft: NewIssueDraft | null
-  /** Shallow-merge the patch into the current draft, or into a fresh empty
-   *  draft when none exists yet. */
+  /** Patch current draft, creating fresh defaults if absent. */
   setNewIssueDraft: (patch: Partial<NewIssueDraft>) => void
   clearNewIssueDraft: () => void
 }
 
-// Why: a factory (not a shared module constant) so a partial patch that omits
-// `labels`/`assignees` seeds fresh arrays rather than aliasing one singleton's —
-// an in-place mutation of an empty draft would otherwise corrupt every future one.
+// Create fresh labels/assignees arrays; shared empty defaults alias future drafts after mutation.
 function createEmptyNewIssueDraft(): NewIssueDraft {
   return { title: '', body: '', labels: [], assignees: [], repoId: null }
 }

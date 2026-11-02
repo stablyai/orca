@@ -38,8 +38,7 @@ export class ProcessGoneDedupe {
     }
 
     const claim = { key }
-    // Why: process-gone tuples come from Electron and can vary by exit code;
-    // keep the short dedupe window without retaining stale tuples forever.
+    // Refresh insertion order so capacity eviction removes the oldest claim.
     this.recentKeys.delete(key)
     this.recentKeys.set(key, { recordedAt: now, claim })
     this.prune(now)
@@ -48,8 +47,7 @@ export class ProcessGoneDedupe {
 
   release(claim: ProcessGoneDedupeClaim): void {
     const current = this.recentKeys.get(claim.key)
-    // Why: an old failed write must not erase a newer claim for the same
-    // renderer after the dedupe window expires or bounded entries are evicted.
+    // A failed old write must not release a newer claim for the same key.
     if (current?.claim === claim) {
       this.recentKeys.delete(claim.key)
     }
@@ -80,12 +78,12 @@ export function getProcessGoneDedupeKey(
   source: 'renderer' | 'child',
   processType: string,
   reason: string,
-  exitCode: number | null
+  exitCode: number | null,
+  webContentsId?: number
 ): string {
-  // Why: one renderer death can surface as crashed/oom/launch-failed in a
-  // burst. Coalesce that prompt noise while keeping child identities precise.
+  // One renderer death may produce several reasons; dedupe it by renderer identity.
   if (source === 'renderer') {
-    return `${source}:${processType}`
+    return `${source}:${processType}:${webContentsId ?? 'global'}`
   }
   return `${source}:${processType}:${reason}:${exitCode ?? 'null'}`
 }

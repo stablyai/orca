@@ -1,0 +1,87 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "source-control.hosted-review-create",
+  "family": "hostedReview.create-chain",
+  "namedDeltas": [],
+  "values": {
+    "38143ba8e1d0": {
+      "name": "hostedReview.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
+    },
+    "a75f3e11f830": {
+      "name": "hostedReview.create#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": "main",
+            "body": "Recorded body",
+            "draft": false,
+            "head": "feature",
+            "provider": "github",
+            "repo": "id:repo42",
+            "title": "Recorded title",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "internal",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d14a0dd639ad": {
+      "outcome": {
+        "error": "Failed to create pull request",
+        "ok": false
+      }
+    },
+    "e12183bfd2c3": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Failed to create pull request",
+        "ok": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-create-refused-empty-message",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["a75f3e11f830"],
+          "payloads": ["38143ba8e1d0"],
+          "settlements": {
+            "create": "e12183bfd2c3"
+          },
+          "state": "d14a0dd639ad",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -1,8 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import {
   nativeChatLaunchAgentForLeaf,
+  nativeChatLeafOwnsTabWideEvidence,
   resolveNativeChatLeafRoute
 } from './native-chat-leaf-routing'
+
+describe('nativeChatLeafOwnsTabWideEvidence', () => {
+  it("owns tab-wide evidence only while the bound leaf is still the tab's sole pane", () => {
+    expect(
+      nativeChatLeafOwnsTabWideEvidence({
+        ownerLeafId: 'leaf-a',
+        leafId: 'leaf-a',
+        leafIds: ['leaf-a']
+      })
+    ).toBe(true)
+    // A split sibling must not inherit the tab's launch draft (issue #16695).
+    expect(
+      nativeChatLeafOwnsTabWideEvidence({
+        ownerLeafId: 'leaf-a',
+        leafId: 'leaf-b',
+        leafIds: ['leaf-a', 'leaf-b']
+      })
+    ).toBe(false)
+    // Not even the original pane keeps it once the tab is split.
+    expect(
+      nativeChatLeafOwnsTabWideEvidence({
+        ownerLeafId: 'leaf-a',
+        leafId: 'leaf-a',
+        leafIds: ['leaf-a', 'leaf-b']
+      })
+    ).toBe(false)
+    expect(
+      nativeChatLeafOwnsTabWideEvidence({
+        ownerLeafId: null,
+        leafId: 'leaf-a',
+        leafIds: ['leaf-a']
+      })
+    ).toBe(false)
+  })
+})
 
 describe('nativeChatLaunchAgentForLeaf', () => {
   it('uses the tab launch hint only for its sole leaf', () => {
@@ -99,7 +135,7 @@ describe('resolveNativeChatLeafRoute', () => {
     ).toEqual({ chatLeafId: 'agent-leaf', exitChat: false })
   })
 
-  it('moves chat to an eligible active sibling after its leaf closes', () => {
+  it('exits chat when the user closes its pane', () => {
     expect(
       resolveNativeChatLeafRoute({
         isChatViewMode: true,
@@ -108,7 +144,7 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafStillMounted: false,
         activeLeafIsEligible: true
       })
-    ).toEqual({ chatLeafId: 'agent-sibling', exitChat: false })
+    ).toEqual({ chatLeafId: null, exitChat: true })
   })
 
   it('does not move chat when its mounted leaf temporarily becomes ineligible', () => {

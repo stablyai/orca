@@ -1,7 +1,7 @@
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
-import { parseWslPath } from '../wsl'
-import { parsePtySessionId } from './pty-session-id'
+import { getDefaultWslDistro, parseWslPath } from '../wsl'
+import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type WslSessionContext = {
@@ -41,7 +41,8 @@ export function resolveWslSessionContext(args: {
   return (
     (args.sessionId ? getWslContextFromSessionId(args.sessionId) : undefined) ??
     (isWslShellName(args.shellOverride)
-      ? getWslContextFromPreferredDistro(args.terminalWindowsWslDistro)
+      ? (getWslContextFromPreferredDistro(args.terminalWindowsWslDistro) ??
+        getWslContextFromPreferredDistro(getDefaultWslDistro()))
       : undefined)
   )
 }

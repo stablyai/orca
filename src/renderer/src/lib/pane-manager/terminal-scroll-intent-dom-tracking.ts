@@ -8,7 +8,8 @@ import {
   syncTerminalScrollIntentFromViewport
 } from './terminal-scroll-intent'
 import { syncTerminalScrollIntentSoon } from './terminal-scroll-intent-settle'
-import type { TerminalScrollIntentKey, TerminalScrollIntentTarget } from './terminal-scroll-intent'
+import type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
+import type { TerminalScrollIntentKey } from './terminal-scroll-intent-key-store'
 import {
   isTerminalScrollIntentRebuildInFlight,
   onTerminalScrollIntentBufferRebuildComplete
@@ -40,10 +41,7 @@ type TerminalWithOnData = {
   }
 }
 
-// Mouse reports (SGR "\x1b[<b;x;yM" and X10 "\x1b[M...") stream at pointer
-// frequency and are the one input kind whose native scroll-to-bottom must NOT
-// reclassify a pin: converting it would permanently drop a reading position
-// on a mere mouse-move over a mouse-tracking app.
+// Mouse reports scroll xterm to bottom as input but must not erase the reader’s pin merely from pointer movement.
 function isMouseReportInput(data: string): boolean {
   return (
     data.charCodeAt(0) === 0x1b &&
@@ -52,12 +50,7 @@ function isMouseReportInput(data: string): boolean {
   )
 }
 
-// Why: typing/pasting scrolls the terminal to the bottom (xterm
-// scrollOnUserInput) without going through any wheel/pointer path this module
-// tracks. Without a resync, a stored pin goes stale and a later
-// workspace-switch restore yanks the user back to the old reading position.
-// onData also carries parser auto-replies (DSR/CPR, focus reports), so pinned
-// xterm's core onUserInput signal identifies which emissions were truly user-driven.
+// Typing/paste scrolls bottom outside wheel/pointer paths; resync intent to avoid restoring a stale pin. onData includes parser replies, so pinned-core onUserInput identifies actual input.
 function subscribeScrollIntentUserInputResync(
   terminal: TerminalScrollIntentTarget,
   isActive: () => boolean,
@@ -76,8 +69,7 @@ function subscribeScrollIntentUserInputResync(
       if (isMouseReportInput(data)) {
         pendingUserInputRevision = null
         if (isActive() && getTerminalScrollIntentKind(terminal) === 'pinnedViewport') {
-          // Why: xterm treats mouse reports as user input and scrolls bottom
-          // before onData. Restore the reading position before output follows.
+          // xterm scrolls bottom before onData for mouse reports; restore the pin before output follows.
           enforceTerminalCurrentScrollIntent(terminal)
         }
         return
@@ -89,14 +81,12 @@ function subscribeScrollIntentUserInputResync(
           resyncUserInput(interactionRevision)
         }
       } else if (isActive()) {
-        // Compatibility fallback for test doubles or an unexpected xterm
-        // shape; pinned production xterm uses onUserInput below.
+        // Fallback for test doubles/unexpected xterm shape; production uses onUserInput below.
         resyncUserInput(captureInteractionRevision())
       }
     })
     const userInputSubscription = onUserInput?.(() => {
-      // Why: xterm emits onUserInput immediately before its matching onData.
-      // Reserve order here, then let onData classify typing versus mouse.
+      // onUserInput immediately precedes matching onData; reserve order, then classify typing versus mouse.
       pendingUserInputRevision = captureInteractionRevision()
     })
     return {
@@ -114,9 +104,7 @@ function subscribeScrollIntentUserInputResync(
   }
 }
 
-/** Wires the user-driven scroll signals (wheel, scrollbar pointer drags) that
- *  are allowed to change a terminal's scroll intent. Output-driven scroll
- *  events deliberately do not update intent (see terminal-scroll-intent.ts). */
+/** Track wheel/scrollbar user intent; output-driven scroll deliberately leaves it unchanged (terminal-scroll-intent.ts). */
 export function attachTerminalScrollIntentTracking(
   terminal: TerminalScrollIntentTarget,
   host: HTMLElement,
@@ -158,8 +146,7 @@ export function attachTerminalScrollIntentTracking(
           pendingSync &&
           pendingSync.revision === latestCommittedInteractionRevision
         ) {
-          // Why: wheel/scrollbar movement during replay must be sampled from
-          // the completed buffer, never from its transient cleared rows.
+          // Sample replay-time gestures only after the completed buffer replaces transient cleared rows.
           const preservePinnedAtBottom = pendingSync.mode === 'preservePinnedAtBottom'
           if (
             preservePinnedAtBottom &&
@@ -172,9 +159,7 @@ export function attachTerminalScrollIntentTracking(
             preservePinnedAtBottom
           })
           if (preservePinnedAtBottom) {
-            // Why: an upward wheel or scrollbar gesture against the cleared 0/0
-            // buffer must not erase the durable pin. Settle after restoration so
-            // a real move wins and a no-op gesture can still return to follow.
+            // Gestures against cleared 0/0 must preserve durable pins; settle after restoration so genuine movement wins and no-op gestures can still follow.
             syncTerminalScrollIntentSoon(terminal, {
               allowBufferShrink: true,
               preservePinnedAtBottom: true,
@@ -233,9 +218,7 @@ export function attachTerminalScrollIntentTracking(
   globalThis.addEventListener?.('pointercancel', onPointerDone, true)
   return {
     dispose: () => {
-      // Why: native pinned output can grow baseY without a DOM scroll event;
-      // persist that geometry before remount, but never let an old instance
-      // overwrite a successor already bound to the same leaf key.
+      // Persist baseY growth even without DOM scroll events before remount; old instances must never overwrite a successor on the same leaf.
       if (isTerminalScrollIntentKeyBindingCurrent(terminal)) {
         syncTerminalScrollIntentFromViewport(terminal)
       }

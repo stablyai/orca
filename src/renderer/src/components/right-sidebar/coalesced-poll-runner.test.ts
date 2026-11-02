@@ -4,12 +4,15 @@ import { type CoalescedPollRunner, createCoalescedPollRunner } from './coalesced
 function deferred(): {
   promise: Promise<void>
   resolve: () => void
+  reject: (error: Error) => void
 } {
   let resolve: () => void = () => {}
-  const promise = new Promise<void>((r) => {
+  let reject: (error: Error) => void = () => {}
+  const promise = new Promise<void>((r, j) => {
     resolve = r
+    reject = j
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -132,7 +135,6 @@ describe('createCoalescedPollRunner', () => {
       await flushMicrotasks()
       expect(task).toHaveBeenCalledTimes(1)
 
-      // Ticks during the backoff window must not start a run early.
       await vi.advanceTimersByTimeAsync(3000)
       runner.run()
       await vi.advanceTimersByTimeAsync(171_998)
@@ -157,6 +159,28 @@ describe('createCoalescedPollRunner', () => {
 
       // 5 x 120s = 600s uncapped; the cap holds the gap to 300s.
       runner.run()
+      await vi.advanceTimersByTimeAsync(299_999)
+      expect(task).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(task).toHaveBeenCalledTimes(2)
+
+      calls[1]?.resolve()
+      await flushMicrotasks()
+      vi.useRealTimers()
+    })
+
+    it('paces a GitCommandTimeoutError from its full timeout duration', async () => {
+      vi.useFakeTimers()
+      const { runner, task, calls } = makeSlowRunner()
+
+      runner.run()
+      runner.run()
+      await vi.advanceTimersByTimeAsync(120_000)
+      const timeoutError = new Error('git timed out.')
+      timeoutError.name = 'GitCommandTimeoutError'
+      calls[0]?.reject(timeoutError)
+      await flushMicrotasks()
+
       await vi.advanceTimersByTimeAsync(299_999)
       expect(task).toHaveBeenCalledTimes(1)
       await vi.advanceTimersByTimeAsync(1)
@@ -219,7 +243,6 @@ describe('createCoalescedPollRunner', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(task).toHaveBeenCalledTimes(2)
 
-      // The superseded tick timer must not fire an extra run later.
       calls[1]?.resolve()
       await flushMicrotasks()
       await vi.advanceTimersByTimeAsync(600_000)

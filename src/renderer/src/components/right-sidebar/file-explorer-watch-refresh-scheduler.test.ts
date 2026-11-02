@@ -1,0 +1,326 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFileExplorerWatchRefreshScheduler } from './file-explorer-watch-refresh-scheduler'
+import type { FileExplorerTreeRefreshOutcome } from './file-explorer-types'
+
+function createDeferred(): {
+  promise: Promise<FileExplorerTreeRefreshOutcome>
+  resolve: (outcome?: FileExplorerTreeRefreshOutcome) => void
+} {
+  let resolve!: (outcome?: FileExplorerTreeRefreshOutcome) => void
+  const promise = new Promise<FileExplorerTreeRefreshOutcome>((res) => {
+    resolve = (outcome = 'refreshed') => res(outcome)
+  })
+  return { promise, resolve }
+}
+
+function setup(
+  overrides: Partial<Parameters<typeof createFileExplorerWatchRefreshScheduler>[0]> = {}
+) {
+  const { refreshTree: treeImpl, refreshDir: dirImpl, ...rest } = overrides
+  const refreshTree = vi.fn(
+    treeImpl ?? (async (): Promise<FileExplorerTreeRefreshOutcome> => 'refreshed')
+  )
+  const refreshDir = vi.fn(dirImpl ?? (async (_dirPath: string) => {}))
+  const scheduler = createFileExplorerWatchRefreshScheduler({
+    refreshTree,
+    refreshDir,
+    isCoveredByFullRefresh: () => false,
+    dirConcurrency: 4,
+    ...rest
+  })
+  return { refreshTree, refreshDir, scheduler }
+}
+
+describe('createFileExplorerWatchRefreshScheduler', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('coalesces a burst of full-refresh requests into one tree refresh', async () => {
+    const { refreshTree, scheduler } = setup()
+
+    for (let index = 0; index < 20; index++) {
+      scheduler.requestFullRefresh()
+    }
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+  })
+
+  it('dedupes dir refreshes that differ only in path spelling', async () => {
+    const { refreshDir, scheduler } = setup()
+
+    // Fold Windows separators/trailing slashes so one directory does not cause three reads.
+    scheduler.requestDirRefresh('C:/repo/src/')
+    scheduler.requestDirRefresh('C:\\repo\\src')
+    scheduler.requestDirRefresh('C:/repo/src')
+    scheduler.requestDirRefresh('/repo/docs/')
+    scheduler.requestDirRefresh('/repo/docs')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshDir).toHaveBeenCalledTimes(2)
+    expect(refreshDir.mock.calls.map(([dirPath]) => dirPath)).toEqual(['C:/repo/src', '/repo/docs'])
+  })
+
+  it('still refreshes a pending dir that a full refresh does not cover', async () => {
+    // Full refresh covers expanded dirs only; collapsed cache entries still need pending reads.
+    const { refreshTree, refreshDir, scheduler } = setup()
+
+    scheduler.requestDirRefresh('/repo/collapsed')
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledWith('/repo/collapsed')
+  })
+
+  it('skips a pending dir the full refresh already re-read', async () => {
+    const { refreshTree, refreshDir, scheduler } = setup({
+      isCoveredByFullRefresh: (dirPath) => dirPath === '/repo/src'
+    })
+
+    scheduler.requestDirRefresh('/repo/src')
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+    expect(refreshDir).not.toHaveBeenCalled()
+  })
+
+  it('re-issues covered dir refreshes when the tree refresh was superseded', async () => {
+    // Superseded root reads skip expanded dirs; preserve their refreshes because re-expansion will not mark them stale.
+    const gate = createDeferred()
+    const { refreshDir, scheduler } = setup({
+      refreshTree: () => gate.promise,
+      isCoveredByFullRefresh: (dirPath) => dirPath === '/repo/src'
+    })
+
+    scheduler.requestDirRefresh('/repo/src')
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+
+    gate.resolve('superseded')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledWith('/repo/src')
+  })
+
+  it('drops pending dir refreshes when the tree refresh could not read the root', async () => {
+    // Failed root transport would add dead per-dir timeouts and block future refreshes.
+    const gate = createDeferred()
+    const { refreshDir, scheduler } = setup({
+      refreshTree: () => gate.promise,
+      isCoveredByFullRefresh: () => false
+    })
+
+    scheduler.requestDirRefresh('/repo/src')
+    scheduler.requestDirRefresh('/repo/docs')
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+
+    gate.resolve('root-unreadable')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshDir).not.toHaveBeenCalled()
+  })
+
+  it('refreshes a covered dir when no full refresh is pending', async () => {
+    const { refreshTree, refreshDir, scheduler } = setup({
+      isCoveredByFullRefresh: () => true
+    })
+
+    scheduler.requestDirRefresh('/repo/src')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshTree).not.toHaveBeenCalled()
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not start a second run while the first is still in flight', async () => {
+    const gate = createDeferred()
+    const { refreshTree, scheduler } = setup({ refreshTree: () => gate.promise })
+
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+
+    gate.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshTree).toHaveBeenCalledTimes(2)
+  })
+
+  it('flushes a dir request that arrived during an in-flight run', async () => {
+    const gate = createDeferred()
+    const { refreshDir, scheduler } = setup({ refreshTree: () => gate.promise })
+
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+
+    scheduler.requestDirRefresh('/repo/late')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refreshDir).not.toHaveBeenCalled()
+
+    gate.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledWith('/repo/late')
+  })
+
+  it('never runs more dir refreshes at once than dirConcurrency', async () => {
+    let inFlight = 0
+    let peakInFlight = 0
+    const refreshDir = vi.fn(async (_dirPath: string) => {
+      inFlight++
+      peakInFlight = Math.max(peakInFlight, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      inFlight--
+    })
+    const { scheduler } = setup({ refreshDir, dirConcurrency: 4 })
+
+    for (let index = 0; index < 20; index++) {
+      scheduler.requestDirRefresh(`/repo/d${index}`)
+    }
+    await vi.advanceTimersByTimeAsync(20 * 10)
+
+    expect(refreshDir).toHaveBeenCalledTimes(20)
+    expect(peakInFlight).toBeLessThanOrEqual(4)
+  })
+
+  it('cancels a pending flush', async () => {
+    const { refreshTree, refreshDir, scheduler } = setup()
+
+    scheduler.requestFullRefresh()
+    scheduler.requestDirRefresh('/repo/src')
+    expect(scheduler.cancel()).toBe(true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshTree).not.toHaveBeenCalled()
+    expect(refreshDir).not.toHaveBeenCalled()
+  })
+
+  it('reports no discarded work when an idle scheduler is cancelled', () => {
+    const { scheduler } = setup()
+
+    expect(scheduler.cancel()).toBe(false)
+  })
+
+  it('reports discarded work when cancelled with a refresh in flight and nothing queued', async () => {
+    const gate = createDeferred()
+    const { refreshTree, scheduler } = setup({ refreshTree: () => gate.promise })
+
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+
+    // Nothing pending and no timer armed: the in-flight run is the only discarded work.
+    expect(scheduler.cancel()).toBe(true)
+
+    gate.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+  })
+
+  it('stops refreshing queued dirs when cancelled mid-run', async () => {
+    // Queued reads must stop before React rebinds the live refreshDir ref to the next worktree.
+    const gate = createDeferred()
+    const refreshDir = vi.fn(async (dirPath: string) => {
+      if (dirPath === '/repo/d0') {
+        await gate.promise
+      }
+    })
+    const { scheduler } = setup({ refreshDir, dirConcurrency: 1 })
+
+    for (let index = 0; index < 4; index++) {
+      scheduler.requestDirRefresh(`/repo/d${index}`)
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+
+    scheduler.cancel()
+    gate.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+  })
+
+  it('still refreshes a dir first expanded while the tree refresh was in flight', async () => {
+    const gate = createDeferred()
+    const expanded = new Set<string>()
+    const { refreshDir, scheduler } = setup({
+      refreshTree: () => gate.promise,
+      isCoveredByFullRefresh: (dirPath) => expanded.has(dirPath)
+    })
+
+    scheduler.requestDirRefresh('/repo/late')
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // The full refresh used the old expanded set; preserve newly expanded dirs' pending reads.
+    expanded.add('/repo/late')
+    gate.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledWith('/repo/late')
+  })
+
+  it('drops a dir queued during an in-flight run when cancel lands first', async () => {
+    const gate = createDeferred()
+    const { refreshTree, refreshDir, scheduler } = setup({ refreshTree: () => gate.promise })
+
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+    scheduler.requestDirRefresh('/repo/src')
+    scheduler.cancel()
+
+    gate.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+    expect(refreshDir).not.toHaveBeenCalled()
+  })
+
+  it('keeps a full refresh ahead of the dir refreshes it does not cover', async () => {
+    const order: string[] = []
+    const { scheduler } = setup({
+      refreshTree: async (): Promise<FileExplorerTreeRefreshOutcome> => {
+        order.push('tree')
+        return 'refreshed'
+      },
+      refreshDir: async (dirPath) => {
+        order.push(dirPath)
+      }
+    })
+
+    scheduler.requestDirRefresh('/repo/collapsed')
+    scheduler.requestFullRefresh()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(order).toEqual(['tree', '/repo/collapsed'])
+  })
+
+  it('flushes on the next tick and coalesces one payload burst into a single refresh', async () => {
+    const { refreshTree, refreshDir, scheduler } = setup()
+
+    for (let index = 0; index < 20; index++) {
+      scheduler.requestFullRefresh()
+      scheduler.requestDirRefresh('/repo/src')
+    }
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(refreshTree).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledTimes(1)
+    expect(refreshDir).toHaveBeenCalledWith('/repo/src')
+  })
+})

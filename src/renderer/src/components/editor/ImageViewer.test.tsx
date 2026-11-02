@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const reactHookRuntime = vi.hoisted(() => ({
@@ -6,7 +7,7 @@ const reactHookRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useMemo<T>(factory: () => T) {
@@ -17,6 +18,9 @@ vi.mock('react', async () => {
     },
     useEffect() {
       return undefined
+    },
+    useContext() {
+      return false
     },
     useRef<T>(initial: T) {
       return { current: initial }
@@ -192,5 +196,28 @@ describe('ImageViewer preview source retry', () => {
 
     expect(findElementsByType(rendered, 'Image')).toHaveLength(1)
     expect(findElementsByType(rendered, 'img')).toHaveLength(0)
+  })
+})
+
+describe('ImageViewer reading its bytes by URL', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  it('shows an image from its orca-media URL, sized from the grant', async () => {
+    reactHookRuntime.index = 0
+    const module = await import('./ImageViewer')
+    const rendered = expandNode(
+      module.default({
+        src: 'orca-media://file/token?revision=r1',
+        byteSize: 2048,
+        filePath: '/repo/preview.png',
+        mimeType: 'image/png'
+      })
+    )
+    expect(findPreviewImage(rendered).props.src).toBe('orca-media://file/token?revision=r1')
+    expect(JSON.stringify(rendered)).toContain('2.0 KB')
   })
 })

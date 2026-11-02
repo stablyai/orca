@@ -1,8 +1,9 @@
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { RemoveWorktreeResult, Worktree } from '../../../../shared/types'
+import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
-import { Button } from '../ui/button'
+import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 
 type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'>
 
@@ -10,6 +11,7 @@ type PreservedBranchToastBodyProps = {
   description: string
   forceDeleteLabel: string | undefined
   onForceDelete: (() => void) | undefined
+  onAlwaysForceDelete: (() => Promise<void>) | undefined
 }
 
 function preservedBranchToastId(branchName: string, expectedHead: string | undefined): string {
@@ -47,30 +49,41 @@ function getPreservedBranchDescription(
       )
 }
 
-// Why: Sonner's native action row pinches long branch/worktree names into a
-// narrow column. Keep the native toast frame, but give the body its own footer.
+// Use a custom footer so long branch/worktree names do not squeeze Sonner’s native action row.
 function PreservedBranchToastBody({
   description,
   forceDeleteLabel,
-  onForceDelete
+  onForceDelete,
+  onAlwaysForceDelete
 }: PreservedBranchToastBodyProps): React.JSX.Element {
   return (
-    <div className="flex w-[300px] max-w-[calc(100vw-96px)] flex-col gap-3">
+    <div className="flex w-full flex-col gap-3">
       <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
         {description}
       </p>
       {forceDeleteLabel && onForceDelete ? (
-        <div className="flex min-w-0 overflow-hidden">
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            className="w-full min-w-0"
-            onClick={onForceDelete}
+        <div className="min-w-0">
+          <WorktreeForceDeleteButton
+            fullWidth
+            menuSide="top"
+            onForceDelete={onForceDelete}
+            onAlwaysForceDelete={onAlwaysForceDelete}
+            moreActionsLabel={translate(
+              'workspaceDeletion.moreBranchActions',
+              'More branch delete options'
+            )}
+            alwaysForceDeleteLabel={translate(
+              'workspaceDeletion.alwaysForceDeleteBranches',
+              'Always delete preserved branches'
+            )}
+            alwaysForceDeleteTooltip={translate(
+              'workspaceDeletion.alwaysForceDeleteBranchesTooltip',
+              'Applies to branches kept after future workspace deletions.'
+            )}
           >
             <Trash2 className="size-3.5" />
             <span className="truncate">{forceDeleteLabel}</span>
-          </Button>
+          </WorktreeForceDeleteButton>
         </div>
       ) : null}
     </div>
@@ -80,7 +93,8 @@ function PreservedBranchToastBody({
 export function showPreservedBranchToast(
   result: RemoveWorktreeResult | undefined,
   worktree: PreservedBranchWorktree | undefined,
-  onForceDelete: (branchName: string, expectedHead: string) => void
+  onForceDelete: (branchName: string, expectedHead: string) => void,
+  onAlwaysForceDelete?: () => Promise<void>
 ): void {
   const preservedBranch = result?.preservedBranch
   const branch = preservedBranch?.branchName
@@ -110,6 +124,7 @@ export function showPreservedBranchToast(
         description={description}
         forceDeleteLabel={forceDeleteLabel}
         onForceDelete={forceDelete}
+        onAlwaysForceDelete={onAlwaysForceDelete}
       />
     ),
     dismissible: true,

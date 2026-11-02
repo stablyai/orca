@@ -24,9 +24,7 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { GeminiHookService } from './hook-service'
-
-const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 
 describe('GeminiHookService', () => {
   let homeDir: string
@@ -105,7 +103,7 @@ describe('GeminiHookService', () => {
     expect(config.hooks.BeforeAgent[0].hooks[0].command).toBe('echo user-before-agent')
     const managedCommandPattern =
       process.platform === 'win32'
-        ? WINDOWS_POWERSHELL_LAUNCHER
+        ? wrapWindowsBatchHookCommand(managedHookPath)
         : new RegExp(managedHookPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     expect(config.hooks.BeforeAgent[1].hooks[0].command).toMatch(managedCommandPattern)
     expect(config.hooks.AfterAgent[0].hooks[0].command).toMatch(managedCommandPattern)
@@ -113,33 +111,22 @@ describe('GeminiHookService', () => {
     expect(config.hooks.BeforeTool[0].hooks[0].command).toMatch(managedCommandPattern)
   })
 
-  // Why: #6078 — a Windows user profile path with a space used to be written
-  // verbatim as the hook command, so the agent split it at the space. The
-  // managed command must use an encoded launcher so the path never appears raw
-  // on the cmd.exe command line.
-  it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
-    () => {
-      const spaceHome = join(tmpdir(), 'orca gemini home with spaces')
-      mkdirSync(spaceHome, { recursive: true })
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        expect(new GeminiHookService().install().state).toBe('installed')
-
-        const config = JSON.parse(
-          readFileSync(join(spaceHome, '.gemini', 'settings.json'), 'utf8')
-        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
-
-        for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool']) {
-          const command = config.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-        }
-      } finally {
-        rmSync(spaceHome, { recursive: true, force: true })
-        homedirMock.mockReturnValue(homeDir)
+  // Shell execution is covered separately by windows-hook-payload-delivery.test.ts.
+  it('registers the Windows batch hook command for every event', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect(new GeminiHookService().install().state).toBe('installed')
+      const command = wrapWindowsBatchHookCommand(
+        join(homeDir, '.orca', 'agent-hooks', 'gemini-hook.cmd')
+      )
+      const config = JSON.parse(readFileSync(join(homeDir, '.gemini', 'settings.json'), 'utf8'))
+      for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool']) {
+        expect(config.hooks[eventName].at(-1).hooks[0].command).toBe(command)
       }
+    } finally {
+      platform.mockRestore()
     }
-  )
+  })
 
   it('preserves user-authored PreToolUse hooks while sweeping stale managed Gemini hooks', () => {
     const managedHookFileName = process.platform === 'win32' ? 'gemini-hook.cmd' : 'gemini-hook.sh'
@@ -184,7 +171,7 @@ describe('GeminiHookService', () => {
     expect(preToolCommands).toEqual(['echo user-authored'])
     expect(config.hooks.BeforeTool[0].hooks[0].command).toMatch(
       process.platform === 'win32'
-        ? WINDOWS_POWERSHELL_LAUNCHER
+        ? wrapWindowsBatchHookCommand(join(homeDir, '.orca', 'agent-hooks', managedHookFileName))
         : new RegExp(managedHookFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     )
   })

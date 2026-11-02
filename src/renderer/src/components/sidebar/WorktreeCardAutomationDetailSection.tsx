@@ -1,7 +1,6 @@
 import React from 'react'
 import { CalendarClock, PlayCircle } from 'lucide-react'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { AutomationWorkspaceProvenance } from '../../../../shared/types'
+import type { AutomationWorkspaceProvenance } from '../../../../shared/worktree/types'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
@@ -16,7 +15,6 @@ import {
 
 type WorktreeCardAutomationDetailSectionProps = {
   provenance: AutomationWorkspaceProvenance
-  worktreeHostId?: ExecutionHostId
   onOpenAutomation?: (event: React.MouseEvent) => void
   onOpenAutomationRun?: (event: React.MouseEvent) => void
 }
@@ -29,7 +27,6 @@ type AutomationProvenanceAvailability =
 
 export function WorktreeCardAutomationDetailSection({
   provenance,
-  worktreeHostId,
   onOpenAutomation,
   onOpenAutomationRun
 }: WorktreeCardAutomationDetailSectionProps): React.JSX.Element {
@@ -42,12 +39,19 @@ export function WorktreeCardAutomationDetailSection({
     async function resolveAvailability(): Promise<void> {
       setAvailability({ status: 'checking' })
       try {
-        const target = getAutomationTargetFromHostId(provenance.hostId ?? worktreeHostId)
+        // Automation provenance owns the lookup host; its resulting workspace can live elsewhere.
+        const target = getAutomationTargetFromHostId(provenance.hostId)
         const automations = await listAutomationsForTarget(target)
         const automation = automations.find((entry) => entry.id === provenance.automationId)
         if (!automation) {
           if (!cancelled) {
-            setAvailability({ status: 'automation-missing' })
+            // Why: a miss proves removal only for a host-recorded owner; a client's label may name another desktop.
+            setAvailability({
+              status:
+                provenance.hostId && provenance.origin !== 'client'
+                  ? 'automation-missing'
+                  : 'unavailable'
+            })
           }
           return
         }
@@ -69,7 +73,7 @@ export function WorktreeCardAutomationDetailSection({
     return () => {
       cancelled = true
     }
-  }, [provenance.automationId, provenance.automationRunId, provenance.hostId, worktreeHostId])
+  }, [provenance.automationId, provenance.automationRunId, provenance.hostId, provenance.origin])
 
   const canOpenAutomation = availability.status === 'available'
   const canOpenAutomationRun = availability.status === 'available' && availability.runAvailable

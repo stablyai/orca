@@ -14,8 +14,6 @@ function watcherWith(
   return {
     reconcileScan: () => {},
     lookupBest(worktreeIds, port): AdvertisedUrl | undefined {
-      // Why: tests pin URLs to worktreeId+port via the entries map; whichever
-      // worktree appears first in the request wins to keep assertions explicit.
       for (const wt of worktreeIds) {
         const hit = entries[`${wt}::${port}`]
         if (hit) {

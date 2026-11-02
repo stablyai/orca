@@ -1,4 +1,4 @@
-const WINDOWS_DRIVE_PATH_PREFIX = /^\/[A-Za-z]:\//
+export const WINDOWS_DRIVE_PATH_PREFIX = /^\/[A-Za-z]:\//
 const UNC_PATH_PREFIX = /^(?:\\\\|\/\/)([^\\/]+)[\\/]+([^\\/]+)(?:[\\/](.*))?$/
 
 function encodePathSegments(path: string): string {
@@ -18,12 +18,11 @@ export function filesystemPathToFileUri(filePath: string): string {
   if (uncMatch) {
     const [, host, share, rest = ''] = uncMatch
     const pathSegments = [share, ...rest.replaceAll('\\', '/').split('/').filter(Boolean)]
-    // Why: UNC hosts belong in the file URI authority; putting them in the
-    // pathname produces file:////server/share and loses the host on decode.
+    // UNC hosts belong in URI authority; file:////server/share loses the host on decode.
     return `file://${encodeURIComponent(host)}/${pathSegments.map(encodeURIComponent).join('/')}`
   }
 
-  const normalizedPath = filePath.replaceAll('\\', '/')
+  const normalizedPath = filePath.startsWith('/') ? filePath : filePath.replaceAll('\\', '/')
   const encodedPath = encodePathSegments(normalizedPath)
   return normalizedPath.startsWith('/') ? `file://${encodedPath}` : `file:///${encodedPath}`
 }
@@ -38,8 +37,7 @@ export function filesystemPathHrefToFileUri(filePathHref: string): string {
   const suffix = filePathHref.slice(suffixIndex)
   const url = new URL(filesystemPathToFileUri(pathPart))
   if (suffix.startsWith('#')) {
-    // Why: markdown href fragments like `#L10` should stay URL fragments,
-    // not become `%23L10` inside the Windows filesystem path.
+    // Keep markdown #L10 as a fragment instead of encoding it into a Windows path.
     url.hash = suffix
     return url.toString()
   }

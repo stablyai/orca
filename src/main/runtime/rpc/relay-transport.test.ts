@@ -28,7 +28,8 @@ describe('CloudRelayTransport', () => {
   })
 
   it('authenticates one query-free host-data socket and forwards messages verbatim', async () => {
-    const server = new WebSocketServer({ port: 0, perMessageDeflate: false })
+    // Bind the exact loopback address clients dial; wildcard binds let another listener claim that address.
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()
@@ -117,8 +118,7 @@ describe('CloudRelayTransport', () => {
           fn(...args)
         }
       }
-      // Why: models a half-open post-sleep relay socket — terminate() never
-      // produces a 'close' event, which previously hung stop() forever.
+      // Model a post-sleep half-open socket whose terminate never emits close, formerly hanging stop forever.
       const fakeSocket = {
         readyState: 1,
         OPEN: 1,
@@ -177,8 +177,7 @@ describe('CloudRelayTransport', () => {
         transport.metadataFor(socket)
         onLateMessage()
       })
-      // Why: timeout cleanup can precede the native socket's eventual close;
-      // late frames must not reach wiring after their metadata was released.
+      // After forced timeout cleanup, late native frames must not reach wiring with released metadata.
       expect(() => emit('message', 'late-after-stop', false)).not.toThrow()
       expect(onLateMessage).not.toHaveBeenCalled()
       expect(reply).not.toBeNull()

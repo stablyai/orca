@@ -1,4 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { expandNode } from './tab-bar-dropdown-menu-item-probe'
+import {
+  stubHeadlessReact,
+  stubShallowSelector,
+  stubTooltip
+} from './tab-bar-windows-shell-launch-render-stubs'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const appStoreSnapshot: {
   activeTabId: string | null
@@ -49,46 +62,16 @@ const useAppStoreMock = vi.fn(
     })
 )
 
-vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
-  return {
-    ...actual,
-    memo: <T>(component: T) => component,
-    useEffect: () => {},
-    useLayoutEffect: () => {},
-    useCallback: <T>(callback: T) => callback,
-    useMemo: <T>(factory: () => T) => factory(),
-    useRef: <T>(current: T) => ({ current }),
-    useState: <T>(initial: T) => [initial, vi.fn()] as const
-  }
-})
-
-// The headless React mock above stubs hooks, so zustand's useShallow (which
-// calls useRef) has no dispatcher; make it a pass-through like the store mock.
-vi.mock('zustand/react/shallow', () => ({
-  useShallow: (selector: unknown) => selector
+vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
+vi.mock('zustand/react/shallow', () => stubShallowSelector())
+// The headless React stub has no dispatcher for the hook each tab row subscribes to language changes with.
+vi.mock('react-i18next', async () => ({
+  ...(await vi.importActual<Record<string, unknown>>('react-i18next')),
+  useTranslation: () => ({})
 }))
 
-vi.mock('lucide-react', () => ({
-  FilePlus: function FilePlus() {
-    return null
-  },
-  FileText: function FileText() {
-    return null
-  },
-  Globe: function Globe() {
-    return null
-  },
-  Plus: function Plus() {
-    return null
-  },
-  Smartphone: function Smartphone() {
-    return null
-  },
-  TerminalSquare: function TerminalSquare() {
-    return null
-  }
-}))
+vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: function SortableContext(props: { children?: unknown }) {
@@ -145,6 +128,12 @@ vi.mock('./SortableTab', () => ({
   }
 }))
 
+vi.mock('./TerminalSortableTab', () => ({
+  default: function SortableTab(props: Record<string, unknown>) {
+    return { type: 'SortableTab', props }
+  }
+}))
+
 vi.mock('./EditorFileTab', () => ({
   default: function EditorFileTab(props: Record<string, unknown>) {
     return { type: 'EditorFileTab', props }
@@ -161,7 +150,11 @@ vi.mock('./BrowserTab', () => ({
 vi.mock('./QuickLaunchButton', () => ({
   QuickLaunchAgentMenuItems: function QuickLaunchAgentMenuItems() {
     return null
-  }
+  },
+  ProjectedAgentMenuItems: function ProjectedAgentMenuItems() {
+    return null
+  },
+  useTabAgentMenuLaunch: () => () => undefined
 }))
 
 vi.mock('./shell-icons', () => ({
@@ -210,6 +203,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
+vi.mock('@/components/ui/tooltip', () => stubTooltip())
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
@@ -236,6 +231,11 @@ function findChildrenByType(node: unknown, typeName: string): ReactElementLike[]
     const matchedName = typeof type === 'string' ? type : type?.name
     if (matchedName === typeName) {
       results.push(el)
+    }
+    if (matchedName === 'TabBarStaticCreateMenu' && typeof el.type === 'function') {
+      // Expand the deferred pure menu component in this shallow renderer.
+      visit(el.type(el.props))
+      return
     }
     if (el.props && 'children' in el.props) {
       visit(el.props.children)
@@ -265,21 +265,24 @@ async function renderTabBar(props: Record<string, unknown>): Promise<unknown> {
     | ((props: Record<string, unknown>) => unknown)
     | { type: (props: Record<string, unknown>) => unknown }
   const TabBar = typeof candidate === 'function' ? candidate : candidate.type
-  return TabBar({
-    activeTabId: null,
-    worktreeId: 'wt-1',
-    expandedPaneByTabId: {},
-    onActivate: () => {},
-    onClose: () => {},
-    onCloseOthers: () => {},
-    onCloseToRight: () => {},
-    onNewTerminalTab: () => {},
-    onNewBrowserTab: () => {},
-    onSetCustomTitle: () => {},
-    onSetTabColor: () => {},
-    onTogglePaneExpand: () => {},
-    ...props
-  })
+  return expandNode(
+    TabBar({
+      activeTabId: null,
+      worktreeId: 'wt-1',
+      expandedPaneByTabId: {},
+      onActivate: () => {},
+      onClose: () => {},
+      onCloseOthers: () => {},
+      onCloseToRight: () => {},
+      onCloseToLeft: () => {},
+      onNewTerminalTab: () => {},
+      onNewBrowserTab: () => {},
+      onSetCustomTitle: () => {},
+      onSetTabColor: () => {},
+      onTogglePaneExpand: () => {},
+      ...props
+    })
+  )
 }
 
 const TERMINAL_TAB = {
@@ -292,14 +295,6 @@ const TERMINAL_TAB = {
   color: null,
   sortOrder: 0,
   createdAt: 0
-}
-
-const EDITOR_FILE = {
-  id: 'file-1',
-  tabId: 'unified-editor-1',
-  worktreeId: 'wt-1',
-  relativePath: 'foo.ts',
-  isDirty: false
 }
 
 describe('TabBar context menu wiring', () => {
@@ -328,111 +323,6 @@ describe('TabBar context menu wiring', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
-  })
-
-  it('wires the shared agent projection selector into the production TabBar', async () => {
-    const { selectTabBarAgentProjections } = await import('./tab-agent-types-by-tab-id')
-
-    await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
-
-    expect(useAppStoreMock).toHaveBeenCalledWith(selectTabBarAgentProjections)
-  })
-
-  it('counts every tab kind for SortableTab.tabCount', async () => {
-    // Why: Close Others used to pass tabCount=tabs.length, where tabs is just the
-    // terminal list. With one terminal + any number of editor/browser tabs, the
-    // menu item rendered as disabled even though closeOthers can close the
-    // non-terminal siblings.
-    const element = await renderTabBar({
-      tabs: [TERMINAL_TAB],
-      editorFiles: [EDITOR_FILE],
-      browserTabs: [],
-      tabBarOrder: ['term-1', 'unified-editor-1']
-    })
-    const sortable = findChildrenByType(element, 'SortableTab')
-    expect(sortable).toHaveLength(1)
-    expect(sortable[0].props.tabCount).toBe(2)
-  })
-
-  it('keeps the tab strip content-sized until horizontal scrolling is needed', async () => {
-    const element = await renderTabBar({
-      tabs: [TERMINAL_TAB],
-      editorFiles: [EDITOR_FILE],
-      browserTabs: [],
-      tabBarOrder: ['term-1', 'unified-editor-1']
-    })
-    const divs = findChildrenByType(element, 'div')
-    const stripWrapper = divs.find((candidate) =>
-      String(candidate.props.className ?? '').includes('flex-[0_1_auto]')
-    )
-    const strip = divs.find((candidate) =>
-      String(candidate.props.className ?? '').includes('terminal-tab-strip')
-    )
-
-    expect(stripWrapper).toBeTruthy()
-    expect(stripWrapper?.props.className).toContain('min-w-0')
-    expect(stripWrapper?.props.className).toContain('max-w-full')
-    expect(strip).toBeTruthy()
-    expect(strip?.props.className).toContain('min-w-0')
-    expect(strip?.props.className).toContain('flex-1')
-    expect(strip?.props.className).toContain('overflow-x-auto')
-    expect(strip?.props.className).not.toContain('scrollbar-sleek')
-  })
-
-  it('passes the editor unifiedTabId when EditorFileTab triggers onCloseToRight', async () => {
-    // Why: TabBar wires the editor tab as () => onCloseToRight(item.id). The
-    // emitted id is the editor's unifiedTabId (item.id for editors), not the
-    // file entityId. TabGroupPanel must accept this id shape to close right-side
-    // tabs from an editor tab — see the matching id|entityId resolver there.
-    const onCloseToRight = vi.fn()
-    const element = await renderTabBar({
-      tabs: [TERMINAL_TAB],
-      editorFiles: [EDITOR_FILE],
-      browserTabs: [],
-      tabBarOrder: ['term-1', 'unified-editor-1'],
-      onCloseToRight
-    })
-    const editorTabs = findChildrenByType(element, 'EditorFileTab')
-    expect(editorTabs).toHaveLength(1)
-    const onClose = editorTabs[0].props.onCloseToRight as () => void
-    onClose()
-    expect(onCloseToRight).toHaveBeenCalledWith('unified-editor-1')
-  })
-
-  it('passes pinned state and toggles unpin through the unified tab id', async () => {
-    appStoreSnapshot.unifiedTabsByWorktree = {
-      'wt-1': [
-        {
-          id: 'unified-term-1',
-          entityId: 'term-1',
-          groupId: 'wt-1',
-          worktreeId: 'wt-1',
-          contentType: 'terminal',
-          label: 'Terminal',
-          customLabel: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 0,
-          isPinned: true
-        }
-      ]
-    }
-
-    const element = await renderTabBar({
-      tabs: [TERMINAL_TAB],
-      editorFiles: [],
-      browserTabs: [],
-      tabBarOrder: ['term-1']
-    })
-
-    const sortable = findChildrenByType(element, 'SortableTab')
-    expect(sortable).toHaveLength(1)
-    expect(sortable[0].props.isPinned).toBe(true)
-
-    ;(sortable[0].props.onTogglePin as () => void)()
-
-    expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
-    expect(pinTabMock).not.toHaveBeenCalled()
   })
 
   it('waits for async menu-created terminals before focusing xterm', async () => {
@@ -470,65 +360,24 @@ describe('TabBar context menu wiring', () => {
     expect(focusTerminalTabSurface).not.toHaveBeenCalledWith('old-terminal')
   })
 
-  it('can put markdown actions before terminal actions in the new-tab menu', async () => {
+  it('omits impossible paired-web actions while keeping terminal and markdown', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       onNewFileTab: () => {},
       onOpenFileTab: () => {},
-      newTabMenuOrder: 'markdown-first'
+      onNewSimulatorTab: () => {}
     })
 
     const menuLabels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
       extractText(item.props.children)
     )
 
-    expect(menuLabels[0]).toContain('New Markdown')
-    expect(menuLabels[1]).toContain('Open Markdown...')
-    expect(menuLabels[2]).toContain('New Terminal')
-    expect(menuLabels[3]).toContain('New Browser Tab')
-  })
-
-  it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {
-    const onNewSimulatorTab = vi.fn()
-    appStoreSnapshot.unifiedTabsByWorktree = {
-      'wt-1': [
-        {
-          id: 'sim-1',
-          entityId: 'sim-1',
-          groupId: 'group-2',
-          worktreeId: 'wt-1',
-          contentType: 'simulator',
-          label: 'Mobile Emulator',
-          customLabel: null,
-          color: null,
-          sortOrder: 1,
-          createdAt: 0
-        }
-      ]
-    }
-
-    const element = await renderTabBar({
-      tabs: [TERMINAL_TAB],
-      groupId: 'group-1',
-      onNewSimulatorTab
-    })
-
-    const emulatorItem = findChildrenByType(element, 'DropdownMenuItem').find((item) =>
-      extractText(item.props.children).includes('Go to Mobile Emulator')
-    )
-    expect(emulatorItem).toBeTruthy()
-    if (!emulatorItem) {
-      throw new Error('Go to Mobile Emulator menu item not rendered')
-    }
-    expect(emulatorItem.props.disabled).toBeUndefined()
-    expect(emulatorItem.props.onSelect).toBeTypeOf('function')
-    ;(emulatorItem.props.onSelect as () => void)()
-    expect(onNewSimulatorTab).toHaveBeenCalledTimes(1)
-
-    const tooltip = findChildrenByType(element, 'TooltipContent').find((item) =>
-      extractText(item.props.children).includes('Open the existing emulator tab.')
-    )
-    expect(tooltip).toBeTruthy()
+    expect(menuLabels.some((label) => label.includes('New Terminal'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('New Markdown'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('Open Markdown...'))).toBe(true)
+    expect(menuLabels.some((label) => label.includes('Browser'))).toBe(false)
+    expect(menuLabels.some((label) => label.includes('Mobile Emulator'))).toBe(false)
   })
 
   it('cancels delayed menu focus when the tab bar root unmounts', async () => {

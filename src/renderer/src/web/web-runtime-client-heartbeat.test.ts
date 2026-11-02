@@ -1,11 +1,13 @@
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
+import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
+import { createFixedKeyLegacyHandshakeForTest } from '../../../shared/paired-e2ee-fixed-key-test-fixture'
 import { WebRuntimeClient } from './web-runtime-client'
 
-// Why: a half-open browser WebSocket stays readyState===OPEN with no
-// onclose/onerror, so the client must actively detect server silence without
-// keeping its timer armed while the window is hidden.
+// Half-open WebSockets can stay OPEN without close/error; detect silence while visible and disarm timers while hidden.
 
 const fakeSockets: FakeWebSocket[] = []
+const clients: WebRuntimeClient[] = []
 let visibilityState: DocumentVisibilityState = 'visible'
 let nextIntervalId = 1
 const documentListeners = new Map<string, () => void>()
@@ -49,7 +51,7 @@ class FakeWebSocket {
 type HeartbeatInternals = {
   ws: FakeWebSocket | null
   state: string
-  sharedKey: Uint8Array | null
+  handshake: PairedE2EEClientHandshake | null
   lastInboundFrameAt: number
   lastHeartbeatTickAt: number
   heartbeatProbeSentAt: number | null
@@ -67,12 +69,15 @@ function makeConnectedClient(): {
   setVisible: (visible: boolean) => void
 } {
   let nowMs = 1_000
-  const client = new WebRuntimeClient({
-    v: 2,
-    endpoint: 'ws://127.0.0.1:6768',
-    deviceToken: 'token',
-    publicKeyB64: Buffer.alloc(32).toString('base64')
-  })
+  const client = new WebRuntimeClient(
+    pairedRuntimeConnectionFromOffer({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+  )
+  clients.push(client)
   const internals = client as unknown as HeartbeatInternals
   // Override the protected time/visibility seams deterministically.
   internals.now = () => nowMs
@@ -80,7 +85,7 @@ function makeConnectedClient(): {
   const socket = fakeSockets[0]!
   socket.readyState = FakeWebSocket.OPEN
   internals.ws = socket
-  internals.sharedKey = new Uint8Array(32)
+  internals.handshake = createFixedKeyLegacyHandshakeForTest(new Uint8Array(32))
   internals.state = 'connected'
   internals.lastInboundFrameAt = nowMs
   internals.lastHeartbeatTickAt = nowMs
@@ -130,6 +135,7 @@ describe('WebRuntimeClient liveness heartbeat', () => {
   })
 
   afterEach(() => {
+    clients.splice(0).forEach((client) => client.close())
     vi.unstubAllGlobals()
   })
 
@@ -142,8 +148,7 @@ describe('WebRuntimeClient liveness heartbeat', () => {
     intervalCallbacks.values().next().value?.()
   }
 
-  // Advance time AND record a tick boundary so the suspended-loop detector
-  // (sinceLastTick) sees a normal cadence, mirroring back-to-back real ticks.
+  // Advance tick boundaries with time so sinceLastTick models normal cadence, not suspension.
   function advanceOneTick(internals: HeartbeatInternals, setNow: (ms: number) => void): void {
     const next = internals.now() + 10_000
     setNow(next)
@@ -178,8 +183,7 @@ describe('WebRuntimeClient liveness heartbeat', () => {
 
     expect(setIntervalMock).toHaveBeenCalledTimes(2)
     expect(intervalCallbacks.size).toBe(1)
-    // lastInboundFrameAt is NOT rebaselined on a visible re-arm: it stays at the fresh-connect baseline
-    // (1_000) so a socket that went silent while hidden is still detectable on the next tick.
+    // Visible re-arm preserves inbound baseline so hidden silence remains detectable on the next tick.
     expect(internals.lastInboundFrameAt).toBe(1_000)
     // The tick clock resets so the parked hidden gap isn't misread as a suspended loop; the probe clears.
     expect(internals.lastHeartbeatTickAt).toBe(601_000)
@@ -191,8 +195,7 @@ describe('WebRuntimeClient liveness heartbeat', () => {
     const { client, internals, socket, setNow, setVisible } = makeConnectedClient()
     internals.startHeartbeat()
 
-    // Hide, let a long silent gap elapse, then become visible again. The connection produced no inbound
-    // frames the whole time, so the preserved baseline (1_000) must drive prompt liveness detection.
+    // Model ten silent hidden minutes; preserved inbound baseline must prompt liveness detection on return.
     setVisible(false)
     dispatchVisibilityChange()
     setNow(601_000)
@@ -262,8 +265,7 @@ describe('WebRuntimeClient liveness heartbeat', () => {
 
   it('sends a status.get probe after the idle threshold of silence', () => {
     const { internals, socket, setNow } = makeConnectedClient()
-    // 30s since last inbound frame, but the tick loop ran on normal cadence
-    // (last tick ~10s ago), so this is real silence > HEARTBEAT_IDLE_MS (25s).
+    // Normal tick cadence distinguishes 30s inbound silence from loop suspension (idle threshold 25s).
     internals.lastInboundFrameAt = 1_000
     setNow(31_000)
     internals.lastHeartbeatTickAt = 31_000 - 10_000

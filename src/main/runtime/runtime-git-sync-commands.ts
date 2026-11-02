@@ -1,0 +1,138 @@
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type { GitUpstreamStatus } from '../../shared/git-status-types'
+import type { GitPushTarget } from '../../shared/worktree/types'
+import { materializeWorktreePushTargetRemote } from '../ipc/worktree-remote'
+import { assertRuntimeReadWslDistroRunning } from './runtime-wsl-background-read-gate'
+import type { LocalGitProvider } from '../providers/local-git-provider'
+import {
+  localGitOptionsForTarget,
+  requireRuntimeGitProvider,
+  type RuntimeGitCommandHost,
+  type RuntimeGitTarget
+} from './runtime-git-command-target'
+
+export class RuntimeGitSyncCommands {
+  constructor(private readonly host: RuntimeGitCommandHost) {}
+
+  /** Materialize on the worktree host without Store ownership/refspec side effects; persist new push remotes via the resolved worktree's host callback (#17828). */
+  private async prepareRemoteSync(
+    target: RuntimeGitTarget,
+    pushTarget: GitPushTarget | undefined
+  ): Promise<{ provider: LocalGitProvider; pushTarget: GitPushTarget | undefined }> {
+    const provider = requireRuntimeGitProvider(target)
+    const materialized = pushTarget
+      ? await materializeWorktreePushTargetRemote(
+          target.worktree.path,
+          pushTarget,
+          undefined,
+          target.repo?.id,
+          localGitOptionsForTarget(target)
+        )
+      : undefined
+    if (materialized?.remoteCreated) {
+      this.host.persistMaterializedPushTarget?.(target.worktree, materialized)
+    }
+    return { provider, pushTarget: materialized }
+  }
+
+  async abortRuntimeGitMerge(worktreeSelector: string): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    await requireRuntimeGitProvider(target).abortMerge(target.worktree.path)
+    return { ok: true }
+  }
+
+  async abortRuntimeGitRebase(worktreeSelector: string): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    await requireRuntimeGitProvider(target).abortRebase(target.worktree.path)
+    return { ok: true }
+  }
+
+  async getRuntimeGitUpstreamStatus(
+    worktreeSelector: string,
+    pushTarget?: GitPushTarget
+  ): Promise<GitUpstreamStatus> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    // A poll no user asked for: never start a stopped WSL distro (E9).
+    await assertRuntimeReadWslDistroRunning(target, localGitOptionsForTarget(target).wslDistro)
+    return requireRuntimeGitProvider(target).getUpstreamStatus(target.worktree.path, pushTarget)
+  }
+
+  async fetchRuntimeGit(
+    worktreeSelector: string,
+    pushTarget?: GitPushTarget
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const sync = await this.prepareRemoteSync(target, pushTarget)
+    await sync.provider.fetchRemote(target.worktree.path, sync.pushTarget)
+    return { ok: true }
+  }
+
+  async syncRuntimeGitForkDefaultBranch(
+    worktreeSelector: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitForkSyncResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).syncForkDefaultBranch(
+      target.worktree.path,
+      expectedUpstream
+    )
+  }
+
+  async pullRuntimeGit(
+    worktreeSelector: string,
+    pushTarget?: GitPushTarget
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const sync = await this.prepareRemoteSync(target, pushTarget)
+    await sync.provider.pullBranch(target.worktree.path, sync.pushTarget)
+    return { ok: true }
+  }
+
+  async fastForwardRuntimeGit(
+    worktreeSelector: string,
+    pushTarget?: GitPushTarget
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const sync = await this.prepareRemoteSync(target, pushTarget)
+    await sync.provider.fastForwardBranch(target.worktree.path, sync.pushTarget)
+    return { ok: true }
+  }
+
+  async rebaseRuntimeGitFromBase(worktreeSelector: string, baseRef: string): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    await requireRuntimeGitProvider(target).rebaseFromBase(target.worktree.path, baseRef)
+    return { ok: true }
+  }
+
+  async pushRuntimeGit(
+    worktreeSelector: string,
+    publish?: boolean,
+    pushTarget?: GitPushTarget,
+    forceWithLease?: boolean
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const sync = await this.prepareRemoteSync(target, pushTarget)
+    await sync.provider.pushBranch(target.worktree.path, publish === true, sync.pushTarget, {
+      forceWithLease: forceWithLease === true
+    })
+    return { ok: true }
+  }
+
+  async commitRuntimeGit(
+    worktreeSelector: string,
+    message: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (message.trim().length === 0) {
+      throw new Error('Commit message is required')
+    }
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).commit(target.worktree.path, message)
+  }
+
+  async completeRuntimeGitMerge(
+    worktreeSelector: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).completeMerge(target.worktree.path)
+  }
+}

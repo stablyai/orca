@@ -1,4 +1,5 @@
-import type { PersistedUIState, TopLevelView } from '../../../shared/types'
+import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { TopLevelView } from '../../../shared/ui-chrome-types'
 
 type ActiveViewUnloadState = {
   activeView: TopLevelView
@@ -8,7 +9,6 @@ type ActiveViewUnloadState = {
 export function buildActiveViewUnloadPatch(
   state: ActiveViewUnloadState
 ): Partial<PersistedUIState> {
-  // Why: unloading during startup must not overwrite the saved view with the
-  // renderer default before persisted UI hydration finishes.
+  // Startup unload must not replace the saved view with defaults before hydration.
   return state.persistedUIReady ? { activeView: state.activeView } : {}
 }

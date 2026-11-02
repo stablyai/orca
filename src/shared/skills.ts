@@ -14,13 +14,11 @@ export type DiscoveredSkill = {
   sourceKind: SkillSourceKind
   sourceLabel: string
   rootPath: string
-  /** Every root that reached this file. Canonical-path dedup keeps one row but
-   *  must not erase co-owning roots, or shared symlinked skills lose agents. */
+  /** Retain co-owning roots during canonical-path dedup or symlinked skills lose agents. */
   rootPaths?: string[]
   directoryPath: string
   skillFilePath: string
   installed: boolean
-  fileCount: number
   updatedAt: number | null
 }
 
@@ -33,7 +31,8 @@ export type SkillDiscoverySource = {
   /** Agent that owns this root; null is the explicit shared-skills scope. */
   owner: AgentType | null
   exists: boolean
-  skippedReason?: 'missing' | 'remote-repo'
+  /** Unavailable means unanswered, so skills are unknown rather than absent. */
+  skippedReason?: 'missing' | 'remote-repo' | 'unavailable'
 }
 
 export type SkillDiscoveryResult = {
@@ -47,10 +46,14 @@ export type SkillDiscoveryTarget = {
   wslDistro?: string | null
   /** Workspace path whose local .agents/.claude skill roots should be scanned. */
   cwd?: string | null
-  /** Lets the owning runtime resolve the project runtime from its own store
-   *  when the caller (e.g. a remote client) cannot supply `projectRuntime`. */
+  /** Let the owning runtime resolve projectRuntime when a remote client cannot supply it. */
   worktreeId?: string | null
   projectRuntime?: ProjectExecutionRuntimeResolution
+  /** Bypass shared scans after known disk changes; old hosts ignore this and scan normally. */
+  refresh?: boolean
+  /** Optional inventory filter for callers that only need known installed skills. */
+  names?: string[]
+  sourceKinds?: SkillSourceKind[]
 }
 
 const ResolvedProjectRuntimeSchema = z.object({
@@ -100,6 +103,12 @@ export const SkillDiscoveryTargetSchema: z.ZodType<SkillDiscoveryTarget> = z.obj
   worktreeId: z.string().nullable().optional(),
   projectRuntime: z
     .discriminatedUnion('status', [ResolvedProjectRuntimeSchema, RepairProjectRuntimeSchema])
+    .optional(),
+  refresh: z.boolean().optional(),
+  names: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
+  sourceKinds: z
+    .array(z.enum(['home', 'repo', 'bundled', 'plugin']))
+    .max(4)
     .optional()
 })
 

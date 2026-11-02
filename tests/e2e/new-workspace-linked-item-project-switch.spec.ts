@@ -1,16 +1,5 @@
-/**
- * E2E: linked work item behavior when switching the composer project.
- *
- * Why: Jira/Linear issues are workspace-scoped context — switching the
- * implementation project must keep them attached. They used to be dropped,
- * leaving only the derived name in the smart field. GitHub/GitLab sources
- * are repo-scoped and must still clear on a project switch.
- *
- * Why E2E: the preservation logic lives in useComposerState behind the real
- * ProjectCombobox interaction and main-process repo resolution — a store
- * slice unit test cannot reach the combobox → handleProjectChange → smart
- * field pill re-render path.
- */
+// Project switches must retain workspace-scoped Jira/Linear issues and clear repo-scoped GitHub/GitLab sources.
+// Drive the real ProjectCombobox → handleProjectChange → pill render path, including main’s repo resolution.
 
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -20,6 +9,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import type { LinkedWorkItemSummary } from '../../src/renderer/src/lib/new-workspace'
+import type { TaskSourceContext } from '../../src/shared/task-source-context'
 
 const SECOND_PROJECT_NAME = 'linked-item-second-project'
 
@@ -53,26 +43,59 @@ async function addSecondProject(page: Page, repoPath: string): Promise<void> {
 async function openComposerWithLinkedWorkItem(
   page: Page,
   linkedWorkItem: LinkedWorkItemSummary,
-  prefilledName: string
+  prefilledName: string,
+  taskSourceContext: TaskSourceContext | null = null
 ): Promise<void> {
   await page.evaluate(
-    ({ linkedWorkItem, prefilledName }) => {
+    ({ linkedWorkItem, prefilledName, taskSourceContext }) => {
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      store.getState().openModal('new-workspace-composer', { linkedWorkItem, prefilledName })
+      store.getState().openModal('new-workspace-composer', {
+        linkedWorkItem,
+        prefilledName,
+        taskSourceContext
+      })
     },
-    { linkedWorkItem, prefilledName }
+    { linkedWorkItem, prefilledName, taskSourceContext }
   )
+}
+
+async function getJiraSourceContext(page: Page): Promise<TaskSourceContext> {
+  return page.evaluate(() => {
+    const state = window.__store?.getState()
+    const activeWorktreeId = state?.activeWorktreeId
+    const setup = state?.projectHostSetups.find((candidate) =>
+      state.worktreesByRepo[candidate.repoId]?.some((worktree) => worktree.id === activeWorktreeId)
+    )
+    if (!setup) {
+      throw new Error('Active project host setup is unavailable')
+    }
+    return {
+      kind: 'task-source',
+      provider: 'jira',
+      projectId: setup.projectId,
+      hostId: setup.hostId,
+      projectHostSetupId: setup.id,
+      repoId: setup.repoId,
+      providerIdentity: {
+        provider: 'jira',
+        siteId: 'e2e-jira-site',
+        siteUrl: 'https://example.atlassian.net',
+        projectKey: 'RDG'
+      }
+    }
+  })
 }
 
 async function switchComposerProject(page: Page, projectName: string): Promise<void> {
   const composer = page.getByRole('dialog')
-  const combobox = composer.locator('button[data-project-combobox-root="true"]')
+  const combobox = composer.getByRole('combobox', { name: 'Project' })
+  const comboboxRoot = composer.locator('div[data-project-combobox-root="true"]')
   await combobox.click()
   await page.getByRole('option', { name: new RegExp(projectName) }).click()
-  await expect(combobox).toContainText(projectName)
+  await expect(comboboxRoot).toContainText(projectName)
 }
 
 test.describe('New workspace composer linked item across project switches', () => {
@@ -93,6 +116,7 @@ test.describe('New workspace composer linked item across project switches', () =
   })
 
   test('keeps a Jira issue linked when the project changes', async ({ orcaPage }) => {
+    const jiraSourceContext = await getJiraSourceContext(orcaPage)
     await openComposerWithLinkedWorkItem(
       orcaPage,
       {
@@ -103,7 +127,8 @@ test.describe('New workspace composer linked item across project switches', () =
         url: 'https://example.atlassian.net/browse/RDG-344',
         jiraIdentifier: 'RDG-344'
       },
-      'rdg-344-nuxtjs-nextjs'
+      'rdg-344-nuxtjs-nextjs',
+      jiraSourceContext
     )
 
     const composer = orcaPage.getByRole('dialog')

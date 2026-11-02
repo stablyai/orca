@@ -1,0 +1,5 @@
+{"t":1790146616295,"path":"/hook/opencode2","payload":{"hook_event_name":"SessionStart","sessionID":"ses_f32f26424ffe3xdiePHBUnsdAY"}}
+{"t":1790146616310,"path":"/hook/opencode2","payload":{"hook_event_name":"MessagePart","role":"user","text":"Use your task tool to spawn exactly one subagent. Give that subagent this instruction: run the shell command 'echo hello-from-subagent' and report its output. Do not run the command yourself; you must delegate it. When the subagent returns, reply with just its output.","messageID":"msg_0cd0d9bdc001wjukqO5OqJP2IX","sessionID":"ses_f32f26424ffe3xdiePHBUnsdAY"}}
+{"t":1790146616329,"path":"/hook/opencode2","payload":{"hook_event_name":"SessionBusy","sessionID":"ses_f32f26424ffe3xdiePHBUnsdAY"}}
+{"t":1790146624607,"path":"/hook/opencode2","payload":{"hook_event_name":"MessagePart","role":"assistant","text":"hello-from-subagent","messageID":"msg_0cd0db795001FsTcwuFUDpJTrI","sessionID":"ses_f32f26424ffe3xdiePHBUnsdAY"}}
+{"t":1790146624629,"path":"/hook/opencode2","payload":{"hook_event_name":"SessionIdle","sessionID":"ses_f32f26424ffe3xdiePHBUnsdAY"}}

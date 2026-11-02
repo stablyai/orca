@@ -1,9 +1,8 @@
 type HostRouteExitRouter = {
-  replace: (href: '/') => void
+  dismissTo: (href: '/') => void
 }
 
 export function leaveHostRoute(router: HostRouteExitRouter): void {
-  // Why: direct pairing can open /h/:hostId as the root route, and split-view
-  // detail history is not the host/home screen the header is meant to exit to.
-  router.replace('/')
+  // Direct pairing may make the host route the root; dismissTo pops home when present or replaces after a cold entry, avoiding split-view detail history.
+  router.dismissTo('/')
 }

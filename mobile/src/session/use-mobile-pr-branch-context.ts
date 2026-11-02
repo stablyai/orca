@@ -5,7 +5,7 @@ import type { MobileGitBranchCompareResult } from '../source-control/mobile-bran
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import { resolveMobileBranchCompareBaseRef } from '../source-control/mobile-branch-base-ref'
 import { fetchGithubRepoSlug } from './github-pr-rpc'
-import { readMobileBranchCompareResult, readMobileGitStatusResult } from './mobile-diff-review-rpc'
+import { branchContextCompareRead, branchContextStatusRead } from './mobile-diff-review-operations'
 
 export type MobilePrBranchContext = {
   branch: string | null
@@ -16,10 +16,7 @@ export type MobilePrBranchContext = {
   loaded: boolean
 }
 
-// Pure derivation of branch + head SHA from a git.status + git.branchCompare snapshot.
-// Head SHA must match the review path's precedence (use-mobile-diff-review-controller.ts):
-// `status.head ?? branchCompare.summary.headOid ?? null` — a status-only read would lose
-// the SHA when `status.head` is absent and diverge from the review surface's check status.
+// Use the same status.head then branchCompare head fallback as review so both surfaces identify check runs consistently.
 export function deriveMobilePrBranchContext(
   status: MobileGitStatusResult | null,
   branchCompare: MobileGitBranchCompareResult | null
@@ -31,12 +28,7 @@ export function deriveMobilePrBranchContext(
   }
 }
 
-// Loads repo eligibility independently from branch/SHA. The header PR icon only
-// needs the cheap GitHub probe; the panel can keep loading branch context after
-// the entry point is already stable in the top bar.
-//
-// `includeBranchIdentity: false` skips git.status + branchCompare — use when the
-// caller only gates a PR entry on hosted-repo eligibility (session dock icon).
+// Probe repo eligibility independently so the PR entry can appear before branch context; repo-only mode skips identity RPCs.
 export function useMobilePrBranchContext(input: {
   client: RpcClient | null
   connState: ConnectionState
@@ -74,7 +66,6 @@ export function useMobilePrBranchContext(input: {
       status: null,
       isGithubRepo: false,
       repoLoaded: false,
-      // Repo-only mode is "loaded" for branch fields immediately (they stay null).
       loaded: !includeBranchIdentity
     })
 
@@ -88,8 +79,7 @@ export function useMobilePrBranchContext(input: {
           }))
         }
       })
-      // Why: a rejected repo probe should only hide the PR entry, not block
-      // branch context that can still power the panel's loading/error state.
+      // Failed repo probes hide only the entry; branch data may still power panel state.
       .catch(() => {
         if (!cancelled) {
           setContext((prev) => ({
@@ -116,8 +106,7 @@ export function useMobilePrBranchContext(input: {
           }))
         }
       })
-      // Why: a rejected branch read must not escape as an unhandled rejection;
-      // keep repo eligibility and let the panel show "branch unavailable".
+      // Contain branch-read rejection while retaining repo eligibility and a readable unavailable state.
       .catch(() => {
         if (!cancelled) {
           setContext((prev) => ({
@@ -162,8 +151,7 @@ export async function loadMobilePrBranchIdentity(
 ): Promise<Pick<MobilePrBranchContext, 'branch' | 'headSha' | 'status'>> {
   const [status, branchCompare] = await Promise.all([
     readGitStatus(client, worktreeId),
-    // Why: the standalone PR entry point only needs branchCompare as a head-SHA
-    // fallback; compare failures must not hide the PR panel when git.status works.
+    // Branch compare is only the SHA fallback here; failure must not hide a PR panel whose status read works.
     readBranchCompare(client, worktreeId).catch(() => null)
   ])
   return deriveMobilePrBranchContext(status, branchCompare)
@@ -173,23 +161,24 @@ async function readGitStatus(
   client: RpcClient,
   worktreeId: string
 ): Promise<MobileGitStatusResult | null> {
-  const response = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
-  return response.ok ? readMobileGitStatusResult(response.result) : null
+  const reply = await branchContextStatusRead.request(client, { worktree: `id:${worktreeId}` })
+  const status = branchContextStatusRead.interpret(reply)
+  return status.accepted ? status.value : null
 }
 
 async function readBranchCompare(
   client: RpcClient,
   worktreeId: string
 ): Promise<MobileGitBranchCompareResult | null> {
-  // branchCompare requires a baseRef; without one (or on error) the headOid fallback is
-  // simply unavailable and headSha relies on status.head.
+  // Without a base ref, rely on status.head instead of attempting branch compare.
   const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
   if (!baseRef) {
     return null
   }
-  const response = await client.sendRequest('git.branchCompare', {
+  const reply = await branchContextCompareRead.request(client, {
     worktree: `id:${worktreeId}`,
     baseRef
   })
-  return response.ok ? readMobileBranchCompareResult(response.result) : null
+  const compared = branchContextCompareRead.interpret(reply)
+  return compared.accepted ? compared.value : null
 }

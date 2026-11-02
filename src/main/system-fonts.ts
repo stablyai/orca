@@ -1,12 +1,13 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 
 let cachedFonts: string[] | null = null
 let fontsPromise: Promise<string[]> | null = null
 const SYSTEM_FONT_LIST_TIMEOUT_MS = 15_000
-// Why: large macOS font catalogs can make system_profiler exceed 15s even
-// when it is healthy; keep the longer wait scoped to that slow command.
+// Large macOS font catalogs need more time in system_profiler.
 const MAC_SYSTEM_FONT_LIST_TIMEOUT_MS = 45_000
 
+/** Empty when the OS list is unreadable; the renderer then shows its curated fonts and says so. */
 export async function listSystemFontFamilies(): Promise<string[]> {
   if (cachedFonts) {
     return cachedFonts
@@ -16,23 +17,19 @@ export async function listSystemFontFamilies(): Promise<string[]> {
   }
 
   fontsPromise = loadSystemFontFamilies()
-    .then((fonts) => {
-      cachedFonts = fonts.length > 0 ? fonts : fallbackFonts()
-      return cachedFonts
+    .catch((error: unknown) => {
+      console.warn('[system-fonts] failed to list installed fonts:', error)
+      return []
     })
-    .catch(() => {
-      cachedFonts = fallbackFonts()
-      return cachedFonts
+    .then((fonts) => {
+      cachedFonts = fonts
+      return fonts
     })
     .finally(() => {
       fontsPromise = null
     })
 
   return fontsPromise
-}
-
-export function warmSystemFontFamilies(): void {
-  void listSystemFontFamilies()
 }
 
 function loadSystemFontFamilies(): Promise<string[]> {
@@ -81,15 +78,17 @@ function listLinuxFonts(): Promise<string[]> {
 }
 
 function listWindowsFonts(): Promise<string[]> {
+  // Pin UTF-8 before output; PowerShell 5.1 otherwise uses the OEM code page.
   const script = `
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Drawing
 $fonts = New-Object System.Drawing.Text.InstalledFontCollection
 $fonts.Families | ForEach-Object { $_.Name }
 `
 
   return execFileText(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+    windowsPowerShellPath(),
+    ['-NoProfile', '-NonInteractive', '-Command', script],
     8 * 1024 * 1024
   ).then((output) =>
     uniqueSorted(
@@ -101,45 +100,26 @@ $fonts.Families | ForEach-Object { $_.Name }
   )
 }
 
-function execFileText(
+async function execFileText(
   command: string,
   args: string[],
   maxBuffer: number,
   timeoutMs = SYSTEM_FONT_LIST_TIMEOUT_MS
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const child = execFile(command, args, { encoding: 'utf8', maxBuffer }, (error, stdout) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve(stdout)
-    })
-    if (!settled) {
-      timer = setTimeout(() => {
-        if (settled) {
-          return
-        }
-        settled = true
-        // Why: font discovery is a startup convenience; a stuck OS font tool
-        // should fall back instead of keeping settings IPC pending forever.
-        child.kill()
-        reject(new Error(`Timed out listing system fonts with ${command}`))
-      }, timeoutMs)
-      if (typeof timer === 'object' && 'unref' in timer) {
-        timer.unref()
-      }
-    }
+  // A stuck OS font tool must not leave settings IPC pending forever.
+  const result = await runProcess({
+    program: command,
+    args,
+    timeoutMs,
+    maxOutputBytes: maxBuffer
   })
+  if (result.timedOut) {
+    throw new Error(`Timed out listing system fonts with ${command}`)
+  }
+  if (result.code !== 0) {
+    throw new Error(`Failed to list system fonts with ${command}`)
+  }
+  return result.stdout
 }
 
 function uniqueSorted(values: (string | undefined)[]): string[] {
@@ -150,21 +130,4 @@ function uniqueSorted(values: (string | undefined)[]): string[] {
         .filter((value) => value.length > 0 && !value.startsWith('.'))
     )
   ).sort((a, b) => a.localeCompare(b))
-}
-
-function fallbackFonts(): string[] {
-  if (process.platform === 'darwin') {
-    return ['SF Mono', 'Menlo', 'Monaco', 'JetBrains Mono', 'Fira Code']
-  }
-  if (process.platform === 'win32') {
-    return ['Cascadia Mono', 'Consolas', 'Lucida Console', 'JetBrains Mono', 'Fira Code']
-  }
-  return [
-    'JetBrains Mono',
-    'Fira Code',
-    'DejaVu Sans Mono',
-    'Liberation Mono',
-    'Ubuntu Mono',
-    'Noto Sans Mono'
-  ]
 }

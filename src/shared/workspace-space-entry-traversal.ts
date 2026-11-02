@@ -1,27 +1,21 @@
-import type { WorkspaceSpaceItemKind } from './workspace-space-types'
+import {
+  createEntryScan,
+  type DirectoryFrame,
+  type EntryJob,
+  type WorkspaceSpaceEntryIdentity,
+  type WorkspaceSpaceEntryScan
+} from './workspace-space-directory-frame'
 import {
   collectWorkspaceSpaceDirectoryEntries,
   createWorkspaceSpaceScanBudget,
+  releaseWorkspaceSpaceScanEntries,
   WorkspaceSpaceScanCapacityError,
+  type WorkspaceSpaceDirectoryAdmission,
   type WorkspaceSpaceScanBudget,
   type WorkspaceSpaceScanLimits
 } from './workspace-space-scan-budget'
 
-type ScannableWorkspaceSpaceItemKind = Exclude<WorkspaceSpaceItemKind, 'other'>
-
-export type WorkspaceSpaceEntryScan = {
-  name: string
-  path: string
-  kind: ScannableWorkspaceSpaceItemKind
-  sizeBytes: number
-  skippedEntryCount: number
-  children?: WorkspaceSpaceEntryScan[]
-}
-
-type WorkspaceSpaceEntryIdentity = {
-  kind: ScannableWorkspaceSpaceItemKind
-  sizeBytes: number
-}
+export type { WorkspaceSpaceEntryScan } from './workspace-space-directory-frame'
 
 type WorkspaceSpaceEntryTraversalOptions<TEntry> = {
   rootPath: string
@@ -38,50 +32,14 @@ type WorkspaceSpaceEntryTraversalOptions<TEntry> = {
   limits?: Partial<WorkspaceSpaceScanLimits>
 }
 
-type ParentSlot<TEntry> = {
-  frame: DirectoryFrame<TEntry>
-  index: number
-}
-
-type DirectoryFrame<TEntry> = {
-  result: WorkspaceSpaceEntryScan
-  entries: readonly TEntry[]
-  nextIndex: number
-  remainingChildren: number
-  childResults?: (WorkspaceSpaceEntryScan | null | undefined)[]
-  parentSlot?: ParentSlot<TEntry>
-}
-
-type EntryJob<TEntry> = {
-  frame: DirectoryFrame<TEntry>
-  index: number
-  entry: TEntry
-  name: string
-  path: string
-}
-
-function createEntryScan(
-  path: string,
-  name: string,
-  identity: WorkspaceSpaceEntryIdentity
-): WorkspaceSpaceEntryScan {
-  return {
-    name,
-    path,
-    kind: identity.kind,
-    sizeBytes: identity.sizeBytes,
-    skippedEntryCount: 0
-  }
-}
-
 async function readDirectoryOrNull<TEntry>(
   path: string,
   options: WorkspaceSpaceEntryTraversalOptions<TEntry>,
   budget: WorkspaceSpaceScanBudget
-): Promise<readonly TEntry[] | null> {
+): Promise<WorkspaceSpaceDirectoryAdmission<TEntry> | null> {
   try {
     const directory = await options.readDirectory(path)
-    const entries = await collectWorkspaceSpaceDirectoryEntries(
+    const admission = await collectWorkspaceSpaceDirectoryEntries(
       directory,
       path,
       options.entryName,
@@ -89,7 +47,7 @@ async function readDirectoryOrNull<TEntry>(
       options.checkCancelled
     )
     options.checkCancelled()
-    return entries
+    return admission
   } catch (error) {
     if (options.isCancellationError(error) || error instanceof WorkspaceSpaceScanCapacityError) {
       throw error
@@ -98,11 +56,7 @@ async function readDirectoryOrNull<TEntry>(
   }
 }
 
-/**
- * Scans one directory tree with a fixed worker pool. Directory frames retain
- * the source arrays returned by readdir, but never allocate one promise or
- * queued closure per entry; only the configured workers own live entry jobs.
- */
+/** Retain readdir arrays, but only workers own live entry jobs; never allocate a promise or queued closure per entry. */
 export async function scanWorkspaceSpaceEntryTree<TEntry>(
   options: WorkspaceSpaceEntryTraversalOptions<TEntry>
 ): Promise<WorkspaceSpaceEntryScan> {
@@ -115,11 +69,12 @@ export async function scanWorkspaceSpaceEntryTree<TEntry>(
     return root
   }
 
-  const rootEntries = await readDirectoryOrNull(options.rootPath, options, budget)
-  if (rootEntries === null) {
+  const rootAdmission = await readDirectoryOrNull(options.rootPath, options, budget)
+  if (rootAdmission === null) {
     root.skippedEntryCount = 1
     return root
   }
+  const rootEntries = rootAdmission.entries
   if (rootEntries.length === 0) {
     root.children = []
     return root
@@ -128,6 +83,8 @@ export async function scanWorkspaceSpaceEntryTree<TEntry>(
   const rootFrame: DirectoryFrame<TEntry> = {
     result: root,
     entries: rootEntries,
+    retainedBytes: rootAdmission.retainedBytes,
+    retired: false,
     nextIndex: 0,
     remainingChildren: rootEntries.length,
     childResults: Array.from({ length: rootEntries.length }, () => undefined)
@@ -152,27 +109,35 @@ export async function scanWorkspaceSpaceEntryTree<TEntry>(
     onAbort()
   }
 
+  // Release exhausted listings before descending so dead arrays do not consume the budget.
+  const retireFrame = (frame: DirectoryFrame<TEntry>): void => {
+    if (frame.retired) {
+      return
+    }
+    frame.retired = true
+    releaseWorkspaceSpaceScanEntries(budget, frame.retainedBytes)
+    frame.entries = []
+    frame.retainedBytes = 0
+  }
+
   const takeAvailableJob = (): EntryJob<TEntry> | null => {
     while (availableFrames.length > 0) {
       const frame = availableFrames.at(-1)!
       if (frame.nextIndex >= frame.entries.length) {
         availableFrames.pop()
+        retireFrame(frame)
         continue
       }
       const index = frame.nextIndex
       frame.nextIndex += 1
-      if (frame.nextIndex >= frame.entries.length) {
-        availableFrames.pop()
-      }
       const entry = frame.entries[index]
       const name = options.entryName(entry)
-      return {
-        frame,
-        index,
-        entry,
-        name,
-        path: options.joinPath(frame.result.path, name)
+      const path = options.joinPath(frame.result.path, name)
+      if (frame.nextIndex >= frame.entries.length) {
+        availableFrames.pop()
+        retireFrame(frame)
       }
+      return { frame, index, entry, name, path }
     }
     return null
   }
@@ -239,8 +204,9 @@ export async function scanWorkspaceSpaceEntryTree<TEntry>(
   const expandDirectory = (
     job: EntryJob<TEntry>,
     result: WorkspaceSpaceEntryScan,
-    entries: readonly TEntry[]
+    admission: WorkspaceSpaceDirectoryAdmission<TEntry>
   ): void => {
+    const entries = admission.entries
     if (entries.length === 0) {
       completeChild(job.frame, job.index, result)
       return
@@ -249,6 +215,8 @@ export async function scanWorkspaceSpaceEntryTree<TEntry>(
     availableFrames.push({
       result,
       entries,
+      retainedBytes: admission.retainedBytes,
+      retired: false,
       nextIndex: 0,
       remainingChildren: entries.length,
       parentSlot: { frame: job.frame, index: job.index }
@@ -274,13 +242,13 @@ export async function scanWorkspaceSpaceEntryTree<TEntry>(
       completeChild(job.frame, job.index, result)
       return
     }
-    const entries = await readDirectoryOrNull(job.path, options, budget)
-    if (entries === null) {
+    const admission = await readDirectoryOrNull(job.path, options, budget)
+    if (admission === null) {
       result.skippedEntryCount = 1
       completeChild(job.frame, job.index, result)
       return
     }
-    expandDirectory(job, result, entries)
+    expandDirectory(job, result, admission)
   }
 
   const worker = async (): Promise<void> => {

@@ -4,6 +4,8 @@ import { cn } from '@/lib/utils'
 import { commitRow } from './rich-markdown-commands'
 import type { DocLinkMenuRow, DocLinkMenuState } from './rich-markdown-commands'
 import { translate } from '@/i18n/i18n'
+import { RichMarkdownCompletionPopover } from './RichMarkdownCompletionPopover'
+import { useRichMarkdownCompletionScroll } from './useRichMarkdownCompletionScroll'
 
 type RichMarkdownDocLinkMenuProps = {
   editor: Editor | null
@@ -11,6 +13,7 @@ type RichMarkdownDocLinkMenuProps = {
   rows: DocLinkMenuRow[]
   totalMatches: number
   selectedIndex: number
+  onClose: () => void
 }
 
 export function RichMarkdownDocLinkMenu({
@@ -18,15 +21,20 @@ export function RichMarkdownDocLinkMenu({
   menu,
   rows,
   totalMatches,
-  selectedIndex
+  selectedIndex,
+  onClose
 }: RichMarkdownDocLinkMenuProps): React.JSX.Element {
+  const { viewportRef, activeItemRef } = useRichMarkdownCompletionScroll(selectedIndex, rows)
   const overflow = totalMatches > rows.length
   return (
-    <div
-      className="rich-markdown-doc-link-menu"
-      style={{ left: menu.left, top: menu.top }}
+    <RichMarkdownCompletionPopover
+      editor={editor}
+      position={menu.to}
+      onClose={onClose}
+      viewportRef={viewportRef}
+      className="rich-markdown-doc-link-menu scrollbar-sleek"
       role="listbox"
-      aria-label={translate(
+      ariaLabel={translate(
         'auto.components.editor.RichMarkdownDocLinkMenu.0e8489bc11',
         'Markdown document links'
       )}
@@ -44,11 +52,12 @@ export function RichMarkdownDocLinkMenu({
           return (
             <button
               key={rowKey}
+              ref={index === selectedIndex ? activeItemRef : undefined}
               type="button"
+              role="option"
+              aria-selected={index === selectedIndex}
               className={cn('rich-markdown-doc-link-item', index === selectedIndex && 'is-active')}
-              // Why: mousedown inside the editor-mounted popover would otherwise
-              // blur the editor before click fires, losing the selection we need
-              // to run the commit transaction against.
+              // Prevent blur before click so the commit transaction retains its editor selection.
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => editor && commitRow(editor, menu, row)}
             >
@@ -68,10 +77,11 @@ export function RichMarkdownDocLinkMenu({
       )}
       {overflow ? (
         <div className="rich-markdown-doc-link-footer">
-          {translate('auto.components.editor.RichMarkdownDocLinkMenu.2aaf7d9678', 'Showing')}{' '}
-          {rows.length}{' '}
-          {translate('auto.components.editor.RichMarkdownDocLinkMenu.90c5f0e1e4', 'of')}{' '}
-          {totalMatches}
+          {translate(
+            'auto.components.editor.RichMarkdownDocLinkMenu.showingOfTotal',
+            'Showing {{shown}} of {{total}}',
+            { shown: rows.length, total: totalMatches }
+          )}
         </div>
       ) : null}
       <div className="rich-markdown-doc-link-hint">
@@ -80,6 +90,6 @@ export function RichMarkdownDocLinkMenu({
           '↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss'
         )}
       </div>
-    </div>
+    </RichMarkdownCompletionPopover>
   )
 }

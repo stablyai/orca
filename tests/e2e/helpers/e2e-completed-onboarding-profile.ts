@@ -1,4 +1,7 @@
-import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../src/shared/constants'
+import {
+  ONBOARDING_FINAL_STEP,
+  ONBOARDING_FLOW_VERSION
+} from '../../../src/shared/onboarding-defaults'
 import { FEATURE_INTERACTION_IDS } from '../../../src/shared/feature-interactions'
 import { FEATURE_TIP_IDS } from '../../../src/shared/feature-tips'
 
@@ -27,8 +30,7 @@ export function getE2ECompletedOnboardingProfile() {
       lastCompletedStep: ONBOARDING_FINAL_STEP
     },
     ui: {
-      // Why: completed-onboarding E2E profiles should not be interrupted by
-      // first-run education modals that cover the UI under test.
+      // Suppress first-run education overlays in completed-user fixtures.
       featureTipsSeenIds: [...FEATURE_TIP_IDS],
       featureInteractions: Object.fromEntries(
         FEATURE_INTERACTION_IDS.map((id) => [
@@ -39,9 +41,11 @@ export function getE2ECompletedOnboardingProfile() {
       contextualToursSeenIds: [...SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS],
       contextualToursAutoEligible: false,
       projectOrderManualDefaultNoticeDismissed: true,
-      // Why: E2E profiles model completed existing users and should not be
-      // interrupted by the usage-display change toast covering the UI under test.
-      usagePercentageDisplayChangeNoticeDismissed: true
+      // Keep the browser import hint out of split-test pointer paths.
+      browserImportHintHidden: true,
+      // Suppress the usage-display toast in completed-user fixtures.
+      usagePercentageDisplayChangeNoticeDismissed: true,
+      statusBarCompactChangeNoticeDismissed: true
     }
   }
 }

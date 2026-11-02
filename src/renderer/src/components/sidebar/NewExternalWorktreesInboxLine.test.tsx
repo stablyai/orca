@@ -16,7 +16,16 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 const roots: Root[] = []
 
-async function renderLine(): Promise<HTMLDivElement> {
+type RenderOverrides = {
+  hostContextLabel?: string
+  inboxCount?: number
+  pending?: boolean
+  error?: string | null
+  onReview?: () => void
+  onSuppress?: () => void
+}
+
+async function renderLine(overrides: RenderOverrides = {}): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -26,25 +35,21 @@ async function renderLine(): Promise<HTMLDivElement> {
     root.render(
       <NewExternalWorktreesInboxLine
         repoDisplayName="orca"
-        inboxWorktrees={[
-          {
-            id: 'external-1',
-            displayName: 'payments-refactor',
-            branch: 'refs/heads/payments-refactor',
-            path: '/worktrees/orca/payments-refactor'
-          }
-        ]}
-        pending={false}
-        error={null}
-        onImportWorktree={vi.fn()}
-        onKeepHidden={vi.fn()}
-        onImportAll={vi.fn()}
-        onSuppress={vi.fn()}
+        hostContextLabel={overrides.hostContextLabel}
+        inboxCount={overrides.inboxCount ?? 24}
+        pending={overrides.pending ?? false}
+        error={overrides.error ?? null}
+        onReview={overrides.onReview ?? vi.fn()}
+        onSuppress={overrides.onSuppress ?? vi.fn()}
       />
     )
   })
 
   return container
+}
+
+function getReviewButton(container: HTMLDivElement): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>('button[aria-label^="Review "]')
 }
 
 describe('NewExternalWorktreesInboxLine', () => {
@@ -60,8 +65,10 @@ describe('NewExternalWorktreesInboxLine', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps suppress as a hover-revealed header icon instead of expanded text action', async () => {
-    const container = await renderLine()
+  it('keeps suppress as a hover-revealed control that does not trigger review', async () => {
+    const onReview = vi.fn()
+    const onSuppress = vi.fn()
+    const container = await renderLine({ onReview, onSuppress })
 
     const suppressButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Hide external worktrees permanently for orca"]'
@@ -69,18 +76,12 @@ describe('NewExternalWorktreesInboxLine', () => {
     expect(suppressButton).not.toBeNull()
     expect(suppressButton?.className).toContain('can-hover:group-hover:opacity-100')
     expect(container.textContent).toContain("Don't show again")
+    expect(getReviewButton(container)?.contains(suppressButton)).toBe(false)
 
-    const expandButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Expand new externally-created worktrees for orca"]'
-    )
     await act(async () => {
-      expandButton?.click()
+      suppressButton?.click()
     })
-
-    expect(container.textContent).toContain('payments-refactor')
-    const textButtons = [...container.querySelectorAll('button')].filter(
-      (button) => button.textContent === "Don't show again"
-    )
-    expect(textButtons).toHaveLength(0)
+    expect(onSuppress).toHaveBeenCalledTimes(1)
+    expect(onReview).not.toHaveBeenCalled()
   })
 })

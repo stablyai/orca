@@ -1,0 +1,64 @@
+name: Computer-use macOS native
+
+# Split from computer-e2e.yml so CLI/daemon-only PRs skip the macOS runner: this job builds the
+# Swift helper and forks out/main/computer-sidecar.js, whose imports never reach src/cli or src/main/daemon.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - '.github/workflows/computer-macos-native.yml'
+      - 'electron.vite.config.ts'
+      - 'config/build-plugins/**'
+      - 'config/scripts/build-computer-macos.mjs'
+      - 'config/scripts/build-native-for-platform.mjs'
+      - 'config/scripts/build-native-for-platform.test.mjs'
+      - 'config/scripts/pnpm-cli-invocation.mjs'
+      - 'config/scripts/macos-computer-helper-owner-loss-*'
+      - 'config/scripts/verify-computer-native.mjs'
+      - 'native/computer-use-macos/**'
+      - 'native/computer-use-linux/**'
+      - 'native/computer-use-windows/**'
+      - 'skills/computer-use/SKILL.md'
+      - 'src/main/computer/**'
+      - 'src/shared/computer-use-*.ts'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+concurrency:
+  group: computer-macos-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Hosted macOS runners cannot receive persistent Accessibility/Screen Recording
+  # grants. Keep the real native build/owner-loss checks on every matching trigger instead.
+  mac-native-owner-smoke:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - name: Owner-loss benchmark process cleanup
+        run: >-
+          pnpm vitest run
+          config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
+          config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
+      # Why: the parallel launcher's cancellation tests are darwin-only and no
+      # other PR job runs on macOS.
+      - name: Parallel native build launcher cancellation
+        run: >-
+          pnpm vitest run --config config/vitest.config.ts
+          config/scripts/build-native-for-platform.test.mjs
+      - name: Authenticated helper owner-loss smoke
+        run: pnpm bench:macos-computer-helper-owner-loss --expect reaped --trials 1
+      - name: Swift tests and signed universal helper verification
+        run: pnpm verify:computer-native

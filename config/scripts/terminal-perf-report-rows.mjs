@@ -1,16 +1,17 @@
 import { readFileSync } from 'node:fs'
+import { reportBudgetsForScenario } from './terminal-perf-report-budgets.mjs'
 
-const BUDGETS = {
-  medianMs: 75,
-  worstMs: 300,
-  revisitMs: 300,
-  maxTimerDriftMs: 150,
-  scrollMs: 150,
-  restoreMs: 1000,
-  rendererQueuedChars: 2 * 1024 * 1024,
-  rendererPeakQueuedChars: 2 * 1024 * 1024,
-  rendererDroppedBacklogs: 0
-}
+const ROW_BUDGET_FIELDS = [
+  ['medianMs', 'median'],
+  ['worstMs', 'worst'],
+  ['revisitMs', 'revisit'],
+  ['maxTimerDriftMs', 'maxTimerDrift'],
+  ['scrollMs', 'scroll'],
+  ['restoreMs', 'restore'],
+  ['rendererQueuedChars', 'rendererQueuedChars'],
+  ['rendererPeakQueuedChars', 'rendererPeakQueuedChars'],
+  ['rendererDroppedBacklogs', 'rendererDroppedBacklogs']
+]
 
 const SCENARIO_LABELS = [
   ['opencode-scale-same-workspace', 'Same workspace panes'],
@@ -21,8 +22,7 @@ const SCENARIO_LABELS = [
   ['opencode-main-pressure', 'Main renderer pressure'],
   ['opencode-hidden-pressure', 'Hidden pressure'],
   ['opencode-revisit-pressure', 'Revisit under pressure'],
-  // Why: the prefix also matches opencode-parked-memory-disabled, so both
-  // parked-memory scenarios group under one label.
+  // Prefix groups both parked-memory scenarios, including opencode-parked-memory-disabled.
   ['opencode-parked-memory', 'Parked hidden terminal memory']
 ]
 
@@ -109,8 +109,7 @@ function normalizeRow(row) {
     mainPeakInFlightChars: parseCount(row.mainPeakInFlightChars),
     heldAckChars: parseCount(row.heldAckChars),
     hiddenSkippedChars: parseCount(row.hiddenSkippedChars),
-    // Why: parked-memory annotations report a fractional MB heap figure plus
-    // live renderer view counts; Number() keeps the MB float intact.
+    // Keep fractional MB heap alongside live view counts; Number preserves decimals.
     heapUsedMB: parseCount(row.heapUsedMB),
     liveTerminals: parseCount(row.liveTerminals),
     livePaneManagers: parseCount(row.livePaneManagers)
@@ -157,14 +156,16 @@ export function scenarioTitle(scenario, row) {
 }
 
 export function budgetFailures(row) {
+  const budgets = reportBudgetsForScenario(row.scenario)
   const failures = []
-  for (const [key, budget] of Object.entries(BUDGETS)) {
-    const value = row[key]
-    if (value == null) {
+  for (const [rowKey, budgetKey] of ROW_BUDGET_FIELDS) {
+    const value = row[rowKey]
+    const budget = budgets[budgetKey]
+    if (value == null || budget == null) {
       continue
     }
     if (value > budget) {
-      failures.push(`${key} ${value} > ${budget}`)
+      failures.push(`${rowKey} ${value} > ${budget}`)
     }
   }
   return failures

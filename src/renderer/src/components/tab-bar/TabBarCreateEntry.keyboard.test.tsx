@@ -3,11 +3,16 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { TabEntryOption } from './tab-create-entry-action'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 
-// Why: the real entry-action module pulls in runtime IPC + the app store; the
-// keyboard behavior under test only needs a controllable option list.
+// Stub runtime IPC/store-backed actions to isolate keyboard option handling.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
@@ -15,7 +20,12 @@ vi.mock('./tab-create-entry-action', () => ({
   isTabEntryAbsolutePathLike: () => false
 }))
 vi.mock('../quick-open-file-list', () => ({
-  useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
+  useRuntimeFileListForWorktree: () => ({
+    files: [],
+    loading: false,
+    loadError: null,
+    truncated: false
+  })
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],
@@ -32,12 +42,80 @@ const fileOption = (relativePath: string): TabEntryOption => ({
   classification: { kind: 'existing-file', matchKind: 'fuzzy', relativePath }
 })
 
+// Seed open terminals so an empty query must suppress otherwise available switch rows.
+function seedOpenTabs(): void {
+  const worktree = {
+    id: 'wt-1',
+    repoId: 'repo-1',
+    path: '/tmp/wt-1',
+    head: 'abc123',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: 'Aurora',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0
+  } satisfies Worktree
+  const unifiedTab = (id: string, entityId: string): Tab => ({
+    id,
+    entityId,
+    groupId: 'group-1',
+    worktreeId: 'wt-1',
+    contentType: 'terminal',
+    label: '',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  })
+  const terminalTab = (id: string, title: string): TerminalTab => ({
+    id,
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title,
+    generatedTitle: null,
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  })
+  const group: TabGroup = {
+    id: 'group-1',
+    worktreeId: 'wt-1',
+    activeTabId: 'tab-a',
+    tabOrder: ['tab-a', 'tab-b']
+  }
+
+  useAppStore.setState(
+    {
+      ...useAppStore.getInitialState(),
+      worktreesByRepo: { 'repo-1': [worktree] },
+      unifiedTabsByWorktree: {
+        'wt-1': [unifiedTab('tab-a', 'term-a'), unifiedTab('tab-b', 'term-b')]
+      },
+      tabsByWorktree: { 'wt-1': [terminalTab('term-a', 'alpha'), terminalTab('term-b', 'beta')] },
+      groupsByWorktree: { 'wt-1': [group] },
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      activeWorktreeId: 'wt-1'
+    } as AppState,
+    true
+  )
+}
+
 let container: HTMLDivElement
 let root: Root
 
 function mount(node: React.JSX.Element): void {
   act(() => {
-    root.render(node)
+    // Result rows carry a path tooltip, which Radix requires a provider for.
+    root.render(<TooltipProvider>{node}</TooltipProvider>)
   })
 }
 
@@ -54,8 +132,7 @@ function setQuery(value: string): void {
   if (!input) {
     throw new Error('input not found')
   }
-  // Why: React patches the input value setter to track changes; bypass it with
-  // the native setter so the synthetic onChange actually fires.
+  // Use the native value setter to bypass React tracking and trigger synthetic onChange.
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
@@ -115,9 +192,7 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)
     mount(<TabBarCreateEntry worktreeId="wt" groupId="g" menuOpen onOpenEntry={onOpenEntry} />)
 
-    // The pre-fix `> 1` guard left a single result unhandled: the arrow leaked to
-    // the input cursor / Radix. Now it must be consumed (preventDefault) and Enter
-    // still opens the row.
+    // Even one result must consume arrow navigation before the input cursor or Radix handles it.
     const event = pressKey(container.querySelector('input')!, 'ArrowDown')
     expect(event.defaultPrevented).toBe(true)
 
@@ -169,8 +244,6 @@ describe('TabBarCreateEntry keyboard navigation', () => {
       />
     )
 
-    // A partial query surfaces the agent (issue #1); it is the top row, so Enter
-    // launches it.
     setQuery('gem')
     submitForm()
 
@@ -216,6 +289,31 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     pressKey(container.querySelector('input')!, 'ArrowDown')
 
     expect(document.activeElement).toBe(firstItem)
+  })
+
+  it('gives the input the same accessible name as its placeholder', () => {
+    mount(<TabBarCreateEntry worktreeId="wt" groupId="g" menuOpen onOpenEntry={vi.fn()} />)
+
+    const input = container.querySelector('input')!
+    const placeholder = input.getAttribute('placeholder')
+    expect(placeholder).toBe('Search open tabs, history, files, URLs, agents\u2026')
+    expect(input.getAttribute('aria-label')).toBe(placeholder)
+  })
+
+  it('offers no switch rows when the menu opens with tabs open and no query', () => {
+    seedOpenTabs()
+    mount(
+      <div role="menu">
+        <TabBarCreateEntry worktreeId="wt-1" groupId="group-1" menuOpen onOpenEntry={vi.fn()} />
+        <button type="button" role="menuitem">
+          New Terminal
+        </button>
+      </div>
+    )
+
+    expect(container.querySelectorAll('[role="option"]')).toHaveLength(0)
+    expect(container.querySelectorAll('[role="menuitem"]')).toHaveLength(1)
+    expect(container.querySelector('input')!.value).toBe('')
   })
 
   it('returns focus to the input on ArrowUp from the first menu item (no dead-end)', () => {

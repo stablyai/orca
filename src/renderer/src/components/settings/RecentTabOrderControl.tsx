@@ -1,5 +1,5 @@
 import React from 'react'
-import type { CtrlTabOrderMode } from '../../../../shared/types'
+import type { CtrlTabOrderMode } from '../../../../shared/tab-types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow } from './SettingsFormControls'

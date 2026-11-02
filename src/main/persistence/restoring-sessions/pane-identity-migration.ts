@@ -1,0 +1,156 @@
+import type { ProfileStateStartupPaneAlias } from '../loading-store/profile-state-authority'
+import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { collectLayoutLeafIdsInOrder, firstLayoutLeafId } from './terminal-layout-normalization'
+
+export function findWorktreeIdForTab(
+  session: WorkspaceSessionState,
+  tabId: string
+): string | undefined {
+  for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+    if (tabs.some((tab) => tab.id === tabId)) {
+      return worktreeId
+    }
+  }
+  return undefined
+}
+
+export type TerminalTabLookup = {
+  get(tabId: string): TerminalTab | undefined
+}
+
+/** Lazy scans preserve first-match ordering and resume where the previous lookup stopped. */
+export function createLazyTerminalTabLookup(session: WorkspaceSessionState): TerminalTabLookup {
+  const tabsByWorktree = Object.entries(session.tabsByWorktree ?? {})
+  const tabsById = new Map<string, TerminalTab>()
+  let worktreeIndex = 0
+  let tabIndex = 0
+  let exhausted = false
+
+  return {
+    get(requestedTabId: string): TerminalTab | undefined {
+      if (tabsById.has(requestedTabId)) {
+        return tabsById.get(requestedTabId)
+      }
+      if (exhausted) {
+        return undefined
+      }
+
+      while (worktreeIndex < tabsByWorktree.length) {
+        const tabs = tabsByWorktree[worktreeIndex][1]
+        while (tabIndex < tabs.length) {
+          const currentIndex = tabIndex
+          tabIndex += 1
+          // Preserve Array#some behavior on sparse arrays.
+          if (!(currentIndex in tabs)) {
+            continue
+          }
+          const tab = tabs[currentIndex]
+          const tabId = tab.id
+          if (!tabsById.has(tabId)) {
+            tabsById.set(tabId, tab)
+          }
+          if (tabId === requestedTabId) {
+            return tabsById.get(requestedTabId)
+          }
+        }
+        worktreeIndex += 1
+        tabIndex = 0
+      }
+
+      exhausted = true
+      return undefined
+    }
+  }
+}
+
+export type PaneAliasNormalizationOptions = {
+  registerAliases?: boolean
+  collectUnboundPaneAlias?: (entry: ProfileStateStartupPaneAlias) => void
+}
+
+type LegacyPaneKeyAlias = Omit<LegacyPaneKeyAliasEntry, 'ptyId'> & { ptyId?: string }
+
+/** Include unbound aliases needed by live hooks even though persistence omits them. */
+export function collectLegacyPaneKeyAliasesForTab(args: {
+  tabId: string
+  tab: TerminalTab | undefined
+  inputLayout: TerminalLayoutSnapshot
+  normalizedLayout: TerminalLayoutSnapshot
+  leafIdByInputLeafId: Map<string, string>
+}): LegacyPaneKeyAlias[] {
+  const legacyPaneKeyAliasEntries: LegacyPaneKeyAlias[] = []
+  const registeredLegacyPaneKeys = new Set<string>()
+  const hasLeafPtyBindings = Object.keys(args.inputLayout.ptyIdsByLeafId ?? {}).length > 0
+  const fallbackPtyId =
+    !hasLeafPtyBindings && typeof args.tab?.ptyId === 'string' ? args.tab.ptyId : undefined
+  const collectLegacyAlias = (inputLeafId: string, leafId: string, ptyId?: string): void => {
+    if (!isTerminalLeafId(leafId)) {
+      return
+    }
+    let paneKey: string
+    try {
+      paneKey = makePaneKey(args.tabId, leafId)
+    } catch {
+      return
+    }
+    const numeric = /^(?:pane:)?(\d+)$/.exec(inputLeafId)?.[1]
+    if (!numeric) {
+      return
+    }
+    // PaneManager is 1-based; zero-based split aliases would make tab:1 ambiguous.
+    const legacyPaneKey = `${args.tabId}:${numeric}`
+    registeredLegacyPaneKeys.add(legacyPaneKey)
+    legacyPaneKeyAliasEntries.push({
+      ptyId,
+      legacyPaneKey,
+      stablePaneKey: paneKey,
+      updatedAt: Date.now()
+    })
+  }
+  const inputLeafIds = new Set([
+    ...collectLayoutLeafIdsInOrder(args.inputLayout.root),
+    ...Object.keys(args.inputLayout.ptyIdsByLeafId ?? {})
+  ])
+  for (const inputLeafId of inputLeafIds) {
+    if (isTerminalLeafId(inputLeafId)) {
+      continue
+    }
+    const leafId = args.leafIdByInputLeafId.get(inputLeafId)
+    if (leafId) {
+      collectLegacyAlias(
+        inputLeafId,
+        leafId,
+        args.inputLayout.ptyIdsByLeafId?.[inputLeafId] ?? fallbackPtyId
+      )
+    }
+  }
+  if (args.tab?.ptyId && !hasLeafPtyBindings) {
+    const fallbackLeafId =
+      args.normalizedLayout.activeLeafId ?? firstLayoutLeafId(args.normalizedLayout.root)
+    let paneKey: string | undefined
+    if (fallbackLeafId && isTerminalLeafId(fallbackLeafId)) {
+      try {
+        paneKey = makePaneKey(args.tabId, fallbackLeafId)
+      } catch {
+        // Skip malformed persisted tab IDs without aborting the whole normalization.
+      }
+    }
+    if (paneKey) {
+      for (const legacyPaneKey of [`${args.tabId}:0`, `${args.tabId}:1`]) {
+        if (registeredLegacyPaneKeys.has(legacyPaneKey)) {
+          continue
+        }
+        legacyPaneKeyAliasEntries.push({
+          ptyId: args.tab.ptyId,
+          legacyPaneKey,
+          stablePaneKey: paneKey,
+          updatedAt: Date.now()
+        })
+      }
+    }
+  }
+  return legacyPaneKeyAliasEntries
+}

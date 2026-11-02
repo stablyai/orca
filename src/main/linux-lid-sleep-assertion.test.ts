@@ -7,6 +7,7 @@ import {
 
 class FakeSystemdInhibitProcess extends EventEmitter {
   pid = 123
+  stdin = Object.assign(new EventEmitter(), { destroy: vi.fn() })
   kill = vi.fn(() => {
     this.emit('exit', null, 'SIGTERM')
     return true
@@ -21,7 +22,7 @@ function createLogger() {
 }
 
 describe('LinuxLidSleepAssertion', () => {
-  it('spawns systemd-inhibit with sleep and lid-switch inhibitors on Linux', () => {
+  it('holds sleep and lid-switch inhibitors with a parent-owned input pipe on Linux', () => {
     const child = new FakeSystemdInhibitProcess()
     const spawn = vi.fn(() => child)
     const assertion = new LinuxLidSleepAssertion({
@@ -39,11 +40,10 @@ describe('LinuxLidSleepAssertion', () => {
         '--who=Orca',
         '--why=Agents are working',
         '--mode=block',
-        'sleep',
-        'infinity'
+        'cat'
       ],
       {
-        stdio: 'ignore',
+        stdio: ['pipe', 'ignore', 'ignore'],
         windowsHide: true
       }
     )
@@ -76,7 +76,7 @@ describe('LinuxLidSleepAssertion', () => {
     expect(spawn).toHaveBeenCalledTimes(1)
   })
 
-  it('stops only the child process it started', () => {
+  it('releases only its own inhibitor by closing the input pipe', () => {
     const child = new FakeSystemdInhibitProcess()
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
@@ -87,10 +87,11 @@ describe('LinuxLidSleepAssertion', () => {
     assertion.start('status-change')
     assertion.stop('settings-change')
 
-    expect(child.kill).toHaveBeenCalledTimes(1)
+    expect(child.stdin.destroy).toHaveBeenCalledTimes(1)
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
-  it('removes child listeners when stopped intentionally', () => {
+  it('keeps late spawn errors handled until the stopped child closes', () => {
     const child = new FakeSystemdInhibitProcess()
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
@@ -104,8 +105,13 @@ describe('LinuxLidSleepAssertion', () => {
 
     assertion.stop('settings-change')
 
+    expect(child.listenerCount('error')).toBe(1)
+    child.emit('exit', 0, null)
+    expect(child.listenerCount('error')).toBe(1)
+    child.emit('close', 0, null)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('exit')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
   })
 
   it('does not report an intentional stop as a failed inhibitor', () => {
@@ -119,6 +125,8 @@ describe('LinuxLidSleepAssertion', () => {
 
     assertion.start('status-change')
     assertion.stop('settings-change')
+    child.emit('error', new Error('spawn failed after stop'))
+    child.stdin.emit('error', new Error('pipe closed after stop'))
 
     expect(logger.warn).not.toHaveBeenCalled()
     expect(logger.debug).not.toHaveBeenCalled()
@@ -165,6 +173,7 @@ describe('LinuxLidSleepAssertion', () => {
     const error = new Error('Access denied') as Error & { code: string }
     error.code = 'EACCES'
     firstChild.emit('error', error)
+    firstChild.emit('close', -1, null)
     now += LINUX_LID_SLEEP_ASSERTION_RETRY_MS + 1
     assertion.start('status-change')
 
@@ -173,7 +182,81 @@ describe('LinuxLidSleepAssertion', () => {
     expect(logger.warn).toHaveBeenCalledTimes(1)
     expect(firstChild.listenerCount('error')).toBe(0)
     expect(firstChild.listenerCount('exit')).toBe(0)
+    expect(firstChild.stdin.destroy).toHaveBeenCalledOnce()
   })
+
+  it('releases the pipe after a child exits unexpectedly', () => {
+    const child = new FakeSystemdInhibitProcess()
+    const onUnexpectedFailure = vi.fn()
+    const assertion = new LinuxLidSleepAssertion({
+      logger: createLogger(),
+      onUnexpectedFailure,
+      platform: 'linux',
+      spawn: vi.fn(() => child)
+    })
+
+    assertion.start('status-change')
+    child.emit('exit', 1, null)
+
+    expect(child.stdin.destroy).toHaveBeenCalledOnce()
+    expect(onUnexpectedFailure).toHaveBeenCalledWith('linux-lid-assertion-failure')
+    assertion.dispose()
+  })
+
+  it('handles pipe errors without crashing and permits a bounded retry', () => {
+    const child = new FakeSystemdInhibitProcess()
+    const replacement = new FakeSystemdInhibitProcess()
+    const spawn = vi.fn(() => replacement).mockReturnValueOnce(child)
+    const onUnexpectedFailure = vi.fn()
+    let now = 1_000
+    const assertion = new LinuxLidSleepAssertion({
+      logger: createLogger(),
+      now: () => now,
+      onUnexpectedFailure,
+      platform: 'linux',
+      spawn
+    })
+
+    assertion.start('status-change')
+    child.stdin.emit('error', new Error('pipe failed'))
+    assertion.start('status-change')
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(child.stdin.destroy).toHaveBeenCalledOnce()
+    expect(onUnexpectedFailure).toHaveBeenCalledTimes(1)
+    now += LINUX_LID_SLEEP_ASSERTION_RETRY_MS
+    assertion.start('status-change')
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    assertion.dispose()
+  })
+
+  it.each([true, false])(
+    'handles pipe then child errors until close (intentional stop: %s)',
+    (stop) => {
+      const child = new FakeSystemdInhibitProcess()
+      const onUnexpectedFailure = vi.fn()
+      const assertion = new LinuxLidSleepAssertion({
+        logger: createLogger(),
+        onUnexpectedFailure,
+        platform: 'linux',
+        spawn: vi.fn(() => child)
+      })
+      assertion.start('status-change')
+      if (stop) {
+        assertion.stop('settings-change')
+      }
+
+      child.stdin.emit('error', new Error('pipe failed'))
+      expect(() => child.emit('error', new Error('late spawn failure'))).not.toThrow()
+      child.emit('exit', 1, null)
+      expect(onUnexpectedFailure).toHaveBeenCalledTimes(stop ? 0 : 1)
+      child.emit('close', 1, null)
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('exit')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+      assertion.dispose()
+    }
+  )
 
   it('suppresses retry attempts until the shared retry gate expires', () => {
     vi.useFakeTimers()
@@ -232,26 +315,105 @@ describe('LinuxLidSleepAssertion', () => {
     vi.useRealTimers()
   })
 
-  it('logs repeated identical failures at debug until reset', () => {
-    const logger = createLogger()
-    const spawn = vi.fn(() => {
-      throw new Error('dbus unavailable')
-    })
-    let now = 1_000
-    const assertion = new LinuxLidSleepAssertion({
-      logger,
-      now: () => now,
-      platform: 'linux',
-      spawn
+  describe('when systemd-inhibit starts but exits immediately (no usable logind)', () => {
+    function createRetryingAssertion() {
+      const logger = createLogger()
+      const children: FakeSystemdInhibitProcess[] = []
+      const spawnTimes: number[] = []
+      const spawn = vi.fn(() => {
+        const child = new FakeSystemdInhibitProcess()
+        children.push(child)
+        spawnTimes.push(Date.now())
+        return child
+      })
+      const assertion: LinuxLidSleepAssertion = new LinuxLidSleepAssertion({
+        logger,
+        now: () => Date.now(),
+        // Mirrors AgentAwakeService: every failure or retry tick re-runs start().
+        onUnexpectedFailure: (reason) => assertion.start(reason),
+        platform: 'linux',
+        spawn
+      })
+      const failLatestChild = (): void => {
+        const child = children.at(-1)
+        child?.emit('exit', 1, null)
+        child?.emit('close', 1, null)
+      }
+      const spawnGaps = (): number[] =>
+        spawnTimes.slice(1).map((time, index) => time - spawnTimes[index])
+      return { assertion, failLatestChild, logger, spawn, spawnGaps }
+    }
+
+    it('warns once while it keeps retrying, doubling the wait up to a cap', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger, spawnGaps } = createRetryingAssertion()
+
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 8; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+
+        expect(spawnGaps()).toEqual(
+          [1, 2, 4, 8, 16, 16, 16, 16].map((factor) => factor * LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        )
+        expect(logger.warn).toHaveBeenCalledTimes(1)
+        expect(logger.debug).toHaveBeenCalledTimes(7)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
-    assertion.start('status-change')
-    now += LINUX_LID_SLEEP_ASSERTION_RETRY_MS + 1
-    assertion.start('power-resume')
-    assertion.stop('settings-change')
-    assertion.start('status-change')
+    it('stays quiet across idle/active cycles until an inhibitor is held', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger, spawn } = createRetryingAssertion()
 
-    expect(logger.warn).toHaveBeenCalledTimes(2)
-    expect(logger.debug).toHaveBeenCalledTimes(1)
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 4; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+        assertion.stop('status-change')
+        assertion.start('status-change')
+        failLatestChild()
+
+        expect(spawn).toHaveBeenCalledTimes(6)
+        expect(logger.warn).toHaveBeenCalledTimes(1)
+
+        vi.advanceTimersToNextTimer()
+        vi.advanceTimersByTime(LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        assertion.stop('status-change')
+        assertion.start('status-change')
+        failLatestChild()
+
+        expect(logger.warn).toHaveBeenCalledTimes(2)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('treats an inhibitor that held for a full retry interval as recovered', () => {
+      vi.useFakeTimers()
+      try {
+        const { assertion, failLatestChild, logger } = createRetryingAssertion()
+
+        assertion.start('status-change')
+        for (let attempt = 0; attempt < 4; attempt++) {
+          failLatestChild()
+          vi.advanceTimersToNextTimer()
+        }
+        vi.advanceTimersByTime(LINUX_LID_SLEEP_ASSERTION_RETRY_MS)
+        failLatestChild()
+
+        expect(logger.warn).toHaveBeenCalledTimes(2)
+        assertion.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })

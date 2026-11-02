@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 import {
   getCachedTerminalGroupIdForWorktree,
-  getCachedUnifiedTerminalTabForWorktree
+  getCachedUnifiedTerminalTabForWorktree,
+  selectUnifiedTerminalTabFields
 } from './terminal-unified-tab-lookup'
 
 function makeTerminalTab(entityId: string, groupId: string): Tab {
@@ -94,5 +95,16 @@ describe('terminal unified tab lookup', () => {
 
     expect(first.iterator).toHaveBeenCalledTimes(1)
     expect(second.iterator).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads pinned state from the selected terminal tab after it changes', () => {
+    const tab = { ...makeTerminalTab('terminal-1', 'group-a'), id: 'unified-1' }
+    expect(
+      selectUnifiedTerminalTabFields({ 'wt-1': [tab] }, 'wt-1', tab.entityId).isTabPinned
+    ).toBe(false)
+    expect(
+      selectUnifiedTerminalTabFields({ 'wt-1': [{ ...tab, isPinned: true }] }, 'wt-1', tab.entityId)
+        .isTabPinned
+    ).toBe(true)
   })
 })

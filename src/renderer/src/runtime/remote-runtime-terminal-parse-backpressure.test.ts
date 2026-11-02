@@ -7,6 +7,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 describe('remote terminal renderer backpressure', () => {
   const sendBinary = vi.fn()
@@ -21,18 +22,14 @@ describe('remote terminal renderer backpressure', () => {
     sendBinary.mockReset()
     unsubscribe.mockReset()
     callbacks = null
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          subscribe: vi.fn(async (_args, nextCallbacks) => {
-            callbacks = nextCallbacks
-            queueMicrotask(() => {
-              callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
-            })
-            return { unsubscribe, sendBinary }
-          })
-        }
-      }
+    stubRuntimeEnvironmentBridge({
+      subscribe: vi.fn(async (_args, nextCallbacks) => {
+        callbacks = nextCallbacks
+        queueMicrotask(() => {
+          callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
+        })
+        return { unsubscribe, sendBinary }
+      })
     })
   })
 
@@ -155,6 +152,71 @@ describe('remote terminal renderer backpressure', () => {
     }
     expect(sentAckBytes()).toEqual([output.byteLength * 3])
     stream.close()
+  })
+
+  it('pauses output only after the host confirms the stream capability', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer } =
+      await import('./remote-runtime-terminal-multiplexer')
+    const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
+      terminal: 'term-hidden',
+      client: { id: 'mac-viewer', type: 'desktop' },
+      callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
+    })
+    sendBinary.mockClear()
+
+    expect(stream.setOutputPaused(true)).toBe(false)
+    expect(sentOpcodes()).not.toContain(TerminalStreamOpcode.SetOutputPaused)
+
+    callbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'subscribed',
+        streamId: stream.streamId,
+        capabilities: { outputPause: 1 }
+      }
+    })
+
+    expect(stream.setOutputPaused(true)).toBe(true)
+    expect(sentOpcodes()).toEqual([TerminalStreamOpcode.SetOutputPaused])
+    expect(
+      decodeTerminalStreamJson<{ paused?: boolean }>(
+        decodeTerminalStreamFrame(sendBinary.mock.calls[0]![0])!.payload
+      )
+    ).toEqual({ paused: true })
+    expect(stream.setOutputPaused(true)).toBe(true)
+    expect(sentOpcodes()).toEqual([TerminalStreamOpcode.SetOutputPaused])
+    stream.close()
+  })
+
+  it('keeps paused input immediate without arming a hidden-output probe', async () => {
+    vi.useFakeTimers()
+    try {
+      const { getRemoteRuntimeTerminalMultiplexer } =
+        await import('./remote-runtime-terminal-multiplexer')
+      const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
+        terminal: 'term-hidden-input',
+        client: { id: 'mac-viewer', type: 'desktop' },
+        callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
+      })
+      callbacks?.onResponse({
+        ok: true,
+        result: {
+          type: 'subscribed',
+          streamId: stream.streamId,
+          capabilities: { outputPause: 1 }
+        }
+      })
+      expect(stream.setOutputPaused(true)).toBe(true)
+      sendBinary.mockClear()
+
+      expect(stream.sendInput('\r')).toBe(true)
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(sentOpcodes()).toEqual([TerminalStreamOpcode.Input])
+      stream.close()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('releases unknown streams and closes malformed connections instead of leaking credit', async () => {
@@ -362,6 +424,56 @@ describe('remote terminal renderer backpressure', () => {
     expect(sentAckBytes()).toEqual([1])
   })
 
+  it('stops rearming the ack flush after a failed ACK tears the stream down', async () => {
+    vi.useFakeTimers()
+    try {
+      const { getRemoteRuntimeTerminalMultiplexer } =
+        await import('./remote-runtime-terminal-multiplexer')
+      const { takeCurrentTerminalDeliveryCredit } =
+        await import('../lib/pane-manager/terminal-delivery-credit')
+      const parseCredits: (() => void)[] = []
+      const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
+        terminal: 'term-wedge',
+        client: { id: 'mac-viewer', type: 'desktop' },
+        callbacks: {
+          onData: () => {
+            const credit = takeCurrentTerminalDeliveryCredit()
+            if (credit) {
+              parseCredits.push(credit)
+            }
+          },
+          onSnapshot: vi.fn()
+        }
+      })
+      sendBinary.mockClear()
+      sendBinary.mockImplementation((bytes) => {
+        if (decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.Ack) {
+          throw new Error('socket closed')
+        }
+      })
+      callbacks?.onBinary(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Output,
+          streamId: stream.streamId,
+          seq: 1,
+          payload: encodeTerminalStreamText('x')
+        })
+      )
+      parseCredits[0]?.()
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(unsubscribe).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(70_000)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(sentAckBytes()).toEqual([1])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   function sentAckBytes(): number[] {
     return sendBinary.mock.calls.flatMap(([bytes]) => {
       const frame = decodeTerminalStreamFrame(bytes)
@@ -370,6 +482,13 @@ describe('remote terminal renderer backpressure', () => {
       }
       const payload = decodeTerminalStreamJson<{ bytes?: number }>(frame.payload)
       return typeof payload?.bytes === 'number' ? [payload.bytes] : []
+    })
+  }
+
+  function sentOpcodes(): TerminalStreamOpcode[] {
+    return sendBinary.mock.calls.flatMap(([bytes]) => {
+      const opcode = decodeTerminalStreamFrame(bytes)?.opcode
+      return opcode === undefined ? [] : [opcode]
     })
   }
 })

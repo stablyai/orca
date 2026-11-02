@@ -1,0 +1,81 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "mobileWeb.bundle-fetch",
+  "family": "mobileWeb.bundle-fetch",
+  "namedDeltas": [],
+  "values": {
+    "6858fdcae414": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "invalid_argument: mobile_web_bundle_unavailable",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "775bfa42070b": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
+    },
+    "8ea0c6a90560": {
+      "assets": {
+        "$rpc": "null"
+      },
+      "outcome": "refused: mobile_web_bundle_unavailable"
+    },
+    "fe8605eb5d5d": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "invalid_argument",
+            "message": "mobile_web_bundle_unavailable"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "mobile-web-bundle-unavailable",
+    "checkpoints": [
+      {
+        "id": "bundle-unavailable",
+        "observation": {
+          "sender": ["fe8605eb5d5d"],
+          "payloads": ["775bfa42070b"],
+          "settlements": {
+            "fetch": "6858fdcae414"
+          },
+          "state": "8ea0c6a90560",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -1,15 +1,7 @@
 /* eslint-disable no-control-regex -- ANSI SGR sequences are raw PTY input. */
-/**
- * Chunk-boundary-safe GitHub PR URL scan over PTY output.
- *
- * Why shared: terminal-side-effect-authority.md (slice 3) makes main emit
- * `pr-link` facts from its per-PTY tracker for local/SSH PTYs, while the
- * renderer keeps byte-scanning for remote-runtime PTYs and the kill-switch-off
- * path. Both paths must share the carry/dedupe semantics or links split across
- * chunks would resolve differently per authority mode.
- */
-import type { RepoSlug } from './github-links'
-import { parseGitHubIssueOrPRLink } from './github-links'
+/** Share chunk carry and dedupe across main’s local/SSH fact scan and renderer remote-runtime/kill-switch byte scans. */
+import type { RepoSlug } from './github/links'
+import { parseGitHubIssueOrPRLink } from './github/links'
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
 const TERMINAL_SGR_PATTERN = /\x1b\[[0-?]*[ -/]*m/g
@@ -53,19 +45,36 @@ function endsWithHttpSchemePrefixFragment(value: string): string {
   return ''
 }
 
-function getPotentialGitHubPRCarry(value: string): string {
-  const schemeIndex = Math.max(...HTTP_SCHEME_PREFIXES.map((prefix) => value.lastIndexOf(prefix)))
-  if (schemeIndex !== -1) {
-    const tailLength = value.length - schemeIndex
-    if (tailLength > MAX_CARRY_LENGTH) {
-      return ''
+function lastIndexOfHttpScheme(value: string, fromIndex?: number): number {
+  let lastIndex = -1
+  for (const prefix of HTTP_SCHEME_PREFIXES) {
+    const candidate =
+      fromIndex === undefined ? value.lastIndexOf(prefix) : value.lastIndexOf(prefix, fromIndex)
+    if (candidate > lastIndex) {
+      lastIndex = candidate
     }
+  }
+  return lastIndex
+}
+
+function getPotentialGitHubPRCarry(value: string): string {
+  // Only the capped suffix can survive; avoid a full-chunk scan on every PTY write.
+  const windowStart = value.length > MAX_CARRY_LENGTH ? value.length - MAX_CARRY_LENGTH : 0
+  const tailWindow = windowStart === 0 ? value : value.slice(windowStart)
+  const schemeIndexInWindow = lastIndexOfHttpScheme(tailWindow)
+  if (schemeIndexInWindow !== -1) {
+    const schemeIndex = windowStart + schemeIndexInWindow
     return hasTerminalUrlWhitespace(value, schemeIndex, value.length)
       ? ''
       : value.slice(schemeIndex)
   }
 
-  return endsWithHttpSchemePrefixFragment(value)
+  const fragment = endsWithHttpSchemePrefixFragment(tailWindow)
+  if (fragment === '' || windowStart === 0) {
+    return fragment
+  }
+  // An earlier scheme already exceeded the cap; do not resurrect that abandoned URL from a suffix fragment.
+  return lastIndexOfHttpScheme(value, windowStart - 1) === -1 ? fragment : ''
 }
 
 function hasTerminalUrlWhitespace(value: string, start: number, end: number): boolean {
@@ -80,17 +89,6 @@ function hasTerminalUrlWhitespace(value: string, start: number, end: number): bo
 type TerminalUrlCandidate = {
   rawUrl: string
   endIndex: number
-}
-
-function findNextHttpSchemeIndex(value: string, start: number): number {
-  let nextIndex = -1
-  for (const prefix of HTTP_SCHEME_PREFIXES) {
-    const candidate = value.indexOf(prefix, start)
-    if (candidate !== -1 && (nextIndex === -1 || candidate < nextIndex)) {
-      nextIndex = candidate
-    }
-  }
-  return nextIndex
 }
 
 function isTerminalUrlTerminator(char: string): boolean {
@@ -108,10 +106,16 @@ function findTerminalUrlCandidateEnd(value: string, start: number): number {
 }
 
 function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCandidate> {
+  const nextSchemeIndexes = HTTP_SCHEME_PREFIXES.map((prefix) => value.indexOf(prefix))
   let searchStart = 0
 
   while (searchStart < value.length) {
-    const candidateStart = findNextHttpSchemeIndex(value, searchStart)
+    let candidateStart = -1
+    for (const index of nextSchemeIndexes) {
+      if (index !== -1 && (candidateStart === -1 || index < candidateStart)) {
+        candidateStart = index
+      }
+    }
     if (candidateStart === -1) {
       return
     }
@@ -119,6 +123,11 @@ function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCand
     const candidateEnd = findTerminalUrlCandidateEnd(value, candidateStart)
     const rawUrl = value.slice(candidateStart, candidateEnd)
     searchStart = Math.max(candidateEnd, candidateStart + 1)
+    for (let index = 0; index < HTTP_SCHEME_PREFIXES.length; index++) {
+      if (nextSchemeIndexes[index] !== -1 && nextSchemeIndexes[index]! < searchStart) {
+        nextSchemeIndexes[index] = value.indexOf(HTTP_SCHEME_PREFIXES[index]!, searchStart)
+      }
+    }
     if (
       rawUrl.length > MAX_TERMINAL_GITHUB_PR_URL_LENGTH ||
       !rawUrl.includes(GITHUB_PR_PATH_MARKER)
@@ -137,8 +146,7 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
   return (data: string): TerminalGitHubPRLink[] => {
     const rawCombined = carry ? carry + data : data
 
-    // Why: PTY output is a hot path; avoid multi-pass ANSI normalization for
-    // chunks that cannot contain a GitHub pull-request URL.
+    // Skip multi-pass normalization when the chunk cannot contain a PR URL.
     if (!rawCombined.includes(GITHUB_PR_PATH_MARKER)) {
       carry = getPotentialGitHubPRCarry(rawCombined)
       return []
@@ -150,12 +158,9 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
       .replace(TERMINAL_CURSOR_CONTROL_PATTERN, TERMINAL_CONTROL_GUARD)
 
     const links: TerminalGitHubPRLink[] = []
-    // Why: PTY data may echo a huge pasted line. Scan URL candidates directly
-    // instead of running a global regex across the whole chunk when it contains
-    // a /pull/ substring.
+    // Scan candidates directly so huge pasted lines containing /pull/ do not trigger a whole-chunk global regex.
     for (const { rawUrl, endIndex } of iterateTerminalUrlCandidates(combined)) {
-      // Why: PTY chunks can split the PR number; wait for a boundary before
-      // treating a URL at chunk-end as complete.
+      // Wait for a boundary: more PR-number digits may arrive in the next chunk.
       if (endIndex === combined.length) {
         continue
       }

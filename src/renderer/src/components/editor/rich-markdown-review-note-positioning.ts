@@ -1,9 +1,7 @@
 import type { Editor } from '@tiptap/react'
-import type { DiffComment } from '../../../../shared/types'
-import {
-  buildRichMarkdownCommentBlocks,
-  getRichMarkdownCommentAnchorTop
-} from './rich-markdown-review-annotations'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
+import { getRichMarkdownCommentAnchorTop } from './rich-markdown-review-annotations'
+import { getRichMarkdownCommentBlocks } from './rich-markdown-comment-blocks'
 import {
   stackRichMarkdownReviewNotePositions,
   type RichMarkdownReviewNotePosition
@@ -23,7 +21,7 @@ export function measureRichMarkdownReviewNotePositions({
   markdownSourceLineOffset
 }: MeasureRichMarkdownReviewNotePositionsOptions): RichMarkdownReviewNotePosition[] {
   const containerRect = container.getBoundingClientRect()
-  const blocks = buildRichMarkdownCommentBlocks(editor)
+  const blocks = getRichMarkdownCommentBlocks(editor)
   const nextPositions = markdownComments
     .map((comment): RichMarkdownReviewNotePosition | null => {
       const bodyLineNumber = Math.max(1, comment.lineNumber - markdownSourceLineOffset)
@@ -39,7 +37,8 @@ export function measureRichMarkdownReviewNotePositions({
         block,
         containerRect,
         container.scrollTop,
-        markdownSourceLineOffset
+        markdownSourceLineOffset,
+        blocks
       )
       return top === null ? null : { comment, top }
     })
@@ -55,10 +54,14 @@ function measureReviewNoteHeights(
   positions: RichMarkdownReviewNotePosition[]
 ): Map<string, number> {
   const measuredHeights = new Map<string, number>()
-  for (const pos of positions) {
-    const el = container.querySelector(`[data-rich-markdown-review-note-id="${pos.comment.id}"]`)
-    if (el) {
-      measuredHeights.set(pos.comment.id, el.getBoundingClientRect().height)
+  if (positions.length === 0) {
+    return measuredHeights
+  }
+  const commentIds = new Set(positions.map((position) => position.comment.id))
+  for (const el of container.querySelectorAll('[data-rich-markdown-review-note-id]')) {
+    const id = el.getAttribute('data-rich-markdown-review-note-id')
+    if (id !== null && commentIds.has(id) && !measuredHeights.has(id)) {
+      measuredHeights.set(id, el.getBoundingClientRect().height)
     }
   }
   return measuredHeights

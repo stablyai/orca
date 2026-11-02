@@ -1,6 +1,4 @@
-// Why: Orca's remote runtime transports share one NaCl box format across
-// desktop, CLI, and mobile pairing. Keeping the Node-compatible primitives in
-// shared code prevents the CLI from importing main-process modules.
+// Share NaCl box format across desktop/CLI/mobile pairing with Node-compatible primitives, avoiding main imports from CLI.
 import nacl from 'tweetnacl'
 
 const MAX_E2EE_TEXT_PLAINTEXT_BYTES = 4 * 1024 * 1024
@@ -48,7 +46,7 @@ export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null
 export function encryptBytes(
   plaintext: Uint8Array<ArrayBufferLike>,
   sharedKey: Uint8Array
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
   const nonce = nacl.randomBytes(nacl.box.nonceLength)
   const ciphertext = nacl.box.after(plaintext, nonce, sharedKey)
 

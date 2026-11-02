@@ -1,6 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
-import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
+import type { SearchFileResult, SearchMatch } from '../../../../shared/code-search-types'
 
 export function cancelRevealFrame(frameRef: React.RefObject<number | null>): void {
   if (frameRef.current !== null) {
@@ -67,9 +67,7 @@ export function openMatchResult(params: {
   cancelRevealFrame(revealInnerRafRef)
   setPendingEditorReveal(null)
 
-  // Why: opening a result can replace the active tab and mount Monaco
-  // asynchronously. Matching terminal-link navigation, wait two frames so
-  // the destination editor owns focus/layout before we ask it to reveal.
+  // Wait two frames for asynchronous tab/Monaco focus and layout before revealing, matching terminal-link navigation.
   revealRafRef.current = requestAnimationFrame(() => {
     revealInnerRafRef.current = requestAnimationFrame(() => {
       setPendingEditorReveal({

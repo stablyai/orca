@@ -1,7 +1,7 @@
-import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileOnboardingStyles = StyleSheet.create({
+export const mobileOnboardingStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -29,7 +29,7 @@ export const mobileOnboardingStyles = StyleSheet.create({
   progressDot: {
     width: 7,
     height: 7,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     backgroundColor: colors.borderSubtle
   },
   progressDotActive: {
@@ -47,8 +47,7 @@ export const mobileOnboardingStyles = StyleSheet.create({
   page: {
     height: '100%'
   },
-  // Why: every decision remains reachable in landscape and with accessibility
-  // text scaling even though Back and swipe-to-skip are intentionally disabled.
+  // Allow landscape/accessibility scrolling because Back and swipe-to-skip are disabled.
   pageContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl
@@ -57,12 +56,17 @@ export const mobileOnboardingStyles = StyleSheet.create({
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xl
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md
+  },
+  notificationContent: {
+    justifyContent: 'flex-start',
+    paddingTop: spacing.xl
   },
   iconSurface: {
     width: 64,
     height: 64,
-    borderRadius: radii.card,
+    borderRadius: radii.tile,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
@@ -90,11 +94,18 @@ export const mobileOnboardingStyles = StyleSheet.create({
     alignSelf: 'center',
     paddingBottom: spacing.lg
   },
+  disclosure: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginBottom: spacing.lg
+  },
   primaryButton: {
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.surfaceBright,
     paddingVertical: spacing.sm
   },
@@ -107,7 +118,7 @@ export const mobileOnboardingStyles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     marginTop: spacing.xs,
     paddingVertical: spacing.sm
   },
@@ -129,4 +140,4 @@ export const mobileOnboardingStyles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.sm
   }
-})
+}))

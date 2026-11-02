@@ -1,0 +1,32 @@
+import type { WorktreeRuntimeOwnerState } from '../lib/worktree-runtime-owner-state'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
+
+export type StructuredSessionTabPublicationVersion = {
+  publicationEpoch: string
+  snapshotVersion: number
+}
+
+export function knownStructuredSessionWorktreeIds(
+  state: WebSessionTabsSyncState & WorktreeRuntimeOwnerState
+): Set<string> {
+  const ids = new Set<string>([
+    FLOATING_TERMINAL_WORKTREE_ID,
+    ...Object.keys(state.unifiedTabsByWorktree)
+  ])
+  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
+    for (const worktree of worktrees) {
+      ids.add(worktree.id)
+    }
+  }
+  for (const detected of Object.values(state.detectedWorktreesByRepo ?? {})) {
+    for (const worktree of detected.worktrees) {
+      ids.add(worktree.id)
+    }
+  }
+  for (const workspace of state.folderWorkspaces ?? []) {
+    ids.add(folderWorkspaceKey(workspace.id))
+  }
+  return ids
+}

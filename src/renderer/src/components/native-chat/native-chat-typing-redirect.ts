@@ -1,4 +1,4 @@
-type KeyboardRedirectEvent = {
+export type KeyboardRedirectEvent = {
   key: string
   ctrlKey: boolean
   metaKey: boolean
@@ -9,14 +9,14 @@ type KeyboardRedirectEvent = {
   target: EventTarget | null
 }
 
-const INTERACTIVE_TARGET_SELECTOR = [
-  'a[href]',
-  'button',
+// Plain pressables use only Space and Enter, so other keys may pass them to the chat's input.
+const PRESSABLE_TARGET_SELECTOR = ['a[href]', 'button', '[role="button"]'].join(',')
+
+const KEY_OWNER_TARGET_SELECTOR = [
   'input',
   'select',
   'textarea',
   '[contenteditable]:not([contenteditable="false"])',
-  '[role="button"]',
   '[role="checkbox"]',
   '[role="combobox"]',
   '[role="menuitem"]',
@@ -28,28 +28,35 @@ const INTERACTIVE_TARGET_SELECTOR = [
   '[data-native-chat-typing-redirect-ignore="true"]'
 ].join(',')
 
-export function shouldRedirectNativeChatTyping(event: KeyboardRedirectEvent): boolean {
+export function shouldRedirectNativeChatTyping(
+  event: KeyboardRedirectEvent,
+  isMac: boolean
+): boolean {
   if (
     event.defaultPrevented ||
     event.isComposing ||
     event.ctrlKey ||
     event.metaKey ||
+    // Option types characters on macOS; elsewhere Alt+key is a shortcut.
+    (event.altKey === true && !isMac) ||
     event.key.length !== 1
   ) {
     return false
   }
-  return !isNativeChatInteractiveTarget(event.target)
+  if (targetMatches(event.target, KEY_OWNER_TARGET_SELECTOR)) {
+    return false
+  }
+  return event.key !== ' ' || !targetMatches(event.target, PRESSABLE_TARGET_SELECTOR)
 }
 
 export function shouldFocusNativeChatPaneFromPointerTarget(target: EventTarget | null): boolean {
-  return !isNativeChatInteractiveTarget(target)
+  return (
+    !targetMatches(target, PRESSABLE_TARGET_SELECTOR) &&
+    !targetMatches(target, KEY_OWNER_TARGET_SELECTOR)
+  )
 }
 
-/** Unmodified Backspace/Delete pressed outside any input should focus the
- *  composer, the same way printable typing does — but unlike typing these keys
- *  are not inserted (their character has no literal form), so the caller only
- *  focuses. Modified chords (Shift/Alt/Ctrl/Cmd+Delete = cut, delete-word, …)
- *  are left to the focused target. */
+/** Unmodified editing keys outside inputs focus without inserting; modified delete/cut chords remain with the target. */
 export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedirectEvent): boolean {
   if (
     event.defaultPrevented ||
@@ -62,15 +69,26 @@ export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedir
   ) {
     return false
   }
-  return !isNativeChatInteractiveTarget(event.target)
+  return !targetMatches(event.target, KEY_OWNER_TARGET_SELECTOR)
 }
 
-function isNativeChatInteractiveTarget(target: EventTarget | null): boolean {
-  const element = eventTargetElement(target)
-  if (!element) {
+/** Focus input before the native paste following this platform chord arrives. */
+export function shouldFocusNativeChatInputForPaste(
+  event: KeyboardRedirectEvent,
+  isMac: boolean
+): boolean {
+  if (event.defaultPrevented || event.isComposing || event.altKey) {
     return false
   }
-  return element.closest(INTERACTIVE_TARGET_SELECTOR) !== null
+  const chord = isMac
+    ? event.metaKey && !event.ctrlKey && event.key.toLowerCase() === 'v'
+    : (event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'v') ||
+      (event.shiftKey === true && !event.ctrlKey && !event.metaKey && event.key === 'Insert')
+  return chord && !targetMatches(event.target, KEY_OWNER_TARGET_SELECTOR)
+}
+
+function targetMatches(target: EventTarget | null, selector: string): boolean {
+  return eventTargetElement(target)?.closest(selector) != null
 }
 
 function eventTargetElement(target: EventTarget | null): Element | null {

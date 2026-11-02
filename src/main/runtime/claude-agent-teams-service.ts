@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { splitTmuxCommand } from '../../shared/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
+import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import type {
   AgentTeam,
   AgentTeamsLaunchEnv,
@@ -8,13 +9,6 @@ import type {
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse,
   TeamPane
-} from './claude-agent-teams-types'
-
-export type {
-  AgentTeamsLaunchEnv,
-  AgentTeamsTerminalApi,
-  AgentTeamsTmuxCompatRequest,
-  AgentTeamsTmuxCompatResponse
 } from './claude-agent-teams-types'
 
 export class ClaudeAgentTeamsService {
@@ -25,18 +19,21 @@ export class ClaudeAgentTeamsService {
     leaderHandle: string
     baseEnv: Record<string, string | undefined>
     shimDir: string
-    shimBin: string
+    /** Absolute path only; null leaves the var unset so the shim refuses to guess a cwd-relative CLI. */
+    shimBin: string | null
   }): AgentTeamsLaunchEnv {
     const teamId = `team-${randomUUID()}`
     const token = randomBytes(32).toString('base64url')
     const leaderPane = '%1'
-    const pathValue = [args.shimDir, args.baseEnv.PATH]
+    // Preserve Windows Path casing or the shim would replace the launch PATH.
+    const pathKey = resolvePathEnvKey(args.baseEnv, process.platform)
+    const pathValue = [args.shimDir, args.baseEnv[pathKey]]
       .filter(Boolean)
       .join(process.platform === 'win32' ? ';' : ':')
     const tmuxValue = `/tmp/orca-claude-agent-teams/${teamId},0,1`
     const env: Record<string, string> = {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-      PATH: pathValue,
+      [pathKey]: pathValue,
       TMUX: tmuxValue,
       TMUX_PANE: leaderPane,
       TERM: 'screen-256color',
@@ -44,8 +41,10 @@ export class ClaudeAgentTeamsService {
       ORCA_AGENT_TEAMS_TEAM_ID: teamId,
       ORCA_AGENT_TEAMS_TOKEN: token,
       ORCA_AGENT_TEAMS_LEADER_PANE: leaderPane,
-      ORCA_AGENT_TEAMS_SHIM_DIR: args.shimDir,
-      ORCA_AGENT_TEAMS_SHIM_BIN: args.shimBin
+      ORCA_AGENT_TEAMS_SHIM_DIR: args.shimDir
+    }
+    if (args.shimBin) {
+      env.ORCA_AGENT_TEAMS_SHIM_BIN = args.shimBin
     }
     if (args.baseEnv.ORCA_PAIRING_CODE) {
       env.ORCA_PAIRING_CODE = args.baseEnv.ORCA_PAIRING_CODE
@@ -71,6 +70,10 @@ export class ClaudeAgentTeamsService {
       previouslyFocusedPane: null
     })
     return { teamId, token, leaderPane, env }
+  }
+
+  releaseTeam(teamId: string): void {
+    this.teams.delete(teamId)
   }
 
   removeTeamForLeaderHandle(handle: string): void {

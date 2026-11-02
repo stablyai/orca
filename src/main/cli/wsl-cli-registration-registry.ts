@@ -7,8 +7,7 @@ import { normalizeWslDistroKey } from './wsl-cli-registration-operation'
 const REGISTRY_FILE_NAME = 'wsl-cli-registrations.json'
 const REGISTRY_SCHEMA_VERSION = 2
 const DEFAULT_NEGATIVE_INSPECTION_TTL_MS = 7 * 24 * 60 * 60 * 1_000
-// Why: the registry is advisory; cap per-distro bookkeeping so hosts that
-// cycle many uniquely named distros cannot grow the file without bound.
+// Bound advisory bookkeeping on hosts that cycle through many distro names.
 const MAX_INSPECTION_ENTRIES = 64
 
 type WslCliRegistrationReconciliation = {
@@ -26,18 +25,20 @@ type WslCliRegistrationRegistryState = {
 type WslCliRegistrationRegistryTiming = {
   now?: number
   negativeInspectionTtlMs?: number
-  // Why: a registered distro already reconciled against this exact launcher
-  // by this exact app build has nothing to repair; skipping it avoids booting
-  // its VM on every startup while still re-probing after each app update.
+  // Unchanged launcher/build pairs need no repair; app updates must trigger a new probe.
   currentTarget?: string | null
   appVersion?: string | null
+  /**
+   * Unregistered distros that may still be inspected: ones Orca deployed a host into. Any other
+   * distro is the user's own and never gets a guest command (EDR noise, untouched environments).
+   */
+  inspectableDistros?: readonly string[]
 }
 
 export type WslCliRegistrationObservation = {
   distro: string
   inspected: boolean
-  // Why: null records an inspection without changing registration ownership —
-  // used for 'unsupported' probes where managed-ness could not be determined.
+  // Null preserves ownership when unsupported probes cannot determine whether registration is managed.
   managed: boolean | null
   reconciled?: WslCliRegistrationReconciliation | null
 }
@@ -110,8 +111,7 @@ function parseState(content: string): WslCliRegistrationRegistryState {
       reconciliations: parseReconciliations(parsed.reconciliations)
     }
   } catch {
-    // Why: a corrupt advisory registry must trigger safe rediscovery rather
-    // than preventing managed registrations from receiving future updates.
+    // Rediscover after corruption so managed registrations can still receive updates.
     return emptyState()
   }
 }
@@ -138,7 +138,7 @@ async function readState(userDataPath: string): Promise<WslCliRegistrationRegist
 function upsertDistro(distros: string[], distro: string): string[] {
   const key = normalizeWslDistroKey(distro)
   const existingIndex = distros.findIndex((entry) => normalizeWslDistroKey(entry) === key)
-  if (existingIndex < 0) {
+  if (existingIndex === -1) {
     return [...distros, distro.trim()]
   }
   return distros.map((entry, index) => (index === existingIndex ? distro.trim() : entry))
@@ -154,8 +154,7 @@ async function writeState(
   state: WslCliRegistrationRegistryState
 ): Promise<void> {
   await mkdir(userDataPath, { recursive: true })
-  // Why: userData writes on Windows can hit Chromium's Protected-DACL EPERM;
-  // writeFileAtomically carries the ACL-repair retry a plain rename lacks.
+  // writeFileAtomically retries Chromium Protected-DACL EPERM with ACL repair on Windows.
   writeFileAtomically(getRegistryPath(userDataPath), `${JSON.stringify(state, null, 2)}\n`)
 }
 
@@ -192,14 +191,14 @@ export async function getWslCliRegistrationCandidates(
   availableDistros: string[],
   timing: WslCliRegistrationRegistryTiming = {}
 ): Promise<string[]> {
-  // Why: the stored queue tail never rejects, so a failed concurrent write
-  // cannot abort candidate discovery; reads still see fully applied updates.
+  // Wait for complete writes; the nonrejecting tail keeps failed writes from aborting discovery.
   await getKeyedSerializedQueueTail(writeQueues, getRegistryPath(userDataPath))
   const state = await readState(userDataPath)
   const registered = new Set(state.registeredDistros.map(normalizeWslDistroKey))
   const now = timing.now ?? Date.now()
   const negativeInspectionTtlMs =
     timing.negativeInspectionTtlMs ?? DEFAULT_NEGATIVE_INSPECTION_TTL_MS
+  const inspectable = new Set((timing.inspectableDistros ?? []).map(normalizeWslDistroKey))
   return uniqueDistros(availableDistros).filter((distro) => {
     const key = normalizeWslDistroKey(distro)
     if (registered.has(key)) {
@@ -210,6 +209,9 @@ export async function getWslCliRegistrationCandidates(
         reconciliation.target === timing.currentTarget &&
         reconciliation.appVersion === (timing.appVersion ?? '')
       )
+    }
+    if (!inspectable.has(key)) {
+      return false
     }
     const inspectedAt = state.inspectionTimes[key]
     return (
@@ -276,4 +278,19 @@ export function recordWslCliRegistrationRemoved(
   return recordWslCliRegistrationObservations(userDataPath, [
     { distro, inspected: true, managed: false, reconciled: null }
   ])
+}
+
+/** A deleted distro has nothing left to inspect or reconcile, so every entry for it goes. */
+export function forgetWslCliRegistration(userDataPath: string, distro: string): Promise<void> {
+  const key = normalizeWslDistroKey(distro)
+  return updateState(userDataPath, (state) => {
+    const { [key]: _inspected, ...inspectionTimes } = state.inspectionTimes
+    const { [key]: _reconciled, ...reconciliations } = state.reconciliations
+    return {
+      ...state,
+      registeredDistros: removeDistro(state.registeredDistros, distro),
+      inspectionTimes,
+      reconciliations
+    }
+  })
 }

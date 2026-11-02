@@ -1,4 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -7,13 +19,9 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
-// Client-side wire regression for #7329: the daemon's pendingEscapeTailAnsi
-// rides the SnapshotStart JSON frame. This drives REAL binary frames through
-// the REAL multiplexer (decodeSnapshotInfo → onSnapshot meta) into the REAL
-// transport (processData → onReplayData meta). The server-side counterpart is
-// terminal-multiplex-escape-tail.test.ts; without this test the client half of
-// the chain could silently drop the field and every suite stayed green.
+// Drive real wire frames through multiplexer and transport so SnapshotStart’s pending escape reaches replay.
 
 describe('remote transport snapshot escape-tail threading (#7329)', () => {
   const runtimeCall = vi.fn()
@@ -49,11 +57,7 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe }
-      }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   it('delivers the SnapshotStart pendingEscapeTailAnsi to onReplayData meta', async () => {
@@ -97,7 +101,9 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
           rows: 24,
           seq: 7,
           source: 'headless',
-          pendingEscapeTailAnsi: '\x1b[3'
+          pendingEscapeTailAnsi: '\x1b[3',
+          alternateScreen: false,
+          terminalOwner: 'shell'
         })
       }),
       encodeTerminalStreamFrame({
@@ -120,7 +126,11 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
     await expect.poll(() => onReplayData.mock.calls.length, { timeout: 5000 }).toBeGreaterThan(0)
     expect(onReplayData).toHaveBeenCalledWith(
       'user@host:~$ ',
-      expect.objectContaining({ pendingEscapeTailAnsi: '\x1b[3' })
+      expect.objectContaining({
+        pendingEscapeTailAnsi: '\x1b[3',
+        alternateScreen: false,
+        terminalOwner: 'shell'
+      })
     )
   })
 })

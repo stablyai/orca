@@ -5,14 +5,11 @@ import {
   canMintMobilePairingOffer,
   type MobilePairingConnectionMode
 } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 
 type MutableRef<T> = { current: T }
 
-/**
- * Mints (or rotates) a pairing QR. Every caller must go through this path so
- * signed-out Anywhere is refused rather than silently degraded to a local-only
- * code under the Relay label.
- */
+/** Mint through one guarded path: signed-out Relay cannot degrade to a mislabeled local-only QR; Relay failures clear the code. */
 export function useMobilePairingGeneration(params: {
   connectionMode: MobilePairingConnectionMode
   signedIn: boolean
@@ -21,11 +18,13 @@ export function useMobilePairingGeneration(params: {
   hasGeneratedRef: MutableRef<boolean>
   pairingRequestIdRef: MutableRef<number>
   setPairQrDataUrl: (value: string | null) => void
+  setPairQrSize: (value: number | null) => void
   setPairingUrl: (value: string | null) => void
+  setPairingQrError: (value: boolean) => void
   setPairLoading: (value: boolean) => void
-  /** Mode the minted QR actually encodes (degraded Relay mints report
-   *  'local-only'); null while no QR is shown. */
-  setEncodedConnectionMode: (value: MobilePairingConnectionMode | null) => void
+  setRelayMintFailure: (value: MobileRelayMintFailure | null) => void
+  /** Re-read on a Relay mint failure: a revoked session is the likeliest cause. */
+  refreshAuthStatus: () => void
 }): {
   generatePairing: (
     rotate: boolean,
@@ -41,9 +40,12 @@ export function useMobilePairingGeneration(params: {
     hasGeneratedRef,
     pairingRequestIdRef,
     setPairQrDataUrl,
+    setPairQrSize,
     setPairingUrl,
+    setPairingQrError,
     setPairLoading,
-    setEncodedConnectionMode
+    setRelayMintFailure,
+    refreshAuthStatus
   } = params
 
   const generatePairing = useCallback(
@@ -53,22 +55,16 @@ export function useMobilePairingGeneration(params: {
       connectionModeOverride?: MobilePairingConnectionMode
     ) => {
       const preferredMode = connectionModeOverride ?? connectionMode
-      // Why: every mint path (auto-generate, regenerate, address change, path
-      // invalidation) must refuse signed-out Anywhere rather than degrade to a
-      // local-only QR under the Relay label.
       if (!canMintMobilePairingOffer({ connectionMode: preferredMode, signedIn })) {
         return
       }
       const requestId = ++pairingRequestIdRef.current
-      // Mark the request synchronously so state changes cannot make the
-      // Step 2 auto-generate effect start a second offer in parallel.
       hasGeneratedRef.current = true
       if (mountedRef.current) {
         setPairLoading(true)
       }
       try {
         const address = addressOverride ?? selectedAddress
-        // canMint already requires sign-in for Anywhere, so preferred is honest.
         const result = await window.api.mobile.getPairingQR({
           ...(address ? { address } : {}),
           connectionMode: preferredMode,
@@ -80,29 +76,42 @@ export function useMobilePairingGeneration(params: {
         if (result.available) {
           if (mountedRef.current) {
             setPairQrDataUrl(result.qrDataUrl)
+            setPairQrSize(result.qrSize)
             setPairingUrl(result.pairingUrl)
-            setEncodedConnectionMode(result.connectionMode)
+            setPairingQrError(result.qrDataUrl === null)
+            setRelayMintFailure(null)
           }
         } else {
-          hasGeneratedRef.current = false
+          // Why: keep hasGenerated so step-2 auto-mint does not loop on failure.
           if (mountedRef.current) {
             setPairQrDataUrl(null)
+            setPairQrSize(null)
             setPairingUrl(null)
-            setEncodedConnectionMode(null)
-            toast.error(
-              translate(
-                'auto.components.mobile.MobilePage.b353e18de1',
-                'WebSocket transport is not running'
+            setPairingQrError(false)
+            if (result.reason === 'relay_mint_failed' && result.relayFailure) {
+              setRelayMintFailure(result.relayFailure)
+              refreshAuthStatus()
+            } else {
+              setRelayMintFailure(null)
+              // Prefer host reason/guidance across all unavailable states instead of assuming WebSocket failure.
+              toast.error(
+                result.guidance ??
+                  translate(
+                    'auto.components.mobile.MobilePage.b353e18de1',
+                    'WebSocket transport is not running'
+                  )
               )
-            )
+            }
           }
         }
       } catch {
         if (mountedRef.current && requestId === pairingRequestIdRef.current) {
           hasGeneratedRef.current = false
           setPairQrDataUrl(null)
+          setPairQrSize(null)
           setPairingUrl(null)
-          setEncodedConnectionMode(null)
+          setPairingQrError(false)
+          setRelayMintFailure(null)
           toast.error(
             translate(
               'auto.components.mobile.MobilePage.4c8bd11c1a',
@@ -121,11 +130,14 @@ export function useMobilePairingGeneration(params: {
       hasGeneratedRef,
       mountedRef,
       pairingRequestIdRef,
+      refreshAuthStatus,
       selectedAddress,
-      setEncodedConnectionMode,
       setPairLoading,
       setPairQrDataUrl,
+      setPairQrSize,
       setPairingUrl,
+      setPairingQrError,
+      setRelayMintFailure,
       signedIn
     ]
   )

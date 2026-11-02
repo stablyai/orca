@@ -1,10 +1,10 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; reveal state intentionally resets when the active/reduced-motion gates change. */
 import { useEffect, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { Wrench } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
@@ -48,18 +48,23 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
     schedule(() => setRevealed((r) => ({ ...r, codex: true })), 1900)
 
     let idx = 0
-    const cycleId = window.setInterval(() => {
-      setClaudeFading(true)
-      const swap = window.setTimeout(() => {
-        idx = (idx + 1) % CLAUDE_ACTIVITIES.length
-        setClaudeIdx(idx)
-        setClaudeFading(false)
-      }, 280)
-      timeouts.push(swap)
-    }, 2400)
+    // Pause hidden-window work; keep idx so revealing resumes without skipping an activity.
+    const stopCycle = installWindowVisibilityInterval({
+      run: () => {
+        setClaudeFading(true)
+        const swap = window.setTimeout(() => {
+          idx = (idx + 1) % CLAUDE_ACTIVITIES.length
+          setClaudeIdx(idx)
+          setClaudeFading(false)
+        }, 280)
+        timeouts.push(swap)
+      },
+      runOnVisible: () => {},
+      intervalMs: 2400
+    })
     return () => {
       timeouts.forEach((id) => window.clearTimeout(id))
-      window.clearInterval(cycleId)
+      stopCycle()
     }
   }, [active, reducedMotion])
 
@@ -199,8 +204,7 @@ function Skel(props: { widthPct: number }): JSX.Element {
   )
 }
 
-// Long horizontal scroller of supported agent pills. Track is duplicated so a
-// -50% translate loop reads as seamless infinite scroll.
+// Duplicate the track so translating by half its width loops seamlessly.
 function SupportedAgentsMarquee(props: { reducedMotion: boolean }): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const agentCatalog = getAgentCatalog()

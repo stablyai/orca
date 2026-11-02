@@ -1,49 +1,56 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  canResolveFolderSmartGitHubSubmit,
-  getInitialAutoManagedWorkspaceName,
-  isExplicitWorkspaceNameInput,
+  getInitialGitHubPrStartPointSelection,
+  getMatchingLinkedTaskSourceContext,
   resolveSmartGitHubCreateNames,
   resolveInitialWorkspaceRunSeed
-} from './useComposerState'
-
-const HOOK_SOURCE = readFileSync(join(__dirname, 'useComposerState.ts'), 'utf8')
-
-function sourceBetween(source: string, startPattern: string, endPattern: string): string {
-  const start = source.indexOf(startPattern)
-  expect(start).toBeGreaterThanOrEqual(0)
-  const end = source.indexOf(endPattern, start + startPattern.length)
-  expect(end).toBeGreaterThan(start)
-  return source.slice(start, end)
-}
+} from './composer-state/composer-decisions'
 
 describe('useComposerState host-context boundaries', () => {
-  it('treats typed workspace names as user-authored, not auto-managed', () => {
-    expect(isExplicitWorkspaceNameInput({ name: 'keep-my-name', lastAutoName: '' })).toBe(true)
-    expect(
-      isExplicitWorkspaceNameInput({
-        name: 'keep-my-name',
-        lastAutoName: 'keep-my-name'
-      })
-    ).toBe(false)
-    expect(isExplicitWorkspaceNameInput({ name: '#1234', lastAutoName: '' })).toBe(false)
-    expect(
-      isExplicitWorkspaceNameInput({
-        name: 'https://github.com/stablyai/orca/pull/1234',
-        lastAutoName: ''
-      })
-    ).toBe(false)
-  })
+  it('seeds TaskPage pull requests as submit-time PR start points', () => {
+    const item = {
+      id: 'pr-42',
+      type: 'pr' as const,
+      number: 42,
+      title: 'Fix PR workspace creation',
+      state: 'open' as const,
+      url: 'https://github.com/stablyai/orca/pull/42',
+      labels: [],
+      updatedAt: '2026-08-04T00:00:00.000Z',
+      author: 'octocat',
+      branchName: 'fix-pr-workspace',
+      baseRefName: 'main',
+      isCrossRepository: true,
+      repoId: 'repo-1'
+    }
 
-  it('does not auto-own arbitrary prefilled names', () => {
     expect(
-      getInitialAutoManagedWorkspaceName({
-        initialName: 'keep-my-name',
-        initialLinkedWorkItem: null
+      getInitialGitHubPrStartPointSelection({
+        item,
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 42,
+          title: item.title,
+          url: item.url,
+          repoId: item.repoId
+        },
+        repoId: 'repo-1'
       })
-    ).toBe('')
+    ).toEqual({ kind: 'github-pr', repoId: 'repo-1', item })
+    expect(
+      getInitialGitHubPrStartPointSelection({
+        item,
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 43,
+          title: item.title,
+          url: 'https://github.com/stablyai/orca/pull/43'
+        },
+        repoId: 'repo-1'
+      })
+    ).toBeNull()
   })
 
   it('preserves explicit names when a linked PR start point resolves at submit time', () => {
@@ -58,669 +65,61 @@ describe('useComposerState host-context boundaries', () => {
     ).toEqual({ workspaceName: 'edited workspace', displayName: undefined })
   })
 
-  it('keeps smart GitHub names for auto-managed PR start-point submissions', () => {
-    expect(
-      resolveSmartGitHubCreateNames({
-        resolutionKind: 'pr-start-point',
-        smartWorkspaceName: 'title-derived-name',
-        smartDisplayName: 'Title derived name',
-        fallbackWorkspaceName: 'https://github.com/stablyai/orca/pull/6772',
-        nameIsAutoManaged: true
-      })
-    ).toEqual({ workspaceName: 'title-derived-name', displayName: 'Title derived name' })
-  })
-
-  it('requires pasted PR recovery to match the selected GitHub host', () => {
-    const recoverySection = sourceBetween(
-      HOOK_SOURCE,
-      'const effectiveLinkedPR = useMemo',
-      'const setupConfig = useMemo'
-    )
-
-    expect(recoverySection).toContain('githubRepoIdentityKey(fromName.slug)')
-    expect(recoverySection).toContain('githubRepoIdentityKey(selectedRepoSlug)')
-    expect(recoverySection).not.toContain('fromName.slug.owner.toLowerCase()')
-  })
-
-  it('auto-owns linked-item generated prefilled names', () => {
-    expect(
-      getInitialAutoManagedWorkspaceName({
-        initialName: 'fix-workspace-name',
-        initialLinkedWorkItem: {
-          type: 'issue',
-          provider: 'github',
-          number: 1234,
-          title: 'Fix workspace name',
-          url: 'https://github.com/stablyai/orca/issues/1234'
-        }
-      })
-    ).toBe('fix-workspace-name')
-  })
-
-  it('resolves GitHub PR bases against the selected run repo, not the source item repo', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const handleSmartGitHubItemSelect',
-      'const handleSmartGitLabItemSelect'
-    )
-
-    expect(section).toContain('const runRepo = selectedRepo ??')
-    expect(section).toContain('resolveGitHubPrStartPointForRepo')
-    expect(section).toContain('repoId: runRepo.id')
-    expect(section).toContain('settings: itemRepoSettings')
-    expect(section).toContain('smartGitHubPrStartPointSelectionRef.current = startPointSelection')
-    expect(section).toContain(
-      'if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection)'
-    )
-    expect(section).not.toContain('repoId: repoForItem.id')
-    expect(section).not.toContain('repo: repoForItem.id')
-  })
-
-  it('resolves GitLab MR bases against the selected run repo, not the source item repo', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const handleSmartGitLabItemSelect',
-      'const handleSmartBranchSelect'
-    )
-
-    expect(section).toContain('const runRepo = selectedRepo ??')
-    expect(section).toContain('repoId: runRepo.id')
-    expect(section).toContain('getSettingsForRepoRuntimeOwner')
-    expect(section).toContain('worktree.resolveMrBase')
-    expect(section).toContain('repo: runRepo.id')
-    expect(section).not.toContain('repoId: repoForItem.id')
-    // Why (#6263): an unresolved MR base must surface a toast and clear stale
-    // state instead of silently dropping the worktree onto origin/master.
-    expect(section).toContain('toast.error(result.error)')
-    expect(section).toContain("'Failed to resolve MR base.'")
-    expect(section).toMatch(/\.catch\(\(error: unknown\) =>/)
-  })
-
-  it('clears only repo-scoped linked work items when the repo or project changes', () => {
-    // Why: Linear and Jira issues are workspace-scoped context — a repo or
-    // project switch must keep them attached. Jira used to be dropped because
-    // this path special-cased Linear only.
-    const repoChangeSection = sourceBetween(
-      HOOK_SOURCE,
-      'const handleRepoChange',
-      'const handleFolderSourceRepoChange'
-    )
-    expect(repoChangeSection).toContain(
-      '!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)'
-    )
-
-    const folderSourceSection = sourceBetween(
-      HOOK_SOURCE,
-      'const handleFolderSourceRepoChange',
-      'const handleProjectHostSetupChange'
-    )
-    expect(folderSourceSection).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(current)')
-
-    // No switch path may gate the linked-item clear on a Linear-only predicate
-    // again. (isLinearLinkedWorkItem itself may still appear — it drives the
-    // separate Linear branch-name feature — but never the preservation decision.)
-    expect(HOOK_SOURCE).not.toContain('if (!preserveLinearLinkedWorkItem)')
-  })
-
-  it('does not use local SSH gates for runtime-owned folder targets', () => {
-    const targetSection = sourceBetween(
-      HOOK_SOURCE,
-      'const parsedFolderTargetHost',
-      'const selectedWorkspaceTarget'
-    )
-    expect(targetSection).toContain("parsedFolderTargetHost?.kind === 'runtime'")
-    expect(targetSection).toContain('connectionId: folderTargetConnectionId')
-    expect(HOOK_SOURCE).not.toContain('folderSourceConnectionId')
-  })
-
-  it('routes folder target runtime ownership through detection, path status, and create', () => {
-    const targetSection = sourceBetween(
-      HOOK_SOURCE,
-      'const parsedFolderTargetHost',
-      'const selectedWorkspaceTarget'
-    )
-    expect(targetSection).toContain('folderTargetRuntimeEnvironmentId')
-    expect(targetSection).toContain("{ kind: 'runtime' as const")
-    expect(targetSection).toContain('useFolderWorkspaceComposerPathStatus(')
-    expect(targetSection).toContain('folderTargetRuntimeEnvironmentId')
-    expect(targetSection).toContain('useDetectedAgents(folderTargetAgentDetectionTarget)')
-
-    const submitSection = sourceBetween(
-      HOOK_SOURCE,
-      'const submitFolderTarget',
-      'const submit = useCallback'
-    )
-    expect(submitSection).toContain('isRemote: folderTargetIsRemote')
-    expect(submitSection).toContain(
-      "launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer'"
-    )
-    expect(submitSection).toContain('runtimeEnvironmentId: folderTargetRuntimeEnvironmentId')
-  })
-
-  it('detects composer agents against the repo host: SSH, then runtime, then local (#7082)', () => {
-    // Why: a repo owned by a paired runtime must show the runtime's agents, not
-    // the local machine's. SSH stays first priority; runtime falls through before
-    // local so an SSH repo never double-detects. Regression guard for #7082.
-    const selectorSection = sourceBetween(
-      HOOK_SOURCE,
-      'const detectedAgentList = useAppStore',
-      'const ensureDetectedAgents = useAppStore'
-    )
-    expect(selectorSection).toContain('if (isRemote) {')
-    expect(selectorSection).toContain('s.remoteDetectedAgentIds[connectionId]')
-    expect(selectorSection).toContain('if (runtimeEnvironmentId) {')
-    expect(selectorSection).toContain('s.runtimeDetectedAgentIds[runtimeEnvironmentId]')
-    expect(selectorSection).toContain('return s.detectedAgentIds')
-    // SSH branch is checked before the runtime branch.
-    expect(selectorSection.indexOf('if (isRemote) {')).toBeLessThan(
-      selectorSection.indexOf('if (runtimeEnvironmentId) {')
-    )
-
-    expect(HOOK_SOURCE).toContain(
-      'const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null'
-    )
-
-    // Detection effect fans out to the same three hosts in the same order and
-    // re-runs when the runtime environment changes.
-    const detectSection = sourceBetween(HOOK_SOURCE, 'const detect = isRemote', 'void detect.then')
-    expect(detectSection).toContain('ensureRemoteDetectedAgents(connectionId)')
-    expect(detectSection).toContain('ensureRuntimeDetectedAgents(runtimeEnvironmentId)')
-    expect(detectSection).toContain('ensureDetectedAgents()')
-    expect(HOOK_SOURCE).toContain(
-      '}, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])'
-    )
-  })
-
-  it('seeds initial workspace run target from the task source context', () => {
+  it('uses an explicit creation target without borrowing the linked Jira account host', () => {
     expect(
       resolveInitialWorkspaceRunSeed({
         initialTaskSourceContext: {
-          projectId: 'logical-project',
-          hostId: 'ssh:builder',
-          projectHostSetupId: 'setup-builder'
-        }
+          projectId: 'account-backed-task-source',
+          hostId: 'local',
+          projectHostSetupId: 'unrelated-setup'
+        },
+        initialWorkspaceTarget: { projectId: 'mapped-project', hostId: 'ssh:builder' }
       })
-    ).toEqual({
-      projectId: 'logical-project',
-      hostId: 'ssh:builder',
-      projectHostSetupId: 'setup-builder'
-    })
+    ).toEqual({ projectId: 'mapped-project', hostId: 'ssh:builder', projectHostSetupId: null })
+  })
 
+  it('keeps a restored draft target ahead of an explicit creation target', () => {
     expect(
       resolveInitialWorkspaceRunSeed({
         draftProjectId: 'draft-project',
         draftHostId: 'local',
-        draftProjectHostSetupId: 'setup-local',
-        initialTaskSourceContext: {
-          projectId: 'logical-project',
-          hostId: 'ssh:builder',
-          projectHostSetupId: 'setup-builder'
-        }
+        draftProjectHostSetupId: 'draft-setup',
+        initialWorkspaceTarget: { projectId: 'mapped-project', hostId: 'ssh:builder' }
       })
-    ).toEqual({
-      projectId: 'draft-project',
-      hostId: 'local',
-      projectHostSetupId: 'setup-local'
-    })
-
-    const section = sourceBetween(HOOK_SOURCE, 'const initialRunSeed', 'const [internalRepoId')
-
-    expect(section).toContain('resolveInitialWorkspaceRunSeed')
-    expect(section).toContain('initialTaskSourceContext')
-    expect(section).toContain('projectId: initialRunSeed.projectId')
-    expect(section).toContain('hostId: initialRunSeed.hostId')
-    expect(section).toContain('projectHostSetupId: initialRunSeed.projectHostSetupId')
+    ).toEqual({ projectId: 'draft-project', hostId: 'local', projectHostSetupId: 'draft-setup' })
   })
 
-  it('resolves typed GitHub issue/PR input through the selected repo source context', () => {
-    expect(HOOK_SOURCE).toContain('const selectedRepoGitHubSourceContext = useMemo')
+  it('restores Jira draft context only when its site and issue identity agree', () => {
+    const item = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/jira/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const context = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'local' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net/jira',
+        projectKey: 'ORCA'
+      }
+    }
 
-    const directLookup = sourceBetween(
-      HOOK_SOURCE,
-      'void window.api.gh',
-      'const applyLinkedWorkItem = useCallback'
-    )
-    expect(directLookup).toContain('sourceContext: selectedRepoGitHubSourceContext')
-    expect(directLookup).toContain('lookupGitHubWorkItemByOwnerRepoForSource')
-    expect(directLookup).toContain('type: normalizedLinkQuery.directLink.type')
-
-    const submitLookup = sourceBetween(
-      HOOK_SOURCE,
-      'const resolvePendingSmartGitHubSubmit',
-      'const prStartPoint'
-    )
-    expect(submitLookup).toContain('sourceContext:')
-    expect(submitLookup).toContain('selectedRepoGitHubSourceContext')
-  })
-
-  it('uses submit-time GitHub PR start points for the create payload', () => {
-    const submitLookup = sourceBetween(
-      HOOK_SOURCE,
-      'const resolvePendingSmartGitHubSubmit',
-      'const applyLinkedGitLabWorkItem'
-    )
-    expect(submitLookup).toContain('resolveGitHubPrStartPointForRepo')
-    expect(submitLookup).toContain("kind: 'pr-start-point'")
-    expect(submitLookup).toContain("kind: 'metadata-only'")
-    expect(submitLookup).toContain('baseBranch: prStartPoint.baseBranch')
-    expect(submitLookup).toContain('branchNameOverride: prStartPoint.branchNameOverride')
-    const selectedPrSubmitLookup = sourceBetween(
-      submitLookup,
-      'if (linkedWorkItem) {',
-      'const intent = getSmartGitHubSubmitIntent(name)'
-    )
-    expect(selectedPrSubmitLookup).toContain('smartGitHubPrStartPointSelectionRef.current')
-    expect(selectedPrSubmitLookup).toContain("linkedWorkItemIdentity?.type === 'pr'")
-    expect(selectedPrSubmitLookup).toContain("startPointIdentity?.type === 'pr'")
-    expect(selectedPrSubmitLookup).toContain(
-      'startPointIdentity.number === linkedWorkItemIdentity.number'
-    )
-    expect(selectedPrSubmitLookup).toContain('resolveGitHubPrStartPointForRepo')
-    expect(selectedPrSubmitLookup.indexOf('resolveGitHubPrStartPointForRepo')).toBeLessThan(
-      selectedPrSubmitLookup.indexOf("return { kind: 'none' }")
-    )
-
-    const fullSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submit = useCallback',
-      'const submitQuick = useCallback'
-    )
-    expect(fullSubmit).toContain("smartGitHubResolution.kind === 'pr-start-point'")
-    expect(fullSubmit).toContain("smartGitHubResolution.kind === 'metadata-only'")
-    expect(fullSubmit).toContain('effectiveLinkedPR !== null || linkedGitLabMR !== null')
-    expect(fullSubmit).toContain('selectedRepoIsGit ? submitBaseBranch : undefined')
-    expect(fullSubmit).toContain('submitPushTarget')
-    expect(fullSubmit).toContain('submitCompareBaseRef')
-    expect(fullSubmit).not.toContain('smartGitHubResolution?.baseBranch ?? baseBranch')
-    expect(fullSubmit).not.toContain('smartGitHubResolution?.compareBaseRef ?? compareBaseRef')
-    expect(fullSubmit).not.toContain('smartGitHubResolution?.pushTarget ?? pushTarget')
-    expect(fullSubmit).not.toContain(
-      'smartGitHubResolution?.branchNameOverride ?? branchNameOverride'
-    )
-
-    const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
-    expect(quickSubmit).toContain("smartGitHubResolution.kind === 'pr-start-point'")
-    expect(quickSubmit).toContain("smartGitHubResolution.kind === 'metadata-only'")
-    expect(quickSubmit).toContain('effectiveLinkedPR !== null || linkedGitLabMR !== null')
-    expect(quickSubmit).toContain('explicitBaseBranch: smartSubmitBaseBranch')
-    expect(quickSubmit).toContain('pushTarget: submitPushTarget')
-    expect(quickSubmit).toContain('compareBaseRef: submitCompareBaseRef')
-    expect(quickSubmit).not.toContain('smartGitHubResolution?.baseBranch ?? baseBranch')
-    expect(quickSubmit).not.toContain('smartGitHubResolution?.compareBaseRef ?? compareBaseRef')
-    expect(quickSubmit).not.toContain('smartGitHubResolution?.pushTarget ?? pushTarget')
-    expect(quickSubmit).not.toContain(
-      'smartGitHubResolution?.branchNameOverride ?? branchNameOverride'
-    )
-  })
-
-  it('saves setup startup policy before creating a workspace', () => {
-    const persistSection = sourceBetween(
-      HOOK_SOURCE,
-      'const persistSetupAgentStartupPolicy = useCallback',
-      'const handleSetupAgentStartupPolicyChange'
-    )
-    expect(persistSection).toContain('setupAgentStartupPolicySaveRef.current')
-    expect(persistSection).toContain('pendingSave?.repoId === currentRepo.id')
-    expect(persistSection).toContain('pendingSave.policy === policy')
-    expect(persistSection).toContain('await pendingSave.promise')
-    expect(persistSection).toContain('continue')
-    expect(HOOK_SOURCE).toContain('setupAgentStartupPolicyDraftRef.current')
-
-    const fullSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submit = useCallback',
-      'const submitQuick = useCallback'
-    )
-    const fullPolicySave = fullSubmit.indexOf('await persistSetupAgentStartupPolicy()')
-    const fullCreate = fullSubmit.indexOf('const result = await createWorktree(')
-    expect(fullPolicySave).toBeGreaterThanOrEqual(0)
-    expect(fullCreate).toBeGreaterThan(fullPolicySave)
-
-    const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
-    const quickPolicySave = quickSubmit.indexOf('await persistSetupAgentStartupPolicy()')
-    const quickCreate = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
-    expect(quickPolicySave).toBeGreaterThanOrEqual(0)
-    expect(quickCreate).toBeGreaterThan(quickPolicySave)
-  })
-
-  it('resolves submit-time GitHub smart input when folder child repos exist', () => {
+    expect(getMatchingLinkedTaskSourceContext(item, context)).toEqual(context)
     expect(
-      canResolveFolderSmartGitHubSubmit({
-        hasFolderSourceRepos: true
+      getMatchingLinkedTaskSourceContext(item, {
+        ...context,
+        providerIdentity: { ...context.providerIdentity, siteUrl: 'https://other.atlassian.net' }
       })
-    ).toBe(true)
+    ).toBeNull()
     expect(
-      canResolveFolderSmartGitHubSubmit({
-        hasFolderSourceRepos: false
-      })
-    ).toBe(false)
-
-    const lookupSection = sourceBetween(
-      HOOK_SOURCE,
-      'const resolvePendingSmartGitHubSubmit',
-      'const prStartPoint'
-    )
-    expect(lookupSection).toContain('isProjectGroupTarget')
-    expect(lookupSection).toContain('folderSourceRepos.filter(isGitRepoKind)')
-    expect(lookupSection).toContain('Promise.all')
-    expect(lookupSection).toContain('buildTaskSourceContextFromRepo')
-
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const submitFolderTarget',
-      'const submit = useCallback'
-    )
-    expect(section).toContain('canResolveFolderSmartGitHubSubmit')
-    expect(section).toContain('hasFolderSourceRepos: folderSourceRepos.length > 0')
-    expect(section).toContain('? await resolvePendingSmartGitHubSubmit()')
-    expect(section).toContain(': null')
-    expect(section).not.toContain('folderSourceRequiresConnection')
-  })
-
-  it('clears branch reuse state when manually editing the branch name', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const handleBranchNameOverrideChange = useCallback',
-      'const addComposerAttachments = useCallback'
-    )
-
-    expect(section).toContain('resolveComposerManualBranchNameChange')
-    expect(section).toContain('setReuseEligibleBranch(null)')
-    expect(section).toContain('setReuseSelectedBranch(false)')
-    expect(section).toContain("branchAutoNameRef.current = ''")
-  })
-
-  it('forces repo-scoped source reset when returning from folder target to a repo with the same id', () => {
-    const handleRepoChange = sourceBetween(
-      HOOK_SOURCE,
-      'const handleRepoChange = useCallback',
-      'const handleFolderSourceRepoChange = useCallback'
-    )
-    expect(handleRepoChange).toContain('forceResetStartFrom?: boolean')
-    expect(handleRepoChange).toContain('value === repoId && !options.forceResetStartFrom')
-
-    const handleProjectChange = sourceBetween(
-      HOOK_SOURCE,
-      'const handleProjectChange = useCallback',
-      'const handleSmartGitHubItemSelect'
-    )
-    expect(handleProjectChange).toContain(
-      'handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })'
-    )
-  })
-
-  it('keeps a Linear branch override when its workspace-scoped issue survives a repo change', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const handleRepoChange = useCallback',
-      'const handleFolderSourceRepoChange = useCallback'
-    )
-
-    expect(section).toContain('const preservedLinearBranchName = preserveLinearLinkedWorkItem')
-    expect(section).toContain('getLinearLinkedWorkItemBranchName(linkedWorkItem)')
-    expect(section).toContain('setBranchNameOverride(preservedLinearBranchName)')
-    expect(section).toContain(
-      'setBranchNameOverridePreservesNameEdits(Boolean(preservedLinearBranchName))'
-    )
-    expect(section).toContain("branchAutoNameRef.current = preservedLinearBranchName ?? ''")
-  })
-
-  it('clears a Linear branch override when its linked issue is removed', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const handleRemoveLinkedWorkItem = useCallback',
-      'const handleNameValueChange = useCallback'
-    )
-
-    expect(section).toContain('const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)')
-    expect(section).toContain('if (removedLinearItem)')
-    expect(section).toContain('setBranchNameOverride(undefined)')
-    expect(section).toContain('setBranchNameOverridePreservesNameEdits(false)')
-    expect(section).toContain("branchAutoNameRef.current = ''")
-  })
-
-  it('selects a project by its own host instead of pinning the current host', () => {
-    // Regression: passing the current host as a hard `hostId` made picking a
-    // project set up only on a different host a silent no-op. The current host
-    // must be a preference (focusedHostScope), with a fallback to any ready host.
-    const handleProjectChange = sourceBetween(
-      HOOK_SOURCE,
-      'const handleProjectChange = useCallback',
-      'const handleSmartGitHubItemSelect'
-    )
-    expect(handleProjectChange).toContain('focusedHostScope: preferredHostId ?? workspaceHostScope')
-    expect(handleProjectChange).not.toContain('hostId: preferredHostId')
-  })
-
-  it('clears GitLab-specific linked state when clearing smart-name selection', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const handleClearSmartNameSelection = useCallback',
-      'const submitFolderTarget = useCallback'
-    )
-    expect(section).toContain("setLinkedIssue('')")
-    expect(section).toContain('setLinkedPR(null)')
-    expect(section).toContain('setLinkedGitLabIssue(null)')
-    expect(section).toContain('setLinkedGitLabMR(null)')
-    expect(section).toContain('setLinkedWorkItem(null)')
-  })
-
-  it('clears stale opposite-provider review fields when selecting linked work items', () => {
-    const githubApply = sourceBetween(
-      HOOK_SOURCE,
-      'const applyLinkedWorkItem = useCallback',
-      'const resolvePendingSmartGitHubSubmit'
-    )
-    expect(githubApply).toContain('setLinkedGitLabIssue(null)')
-    expect(githubApply).toContain('setLinkedGitLabMR(null)')
-    expect(githubApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
-    expect(githubApply).toContain("branchAutoNameRef.current = ''")
-
-    const gitlabApply = sourceBetween(
-      HOOK_SOURCE,
-      'const applyLinkedGitLabWorkItem = useCallback',
-      'const handleSelectLinkedItem'
-    )
-    expect(gitlabApply).toContain("setLinkedIssue('')")
-    expect(gitlabApply).toContain('setLinkedPR(null)')
-    expect(gitlabApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
-    expect(gitlabApply).toContain("branchAutoNameRef.current = ''")
-
-    const projectGroupSmartHandlers = sourceBetween(
-      HOOK_SOURCE,
-      'const handleSmartGitHubItemSelect',
-      'const handleSmartBranchSelect'
-    )
-    expect(projectGroupSmartHandlers).toContain('setLinkedGitLabIssue(null)')
-    expect(projectGroupSmartHandlers).toContain('setLinkedGitLabMR(null)')
-    expect(projectGroupSmartHandlers).toContain(
-      "setLinkedIssue(identity.type === 'issue' ? String(identity.number) : '')"
-    )
-    expect(projectGroupSmartHandlers).toContain(
-      "setLinkedPR(identity.type === 'pr' ? identity.number : null)"
-    )
-  })
-
-  it('disables repo-backed folder smart lookup when a folder target has no source repos', () => {
-    const cardProps = sourceBetween(
-      HOOK_SOURCE,
-      'const cardProps: ComposerCardProps = {',
-      'return {'
-    )
-    expect(cardProps).toContain(
-      'repoBackedSourcesDisabled: isProjectGroupTarget ? folderSourceRepos.length === 0 : false'
-    )
-    expect(cardProps).toContain(
-      'repoBackedSearchRepos: isProjectGroupTarget ? folderSourceRepos : undefined'
-    )
-  })
-
-  it('surfaces folder submit smart-resolution failures through create error UI', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const submitFolderTarget',
-      'const submit = useCallback'
-    )
-    expect(section).toContain('catch (error)')
-    expect(section).toContain('const formattedError = formatWorkspaceCreateError(error)')
-    expect(section).toContain('setCreateError(formattedError)')
-    expect(section).toContain('toast.error(getWorkspaceCreateErrorToastMessage(formattedError))')
-    expect(section).toContain('if (!folderWorkspaceCreated)')
-    expect(section).toContain('setCreateError({')
-  })
-
-  it('passes folder child repos to smart lookup instead of building task source options', () => {
-    const cardProps = sourceBetween(
-      HOOK_SOURCE,
-      'const cardProps: ComposerCardProps = {',
-      'return {'
-    )
-    expect(cardProps).toContain(
-      'repoBackedSearchRepos: isProjectGroupTarget ? folderSourceRepos : undefined'
-    )
-    expect(HOOK_SOURCE).not.toContain('folderSourceProjectOptions')
-    expect(HOOK_SOURCE).not.toContain('handleFolderTaskSourceProjectChange')
-    expect(HOOK_SOURCE).not.toContain('getRepoIdFromNewWorkspaceFolderSourceOptionId')
-  })
-
-  it('keeps folder run repo changes inside the selected folder source set', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const handleFolderSourceRepoChange = useCallback',
-      'const handleProjectHostSetupChange = useCallback'
-    )
-    expect(section).toContain('folderSourceRepos.some((repo) => repo.id === value)')
-    expect(section).toContain('return')
-
-    const cardProps = sourceBetween(
-      HOOK_SOURCE,
-      'const cardProps: ComposerCardProps = {',
-      'return {'
-    )
-    expect(cardProps).toContain('allowSmartNameAddProject: !isProjectGroupTarget')
-  })
-
-  it('preserves Jira linked items when switching from repo target to folder target', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const handleProjectChange = useCallback',
-      'const handleSmartGitHubItemSelect'
-    )
-    expect(section).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)')
-  })
-
-  it('resolves quick-create base refs through the worktree-create precedence helper', () => {
-    const section = sourceBetween(
-      HOOK_SOURCE,
-      'const smartSubmitBaseBranch',
-      'const createDisplayName'
-    )
-
-    expect(section).toContain('resolveWorktreeCreateBaseBranch')
-    expect(section).toContain('explicitBaseBranch: smartSubmitBaseBranch')
-    expect(section).not.toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
-    expect(section).not.toContain('getRuntimeRepoBaseRefDefault')
-  })
-
-  it('plans new workspace agent startup from the selected repo runtime', () => {
-    expect(HOOK_SOURCE).toContain('const selectedRepoAgentLaunchPlatform = useMemo')
-    expect(HOOK_SOURCE).toContain('getLocalRepoProjectExecutionRuntimeContext')
-    expect(HOOK_SOURCE).toContain('getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)')
-
-    const fullSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submit = useCallback',
-      'const submitQuick = useCallback'
-    )
-    expect(fullSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
-    expect(fullSubmit).not.toContain('platform: CLIENT_PLATFORM')
-
-    const quickSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submitQuick = useCallback',
-      'const createGateInput'
-    )
-    expect(quickSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
-    expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
-  })
-
-  it('prepares linked quick-create drafts for the selected default agent', () => {
-    const quickSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submitQuick = useCallback',
-      'const createGateInput'
-    )
-
-    expect(quickSubmit).toContain(
-      'const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem'
-    )
-    expect(quickSubmit).toContain('resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem')
-    expect(quickSubmit).not.toContain('explicitAgentChoice')
-    expect(quickSubmit).not.toContain('shouldPrepareQuickLinkedWorkItemAgentPrompt')
-    expect(HOOK_SOURCE).not.toContain('resolveQuickWorkspaceSubmitAgent')
-  })
-
-  it('keeps Linear starts out of issue-command templates without special draft routing', () => {
-    expect(HOOK_SOURCE).not.toContain('isOrcaCliAvailableForLaunch')
-    expect(HOOK_SOURCE).not.toContain('hasGeneratedLinearSourceContext')
-    expect(HOOK_SOURCE).not.toContain('shouldDraftGeneratedLinearContext')
-    expect(HOOK_SOURCE).toMatch(
-      /willApplyIssueCommandAsPrompt[\s\S]*linkedWorkItemProvider !== 'linear'/
-    )
-
-    const previewSection = sourceBetween(
-      HOOK_SOURCE,
-      'const shouldApplyLinkedOnlyTemplate =',
-      'const linkedOnlyTemplatePrompt'
-    )
-    expect(previewSection).toContain("linkedWorkItemProvider !== 'linear'")
-
-    const fullSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submit = useCallback',
-      'const submitQuick = useCallback'
-    )
-    expect(fullSubmit).toContain("submitLinkedWorkItemProvider !== 'linear'")
-    expect(fullSubmit).toMatch(
-      /submitShouldRunIssueAutomation[\s\S]*submitLinkedWorkItemProvider !== 'linear'/
-    )
-    expect(fullSubmit).toContain('prompt: submitStartupPrompt')
-    expect(fullSubmit).toContain('const shouldSeedInitialAgentStatus =')
-    expect(fullSubmit).toContain('...(shouldSeedInitialAgentStatus')
-
-    const quickSubmit = sourceBetween(
-      HOOK_SOURCE,
-      'const submitQuick = useCallback',
-      'const createGateInput'
-    )
-    expect(quickSubmit).toContain('agent === null || !quickDraftPrompt')
-    expect(quickSubmit).toContain('startupPlan.draftPrompt = quickDraftPrompt')
-  })
-
-  it('gates per-workspace environment recipe discovery behind the experimental setting', () => {
-    const recipeLoadSection = sourceBetween(
-      HOOK_SOURCE,
-      'const ephemeralVmsEnabled',
-      'const selectedRepoConnectionId'
-    )
-    expect(recipeLoadSection).toContain('settings?.experimentalEphemeralVms === true')
-    expect(recipeLoadSection).toContain('!ephemeralVmsEnabled')
-    expect(recipeLoadSection).toContain('window.api.ephemeralVm')
-
-    const submitSection = sourceBetween(
-      HOOK_SOURCE,
-      'let ephemeralVmRecipe',
-      'const request: WorktreeCreationRequest'
-    )
-    expect(submitSection).toContain(
-      'const activeEphemeralVmRecipeId = ephemeralVmsEnabled ? selectedEphemeralVmRecipeId : null'
-    )
-    expect(submitSection).toContain('recipeId: activeEphemeralVmRecipeId')
-
-    const cardPropsSection = sourceBetween(HOOK_SOURCE, 'const cardProps', 'return {')
-    expect(cardPropsSection).toContain('ephemeralVmRecipes:')
-    expect(cardPropsSection).toContain('!ephemeralVmsEnabled')
-    expect(cardPropsSection).toContain('selectedEphemeralVmRecipeId:')
-    expect(cardPropsSection).toContain('ephemeralVmRecipeError:')
+      getMatchingLinkedTaskSourceContext({ ...item, jiraIdentifier: 'ORCA-999' }, context)
+    ).toBeNull()
   })
 })

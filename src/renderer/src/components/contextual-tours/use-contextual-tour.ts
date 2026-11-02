@@ -10,6 +10,7 @@ const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
   'workspace-agent-sessions': 'workspace_agent_sessions_visible',
   browser: 'browser_visible',
+  'client-hosted-browser': 'client_hosted_browser_visible',
   tasks: 'tasks_open',
   automations: 'automations_open',
   'floating-workspace': 'floating_workspace_visible',
@@ -107,8 +108,7 @@ export function useContextualTour(
     enabledInteractionSnapshotRef.current = {
       id,
       source,
-      // Why: recording writes featureInteractions; subscribing here would
-      // retrigger this effect and repeatedly persist the same enabled source.
+      // Recording writes featureInteractions; subscribing would retrigger persistence for the same source.
       wasPreviouslyInteracted: snapshot.wasPreviouslyInteracted,
       persisted: snapshot.persisted
     }
@@ -124,8 +124,7 @@ export function useContextualTour(
   ])
 
   useEffect(() => {
-    // Why: source disable should end through the overlay so a shown tour gets
-    // a cancellation outcome; the store flag also lets pre-render attempts retry.
+    // End shown tours through the overlay for a cancellation outcome; pre-render attempts remain retryable.
     if (
       !enabled &&
       activeContextualTourId === id &&
@@ -147,8 +146,7 @@ export function useContextualTour(
   useEffect(() => {
     return () => {
       const state = useAppStore.getState()
-      // Why: surfaces like sheets can unmount without rendering an `enabled=false`
-      // pass, so suppress their active tour during cleanup too.
+      // Sheets may unmount without an enabled=false render; suppress their active tour during cleanup too.
       if (
         state.activeContextualTourId === id &&
         state.activeContextualTourSource === source &&
@@ -227,8 +225,7 @@ export function useContextualTour(
       attributes: true,
       attributeFilter: ['aria-hidden', 'class', 'data-contextual-tour-target', 'hidden', 'style']
     })
-    // Why: native prompts and async surface hydration can pause or miss the
-    // first target measurement; retry briefly without long-lived polling.
+    // Bound retries for native prompts and async hydration that delay first measurement.
     const interval = window.setInterval(() => {
       if (attempts >= 20) {
         window.clearInterval(interval)

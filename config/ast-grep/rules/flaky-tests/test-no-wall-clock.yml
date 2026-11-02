@@ -1,0 +1,55 @@
+# Ratcheted by config/scripts/check-flaky-test-pattern-ratchet.mjs; info severity keeps
+# `pnpm lint:ast-grep` quiet about the grandfathered baseline.
+# A file that installs fake timers or stubs Date is trusted as a whole, to keep false positives low.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: test-no-wall-clock
+language: typescript
+severity: info
+message: A unit test reading the wall clock can pass or fail with the time of day or machine speed. Use fixed timestamps, or vi.useFakeTimers() with vi.setSystemTime().
+note: 'If the real clock is the point of the test, add `// ast-grep-ignore: test-no-wall-clock -- <reason>` above it.'
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+rule:
+  any:
+    - pattern: Date.now()
+    - pattern: new Date()
+  not:
+    any:
+      # `${Date.now()}` builds a unique name, not a timing assumption.
+      - inside: { kind: template_substitution }
+      - inside:
+          stopBy: end
+          kind: program
+          has:
+            stopBy: end
+            any:
+              - pattern: vi.useFakeTimers($$$)
+              - pattern: vi.setSystemTime($$$)
+              - pattern: vi.spyOn(Date, $$$)
+---
+id: test-no-wall-clock-tsx
+language: tsx
+severity: info
+message: A unit test reading the wall clock can pass or fail with the time of day or machine speed. Use fixed timestamps, or vi.useFakeTimers() with vi.setSystemTime().
+note: 'If the real clock is the point of the test, add `// ast-grep-ignore: test-no-wall-clock -- <reason>` above it.'
+files:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+rule:
+  any:
+    - pattern: Date.now()
+    - pattern: new Date()
+  not:
+    any:
+      # `${Date.now()}` builds a unique name, not a timing assumption.
+      - inside: { kind: template_substitution }
+      - inside:
+          stopBy: end
+          kind: program
+          has:
+            stopBy: end
+            any:
+              - pattern: vi.useFakeTimers($$$)
+              - pattern: vi.setSystemTime($$$)
+              - pattern: vi.spyOn(Date, $$$)

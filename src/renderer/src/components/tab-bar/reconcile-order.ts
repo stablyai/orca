@@ -1,22 +1,20 @@
-/**
- * Reconcile stored tab bar order with the current set of tab IDs.
- * Keeps items that still exist in their stored positions, appends new items
- * at the end in their natural order (not grouped by type).
- */
+/** Keep surviving stored order and append missing IDs in input type order. */
 export function reconcileTabOrder(
   storedOrder: string[] | undefined,
   terminalIds: string[],
   editorIds: string[],
   browserIds: string[] = [],
-  simulatorIds: string[] = []
+  simulatorIds: string[] = [],
+  agentSessionIds: string[] = []
 ): string[] {
-  const validIds = new Set([...terminalIds, ...editorIds, ...browserIds, ...simulatorIds])
-  // Why: storedOrder is persisted group tab order and is mutated by many
-  // codepaths (drop/move/reorder/hydrate). A stale or racey write can leave
-  // the same tab id twice in the list, which surfaces as React's "two
-  // children with the same key" warning when TabBar maps items to
-  // SortableTab/EditorFileTab/BrowserTab. Dedupe at the render boundary so
-  // the UI never produces duplicate keys regardless of store-side bugs.
+  const validIds = new Set([
+    ...terminalIds,
+    ...editorIds,
+    ...browserIds,
+    ...simulatorIds,
+    ...agentSessionIds
+  ])
+  // Deduplicate at the render boundary because persisted drop/move/hydration races can leave repeated React keys.
   const result: string[] = []
   const inResult = new Set<string>()
   for (const id of storedOrder ?? []) {
@@ -25,7 +23,13 @@ export function reconcileTabOrder(
       inResult.add(id)
     }
   }
-  for (const id of [...terminalIds, ...editorIds, ...browserIds, ...simulatorIds]) {
+  for (const id of [
+    ...terminalIds,
+    ...editorIds,
+    ...browserIds,
+    ...simulatorIds,
+    ...agentSessionIds
+  ]) {
     if (!inResult.has(id)) {
       result.push(id)
       inResult.add(id)

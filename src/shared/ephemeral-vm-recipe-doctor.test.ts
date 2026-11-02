@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { doctorEphemeralVmRecipe } from './ephemeral-vm-recipe-doctor'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 
 const roots: string[] = []
 
@@ -89,7 +89,6 @@ describe('doctorEphemeralVmRecipe', () => {
       destroyDisabled: true
     })
     expect(checkById(result, 'recipe.suspend_resume_pairing')?.status).toBe('warn')
-    // warn never flips ok
     expect(result.ok).toBe(true)
   })
 

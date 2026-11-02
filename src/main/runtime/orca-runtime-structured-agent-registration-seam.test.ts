@@ -1,0 +1,115 @@
+// Support/create/account reads share registration authority before host install; unknown agents must not install one.
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService } from './orca-runtime'
+import { structuredAgentRuntimeRegistration } from './structured-agent-runtime-registrations'
+import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
+import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
+
+afterEach(() => vi.restoreAllMocks())
+
+const LOCAL = {
+  executionHostId: 'local' as const,
+  wslDistro: null,
+  workspaceId: 'workspace-1',
+  workspaceKind: 'git-worktree' as const
+}
+
+function runtimeAt(location = LOCAL) {
+  const runtime = new OrcaRuntimeService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these reads consume only getSettings from the store.
+    { getSettings: () => ({ agentDefaultEnv: {} }) } as never
+  )
+  const installHost = vi.fn(async () => {
+    throw new Error('the host must not be installed to answer this')
+  })
+  Object.assign(runtime, {
+    resolveStructuredAgentSessionLocation: vi.fn(async () => location),
+    ensureStructuredAgentSessionHost: installHost
+  })
+  return { runtime, installHost }
+}
+
+describe('the structured agent registration list', () => {
+  it("answers createSupport from the agent's own location rule", async () => {
+    const codex = structuredAgentRuntimeRegistration('codex')!
+    const { runtime, installHost } = runtimeAt()
+    expect(await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'codex')).toEqual(
+      { supported: true }
+    )
+
+    vi.spyOn(codex, 'supportsLocation').mockReturnValue(false)
+    expect(await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'codex')).toEqual(
+      { supported: false, reason: 'agent' }
+    )
+    expect(codex.supportsLocation).toHaveBeenCalledWith(LOCAL)
+    expect(installHost).not.toHaveBeenCalled()
+  })
+
+  it('refuses an agent it does not hold without installing the host', async () => {
+    const { runtime, installHost } = runtimeAt()
+    expect(
+      await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'cursor')
+    ).toEqual({
+      supported: false,
+      reason: 'agent'
+    })
+    await expect(runtime.resolveStructuredAgentAccountHome('cursor')).rejects.toMatchObject({
+      message: 'structured_agent_session_unsupported'
+    })
+    expect(installHost).not.toHaveBeenCalled()
+  })
+
+  it('refuses Antigravity chat on a host without a pinned server build', async () => {
+    const { runtime, installHost } = runtimeAt()
+    const adapter = new AcpStructuredSessionAdapter({
+      spec: acpLaunchSpecFor('antigravity')!,
+      resolveLaunch: async () => {
+        throw new Error('no launch')
+      },
+      readLaunch: async () => {
+        throw new Error('no read')
+      },
+      connect: () => {
+        throw new Error('no connection')
+      },
+      dataDirectory: '/orca-data',
+      isWindowsProcessStartTimeAvailable: () => true
+    })
+    Object.assign(runtime, {
+      resolveRuntimeFileTarget: vi.fn(async () => ({ worktree: { path: '/worktree' } }))
+    })
+    const platform = process.platform
+    try {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+      expect(adapter.supportsLocation(LOCAL)).toBe(true)
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      expect(
+        await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', 'antigravity')
+      ).toEqual({ supported: false, reason: 'agent' })
+      expect(adapter.supportsLocation(LOCAL)).toBe(false)
+      expect(installHost).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+    }
+  })
+
+  it("resolves an account home through the agent's registration, with the read purpose", async () => {
+    const claude = structuredAgentRuntimeRegistration('claude')!
+    vi.spyOn(claude, 'resolveAccountHome').mockResolvedValue({
+      variable: 'CLAUDE_CONFIG_DIR',
+      path: '/accounts/claude'
+    })
+    const { runtime, installHost } = runtimeAt()
+
+    expect(await runtime.resolveStructuredAgentAccountHome('claude')).toEqual({
+      variable: 'CLAUDE_CONFIG_DIR',
+      path: '/accounts/claude'
+    })
+    expect(claude.resolveAccountHome).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'read', location: null, workspacePath: null }),
+      expect.anything()
+    )
+    expect(installHost).not.toHaveBeenCalled()
+  })
+})

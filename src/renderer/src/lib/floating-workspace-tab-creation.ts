@@ -1,16 +1,14 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { BrowserTab, TerminalTab } from '../../../shared/types'
 import { createUntitledMarkdownFileWithTemplateSelection } from './create-untitled-markdown'
 import { getConnectionId } from './connection-context'
 import { detectLanguage } from './language-detect'
 import type { AppState } from '@/store/types'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
+import { createBrowserUuid } from './browser-uuid'
 import { translate } from '@/i18n/i18n'
+import { assertClientCreationActionAvailable } from './client-creation-action-policy'
 
-type FloatingWorkspaceTerminalStore = Pick<
-  AppState,
-  'activeGroupIdByWorktree' | 'createTab' | 'activateTab'
->
+type FloatingWorkspaceTerminalStore = Pick<AppState, 'activeGroupIdByWorktree' | 'createTab'>
 
 type FloatingWorkspaceBrowserStore = Pick<
   AppState,
@@ -21,29 +19,31 @@ type FloatingWorkspaceMarkdownStore = Pick<AppState, 'activeGroupIdByWorktree' |
 
 export async function createFloatingWorkspaceTerminalTab(
   store: FloatingWorkspaceTerminalStore,
-  shellOverride?: string
-): Promise<TerminalTab | null> {
-  const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  shellOverride?: string,
+  /** A split group's own "+"; omitted, the tab lands in the focused group. */
+  groupId?: string
+): Promise<void> {
+  const targetGroupId = groupId ?? store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
 
-  // Why: the floating workspace is a local scratchpad; a focused remote runtime
-  // must not own its SSH/tmux terminals or prune them via session snapshots.
-  const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride, {
-    activate: false
-  })
-  store.activateTab(tab.id)
-  focusTerminalTabSurface(tab.id)
-  return tab
+  // Floating scratchpad terminals stay local; focused remote runtimes must not own or snapshot-prune them.
+  const tabId = createBrowserUuid()
+  store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride, { id: tabId })
+  focusTerminalTabSurface(tabId)
 }
 
 export async function createFloatingWorkspaceBrowserTab(
   store: FloatingWorkspaceBrowserStore
-): Promise<BrowserTab | null> {
+): Promise<void> {
+  assertClientCreationActionAvailable(
+    store as AppState,
+    FLOATING_TERMINAL_WORKTREE_ID,
+    'managed-browser'
+  )
   const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
   const url = store.browserDefaultUrl ?? 'about:blank'
 
-  // Why: browser tabs in the floating workspace share the same local-only
-  // ownership rule as floating terminals.
-  return store.createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
+  // Floating browsers follow terminals’ local-only ownership rule.
+  store.createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
     title: translate('auto.lib.floating.workspace.tab.creation.f3785eddc2', 'New Browser Tab'),
     focusAddressBar: true,
     targetGroupId,
@@ -65,7 +65,7 @@ export async function createFloatingWorkspaceMarkdownTab(
     floatingMarkdownDirectory,
     FLOATING_TERMINAL_WORKTREE_ID,
     getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
-    { activeRuntimeEnvironmentId: null }
+    { kind: 'local' }
   )
   if (!fileInfo) {
     return

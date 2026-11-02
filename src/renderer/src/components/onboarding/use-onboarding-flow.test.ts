@@ -3,8 +3,8 @@ import { toast } from 'sonner'
 import {
   prepareSkippedOnboardingPreferences,
   remapOpenOnboardingLastCompletedStep
-} from './use-onboarding-flow'
-import { getDefaultOnboardingState } from '../../../../shared/constants'
+} from './onboarding-flow-state'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() }
@@ -43,7 +43,7 @@ describe('prepareSkippedOnboardingPreferences', () => {
     })
   })
 
-  it('keeps the selected agent preference before jumping to repo setup', async () => {
+  it('keeps the selected agent preference before opening project setup', async () => {
     const setTheme = vi.fn()
     const applyTheme = vi.fn()
     const updateSettings = vi.fn().mockResolvedValue(undefined)

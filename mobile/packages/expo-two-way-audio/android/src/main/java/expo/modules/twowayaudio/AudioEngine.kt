@@ -53,7 +53,6 @@ class AudioEngine (context: Context) {
     private var isRecordingBeforePause = false
     var isPlaying = false
 
-    // Callbacks
     var onMicDataCallback: ((ByteArray) -> Unit)? = null
     var onInputVolumeCallback: ((Float) -> Unit)? = null
     var onOutputVolumeCallback: ((Float) -> Unit)? = null
@@ -92,11 +91,9 @@ class AudioEngine (context: Context) {
         requestAudioFocus()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // Route audio to external device if connected, otherwise route to speaker.
-            // AudioDeviceInfo/getDevices are API 23+, while the module supports API 21.
+            // Prefer connected outputs, falling back to speaker; AudioDeviceInfo/getDevices require API 23 (module floor: 21).
             updateAudioRouting()
 
-            // Listen for changes in audio routing
             val callback = object:android.media.AudioDeviceCallback(){
                 override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
                     Log.d("AudioEngine", "onAudioDevicesAdded")
@@ -162,7 +159,6 @@ class AudioEngine (context: Context) {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Use the modern API for Android S and above
             try {
                 selectedDevice?.let {
                     audioManager.setCommunicationDevice(it)
@@ -175,7 +171,6 @@ class AudioEngine (context: Context) {
             }
 
         } else {
-            // Fall back to deprecated method for older Android versions
             @Suppress("DEPRECATION")
             audioManager.isSpeakerphoneOn = !isExternalDeviceConnected
         }
@@ -192,6 +187,9 @@ class AudioEngine (context: Context) {
 
     @SuppressLint("NewApi")
     private fun requestAudioFocus() {
+        // Every resume re-requests; without abandoning first the previous listener stays on the focus stack.
+        abandonAudioFocus()
+
         val listener = AudioManager.OnAudioFocusChangeListener { focusChange ->
             when (focusChange) {
                 AudioManager.AUDIOFOCUS_LOSS -> {
@@ -201,6 +199,8 @@ class AudioEngine (context: Context) {
                     } else {
                         stopRecording()
                         stopPlayback()
+                        // Pre-Q stops for good rather than pausing, so the focus goes back too.
+                        abandonAudioFocus()
                     }
                     onAudioInterruptionCallback?.let { it("blocked") }
                 }
@@ -235,6 +235,18 @@ class AudioEngine (context: Context) {
         if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
             throw RuntimeException("Audio focus request failed")
         }
+    }
+
+    @SuppressLint("NewApi")
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            audioFocusChangeListener?.let { audioManager.abandonAudioFocus(it) }
+        }
+        audioFocusChangeListener = null
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -300,7 +312,11 @@ class AudioEngine (context: Context) {
         }
     }
 
-    private fun stopRecording() {
+    private fun stopRecording(clearPauseResume: Boolean = true) {
+        // Only the activity-pause stop keeps the resume flag; every other stop ends the recording for good.
+        if (clearPauseResume) {
+            isRecordingBeforePause = false
+        }
         if (!isRecording) return
         isRecording = false
         if (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
@@ -311,13 +327,12 @@ class AudioEngine (context: Context) {
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    fun toggleRecording(value: Boolean): Boolean {
-        if (value == isRecording) return isRecording
-
+    fun toggleRecording(value: Boolean, clearPauseResume: Boolean = true): Boolean {
         if (value) {
-            startRecording()
+            if (!isRecording) startRecording()
         } else {
-            stopRecording()
+            // Runs even when already stopped, so a stop issued while paused still clears the resume flag.
+            stopRecording(clearPauseResume)
         }
 
         isRecording = value
@@ -378,14 +393,20 @@ class AudioEngine (context: Context) {
     @RequiresApi(Build.VERSION_CODES.Q)
     fun pauseRecordingAndPlayer() {
         isRecordingBeforePause = isRecording
-        isRecording = toggleRecording(false)
+        isRecording = toggleRecording(false, clearPauseResume = false)
         audioTrack.pause()
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     fun resumeRecordingAndPlayer() {
         requestAudioFocus()
-        isRecording = toggleRecording(isRecordingBeforePause)
+        // Consume the flag: a second resume without an intervening pause must not reopen the microphone.
+        val shouldResumeRecording = isRecordingBeforePause
+        isRecordingBeforePause = false
+        // Reopen only a mic closed by pause; a JS recording started while paused must stay live.
+        if (shouldResumeRecording) {
+            isRecording = toggleRecording(true)
+        }
         audioTrack.play()
     }
 
@@ -430,14 +451,7 @@ class AudioEngine (context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.clearCommunicationDevice()
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest?.let { request ->
-                audioManager.abandonAudioFocusRequest(request)
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.abandonAudioFocus(audioFocusChangeListener)
-        }
+        abandonAudioFocus()
         executorServiceMicrophone.shutdownNow()
         executorServicePlayback.shutdownNow()
     }
@@ -448,26 +462,21 @@ class AudioEngine (context: Context) {
         val sampleCount = buffer.size / 2
         var sumSquares = 0.0f
         for (i in 0 until sampleCount) {
-            // Why: preserve Android's existing signed-byte decode while avoiding
-            // a temporary sample array on every mic/playback audio buffer.
+            // Preserve signed-byte decoding without allocating a sample array per audio buffer.
             val sample = (buffer[i * 2].toInt() or (buffer[i * 2 + 1].toInt() shl 8)).toShort()
             val normalizedSample = sample / 32768.0f
             sumSquares += normalizedSample * normalizedSample
         }
 
-        // Calculate RMS value
         val rmsValue = kotlin.math.sqrt(sumSquares / sampleCount)
 
-        // Convert to decibels
         val dbValue = 20 * kotlin.math.log10(maxOf(rmsValue, epsilon))
 
-        // Normalize decibel value to 0-1 range
-        // Assuming minimum audible is -80dB and maximum is 0dB
+        // Normalize the assumed audible range [-80, 0] dB.
         val minDb = -80.0f
         val normalizedValue = maxOf(0.0f, minOf(1.0f, (dbValue - minDb) / kotlin.math.abs(minDb)))
 
-        // Optional: Apply exponential factor to push smaller values down
-        val expFactor = 2.0f // Adjust this value to change the curve
+        val expFactor = 2.0f
         val adjustedValue = normalizedValue.pow(expFactor)
 
         return adjustedValue

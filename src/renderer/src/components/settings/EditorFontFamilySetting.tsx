@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { SearchableSetting } from './SearchableSetting'
 import { FontAutocomplete, SettingsRow } from './SettingsFormControls'
@@ -25,7 +25,7 @@ export function EditorFontFamilySetting({
       )}
       description={translate(
         'auto.components.settings.EditorFontFamilySetting.description',
-        'Font used by file editors and diff views. Leave empty to follow the terminal font.'
+        'Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.'
       )}
       keywords={['editor', 'font', 'typography', 'family', 'code', 'cjk']}
     >
@@ -36,7 +36,7 @@ export function EditorFontFamilySetting({
         )}
         description={translate(
           'auto.components.settings.EditorFontFamilySetting.description',
-          'Font used by file editors and diff views. Leave empty to follow the terminal font.'
+          'Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.'
         )}
         control={
           <FontAutocomplete

@@ -70,7 +70,7 @@ function valueAfter(flag) {
 
 function buildImage(image) {
   console.log(`Building ${image.name} fixture...`)
-  docker([
+  const buildArgs = [
     'build',
     '--build-arg',
     `BASE_IMAGE=${image.base}`,
@@ -81,7 +81,16 @@ function buildImage(image) {
     '-t',
     image.tag,
     '.'
-  ])
+  ]
+  // Why: apt fetches from archive.ubuntu.com stall or fail mid-sync; a second build usually lands on a healthy index.
+  try {
+    docker(buildArgs)
+  } catch (error) {
+    console.error(
+      `${error instanceof Error ? error.message : String(error)}\nRetrying docker build once...`
+    )
+    docker(buildArgs)
+  }
 }
 
 function extractAppImage(image) {

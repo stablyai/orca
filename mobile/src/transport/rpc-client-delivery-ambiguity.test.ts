@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import {
+  createStableLogicalRpcClient,
+  isLogicalClientCutoverError,
+  LogicalClientCutoverError
+} from './stable-logical-rpc-client'
+
+vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
@@ -13,6 +20,10 @@ vi.mock('./e2ee', () => ({
   encrypt: (plaintext: string) => `encrypted:${plaintext}`,
   decrypt: (raw: string) => raw.replace(/^encrypted:/, ''),
   decryptBytes: (bytes: Uint8Array) => bytes
+}))
+
+vi.mock('./mobile-runtime-capability-negotiation', () => ({
+  negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
 }))
 
 class MockWebSocket {
@@ -59,35 +70,89 @@ class MockWebSocket {
 const mockSockets: MockWebSocket[] = []
 const originalWebSocket = globalThis.WebSocket
 
+function readRequest(payload: string): { id: string; method: string } | null {
+  const value: unknown = JSON.parse(payload.replace(/^encrypted:/, ''))
+  return value &&
+    typeof value === 'object' &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'method' in value &&
+    typeof value.method === 'string'
+    ? { id: value.id, method: value.method }
+    : null
+}
+
 function hasSentRequest(socket: MockWebSocket, method: string): boolean {
-  return socket.sent.some(
-    (payload) =>
-      (JSON.parse(payload.replace(/^encrypted:/, '')) as { method: string }).method === method
-  )
+  return socket.sent.some((payload) => readRequest(payload)?.method === method)
 }
 
 function connectAuthenticated(): { client: ReturnType<typeof connect>; socket: MockWebSocket } {
   const client = connect('ws://desktop.invalid', 'token', 'server-key')
-  const socket = mockSockets[0]!
+  const socket = mockSockets[mockSockets.length - 1]!
   socket.open()
   socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
   socket.receive('encrypted:{"type":"e2ee_authenticated"}')
   return { client, socket }
 }
 
-// Callers presenting send failures must be able to tell "the host never got the
-// frame" from "the frame was written and only the response is missing" — the
-// latter must not be reported to the user as a definite failure.
+// Written frames with lost replies must remain delivery-unknown so UI cannot claim a mutation definitely failed.
 describe('mobile rpc-client delivery ambiguity marking', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     mockSockets.length = 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket
   })
 
   afterEach(() => {
     vi.useRealTimers()
     globalThis.WebSocket = originalWebSocket
+  })
+
+  it.each([true, false])(
+    'preserves physical delivery evidence at the cutover caller (sent=%s)',
+    async (sent) => {
+      const physical = sent
+        ? connectAuthenticated()
+        : {
+            client: connect('ws://desktop.invalid', 'token', 'server-key'),
+            socket: mockSockets[0]!
+          }
+      const client = createStableLogicalRpcClient(physical.client, 'lan')
+      const replacement = connectAuthenticated()
+      const requestError = client
+        .sendRequest('worktree.create', { name: 'new' })
+        .catch((error: unknown) => error)
+      await Promise.resolve()
+      expect(hasSentRequest(physical.socket, 'worktree.create')).toBe(sent)
+
+      await client.migrateTo(replacement.client, 'relay')
+
+      const error = await requestError
+      expect(isLogicalClientCutoverError(error)).toBe(true)
+      expect(isRpcDeliveryUnknown(error)).toBe(sent)
+      expect(error).toBeInstanceOf(LogicalClientCutoverError)
+      expect(isRpcDeliveryUnknown(error instanceof Error ? error.cause : null)).toBe(sent)
+      expect(hasSentRequest(replacement.socket, 'worktree.create')).toBe(false)
+      expect(
+        physical.socket.sent.filter((payload) => payload.includes('worktree.create'))
+      ).toHaveLength(sent ? 1 : 0)
+      client.close()
+    }
+  )
+
+  it('recognizes a cutover by class even when its message changes', () => {
+    const error = new LogicalClientCutoverError()
+    error.message = 'wrapped migration'
+    expect(isLogicalClientCutoverError(error)).toBe(true)
+  })
+
+  it('recognizes a cutover message from another bundle copy', () => {
+    expect(isLogicalClientCutoverError(new Error('RPC interrupted by connection migration'))).toBe(
+      true
+    )
+    expect(isLogicalClientCutoverError(new Error('Client closed'))).toBe(false)
+    expect(isLogicalClientCutoverError('RPC interrupted by connection migration')).toBe(false)
   })
 
   it('marks in-flight requests as delivery-unknown when the socket drops', async () => {
@@ -125,8 +190,7 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
 
   it('marks timed-out requests as delivery-unknown', async () => {
     const { client, socket } = connectAuthenticated()
-    // Short override so the request times out before the activity probe
-    // declares the whole socket dead (which is the drop case above).
+    // Expire the request before the activity probe so this covers deadline ambiguity independently of socket loss.
     const requestError = client
       .sendRequest('terminal.send', { terminal: 't' }, { timeoutMs: 1_000 })
       .then(
@@ -140,6 +204,33 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
 
     const error = await requestError
     expect(error).toMatchObject({ message: 'Request timed out: terminal.send' })
+    expect(isRpcDeliveryUnknown(error)).toBe(true)
+    client.close()
+  })
+
+  it('marks a written request unknown when another request triggers auth recovery', async () => {
+    const { client, socket } = connectAuthenticated()
+    const sendError = client.sendRequest('terminal.send', { terminal: 't' }).then(
+      () => null,
+      (error: Error) => error
+    )
+    const authProbe = client.sendRequest('status.get')
+    await Promise.resolve()
+    expect(hasSentRequest(socket, 'terminal.send')).toBe(true)
+    const probe = socket.sent.map(readRequest).find((request) => request?.method === 'status.get')
+    if (!probe) {
+      throw new Error('Expected the written status probe')
+    }
+
+    socket.receive(
+      `encrypted:${JSON.stringify({ id: probe.id, ok: false, error: { code: 'unauthorized', message: 'Unauthorized' } })}`
+    )
+    await expect(authProbe).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'unauthorized' }
+    })
+
+    const error = await sendError
     expect(isRpcDeliveryUnknown(error)).toBe(true)
     client.close()
   })

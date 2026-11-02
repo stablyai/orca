@@ -1,20 +1,14 @@
-function quotePosixShellArg(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`
-}
-
-function quotePowerShellArg(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
+import { quotePowerShellLiteral } from '../../src/shared/powershell-native-argument'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 function quoteTerminalArg(value: string): string {
-  return process.platform === 'win32' ? quotePowerShellArg(value) : quotePosixShellArg(value)
+  return process.platform === 'win32' ? quotePowerShellLiteral(value) : quotePosixShell(value)
 }
 
 export function nodeTerminalCommand(args: readonly string[]): string {
   const nodeExecutable = quoteTerminalArg(process.execPath)
   const executable = process.platform === 'win32' ? `& ${nodeExecutable}` : nodeExecutable
 
-  // Why: Windows CI shells do not always inherit setup-node's PATH, so E2E
-  // terminal probes must invoke the runner's Node executable directly.
+  // Pin the runner’s Node executable because Windows CI shells may not inherit setup-node’s PATH.
   return [executable, ...args.map(quoteTerminalArg)].join(' ')
 }

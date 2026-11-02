@@ -22,17 +22,13 @@ type E2eTerminalPtyAckGateWindow = Window & {
 
 const e2eTerminalAckGatePtyIds = new Set<string>()
 const e2eTerminalAckGateHeldChars = new Map<string, number>()
-// Why: monotonic per-PTY totals of processed chars, mirrored to main as
-// TCP-style cumulative ACKs so a lost ACK message never becomes permanent
-// in-flight debt. Cleared on pty:exit so a reused id restarts aligned with
-// main's fresh accounting; a renderer reload resets it with the page.
+// Cumulative processed-character ACKs recover lost messages; clear on PTY exit/reload to align reused IDs with main’s fresh totals.
 const processedPtyCharTotals = new Map<string, number>()
 
 function sendPtyAck(ptyId: string, chars: number): void {
   const processedChars = (processedPtyCharTotals.get(ptyId) ?? 0) + chars
   processedPtyCharTotals.set(ptyId, processedChars)
-  // Why: keep the legacy per-chunk delta alongside the cumulative total so an
-  // older main (dev hot-reload mix) still credits deltas.
+  // Keep per-chunk deltas for older main during mixed-version hot reload.
   window.api.pty.ackData?.(ptyId, chars, processedChars)
 }
 
@@ -49,8 +45,7 @@ export function exposeE2eTerminalPtyAckGate(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
-  // Why: perf tests need to force main-process renderer-delivery pressure
-  // without changing production ACK behavior or dropping terminal output.
+  // E2E pressure holds ACKs without changing production behavior or discarding output.
   const target = window as E2eTerminalPtyAckGateWindow
   target.__terminalPtyAckGate ??= {
     hold: (ptyIds) => {
@@ -75,8 +70,7 @@ export function exposeE2eTerminalPtyAckGate(): void {
 }
 
 export function ackPtyData(ptyId: string, chars: number): void {
-  // Why: held e2e-gate chars stay out of the cumulative total too, so a
-  // delivery-resync probe cannot leak them past the simulated backpressure.
+  // Withhold cumulative credit too so resync cannot bypass simulated backpressure.
   if (e2eTerminalAckGatePtyIds.has(ptyId)) {
     e2eTerminalAckGateHeldChars.set(ptyId, (e2eTerminalAckGateHeldChars.get(ptyId) ?? 0) + chars)
     return
@@ -84,20 +78,9 @@ export function ackPtyData(ptyId: string, chars: number): void {
   sendPtyAck(ptyId, chars)
 }
 
-// ─── Parse-deferred ACK crediting ───────────────────────────────────
-// Why: ACKing at dispatcher enqueue made main's 512KB in-flight window mean
-// "bytes RECEIVED", not "bytes PARSED" — under flood the renderer's write
-// queue grew unbounded behind instant ACKs, main saw no backpressure, crossed
-// its pending cap, and dropped output (rc.7.perf DSR timeouts). Crediting is
-// now deferred to the output scheduler's consume point, so in-flight becomes
-// true parse backpressure and main's producer flow control pauses the shell
-// instead of dropping.
+// Credit at scheduler consumption, not receipt: early ACKs hide xterm backlog from main’s flow control and cause output drops.
 
-/** Runs one pty:data delivery with a parse-deferred ACK credit. If the
- *  handler hands bytes to the output scheduler, the claimed credit fires when
- *  the scheduler consumes (writes or discards) them; any credit left
- *  unclaimed fires here at return, so a chunk the handler drops outright can
- *  never leave main's in-flight window permanently open. */
+/** Claimed credit fires on scheduler write/discard; unclaimed credit fires at handler return so dropped chunks cannot strand main’s in-flight debt. */
 export function deliverPtyDataWithDeferredAck(
   ptyId: string,
   chars: number,

@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveSourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control-primary-action-decision'
 import {
-  resolveMobileSourceControlCommitAreaPrimaryActionDecision,
-  type MobileSourceControlPrimaryActionDecisionInputs
-} from './mobile-source-control-primary-action-decision'
-import {
+  buildMobileBranchRemoteAction,
   buildMobileSourceControlPrimaryAction,
   type MobileSourceControlPrimaryActionArgs,
   type MobileSourceControlPrimaryActionHandlers
@@ -40,8 +36,6 @@ function args(overrides: Partial<MobileSourceControlPrimaryActionArgs> = {}) {
     unstagedCount: 0,
     commitMessage: '',
     busyAction: null,
-    openingPath: null,
-    openingBranchPath: null,
     branchCompareResult: null,
     handlers: handlers(),
     ...overrides
@@ -49,7 +43,7 @@ function args(overrides: Partial<MobileSourceControlPrimaryActionArgs> = {}) {
 }
 
 describe('buildMobileSourceControlPrimaryAction', () => {
-  it('selects Stage All for unstaged work and dispatches the stage runner', () => {
+  it('selects Stage all for unstaged work and dispatches the stage runner', () => {
     const h = handlers()
     const action = buildMobileSourceControlPrimaryAction(
       args({
@@ -58,7 +52,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         handlers: h
       })
     )
-    expect(action.label).toBe('Stage All')
+    expect(action.label).toBe('Stage all')
     expect(action.disabled).toBe(false)
     action.onPress()
     expect(h.stageAll).toHaveBeenCalledTimes(1)
@@ -73,7 +67,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         handlers: h
       })
     )
-    expect(action.label).toBe('Commit')
+    expect(action.label).toBe('Commit 1 file')
     expect(action.disabled).toBe(false)
     action.onPress()
     expect(h.commit).toHaveBeenCalledTimes(1)
@@ -97,6 +91,17 @@ describe('buildMobileSourceControlPrimaryAction', () => {
     expect(detached.disabled).toBe(true)
   })
 
+  it('does not republish a branch whose review is already merged, like desktop', () => {
+    const action = buildMobileSourceControlPrimaryAction(
+      args({
+        status: status({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } }),
+        review: { prState: 'merged', isPRStateLoading: false, reviewNumber: 7, pushTarget: null }
+      })
+    )
+    expect(action.disabled).toBe(true)
+    expect(action.accessibilityHint).toBe('Nothing to commit. The review is already merged.')
+  })
+
   it('dispatches force push with lease when the shared decision requires it', () => {
     const h = handlers()
     const action = buildMobileSourceControlPrimaryAction(
@@ -113,6 +118,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
           entries: [],
           summary: {
             status: 'ready',
+            errorMessage: undefined,
             baseRef: 'main',
             baseOid: 'base',
             compareRef: 'HEAD',
@@ -133,6 +139,33 @@ describe('buildMobileSourceControlPrimaryAction', () => {
     ])
   })
 
+  it('leaves a force push to desktop when the review has its own push target', () => {
+    const h = handlers()
+    const action = buildMobileSourceControlPrimaryAction(
+      args({
+        status: status({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 2,
+            behind: 2,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
+        review: {
+          prState: 'open',
+          isPRStateLoading: false,
+          reviewNumber: 7,
+          pushTarget: { remoteName: 'fork', branchName: 'feature' }
+        },
+        handlers: h
+      })
+    )
+    expect(action.requiresForceWithLease).toBe(true)
+    expect(action.disabled).toBe(true)
+    action.onPress()
+    expect(h.runActionSheetGitSequence).not.toHaveBeenCalled()
+  })
+
   it('disables the button for unresolved entries even during a conflict operation', () => {
     const action = buildMobileSourceControlPrimaryAction(
       args({
@@ -142,7 +175,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         commitMessage: 'Resolve'
       })
     )
-    expect(action.label).toBe('Commit')
+    expect(action.label).toBe('Commit 1 file')
     expect(action.disabled).toBe(true)
     expect(action.accessibilityHint).toBe('Resolve conflicts before committing.')
   })
@@ -160,112 +193,29 @@ describe('buildMobileSourceControlPrimaryAction', () => {
   })
 })
 
-function decisionInputs(
-  overrides: Partial<MobileSourceControlPrimaryActionDecisionInputs> = {}
-): MobileSourceControlPrimaryActionDecisionInputs {
-  return {
-    stagedCount: 0,
-    hasUnstagedChanges: false,
-    hasStageableChanges: false,
-    hasPartiallyStagedChanges: false,
-    hasMessage: false,
-    hasUnresolvedConflicts: false,
-    isCommitting: false,
-    isRemoteOperationActive: false,
-    upstreamStatus: undefined,
-    ...overrides
-  }
-}
-
-describe('mobile source-control primary action decision parity', () => {
-  it.each([
-    {
-      name: 'dirty tree stages first',
-      input: decisionInputs({
-        hasUnstagedChanges: true,
-        hasStageableChanges: true,
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 2 }
-      })
-    },
-    {
-      name: 'staged message commits',
-      input: decisionInputs({ stagedCount: 1, hasMessage: true })
-    },
-    {
-      name: 'staged without message blocks commit',
-      input: decisionInputs({ stagedCount: 1, hasMessage: false })
-    },
-    {
-      name: 'unresolved conflicts block commit',
-      input: decisionInputs({ stagedCount: 1, hasMessage: true, hasUnresolvedConflicts: true })
-    },
-    {
-      name: 'unpublished branch publishes',
-      input: decisionInputs({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
-        hasCurrentBranch: true
-      })
-    },
-    {
-      name: 'detached head blocks publish',
-      input: decisionInputs({
-        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
-        hasCurrentBranch: false
-      })
-    },
-    {
-      name: 'tracked ahead pushes',
-      input: decisionInputs({ upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 } })
-    },
-    {
-      name: 'tracked behind pulls',
-      input: decisionInputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 } })
-    },
-    {
-      name: 'tracked diverged syncs',
-      input: decisionInputs({ upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 } })
-    },
-    {
-      name: 'patch-equivalent diverged force-pushes with lease',
-      input: decisionInputs({
-        branchCommitsAhead: 4,
-        upstreamStatus: {
-          hasUpstream: true,
-          upstreamName: 'origin/feature',
-          ahead: 10,
-          behind: 2,
-          behindCommitsArePatchEquivalent: true
-        }
-      })
-    },
-    {
-      name: 'in-flight pull mirrors pull',
-      input: decisionInputs({
-        isRemoteOperationActive: true,
-        inFlightRemoteOpKind: 'pull',
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
-      })
-    },
-    {
-      name: 'in-flight force push mirrors force push',
-      input: decisionInputs({
-        isRemoteOperationActive: true,
-        inFlightRemoteOpKind: 'force_push',
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
-      })
-    },
-    {
-      name: 'in-flight push blocks committable candidate',
-      input: decisionInputs({
-        isRemoteOperationActive: true,
-        inFlightRemoteOpKind: 'push',
+describe('buildMobileBranchRemoteAction', () => {
+  it('offers the branch remote step past local changes, forcing after a rebase', async () => {
+    const h = handlers()
+    const rebased = buildMobileBranchRemoteAction(
+      args({
+        status: status({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 3,
+            behind: 3,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
         stagedCount: 1,
-        hasMessage: true
+        commitMessage: 'wip',
+        handlers: h
       })
-    }
-  ])('matches the shared commit-area decision for $name', ({ input }) => {
-    expect(resolveMobileSourceControlCommitAreaPrimaryActionDecision(input)).toEqual(
-      resolveSourceControlCommitAreaPrimaryActionDecision(input)
     )
+    expect(rebased?.label).toBe('Force Push')
+    await rebased?.run()
+    expect(h.runActionSheetGitSequence).toHaveBeenCalledWith('force-push', [
+      { method: 'git.push', params: { forceWithLease: true } }
+    ])
+    expect(buildMobileBranchRemoteAction(args())).toBeNull()
   })
 })

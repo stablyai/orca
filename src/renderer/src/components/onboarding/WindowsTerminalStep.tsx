@@ -2,7 +2,7 @@ import { Check } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { cn } from '@/lib/utils'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { SettingsSegmentedControl } from '../settings/SettingsFormControls'
@@ -65,8 +65,7 @@ export function WindowsTerminalStep({
   const showWslOption = capabilities.wslAvailable || windowsShell === 'wsl.exe'
 
   const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
-    // Why: onboarding sits above body-level portals, so the distro menu must
-    // portal into the overlay to stay clickable.
+    // Portal inside onboarding so its overlay cannot block the distro menu.
     setSelectPortalRoot(node?.closest<HTMLElement>('[data-onboarding-overlay]') ?? node)
   }, [])
 

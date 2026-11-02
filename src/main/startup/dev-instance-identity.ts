@@ -8,11 +8,13 @@ const MAX_LABEL_LENGTH = 80
 
 export type DevInstanceIdentity = AppIdentity & {
   appUserModelId: string
-  // Why: drives app.setName → the macOS safeStorage Keychain item name
-  // ("<appName> Safe Storage"). Kept stable across dev branches (unlike the
-  // per-branch `name`) so every dev instance shares one Keychain key instead of
-  // creating a new one per branch and re-prompting. Distinct from prod's 'Orca'.
+  // Keep the macOS safeStorage Keychain name stable across dev branches and distinct from production.
   appName: string
+}
+
+/** Electron fixes the Keychain service before ready. Rename dev only; packaged forks must retain their CFBundleName-derived encryption keys. */
+export function shouldApplyPreReadyAppName(identity: Pick<AppIdentity, 'isDev'>): boolean {
+  return identity.isDev
 }
 
 function cleanEnvValue(value: string | undefined): string | null {
@@ -77,9 +79,7 @@ export function getDevInstanceIdentity(
 
   return {
     name: dockTitle,
-    // Why: one stable Keychain key ('Orca Dev Safe Storage') for all dev
-    // branches; the per-branch identity still shows via `name` (window title,
-    // app menu, renderer label).
+    // Share one dev Keychain key; branch identity remains in the display name.
     appName: `${BASE_APP_NAME} Dev`,
     isDev: true,
     devLabel,

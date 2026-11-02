@@ -6,7 +6,9 @@ import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 
 const ENTRY_PATH = resolve('out/main/parcel-watcher-process-entry.js')
-const SUPERVISOR_SOURCE = resolve('src/main/ipc/parcel-watcher-process-supervisor.ts')
+const SUPERVISOR_SOURCE = resolve(
+  'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-supervisor.ts'
+)
 const WAIT_TIMEOUT_MS = 15_000
 const require = createRequire(import.meta.url)
 
@@ -56,6 +58,11 @@ async function loadSupervisor(bundleDir) {
   return require(outfile).WatcherProcessSupervisor
 }
 
+// Why: release cuts run this harness from older tags too; #24863 moved the child and canary into `slot`.
+function watcherSlot(supervisor) {
+  return supervisor.slot ?? supervisor
+}
+
 async function main() {
   if (process.platform === 'win32') {
     console.log('[runtime-file-watcher-fault] SKIP: SIGSEGV oracle is macOS/Linux only')
@@ -65,9 +72,7 @@ async function main() {
     throw new Error(`Missing ${ENTRY_PATH}; run pnpm run build:electron-vite first`)
   }
 
-  // Why: mkdtemp/realpath/bundle/construction can fail before the body runs.
-  // Keep cleanup in finally from the first successful mkdtemp onward, and clean
-  // the original temp path if realpath never succeeds.
+  // Start finally at first mkdtemp: realpath/bundle/construction may fail; remove original temp path if canonicalization never completes.
   let createdRootPath
   let bundleDir
   let rootPath
@@ -85,8 +90,7 @@ async function main() {
   try {
     createdRootPath = await mkdtemp(join(tmpdir(), 'orca-runtime-watcher-fault-'))
     bundleDir = await mkdtemp(join(tmpdir(), 'orca-runtime-watcher-harness-'))
-    // Parcel reports canonical event paths on macOS, where tmpdir() may use the
-    // /var symlink spelling. Keep the oracle in the same path domain.
+    // Match Parcel’s canonical event paths; macOS tmpdir may use /var symlink spelling.
     rootPath = await realpath(createdRootPath)
     const WatcherProcessSupervisor = await loadSupervisor(bundleDir)
     supervisor = new WatcherProcessSupervisor()
@@ -102,8 +106,7 @@ async function main() {
       rootPath,
       (error, events) => {
         if (error) {
-          // Why: throws from the async watcher callback escape main()'s try/finally
-          // and skip teardown. Surface failures through a harness promise instead.
+          // Surface watcher-callback errors through harness promise; async throws escape main’s cleanup.
           rejectWatcherError(error)
           return
         }
@@ -115,7 +118,7 @@ async function main() {
         onInterruption: () => resolveInterruption()
       }
     )
-    watcherCanaryDir = supervisor.canaryDir
+    watcherCanaryDir = watcherSlot(supervisor).canaryDir
 
     const beforeEvent = nextMatchingEvent(
       (listener) => {
@@ -127,14 +130,14 @@ async function main() {
     await writeFile(join(rootPath, 'before.txt'), 'before')
     await Promise.race([beforeEvent, watcherError])
 
-    const firstChildPid = supervisor.child?.pid
+    const firstChildPid = watcherSlot(supervisor).child?.pid
     if (!firstChildPid) {
       throw new Error('Watcher supervisor did not expose a live child')
     }
     process.kill(firstChildPid, 'SIGSEGV')
     await Promise.race([interrupted, watcherError])
 
-    const replacementChildPid = supervisor.child?.pid
+    const replacementChildPid = watcherSlot(supervisor).child?.pid
     if (!replacementChildPid || replacementChildPid === firstChildPid) {
       throw new Error('Watcher supervisor did not replace the faulted child')
     }

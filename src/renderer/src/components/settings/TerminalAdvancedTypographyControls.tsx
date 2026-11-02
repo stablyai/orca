@@ -1,10 +1,12 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   DEFAULT_TERMINAL_FONT_WEIGHT,
+  DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
   TERMINAL_FONT_WEIGHT_MAX,
   TERMINAL_FONT_WEIGHT_MIN,
   TERMINAL_FONT_WEIGHT_STEP,
-  normalizeTerminalFontWeight
+  normalizeTerminalFontWeight,
+  normalizeTerminalFontWeightBold
 } from '../../../../shared/terminal-fonts'
 import {
   fontFamilyHasKnownLigatures,
@@ -21,9 +23,7 @@ type TerminalAdvancedTypographyControlsProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-/** Low-frequency terminal typography knobs (weight, line height, ligatures).
- *  Split out of the primary font controls so the default Terminal scan stays
- *  compact while these stay searchable inside the Advanced disclosure. */
+/** Keep rare typography controls searchable under Advanced without crowding the primary font controls. */
 export function TerminalAdvancedTypographyControls({
   settings,
   updateSettings
@@ -54,6 +54,35 @@ export function TerminalAdvancedTypographyControls({
           suffix="100-900"
           onChange={(value) =>
             updateSettings({ terminalFontWeight: normalizeTerminalFontWeight(value) })
+          }
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.TerminalAdvancedTypographyControls.f5fa1a08f1',
+          'Bold Font Weight'
+        )}
+        description={translate(
+          'auto.components.settings.TerminalAdvancedTypographyControls.0e0d1ee15a',
+          'Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged.'
+        )}
+        keywords={['terminal', 'typography', 'weight', 'bold']}
+      >
+        <NumberField
+          label={translate(
+            'auto.components.settings.TerminalAdvancedTypographyControls.f5fa1a08f1',
+            'Bold Font Weight'
+          )}
+          description=""
+          value={normalizeTerminalFontWeightBold(settings.terminalFontWeightBold)}
+          defaultValue={DEFAULT_TERMINAL_FONT_WEIGHT_BOLD}
+          min={TERMINAL_FONT_WEIGHT_MIN}
+          max={TERMINAL_FONT_WEIGHT_MAX}
+          step={TERMINAL_FONT_WEIGHT_STEP}
+          suffix="100-900"
+          onChange={(value) =>
+            updateSettings({ terminalFontWeightBold: normalizeTerminalFontWeightBold(value) })
           }
         />
       </SearchableSetting>
@@ -110,8 +139,7 @@ export function TerminalAdvancedTypographyControls({
             'auto.components.settings.TerminalAppearanceSection.be8da35e7f',
             'Font Ligatures'
           )}
-          // Why: "ligatures" is jargon; the per-state gloss tells the user whether
-          // Auto resolves on/off for their current font.
+          // Explain whether Auto enables ligatures for the current font.
           description={
             settings.terminalLigatures === 'on'
               ? translate(

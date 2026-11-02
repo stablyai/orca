@@ -1,5 +1,5 @@
 import { Check, Copy } from 'lucide-react'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { DiffCommentCard } from '../diff-comments/DiffCommentCard'
 import { NotesSendMenu } from './NotesSendMenu'
 import {
@@ -134,15 +134,19 @@ export function RichMarkdownReviewNoteLayer({
                         'This note'
                       ),
                       notes: comment.sentAt ? [] : [comment as MarkdownReviewNote],
-                      prompt: formatMarkdownReviewNotes(
-                        [comment as MarkdownReviewNote],
-                        markdownReviewContent
-                      )
+                      formatPrompt: (notes) =>
+                        formatMarkdownReviewNotes(notes, markdownReviewContent)
                     }
                   ]}
-                  targetModeLabel="This note"
+                  targetModeLabel={translate(
+                    'auto.components.editor.NotesSendMenu.thisNote',
+                    'This note'
+                  )}
                   triggerClassName="rich-markdown-review-note-action"
-                  disabledTooltip="Note already sent"
+                  disabledTooltip={translate(
+                    'auto.components.editor.NotesSendMenu.noteAlreadySent',
+                    'Note already sent'
+                  )}
                   onDelivered={onDelivered}
                 />
               </>

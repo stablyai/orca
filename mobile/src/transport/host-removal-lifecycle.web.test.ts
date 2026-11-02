@@ -1,0 +1,53 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const removeHostMock = vi.hoisted(() => vi.fn())
+const unregisterPushMock = vi.hoisted(() => vi.fn())
+const saveRegistrationsMock = vi.hoisted(() => vi.fn())
+
+vi.mock('./host-store', () => ({ removeHost: removeHostMock }))
+vi.mock('../notifications/push-registration', () => ({
+  unregisterPushForRemovedHost: unregisterPushMock
+}))
+vi.mock('../storage/preferences', () => ({
+  saveRemotePushHostRegistrations: saveRegistrationsMock
+}))
+
+import { removeHostAndCloseClient } from './host-removal-lifecycle.web'
+import { isPageHostRemovalUnavailable } from './page-host-removal-refusal'
+
+describe('removing a host from the page', () => {
+  beforeEach(() => vi.clearAllMocks())
+  it('refuses with a code the screen can branch on', async () => {
+    const error = await removeHostAndCloseClient('host-1', vi.fn()).catch(
+      (reason: unknown) => reason
+    )
+    expect(isPageHostRemovalUnavailable(error)).toBe(true)
+    expect({
+      name: error instanceof Error ? error.name : null,
+      code: isPageHostRemovalUnavailable(error) ? error.code : null
+    }).toEqual({
+      name: 'PageHostRemovalUnavailableError',
+      code: 'page_host_removal_unavailable'
+    })
+  })
+
+  it('says where removal does work, rather than asking for a retry that cannot succeed', async () => {
+    await expect(removeHostAndCloseClient('host-1', vi.fn())).rejects.toThrow(
+      'Remove this host from the host list in the Orca app.'
+    )
+  })
+
+  it('touches no store, no push subsystem and no client', async () => {
+    // Refuse before storage/push work because the page has neither native writable state nor a device token.
+    const forgetHostClient = vi.fn()
+    await expect(removeHostAndCloseClient('host-1', forgetHostClient)).rejects.toMatchObject({
+      code: 'page_host_removal_unavailable'
+    })
+    expect({
+      removeHost: removeHostMock.mock.calls.length,
+      unregisterPush: unregisterPushMock.mock.calls.length,
+      saveRegistrations: saveRegistrationsMock.mock.calls.length,
+      forgetHostClient: forgetHostClient.mock.calls.length
+    }).toEqual({ removeHost: 0, unregisterPush: 0, saveRegistrations: 0, forgetHostClient: 0 })
+  })
+})

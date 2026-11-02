@@ -1,6 +1,4 @@
-// Why: some foreground ANSI redraws paint background fills before glyphs settle.
-// Detect those chunks so the terminal can force a narrow viewport refresh
-// without switching renderers based on the text content.
+// Detect foreground ANSI chunks whose background fills precede glyphs so targeted refresh repairs them without selecting renderers by content.
 const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b)
 const REWRITE_CSI_SCAN_TAIL_MAX_CHARS = 64
@@ -29,8 +27,7 @@ function isRendererRiskCodePoint(value: number): boolean {
     isInRange(value, 0x0590, 0x08ff) ||
     value === 0x200d ||
     isInRange(value, 0x1100, 0x11ff) ||
-    // Why: keep this list available for targeted refresh decisions without
-    // turning Unicode output into a renderer-selection signal.
+    // Share refresh classification without making Unicode output a renderer-selection signal.
     isInRange(value, 0x2e80, 0x9fff) ||
     isInRange(value, 0xa960, 0xa97f) ||
     isInRange(value, 0xac00, 0xd7ff) ||
@@ -103,6 +100,9 @@ function sgrSequenceSetsBackground(params: string): boolean {
 }
 
 function containsBackgroundSgr(data: string): boolean {
+  if (!data.includes('\x1b[')) {
+    return false
+  }
   SGR_SEQUENCE_PATTERN.lastIndex = 0
   for (
     let match = SGR_SEQUENCE_PATTERN.exec(data);
@@ -127,8 +127,7 @@ function containsRewriteEraseSequence(data: string): boolean {
       if (char === ';' || char === '?') {
         continue
       }
-      // Why: erase-in-line/screen rewrites can leave stale renderer cells until
-      // the next resize; xterm's buffer is correct, but the visible layer needs repainting.
+      // Erase rewrites can leave stale visible cells despite correct xterm buffers; repaint without requiring resize.
       if (char === 'J' || char === 'K') {
         return true
       }
@@ -209,19 +208,7 @@ export function terminalRewriteOutputRenderRefreshDecision(
   }
 }
 
-/**
- * Whether a native-Windows ConPTY foreground chunk that forces a render refresh
- * should ALSO schedule a follow-up next-frame repaint.
- *
- * Why: Claude Code echoes prompt keystrokes by redrawing the input line in place
- * (CR + CHA/erase + reprint) without DEC 2026 synchronized output. xterm's buffer
- * ends up correct, but its DOM renderer can paint these rapid rewrites one frame
- * late — surfacing a phantom first char or an overwritten cell ("zzzx" rendered as
- * "zzx") that only a window resize clears. A single synchronous refresh races that
- * late paint; a follow-up next-frame repaint corrects the column desync the way the
- * existing cursor-restore and scroll cases already do. Scoped to in-place rewrites
- * on native Windows so plain shells and non-Windows renderers are unaffected.
- */
+/** Native Windows ConPTY prompt rewrites (CR/CHA/erase/reprint without DEC 2026) can paint one frame late, leaving phantom/overwritten characters. Synchronous refresh races that paint; schedule a follow-up frame for in-place rewrites, avoiding costs on other platforms/plain output. */
 export function nativeWindowsRewriteNeedsFollowupRenderRefresh(args: {
   isNativeWindowsConpty: boolean
   isForeground: boolean
@@ -243,8 +230,7 @@ export function terminalOutputPrefersRenderRefresh(data: string): boolean {
     }
   }
   if (!hasNonAscii) {
-    // Why: Codex-style terminal redraws are usually ASCII; avoid the Unicode
-    // emoji/property regex and code-point walk on the hottest output path.
+    // Most Codex redraws are ASCII; avoid Unicode regex/code-point scans on the hot path.
     return false
   }
 
@@ -283,8 +269,7 @@ export function terminalOutputContainsEastAsianRendererRisk(data: string): boole
 }
 
 export type WindowsEastAsianRefreshState = {
-  // Why: recent IME commits are a Windows-client renderer issue, while agent
-  // output repainting is only forced for native ConPTY to avoid remote costs.
+  // IME commits affect Windows clients; forced agent repaint remains native-ConPTY-only to avoid remote costs.
   isWindowsClient: boolean
   isNativeWindowsConpty: boolean
   hadRecentInput: boolean

@@ -1,14 +1,4 @@
-/**
- * Memory-leak regression: per-file and per-worktree editor state must be purged
- * when a worktree is removed.
- *
- * `editorCursorLine` and `editorViewMode` are keyed by fileId and
- * `gitStatusHugeByWorktree` is keyed by worktreeId. Both worktree-removal paths
- * — the bulk `purgeWorktreeTerminalState` (used by the authoritative-scan
- * reconcile) and the single `removeWorktree` — failed to drop these entries, so
- * they accumulated one record per file/worktree for the lifetime of the
- * renderer session.
- */
+/** Both single/bulk worktree removal must evict editorCursorLine/editorViewMode by file and gitStatusHugeByWorktree; missed keys leak per removed file/worktree for renderer lifetime. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 
@@ -28,7 +18,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})
@@ -85,7 +74,7 @@ describe('worktree removal purges per-file editor + git-huge state (leak regress
     const store = createTestStore()
     seedEditorState(store)
 
-    const result = await store.getState().removeWorktree(WT)
+    const result = await store.getState().removeWorktree({ id: WT, executionHostId: null })
     expect(result).toEqual({ ok: true })
 
     const s = store.getState()

@@ -1,0 +1,180 @@
+// Zod transforms lack paths, so salvage combinators track bounded diagnostics during parsing.
+import { z } from 'zod'
+
+const MAX_REPORTED_SALVAGE_PATHS = 100
+
+type DropCollector = { paths: string[]; count: number }
+
+let dropCollector: DropCollector | null = null
+const dropPath: (string | number)[] = []
+
+/** Run a synchronous parse while collecting its salvage count and example paths. */
+export function collectSalvageDrops<T>(parse: () => T): {
+  value: T
+  droppedPaths: string[]
+  droppedCount: number
+} {
+  const previousCollector = dropCollector
+  const previousPath = [...dropPath]
+  const collector: DropCollector = { paths: [], count: 0 }
+  dropCollector = collector
+  dropPath.length = 0
+  try {
+    const value = parse()
+    return { value, droppedPaths: collector.paths, droppedCount: collector.count }
+  } finally {
+    dropCollector = previousCollector
+    dropPath.splice(0, dropPath.length, ...previousPath)
+  }
+}
+
+function reportDrop(segment: string | number): void {
+  if (!dropCollector) {
+    return
+  }
+  dropCollector.count += 1
+  if (dropCollector.paths.length < MAX_REPORTED_SALVAGE_PATHS) {
+    dropCollector.paths.push([...dropPath, segment].join('.'))
+  }
+}
+
+function parseEntry<T extends z.ZodType>(
+  schema: T,
+  raw: unknown
+): { success: true; data: z.output<T> } | { success: false } {
+  try {
+    const parsed = schema.safeParse(raw)
+    return parsed.success ? { success: true, data: parsed.data as z.output<T> } : { success: false }
+  } catch {
+    return { success: false }
+  }
+}
+
+/** Track the diagnostic path without a per-entry closure, a dominant persisted-load cost. */
+function parseEntryAt<T extends z.ZodType>(
+  segment: string | number,
+  schema: T,
+  raw: unknown
+): { success: true; data: z.output<T> } | { success: false } {
+  dropPath.push(segment)
+  try {
+    return parseEntry(schema, raw)
+  } finally {
+    dropPath.pop()
+  }
+}
+
+/** Match z.record string-key acceptance, rejecting non-plain objects/enumerable symbols, without allocating a throwaway copy before revalidating entries. */
+function recordEntryKeys(raw: unknown): string[] | null {
+  if (!z.core.util.isPlainObject(raw)) {
+    return null
+  }
+  for (const symbol of Object.getOwnPropertySymbols(raw)) {
+    if (Object.prototype.propertyIsEnumerable.call(raw, symbol)) {
+      return null
+    }
+  }
+  return Object.keys(raw)
+}
+
+/** Accept unknown string arms as fallback, but reject absent/non-string values. catch would also swallow absence. */
+// Accept readonly arm lists like z.enum; const preserves literal-arm inference.
+export function openEnum<const T extends readonly string[], F extends T[number] | undefined>(
+  values: T,
+  fallback: F
+): z.ZodType<T[number] | F, unknown> {
+  return z.enum(values).or(z.string().transform(() => fallback))
+}
+
+/** Use the host union as an exhaustive record feeding z.enum directly. NoInfer plus the never default requires an explicit union; a test-side copy could drift from the accepted arms. */
+export function hostUnionArms<U extends string = never>(
+  coverage: [U] extends [never] ? never : Readonly<Record<NoInfer<U>, true>>
+): readonly U[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mapped parameter type makes every key exactly a U; Object.keys only loses that at the type level.
+  return Object.keys(coverage) as U[]
+}
+
+/** Drop invalid elements; absence remains fatal. Bare transforms set neither optin nor optout, both required for Zod to suppress missing-key issues. Wrappers supply fallback semantics; zod-salvage-absence.test.ts pins this boundary. */
+export function salvagingArray<T extends z.ZodType>(item: T): z.ZodType<z.output<T>[], unknown> {
+  return z.unknown().transform((raw, ctx) => {
+    if (!Array.isArray(raw)) {
+      ctx.addIssue({ code: 'invalid_type', expected: 'array', input: raw })
+      return z.NEVER
+    }
+    const kept: z.output<T>[] = []
+    for (let index = 0; index < raw.length; index += 1) {
+      const parsed = parseEntryAt(index, item, raw[index])
+      if (parsed.success) {
+        kept.push(parsed.data)
+        continue
+      }
+      reportDrop(index)
+    }
+    return kept
+  }) as z.ZodType<z.output<T>[], unknown>
+}
+
+/** Record that drops entries with invalid keys or values instead of failing. */
+export function salvagingRecord<K extends z.ZodType<string>, V extends z.ZodType>(
+  key: K,
+  value: V,
+  accepts?: (key: string, value: z.output<V>) => boolean
+): z.ZodType<Record<string, z.output<V>>, unknown> {
+  return z.unknown().transform((raw, ctx) => {
+    const entryKeys = recordEntryKeys(raw)
+    if (!entryKeys) {
+      ctx.addIssue({ code: 'invalid_type', expected: 'record', input: raw })
+      return z.NEVER
+    }
+    const entries = raw as Record<string, unknown>
+    // Why: null prototype so a persisted '__proto__' key cannot poison the result.
+    const kept: Record<string, z.output<V>> = Object.create(null)
+    for (const entryKey of entryKeys) {
+      // Why: z.record strips '__proto__' before the value schema sees it, so it is not a drop.
+      if (entryKey === '__proto__') {
+        continue
+      }
+      const parsed = parseEntry(key, entryKey).success
+        ? parseEntryAt(entryKey, value, entries[entryKey])
+        : null
+      if (parsed?.success && (!accepts || accepts(entryKey, parsed.data))) {
+        kept[entryKey] = parsed.data
+        continue
+      }
+      reportDrop(entryKey)
+    }
+    return { ...kept }
+  }) as z.ZodType<Record<string, z.output<V>>, unknown>
+}
+
+function salvaged(name: string, schema: z.ZodType, fallback: () => unknown): z.ZodType {
+  return z.unknown().transform((raw, ctx) => {
+    if (raw === undefined) {
+      ctx.addIssue({ code: 'custom', message: 'required', input: raw })
+      return z.NEVER
+    }
+    const parsed = parseEntryAt(name, schema, raw)
+    if (parsed.success) {
+      return parsed.data
+    }
+    reportDrop(name)
+    return fallback()
+  })
+}
+
+/** Fall back for an invalid required field; absence stays fatal for foreign payloads. */
+export function salvagedField<T extends z.ZodType>(
+  name: string,
+  schema: T,
+  fallback: () => z.output<T>
+): z.ZodType<z.output<T>, unknown> {
+  return salvaged(name, schema, fallback) as z.ZodType<z.output<T>, unknown>
+}
+
+/** Drop an invalid optional field without reporting legitimate absence. */
+export function salvagedOptional<T extends z.ZodType>(
+  name: string,
+  schema: T
+): z.ZodOptional<z.ZodType<z.output<T> | undefined, unknown>> {
+  return salvagedField(name, schema.optional(), () => undefined).optional()
+}

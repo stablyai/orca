@@ -1,11 +1,17 @@
+import { rebrandPiStateTitle } from './pi-state-title-marker'
 import { detectAgentStatusFromTitle, getAgentLabel } from './agent-detection'
+import { STRONG_IDLE_KEYWORDS_RE } from './agent-title-core'
 import type { AgentStatusEntry, AgentType } from './agent-status-types'
 import {
   getSyntheticAgentTitleProfile,
   SYNTHETIC_AGENT_TITLE_PROFILES,
   type SyntheticAgentTitleProfile
 } from './synthetic-agent-title'
-import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import {
+  isLegacyPiCompatibleTitle,
+  rebrandPiCompatibleTitle
+} from './pi-compatible-synthetic-title'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 type TitleProfileMatch = {
   profile: SyntheticAgentTitleProfile
@@ -14,11 +20,11 @@ type TitleProfileMatch = {
 
 type TitleLabelProfileMatch = Pick<TitleProfileMatch, 'profile'>
 
-const COMPATIBLE_IDLE_TITLE_RE = /(?<![\w./\\-])(?:ready|idle|done)(?![\w-])/i
+export type CompatibleAgentOwnerOptions = {
+  /** Whether the owner comes from explicit launch intent. */
+  ownerIsLaunch?: boolean
+}
 
-/**
- * Resolves the synthetic title profile matching a given agent label.
- */
 function getProfileForTitleLabel(label: string | null): TitleLabelProfileMatch | null {
   if (!label) {
     return null
@@ -32,22 +38,9 @@ function getProfileForTitleLabel(label: string | null): TitleLabelProfileMatch |
   return null
 }
 
-/**
- * Resolves the synthetic title profile matching a given terminal title.
- */
 function getProfileForTitle(title: string): TitleProfileMatch | null {
-  // Multiplexers/session wrappers prefix dynamic titles with ` | `, so inspect
-  // each suffix to preserve the inner compatible agent identity.
-  const candidates = [title]
-  let wrapperSeparatorIndex = title.indexOf(' | ')
-  while (wrapperSeparatorIndex >= 0) {
-    const wrappedPaneTitle = title.slice(wrapperSeparatorIndex + 3).trim()
-    if (wrappedPaneTitle && !candidates.includes(wrappedPaneTitle)) {
-      candidates.push(wrappedPaneTitle)
-    }
-    wrapperSeparatorIndex = title.indexOf(' | ', wrapperSeparatorIndex + 3)
-  }
-
+  // Why each segment: a wrapper prefix must not hide the inner compatible agent identity.
+  const candidates = getWrapperTitleSegments(title)
   let fallback: TitleProfileMatch | null = null
   for (const candidate of candidates) {
     const labelProfile = getProfileForTitleLabel(getAgentLabel(candidate))
@@ -67,18 +60,11 @@ function getProfileForTitle(title: string): TitleProfileMatch | null {
   return fallback
 }
 
-/**
- * Why: unknown-launch remote sessions need to wait for foreground ownership
- * before publishing title frames whose identity can be re-owned.
- */
+/** Unknown-launch remote sessions need foreground ownership before emitting titles whose identity can be re-owned. */
 export function hasCompatibleAgentTitleIdentity(title: string): boolean {
   return Boolean(getProfileForTitle(title)?.profile.titleIdentityGroup)
 }
 
-/**
- * Detects the agent status (working, permission, idle) from a terminal title,
- * accounting for legacy Pi titles.
- */
 function getSourceTitleStatus(title: string): 'working' | 'permission' | 'idle' | null {
   const detectedStatus = detectAgentStatusFromTitle(title)
   if (detectedStatus) {
@@ -90,9 +76,6 @@ function getSourceTitleStatus(title: string): 'working' | 'permission' | 'idle' 
   return null
 }
 
-/**
- * Checks if a title indicates an agent is waiting for permissions or input.
- */
 function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile): boolean {
   const normalizedTitle = title.trim().toLowerCase()
   return (
@@ -103,24 +86,18 @@ function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitlePr
   )
 }
 
-/**
- * Checks if a title indicates an agent is idle or ready.
- */
 function hasIdleSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile): boolean {
   const normalizedTitle = title.trim().toLowerCase()
   return (
-    normalizedTitle === sourceProfile.idleLabel.toLowerCase() ||
-    COMPATIBLE_IDLE_TITLE_RE.test(title)
+    normalizedTitle === sourceProfile.idleLabel.toLowerCase() || STRONG_IDLE_KEYWORDS_RE.test(title)
   )
 }
 
-/**
- * Why: remote OMP surfaces may report Pi as the live status identity, while
- * launch ownership still identifies the user-selected agent.
- */
+/** Remote OMP may report Pi live status; launch ownership preserves the selected agent. */
 export function resolveCompatibleAgentTypeForOwner(
   incomingAgentType: AgentType | null | undefined,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: AgentType | null | undefined,
+  _options?: CompatibleAgentOwnerOptions
 ): AgentType | undefined {
   if (!incomingAgentType) {
     return undefined
@@ -137,13 +114,11 @@ export function resolveCompatibleAgentTypeForOwner(
   return ownerAgentType as AgentType
 }
 
-/**
- * Why: Pi-compatible title frames can come from the wrapped harness during
- * active work, so render them through the stable owner profile.
- */
+/** Wrapped Pi harness frames retain the stable launch-owner profile during work. */
 export function normalizeCompatibleAgentTitleForOwner(
   title: string,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: AgentType | null | undefined,
+  _options?: CompatibleAgentOwnerOptions
 ): string {
   const ownerProfile = getSyntheticAgentTitleProfile(ownerAgentType)
   if (!ownerProfile?.titleIdentityGroup) {
@@ -155,6 +130,17 @@ export function normalizeCompatibleAgentTitleForOwner(
     source.profile.titleIdentityGroup !== ownerProfile.titleIdentityGroup
   ) {
     return title
+  }
+  const stateTitle = rebrandPiStateTitle(title, ownerProfile.workingLabel)
+  if (stateTitle !== null) {
+    return stateTitle
+  }
+  // Replace only the leading brand with launch ownership; retain the agent's session/cwd instead of collapsing its semantic title (#16093).
+  // Replace within the matched segment so multiplexer prefixes retain their brand; a prefix parsing as a π title remains an ambiguous match.
+  const ownedSegment = rebrandPiCompatibleTitle(source.sourceTitle, ownerProfile.workingLabel)
+  if (ownedSegment !== null) {
+    const segmentAt = title.lastIndexOf(source.sourceTitle)
+    return segmentAt === -1 ? ownedSegment : title.slice(0, segmentAt) + ownedSegment
   }
   const sourceStatus = getSourceTitleStatus(source.sourceTitle)
   if (sourceStatus === 'working') {
@@ -175,17 +161,19 @@ export function normalizeCompatibleAgentTitleForOwner(
   return ownerProfile.workingLabel
 }
 
-/**
- * Why: mirrored remote status entries must keep the owner and title in sync
- * or later snapshots repaint the same tab under the wrapper agent.
- */
+/** Keep mirrored owner/title aligned so later snapshots cannot repaint the tab under its wrapper agent. */
 export function normalizeCompatibleAgentStatusEntryForOwner(
   entry: AgentStatusEntry,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: AgentType | null | undefined,
+  options?: CompatibleAgentOwnerOptions
 ): AgentStatusEntry {
-  const agentType = resolveCompatibleAgentTypeForOwner(entry.agentType, ownerAgentType)
+  const agentType = resolveCompatibleAgentTypeForOwner(entry.agentType, ownerAgentType, options)
   const terminalTitle = entry.terminalTitle
-    ? normalizeCompatibleAgentTitleForOwner(entry.terminalTitle, agentType ?? ownerAgentType)
+    ? normalizeCompatibleAgentTitleForOwner(
+        entry.terminalTitle,
+        agentType ?? ownerAgentType,
+        options
+      )
     : entry.terminalTitle
   if (agentType === entry.agentType && terminalTitle === entry.terminalTitle) {
     return entry
@@ -195,4 +183,20 @@ export function normalizeCompatibleAgentStatusEntryForOwner(
     ...(agentType ? { agentType } : {}),
     ...(terminalTitle ? { terminalTitle } : {})
   }
+}
+
+/** Returns whether two agents share the same title identity group. */
+export function shareCompatibleTitleIdentityGroup(
+  left: AgentType | null | undefined,
+  right: AgentType | null | undefined
+): boolean {
+  if (!left || !right) {
+    return false
+  }
+  if (left === right) {
+    return true
+  }
+  const leftGroup = getSyntheticAgentTitleProfile(left)?.titleIdentityGroup
+  const rightGroup = getSyntheticAgentTitleProfile(right)?.titleIdentityGroup
+  return Boolean(leftGroup && leftGroup === rightGroup)
 }

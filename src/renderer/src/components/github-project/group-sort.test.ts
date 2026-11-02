@@ -1,6 +1,3 @@
-// Why: cover the bug fixes from the recent review — particularly the NaN
-// sort produced when two rows reference unknown single-select option IDs or
-// unknown iteration IDs, and the empty-group ordering invariant.
 import { describe, expect, it } from 'vitest'
 import type {
   GitHubProjectField,
@@ -8,8 +5,8 @@ import type {
   GitHubProjectSort,
   GitHubProjectTable,
   GitHubProjectView
-} from '../../../../shared/github-project-types'
-import { sortRows, groupRows } from '../../../../shared/github-project-group-sort'
+} from '../../../../shared/github/project-types'
+import { sortRows, groupRows } from '../../../../shared/github/project-group-sort'
 
 const singleSelectField: GitHubProjectField = {
   kind: 'single-select',
@@ -31,6 +28,34 @@ const iterationField: GitHubProjectField = {
     { id: 'iter_1', title: 'Sprint 1', startDate: '2026-01-01', duration: 14, completed: false },
     { id: 'iter_2', title: 'Sprint 2', startDate: '2026-01-15', duration: 14, completed: false }
   ]
+}
+
+const assigneesField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_assignees',
+  name: 'Assignees',
+  dataType: 'ASSIGNEES'
+}
+
+const labelsField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_labels',
+  name: 'Labels',
+  dataType: 'LABELS'
+}
+
+const textField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_text',
+  name: 'Notes',
+  dataType: 'TEXT'
+}
+
+const numberField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_points',
+  name: 'Story Points',
+  dataType: 'NUMBER'
 }
 
 function makeRow(
@@ -122,9 +147,7 @@ describe('sortRows', () => {
   })
 
   it('does not produce NaN when both rows reference unknown single-select options', () => {
-    // Why: this was the bug — `Infinity - Infinity = NaN` made sort()'s
-    // behavior implementation-defined and skipped the row.position
-    // tie-break. Two orphaned rows must still fall through to position.
+    // Avoid Infinity - Infinity producing NaN and bypassing the position tie-break for orphaned options.
     const view = makeView(singleSelectField, {
       direction: 'ASC',
       field: singleSelectField
@@ -150,7 +173,6 @@ describe('sortRows', () => {
       })
     ]
     const sorted = sortRows(makeTable(view, rows), rows)
-    // After tie-break by position, rA (position=1) precedes rB (position=5).
     expect(sorted.map((r) => r.id)).toEqual(['rA', 'rB'])
   })
 
@@ -206,6 +228,65 @@ describe('sortRows', () => {
     expect(sorted.map((r) => r.id)).toEqual(['rHas', 'rEmpty'])
   })
 
+  it('sorts an empty user list last in both directions, like a missing value', () => {
+    const rows = [
+      makeRow('empty-list', 0, {
+        F_assignees: { kind: 'users', fieldId: 'F_assignees', users: [] }
+      }),
+      makeRow('alice', 1, {
+        F_assignees: {
+          kind: 'users',
+          fieldId: 'F_assignees',
+          users: [{ login: 'alice', name: null, avatarUrl: null }]
+        }
+      }),
+      makeRow('no-value', 2, {})
+    ]
+
+    for (const direction of ['ASC', 'DESC'] as const) {
+      const view = makeView(assigneesField, { direction, field: assigneesField })
+      const sorted = sortRows(makeTable(view, rows), rows)
+      expect(sorted.map((r) => r.id)).toEqual(['alice', 'empty-list', 'no-value'])
+    }
+  })
+
+  it('sorts an empty label list last in both directions, like a missing value', () => {
+    const rows = [
+      makeRow('empty-list', 0, {
+        F_labels: { kind: 'labels', fieldId: 'F_labels', labels: [] }
+      }),
+      makeRow('bug', 1, {
+        F_labels: {
+          kind: 'labels',
+          fieldId: 'F_labels',
+          labels: [{ name: 'bug', color: 'ff0000' }]
+        }
+      }),
+      makeRow('no-value', 2, {})
+    ]
+
+    for (const direction of ['ASC', 'DESC'] as const) {
+      const view = makeView(labelsField, { direction, field: labelsField })
+      const sorted = sortRows(makeTable(view, rows), rows)
+      expect(sorted.map((r) => r.id)).toEqual(['bug', 'empty-list', 'no-value'])
+    }
+  })
+
+  it('sorts a blank text value last in both directions, like a missing value', () => {
+    // Why reachable: the normalizer turns a null GitHub text/date into ''.
+    const rows = [
+      makeRow('blank', 0, { F_text: { kind: 'text', fieldId: 'F_text', text: '' } }),
+      makeRow('alpha', 1, { F_text: { kind: 'text', fieldId: 'F_text', text: 'alpha' } }),
+      makeRow('no-value', 2, {})
+    ]
+
+    for (const direction of ['ASC', 'DESC'] as const) {
+      const view = makeView(textField, { direction, field: textField })
+      const sorted = sortRows(makeTable(view, rows), rows)
+      expect(sorted.map((r) => r.id)).toEqual(['alpha', 'blank', 'no-value'])
+    }
+  })
+
   it('keeps sort fallback finite when row positions are absent', () => {
     const view = makeView(singleSelectField)
     const rows = [
@@ -220,6 +301,43 @@ describe('sortRows', () => {
 })
 
 describe('groupRows', () => {
+  it('groups a present-but-empty user list with the missing-value rows', () => {
+    const view = { ...makeView(assigneesField), groupByFields: [assigneesField] }
+    const rows = [
+      makeRow('empty-list', 0, {
+        F_assignees: { kind: 'users', fieldId: 'F_assignees', users: [] }
+      }),
+      makeRow('alice', 1, {
+        F_assignees: {
+          kind: 'users',
+          fieldId: 'F_assignees',
+          users: [{ login: 'alice', name: null, avatarUrl: null }]
+        }
+      }),
+      makeRow('no-value', 2, {})
+    ]
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => [group.label, group.rows.map((r) => r.id)])).toEqual([
+      ['alice', ['alice']],
+      ['No Assignees', ['empty-list', 'no-value']]
+    ])
+  })
+
+  it('orders number-field groups by value, not by the rendered label', () => {
+    const view = { ...makeView(numberField), groupByFields: [numberField] }
+    const rows = [8, 10, -2, 2, -10, 1].map((points, index) =>
+      makeRow(`p${index}`, index, {
+        F_points: { kind: 'number', fieldId: 'F_points', number: points }
+      })
+    )
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => group.label)).toEqual(['-10', '-2', '1', '2', '8', '10'])
+  })
+
   it('places the empty group last', () => {
     const view = {
       ...makeView(singleSelectField),
@@ -239,5 +357,88 @@ describe('groupRows', () => {
     ]
     const groups = groupRows(makeTable(view, rows), rows)
     expect(groups.map((g) => g.key)).toEqual(['opt_a', '__empty__'])
+  })
+})
+
+it('indexes field ordering once for grouping and sorting a large project table', () => {
+  let reads = 0
+  const field: GitHubProjectField = {
+    kind: 'single-select',
+    id: 'field',
+    name: 'Status',
+    dataType: 'SINGLE_SELECT',
+    options: Array.from({ length: 1000 }, (_, i) => ({
+      get id() {
+        reads++
+        return `option-${i}`
+      },
+      name: String(i),
+      color: 'GRAY'
+    }))
+  }
+  const rows = Array.from({ length: 1000 }, (_, i) =>
+    makeRow(String(i), i, {
+      field: {
+        kind: 'single-select',
+        fieldId: 'field',
+        optionId: `option-${(i * 173) % 1000}`,
+        name: String((i * 173) % 1000),
+        color: 'GRAY'
+      }
+    })
+  )
+  const view = { ...makeView(field, { field, direction: 'ASC' }), groupByFields: [field] }
+  const table = makeTable(view, rows)
+  const sorted = sortRows(table, rows)
+  expect(reads).toBe(1000)
+  expect(
+    sorted.map((row) =>
+      Number(
+        row.fieldValuesByFieldId.field.kind === 'single-select' &&
+          row.fieldValuesByFieldId.field.name
+      )
+    )
+  ).toEqual(Array.from({ length: 1000 }, (_, i) => i))
+  reads = 0
+  const groups = groupRows(table, rows)
+  expect(reads).toBe(1000)
+  expect(groups.map((group) => group.key)).toEqual(
+    Array.from({ length: 1000 }, (_, i) => `option-${i}`)
+  )
+})
+
+it('uses the first iteration ordering and metadata when legacy field IDs repeat', () => {
+  const field: GitHubProjectField = {
+    kind: 'iteration',
+    id: 'iteration',
+    name: 'Iteration',
+    dataType: 'ITERATION',
+    iterations: [
+      { id: 'a', title: 'First', startDate: '2026-01-01', duration: 7, completed: true },
+      { id: 'b', title: 'Second', startDate: '2026-02-01', duration: 14, completed: false },
+      { id: 'a', title: 'Duplicate', startDate: '2026-03-01', duration: 21, completed: false }
+    ]
+  }
+  const rows = ['b', 'a'].map((id, index) =>
+    makeRow(id, index, {
+      iteration: {
+        kind: 'iteration',
+        fieldId: 'iteration',
+        iterationId: id,
+        title: id,
+        startDate: '2026-01-01',
+        duration: 7
+      }
+    })
+  )
+  const table = makeTable(
+    { ...makeView(field, { field, direction: 'ASC' }), groupByFields: [field] },
+    rows
+  )
+  expect(sortRows(table, rows).map((row) => row.id)).toEqual(['a', 'b'])
+  expect(groupRows(table, rows)[0].iteration).toEqual({
+    startDate: '2026-01-01',
+    duration: 7,
+    completed: true
   })
 })

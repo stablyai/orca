@@ -4,8 +4,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { listEnvironments } from '../../shared/runtime-environment-store'
+import {
+  listEphemeralVmRuntimes,
+  upsertEphemeralVmRuntime
+} from '../../shared/ephemeral-vm-runtime-store'
 
-const handlers = new Map<string, (_event: unknown, args: never) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
 const {
   handleMock,
   removeHandlerMock,
@@ -34,17 +38,18 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../ephemeral-vm-runtime-ssh', () => ({
+vi.mock('../ephemeral-vm/runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTarget: disconnectRuntimeOwnedSshTargetMock,
   removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock
 }))
 
-vi.mock('./runtime-environments', () => ({
+vi.mock('./runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: invalidateRuntimeEnvironmentTransportMock
 }))
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
+import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 
 const tempDirs: string[] = []
 
@@ -90,6 +95,15 @@ function makeStore(repoPath: string) {
 
 function nodeCommand(scriptPath: string): string {
   return `"${process.execPath}" "${scriptPath}"`
+}
+
+function pluginServiceWithRecipes(
+  recipes: { pluginKey: string; recipe: Record<string, unknown> }[]
+) {
+  return {
+    whenReady: vi.fn().mockResolvedValue(undefined),
+    contentPacks: { vmRecipes: { list: vi.fn(() => recipes) } }
+  }
 }
 
 describe('registerEphemeralVmHandlers', () => {
@@ -163,39 +177,130 @@ describe('registerEphemeralVmHandlers', () => {
     })
   })
 
-  it('lists the recipe catalog across local git repos', async () => {
+  it('merges approved plugin recipes while repository recipes shadow matching ids', async () => {
     const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
     writeFileSync(
       join(repoPath, 'orca.yaml'),
       [
         'environmentRecipes:',
-        '  - id: cloud-sandbox',
-        '    name: Cloud Sandbox',
-        '    create: ./scripts/start.sh',
-        '    destroy: none'
+        '  - id: shared',
+        '    name: Repository Recipe',
+        '    create: repo-create'
       ].join('\n')
     )
-
-    const store = makeStore(repoPath)
-    registerEphemeralVmHandlers(store as never)
-    const result = await handlers.get('ephemeralVm:listRecipeCatalog')?.(null, undefined as never)
-
-    expect(result).toEqual([
+    const pluginService = pluginServiceWithRecipes([
       {
-        repoId: 'repo-1',
-        repoName: 'Repo',
-        repoPath,
-        diagnostics: [],
-        recipes: [
-          {
-            id: 'cloud-sandbox',
-            name: 'Cloud Sandbox',
-            create: './scripts/start.sh',
-            destroyDisabled: true
-          }
-        ]
+        pluginKey: 'samples.recipes',
+        recipe: { id: 'shared', name: 'Plugin Shared', create: 'plugin-shared' }
+      },
+      {
+        pluginKey: 'samples.recipes',
+        recipe: { id: 'global', name: 'Plugin Global', create: 'plugin-global' }
       }
     ])
+
+    registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
+    const result = (await handlers.get('ephemeralVm:listRecipes')?.(null, {
+      repoId: 'repo-1'
+    } as never)) as { recipes: { id: string; name: string }[] }
+
+    expect(pluginService.whenReady).toHaveBeenCalled()
+    expect(result.recipes).toMatchObject([
+      { id: 'shared', name: 'Repository Recipe' },
+      { id: 'global', name: 'Plugin Global' }
+    ])
+  })
+
+  it('uses an immutable plugin recipe snapshot after the plugin is removed', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    const startPath = join(repoPath, 'start.js')
+    const destroyPath = join(repoPath, 'destroy.js')
+    writeFileSync(
+      startPath,
+      `console.log(${JSON.stringify(
+        JSON.stringify({
+          schemaVersion: 1,
+          pairingCode: makePairingCode(),
+          projectRoot: '/workspace/repo'
+        })
+      )})`
+    )
+    writeFileSync(destroyPath, "require('fs').writeFileSync('plugin-cleaned.txt', 'yes')")
+    const registrations = [
+      {
+        pluginKey: 'samples.recipes',
+        recipe: {
+          id: 'plugin-cloud',
+          name: 'Plugin Cloud',
+          create: nodeCommand(startPath),
+          destroy: nodeCommand(destroyPath)
+        }
+      }
+    ]
+    const pluginService = pluginServiceWithRecipes(registrations)
+    registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
+
+    const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
+      repoId: 'repo-1',
+      recipeId: 'plugin-cloud'
+    } as never)) as { ok: true; runtime: { id: string; recipe?: { id: string } } }
+    registrations.splice(0)
+    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: provisioned.runtime.id
+    } as never)
+
+    expect(provisioned.runtime.recipe).toMatchObject({ id: 'plugin-cloud' })
+    expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
+    expect(readFileSync(join(repoPath, 'plugin-cleaned.txt'), 'utf8')).toBe('yes')
+  })
+
+  it('never substitutes a later same-id plugin recipe for a legacy runtime', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    const pluginDestroyPath = join(repoPath, 'plugin-destroy.js')
+    writeFileSync(
+      pluginDestroyPath,
+      "require('fs').writeFileSync('plugin-destroy-ran.txt', 'unsafe')"
+    )
+    upsertEphemeralVmRuntime(userDataPath, {
+      id: 'legacy-runtime',
+      recipeId: 'shared-id',
+      repoId: 'repo-1',
+      status: 'running',
+      cleanupStatus: 'not_started',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        pairingCode: makePairingCode(),
+        projectRoot: '/workspace/repo'
+      }
+    })
+    const pluginService = pluginServiceWithRecipes([
+      {
+        pluginKey: 'samples.recipes',
+        recipe: {
+          id: 'shared-id',
+          name: 'Later Plugin Recipe',
+          create: 'create',
+          destroy: nodeCommand(pluginDestroyPath)
+        }
+      }
+    ])
+    registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
+
+    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: 'legacy-runtime'
+    } as never)
+
+    expect(cleaned).toMatchObject({
+      status: 'cleanup_failed',
+      cleanupLastError: 'Recipe not found: shared-id'
+    })
+    expect(existsSync(join(repoPath, 'plugin-destroy-ran.txt'))).toBe(false)
   })
 
   it('provisions a recipe and persists the ephemeral runtime', async () => {
@@ -362,7 +467,7 @@ describe('registerEphemeralVmHandlers', () => {
     expect(listEnvironments(userDataPath)).toEqual([])
   })
 
-  it('removes the runtime-owned SSH target on cleanup even when destroy fails', async () => {
+  it('retains the runtime-owned SSH target when destroy fails', async () => {
     const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
     const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
@@ -387,8 +492,6 @@ describe('registerEphemeralVmHandlers', () => {
         '}))'
       ].join('\n')
     )
-    // Why: a failing destroy drives the cleanup_failed branch; the runtime-owned
-    // SSH target must still be torn down so it never orphans (see Fix D).
     writeFileSync(destroyPath, 'process.exit(1)')
     writeFileSync(
       join(repoPath, 'orca.yaml'),
@@ -409,12 +512,65 @@ describe('registerEphemeralVmHandlers', () => {
 
     const cleaned = (await handlers.get('ephemeralVm:cleanup')?.(null, {
       runtimeId: provisioned.runtime.id
-    } as never)) as { status?: string; connectionMode?: string; sshTargetId?: string }
+    } as never)) as {
+      status?: string
+      cleanupLastError?: string
+      connectionMode?: string
+      sshTargetId?: string
+    }
 
     expect(cleaned).toEqual(expect.objectContaining({ status: 'cleanup_failed' }))
-    expect(removeRuntimeOwnedSshTargetMock).toHaveBeenCalledWith('runtime-ssh-orca-instance-1')
-    expect(cleaned.connectionMode).toBeUndefined()
-    expect(cleaned.sshTargetId).toBeUndefined()
+    expect(cleaned.cleanupLastError).toBeTruthy()
+    expect(removeRuntimeOwnedSshTargetMock).not.toHaveBeenCalled()
+    expect(cleaned.connectionMode).toBe('ssh')
+    expect(cleaned.sshTargetId).toBe('runtime-ssh-orca-instance-1')
+  })
+
+  it('retries hidden SSH teardown without rerunning completed provider cleanup', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    getPathMock.mockReturnValue(userDataPath)
+    upsertEphemeralVmRuntime(userDataPath, {
+      id: 'runtime-cleanup-retry',
+      recipeId: 'cloud-sandbox',
+      repoId: 'repo-1',
+      status: 'cleanup_failed',
+      cleanupStatus: 'succeeded',
+      connectionMode: 'ssh',
+      sshTargetId: 'runtime-ssh-cleanup-retry',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        connection: {
+          type: 'ssh',
+          projectRoot: '/workspace/repo',
+          target: { label: 'VM', host: 'host', port: 22, username: 'orca' }
+        }
+      }
+    })
+    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    removeRuntimeOwnedSshTargetMock.mockRejectedValueOnce(new Error('store unavailable'))
+
+    const failed = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: 'runtime-cleanup-retry'
+    } as never)
+    expect(failed).toMatchObject({
+      status: 'cleanup_failed',
+      cleanupStatus: 'succeeded',
+      sshTargetId: 'runtime-ssh-cleanup-retry'
+    })
+
+    removeRuntimeOwnedSshTargetMock.mockResolvedValue(undefined)
+    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
+      runtimeId: 'runtime-cleanup-retry'
+    } as never)
+    expect(cleaned).toMatchObject({
+      status: 'cleaned',
+      cleanupStatus: 'succeeded',
+      sshTargetId: undefined
+    })
+    expect(removeRuntimeOwnedSshTargetMock).toHaveBeenCalledTimes(2)
   })
 
   it('runs suspend and resume for an attached ephemeral VM workspace', async () => {
@@ -476,7 +632,8 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
 
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
+    const store = makeStore(repoPath)
+    registerEphemeralVmHandlers(store as never)
     const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox'
@@ -492,10 +649,11 @@ describe('registerEphemeralVmHandlers', () => {
     expect(runningResume).toEqual(expect.objectContaining({ status: 'running' }))
     expect(existsSync(join(repoPath, 'resume-mode.txt'))).toBe(false)
 
-    const suspended = await handlers.get('ephemeralVm:suspendWorkspace')?.(null, {
-      workspaceId: 'workspace-1'
-    } as never)
-    expect(suspended).toEqual(expect.objectContaining({ status: 'suspended' }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suspend reads only getRepo and getRepos, which makeStore provides.
+    await suspendEphemeralVmWorkspace(store as never, 'workspace-1')
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([
+      expect.objectContaining({ status: 'suspended' })
+    ])
     expect(readFileSync(join(repoPath, 'suspend-mode.txt'), 'utf8')).toBe('suspend')
 
     invalidateRuntimeEnvironmentTransportMock.mockImplementationOnce((environmentId: string) => {
@@ -519,53 +677,6 @@ describe('registerEphemeralVmHandlers', () => {
     expect(invalidateRuntimeEnvironmentTransportMock).toHaveBeenCalledWith(
       provisioned.environment.id
     )
-  })
-
-  it('returns a copyable cleanup command for a persisted runtime', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
-    getPathMock.mockReturnValue(userDataPath)
-    mkdirSync(join(repoPath, 'scripts'), { recursive: true })
-    const startPath = join(repoPath, 'scripts', 'start.js')
-    const cleanupPath = join(repoPath, 'scripts', 'cleanup.js')
-    writeFileSync(
-      startPath,
-      [
-        'console.log(JSON.stringify({',
-        '  schemaVersion: 1,',
-        `  pairingCode: ${JSON.stringify(makePairingCode())},`,
-        "  projectRoot: '/workspace/repo'",
-        '}))'
-      ].join('\n')
-    )
-    writeFileSync(cleanupPath, 'process.stdin.resume()\n')
-    writeFileSync(
-      join(repoPath, 'orca.yaml'),
-      [
-        'environmentRecipes:',
-        '  - id: cloud-sandbox',
-        '    name: Cloud Sandbox',
-        `    create: ${JSON.stringify(nodeCommand(startPath))}`,
-        `    destroy: ${JSON.stringify(nodeCommand(cleanupPath))}`
-      ].join('\n')
-    )
-
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
-    const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
-      repoId: 'repo-1',
-      recipeId: 'cloud-sandbox',
-      workspaceName: 'Fix Login Race'
-    } as never)) as { ok: true; runtime: { id: string } }
-    const result = await handlers.get('ephemeralVm:getCleanupCommand')?.(null, {
-      runtimeId: provisioned.runtime.id
-    } as never)
-
-    expect(result).toMatchObject({
-      runtimeId: provisioned.runtime.id,
-      cleanupDisabled: false,
-      payloadJson: expect.stringContaining('"workspaceName": "Fix Login Race"'),
-      command: expect.stringContaining(nodeCommand(cleanupPath))
-    })
   })
 
   it('streams provision logs and cancels an active provision', async () => {

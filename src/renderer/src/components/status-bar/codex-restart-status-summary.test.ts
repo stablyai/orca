@@ -34,29 +34,40 @@ describe('summarizeCodexRestartStatus', () => {
     })
   })
 
-  it('counts stale Codex sessions, tabs, and worktrees', () => {
+  it('stops offering sessions whose restart was already requested', () => {
     expect(
       summarizeCodexRestartStatus({
-        tabsByWorktree: {
-          wt1: [{ id: 'tab-1' }, { id: 'tab-2' }],
-          wt2: [{ id: 'tab-3' }]
-        },
-        ptyIdsByTabId: {
-          'tab-1': ['pty-1', 'pty-2'],
-          'tab-2': ['pty-3'],
-          'tab-3': ['pty-4']
-        },
+        tabsByWorktree: { wt1: [{ id: 'tab-1' }] },
+        ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] },
         codexRestartNoticeByPtyId: {
-          'pty-1': { previousAccountLabel: 'a', nextAccountLabel: 'b' },
-          'pty-2': { previousAccountLabel: 'a', nextAccountLabel: 'b' },
-          'pty-4': { previousAccountLabel: 'a', nextAccountLabel: 'b' }
+          'pty-1': { previousAccountLabel: 'a', nextAccountLabel: 'b', restartRequested: true },
+          'pty-2': { previousAccountLabel: 'a', nextAccountLabel: 'b' }
         }
       })
     ).toEqual({
-      stalePtyIds: ['pty-1', 'pty-2', 'pty-4'],
-      staleSessionCount: 3,
-      staleTabCount: 2,
-      staleWorktreeCount: 2
+      stalePtyIds: ['pty-2'],
+      staleSessionCount: 1,
+      staleTabCount: 1,
+      staleWorktreeCount: 1
+    })
+  })
+
+  it('stops offering sessions the user chose to keep on the old account', () => {
+    expect(
+      summarizeCodexRestartStatus({
+        tabsByWorktree: { wt1: [{ id: 'tab-1' }] },
+        ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] },
+        codexRestartNoticeByPtyId: {
+          // Why: the dismissed record survives only as launch-account memory.
+          'pty-1': { previousAccountLabel: 'a', nextAccountLabel: 'b', dismissed: true },
+          'pty-2': { previousAccountLabel: 'a', nextAccountLabel: 'b' }
+        }
+      })
+    ).toEqual({
+      stalePtyIds: ['pty-2'],
+      staleSessionCount: 1,
+      staleTabCount: 1,
+      staleWorktreeCount: 1
     })
   })
 })

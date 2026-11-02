@@ -1,7 +1,3 @@
-// Settings-search entries for the Privacy pane. Kept in its own file to
-// mirror the other per-pane search modules (notifications-search.ts,
-// terminal-search.ts, etc.) and keep Settings.tsx imports uniform.
-
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'

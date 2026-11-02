@@ -1,19 +1,17 @@
+// Site prompts live in browser-site-permission-prompt.ts; other unlisted permissions are denied.
 const AUTO_GRANTED_BROWSER_PERMISSIONS = new Set([
   'fullscreen',
-  // Agent-browser clipboard commands execute via CDP in this session; denying
-  // them breaks trusted runtime commands even when invoked with a user gesture.
-  'clipboard-read',
   'clipboard-sanitized-write',
-  // User-opened browser pages need these profile-scoped grants to complete
-  // normal site flows like web push setup and durable app storage.
-  'notifications',
-  // Chromium can request this at runtime even though Electron's TS union does
-  // not list it; chatgpt.com uses it to keep browser storage from eviction.
+  // Chromium requests this even though Electron's permission union omits it.
   'persistent-storage',
-  // Chromium still requires user activation, so this only removes Orca's
-  // otherwise unactionable denial for immersive browser apps.
-  'pointerLock'
+  // Chromium still requires user activation for pointer lock.
+  'pointerLock',
+  // Match Orca's unpartitioned third-party cookie policy; request and check must agree.
+  // This also grants unpartitioned localStorage/IndexedDB handles, unlike ambient globals.
+  // Revisit if partitioning becomes configurable: Electron does not persist a STORAGE_ACCESS grant.
+  'storage-access'
 ])
+// Top-level storage access requires Related Website Sets, which Orca does not supply.
 
 export function isAutoGrantedBrowserSessionPermission(permission: string): boolean {
   return AUTO_GRANTED_BROWSER_PERMISSIONS.has(permission)

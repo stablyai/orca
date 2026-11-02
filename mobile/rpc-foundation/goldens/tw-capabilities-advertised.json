@@ -1,0 +1,99 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "tasks.worktree-capabilities",
+  "family": "worktree.runtime-capabilities",
+  "namedDeltas": [],
+  "values": {
+    "216adda2100c": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["mobile.tasks.v1", "worktree.create-idempotency.v1"],
+            "platform": "linux",
+            "worktreeCreateIdempotency": {
+              "dedupeTtlMs": 45000
+            }
+          }
+        }
+      }
+    },
+    "456a1f9383e3": {
+      "capabilities": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "b62568733b13": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    }
+  },
+  "recording": {
+    "scenario": "tw-capabilities-advertised",
+    "checkpoints": [
+      {
+        "id": "probed",
+        "observation": {
+          "sender": ["216adda2100c"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "probe": "b62568733b13"
+          },
+          "state": "456a1f9383e3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

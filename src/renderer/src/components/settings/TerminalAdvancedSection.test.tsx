@@ -3,14 +3,16 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal-word-separator'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, defaultValue: string) => defaultValue
 }))
 
-describe('TerminalAdvancedSection scrollback rows', () => {
+describe('TerminalAdvancedSection', () => {
   let container: HTMLDivElement
   let root: Root
 
@@ -26,11 +28,11 @@ describe('TerminalAdvancedSection scrollback rows', () => {
     document.body.replaceChildren()
   })
 
-  function renderSection(updateSettings = vi.fn()): void {
+  function renderSection(updateSettings = vi.fn(), overrides: Partial<GlobalSettings> = {}): void {
     act(() => {
       root.render(
         <TerminalAdvancedSection
-          settings={{ terminalScrollbackRows: 5000 } as GlobalSettings}
+          settings={{ ...getDefaultSettings('/tmp'), terminalScrollbackRows: 5000, ...overrides }}
           updateSettings={updateSettings}
           scrollbackMode="custom"
           setScrollbackMode={vi.fn()}
@@ -102,5 +104,24 @@ describe('TerminalAdvancedSection scrollback rows', () => {
 
     expect(updateSettings).toHaveBeenCalledWith({ terminalScrollbackRows: 12345 })
     expect(input.value).toBe('12345')
+  })
+
+  it('shows the no-space hint for a custom separator and resets to the default', () => {
+    const updateSettings = vi.fn()
+    renderSection(updateSettings, { terminalWordSeparator: '()[]' })
+
+    const input = container.querySelector<HTMLInputElement>('input:not([type])')
+    expect(input?.value).toBe('()[]')
+    expect(container.textContent).toContain('No space included')
+
+    const reset = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Reset')
+    act(() => reset?.click())
+
+    expect(updateSettings).toHaveBeenCalledWith({ terminalWordSeparator: undefined })
+    expect(input?.value).toBe(TERMINAL_DEFAULT_WORD_SEPARATOR)
+    expect(container.textContent).not.toContain('No space included')
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Reset')).toBe(
+      false
+    )
   })
 })

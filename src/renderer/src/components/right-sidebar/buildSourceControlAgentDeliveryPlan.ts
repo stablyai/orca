@@ -1,28 +1,30 @@
-import { planSourceControlAgentActionLaunch } from '@/lib/source-control-agent-action-plan'
+import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { checkSourceControlAgentActionLaunch } from '@/lib/source-control-agent-action-launch-check'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
-import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
 
 type BuildSourceControlAgentDeliveryPlanArgs = {
+  settings?: GlobalSettings | null
+  agentLaunchPreferences?: AgentLaunchPreferences
   selectedAgent: TuiAgent | null
   commandInput: string
-  agentArgs: string
-  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
+  agentArgs?: string | undefined
   detectedAgents: TuiAgent[]
   connectionUnavailable: boolean
   launchPlatform?: NodeJS.Platform
-  /** Why: keep the previewed command label in sync with the real remote launch,
-   * which omits the Linux-only `orca-ide` rename for SSH hosts. */
+  /** SSH uses the plain orca shim; validate the command that host will run. */
   isRemote?: boolean
 }
 
 export function buildSourceControlAgentDeliveryPlan({
+  settings = useAppStore.getState().settings,
+  agentLaunchPreferences,
   selectedAgent,
   commandInput,
   agentArgs,
-  promptDelivery,
   detectedAgents,
   connectionUnavailable,
   launchPlatform,
@@ -31,31 +33,16 @@ export function buildSourceControlAgentDeliveryPlan({
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
   }
-  const result = planSourceControlAgentActionLaunch({
+  const result = checkSourceControlAgentActionLaunch({
     agent: selectedAgent,
     commandInput,
     agentArgs,
-    sessionOptions: selectedAgent
-      ? resolveNativeChatSessionOptionDefaults(
-          useAppStore.getState().settings?.nativeChatSessionOptions,
-          selectedAgent
-        )
-      : undefined,
-    promptDelivery,
     detectedAgents,
-    disabledAgents: useAppStore.getState().settings?.disabledTuiAgents,
-    cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides,
-    terminalWindowsShell: useAppStore.getState().settings?.terminalWindowsShell,
+    disabledAgents: (agentLaunchPreferences ?? settings)?.disabledTuiAgents,
+    cmdOverrides: settings?.agentCmdOverrides,
+    terminalWindowsShell: settings?.terminalWindowsShell,
     platform: launchPlatform,
     isRemote
   })
-  if (!result.ok) {
-    return { status: 'error', error: result.error }
-  }
-  return {
-    status: 'success',
-    summary: result.summary,
-    commandLabel: result.commandLabel,
-    caveat: result.caveat
-  }
+  return result.ok ? { status: 'idle' } : { status: 'error', error: result.error }
 }

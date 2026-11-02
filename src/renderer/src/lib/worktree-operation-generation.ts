@@ -1,6 +1,9 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
-import { getEnvironmentSshTargetConnectionGeneration } from '@/store/slices/runtime-environment-ssh'
+import { authorityKey, type HostAuthority } from '../../../shared/host-authority'
+import {
+  getEnvironmentSshStateGeneration,
+  getEnvironmentSshTargetConnectionGeneration
+} from '@/store/slices/runtime-environment-ssh'
 import { getLocalSshTargetConnectionGeneration } from '@/store/slices/ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -17,6 +20,7 @@ export type WorktreeOperationGenerationGuard = {
 
 export type WorktreeOperationGenerationSnapshot = {
   route: WorktreeOperationRoute
+  authority?: HostAuthority
   runtimeConnectionGeneration: number | null
   runtimePairingRevision: number | undefined
   runtimeSshGeneration: number | null
@@ -25,12 +29,14 @@ export type WorktreeOperationGenerationSnapshot = {
 }
 
 export function captureWorktreeOperationGenerationSnapshot(
-  expectedRoute: WorktreeOperationRoute
+  expectedRoute: WorktreeOperationRoute,
+  authority?: HostAuthority
 ): WorktreeOperationGenerationSnapshot {
   const environmentId = expectedRoute.runtimeEnvironmentId
-  const executionHost = parseExecutionHostId(expectedRoute.executionHostId)
+  const executionHost = parseExecutionHostId(authority?.at ?? expectedRoute.executionHostId)
   return {
     route: expectedRoute,
+    ...(authority ? { authority: { endpoint: { ...authority.endpoint }, at: authority.at } } : {}),
     runtimeConnectionGeneration: environmentId
       ? getRuntimeEnvironmentConnectionGeneration(environmentId)
       : null,
@@ -54,15 +60,21 @@ export function assertWorktreeOperationGenerationSnapshotCurrent(
   worktreeId: string,
   snapshot: WorktreeOperationGenerationSnapshot,
   createError: () => Error,
-  resolveCurrentRoute?: () => WorktreeOperationRoute | null
+  resolveCurrentRoute?: () => WorktreeOperationRoute | null,
+  resolveCurrentAuthority?: () => HostAuthority | undefined
 ): WorktreeOperationRoute {
   const environmentId = snapshot.route.runtimeEnvironmentId
-  const executionHost = parseExecutionHostId(snapshot.route.executionHostId)
+  const executionHost = parseExecutionHostId(
+    snapshot.authority?.at ?? snapshot.route.executionHostId
+  )
   const currentRoute = resolveCurrentRoute
     ? resolveCurrentRoute()
     : resolveWorktreeOperationRoute(getState(), worktreeId)
+  const currentAuthority = snapshot.authority ? resolveCurrentAuthority?.() : undefined
   if (
     JSON.stringify(currentRoute) !== JSON.stringify(snapshot.route) ||
+    (snapshot.authority &&
+      (!currentAuthority || authorityKey(currentAuthority) !== authorityKey(snapshot.authority))) ||
     (environmentId &&
       getRuntimeEnvironmentConnectionGeneration(environmentId) !==
         snapshot.runtimeConnectionGeneration) ||

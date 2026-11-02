@@ -18,10 +18,10 @@ const SNAPSHOT = {
 
 describe('remote runtime session-tabs in-flight requests', () => {
   it('shares one request within an environment/worktree and evicts it after settlement', async () => {
-    let resolveLoad: (snapshot: RuntimeMobileSessionTabsResult) => void = () => {}
+    let resolveLoad: (answer: { snapshot: RuntimeMobileSessionTabsResult }) => void = () => {}
     const load = vi.fn(
       () =>
-        new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
+        new Promise<{ snapshot: RuntimeMobileSessionTabsResult }>((resolve) => {
           resolveLoad = resolve
         })
     )
@@ -32,11 +32,17 @@ describe('remote runtime session-tabs in-flight requests', () => {
 
     expect(load).toHaveBeenCalledOnce()
     expect(getRemoteRuntimeSessionTabsInFlightCountForTests()).toBe(1)
-    resolveLoad(SNAPSHOT)
-    await expect(Promise.all([first, second])).resolves.toEqual([SNAPSHOT, SNAPSHOT])
+    resolveLoad({ snapshot: SNAPSHOT })
+    // Why: a joiner inherits the request's receipt position instead of minting a newer one.
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { snapshot: SNAPSHOT, receivedFrame: expect.any(Number) },
+      { snapshot: SNAPSHOT, receivedFrame: expect.any(Number) }
+    ])
+    const [firstAnswer, secondAnswer] = await Promise.all([first, second])
+    expect(firstAnswer.receivedFrame).toBe(secondAnswer.receivedFrame)
     expect(getRemoteRuntimeSessionTabsInFlightCountForTests()).toBe(0)
 
-    const followupLoad = vi.fn(async () => SNAPSHOT)
+    const followupLoad = vi.fn(async () => ({ snapshot: SNAPSHOT }))
     await listRemoteRuntimeSessionTabsDeduped({
       ...args,
       load: followupLoad
@@ -46,7 +52,7 @@ describe('remote runtime session-tabs in-flight requests', () => {
   })
 
   it('does not share requests across runtime or worktree ownership boundaries', async () => {
-    const load = vi.fn(async () => SNAPSHOT)
+    const load = vi.fn(async () => ({ snapshot: SNAPSHOT }))
 
     await Promise.all([
       listRemoteRuntimeSessionTabsDeduped({
@@ -70,17 +76,17 @@ describe('remote runtime session-tabs in-flight requests', () => {
   })
 
   it('waits out an older request before sharing a post-operation inventory', async () => {
-    let resolveCurrent: (snapshot: RuntimeMobileSessionTabsResult) => void = () => {}
+    let resolveCurrent: (answer: { snapshot: RuntimeMobileSessionTabsResult }) => void = () => {}
     const currentLoad = vi.fn(
       () =>
-        new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
+        new Promise<{ snapshot: RuntimeMobileSessionTabsResult }>((resolve) => {
           resolveCurrent = resolve
         })
     )
-    let resolveFresh: (snapshot: RuntimeMobileSessionTabsResult) => void = () => {}
+    let resolveFresh: (answer: { snapshot: RuntimeMobileSessionTabsResult }) => void = () => {}
     const freshLoad = vi.fn(
       () =>
-        new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
+        new Promise<{ snapshot: RuntimeMobileSessionTabsResult }>((resolve) => {
           resolveFresh = resolve
         })
     )
@@ -97,11 +103,15 @@ describe('remote runtime session-tabs in-flight requests', () => {
     })
 
     expect(freshLoad).not.toHaveBeenCalled()
-    resolveCurrent(SNAPSHOT)
-    await expect(current).resolves.toBe(SNAPSHOT)
+    resolveCurrent({ snapshot: SNAPSHOT })
+    await expect(current.then((answer) => answer.snapshot)).resolves.toBe(SNAPSHOT)
     await vi.waitFor(() => expect(freshLoad).toHaveBeenCalledOnce())
-    resolveFresh({ ...SNAPSHOT, snapshotVersion: 2 })
-    await expect(Promise.all([firstFresh, secondFresh])).resolves.toEqual([
+    resolveFresh({ snapshot: { ...SNAPSHOT, snapshotVersion: 2 } })
+    await expect(
+      Promise.all([firstFresh, secondFresh]).then((answers) =>
+        answers.map((answer) => answer.snapshot)
+      )
+    ).resolves.toEqual([
       { ...SNAPSHOT, snapshotVersion: 2 },
       { ...SNAPSHOT, snapshotVersion: 2 }
     ])

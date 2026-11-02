@@ -1,6 +1,6 @@
 import type React from 'react'
 import { AppWindow } from 'lucide-react'
-import type { OpenInApplication } from '../../../shared/types'
+import type { OpenInApplication } from '../../../shared/ui-chrome-types'
 import { cn } from './utils'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -33,6 +33,13 @@ export const getOpenInAppPresets = createLocalizedCatalog(() => [
     faviconDomain: 'zed.dev',
     // Why: Zed's favicon is a black transparent mark, which disappears on dark menus.
     iconClassName: 'dark:invert'
+  },
+  {
+    id: 'devin-desktop',
+    label: translate('settings.openInApp.preset.devinDesktop', 'Devin Desktop'),
+    // Why: Devin Desktop (formerly Windsurf) installs this launcher; `devin` is the Devin CLI agent.
+    command: 'devin-desktop',
+    faviconDomain: 'devin.ai'
   }
 ])
 

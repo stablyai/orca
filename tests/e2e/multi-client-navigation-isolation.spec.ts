@@ -1,5 +1,8 @@
+import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -174,5 +177,188 @@ test('keeps two paired browser clients and the host on independent worktrees', a
   } finally {
     await clientB?.close()
     await clientA?.close()
+  }
+})
+
+test('keeps a paired client workspace create-with-agent off the other client and the host', async ({
+  orcaPage,
+  electronApp,
+  testRepoPath
+}) => {
+  const suffix = randomUUID().slice(0, 8)
+  const branchA = `e2e-create-a-${suffix}`
+  const branchB = `e2e-create-b-${suffix}`
+  addGitWorktree(testRepoPath, branchA)
+  addGitWorktree(testRepoPath, branchB)
+
+  await expect
+    .poll(() => loadTestWorktreeIds(orcaPage, branchA, branchB), {
+      timeout: 30_000,
+      message: 'Expected host plus client-selectable worktrees'
+    })
+    .not.toBeNull()
+  const ids = await loadTestWorktreeIds(orcaPage, branchA, branchB)
+  if (!ids) {
+    throw new Error('Test worktrees disappeared after discovery')
+  }
+
+  await selectWorktree(orcaPage, ids.host)
+
+  let clientA: Page | null = null
+  let clientB: Page | null = null
+  try {
+    const offerA = await createPairingOffer(orcaPage)
+    clientA = await openPairedClient(electronApp, offerA, ids.clientA)
+    await selectWorktree(clientA, ids.clientA)
+
+    const offerB = await createPairingOffer(orcaPage)
+    clientB = await openPairedClient(electronApp, offerB, ids.clientB)
+    await selectWorktree(clientB, ids.clientB)
+
+    // A startup-command create is the remote shape sent with activate:true (STA-2802).
+    const createdWorktreeId = await clientA.evaluate(async (name) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('paired client store unavailable')
+      }
+      const state = store.getState()
+      const repoId = state
+        .allWorktrees()
+        .find((worktree) => worktree.id === state.activeWorktreeId)?.repoId
+      if (!repoId) {
+        throw new Error('active worktree has no repo')
+      }
+      const result = await state.createWorktree(
+        repoId,
+        name,
+        undefined,
+        'skip',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { command: 'echo sta-2802-startup' }
+      )
+      return result.worktree.id
+    }, `e2e-created-${suffix}`)
+
+    await expect(worktreeRow(clientB, createdWorktreeId)).toBeVisible({ timeout: 30_000 })
+    await expectActiveWorktree(clientB, ids.clientB)
+    await expectActiveWorktree(orcaPage, ids.host)
+
+    // Drive creator selection directly; worktree-creation-flow.test.ts and worktree.spec.ts cover composer auto-navigation.
+    await selectWorktree(clientA, createdWorktreeId)
+    await expectActiveWorktree(clientB, ids.clientB)
+    await expectActiveWorktree(orcaPage, ids.host)
+
+    await selectWorktree(clientB, ids.clientA2)
+    await expectActiveWorktree(clientA, createdWorktreeId)
+    await expectActiveWorktree(orcaPage, ids.host)
+  } finally {
+    await clientB?.close()
+    await clientA?.close()
+  }
+})
+
+test('shows only provider-backed creation actions in paired web', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
+  const visibleWorktreeId = await orcaPage.evaluate(
+    () => window.__store?.getState().activeWorktreeId
+  )
+  if (!visibleWorktreeId) {
+    throw new Error('Host worktree was not active before paired web validation')
+  }
+
+  const offer = await createPairingOffer(orcaPage)
+  const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
+  try {
+    await selectWorktree(client, visibleWorktreeId)
+    await expect
+      .poll(() =>
+        client.evaluate(() => {
+          const state = window.__store?.getState()
+          if (!state) {
+            return false
+          }
+          const worktree = state
+            .allWorktrees()
+            .find((candidate) => candidate.id === state.activeWorktreeId)
+          const environmentId = worktree?.runtimeOwnerEnvironmentId
+          return environmentId
+            ? state.runtimeStatusByEnvironmentId
+                .get(environmentId)
+                ?.status?.capabilities?.includes('browser.screencast.v1') === true
+            : false
+        })
+      )
+      .toBe(true)
+
+    await client.getByRole('button', { name: 'New tab' }).first().click()
+    await expect(client.getByRole('menuitem', { name: /New Terminal/i })).toBeVisible()
+    await expect(client.getByRole('menuitem', { name: /New Browser Tab/i })).toBeVisible()
+    await expect(client.getByRole('menuitem', { name: /New Markdown/i })).toBeVisible()
+    await expect(client.getByRole('menuitem', { name: /Mobile Emulator/i })).toHaveCount(0)
+
+    const screenshotPath = testInfo.outputPath('paired-web-provider-backed-create-menu.png')
+    await client.screenshot({ path: screenshotPath })
+    await testInfo.attach('paired-web-provider-backed-create-menu', {
+      path: screenshotPath,
+      contentType: 'image/png'
+    })
+  } finally {
+    await client.close()
+  }
+})
+
+test('routes Add Project folder browsing through the paired host', async ({
+  electronApp,
+  orcaPage,
+  registerPostElectronShutdownCleanup
+}) => {
+  const hostFolder = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-web-folder-'))
+  const folderName = path.basename(hostFolder)
+  registerPostElectronShutdownCleanup(async () => {
+    rmSync(hostFolder, { recursive: true, force: true })
+  })
+  const visibleWorktreeId = await orcaPage.evaluate(
+    () => window.__store?.getState().activeWorktreeId
+  )
+  if (!visibleWorktreeId) {
+    throw new Error('Host worktree was not active before paired web validation')
+  }
+
+  const offer = await createPairingOffer(orcaPage)
+  const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
+  try {
+    await openSidebarProjectDialog(client)
+    const addDialog = client.getByRole('dialog', { name: /Add a project/i })
+    await expect(addDialog).toBeVisible()
+    await expect(addDialog).not.toContainText('Local Mac')
+
+    await addDialog.getByRole('button', { name: /Browse folder/i }).click()
+    const browser = client.getByRole('dialog', { name: /Browse host filesystem/i })
+    await expect(browser).toBeVisible()
+    await expect(browser.getByRole('button', { name: /Select folder/i })).toBeVisible()
+    await browser.getByRole('button', { name: /^Cancel$/i }).click()
+
+    const manualPathDialog = client.getByRole('dialog', { name: /Open host project/i })
+    await manualPathDialog.locator('#server-project-path').fill(hostFolder)
+    await manualPathDialog.getByRole('button', { name: /Open as Folder/i }).click()
+    await expect(manualPathDialog).toBeHidden({ timeout: 30_000 })
+    await expect(
+      client.locator('[data-worktree-sidebar]').getByText(folderName, { exact: true }).first()
+    ).toBeVisible({ timeout: 30_000 })
+  } finally {
+    await client.close()
   }
 })

@@ -1,40 +1,32 @@
 import { Terminal } from '@xterm/headless'
-import { describe, expect, it } from 'vitest'
-import { isTerminalQueryReply } from './terminal-query-reply'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  extractOnlyCookedEchoSafeQueryReplies,
+  extractOnlyTerminalQueryReplies,
+  isTerminalQueryReply,
+  needsCookedEchoSafeQueryReply
+} from './terminal-query-reply'
+import { PtyStartupIngress } from './pty-startup-ingress'
 
 describe('isTerminalQueryReply', () => {
-  it('matches synthetic query replies that must be sent immediately', () => {
-    // CPR cursor position report (answer to CSI 6n) — the #7329 culprit.
-    expect(isTerminalQueryReply('\x1b[3;1R')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[22;1R')).toBe(true)
-    // DSR device status.
-    expect(isTerminalQueryReply('\x1b[0n')).toBe(true)
-    // DA1/DA2/DA3 device attributes.
-    expect(isTerminalQueryReply('\x1b[?1;2c')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[?61;4c')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[>0;276;0c')).toBe(true)
-    // Window/cell pixel-size reports.
-    expect(isTerminalQueryReply('\x1b[6;16;8t')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[4;384;640t')).toBe(true)
-    // DECRPM mode report — private (with ?) and ANSI (without ?).
-    expect(isTerminalQueryReply('\x1b[?2026;2$y')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[4;1$y')).toBe(true)
-    // OSC 10/11 color responses (the #7329 culprit) — BEL and ST terminated.
-    expect(isTerminalQueryReply('\x1b]11;rgb:2828/2c2c/3434\x1b\\')).toBe(true)
-    expect(isTerminalQueryReply('\x1b]10;rgb:c0c0/c0c0/c0c0\x07')).toBe(true)
-    // DECXCPR extended cursor position report (answer to CSI ? 6n).
-    expect(isTerminalQueryReply('\x1b[?12;5R')).toBe(true)
-    // Text-area size in characters (answer to CSI 18t).
-    expect(isTerminalQueryReply('\x1b[8;24;80t')).toBe(true)
-    // Kitty keyboard flags report (answer to CSI ? u) — crossterm probes this
-    // at startup, so a debounced reply corrupts the same way CPR did.
-    expect(isTerminalQueryReply('\x1b[?0u')).toBe(true)
-    expect(isTerminalQueryReply('\x1b[?31u')).toBe(true)
-    // DCS DECRQSS reports (vim queries cursor style via DCS $ q) + XTVERSION.
-    expect(isTerminalQueryReply('\x1bP1$r2 q\x1b\\')).toBe(true)
-    expect(isTerminalQueryReply('\x1bP1$r0m\x1b\\')).toBe(true)
-    expect(isTerminalQueryReply('\x1bP0$r\x1b\\')).toBe(true)
-    expect(isTerminalQueryReply('\x1bP>|xterm.js(5.6.0)\x1b\\')).toBe(true)
+  it('routes complete Kitty graphics acknowledgements as replies', () => {
+    const ok = '\x1b_Gi=31;OK\x1b\\'
+    const error = '\x1b_Gi=31,p=2;ENOENT:image not found\x1b\\'
+    expect(isTerminalQueryReply(ok)).toBe(true)
+    expect(isTerminalQueryReply(error)).toBe(true)
+    expect(extractOnlyTerminalQueryReplies(ok + error)).toEqual([ok, error])
+    expect(needsCookedEchoSafeQueryReply(ok)).toBe(false)
+    for (const input of [
+      '\x1b_',
+      '\x1b_Gi=31;OK',
+      '\x1b_Gi=31;OK\x07',
+      '\x1b_Gi=31;hello\x1b\\',
+      '\x1b_Ga=q,i=31;AAAA\x1b\\',
+      `${ok}typed`
+    ]) {
+      expect(isTerminalQueryReply(input)).toBe(false)
+      expect(extractOnlyTerminalQueryReplies(input)).toBeNull()
+    }
   })
 
   it('classifies the fully framed XTVERSION reply emitted by real xterm', async () => {
@@ -54,11 +46,34 @@ describe('isTerminalQueryReply', () => {
     }
   })
 
-  it('documents the accepted modified-F3/CPR collision', () => {
-    // xterm.js encodes Shift+F3 as CSI 1;2R — byte-identical to a CPR report.
-    // Classified as a reply on purpose: order is still preserved (the immediate
-    // path flushes pending input first); see the comment in terminal-query-reply.ts.
-    expect(isTerminalQueryReply('\x1b[1;2R')).toBe(true)
+  it('routes only cooked-echo-risk replies through the ECHO-safe write path', () => {
+    // Color-scheme private DSR + OSC color — cooked prompt paint risk (#13137).
+    expect(needsCookedEchoSafeQueryReply('\x1b[?997;1n')).toBe(true)
+    expect(needsCookedEchoSafeQueryReply('\x1b[?997;2n')).toBe(true)
+    expect(needsCookedEchoSafeQueryReply('\x1b]11;rgb:00/00/00\x07')).toBe(true)
+    // Latency-critical CPR / public DSR / DA stay immediate (#7329).
+    expect(needsCookedEchoSafeQueryReply('\x1b[3;1R')).toBe(false)
+    expect(needsCookedEchoSafeQueryReply('\x1b[0n')).toBe(false)
+    expect(needsCookedEchoSafeQueryReply('\x1b[?1;2c')).toBe(false)
+    // Ordinary input must never take the echo-safe reply path.
+    expect(needsCookedEchoSafeQueryReply('y')).toBe(false)
+    expect(needsCookedEchoSafeQueryReply('\x1b[A')).toBe(false)
+    // Dual-answerer coalesced payload is not a single reply — use extract.
+    expect(needsCookedEchoSafeQueryReply('\x1b[?997;1n\x1b[?997;1n')).toBe(false)
+    expect(extractOnlyCookedEchoSafeQueryReplies('\x1b[?997;1n\x1b[?997;1n')).toEqual([
+      '\x1b[?997;1n',
+      '\x1b[?997;1n'
+    ])
+    expect(extractOnlyCookedEchoSafeQueryReplies('\x1b[?997;1ny')).toBe(null)
+    expect(extractOnlyTerminalQueryReplies('\x1b[?1;2c\x1b[1;1R')).toEqual([
+      '\x1b[?1;2c',
+      '\x1b[1;1R'
+    ])
+    expect(extractOnlyTerminalQueryReplies('\x1b]11;rgb:2828/2c2c/3434\x1b\\\x1b[?1;2c')).toEqual([
+      '\x1b]11;rgb:2828/2c2c/3434\x1b\\',
+      '\x1b[?1;2c'
+    ])
+    expect(extractOnlyTerminalQueryReplies('\x1b[?1;2chello')).toBe(null)
   })
 
   it('does NOT match ordinary typed input or navigation sequences', () => {
@@ -95,5 +110,59 @@ describe('isTerminalQueryReply', () => {
     // Incomplete / non-terminated OSC and DCS must not match.
     expect(isTerminalQueryReply('\x1b]11;rgb:2828/2c2c/3434')).toBe(false)
     expect(isTerminalQueryReply('\x1bP1$r2 q')).toBe(false)
+  })
+})
+
+// termenv reads one OSC-then-CPR response. If CPR overtakes the echo-deferred OSC reply, leftover ESC ] later crashes bubbletea (gh auth login).
+describe('query reply ordering (termenv OSC-then-CPR)', () => {
+  const OSC_11_REPLY = '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\'
+  const CPR_REPLY = '\x1b[1;1R'
+
+  function hostWrites(ingress: PtyStartupIngress, pty: string[]) {
+    return (data: string): void => {
+      if (!ingress.answerLiveQueryReply(data)) {
+        pty.push(data)
+      }
+    }
+  }
+
+  it('delivers the color reply before the CPR the querying program stops at', async () => {
+    vi.useFakeTimers()
+    const pty: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => pty.push(data),
+      onEmission: () => {}
+    })
+    const write = hostWrites(ingress, pty)
+
+    write(OSC_11_REPLY)
+    write(CPR_REPLY)
+    await vi.advanceTimersByTimeAsync(200)
+
+    expect(pty).toEqual([OSC_11_REPLY, CPR_REPLY])
+    // Nothing survives the CPR, so the next program's stdin opens clean.
+    expect(pty.slice(1).join('')).not.toContain('\x1b]')
+    ingress.drainAndClose()
+    vi.useRealTimers()
+  })
+
+  it('preserves reverse query order when CPR arrives before the color query', async () => {
+    vi.useFakeTimers()
+    const pty: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => pty.push(data),
+      onEmission: () => {}
+    })
+    const write = hostWrites(ingress, pty)
+
+    write(CPR_REPLY)
+    write(OSC_11_REPLY)
+    await vi.advanceTimersByTimeAsync(200)
+
+    expect(pty).toEqual([CPR_REPLY, OSC_11_REPLY])
+    ingress.drainAndClose()
+    vi.useRealTimers()
   })
 })

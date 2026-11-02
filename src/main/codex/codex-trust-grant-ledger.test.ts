@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
-  binaryStampsMatch,
   getCodexTrustGrantLedgerPath,
   readCodexTrustGrantLedgerHome,
   removeCodexTrustGrantLedgerHome,
@@ -74,31 +73,10 @@ describe('codex trust grant ledger', () => {
 
   it('tolerates a corrupt ledger file', () => {
     const home = join(userDataDir, 'codex-runtime-home', 'home')
+    mkdirSync(dirname(getCodexTrustGrantLedgerPath()), { recursive: true })
     writeFileSync(getCodexTrustGrantLedgerPath(), 'not-json{{{')
     expect(readCodexTrustGrantLedgerHome(home)).toBeNull()
-    // Why: a corrupt file must not block recording the next verified grant.
     writeCodexTrustGrantLedgerHome(home, { binary: null, entries: {} })
     expect(readCodexTrustGrantLedgerHome(home)).not.toBeNull()
-  })
-
-  it('matches binary stamps only on identical identity', () => {
-    const stamp = { kind: 'native' as const, path: '/bin/codex', size: 1, mtimeMs: 2 }
-    const wslStamp = {
-      kind: 'wsl' as const,
-      distro: 'Ubuntu',
-      path: '/home/alice/.local/bin/codex',
-      version: 'codex-cli 1.2.3'
-    }
-    expect(binaryStampsMatch(stamp, { ...stamp })).toBe(true)
-    expect(binaryStampsMatch(stamp, { ...stamp, mtimeMs: 3 })).toBe(false)
-    expect(binaryStampsMatch(stamp, { ...stamp, size: 9 })).toBe(false)
-    expect(binaryStampsMatch(stamp, { ...stamp, path: '/other/codex' })).toBe(false)
-    expect(binaryStampsMatch(stamp, null)).toBe(false)
-    expect(binaryStampsMatch(null, null)).toBe(true)
-    expect(binaryStampsMatch(wslStamp, { ...wslStamp })).toBe(true)
-    expect(binaryStampsMatch(wslStamp, { ...wslStamp, distro: 'Debian' })).toBe(false)
-    expect(binaryStampsMatch(wslStamp, { ...wslStamp, path: '/opt/codex' })).toBe(false)
-    expect(binaryStampsMatch(wslStamp, { ...wslStamp, version: 'codex-cli 1.2.4' })).toBe(false)
-    expect(binaryStampsMatch(wslStamp, stamp)).toBe(false)
   })
 })

@@ -19,7 +19,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: vi.fn(() => '/tmp') },
+  app: { getPath: vi.fn(() => '/tmp'), commandLine: { getSwitchValue: vi.fn(() => 'x11') } },
   clipboard: {
     readText: clipboardReadText,
     readBuffer: vi.fn(),
@@ -39,7 +39,7 @@ vi.mock('electron', () => ({
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer }))
 vi.mock('./clipboard-remote-file-copy', () => ({
   cleanupExpiredRemoteClipboardFiles: vi.fn(async () => undefined),
-  writeRemoteFileToClipboard: vi.fn()
+  scheduleLegacyRemoteClipboardFileCleanup: vi.fn()
 }))
 
 import {
@@ -66,15 +66,22 @@ describe('dashboard popout clipboard access', () => {
     registerClipboardHandlers({} as never)
   })
 
-  it('allows terminal text copy and paste through the exact popout renderer', async () => {
-    await expect(handlers.get('clipboard:readText')?.(popoutEvent)).resolves.toBe(
-      'terminal clipboard text'
-    )
+  it('keeps legacy writes non-rejecting while verified terminal writes report stale text', async () => {
     await expect(
-      handlers.get('clipboard:writeText')?.(popoutEvent, 'terminal selection')
+      handlers.get('clipboard:writeText')?.(popoutEvent, 'legacy copy')
+    ).resolves.toBeUndefined()
+    await expect(
+      handlers.get('clipboard:writeTerminalText')?.(popoutEvent, 'verified terminal copy')
+    ).rejects.toThrow('Clipboard write verification failed')
+
+    clipboardWriteText.mockImplementation((text: string) => clipboardReadText.mockReturnValue(text))
+    await expect(
+      handlers.get('clipboard:writeTerminalText')?.(popoutEvent, 'confirmed terminal copy')
     ).resolves.toBeUndefined()
 
-    expect(clipboardWriteText).toHaveBeenCalledWith('terminal selection')
+    expect(clipboardWriteText).toHaveBeenCalledWith('legacy copy')
+    expect(clipboardWriteText).toHaveBeenCalledWith('verified terminal copy')
+    expect(clipboardWriteText).toHaveBeenCalledWith('confirmed terminal copy')
   })
 
   it('does not extend popout authority to selection, image, file, or remote clipboard APIs', async () => {
@@ -87,6 +94,12 @@ describe('dashboard popout clipboard access', () => {
     await expect(handlers.get('clipboard:saveImageAsTempFile')?.(popoutEvent)).rejects.toThrow(
       'Unauthorized clipboard IPC sender'
     )
+    expect(() => handlers.get('clipboard:readFilePaths')?.(popoutEvent)).toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
+    expect(() =>
+      handlers.get('clipboard:restoreNativeChatPastes')?.(popoutEvent, ['/etc/passwd'])
+    ).toThrow('Unauthorized clipboard IPC sender')
     expect(() =>
       handlers.get('clipboard:writeFile')?.(popoutEvent, {
         filePath: '/tmp/copied-file.txt',
@@ -102,17 +115,13 @@ describe('dashboard popout clipboard access', () => {
     expect(clipboardWriteBuffer).not.toHaveBeenCalled()
   })
 
-  it('still rejects unrelated renderer windows from text clipboard APIs', async () => {
-    isDashboardPopoutRenderer.mockReturnValue(false)
-
-    await expect(handlers.get('clipboard:readText')?.(popoutEvent)).rejects.toThrow(
-      'Unauthorized clipboard IPC sender'
-    )
-    await expect(handlers.get('clipboard:writeText')?.(popoutEvent, 'secret')).rejects.toThrow(
-      'Unauthorized clipboard IPC sender'
-    )
-
-    expect(clipboardReadText).not.toHaveBeenCalled()
+  it('applies the text size gate to verified terminal writes', async () => {
+    await expect(
+      handlers.get('clipboard:writeTerminalText')?.(
+        popoutEvent,
+        'copied-secret-token-value'.repeat(900_000)
+      )
+    ).rejects.toThrow('Clipboard text is too large to copy safely.')
     expect(clipboardWriteText).not.toHaveBeenCalled()
   })
 })

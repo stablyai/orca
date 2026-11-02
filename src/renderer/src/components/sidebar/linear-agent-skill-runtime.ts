@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
@@ -28,8 +28,7 @@ export function getLinearPromptAgentRuntime(
   projectRuntime?: ProjectExecutionRuntimeResolution
 ): LocalAgentRuntime {
   if (remote) {
-    // Why: this prompt opens a local terminal; remote environments need their
-    // own setup even when local agent discovery prefers WSL.
+    // This prompt opens a local terminal; remote hosts need separate skill setup even when local discovery uses WSL.
     return {
       runtime: 'host',
       label: currentPlatform === 'win32' ? 'Windows' : 'This device'
@@ -64,8 +63,7 @@ function getProjectAgentRuntime(
     return null
   }
   if (projectRuntime.status === 'repair-required') {
-    // Why: a repair state still owns the project runtime; falling back to host
-    // here would mix skill setup state between Windows and WSL.
+    // Repair-required WSL projects still own their runtime; do not mix their skill state with Windows.
     return getWslAgentRuntime(projectRuntime.repair.preferredRuntime.distro)
   }
   if (projectRuntime.runtime.kind === 'wsl') {
@@ -85,20 +83,6 @@ function getWslAgentRuntime(distro: string | null): LocalAgentRuntime {
       ? `WSL ${distro}`
       : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
   }
-}
-
-export function getLinearPromptTerminalShellOverride(
-  currentPlatform: NodeJS.Platform,
-  settings: LinearAgentSkillPromptSettings | null | undefined,
-  runtime: LocalAgentRuntime
-): string | undefined {
-  if (currentPlatform !== 'win32') {
-    return undefined
-  }
-  if (runtime.runtime === 'wsl') {
-    return 'powershell.exe'
-  }
-  return settings?.terminalWindowsShell?.toLowerCase() === 'wsl.exe' ? 'powershell.exe' : undefined
 }
 
 export function getLinearPromptSetupCheckIdentity(args: {

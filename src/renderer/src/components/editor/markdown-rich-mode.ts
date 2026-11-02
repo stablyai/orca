@@ -1,6 +1,17 @@
-import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
+import { defaultSchema } from 'rehype-sanitize'
+import { normalizeDetailsOpeningTag } from './details-markdown-html'
+import {
+  getRichMarkdownPassthroughOutput,
+  getRichMarkdownRoundTripOutput
+} from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
+import {
+  canRenderMarkdownAtSize,
+  exceedsMarkdownRenderOverrideSizeLimit
+} from './markdown-rich-size-limit'
 import { translate } from '@/i18n/i18n'
+import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 export type MarkdownRichModeUnsupportedReason =
   | 'html-or-jsx'
@@ -14,6 +25,19 @@ type UnsupportedMatch = {
   pattern: RegExp
 }
 
+export type MarkdownRichModeEligibility = {
+  exceedsSizeLimit: boolean
+  unsupportedMessage: string | null
+}
+
+/** Cache this pure document decision only; localized messages must be resolved per read. */
+export type MarkdownRichModeEligibilityDecision = {
+  exceedsSizeLimit: boolean
+  unsupportedReason: MarkdownRichModeUnsupportedReason | null
+}
+
+const KNOWN_MARKDOWN_HTML_TAG_NAMES = new Set(defaultSchema.tagNames ?? [])
+
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   {
     reason: 'html-or-jsx',
@@ -23,10 +47,8 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains HTML, JSX, or MDX.'
       )
     },
-    // Why: the rich editor preserves common embedded markup via placeholder
-    // tokens before parsing, but any HTML shape that still fails round-trip
-    // must fall back instead of risking silent source corruption.
-    pattern: /<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*)?\/?>|<!--[\s\S]*?-->/
+    // Fall back when placeholder-protected HTML still fails round-trip to avoid silently corrupting source.
+    pattern: /<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*)?\/?>/
   },
   {
     reason: 'reference-links',
@@ -51,44 +73,126 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
 ]
 
 export function getMarkdownRichModeUnsupportedMessage(content: string): string | null {
-  // Why: front-matter is handled externally — stripped before the rich editor
-  // sees the content and displayed as a read-only block. Only the body needs
-  // to pass the unsupported-content checks.
+  return resolveMarkdownRichModeUnsupportedMessage(getMarkdownRichModeUnsupportedReason(content))
+}
+
+/** Resolve through the getter so messages follow the active UI language. */
+export function resolveMarkdownRichModeUnsupportedMessage(
+  reason: MarkdownRichModeUnsupportedReason | null
+): string | null {
+  if (reason === null) {
+    return null
+  }
+  return UNSUPPORTED_PATTERNS.find((matcher) => matcher.reason === reason)?.message ?? null
+}
+
+export function getMarkdownRichModeUnsupportedReason(
+  content: string
+): MarkdownRichModeUnsupportedReason | null {
+  // Front matter is displayed separately as read-only; only its body enters rich editing.
   const fm = extractFrontMatter(content)
   const body = fm ? fm.body : content
 
   const contentWithoutCode = stripMarkdownCode(body)
 
-  // Why: run cheap regex checks first. If no unsupported syntax is detected,
-  // rich mode is safe — no need for the expensive round-trip check. The
-  // round-trip (which synchronously creates a throwaway TipTap editor, parses
-  // the full document, and serializes it back) is only needed as a second
-  // opinion when HTML is detected, to verify the HTML survives the round-trip
-  // before blocking the user from rich mode.
+  // Only documents containing embedded HTML need a preservation proof.
   const htmlMatcher = UNSUPPORTED_PATTERNS.find((m) => m.reason === 'html-or-jsx')
-  const hasHtml = htmlMatcher && htmlMatcher.pattern.test(contentWithoutCode)
+  const hasHtml = htmlMatcher && hasHtmlOrJsx(contentWithoutCode, htmlMatcher.pattern)
 
   for (const matcher of UNSUPPORTED_PATTERNS) {
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
     if (matcher.pattern.test(contentWithoutCode)) {
-      return matcher.message
+      return matcher.reason
     }
   }
 
   if (hasHtml) {
-    // Why: the round-trip check creates a throwaway TipTap Editor synchronously
-    // on the main thread. For large files this blocks for seconds, so we skip it and conservatively block rich mode for HTML files
-    // above this threshold.
-    const roundTripOutput = body.length <= 50_000 ? getRichMarkdownRoundTripOutput(body) : null
+    const roundTripOutput =
+      body.length > 50_000
+        ? getLargeMarkdownRoundTripOutput(body, htmlMatcher!.pattern)
+        : getRichMarkdownRoundTripOutput(body)
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
       return null
     }
-    return htmlMatcher!.message
+    return htmlMatcher!.reason
   }
 
   return null
+}
+
+function getLargeMarkdownRoundTripOutput(body: string, htmlPattern: RegExp): string | null {
+  try {
+    const codec = createRichMarkdownEditorCodec()
+    const encoded = encodeRawMarkdownHtmlForRichEditor(body, codec, {
+      htmlSuperscriptLinks: true
+    })
+    // Remaining HTML needs DOM parsing; keep large editable toggles on the bounded fallback.
+    if (hasHtmlOrJsx(stripMarkdownCode(encoded), htmlPattern)) {
+      return null
+    }
+    return getRichMarkdownPassthroughOutput(encoded, codec)
+  } catch {
+    return null
+  }
+}
+
+export function getMarkdownRichModeEligibilityDecision({
+  content,
+  sizeOverridden
+}: {
+  content: string
+  sizeOverridden: boolean
+}): MarkdownRichModeEligibilityDecision {
+  // Past the hard cap neither mode renders rich, so the unsupported-syntax scan is moot.
+  if (exceedsMarkdownRenderOverrideSizeLimit(content)) {
+    return { exceedsSizeLimit: true, unsupportedReason: null }
+  }
+  return {
+    exceedsSizeLimit: !canRenderMarkdownAtSize(content, sizeOverridden),
+    unsupportedReason: getMarkdownRichModeUnsupportedReason(content)
+  }
+}
+
+export function getMarkdownRichModeEligibility(params: {
+  content: string
+  sizeOverridden: boolean
+}): MarkdownRichModeEligibility {
+  const decision = getMarkdownRichModeEligibilityDecision(params)
+  return {
+    exceedsSizeLimit: decision.exceedsSizeLimit,
+    unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
+  }
+}
+
+function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {
+  // A missing closer after the first opener rules out every later opener.
+  const commentStart = content.indexOf('<!--')
+  if (commentStart !== -1 && content.includes('-->', commentStart + 4)) {
+    return true
+  }
+  for (const match of content.matchAll(new RegExp(pattern, 'g'))) {
+    if (isHtmlOrJsxFragment(match[0])) {
+      return true
+    }
+  }
+  return false
+}
+
+function isHtmlOrJsxFragment(fragment: string): boolean {
+  if (fragment.startsWith('</')) {
+    return true
+  }
+
+  const tagMatch = fragment.match(/^<([A-Za-z][\w.:-]*)/)
+  const tagName = tagMatch?.[1]
+  if (!tagName) {
+    return false
+  }
+
+  const suffix = fragment.slice(tagName.length + 1, -1)
+  return suffix.length > 0 || KNOWN_MARKDOWN_HTML_TAG_NAMES.has(tagName.toLowerCase())
 }
 
 function stripMarkdownCode(content: string): string {
@@ -96,10 +200,9 @@ function stripMarkdownCode(content: string): string {
   let activeFence: '`' | '~' | null = null
   let lineStart = 0
 
-  for (let index = 0; index <= content.length; index += 1) {
-    if (index < content.length && content.charCodeAt(index) !== 10) {
-      continue
-    }
+  while (lineStart <= content.length) {
+    const newlineIndex = content.indexOf('\n', lineStart)
+    const index = newlineIndex === -1 ? content.length : newlineIndex
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
     const line = content.slice(lineStart, lineEnd)
     const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
@@ -122,11 +225,18 @@ function stripMarkdownCode(content: string): string {
 function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {
   let searchIndex = 0
   return forEachEmbeddedHtmlFragment(contentWithoutCode, (fragment) => {
-    const foundIndex = roundTripOutput.indexOf(fragment, searchIndex)
+    const normalized = normalizeDetailsOpeningTag(fragment)
+    const exactIndex = roundTripOutput.indexOf(fragment, searchIndex)
+    // Details serialization adds Orca's class and canonicalizes supported attributes.
+    const normalizedIndex =
+      normalized === fragment ? -1 : roundTripOutput.indexOf(normalized, searchIndex)
+    const useNormalized =
+      normalizedIndex !== -1 && (exactIndex === -1 || normalizedIndex < exactIndex)
+    const foundIndex = useNormalized ? normalizedIndex : exactIndex
     if (foundIndex === -1) {
       return false
     }
-    searchIndex = foundIndex + fragment.length
+    searchIndex = foundIndex + (useNormalized ? normalized.length : fragment.length)
     return true
   })
 }
@@ -135,6 +245,7 @@ function forEachEmbeddedHtmlFragment(
   content: string,
   visit: (fragment: string) => boolean
 ): boolean {
+  const lastCommentClose = content.lastIndexOf('-->')
   for (let index = 0; index < content.length; index++) {
     if (content.charCodeAt(index) !== 60) {
       continue
@@ -142,7 +253,7 @@ function forEachEmbeddedHtmlFragment(
 
     let fragmentEnd: number | null = null
     if (content.startsWith('<!--', index)) {
-      const commentEnd = content.indexOf('-->', index + 4)
+      const commentEnd = index + 4 <= lastCommentClose ? content.indexOf('-->', index + 4) : -1
       fragmentEnd = commentEnd === -1 ? null : commentEnd + 3
     } else {
       fragmentEnd = getHtmlTagEnd(content, index)

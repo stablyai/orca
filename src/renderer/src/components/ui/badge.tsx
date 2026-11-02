@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { Slot } from 'radix-ui'
+import * as Slot from 'radix-ui/slot'
 
 import { cn } from '@/lib/utils'
 
@@ -17,7 +17,15 @@ const badgeVariants = cva(
         outline:
           'border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         ghost: '[a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 [a&]:hover:underline'
+        link: 'text-primary underline-offset-4 [a&]:hover:underline',
+        /** Workspace execution-host context, quieter and squarer than status chips. */
+        hostContext:
+          'h-4 rounded border-border bg-[var(--host-badge,var(--accent))] px-1.5 text-[10px] leading-none text-[var(--host-badge-foreground,var(--muted-foreground))] dark:border-border/50 dark:bg-[var(--host-badge,color-mix(in_oklab,var(--accent)_80%,transparent))]',
+        /** A task label inside a dense reference row's metadata line. */
+        referenceLabel: 'h-3.5 border-border px-1 py-0 text-3xs font-normal text-muted-foreground',
+        /** A skill or file sitting inline in the chat message box, ringed while selected. */
+        promptPill:
+          'max-w-full border-border bg-secondary px-1.5 py-0 align-baseline text-muted-foreground data-[selected=true]:ring-1 data-[selected=true]:ring-ring'
       }
     },
     defaultVariants: {

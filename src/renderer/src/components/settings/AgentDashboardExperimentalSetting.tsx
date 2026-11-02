@@ -1,9 +1,10 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSegmentedControl, SettingsSwitch } from './SettingsFormControls'
 import { getExperimentalSearchEntry } from './experimental-search'
+import { canOpenAgentDashboardPopout } from '../dashboard/agent-dashboard-open-mode'
 
 type AgentDashboardExperimentalSettingProps = {
   settings: GlobalSettings
@@ -42,7 +43,7 @@ export function AgentDashboardExperimentalSetting({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ExperimentalPane.agentDashboard.copy',
-              'Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents and jump into their live terminals.'
+              'Adds an Agent Dashboard entry to the left sidebar. Monitor agents that need you, are working, or are done, with optional idle agents.'
             )}
           </p>
         </div>
@@ -55,8 +56,8 @@ export function AgentDashboardExperimentalSetting({
           onChange={() => updateSettings({ experimentalAgentDashboardPopout: !enabled })}
         />
       </div>
-      {enabled ? (
-        <div className="ml-4 border-l border-border pl-4">
+      {enabled && canOpenAgentDashboardPopout() ? (
+        <div className="ml-4 space-y-3 border-l border-border pl-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">
               <Label>

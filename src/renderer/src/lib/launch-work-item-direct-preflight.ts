@@ -1,22 +1,38 @@
-import { getSetupConfig } from '@/lib/new-workspace'
-import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { planAgentCliArgsSuffix } from './tui-agent-startup'
+import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
+import { useAppStore, type AppState } from '@/store'
+import {
+  ensureDetectedAgentsForRepo,
+  loadProjectLaunchContext
+} from './agent-detection-target-inventory'
+import { toast } from 'sonner'
+import { CLIENT_PLATFORM } from './new-workspace'
+import { getLocalRepoProjectExecutionRuntimeContext } from './local-preflight-context'
+import { refineLocalLaunchPlatform, resolveRepoExecutionHostPlatform } from './execution-host-facts'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
+import type { AgentLaunchRequestId } from './agent-launch-request-id'
+import {
+  awaitStructuredRouteHostAnswer,
+  planAgentSessionLaunch,
+  type AgentSessionLaunchRequest
+} from './agent-session-launch-plan'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
-import type {
-  GitHubPrStartPoint,
-  GlobalSettings,
-  OrcaHooks,
-  RepoHookSettings,
-  SetupDecision
-} from '../../../shared/types'
-
-// Why: preflight routes by the repo's owner host, which `getSettingsForRepoRuntimeOwner`
-// hands back as a narrow runtime-scope pick rather than the full GlobalSettings.
-type PreflightSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import type { Repo } from '../../../shared/repo-types'
+import type { GitHubPrStartPoint } from '../../../shared/worktree/types'
+import type { LaunchWorkItemDirectArgs } from './launch-work-item-direct-types'
 
 export async function resolveDirectPrStartPoint(
   repoId: string,
   prNumber: number,
-  settings: PreflightSettings,
+  target: RuntimeClientTarget | null,
   hints: {
     branchName?: string
     headRefName?: string
@@ -27,39 +43,171 @@ export async function resolveDirectPrStartPoint(
   return resolveGitHubPrStartPointForRepo({
     repoId,
     prNumber,
-    settings,
+    target,
     headRefName: hints.headRefName ?? hints.branchName,
     baseRefName: hints.baseRefName,
     isCrossRepository: hints.isCrossRepository
   })
 }
 
-export async function resolveDirectSetupDecision(
-  repoId: string,
-  repo: { hookSettings?: RepoHookSettings },
-  settings: PreflightSettings
-): Promise<{ kind: 'decided'; decision: SetupDecision } | { kind: 'needs-modal' }> {
-  let yamlHooks: OrcaHooks | null = null
-  try {
-    // Why: route the hooks probe by the repo's owner host (passed in) so preflight
-    // and the subsequent owner-routed createWorktree hit the same host.
-    const result = await checkRuntimeHooks(settings, repoId)
-    yamlHooks = (result.hooks as OrcaHooks | null) ?? null
-  } catch {
-    yamlHooks = null
+export { inspectRequiredWorkspaceSetup as resolveDirectSetupDecision } from './workspace-setup-preparation'
+export type { WorkspaceSetupInspection as DirectSetupInspection } from './workspace-setup-preparation'
+
+export type DirectLaunchOwnerRow = {
+  repo: Repo
+  executionHostId: ExecutionHostId
+  target: RuntimeClientTarget
+}
+
+/** Share one repo owner across setup, PR start, trust and creation; null/ambiguous owner goes to the modal rather than focus-based guessing. */
+export function resolveDirectLaunchOwnerRow(
+  repos: readonly Repo[],
+  repoId: string
+): DirectLaunchOwnerRow | null {
+  const rows = repos.filter((r) => r.id === repoId)
+  if (rows.length !== 1) {
+    return null
   }
-  const setupConfig = getSetupConfig(repo, yamlHooks)
-  if (!setupConfig) {
-    // Why: no setup script configured, so this path should behave like callers
-    // that omit a setup decision entirely.
-    return { kind: 'decided', decision: 'inherit' }
+  const executionHostId = getRepoExecutionHostId(rows[0])
+  const target = ipcOrRuntimeTargetForHostId(executionHostId)
+  return target ? { repo: rows[0], executionHostId, target } : null
+}
+
+/** Freeze the prospective verdict before create; the actual-agent path handles older hosts. */
+export async function planDirectWorkItemLaunch(args: {
+  requestId: AgentLaunchRequestId
+  prospectiveAgent: TuiAgent | null
+  projectContext?: ProjectLaunchContext
+  repoId: string
+  repoOwnerHostId: ExecutionHostId
+  draftContent: string
+  promptDelivery: 'draft' | 'submit-after-ready'
+  resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
+  sessionOptions?: Readonly<Record<string, string>>
+  launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
+}) {
+  const { prospectiveAgent, projectContext } = args
+  if (!prospectiveAgent) {
+    return undefined
   }
-  const policy = repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  if (policy === 'ask') {
-    return { kind: 'needs-modal' }
+  const sessionOptions = args.resolveSessionOptions
+    ? args.resolveSessionOptions(prospectiveAgent)
+    : args.sessionOptions
+  const request: AgentSessionLaunchRequest = {
+    requestId: args.requestId,
+    agent: prospectiveAgent,
+    workspace: {
+      kind: projectContext?.workspaceKind ?? 'git-worktree',
+      repoId: args.repoId,
+      executionHostId: args.repoOwnerHostId,
+      ...(projectContext ? { executionContext: projectContext.executionContext } : {})
+    },
+    prompt: args.draftContent,
+    promptDelivery: args.promptDelivery,
+    ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+    ...directLaunchSurfaceRequest(args.launchChoice)
   }
+  await awaitStructuredRouteHostAnswer(useAppStore.getState(), request, 3000)
+  return planAgentSessionLaunch(useAppStore.getState(), request)
+}
+
+/** A picked surface stays explicit through both planning sites; none follows the settings route. */
+export function directLaunchSurfaceRequest(
+  choice: LaunchWorkItemDirectArgs['launchChoice']
+): Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'selectedExecutionHostId'> {
   return {
-    kind: 'decided',
-    decision: policy === 'run-by-default' ? 'run' : 'skip'
+    ...(choice?.requestedSurface ? { requestedSurface: choice.requestedSurface } : {}),
+    ...(choice?.executionHostId ? { selectedExecutionHostId: choice.executionHostId } : {})
+  }
+}
+
+export async function resolveDirectProspectiveAgent(
+  store: AppState,
+  repo: Repo,
+  projectContext: ProjectLaunchContext | undefined,
+  args: Pick<LaunchWorkItemDirectArgs, 'agentOverride' | 'agentLaunchPreferences'>
+) {
+  const { agentOverride, agentLaunchPreferences } = args
+  const detectedAgentsPromise = projectContext
+    ? Promise.resolve(projectContext.agents)
+    : agentOverride
+      ? null
+      : ensureDetectedAgentsForRepo(store, repo)
+  const detectedAgentIds = ((await detectedAgentsPromise) ?? []).filter(isTuiAgent)
+  const current = useAppStore.getState()
+  const workspace = {
+    kind: projectContext?.workspaceKind ?? 'git-worktree',
+    repoId: repo.id,
+    executionHostId: getRepoExecutionHostId(repo),
+    ...(projectContext ? { executionContext: projectContext.executionContext } : {})
+  } as const
+  const preferences =
+    agentLaunchPreferences ?? readAgentLaunchPreferencesForWorkspace(current, workspace)
+  const prospectiveAgent =
+    agentOverride ??
+    resolveDefaultAgentForWorkspace({
+      defaultTuiAgent: preferences?.defaultTuiAgent,
+      detectedAgentIds,
+      disabledTuiAgents: preferences?.disabledTuiAgents,
+      chatIn: { store: current, workspace }
+    })
+  const unavailable = Boolean(
+    agentLaunchPreferences &&
+    agentOverride &&
+    !isTuiAgentEnabled(agentOverride, agentLaunchPreferences.disabledTuiAgents)
+  )
+  return { prospectiveAgent, unavailable }
+}
+
+export function directWorkItemAgentArgsError(
+  agentArgs: string | null | undefined,
+  shell: AgentStartupShell,
+  nativeChat: boolean
+): string | null {
+  if (nativeChat) {
+    return null
+  }
+  // Reject malformed saved arguments before creating a workspace.
+  const plan = planAgentCliArgsSuffix(agentArgs, shell)
+  return plan.ok ? null : plan.error
+}
+
+export function prepareDirectLaunchContext(
+  store: AppState,
+  args: Pick<LaunchWorkItemDirectArgs, 'repoId' | 'launchPlatform' | 'openModalFallback'>
+) {
+  const owner = resolveDirectLaunchOwnerRow(store.repos, args.repoId)
+  if (!owner) {
+    args.openModalFallback()
+    return null
+  }
+  const { repo, target: repoOwnerTarget } = owner
+
+  const repoConnectionId = repo.connectionId?.trim() || null
+  const repoProjectRuntime = repoConnectionId
+    ? undefined
+    : getLocalRepoProjectExecutionRuntimeContext(store, args.repoId, CLIENT_PLATFORM)
+  // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#27971).
+  const repoLaunchFact = resolveRepoExecutionHostPlatform(store, repo, () => repoProjectRuntime)
+  if (repoLaunchFact.kind === 'withheld') {
+    toast.error(repoLaunchFact.reason)
+    return null
+  }
+  const repoLaunchHost = refineLocalLaunchPlatform(repoLaunchFact, args.launchPlatform)
+  const shell: AgentStartupShell = repoLaunchHost.platform === 'win32' ? 'powershell' : 'posix'
+  // Why: agent detection shells out and can be cold/slow. Start it now, but
+  // don't let it serialize setup-policy resolution or git worktree creation.
+  const projectContextPromise = loadProjectLaunchContext(repoOwnerTarget, args.repoId).then(
+    (context) => ({ context }),
+    () => null
+  )
+
+  return {
+    ...owner,
+    repoConnectionId,
+    repoProjectRuntime,
+    repoLaunchHost,
+    shell,
+    projectContextPromise
   }
 }

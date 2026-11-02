@@ -1,0 +1,459 @@
+#!/usr/bin/env node
+// Package the server separately from its compatibility launcher.
+import { fork, spawnSync } from 'node:child_process'
+import { build } from 'esbuild'
+import {
+  buildOrcadEntry,
+  buildOrcadCli,
+  buildOrcadLauncher,
+  ORCAD_SERVER_BUILD_TARGET,
+  ORCAD_BUNDLE_PLUGINS,
+  ORCAD_EXTERNAL_MODULES,
+  ORCAD_CHILD_ENTRY_POINTS,
+  ORCAD_COMMONJS_MODULE_OPTIONS,
+  orcadChildOutputFilename
+} from './orcad-entry-build.mjs'
+import { createRequire } from 'node:module'
+import {
+  chmodSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import process from 'node:process'
+import { smokeProfileStateWorkers } from './profile-state-worker-smoke.mjs'
+import { smokeForeignSqliteReaderWorker } from './foreign-sqlite-reader-worker-smoke.mjs'
+import { smokeSessionScannerService } from './session-scanner-service-smoke.mjs'
+import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
+import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
+import { stageOrcadWindowsCliLauncher } from './orcad-windows-cli-launcher.mjs'
+import { stageOrcadWindowsSecurity } from './orcad-windows-security.mjs'
+import { stageOrcadLinearSdk } from './orcad-linear-sdk-package.mjs'
+import { stageOrcadMobileWebBundle } from './orcad-mobile-web-bundle.mjs'
+import {
+  ORCAD_EMOJI_SHORTCODE_DATASET,
+  ORCAD_CLI_ENTRY_FILENAME,
+  ORCAD_CLI_PACKAGE_FILENAME,
+  ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS,
+  ORCAD_LAUNCHER_FILENAME,
+  ORCAD_SERVER_ENTRY_FILENAME,
+  ORCAD_NODE_PTY_DIR,
+  ORCAD_NODE_PTY_JS_ARTIFACTS,
+  ORCAD_NODE_RUNTIME_MARKER_FILENAME,
+  ORCAD_PARCEL_WATCHER_ENTRY,
+  ORCAD_PARCEL_WATCHER_NATIVE,
+  ORCAD_SERVER_TARGET_FILENAME,
+  ORCAD_VERSION_FILENAME,
+  orcadNodePtySlotFiles,
+  orcadRipgrepArtifact
+} from '../../src/shared/orcad-artifacts.ts'
+import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
+import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
+import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
+import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
+import { resolveBuildSourceCommit } from './build-source-commit.mjs'
+
+const { darkBuildMarkers } = createRequire(import.meta.url)('../dark-build-switches.cjs')
+
+const ROOT = join(import.meta.dirname, '..', '..')
+const OUT_DIR = process.env.ORCAD_OUT_DIR
+  ? resolve(process.env.ORCAD_OUT_DIR)
+  : join(ROOT, 'out', 'orcad')
+// Ship fork/worker entries beside orcad.js: remote deployments have no desktop out/main fallback, and a missing daemon loses terminals on restart.
+const childOutFile = (role) =>
+  join(OUT_DIR, orcadChildOutputFilename(ORCAD_CHILD_ENTRY_POINTS[role]))
+const WATCHER_OUT_FILE = childOutFile('watcher')
+const DAEMON_OUT_FILE = childOutFile('daemon')
+const OUT_FILE = join(OUT_DIR, ORCAD_LAUNCHER_FILENAME)
+const SERVER_OUT_FILE = join(OUT_DIR, ORCAD_SERVER_ENTRY_FILENAME)
+const BUILD_TARGET = process.env.ORCAD_BUILD_TARGET
+if (!BUILD_TARGET) {
+  throw new Error('ORCAD_BUILD_TARGET is required; run `pnpm build:orcad`')
+}
+const [targetPlatform, targetArch] = BUILD_TARGET.split('-')
+const targetIsWindows = targetPlatform === 'win32'
+const runtimeAsset = NODE_RUNTIME_ASSETS[BUILD_TARGET]
+if (!runtimeAsset) {
+  throw new Error(`Unsupported ORCAD_BUILD_TARGET: ${BUILD_TARGET}`)
+}
+// Set only when the build host can run this target's runtime.
+const nodeRuntimePath = process.env.ORCAD_NODE_RUNTIME_PATH || null
+const PREBUILDS_DIR = process.env.ORCAD_PREBUILDS_DIR
+if (!PREBUILDS_DIR) {
+  throw new Error('ORCAD_PREBUILDS_DIR is required; run `pnpm build:orcad`')
+}
+const AGENT_BROWSER_NAME = orcadAgentBrowserNativeName(
+  targetPlatform,
+  targetArch,
+  BUILD_TARGET.endsWith('-musl') ? 'musl' : 'glibc'
+)
+const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
+const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
+const WATCHER_MODULE_DIR = join(OUT_DIR, 'node_modules', '@parcel', 'watcher')
+
+async function stageParcelWatcher(target) {
+  const requireFromWatcher = createRequire(
+    join(ROOT, 'node_modules', '@parcel', 'watcher', 'index.js')
+  )
+  const nativeSource = await materializeWatcherPackage(target)
+  const wrapperSource = requireFromWatcher.resolve('@parcel/watcher/wrapper.js')
+  mkdirSync(WATCHER_MODULE_DIR, { recursive: true })
+  await build({
+    ...ORCAD_COMMONJS_MODULE_OPTIONS,
+    stdin: {
+      contents:
+        `const {createWrapper}=require(${JSON.stringify(wrapperSource)});` +
+        `module.exports=createWrapper(require('./watcher.node'));`,
+      resolveDir: ROOT,
+      sourcefile: 'orcad-parcel-watcher-entry.js'
+    },
+    bundle: true,
+    platform: 'node',
+    target: ORCAD_SERVER_BUILD_TARGET,
+    format: 'cjs',
+    outfile: join(OUT_DIR, ORCAD_PARCEL_WATCHER_ENTRY),
+    external: ['./watcher.node'],
+    minify: true,
+    sourcemap: false,
+    logLevel: 'error'
+  })
+  copyFileSync(nativeSource, join(OUT_DIR, ORCAD_PARCEL_WATCHER_NATIVE))
+}
+
+/** node-pty's JS plus only this target's prebuild slot, laid out the way node-pty's loader looks. */
+function stageNodePty(target) {
+  const problems = findSlotProblems(readManifest(PREBUILDS_DIR), PREBUILDS_DIR, [target])
+  if (problems.length > 0) {
+    throw new Error(`[build-orcad] node-pty prebuild for ${target}: ${problems.join('; ')}`)
+  }
+  const slotFiles = Object.keys(readManifest(PREBUILDS_DIR).slots[target].files).sort()
+  const expected = orcadNodePtySlotFiles(target).sort()
+  if (slotFiles.join('\0') !== expected.join('\0')) {
+    throw new Error(
+      `[build-orcad] ${target} prebuild ships ${slotFiles.join(', ')}; orcad-artifacts.ts expects ${expected.join(', ')}`
+    )
+  }
+  const sourceDir = dirname(createRequire(import.meta.url).resolve('node-pty/package.json'))
+  for (const artifact of ORCAD_NODE_PTY_JS_ARTIFACTS) {
+    const destination = join(OUT_DIR, artifact)
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(join(sourceDir, artifact.slice(ORCAD_NODE_PTY_DIR.length + 1)), destination)
+  }
+  for (const file of expected) {
+    const destination = join(OUT_DIR, ORCAD_NODE_PTY_DIR, 'build', 'Release', ...file.split('/'))
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(join(PREBUILDS_DIR, target, ...file.split('/')), destination)
+    if (file === 'spawn-helper') {
+      chmodSync(destination, 0o755)
+    }
+  }
+}
+
+rmSync(OUT_DIR, { recursive: true, force: true })
+mkdirSync(OUT_DIR, { recursive: true })
+writeFileSync(join(OUT_DIR, ORCAD_SERVER_TARGET_FILENAME), `${BUILD_TARGET}\n`)
+// Outside the artifact list, so the version hash and every deploy ignore it.
+for (const marker of darkBuildMarkers()) {
+  writeFileSync(join(OUT_DIR, marker.fileName), marker.text)
+}
+writeFileSync(
+  join(OUT_DIR, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
+  `${runtimeAsset.executableSha256}\n`
+)
+stageNodePty(BUILD_TARGET)
+await stageParcelWatcher(BUILD_TARGET)
+stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
+stageOrcadWindowsCliLauncher(ROOT, OUT_DIR, BUILD_TARGET)
+stageOrcadWindowsSecurity(ROOT, OUT_DIR, BUILD_TARGET, undefined, undefined, {
+  enabled: process.env.ORCA_REUSE_PREPARED_WINDOWS_SECURITY === 'true',
+  runtimePath: nodeRuntimePath
+})
+const emojiDatasetOutput = join(OUT_DIR, ORCAD_EMOJI_SHORTCODE_DATASET)
+mkdirSync(dirname(emojiDatasetOutput), { recursive: true })
+copyFileSync(
+  createRequire(import.meta.url).resolve('emojibase-data/en/shortcodes/emojibase.json'),
+  emojiDatasetOutput
+)
+await stageOrcadLinearSdk(ROOT, OUT_DIR)
+// The desktop template omits it: ~10 MB per target, and orcad already treats it as optional.
+if (existsSync(AGENT_BROWSER_SOURCE) && process.env.ORCAD_OMIT_AGENT_BROWSER !== '1') {
+  copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
+  if (!targetIsWindows) {
+    chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
+  }
+}
+{
+  const [, ripgrepPlatform, ripgrepName] = orcadRipgrepArtifact(BUILD_TARGET).split('/')
+  const outputDir = join(OUT_DIR, 'ripgrep', ripgrepPlatform)
+  mkdirSync(outputDir, { recursive: true })
+  const outputPath = join(outputDir, ripgrepName)
+  copyFileSync(
+    join(ROOT, 'node_modules', '@vscode', 'ripgrep-universal', 'bin', ripgrepPlatform, ripgrepName),
+    outputPath
+  )
+  if (!targetIsWindows) {
+    chmodSync(outputPath, 0o755)
+  }
+}
+cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 'licenses'), {
+  recursive: true
+})
+cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-chat-visuals'), {
+  recursive: true
+})
+for (const artifact of ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS) {
+  mkdirSync(dirname(join(OUT_DIR, artifact)), { recursive: true })
+  copyFileSync(join(ROOT, 'native', ...artifact.split('/')), join(OUT_DIR, ...artifact.split('/')))
+}
+stageOrcadMobileWebBundle(OUT_DIR)
+
+// Build children individually to land flat beside orcad.js; multi-entry outdir mirrors source directories and breaks runtime resolution.
+function buildForkedChild(entryPoint, outfile) {
+  return build({
+    ...ORCAD_COMMONJS_MODULE_OPTIONS,
+    entryPoints: [entryPoint],
+    bundle: true,
+    platform: 'node',
+    target: ORCAD_SERVER_BUILD_TARGET,
+    format: 'cjs',
+    outfile,
+    external: ORCAD_EXTERNAL_MODULES,
+    plugins: ORCAD_BUNDLE_PLUGINS,
+    metafile: true,
+    minify: true,
+    sourcemap: false,
+    define: {
+      ...ORCAD_COMMONJS_MODULE_OPTIONS.define,
+      'process.env.NODE_ENV': '"production"'
+    },
+    logLevel: 'error'
+  })
+}
+
+const childResults = await Promise.all(
+  Object.values(ORCAD_CHILD_ENTRY_POINTS).map((entryPoint) =>
+    buildForkedChild(join(ROOT, entryPoint), join(OUT_DIR, orcadChildOutputFilename(entryPoint)))
+  )
+)
+
+const result = await buildOrcadEntry(SERVER_OUT_FILE)
+const cliResult = await buildOrcadCli(join(OUT_DIR, ORCAD_CLI_ENTRY_FILENAME))
+const { version: cliVersion } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+// Why commit: the stamp keys one serve-supervisor snapshot per build.
+const cliPackage = {
+  type: 'commonjs',
+  private: true,
+  version: cliVersion,
+  commit: resolveBuildSourceCommit()
+}
+writeFileSync(join(OUT_DIR, ORCAD_CLI_PACKAGE_FILENAME), `${JSON.stringify(cliPackage)}\n`)
+const launcherResult = await buildOrcadLauncher(OUT_FILE)
+
+const output = Object.values(result.metafile.outputs).find(
+  (o) => o.entryPoint === 'src/main/orcad/main.ts'
+)
+// Check metafile original specifiers, not resolved paths, to catch bundled Electron; inspect children too or daemon fork silently fails.
+function collectImporters(metafiles, matches) {
+  const importers = new Set()
+  for (const metafile of metafiles) {
+    for (const [file, info] of Object.entries(metafile.inputs)) {
+      for (const imported of info.imports ?? []) {
+        if (matches(imported.original ?? imported.path)) {
+          importers.add(file)
+        }
+      }
+    }
+  }
+  return importers
+}
+
+const metafiles = [
+  launcherResult.metafile,
+  result.metafile,
+  cliResult.metafile,
+  ...childResults.map((child) => child.metafile)
+]
+const electronImporters = collectImporters(
+  metafiles,
+  (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
+)
+const sqliteImporters = collectImporters(metafiles, (specifier) => specifier === 'node:sqlite')
+// A bundled UMD factory keeps its relative requires, which fail beside the single-file bundle (#33592).
+const umdInputs = metafiles.flatMap((metafile) =>
+  Object.keys(metafile.inputs).filter((file) => /[\\/]lib[\\/]umd[\\/]/.test(file))
+)
+
+const graphErrors = []
+if (electronImporters.size > 0) {
+  graphErrors.push(
+    `${electronImporters.size} module(s) in the bundle import electron:\n${[...electronImporters]
+      .map((file) => `  - ${file}`)
+      .join('\n')}`
+  )
+}
+if (sqliteImporters.size > 0) {
+  graphErrors.push(
+    `${sqliteImporters.size} module(s) in the bundle import node:sqlite:\n${[...sqliteImporters]
+      .map((file) => `  - ${file}`)
+      .join('\n')}`
+  )
+}
+if (umdInputs.length > 0) {
+  graphErrors.push(
+    `${umdInputs.length} UMD module(s) in the bundle; resolve their ESM build in ORCAD_BUNDLE_PLUGINS:\n${umdInputs
+      .map((file) => `  - ${file}`)
+      .join('\n')}`
+  )
+}
+
+if (graphErrors.length > 0) {
+  console.error(`[build-orcad] ${graphErrors.join('\n')}`)
+  // Entry directly imports ipc/pty beyond runtime ratchet graph; add orcad as ratchet entry to prevent the measurements drifting.
+  process.exitCode = 1
+} else {
+  // Smoke plain-Node resolution beyond Electron-name scans: dynamic requires/natives/top-level throws can still fail.
+  // Assert exit code: minified crash reports echo the whole bundle line, falsely matching any expected message.
+  const smoke = spawnSync(process.execPath, [SERVER_OUT_FILE, '--orcad-smoke-load-check'], {
+    encoding: 'utf8',
+    timeout: 60_000
+  })
+  const smokeOutput = `${smoke.stdout ?? ''}${smoke.stderr ?? ''}`
+  if (smoke.error || smoke.signal || smoke.status !== 0) {
+    console.error(
+      `[build-orcad] the bundle lost Node load compatibility.\n` +
+        `Expected a clean load-check exit, got status=${smoke.status ?? 'none'} ` +
+        `signal=${smoke.signal ?? 'none'} ` +
+        `error=${smoke.error?.message ?? 'none'}\n${smokeOutput.slice(0, 2000)}`
+    )
+    process.exitCode = 1
+  }
+  const providerSmoke = runProcessSync({
+    program: process.execPath,
+    args: [SERVER_OUT_FILE, '--orcad-structured-provider-load-check'],
+    timeoutMs: 60_000
+  })
+  if (providerSmoke.code !== 0 || providerSmoke.timedOut || providerSmoke.outputTruncated) {
+    console.error(
+      `[build-orcad] the packaged structured provider failed to load.\n${describeProcessFailure(providerSmoke)}`
+    )
+    process.exitCode = 1
+  }
+  // Require bundle then call exported parseArgs to prove entry code evaluates; socket/token/PTY lifecycle belongs to smoke:orcad-terminal.
+  // Assert exit code because minified exception text includes unrelated bundle strings.
+  const daemonSmoke = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `const mod = require(${JSON.stringify(DAEMON_OUT_FILE)})\n` +
+        `if (typeof mod.parseArgs !== 'function') { process.exit(3) }\n` +
+        `try { mod.parseArgs([]); process.exit(4) } catch { process.exit(0) }`
+    ],
+    {
+      encoding: 'utf8',
+      timeout: 60_000,
+      env: { ...process.env, ORCA_DAEMON_ENTRY_LOAD_CHECK: '1' }
+    }
+  )
+  const daemonSmokeOutput = `${daemonSmoke.stdout ?? ''}${daemonSmoke.stderr ?? ''}`
+  if (daemonSmoke.error || daemonSmoke.signal || daemonSmoke.status !== 0) {
+    console.error(
+      `[build-orcad] the daemon child lost Node load compatibility.\n` +
+        `Expected a clean load check, got status=${daemonSmoke.status ?? 'none'} ` +
+        `signal=${daemonSmoke.signal ?? 'none'} ` +
+        `error=${daemonSmoke.error?.message ?? 'none'}\n${daemonSmokeOutput.slice(0, 2000)}`
+    )
+    process.exitCode = 1
+  }
+  const watcherFailure = nodeRuntimePath ? await smokeLoadWatcherChild(nodeRuntimePath) : null
+  if (watcherFailure) {
+    console.error(
+      `[build-orcad] the watcher child failed under the bundled runtime.\n${watcherFailure}`
+    )
+    process.exitCode = 1
+  }
+}
+
+/** @type {{ label: string, smoke: (outDir: string, options?: { runtimePath?: string }) => unknown }[]} */
+const workerSmokes = [
+  { label: 'profile state worker', smoke: smokeProfileStateWorkers },
+  { label: 'foreign SQLite reader worker', smoke: smokeForeignSqliteReaderWorker },
+  { label: 'session scanner service', smoke: smokeSessionScannerService }
+]
+// Each shipped child is checked under the build's Node and, when set, the pinned runtime.
+for (const { label, smoke } of workerSmokes) {
+  try {
+    await smoke(OUT_DIR)
+    if (nodeRuntimePath) {
+      await smoke(OUT_DIR, { runtimePath: nodeRuntimePath })
+    }
+  } catch (error) {
+    console.error(`[build-orcad] ${label} check failed:`, error)
+    process.exitCode = 1
+  }
+}
+
+// Remote install directories key by content hash; version alone would reuse install-complete directories with stale bytes.
+if (process.exitCode !== 1) {
+  const fullVersion = computeOrcadFullVersion(OUT_DIR, {
+    target: BUILD_TARGET,
+    agentBrowserFilename: AGENT_BROWSER_NAME
+  })
+  writeFileSync(join(OUT_DIR, ORCAD_VERSION_FILENAME), fullVersion)
+  console.log(
+    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports, Node ${NODE_RUNTIME_PIN.version} referenced.`
+  )
+}
+
+// Verify the shipped native watcher actually subscribes under the bundled runtime.
+async function smokeLoadWatcherChild(runtimePath) {
+  const probeDir = mkdtempSync(join(tmpdir(), 'orcad-watcher-smoke-'))
+  const child = fork(WATCHER_OUT_FILE, [], {
+    execPath: runtimePath,
+    stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+    windowsHide: true
+  })
+  let stderr = ''
+  let subscribed = false
+  child.stderr?.on('data', (chunk) => {
+    stderr += String(chunk)
+  })
+  try {
+    return await new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL')
+        resolve(`Watcher did not complete its subscription within 30s.\n${stderr.slice(0, 2000)}`)
+      }, 30_000)
+      const settle = (failure) => {
+        clearTimeout(timer)
+        resolve(failure)
+      }
+      child.on('message', (message) => {
+        subscribed ||= message?.op === 'subscribed'
+        if (message?.op === 'subscribed' || message?.op === 'subscribe-failed') {
+          child.disconnect()
+        }
+      })
+      child.on('error', (error) => settle(`fork failed: ${error.message}`))
+      // Disconnect exits 0; nonzero/signal before that is a load failure.
+      child.on('exit', (code, signal) =>
+        settle(
+          code === 0 && subscribed
+            ? null
+            : `subscribed=${subscribed} exit code=${code} signal=${signal}\n${stderr.slice(0, 2000)}`
+        )
+      )
+      child.send({ op: 'subscribe', id: 1, dir: probeDir, opts: {} })
+    })
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+}

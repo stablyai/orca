@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { EditorContent, useEditor } from '@tiptap/react'
+import { useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import { ImageIcon, Paperclip } from 'lucide-react'
@@ -20,19 +20,21 @@ import { createEditableMarkdownLinkBubble } from '@/components/editor/rich-markd
 import { copyRichMarkdownLink } from '@/components/editor/rich-markdown-link-clipboard'
 import { normalizeSoftBreaks } from '@/components/editor/rich-markdown-normalize'
 import { GitHubMarkdownComposerPreviewPane } from '@/components/github/github-markdown-composer-preview-pane'
+import { GitHubMarkdownComposerEditorPane } from '@/components/github/GitHubMarkdownComposerEditorPane'
 import {
   GitHubMarkdownComposerTabbar,
   type ComposerTab
 } from '@/components/github/github-markdown-composer-tabbar'
 import { hasBoundedGitHubMarkdownImageUrlText } from '@/components/github/github-markdown-image-url'
 import { useImageInput } from '@/components/github/use-image-input'
-import type { GitHubOwnerRepo } from '../../../../shared/types'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
 } from '@/components/editor/rich-markdown-spellcheck'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type GitHubMarkdownComposerProps = {
   value: string
@@ -200,15 +202,14 @@ export function GitHubMarkdownComposer({
       return
     }
     editorRef.current = editor
-    editor.setEditable(!disabled)
+    editor.setEditable(!disabled, false)
   }, [disabled, editor])
 
   useEffect(() => {
     if (!editor) {
       return
     }
-    // Why: parent clears to '' after submit; always reset the editor so stale
-    // draft text never survives a successful comment post.
+    // Reset on the parent’s post-submit empty value so a successfully posted draft cannot linger.
     if (!value.trim()) {
       if (editor.getMarkdown().trim()) {
         applyingExternalValueRef.current = true
@@ -280,7 +281,7 @@ export function GitHubMarkdownComposer({
 
   const handleLinkOpen = useCallback(() => {
     if (linkBubble?.href) {
-      window.api.shell.openUrl(linkBubble.href)
+      openAppHttpLink(linkBubble.href)
     }
   }, [linkBubble?.href])
 
@@ -337,13 +338,7 @@ export function GitHubMarkdownComposer({
       </Button>
     </form>
   ) : null
-
-  const editorPane = (
-    <div className="max-h-[360px] overflow-y-auto scrollbar-sleek">
-      <EditorContent editor={editor} />
-    </div>
-  )
-
+  const editorPane = <GitHubMarkdownComposerEditorPane disabled={disabled} editor={editor} />
   const previewPane = (
     <GitHubMarkdownComposerPreviewPane
       value={value}
@@ -351,7 +346,6 @@ export function GitHubMarkdownComposer({
       previewGithubRepo={previewGithubRepo}
     />
   )
-
   const attachmentFooter = isTabbed ? (
     <button
       type="button"
@@ -368,7 +362,6 @@ export function GitHubMarkdownComposer({
       </span>
     </button>
   ) : null
-
   return (
     <div
       ref={rootRef}

@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import type { CodexAppServerInvocation } from './codex-app-server-session'
+import type { CodexAppServerInvocation } from './app-server/codex-app-server-session'
 import { createCodexSessionBackfillAuditWriter } from './codex-session-backfill-audit'
 import { CODEX_SESSION_INDEX_HEAL_VERSION } from './codex-session-index-heal-state'
 import {
@@ -18,10 +18,6 @@ import {
   type CodexSessionIndexHealPaths
 } from './codex-session-index-heal'
 
-// Stub codex app-server speaking the JSONL protocol for the heal pass:
-// initialize → initialized → thread/read×N. Scenario-driven via STUB_CONFIG;
-// every thread/read is appended to readLogFile so tests can assert order,
-// batching (one spawn appends a server-start marker), and skip behavior.
 const STUB_SERVER_SOURCE = `
 const fs = require('node:fs')
 const config = JSON.parse(process.env.STUB_CONFIG)
@@ -147,6 +143,7 @@ function createHealRig(options: {
     readLogFile,
     buildInvocation: (_systemCodexHomePath, timeoutMs) => ({
       command: process.execPath,
+      cliPath: null,
       args: [stubPath],
       env: {
         STUB_CONFIG: JSON.stringify({
@@ -190,7 +187,7 @@ function readLedgerOutcomes(paths: CodexSessionIndexHealPaths): Record<string, s
       const record = JSON.parse(line) as { threadId: string; outcome: string }
       outcomes[record.threadId] = record.outcome
     } catch {
-      // Torn tails are quarantined by the next append and ignored by readers.
+      // Ignore torn ledger tails, as the production reader does.
     }
   }
   return outcomes
@@ -232,7 +229,7 @@ describe('runCodexSessionIndexHeal', () => {
     expect(marker.healedThreads).toBe(3)
   })
 
-  it('is a no-op when the marker matches the audit ledger size', async () => {
+  it('keeps second and later passes cheap when the audit ledger is unchanged', async () => {
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }]
     })
@@ -245,9 +242,35 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+    const third = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
     expect(second.outcome).toBe('up-to-date')
-    // One spawn from the first run only — the no-op run must not hit the CLI.
+    expect(third.outcome).toBe('up-to-date')
     expect(rig.readLog().serverStarts).toBe(1)
+  })
+
+  it('re-reads a healed thread after a later publication event', async () => {
+    const id = threadId('1')
+    const stamp = '2026-07-01T10-00-00'
+    const rig = createHealRig({ auditedThreads: [{ stamp, id }] })
+    await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    await createCodexSessionBackfillAuditWriter(rig.paths.auditLogPath)({
+      action: 'existing',
+      target: rolloutTarget(rig.paths.systemSessionsRoot, stamp, id)
+    })
+    const repeated = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    expect(repeated).toMatchObject({ pendingThreads: 1, healedThreads: 1 })
+    expect(rig.readLog().threadIds).toEqual([id, id])
   })
 
   it('resumes only unprocessed sessions when the audit ledger grows', async () => {
@@ -312,6 +335,7 @@ describe('runCodexSessionIndexHeal', () => {
     const marker = JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8')) as {
       retryableFailureAt: number
     }
+    expect(marker.retryableFailureAt).toEqual(expect.any(Number))
     marker.retryableFailureAt = 0
     writeFileSync(rig.paths.healMarkerPath, `${JSON.stringify(marker)}\n`, 'utf-8')
     const retried = await runCodexSessionIndexHeal(rig.paths, {
@@ -462,6 +486,25 @@ describe('runCodexSessionIndexHeal', () => {
     expect(resumed.healedThreads + summary.healedThreads).toBe(4)
   })
 
+  it('writes no completion marker when stop flips inside the last batch', async () => {
+    const rig = createHealRig({
+      auditedThreads: [
+        { stamp: '2026-07-02T10-00-00', id: threadId('2') },
+        { stamp: '2026-07-01T10-00-00', id: threadId('1') }
+      ]
+    })
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      readConcurrency: 1,
+      interBatchDelayMs: 0,
+      shouldStop: () => rig.readLog().threadIds.length > 0
+    })
+
+    expect(summary).toMatchObject({ outcome: 'stopped', healedThreads: 1 })
+    expect(existsSync(rig.paths.healMarkerPath)).toBe(false)
+  })
+
   it('does not spawn another server when stop flips during the inter-batch delay', async () => {
     const rig = createHealRig({
       auditedThreads: [
@@ -475,8 +518,7 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       readsPerServerSession: 1,
       interBatchDelayMs: 1,
-      // False through the second batch's pre-delay check, then model opt-out
-      // while the delay is in progress.
+      // Opt out after the second batch's pre-delay check.
       shouldStop: () => stopChecks++ >= 3
     })
 
@@ -498,7 +540,6 @@ describe('runCodexSessionIndexHeal', () => {
     expect(summary.healedThreads).toBe(0)
     expect(readLedgerOutcomes(rig.paths)).toEqual({})
 
-    // Within the retry interval the unsupported marker suppresses re-probing.
     const again = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0

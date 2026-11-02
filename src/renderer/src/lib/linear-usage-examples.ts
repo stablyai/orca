@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { ORCA_LINEAR_SKILL_NAME } from './agent-feature-install-commands'
+import { ORCA_LINEAR_SKILL_NAME } from './agent-feature-skill-names'
 import type { SkillUsageExample } from './skill-usage-example'
 
 const LINEAR_SLASH_COMMAND = `/${ORCA_LINEAR_SKILL_NAME}`
@@ -47,14 +47,14 @@ export const getLinearUsageExamples = createLocalizedCatalog((): SkillUsageExamp
   },
   {
     id: 'attach-pr',
-    title: translate('auto.lib.linear.usage.examples.attachPr', 'Attach the PR link'),
+    title: translate('auto.lib.linear.usage.examples.attachPr', 'Attach the review link'),
     summary: translate(
       'auto.lib.linear.usage.examples.attachPrSummary',
-      'Link the pull request to the Linear issue when you open it.'
+      'Link the pull or merge request to the Linear issue when you open it.'
     ),
     prompt: translate(
       'auto.lib.linear.usage.examples.attachPrPrompt',
-      'Use {{value0}} to attach this PR to the linked Linear issue with a PR link.',
+      'Use {{value0}} to attach this pull or merge request to the linked Linear issue.',
       { value0: LINEAR_SLASH_COMMAND }
     )
   },

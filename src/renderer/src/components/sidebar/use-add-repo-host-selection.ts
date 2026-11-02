@@ -12,29 +12,44 @@ import { isEphemeralVmRuntimeEnvironment } from '../../../../shared/runtime-envi
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { canSelectAddRepoHost } from './add-repo-host-availability'
+import {
+  indexExecutionHostsById,
+  pickerExecutionHosts
+} from '../../../../shared/managed-orcad-execution-host'
 import { translate } from '@/i18n/i18n'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 export function useAddRepoHostSelection({
   isOpen,
-  setStep
+  setStep,
+  preferredHostId = null
 }: {
   isOpen: boolean
   setStep: (step: AddRepoDialogStep) => void
+  /** The host the dialog was opened for (a dropped folder's owner); wins over the focused host. */
+  preferredHostId?: ExecutionHostId | null
 }): {
   hostOptions: ReturnType<typeof useSidebarHostScopeOptions>['hostOptions']
-  selectedHostId: ExecutionHostId
+  selectedHostId: ExecutionHostId | null
+  /** The host the picker shows: the chosen one, even while it is still coming up. */
+  displayedHostId: ExecutionHostId | null
   selectedParsedHost: ReturnType<typeof parseExecutionHostId>
-  selectedSshTargetId: string | null
+  selectedHostLabel: string | null
   hostSelectorOpen: boolean
   setHostSelectorOpen: (open: boolean) => void
-  handleSelectAddProjectHost: (hostId: ExecutionHostId) => Promise<void>
-  handleConnectAddProjectHost: (hostId: ExecutionHostId) => Promise<void>
+  /** False when the host cannot be selected, so the selection did not change. */
+  handleSelectAddProjectHost: (hostId: ExecutionHostId) => Promise<boolean>
+  /** False when the host did not connect (the failure is already toasted). */
+  handleConnectAddProjectHost: (hostId: ExecutionHostId) => Promise<boolean>
 } {
   const settings = useAppStore((s) => s.settings)
   const setSshConnectionState = useAppStore((s) => s.setSshConnectionState)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const { hostOptions } = useSidebarHostScopeOptions()
+  const isWebClient = isWebClientLocation()
   const ephemeralRuntimeEnvironmentIds = useMemo(
     () =>
       new Set(
@@ -46,72 +61,122 @@ export function useAddRepoHostSelection({
   )
   const selectableHostOptions = useMemo(
     () =>
-      hostOptions.filter((host) => {
+      pickerExecutionHosts(hostOptions).filter((host) => {
         const parsed = parseExecutionHostId(host.id)
         return (
-          parsed?.kind !== 'runtime' || !ephemeralRuntimeEnvironmentIds.has(parsed.environmentId)
+          !(isWebClient && parsed?.kind === 'local') &&
+          (parsed?.kind !== 'runtime' || !ephemeralRuntimeEnvironmentIds.has(parsed.environmentId))
         )
       }),
-    [ephemeralRuntimeEnvironmentIds, hostOptions]
+    [ephemeralRuntimeEnvironmentIds, hostOptions, isWebClient]
   )
   const [selectedAddProjectHostId, setSelectedAddProjectHostId] =
     useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
   const [hostSelectorOpen, setHostSelectorOpen] = useState(false)
   const previousOpenRef = useRef(false)
+  const pairedWebRuntimeHost = isWebClient
+    ? selectableHostOptions.find((host) => host.kind === 'runtime' && canSelectAddRepoHost(host))
+    : undefined
 
-  const selectedHost =
-    selectableHostOptions.find(
-      (host) => host.id === selectedAddProjectHostId && canSelectAddRepoHost(host)
-    ) ??
-    selectableHostOptions.find(
-      (host) => host.id === LOCAL_EXECUTION_HOST_ID && canSelectAddRepoHost(host)
-    ) ??
-    selectableHostOptions.find((host) => canSelectAddRepoHost(host)) ??
-    selectableHostOptions[0]
-  const selectedHostId = selectedHost?.id ?? LOCAL_EXECUTION_HOST_ID
+  // Why through the index: a connect saves the SSH id, which may now stand under its server's row.
+  const resolvedHost = indexExecutionHostsById(hostOptions).get(selectedAddProjectHostId)
+  const requestedHost =
+    resolvedHost && selectableHostOptions.includes(resolvedHost) ? resolvedHost : undefined
+  const requestedHostSelectable = requestedHost ? canSelectAddRepoHost(requestedHost) : false
+  // A connecting or unmerged SSH target must block actions rather than silently select this computer.
+  const requestedHostPending =
+    requestedHost !== undefined &&
+    !requestedHostSelectable &&
+    (requestedHost.kind === 'ssh' ||
+      requestedHost.wslDistro !== undefined ||
+      (requestedHost.aliasHostIds?.length ?? 0) > 0)
+  const selectedHost = requestedHostSelectable
+    ? requestedHost
+    : requestedHostPending
+      ? undefined
+      : (pairedWebRuntimeHost ??
+        selectableHostOptions.find(
+          (host) => host.id === LOCAL_EXECUTION_HOST_ID && canSelectAddRepoHost(host)
+        ) ??
+        selectableHostOptions.find((host) => canSelectAddRepoHost(host)))
+  const selectedHostId =
+    selectedHost?.id ?? (isWebClient || requestedHostPending ? null : LOCAL_EXECUTION_HOST_ID)
+  const displayedHostId = requestedHostPending ? (requestedHost?.id ?? null) : selectedHostId
   const selectedParsedHost = parseExecutionHostId(selectedHostId)
-  const selectedSshTargetId =
-    selectedParsedHost?.kind === 'ssh' ? selectedParsedHost.targetId : null
 
   useEffect(() => {
     if (isOpen && !previousOpenRef.current) {
-      const focusedHostId = getSettingsFocusedExecutionHostId(settings)
-      const nextHostId = selectableHostOptions.some(
-        (host) => host.id === focusedHostId && canSelectAddRepoHost(host)
-      )
-        ? focusedHostId
-        : LOCAL_EXECUTION_HOST_ID
-      setSelectedAddProjectHostId(nextHostId)
+      const hostsById = indexExecutionHostsById(hostOptions)
+      const preferredHost = preferredHostId ? hostsById.get(preferredHostId) : undefined
+      const focusedHost = hostsById.get(getSettingsFocusedExecutionHostId(settings))
+      // A dropped folder’s WSL host may still be starting; do not require canSelectAddRepoHost yet.
+      const nextHostId =
+        preferredHost && selectableHostOptions.includes(preferredHost)
+          ? preferredHost.id
+          : focusedHost &&
+              selectableHostOptions.includes(focusedHost) &&
+              canSelectAddRepoHost(focusedHost)
+            ? focusedHost.id
+            : (pairedWebRuntimeHost?.id ?? (isWebClient ? null : LOCAL_EXECUTION_HOST_ID))
+      if (nextHostId) {
+        setSelectedAddProjectHostId(nextHostId)
+      }
     }
     if (!isOpen) {
       setHostSelectorOpen(false)
     }
     previousOpenRef.current = isOpen
-  }, [isOpen, selectableHostOptions, settings])
+  }, [
+    hostOptions,
+    isOpen,
+    isWebClient,
+    pairedWebRuntimeHost?.id,
+    preferredHostId,
+    selectableHostOptions,
+    settings
+  ])
 
   const handleSelectAddProjectHost = useCallback(
-    async (hostId: ExecutionHostId): Promise<void> => {
+    async (hostId: ExecutionHostId): Promise<boolean> => {
       const host = selectableHostOptions.find((candidate) => candidate.id === hostId)
       if (!host || !canSelectAddRepoHost(host)) {
-        return
+        return false
       }
       setSelectedAddProjectHostId(hostId)
       setStep('add')
+      return true
     },
     [selectableHostOptions, setStep]
   )
 
   const handleConnectAddProjectHost = useCallback(
-    async (hostId: ExecutionHostId): Promise<void> => {
+    async (hostId: ExecutionHostId): Promise<boolean> => {
       const host = selectableHostOptions.find((candidate) => candidate.id === hostId)
       const parsed = parseExecutionHostId(hostId)
+      if (host?.wslDistro !== undefined && parsed?.kind === 'runtime') {
+        // Main publishes the WSL host's progress; the row turns selectable once its server answers.
+        try {
+          await window.api.runtimeEnvironments.connect({ selector: parsed.environmentId })
+          setSelectedAddProjectHostId(hostId)
+          return true
+        } catch (err) {
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'auto.components.sidebar.useAddRepoHostSelection.wslConnectionFailed',
+                  'Couldn’t start the WSL host.'
+                )
+          )
+          return false
+        }
+      }
       if (!host || parsed?.kind !== 'ssh') {
-        return
+        return false
       }
 
       const previousState = sshConnectionStates.get(parsed.targetId)
-      // Why: ssh.connect can complete before the global state-change event
-      // reaches the renderer; optimistic state keeps this picker responsive.
+      // Optimistically mark connecting because the global SSH state event may arrive after connect returns.
       setSshConnectionState(parsed.targetId, {
         targetId: parsed.targetId,
         status: 'connecting',
@@ -133,35 +198,31 @@ export function useAddRepoHostSelection({
           setSshConnectionState(parsed.targetId, state)
         }
         if (state?.status !== 'connected') {
-          return
+          return false
         }
         setSelectedAddProjectHostId(hostId)
         setStep('add')
         setHostSelectorOpen(false)
+        return true
       } catch (err) {
-        setSshConnectionState(
-          parsed.targetId,
-          previousState ?? {
+        const fallback = translate(
+          'auto.components.sidebar.useAddRepoHostSelection.connectionFailed',
+          'SSH connection failed.'
+        )
+        // Main publishes the failure and its reason; only replace our own optimistic row.
+        if (
+          useAppStore.getState().sshConnectionStates.get(parsed.targetId)?.status === 'connecting'
+        ) {
+          setSshConnectionState(parsed.targetId, {
             targetId: parsed.targetId,
-            status: 'disconnected',
-            error:
-              err instanceof Error
-                ? err.message
-                : translate(
-                    'auto.components.sidebar.useAddRepoHostSelection.connectionFailed',
-                    'SSH connection failed.'
-                  ),
-            reconnectAttempt: 0
-          }
-        )
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : translate(
-                'auto.components.sidebar.useAddRepoHostSelection.connectionFailed',
-                'SSH connection failed.'
-              )
-        )
+            status: 'error',
+            error: extractIpcErrorMessage(err, fallback),
+            reconnectAttempt: previousState?.reconnectAttempt ?? 0,
+            remotePlatform: previousState?.remotePlatform
+          })
+        }
+        toastSshConnectFailure(parsed.targetId, err, fallback)
+        return false
       }
     },
     [selectableHostOptions, setSshConnectionState, setStep, sshConnectionStates]
@@ -170,8 +231,10 @@ export function useAddRepoHostSelection({
   return {
     hostOptions: selectableHostOptions,
     selectedHostId,
+    displayedHostId,
     selectedParsedHost,
-    selectedSshTargetId,
+    selectedHostLabel:
+      selectableHostOptions.find((host) => host.id === selectedHostId)?.label ?? null,
     hostSelectorOpen,
     setHostSelectorOpen,
     handleSelectAddProjectHost,

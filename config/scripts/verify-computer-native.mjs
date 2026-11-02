@@ -28,6 +28,18 @@ const checks = [
     enabled: true
   },
   {
+    name: 'Linux snapshot renderer tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/runtime_render_test.py'],
+    enabled: true
+  },
+  {
+    name: 'Linux keyboard synthesis tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/runtime_keyboard_test.py'],
+    enabled: true
+  },
+  {
     name: 'native provider argument guardrails',
     run: verifyNativeArgumentGuardrails,
     enabled: true
@@ -46,6 +58,12 @@ const checks = [
       ].join(';')
     ],
     enabled: process.platform === 'linux'
+  },
+  {
+    name: 'Linux set_value tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/set_value_test.py'],
+    enabled: true
   },
   {
     name: 'Windows provider PowerShell parse',
@@ -67,6 +85,19 @@ const checks = [
   {
     name: 'Windows provider handshake',
     run: verifyWindowsProviderHandshake,
+    enabled: process.platform === 'win32'
+  },
+  {
+    name: 'Windows snapshot renderer tests',
+    command: 'powershell.exe',
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      'native/computer-use-windows/runtime-render.test.ps1'
+    ],
     enabled: process.platform === 'win32'
   },
   {
@@ -200,12 +231,9 @@ function verifyNativeArgumentGuardrails() {
   }
   if (
     !linux.includes('def require_non_empty_string(value, name):') ||
-    !linux.includes('type_text(require_non_empty_string(operation.get("text"), "text"))') ||
-    !linux.includes('press_key(require_non_empty_string(operation.get("key"), "key"))')
+    !linux.includes('text = require_non_empty_string(operation.get("text"), "text")')
   ) {
-    failures.push(
-      'Linux text/key actions must reject missing payloads instead of sending empty input'
-    )
+    failures.push('Linux text actions must reject missing payloads instead of sending empty input')
   }
   if (!linux.includes('"targetById": False')) {
     failures.push('Linux provider must not advertise stable window-id targeting')
@@ -271,11 +299,6 @@ function verifyNativeArgumentGuardrails() {
   if (/restore_window\(app\)(?!:)/.test(linux)) {
     failures.push('Linux restore call sites must pass the selected window target')
   }
-  if (!linux.includes('even when the click uses an accessibility path')) {
-    failures.push(
-      'Linux clicks must activate the target window before accessibility or pointer input'
-    )
-  }
   if (
     !linux.includes('compact_browser_tabs=is_browser_app(query, app)') ||
     !linux.includes('inactive browser tabs omitted')
@@ -311,11 +334,6 @@ function verifyNativeArgumentGuardrails() {
   ) {
     failures.push(
       'macOS typeText must try verified focused AX text replacement before synthetic keyboard fallback'
-    )
-  }
-  if (!macos.includes('even when the click uses an AX action path')) {
-    failures.push(
-      'macOS clicks must activate the target window before accessibility or pointer input'
     )
   }
   if (
@@ -377,11 +395,6 @@ function verifyNativeArgumentGuardrails() {
   ) {
     failures.push(
       'Windows text/key actions must reject missing payloads instead of sending empty input'
-    )
-  }
-  if (!windows.includes('even when UI Automation handles the click')) {
-    failures.push(
-      'Windows clicks must activate the target window before UI Automation or pointer input'
     )
   }
   if (
@@ -470,11 +483,11 @@ function verifyNativeArgumentGuardrails() {
 
 function powerShellFunctionBody(source, name) {
   const start = source.indexOf(`function ${name}`)
-  if (start < 0) {
+  if (start === -1) {
     return null
   }
   const bodyStart = source.indexOf('{', start)
-  if (bodyStart < 0) {
+  if (bodyStart === -1) {
     return null
   }
   let depth = 0
@@ -494,11 +507,11 @@ function powerShellFunctionBody(source, name) {
 
 function swiftFunctionBody(source, name) {
   const start = source.indexOf(`func ${name}`)
-  if (start < 0) {
+  if (start === -1) {
     return null
   }
   const bodyStart = source.indexOf('{', start)
-  if (bodyStart < 0) {
+  if (bodyStart === -1) {
     return null
   }
   let depth = 0

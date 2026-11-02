@@ -1,4 +1,4 @@
-import type { GitHubProjectSummary } from '../../../../shared/github-project-types'
+import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
 
 export const PROJECT_PICKER_BROWSE_CACHE_TTL_MS = 5 * 60_000
 export const PROJECT_PICKER_BROWSE_CACHE_MAX_ENTRIES = 32
@@ -50,8 +50,7 @@ export function getProjectPickerBrowseCacheEntry(
     browseCacheByRuntimeScope.delete(cacheKey)
     return null
   }
-  // Why: cache keys are runtime scopes; refresh recency so active runtimes do
-  // not get evicted just because a user briefly tries many other runtimes.
+  // Refresh runtime recency so trying other runtimes cannot evict the active scope prematurely.
   browseCacheByRuntimeScope.delete(cacheKey)
   browseCacheByRuntimeScope.set(cacheKey, entry)
   return entry

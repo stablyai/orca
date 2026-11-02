@@ -5,11 +5,14 @@ import { detectLanguage } from '@/lib/language-detect'
 import { toast } from 'sonner'
 import type { TreeNode } from './file-explorer-types'
 import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-marker'
+import type { DirToggleTiming } from './file-explorer-dir-toggle-timing'
 import { translate } from '@/i18n/i18n'
 import {
   getFileExplorerOwnerUnresolvedMessage,
   requireMatchingFileExplorerOperationRoute
 } from './file-explorer-operation-owner'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { fileExplorerNodeTabRelativePath } from './file-explorer-directory-listing'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
@@ -35,16 +38,16 @@ type UseFileExplorerHandlersParams = {
   loadDir: (
     dirPath: string,
     depth: number,
-    options?: { force?: boolean; failOnError?: boolean }
+    options?: { force?: boolean; failOnError?: boolean; wakeWslDistro?: boolean }
   ) => Promise<boolean>
-  statPath: (path: string) => Promise<{ isDirectory: boolean }>
+  statPath: (path: string) => Promise<{ isDirectory: boolean; escapesWorktree?: boolean }>
   markPathAsDirectory: (path: string) => void
   setSelectedPath: (path: string) => void
   scrollRef: RefObject<HTMLDivElement | null>
 }
 
 type UseFileExplorerHandlersReturn = {
-  handleClick: (node: TreeNode) => void
+  handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
   handleDoubleClick: (node: TreeNode) => void
   handleWheelCapture: (e: React.WheelEvent<HTMLDivElement>) => void
 }
@@ -86,25 +89,22 @@ export async function activateFileExplorerNode(args: {
     toggleDir(activeWorktreeId, node.path)
     return
   }
+  let escapesWorktree = false
   if (node.isSymlink) {
-    // Why: symlink targets may live in macOS TCC-protected app data. Resolve
-    // them only after the user explicitly activates the row.
-    let targetIsDirectory = false
+    // Resolve symlinks only on explicit activation because targets may be protected by macOS TCC.
+    let target: { isDirectory: boolean; escapesWorktree?: boolean } | null = null
     try {
-      targetIsDirectory = (await statPath(node.path)).isDirectory
+      target = await statPath(node.path)
     } catch {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991',
-          'Cannot open symlink target'
-        )
-      )
-      return
+      // Let the editor report unresolved target errors instead of dead-ending the click.
     }
-    if (targetIsDirectory) {
+    escapesWorktree = target?.escapesWorktree === true
+    if (target?.isDirectory) {
+      // A user's expand may start a stopped WSL distro.
       const loadedAsDirectory = await loadDir(node.path, node.depth, {
         force: true,
-        failOnError: true
+        failOnError: true,
+        wakeWslDistro: true
       })
       if (loadedAsDirectory) {
         markPathAsDirectory(node.path)
@@ -125,7 +125,7 @@ export async function activateFileExplorerNode(args: {
   let fileRuntimeEnvironmentId: string | null
   try {
     const route = requireMatchingFileExplorerOperationRoute(activeWorktreeId, node.operationOwner)
-    fileRuntimeEnvironmentId = route.settings.activeRuntimeEnvironmentId?.trim() || null
+    fileRuntimeEnvironmentId = runtimeTargetEnvironmentId(route.target)
   } catch {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
     return
@@ -133,7 +133,8 @@ export async function activateFileExplorerNode(args: {
   openFile(
     {
       filePath: node.path,
-      relativePath: node.relativePath,
+      // Outside-project links use user-named absolute paths so reopening after restart preserves authorization.
+      relativePath: escapesWorktree ? node.path : fileExplorerNodeTabRelativePath(node),
       worktreeId: activeWorktreeId,
       runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
       language: detectLanguage(node.name),
@@ -141,11 +142,9 @@ export async function activateFileExplorerNode(args: {
     },
     {
       preview: true,
-      // Why: activating an Explorer file is a focus handoff even if the rich
-      // editor finishes mounting after the row receives browser focus.
+      // Hand focus to the editor even if rich-editor mounting finishes after the row takes browser focus.
       focusEditor: true,
-      // Why: explicit local opens must not inherit the active runtime, so we
-      // encode "no runtime owner" via the fallback-suppression option.
+      // Suppress runtime fallback for explicit local opens.
       suppressActiveRuntimeFallback: fileRuntimeEnvironmentId === null
     }
   )
@@ -165,7 +164,12 @@ export function useFileExplorerHandlers({
   scrollRef
 }: UseFileExplorerHandlersParams): UseFileExplorerHandlersReturn {
   const handleClick = useCallback(
-    (node: TreeNode) => {
+    (node: TreeNode, dirToggle: DirToggleTiming = 'immediate') => {
+      if (dirToggle === 'skip' && (node.isDirectory || node.isSymlink)) {
+        // Rename owns this click; symlinks remain file-shaped until activation, so isDirectory alone would retoggle.
+        setSelectedPath(node.path)
+        return
+      }
       void activateFileExplorerNode({
         node,
         activeWorktreeId,

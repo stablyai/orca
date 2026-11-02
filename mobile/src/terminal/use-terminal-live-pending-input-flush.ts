@@ -1,31 +1,59 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
+import { getTerminalInputByteLength } from '../../../src/shared/terminal-input'
+import {
+  UNFRAMED_AGENT_INPUT_MAX_BYTES,
+  wrapTerminalBracketedPasteText
+} from '../../../src/shared/terminal-bracketed-paste-text'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 import {
   buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
-  TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS
-} from './terminal-live-hangul-mirror'
+  TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS,
+  type TerminalLiveMirrorStep
+} from './terminal-live-preedit-mirror'
 import {
+  cancelTerminalLivePendingFlush,
+  createTerminalLivePendingFlushState,
+  queueTerminalLiveControlSend,
   queueTerminalLiveMirrorSend,
-  waitForTerminalLivePendingFlush
+  waitForTerminalLivePendingFlush,
+  type TerminalLiveInputFailure
 } from './terminal-live-pending-flush-state'
 
 type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabTypeRef: RefObject<TTabType | null>
+  readonly framesLivePaste?: (handle: string) => boolean
+  readonly onFieldSessionEnded?: (handle: string) => void
+  readonly onSendFailure?: (failure: TerminalLiveInputFailure) => void
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
 }
 
+type RunTerminalLiveMirrorStep = (
+  handle: string,
+  fieldText: string,
+  commitHeld: boolean,
+  composing?: boolean
+) => Promise<boolean>
+
 type TerminalLivePendingInputFlush = {
-  readonly applyLiveInputMirror: (handle: string, fieldText: string) => void
+  readonly applyLiveInputMirror: (
+    handle: string,
+    fieldText: string,
+    composing?: boolean
+  ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
+  readonly endLiveInputSessionThenSend: TerminalLiveInputSender
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
+  readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
+  readonly queueLiveInputControl: TerminalLiveInputSender
   readonly sentLiveInputTextRef: RefObject<string>
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
@@ -33,19 +61,21 @@ type TerminalLivePendingInputFlush = {
 export function useTerminalLivePendingInputFlush<TTabType extends string>({
   activeHandleRef,
   activeSessionTabTypeRef,
+  framesLivePaste,
+  onFieldSessionEnded,
+  onSendFailure,
   liveInputRef,
   liveInputTerminalHandlesRef,
   sendLiveTerminalInputRef,
   setLiveInputCapture
 }: TerminalLivePendingInputFlushOptions<TTabType>): TerminalLivePendingInputFlush {
   const heldCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingLiveInputFlushRef = useRef<Promise<boolean> | null>(null)
+  const pendingLiveInputFlushRef = useRef(createTerminalLivePendingFlushState())
   const heldLiveInputTextRef = useRef('')
+  const liveInputComposingRef = useRef<boolean | undefined>(undefined)
   const sentLiveInputTextRef = useRef('')
   const pendingLiveInputHandleRef = useRef<string | null>(null)
-  const runMirrorStepRef = useRef<
-    (handle: string, fieldText: string, commitHeld: boolean) => Promise<boolean>
-  >(async () => false)
+  const runMirrorStepRef = useRef<RunTerminalLiveMirrorStep>(async () => false)
 
   const clearHeldCommitTimer = useCallback(() => {
     if (heldCommitTimerRef.current) {
@@ -56,7 +86,9 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
 
   const resetMirrorState = useCallback(() => {
     clearHeldCommitTimer()
+    cancelTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
     heldLiveInputTextRef.current = ''
+    liveInputComposingRef.current = undefined
     sentLiveInputTextRef.current = ''
     pendingLiveInputHandleRef.current = null
   }, [clearHeldCommitTimer])
@@ -64,69 +96,143 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   const clearPendingLiveInputCommit = useCallback(() => {
     resetMirrorState()
     setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
+    writeTerminalLiveInputText(liveInputRef, '')
   }, [liveInputRef, resetMirrorState, setLiveInputCapture])
 
+  useEffect(() => {
+    const state = pendingLiveInputFlushRef.current
+    state.onFailure = (handle, failure) => {
+      onFieldSessionEnded?.(handle)
+      clearPendingLiveInputCommit()
+      onSendFailure?.(failure)
+    }
+    return () => {
+      state.onFailure = null
+    }
+  }, [clearPendingLiveInputCommit, onFieldSessionEnded, onSendFailure])
+
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {
-    return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef)
+    return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
   }, [])
 
-  const runMirrorStep = useCallback(
-    async (handle: string, fieldText: string, commitHeld: boolean): Promise<boolean> => {
+  const sendQueuedMirrorPayload = useCallback(
+    (handle: string, payload: string): Promise<boolean> =>
+      sendLiveTerminalInputRef.current(handle, payload),
+    [sendLiveTerminalInputRef]
+  )
+
+  const sendQueuedPointerPayload = useCallback(
+    (handle: string, payload: string): Promise<boolean> =>
+      sendLiveTerminalInputRef.current(handle, payload, 'pointer'),
+    [sendLiveTerminalInputRef]
+  )
+
+  // A single append this long is an OS paste, or an edit before one; frame it like a paste.
+  const isFramedPasteAppend = useCallback(
+    (handle: string, step: TerminalLiveMirrorStep): boolean =>
+      getTerminalInputByteLength(step.appendText) > UNFRAMED_AGENT_INPUT_MAX_BYTES &&
+      framesLivePaste?.(handle) === true,
+    [framesLivePaste]
+  )
+  const buildMirrorPayload = useCallback(
+    (handle: string, step: TerminalLiveMirrorStep): string =>
+      buildTerminalLiveMirrorPayload(
+        isFramedPasteAppend(handle, step)
+          ? { ...step, appendText: wrapTerminalBracketedPasteText(step.appendText) }
+          : step
+      ),
+    [isFramedPasteAppend]
+  )
+
+  const runMirrorStep = useCallback<RunTerminalLiveMirrorStep>(
+    async (handle, fieldText, commitHeld, composing) => {
       if (
         handle !== activeHandleRef.current ||
         (activeSessionTabTypeRef.current != null &&
           activeSessionTabTypeRef.current !== 'terminal') ||
         !liveInputTerminalHandlesRef.current.has(handle)
       ) {
-        // Why: a stale handle must not keep local mirror state alive — the next
-        // active terminal would inherit wrong erase counts. A null tab type is
-        // "unknown" during tab-list lag, not "left the terminal", so it must not trip.
+        // Stale handles must drop mirror erase counts, but null tab type during list lag does not prove departure.
         resetMirrorState()
         return false
       }
 
-      const step = computeTerminalLiveMirrorStep(sentLiveInputTextRef.current, fieldText, {
-        commitHeld
+      const typedStep = computeTerminalLiveMirrorStep(sentLiveInputTextRef.current, fieldText, {
+        commitHeld,
+        composing
       })
+      // Agents may collapse a framed paste into one token, so commit the whole field and end its session.
+      const pasted = isFramedPasteAppend(handle, typedStep)
+      const step =
+        pasted && typedStep.heldText.length > 0
+          ? computeTerminalLiveMirrorStep(sentLiveInputTextRef.current, fieldText, {
+              commitHeld: true
+            })
+          : typedStep
       sentLiveInputTextRef.current = step.nextSentText
       heldLiveInputTextRef.current = step.heldText
+      liveInputComposingRef.current = composing
       pendingLiveInputHandleRef.current =
-        step.heldText.length > 0 || step.nextSentText.length > 0 ? handle : null
+        step.heldText.length > 0 ||
+        step.nextSentText.length > 0 ||
+        pendingLiveInputFlushRef.current.current
+          ? handle
+          : null
 
       clearHeldCommitTimer()
-      if (step.heldText.length > 0) {
+      // Reported preedit must never idle-commit; only unreported heuristic holds may settle on a timer.
+      if (step.heldText.length > 0 && composing === undefined) {
         heldCommitTimerRef.current = setTimeout(() => {
           heldCommitTimerRef.current = null
           const heldField = sentLiveInputTextRef.current + heldLiveInputTextRef.current
           void runMirrorStepRef.current(handle, heldField, true)
-        }, TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+        }, TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
       }
 
-      const payload = buildTerminalLiveMirrorPayload(step)
+      const payload = buildMirrorPayload(handle, step)
       if (payload.length === 0) {
         return waitForPendingLiveInputFlush()
       }
-      return queueTerminalLiveMirrorSend(pendingLiveInputFlushRef, () =>
-        sendLiveTerminalInputRef.current(handle, payload)
+      const sent = queueTerminalLiveMirrorSend(
+        pendingLiveInputFlushRef.current,
+        handle,
+        payload,
+        sendQueuedMirrorPayload
       )
+      if (pasted) {
+        onFieldSessionEnded?.(handle)
+        clearHeldCommitTimer()
+        heldLiveInputTextRef.current = ''
+        liveInputComposingRef.current = undefined
+        sentLiveInputTextRef.current = ''
+        setLiveInputCapture('')
+        writeTerminalLiveInputText(liveInputRef, '')
+      }
+      return sent
     },
     [
       activeHandleRef,
       activeSessionTabTypeRef,
+      buildMirrorPayload,
       clearHeldCommitTimer,
+      isFramedPasteAppend,
+      liveInputRef,
+      onFieldSessionEnded,
       liveInputTerminalHandlesRef,
       resetMirrorState,
-      sendLiveTerminalInputRef,
+      sendQueuedMirrorPayload,
+      setLiveInputCapture,
       waitForPendingLiveInputFlush
     ]
   )
-  runMirrorStepRef.current = runMirrorStep
+  // Commit the timer’s input ref in an effect; render writes would leak discarded work.
+  useEffect(() => {
+    runMirrorStepRef.current = runMirrorStep
+  }, [runMirrorStep])
 
   const applyLiveInputMirror = useCallback(
-    (handle: string, fieldText: string): void => {
-      void runMirrorStep(handle, fieldText, false)
-    },
+    (handle: string, fieldText: string, composing?: boolean): Promise<boolean> =>
+      runMirrorStep(handle, fieldText, false, composing),
     [runMirrorStep]
   )
 
@@ -147,33 +253,78 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
           ? await runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
           : await waitForPendingLiveInputFlush()
 
-      // Why: an explicit flush ends the field's editing session; the echoed PTY
-      // text stays, so local mirror state must restart from empty.
+      // Flush ends the field session while retaining PTY echo, so local mirror state restarts empty.
       clearPendingLiveInputCommit()
       return result
     },
     [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
   )
 
-  useEffect(() => {
-    return () => {
-      if (heldCommitTimerRef.current) {
-        clearTimeout(heldCommitTimerRef.current)
-        heldCommitTimerRef.current = null
+  // Queue at key time; waiting for the drain would let text typed meanwhile go first.
+  const queueLiveInputControl = useCallback<TerminalLiveInputSender>(
+    (handle, bytes, origin) => {
+      // Own the queued bytes so a terminal switch retires them even with an empty field.
+      pendingLiveInputHandleRef.current = handle
+      return queueTerminalLiveControlSend(
+        pendingLiveInputFlushRef.current,
+        handle,
+        bytes,
+        origin === 'pointer' ? sendQueuedPointerPayload : sendQueuedMirrorPayload
+      )
+    },
+    [sendQueuedMirrorPayload, sendQueuedPointerPayload]
+  )
+
+  // Queue held text and the control synchronously so the next keystroke follows them.
+  const endLiveInputSessionThenSend = useCallback<TerminalLiveInputSender>(
+    (handle, bytes, origin) => {
+      const pendingHandle = pendingLiveInputHandleRef.current
+      const flushState = pendingLiveInputFlushRef.current
+      if (pendingHandle && pendingHandle !== handle) {
+        // Never drain another terminal’s queued deltas into the current one.
+        cancelTerminalLivePendingFlush(flushState)
+      } else if (pendingHandle === handle && heldLiveInputTextRef.current.length > 0) {
+        const sentText = sentLiveInputTextRef.current
+        const payload = buildMirrorPayload(
+          handle,
+          computeTerminalLiveMirrorStep(sentText, sentText + heldLiveInputTextRef.current, {
+            commitHeld: true
+          })
+        )
+        if (payload.length > 0) {
+          void queueTerminalLiveMirrorSend(flushState, handle, payload, sendQueuedMirrorPayload)
+        }
       }
+      const sent = queueLiveInputControl(handle, bytes, origin)
+      clearHeldCommitTimer()
       heldLiveInputTextRef.current = ''
+      liveInputComposingRef.current = undefined
       sentLiveInputTextRef.current = ''
-      pendingLiveInputHandleRef.current = null
-      pendingLiveInputFlushRef.current = null
-    }
-  }, [])
+      setLiveInputCapture('')
+      writeTerminalLiveInputText(liveInputRef, '')
+      return sent
+    },
+    [
+      buildMirrorPayload,
+      clearHeldCommitTimer,
+      liveInputRef,
+      queueLiveInputControl,
+      sendQueuedMirrorPayload,
+      setLiveInputCapture
+    ]
+  )
+
+  useEffect(() => resetMirrorState, [resetMirrorState])
 
   return {
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
+    endLiveInputSessionThenSend,
     flushPendingLiveInputText,
     heldLiveInputTextRef,
+    liveInputComposingRef,
     pendingLiveInputHandleRef,
+    queueLiveInputControl,
     sentLiveInputTextRef,
     waitForPendingLiveInputFlush
   }

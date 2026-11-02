@@ -1,12 +1,13 @@
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import { CloneStep } from './AddRepoCloneStep'
 import { RemoteStep } from './AddRepoRemoteStep'
+import { useServerSshProjects } from './use-server-ssh-projects'
 import { CreateStep } from './AddRepoCreateStep'
 import { AddRepoLocalStartStep } from './AddRepoStartSteps'
 import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from './AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 import type { GitAvailability } from './create-project-defaults'
 
@@ -14,13 +15,14 @@ type AddRepoDialogStepContentProps = {
   step: AddRepoDialogStep
   isRuntimeEnvironmentActive: boolean
   activeRuntimeEnvironmentId: string | null | undefined
-  isSshLikely: boolean
   repoCount: number
   isAdding: boolean
   addProjectBusyLabel: string | null
   nestedScanInProgress: boolean
   nestedScanId: string | null
   serverPath: string
+  /** The path came from Windows' picker or an Explorer drop, so the host's browser is skipped. */
+  serverPathPrefilled?: boolean
   isAddingServerPath: boolean
   cloneUrl: string
   cloneDestination: string
@@ -29,13 +31,10 @@ type AddRepoDialogStepContentProps = {
   isCloning: boolean
   sshTargets: (SshTarget & { state?: SshConnectionState })[]
   selectedTargetId: string | null
-  selectedSshTargetId?: string | null
   selectedHostLabel?: string | null
-  lockSshTargetSelection?: boolean
   remotePath: string
   remoteError: string | null
   isAddingRemote: boolean
-  isScanningRemoteNested: boolean
   nestedScan: NestedRepoScanResult | null
   nestedSelectedPaths: Set<string>
   nestedGroupName: string
@@ -44,10 +43,11 @@ type AddRepoDialogStepContentProps = {
   createError: string | null
   isCreating: boolean
   hostSelector?: ReactNode
-  showRemoteAction?: boolean
-  canCreateProject?: boolean
+  /** A WSL host's Windows drive refusal, with its "Add on this computer" action. */
+  windowsDriveNotice?: ReactNode
+  actionsDisabled?: boolean
   manualCreateParentEntry?: boolean
-  browseHostKind?: 'local' | 'ssh' | 'runtime'
+  browseHostKind?: 'local' | 'runtime'
   createDefaultParent: string
   createGitAvailability: GitAvailability
   createRuntimeParentStatus: 'idle' | 'checking' | 'failed'
@@ -62,9 +62,7 @@ type AddRepoDialogStepContentProps = {
   onSelectTarget: (id: string) => void
   onRemotePathChange: (path: string) => void
   onAddRemoteRepo: () => void
-  onOpenSshSettings: () => void
   onConnectTarget: (id: string) => Promise<void>
-  onStopRemoteNestedScan: () => void
   onCloneUrlChange: (url: string) => void
   onCloneDestinationChange: (destination: string) => void
   onPickCloneDestination: () => void
@@ -83,13 +81,13 @@ export function AddRepoDialogStepContent({
   step,
   isRuntimeEnvironmentActive,
   activeRuntimeEnvironmentId,
-  isSshLikely,
   repoCount,
   isAdding,
   addProjectBusyLabel,
   nestedScanInProgress,
   nestedScanId,
   serverPath,
+  serverPathPrefilled = false,
   isAddingServerPath,
   cloneUrl,
   cloneDestination,
@@ -98,13 +96,10 @@ export function AddRepoDialogStepContent({
   isCloning,
   sshTargets,
   selectedTargetId,
-  selectedSshTargetId,
   selectedHostLabel,
-  lockSshTargetSelection = false,
   remotePath,
   remoteError,
   isAddingRemote,
-  isScanningRemoteNested,
   nestedScan,
   nestedSelectedPaths,
   nestedGroupName,
@@ -113,8 +108,8 @@ export function AddRepoDialogStepContent({
   createError,
   isCreating,
   hostSelector,
-  showRemoteAction = true,
-  canCreateProject = true,
+  windowsDriveNotice,
+  actionsDisabled = false,
   manualCreateParentEntry = isRuntimeEnvironmentActive,
   browseHostKind = 'local',
   createDefaultParent,
@@ -131,9 +126,7 @@ export function AddRepoDialogStepContent({
   onSelectTarget,
   onRemotePathChange,
   onAddRemoteRepo,
-  onOpenSshSettings,
   onConnectTarget,
-  onStopRemoteNestedScan,
   onCloneUrlChange,
   onCloneDestinationChange,
   onPickCloneDestination,
@@ -147,19 +140,26 @@ export function AddRepoDialogStepContent({
   onPickCreateParent,
   onCreate
 }: AddRepoDialogStepContentProps): React.JSX.Element | null {
-  if (step === 'add') {
+  // The selected server owns the SSH hosts eligible for project creation.
+  const serverSsh = useServerSshProjects(
+    activeRuntimeEnvironmentId ?? null,
+    selectedHostLabel ?? null,
+    onOpenRemoteStep
+  )
+  // Server-owned SSH hosts need their paired server; return to Start if it disappears.
+  if (step === 'add' || (step === 'remote' && !serverSsh)) {
     return (
       <AddRepoLocalStartStep
+        notice={windowsDriveNotice}
         repoCount={repoCount}
-        isSshLikely={isSshLikely}
         isAdding={isAdding}
         addProjectBusyLabel={addProjectBusyLabel}
         nestedScanInProgress={nestedScanInProgress}
         nestedScanId={nestedScanId}
         hostSelector={hostSelector}
-        showRemoteAction={showRemoteAction}
-        canCreateProject={canCreateProject}
+        actionsDisabled={actionsDisabled}
         browseHostKind={browseHostKind}
+        offersServerSshHosts={serverSsh !== null}
         onBrowse={onBrowse}
         onOpenCloneStep={onOpenCloneStep}
         onOpenRemoteStep={onOpenRemoteStep}
@@ -172,12 +172,13 @@ export function AddRepoDialogStepContent({
   if (step === 'server-path') {
     return (
       <AddRepoServerPathStartStep
+        notice={windowsDriveNotice}
         serverPath={serverPath}
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
         isAddingServerPath={isAddingServerPath}
         addProjectBusyLabel={addProjectBusyLabel}
         hostSelector={hostSelector}
-        initialBrowsing
+        initialBrowsing={!(serverPathPrefilled && serverPath.trim())}
         onServerPathChange={onServerPathChange}
         onAddServerPath={onAddServerPath}
         onOpenCloneStep={onOpenCloneStep}
@@ -186,22 +187,19 @@ export function AddRepoDialogStepContent({
     )
   }
 
-  if (step === 'remote') {
+  if (step === 'remote' && serverSsh) {
     return (
       <RemoteStep
         sshTargets={sshTargets}
         selectedTargetId={selectedTargetId}
-        lockSshTargetSelection={lockSshTargetSelection}
         remotePath={remotePath}
         remoteError={remoteError}
         isAddingRemote={isAddingRemote}
-        isScanningNested={isScanningRemoteNested}
         onSelectTarget={onSelectTarget}
         onRemotePathChange={onRemotePathChange}
         onAdd={onAddRemoteRepo}
-        onOpenSshSettings={onOpenSshSettings}
         onConnectTarget={onConnectTarget}
-        onStopNestedScan={onStopRemoteNestedScan}
+        server={serverSsh}
       />
     )
   }
@@ -216,14 +214,12 @@ export function AddRepoDialogStepContent({
         isCloning={isCloning}
         disableDestinationPicker={isRuntimeEnvironmentActive}
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
-        sshTargetId={selectedSshTargetId}
-        cloneTargetLabel={
-          isRuntimeEnvironmentActive || selectedSshTargetId ? selectedHostLabel : null
-        }
+        cloneTargetLabel={isRuntimeEnvironmentActive ? selectedHostLabel : null}
         onUrlChange={onCloneUrlChange}
         onDestChange={onCloneDestinationChange}
         onPickDestination={onPickCloneDestination}
         onClone={onClone}
+        submitDisabled={actionsDisabled}
       />
     )
   }
@@ -258,11 +254,12 @@ export function AddRepoDialogStepContent({
         parentDefaultPending={createParentDefaultPending}
         manualParentEntry={manualCreateParentEntry}
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
-        sshTargetId={selectedSshTargetId}
         onNameChange={onCreateNameChange}
         onParentChange={onCreateParentChange}
         onPickParent={onPickCreateParent}
         onCreate={onCreate}
+        submitDisabled={actionsDisabled}
+        notice={windowsDriveNotice}
       />
     )
   }

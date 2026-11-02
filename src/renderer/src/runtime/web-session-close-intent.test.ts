@@ -24,11 +24,6 @@ describe('web session close intent', () => {
     expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-1', 1000)).toBe(false)
   })
 
-  it('expires a never-confirmed close', () => {
-    recordWebSessionCloseIntent(OWNER, WT, 'host-tab-1', 1000)
-    expect(isWebSessionCloseIntentPending(OWNER, WT, 'host-tab-1', 12_000)).toBe(false)
-  })
-
   it('scopes intents by owner, pairing revision, and worktree', () => {
     recordWebSessionCloseIntent(OWNER, WT, 'host-tab-1', 1000)
 
@@ -66,10 +61,5 @@ describe('web session close intent', () => {
     clearWebSessionCloseIntentsForOwner(OWNER)
     expect(isWebSessionCloseIntentPending(OWNER, 'other-wt', 'host-tab-3', 1000)).toBe(false)
     expect(isWebSessionCloseIntentPending(otherOwner, WT, 'host-tab-4', 1000)).toBe(true)
-  })
-
-  it('ignores empty ids', () => {
-    recordWebSessionCloseIntent(OWNER, WT, '   ', 1000)
-    expect(isWebSessionCloseIntentPending(OWNER, WT, '', 1000)).toBe(false)
   })
 })

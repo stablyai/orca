@@ -32,8 +32,7 @@ function elementWithRect(
   })
   Object.defineProperty(element, 'offsetWidth', { value: rect.width })
   Object.defineProperty(element, 'offsetHeight', { value: rect.height })
-  // Why: happy-dom does no layout, so client dimensions default to 0 and a
-  // collision boundary element would otherwise read as zero-sized.
+  // happy-dom has no layout; seed dimensions so collision boundaries are not zero-sized.
   Object.defineProperty(element, 'clientWidth', { value: rect.width })
   Object.defineProperty(element, 'clientHeight', { value: rect.height })
   document.body.appendChild(element)
@@ -94,13 +93,11 @@ describe('contextual tour floating position', () => {
 
     expect(Number.isFinite(Number(position.panelPosition.left))).toBe(true)
     expect(Number.isFinite(Number(position.panelPosition.top))).toBe(true)
-    // Why: the arrow starts just outside the panel border so the card outline
-    // remains visually clean.
+    // Keep the arrow outside the panel border for a continuous outline.
     expect(position.arrowPosition[expectedStaticArrowSide(position.panelPlacement)]).toBe(-8)
   })
 
-  // Regression: a tall step panel inside a small dialog host fit no placement,
-  // so it overflowed the host and overflow-hidden clipped its buttons.
+  // Overlap is preferable to overflow clipping a tall hosted panel’s buttons.
   it('keeps the panel inside the host when no placement fits, overlapping the target', async () => {
     const host = elementWithRect({
       left: 300,
@@ -223,9 +220,7 @@ describe('contextual tour floating position', () => {
     }
   )
 
-  // Regression: computePosition already returns coordinates relative to the
-  // panel's offsetParent (the host). Subtracting the host rect again sent
-  // hosted panels (e.g. the workspace-creation dialog tour) off-screen.
+  // computePosition already returns host-local coordinates; subtracting the host again sends panels offscreen.
   it('positions hosted panels in host-local coordinates without double offset subtraction', async () => {
     const host = elementWithRect({
       left: 300,
@@ -265,10 +260,150 @@ describe('contextual tour floating position', () => {
       targetElement: target
     })
 
-    // Host-local: target is at (100, 80) inside the host, so a bottom-placed
-    // panel sits at target bottom (120) + 12px gap, shifted to stay inside.
+    // Target bottom 120 plus 12px gap gives host-local top 132; collision shifting retains containment.
     expect(position.panelPosition.top).toBe(132)
     expect(position.panelPosition.left).toBeGreaterThanOrEqual(0)
     expect(Number(position.panelPosition.left)).toBeLessThanOrEqual(520 - 320)
+  })
+})
+
+type MovableTarget = {
+  element: HTMLElement
+  moveTo: (top: number) => void
+  rectReads: () => number
+}
+
+function movableTargetElement(initialTop: number): MovableTarget {
+  let top = initialTop
+  let reads = 0
+  const element = document.createElement('div')
+  Object.defineProperty(element, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => {
+      reads += 1
+      return {
+        left: 500,
+        right: 600,
+        top,
+        bottom: top + 40,
+        width: 100,
+        height: 40,
+        x: 500,
+        y: top
+      }
+    }
+  })
+  Object.defineProperty(element, 'offsetWidth', { value: 100 })
+  Object.defineProperty(element, 'offsetHeight', { value: 40 })
+  Object.defineProperty(element, 'clientWidth', { value: 100 })
+  Object.defineProperty(element, 'clientHeight', { value: 40 })
+  document.body.appendChild(element)
+  return {
+    element,
+    moveTo: (next) => {
+      top = next
+    },
+    rectReads: () => reads
+  }
+}
+
+function panelElement(): HTMLElement {
+  return elementWithRect({ left: 0, right: 320, top: 0, bottom: 180, width: 320, height: 180 })
+}
+
+async function countFramesFor(durationMs: number): Promise<number> {
+  let frames = 0
+  let running = true
+  const tick = (): void => {
+    if (!running) {
+      return
+    }
+    frames += 1
+    requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+  await new Promise((resolve) => setTimeout(resolve, durationMs))
+  running = false
+  return frames
+}
+
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()))
+}
+
+describe('contextual tour floating position tracking cost', () => {
+  it('stops reading the target rect every frame once the target settles', async () => {
+    const target = movableTargetElement(400)
+    const stopWatching = watchContextualTourFloatingPosition({
+      arrowElement: arrowElement(),
+      floatingElement: panelElement(),
+      panelHost: null,
+      preferredPlacement: 'right',
+      targetElement: target.element,
+      onPosition: () => undefined
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const readsBeforeIdle = target.rectReads()
+    const idleFrames = await countFramesFor(300)
+    const idleReads = target.rectReads() - readsBeforeIdle
+    stopWatching()
+
+    expect(idleFrames).toBeGreaterThan(100)
+    expect(idleReads).toBeLessThan(idleFrames / 10)
+  })
+
+  it('keeps the panel glued to a target that moves for several frames after one wake', async () => {
+    const target = movableTargetElement(400)
+    const positions: ContextualTourFloatingPosition[] = []
+    const stopWatching = watchContextualTourFloatingPosition({
+      arrowElement: arrowElement(),
+      floatingElement: panelElement(),
+      panelHost: null,
+      preferredPlacement: 'right',
+      targetElement: target.element,
+      onPosition: (position) => positions.push(position)
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    // A layout animation: one wake, then continuous motion with no further events.
+    window.dispatchEvent(new Event('scroll'))
+    for (const top of [420, 440, 460, 480, 500]) {
+      target.moveTo(top)
+      await nextFrame()
+      await nextFrame()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    stopWatching()
+
+    // Right placement centres the 180px panel on the 40px target: 500 + 20 - 90.
+    expect(positions.at(-1)?.panelPosition).toEqual({ left: 612, top: 430 })
+  })
+
+  it('picks a parked target back up when it moves with no observer event', async () => {
+    const target = movableTargetElement(400)
+    const positions: ContextualTourFloatingPosition[] = []
+    const stopWatching = watchContextualTourFloatingPosition({
+      arrowElement: arrowElement(),
+      floatingElement: panelElement(),
+      panelHost: null,
+      preferredPlacement: 'right',
+      targetElement: target.element,
+      onPosition: (position) => positions.push(position)
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const deliveredWhileParked = positions.length
+    target.moveTo(600)
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    stopWatching()
+
+    expect(positions.length).toBeGreaterThan(deliveredWhileParked)
+    expect(positions.at(-1)?.panelPosition).toEqual({ left: 612, top: 530 })
+
+    const deliveredBeforeStop = positions.length
+    target.moveTo(200)
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(positions.length).toBe(deliveredBeforeStop)
   })
 })

@@ -4,13 +4,15 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import type { RemoveWorktreeResult } from '../../../../shared/types'
+import { TooltipProvider } from '../ui/tooltip'
+import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { showPreservedBranchToast } from './preserved-branch-toast'
 
 vi.mock('sonner', () => ({
   toast: {
     warning: vi.fn(),
-    dismiss: vi.fn()
+    dismiss: vi.fn(),
+    error: vi.fn()
   }
 }))
 
@@ -24,7 +26,7 @@ function renderToastBody(): HTMLElement {
   const root = createRoot(container)
   mountedRoots.push(root)
   act(() => {
-    root.render(description)
+    root.render(<TooltipProvider>{description}</TooltipProvider>)
   })
   return container
 }
@@ -101,5 +103,30 @@ describe('showPreservedBranchToast', () => {
       'Worktree deleted, branch kept',
       expect.not.objectContaining({ duration: Infinity })
     )
+  })
+
+  it('keeps the branch and toast when saving the future choice fails', async () => {
+    const savePreference = vi.fn().mockRejectedValue(new Error('disk full'))
+    const onForceDelete = vi.fn()
+    showPreservedBranchToast(
+      { preservedBranch: { branchName: 'feature/test', head: 'abc123' } },
+      undefined,
+      onForceDelete,
+      savePreference
+    )
+    const body = renderToastBody()
+    await act(async () => {
+      body
+        .querySelector('button[aria-label="More branch delete options"]')
+        ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+    await act(async () => {
+      document
+        .querySelector('[role="menuitem"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onForceDelete).not.toHaveBeenCalled()
+    expect(toast.dismiss).not.toHaveBeenCalled()
   })
 })

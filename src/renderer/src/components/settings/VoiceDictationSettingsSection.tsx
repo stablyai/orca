@@ -1,8 +1,10 @@
 import type { VoiceSettings } from '../../../../shared/speech-types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
+import { Switch } from '../ui/switch'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
@@ -27,33 +29,24 @@ export function VoiceDictationSettingsSection({
             {translate('auto.components.settings.VoicePane.0121960365', 'Enable Voice Dictation')}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate('auto.components.settings.VoicePane.4465596675', 'Press')} {shortcutLabel}{' '}
             {translate(
-              'auto.components.settings.VoicePane.366e1b4f36',
-              'to dictate text into any focused pane.'
+              'auto.components.settings.VoicePane.dictationShortcutDescription',
+              'Press {{shortcut}} to dictate text into any focused pane.',
+              { shortcut: shortcutLabel }
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={voiceSettings.enabled}
+        <Switch
+          checked={voiceSettings.enabled}
           aria-label={translate(
             'auto.components.settings.VoicePane.0121960365',
             'Enable Voice Dictation'
           )}
           aria-busy={permissionPending}
           disabled={permissionPending}
-          onClick={() => void onToggleVoiceDictation()}
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            voiceSettings.enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-          } ${permissionPending ? 'cursor-wait opacity-70' : ''}`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              voiceSettings.enabled ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+          onCheckedChange={() => void onToggleVoiceDictation()}
+          className="disabled:cursor-wait disabled:opacity-70"
+        />
       </div>
 
       <Separator />
@@ -64,13 +57,11 @@ export function VoiceDictationSettingsSection({
             {translate('auto.components.settings.VoicePane.ba4a900d1d', 'Dictation Mode')}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate('auto.components.settings.VoicePane.ff9a680010', 'Toggle: press')}{' '}
-            {shortcutLabel}{' '}
             {translate(
-              'auto.components.settings.VoicePane.295d84b849',
-              'once to start, again to stop. Hold: dictate while'
-            )}{' '}
-            {shortcutLabel} {translate('auto.components.settings.VoicePane.7cf715f891', 'is held.')}
+              'auto.components.settings.VoicePane.dictationModesDescription',
+              'Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held.',
+              { shortcut: shortcutLabel }
+            )}
           </p>
         </div>
         <div className="flex shrink-0 items-center rounded-md border border-border/60 bg-background/50 p-0.5">
@@ -92,6 +83,13 @@ export function VoiceDictationSettingsSection({
           ))}
         </div>
       </div>
+
+      <Separator />
+
+      <VoiceMicrophoneSetting
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={onUpdateVoiceSettings}
+      />
 
       <Separator />
     </>

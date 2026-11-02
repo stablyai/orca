@@ -17,8 +17,7 @@ export function buildSetupScriptPromptTelemetry({
   hasSharedHooks: boolean
 }): SetupScriptPromptTelemetry {
   const base = {
-    // Why: the UI now treats package-manager suggestions as detected setup,
-    // but the analytics wire value is stable for historical funnels.
+    // Keep historical wire labels although package-manager suggestions now display as detected setup.
     mode: candidate ? 'import_available' : 'configure_needed',
     file_count_bucket: bucketSetupScriptCount(candidate?.files.length ?? 0),
     unsupported_field_count_bucket: bucketSetupScriptCount(

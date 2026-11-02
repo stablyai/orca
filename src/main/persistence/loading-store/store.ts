@@ -1,0 +1,312 @@
+import { dirname } from 'node:path'
+import {
+  setMigrationUnsupportedPty,
+  setMigrationUnsupportedPtyPersistenceListener
+} from '../../agent-hooks/migration-unsupported-pty-state'
+import { agentHookServer } from '../../agent-hooks/server'
+import { ActiveViewPreference } from '../../active-view-preference'
+import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
+import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
+import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
+import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
+import {
+  createStoreDomains,
+  installStoreDomainContexts,
+  STORE_DOMAIN_OPERATION_CLASSES,
+  type StoreDomains,
+  type StoreDomainOperations
+} from './store-domain-composition'
+import type { PersistedState } from '../../../shared/persisted-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { dropInvalidWorkspaceLayoutsAtLoad } from '../restoring-sessions/invalid-workspace-layout-purge'
+import {
+  bindPersistedTabTerminalPanes,
+  sweepPersistedUnattachedTerminalRows
+} from '../restoring-sessions/tab-terminal-pane-binding-repair'
+import { scheduleSave } from './write-scheduling'
+import {
+  migrateLegacyOpenCodeGoApiKey,
+  type OpenCodeGoApiKeyTarget
+} from './legacy-opencode-go-api-key-migration'
+import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
+import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
+import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
+import {
+  beginProfileStateMaintenance,
+  freezeProfileStateWrites,
+  freezeProfileStateWritesAsync,
+  type ProfileStateMaintenanceOptions
+} from './profile-state-maintenance'
+import type {
+  AsyncProfileStateAuthority,
+  ProfileStateAuthorityInitialState,
+  ProfileStateStartupPaneAlias,
+  ProfileStatePersistenceAuthority,
+  ProfileStateMaintenance
+} from './profile-state-authority'
+
+export type StoreOptions = StoreRuntimeOptions & {
+  serializedState?: string
+  collectUnboundPaneAlias?: (entry: ProfileStateStartupPaneAlias) => void
+  /** Consume the validated startup read without caching a second copy. */
+  initialAuthorityState?: ProfileStateAuthorityInitialState<ProfileStatePersistenceAuthority>
+}
+
+export type PreparedProfileStateExport = {
+  readonly json: string
+  commit(): void
+}
+export type PtyBindingSourceExpectation = {
+  worktreeId?: string
+  tabId: string
+  leafId: string
+  ptyId: string
+  incarnationId?: string
+}
+
+// oxlint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- Store installs the exact concrete domain class descriptors and contexts below
+export class Store {
+  private readonly runtime: StoreRuntimeState
+  private readonly domains: StoreDomains
+  private readonly state: PersistedState
+
+  constructor(options: StoreOptions = {}) {
+    if (options.profileStateAuthority !== undefined && options.serializedState !== undefined) {
+      throw new Error('Store cannot use both a profile-state authority and serialized state')
+    }
+    if (
+      options.initialAuthorityState !== undefined &&
+      (options.profileStateAuthority === undefined ||
+        options.initialAuthorityState.authority !== options.profileStateAuthority)
+    ) {
+      throw new Error('Store initial authority state must belong to its profile-state authority')
+    }
+    if (options.profileStateAuthority === undefined && options.serializedState === undefined) {
+      throw new Error('Writable Store construction requires a SQLite profile-state authority')
+    }
+    const initial = options.initialAuthorityState
+    const parsedState = initial?.takeParsedState?.()
+    const imported = options.serializedState !== undefined
+    this.runtime = new StoreRuntimeState(options)
+    this.runtime.writesFrozen = imported
+    this.domains = createStoreDomains(this.runtime)
+    installStoreDomainContexts(this, this.domains)
+    this.runtime.flushOrThrow = () => this.flushOrThrow()
+    this.runtime.runDurableMutation = (mutate) => this.runDurableMutation(mutate)
+    let loaded: PersistedState
+    if (options.profileStateAuthority !== undefined) {
+      if (initial !== undefined) {
+        loaded =
+          initial.takeParsedState !== undefined
+            ? this.domains.loader.loadParsedFromAuthority(parsedState)
+            : this.domains.loader.loadFromAuthority(initial.serializedState)
+      } else {
+        loaded = this.domains.loader.loadFromAuthority(
+          options.profileStateAuthority.readSerializedState()
+        )
+      }
+    } else if (options.serializedState !== undefined) {
+      loaded = this.domains.loader.loadSerialized(options.serializedState)
+    } else {
+      throw new Error('Store requires an authority or a frozen serialized import')
+    }
+    const normalized = normalizePersistedPaneIdentityState(
+      nameEmptyPersistedTerminalLayoutRoots(loaded),
+      {
+        registerAliases: !imported,
+        collectUnboundPaneAlias: options.collectUnboundPaneAlias
+      }
+    )
+    this.state = normalized.state
+    this.runtime.state = this.state
+    this.runtime.activeViewPreference = new ActiveViewPreference(
+      this.runtime.dataFile,
+      this.state.ui?.activeView
+    )
+    const adaptedProjectGroups = this.domains.adaptation.adaptFlatFolderScanProjectGroups()
+    this.domains.adaptation.hydrateFolderWorkspaceDiffComments()
+    // Removal paths require registration; load must sweep residue whose owning repo is already gone.
+    const sweptRepoIds = this.domains.repos.sweepDeregisteredRepoResidue()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      dropInvalidWorkspaceLayoutsAtLoad(this, this.state)
+      this.state = bindPersistedTabTerminalPanes(sweepPersistedUnattachedTerminalRows(this.state))
+      this.runtime.state = this.state
+    }
+    // Imported snapshots cannot own the live hook server or write their source file.
+    if (!imported) {
+      // Finish interrupted blob installs; shell history waits for post-attach live-process evidence.
+      this.domains.orcadMigrationBlobInstalls.installPendingOrcadMigrationReceivedBlobs()
+      for (const entry of initial?.unboundPaneAliases ?? []) {
+        agentHookServer.registerPaneKeyAlias(
+          entry.legacyPaneKey,
+          entry.stablePaneKey,
+          undefined,
+          entry.updatedAt
+        )
+      }
+      for (const entry of normalized.migrationUnsupportedEntries) {
+        setMigrationUnsupportedPty(entry)
+      }
+      for (const entry of normalized.legacyPaneKeyAliasEntries) {
+        registerPersistedPaneKeyAlias(entry)
+      }
+      setMigrationUnsupportedPtyPersistenceListener((entries) => {
+        this.state.migrationUnsupportedPtyEntries = entries
+        scheduleSave(this.domains.scheduling, ['migrationUnsupportedPtyEntries'])
+      })
+      agentHookServer.setPaneKeyAliasPersistenceListener((entries) => {
+        this.state.legacyPaneKeyAliasEntries = entries
+        scheduleSave(this.domains.scheduling, ['legacyPaneKeyAliasEntries'])
+      })
+      if (
+        normalized.changed ||
+        this.runtime.loadNeedsSave ||
+        adaptedProjectGroups ||
+        sweptRepoIds.length > 0
+      ) {
+        scheduleSave(this.domains.scheduling)
+      }
+    }
+  }
+
+  /** Retain the legacy settings key until migration to the main-owned store succeeds. */
+  migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
+    if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
+      scheduleSave(this.domains.scheduling)
+    }
+  }
+
+  getProfileStorageDirectory(): string {
+    return dirname(this.runtime.dataFile)
+  }
+
+  /** Accept secret retention only after the export commits, preserving sealed fallback on failed migration. */
+  prepareProfileStateExport(): PreparedProfileStateExport {
+    const built = this.domains.serialization.buildStateToSave()
+    let committed = false
+    return {
+      json: built.payload.toString('utf8'),
+      commit: () => {
+        if (committed) {
+          return
+        }
+        this.runtime.protectedSecrets.commitRetentionUpdates(built.protectedSecretUpdates)
+        committed = true
+      }
+    }
+  }
+
+  writeProfileStateJsonExport(targetPath: string): number {
+    this.runtime.dirtyProfileStateDomains = null
+    this.flushOrThrow()
+    const authority = this.runtime.profileStateAuthority
+    if (authority?.asynchronous) {
+      throw new Error('Live profile exports require an awaited export')
+    }
+    if (authority?.writeJsonExport) {
+      return authority.writeJsonExport(targetPath)
+    }
+
+    throw new Error('Profile state exports require a SQLite profile-state authority')
+  }
+
+  writeLatestProfileStateJsonExport(): number | undefined {
+    const authority = this.runtime.profileStateAuthority
+    if (authority?.asynchronous) {
+      throw new Error('Live profile exports require an awaited export')
+    }
+    if (!authority?.writeJsonExport) {
+      return undefined
+    }
+    this.runtime.dirtyProfileStateDomains = null
+    this.flushOrThrow()
+
+    const writeExport = authority.writeJsonExport.bind(authority)
+    return writeVersionedProfileStateExport(this.runtime.dataFile, writeExport)
+  }
+
+  writeLatestProfileStateJsonExportAsync(): Promise<number | undefined> {
+    if (!this.runtime.profileStateAuthority?.asynchronous) {
+      return Promise.resolve(this.writeLatestProfileStateJsonExport())
+    }
+    return this.enqueueProfileExport((authority) =>
+      authority.writeLatestJsonExport(this.runtime.dataFile)
+    )
+  }
+
+  private enqueueProfileExport(
+    exportState: (authority: AsyncProfileStateAuthority) => Promise<number | undefined>
+  ): Promise<number | undefined> {
+    if (
+      this.runtime.writesFrozen ||
+      this.runtime.quitFlushStarted ||
+      this.runtime.profileMaintenancePending
+    ) {
+      return Promise.reject(new Error('Cannot export finalized profile persistence'))
+    }
+    const authority = this.runtime.profileStateAuthority
+    if (!authority?.asynchronous) {
+      return Promise.resolve(undefined)
+    }
+    return enqueuePrimaryStateOperation(this.domains.writes, async () => {
+      this.runtime.dirtyProfileStateDomains = null
+      if (!(await writeToDiskAsync(this.domains.writes))) {
+        throw new Error('Profile state changed while preparing its export')
+      }
+      return exportState(authority)
+    })
+  }
+
+  quarantineProfileStateDatabase(
+    quarantineRoot?: string,
+    reason?: string
+  ): ProfileStateDatabaseQuarantine {
+    this.freezeWrites()
+    const authority = this.runtime.profileStateAuthority
+    if (authority?.asynchronous) {
+      throw new Error('Live profile quarantine requires an awaited close')
+    }
+    if (!authority?.quarantineDatabase) {
+      throw new Error('SQLite profile-state quarantine is unavailable')
+    }
+    return authority.quarantineDatabase(quarantineRoot, reason)
+  }
+
+  freezeWrites(): void {
+    freezeProfileStateWrites(this.runtime)
+  }
+
+  beginProfileMaintenance(
+    options?: ProfileStateMaintenanceOptions
+  ): Promise<ProfileStateMaintenance> {
+    return beginProfileStateMaintenance(this.runtime, this.domains, options)
+  }
+
+  freezeWritesAsync(): Promise<void> {
+    return freezeProfileStateWritesAsync(this.runtime)
+  }
+
+  async quarantineProfileStateDatabaseAsync(
+    quarantineRoot?: string,
+    reason?: string
+  ): Promise<ProfileStateDatabaseQuarantine> {
+    await this.beginProfileMaintenance({ flush: false })
+    const authority = this.runtime.profileStateAuthority
+    if (!authority?.quarantineDatabase) {
+      throw new Error('SQLite profile-state quarantine is unavailable')
+    }
+    return authority.quarantineDatabase(quarantineRoot, reason)
+  }
+}
+
+// oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging derives Store's prototype API directly from the exact concrete domain classes installed below
+export interface Store extends StoreDomainOperations {}
+
+for (const OperationClass of STORE_DOMAIN_OPERATION_CLASSES) {
+  const descriptors = Object.getOwnPropertyDescriptors(OperationClass.prototype)
+  for (const [name, descriptor] of Object.entries(descriptors)) {
+    if (name !== 'constructor') {
+      Object.defineProperty(Store.prototype, name, descriptor)
+    }
+  }
+}

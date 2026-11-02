@@ -1,19 +1,47 @@
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../../shared/types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 
-export function upsertAddedRepoWithProjectHostSetup(repo: Repo): void {
+type AddedRepoOwner = {
+  runtimeEnvironmentId?: string | null
+}
+
+function repoWithCapturedOwner(repo: Repo, owner: AddedRepoOwner): Repo {
+  if (owner.runtimeEnvironmentId !== undefined) {
+    const runtimeEnvironmentId = owner.runtimeEnvironmentId?.trim()
+    return {
+      ...repo,
+      executionHostId: runtimeEnvironmentId
+        ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+        : LOCAL_EXECUTION_HOST_ID
+    }
+  }
+  return repo
+}
+
+export function upsertAddedRepoWithProjectHostSetup(
+  repo: Repo,
+  owner: AddedRepoOwner = {}
+): { alreadyPresent: boolean; repo: Repo } {
   const state = useAppStore.getState()
-  const repos = state.repos.some((entry) => entry.id === repo.id)
-    ? state.repos.map((entry) => (entry.id === repo.id ? repo : entry))
-    : [...state.repos, repo]
+  const ownedRepo = repoWithCapturedOwner(repo, owner)
+  const repoIdentity = getRepoHostIdentity(ownedRepo)
+  const alreadyPresent = state.repos.some((entry) => getRepoHostIdentity(entry) === repoIdentity)
+  const repos = alreadyPresent
+    ? state.repos.map((entry) => (getRepoHostIdentity(entry) === repoIdentity ? ownedRepo : entry))
+    : [...state.repos, ownedRepo]
   const projection = projectHostSetupProjectionFromRepos(repos)
 
-  // Why: these Add Project flows call IPC directly, bypassing the repo slice
-  // action that normally keeps the project-first compatibility model synced.
+  // Direct IPC bypasses repo-slice compatibility projection; synchronize project-first state here.
   useAppStore.setState({
     repos,
     projects: projection.projects,
     projectHostSetups: projection.setups
   })
+  return { alreadyPresent, repo: ownedRepo }
 }

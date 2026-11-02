@@ -2,6 +2,7 @@ type InputQuietScheduleOptions = {
   delayMs: number
   quietMs: number
   idleTimeoutMs: number
+  maxWaitMs?: number
 }
 
 const INPUT_QUIET_EVENTS: readonly (keyof WindowEventMap)[] = [
@@ -14,7 +15,8 @@ const INPUT_QUIET_EVENTS: readonly (keyof WindowEventMap)[] = [
 ]
 
 let listenersInstalled = false
-let lastInputAt = 0
+let listenersWindow: Window | null = null
+let lastInputAt = Number.NEGATIVE_INFINITY
 
 function now(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -28,16 +30,44 @@ export function markInputQuietSchedulerInput(): void {
   recordInput()
 }
 
+export function resetInputQuietSchedulerForTest(): void {
+  lastInputAt = Number.NEGATIVE_INFINITY
+}
+
+export function hasInputBeenQuietFor(quietMs: number): boolean {
+  if (typeof window !== 'undefined') {
+    ensureInputQuietListeners(window)
+  }
+  return now() - lastInputAt >= quietMs
+}
+
 function ensureInputQuietListeners(targetWindow: Window): void {
   if (listenersInstalled) {
     return
   }
   listenersInstalled = true
-  lastInputAt = now()
   const options: AddEventListenerOptions = { capture: true, passive: true }
   for (const eventName of INPUT_QUIET_EVENTS) {
     targetWindow.addEventListener(eventName, recordInput, options)
   }
+  listenersWindow = targetWindow
+}
+
+function disposeInputQuietListeners(): void {
+  if (!listenersWindow) {
+    return
+  }
+  const options: AddEventListenerOptions = { capture: true }
+  for (const eventName of INPUT_QUIET_EVENTS) {
+    listenersWindow.removeEventListener(eventName, recordInput, options)
+  }
+  listenersWindow = null
+  listenersInstalled = false
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Remove global hooks on Vite replacement so HMR cannot retain stale scheduler closures.
+  import.meta.hot.dispose(disposeInputQuietListeners)
 }
 
 function scheduleIdleCallback(targetWindow: Window, callback: () => void, timeout: number): number {
@@ -63,7 +93,7 @@ function cancelIdleCallback(targetWindow: Window, idleId: number): void {
 
 export function scheduleAfterInputQuiet(
   callback: () => void,
-  { delayMs, quietMs, idleTimeoutMs }: InputQuietScheduleOptions
+  { delayMs, quietMs, idleTimeoutMs, maxWaitMs }: InputQuietScheduleOptions
 ): () => void {
   if (typeof window === 'undefined') {
     const fallbackTimer = setTimeout(callback, delayMs)
@@ -77,12 +107,34 @@ export function scheduleAfterInputQuiet(
   let delayTimer: number | null = null
   let quietTimer: number | null = null
   let idleId: number | null = null
+  let maxWaitTimer: number | null = null
+
+  const clearScheduledWork = (): void => {
+    if (delayTimer !== null) {
+      targetWindow.clearTimeout(delayTimer)
+      delayTimer = null
+    }
+    if (quietTimer !== null) {
+      targetWindow.clearTimeout(quietTimer)
+      quietTimer = null
+    }
+    if (idleId !== null) {
+      cancelIdleCallback(targetWindow, idleId)
+      idleId = null
+    }
+    if (maxWaitTimer !== null) {
+      targetWindow.clearTimeout(maxWaitTimer)
+      maxWaitTimer = null
+    }
+  }
 
   const run = (): void => {
-    idleId = null
-    if (!cancelled) {
-      callback()
+    if (cancelled) {
+      return
     }
+    clearScheduledWork()
+    cancelled = true
+    callback()
   }
 
   const checkQuietWindow = (): void => {
@@ -99,24 +151,17 @@ export function scheduleAfterInputQuiet(
     idleId = scheduleIdleCallback(targetWindow, run, idleTimeoutMs)
   }
 
-  // Why: terminal wake remounts xterm panes. Wait for both the initial delay
-  // and a quiet input window so a follow-up click/keystroke cannot collide
-  // with the heavy remount.
+  // Wait for both startup delay and quiet input before heavy terminal-wake remounts so follow-up gestures do not collide.
   delayTimer = targetWindow.setTimeout(() => {
     delayTimer = null
     checkQuietWindow()
   }, delayMs)
+  if (maxWaitMs !== undefined) {
+    maxWaitTimer = targetWindow.setTimeout(run, Math.max(0, maxWaitMs))
+  }
 
   return () => {
     cancelled = true
-    if (delayTimer !== null) {
-      targetWindow.clearTimeout(delayTimer)
-    }
-    if (quietTimer !== null) {
-      targetWindow.clearTimeout(quietTimer)
-    }
-    if (idleId !== null) {
-      cancelIdleCallback(targetWindow, idleId)
-    }
+    clearScheduledWork()
   }
 }

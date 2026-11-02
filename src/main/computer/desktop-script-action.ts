@@ -173,8 +173,7 @@ function refreshedElementValue(
   fallbackIndex: number
 ): string | undefined {
   const elements = snapshot?.elements ?? []
-  // Why: app re-renders can reassign sparse element indexes after the action;
-  // verification should follow the provider identity of the acted-on element.
+  // Re-renders can reassign element indexes; prefer stable provider identity.
   const identityMatch = targetElement
     ? elements.find((element) => sameElementIdentity(element, targetElement))
     : undefined
@@ -227,4 +226,11 @@ export function elementParam(
     )
   }
   return element
+}
+
+/** Replay observations only: a lost reply can follow an already-completed input action. */
+const OBSERVATION_TOOLS = new Set(['handshake', 'list_apps', 'list_windows', 'get_app_state'])
+
+export function isReplayableTool(tool: string): boolean {
+  return OBSERVATION_TOOLS.has(tool)
 }

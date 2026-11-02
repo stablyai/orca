@@ -1,186 +1,53 @@
-import { runInNewContext } from 'node:vm'
-// TypeScript 7 is a native CLI; transpile tests still need the legacy JavaScript API.
-import ts from 'typescript-api'
 import { describe, expect, it, vi } from 'vitest'
 
-import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
-
-type HookContext = {
-  isIdle?: () => boolean
-  sessionManager?: {
-    getSessionId?: () => unknown
-    getSessionFile?: () => unknown
-  }
-}
-
-type HookHandler = (event?: unknown, context?: HookContext) => Promise<void> | void
-
-type FakeCurlChild = {
-  on: ReturnType<typeof vi.fn>
-  stdin: {
-    on: ReturnType<typeof vi.fn>
-    end: ReturnType<typeof vi.fn>
-  }
-}
-
-type Harness = {
-  fetchMock: ReturnType<typeof vi.fn>
-  spawnMock: ReturnType<typeof vi.fn>
-  spawnedChildren: FakeCurlChild[]
-  fsMock: {
-    existsSync: ReturnType<typeof vi.fn>
-    readFileSync: ReturnType<typeof vi.fn>
-  }
-  handlers: Record<string, HookHandler>
-  processEnv: Record<string, string | undefined>
-  callHook: (name: string, event?: unknown, context?: HookContext) => Promise<void>
-  // Re-invoke the extension factory in the same process (as Pi does on an
-  // in-process extension reload), swapping in the freshly registered handlers.
-  reload: () => void
-}
-
-const BASE_ENV = {
-  ORCA_PANE_KEY: 'pane-1',
-  ORCA_AGENT_LAUNCH_TOKEN: 'launch-1',
-  ORCA_TAB_ID: 'tab-1',
-  ORCA_WORKTREE_ID: 'tree-1',
-  ORCA_AGENT_HOOK_PORT: '4321',
-  ORCA_AGENT_HOOK_TOKEN: 'token-1',
-  ORCA_AGENT_HOOK_ENV: 'env-1',
-  ORCA_AGENT_HOOK_VERSION: '1.2.3'
-} satisfies Record<string, string>
-
-// Why: ownership keys on process.pid, so reload and child-process tests need
-// stable, distinct identities.
-const SELF_PID = 4242
-
-function createHarness(args: {
-  kind: 'pi' | 'omp'
-  env?: Record<string, string | undefined>
-  pid?: number
-  title?: string
-  argv?: string[]
-  existsSync?: (path: string) => boolean
-  readFileSync?: (path: string, encoding: string) => string
-  fetchImpl?: (...params: Parameters<typeof fetch>) => Promise<unknown>
-}): Harness {
-  const fetchMock = vi.fn(
-    args.fetchImpl ??
-      (async () => ({
-        ok: true
-      }))
-  )
-
-  const spawnedChildren: FakeCurlChild[] = []
-  const spawnMock = vi.fn(() => {
-    const child: FakeCurlChild = {
-      on: vi.fn(),
-      stdin: {
-        on: vi.fn(),
-        end: vi.fn()
-      }
-    }
-    spawnedChildren.push(child)
-    return child
-  })
-
-  const fsMock = {
-    existsSync: vi.fn(args.existsSync ?? (() => false)),
-    readFileSync: vi.fn(
-      args.readFileSync ??
-        ((path: string) => {
-          throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
-        })
-    )
-  }
-
-  const module = {
-    exports: {} as { default?: (pi: { on: (name: string, handler: HookHandler) => void }) => void }
-  }
-  const requireMock = vi.fn((specifier: string) => {
-    if (specifier === 'fs') {
-      return fsMock
-    }
-    if (specifier === 'child_process') {
-      return { spawn: spawnMock }
-    }
-    throw new Error(`unexpected require(${specifier})`)
-  })
-
-  const processMock = {
-    env: {
-      ...BASE_ENV,
-      ...args.env
-    },
-    pid: args.pid ?? SELF_PID,
-    title: args.title ?? 'node',
-    argv: args.argv ?? ['node', '/usr/bin/orca']
-  }
-
-  const context = {
-    module,
-    exports: module.exports,
-    require: requireMock,
-    process: processMock,
-    fetch: fetchMock,
-    console: {
-      warn: vi.fn(),
-      error: vi.fn(),
-      log: vi.fn()
-    },
-    Promise,
-    Buffer,
-    URL,
-    AbortController,
-    setTimeout,
-    clearTimeout
-  } as Record<string, unknown>
-  context.globalThis = context
-
-  const source = getPiAgentStatusExtensionSource(args.kind)
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020
-    }
-  }).outputText
-  runInNewContext(output, context)
-
-  const register = module.exports.default
-  if (!register) {
-    throw new Error('expected default export from generated source')
-  }
-
-  const handlers: Record<string, HookHandler> = {}
-  const registerInto = (target: Record<string, HookHandler>): void => {
-    register({
-      on(name: string, handler: HookHandler) {
-        target[name] = handler
-      }
-    })
-  }
-  registerInto(handlers)
-
-  return {
-    fetchMock,
-    spawnMock,
-    spawnedChildren,
-    fsMock,
-    handlers,
-    processEnv: processMock.env,
-    callHook: async (name, event, hookContext) => {
-      await handlers[name]?.(event, hookContext)
-    },
-    reload: () => {
-      for (const key of Object.keys(handlers)) {
-        delete handlers[key]
-      }
-      registerInto(handlers)
-    }
-  }
-}
+import {
+  AGENT_STATUS_EXTENSION_SELF_PID as SELF_PID,
+  createAgentStatusExtensionHarness as createHarness
+} from './agent-status-extension-test-harness'
 
 describe('getPiAgentStatusExtensionSource', () => {
+  it('registers Prime hooks only in the event-emitting daemon worker', () => {
+    const frontend = createHarness({
+      kind: 'prime-agent',
+      env: { PRIME_AGENT_INTERNAL_DAEMON_WORKER: undefined }
+    })
+    const worker = createHarness({
+      kind: 'prime-agent',
+      env: { ORCA_PI_STATUS_OWNED: String(SELF_PID - 1) }
+    })
+
+    expect(frontend.handlers).toEqual({})
+    expect(frontend.processEnv.ORCA_PI_STATUS_OWNED).toBeUndefined()
+    expect(worker.handlers.agent_start).toBeTypeOf('function')
+    expect(worker.processEnv.ORCA_PRIME_AGENT_STATUS_OWNED).toBe(String(SELF_PID))
+  })
+
+  it('posts persisted Prime session metadata to the Prime route', async () => {
+    const harness = createHarness({
+      kind: 'prime-agent',
+      existsSync: (path) => path === '/tmp/prime-session-1.jsonl'
+    })
+
+    await harness.callHook(
+      'session_start',
+      { reason: 'startup' },
+      {
+        sessionManager: {
+          getSessionId: () => 'prime-session-1',
+          getSessionFile: () => '/tmp/prime-session-1.jsonl'
+        }
+      }
+    )
+
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:4321/hook/prime-agent')
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'session_start',
+      session_id: 'prime-session-1',
+      session_file: '/tmp/prime-session-1.jsonl'
+    })
+  })
+
   it('includes the session id and file path in Pi status posts after session_start', async () => {
     const harness = createHarness({
       kind: 'pi',
@@ -287,7 +154,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
       await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
       const payloads = harness.fetchMock.mock.calls.map(
-        ([_, init]) => JSON.parse(String(init?.body)).payload
+        ([_event, init]) => JSON.parse(String(init?.body)).payload
       )
       expect(payloads).toEqual([
         { hook_event_name: 'session_start' },
@@ -328,27 +195,58 @@ describe('getPiAgentStatusExtensionSource', () => {
   it('tracks persistent OMP sessions and clears ephemeral session ids', async () => {
     const harness = createHarness({ kind: 'omp' })
     let sessionId = 'omp-session-8'
-    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => '/tmp/s' }
+    let sessionFile: string | undefined = '/tmp/s'
+    const sessionManager = { getSessionId: () => sessionId, getSessionFile: () => sessionFile }
 
     await harness.callHook('agent_start', undefined, { sessionManager })
     sessionId = 'omp-session-9'
     await harness.callHook('before_agent_start', { prompt: 'hi' }, { sessionManager })
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
-    await harness.callHook('agent_end', undefined, {
-      sessionManager: { getSessionId: () => 'omp-ephemeral' }
-    })
+    sessionId = 'omp-ephemeral'
+    sessionFile = undefined
+    await harness.callHook('agent_end', undefined, { sessionManager })
 
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3))
     expect(
-      harness.fetchMock.mock.calls.map(([_, init]) => JSON.parse(String(init?.body)).payload)
+      harness.fetchMock.mock.calls.map(([_event, init]) => JSON.parse(String(init?.body)).payload)
     ).toEqual([
-      { hook_event_name: 'agent_start', session_id: 'omp-session-8' },
+      { hook_event_name: 'agent_start', session_id: 'omp-session-8', session_file: '/tmp/s' },
       {
         hook_event_name: 'before_agent_start',
         prompt: 'hi',
-        session_id: 'omp-session-9'
+        session_id: 'omp-session-9',
+        session_file: '/tmp/s'
       },
       { hook_event_name: 'agent_end' }
+    ])
+  })
+
+  it('does not let a nested OMP session replace the root resume identity', async () => {
+    const harness = createHarness({ kind: 'omp' })
+    const root = {
+      getSessionId: () => 'root-session',
+      getSessionFile: () => '/tmp/root.jsonl',
+      getHeader: () => ({ parentSession: undefined })
+    }
+    const child = {
+      getSessionId: () => 'child-session',
+      getSessionFile: () => '/tmp/root-artifacts/worker.jsonl',
+      getHeader: () => ({ parentSession: '/tmp/root.jsonl' })
+    }
+
+    await harness.callHook('agent_start', undefined, { sessionManager: child })
+    await harness.callHook('agent_start', undefined, { sessionManager: root })
+
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+    const payloads = harness.fetchMock.mock.calls.map(
+      ([_event, init]) => JSON.parse(String(init?.body)).payload
+    )
+    expect(payloads).toEqual([
+      {
+        hook_event_name: 'agent_start',
+        session_id: 'root-session',
+        session_file: '/tmp/root.jsonl'
+      }
     ])
   })
 
@@ -369,21 +267,17 @@ describe('getPiAgentStatusExtensionSource', () => {
         )
       })
 
-      await harness.callHook('agent_start', undefined, {
-        sessionManager: {
-          getSessionId: () => 'omp-session-8',
-          getSessionFile: () => '/tmp/omp-session-8.jsonl'
-        }
-      })
+      let sessionId = 'omp-session-8'
+      const sessionManager = {
+        getSessionId: () => sessionId,
+        getSessionFile: () => `/tmp/${sessionId}.jsonl`
+      }
+      await harness.callHook('agent_start', undefined, { sessionManager })
+      sessionId = 'omp-session-9'
       await harness.callHook(
         'message_end',
         { message: { role: 'assistant', content: 'done' } },
-        {
-          sessionManager: {
-            getSessionId: () => 'omp-session-9',
-            getSessionFile: () => '/tmp/omp-session-9.jsonl'
-          }
-        }
+        { sessionManager }
       )
       await harness.callHook('message_end', { message: { role: 'user', content: 'next' } }, {})
 
@@ -394,35 +288,35 @@ describe('getPiAgentStatusExtensionSource', () => {
         hook_event_name: 'message_end',
         role: 'assistant',
         text: 'done',
-        session_id: 'omp-session-9'
+        session_id: 'omp-session-9',
+        session_file: '/tmp/omp-session-9.jsonl'
       })
-      expect(body.payload).not.toHaveProperty('session_file')
       expect(harness.fetchMock.mock.calls[1]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
       expect(harness.spawnMock).not.toHaveBeenCalled()
       finishDeliveries[1]?.()
     }
   )
 
-  it.each(['pi', 'omp'] as const)(
+  it.each(['pi', 'omp', 'prime-agent'] as const)(
     'registers no status handlers for a nested %s subagent process',
     (kind) => {
-      // Why: inheriting the lead's owner PID must disable the extension as a
-      // whole, so future hook additions cannot reopen the notification leak.
+      // Suppress the whole nested extension or future hook additions could leak duplicate notifications.
       const lead = createHarness({ kind, pid: SELF_PID })
       const child = createHarness({ kind, pid: SELF_PID + 1, env: lead.processEnv })
       const grandchild = createHarness({ kind, pid: SELF_PID + 2, env: child.processEnv })
 
       expect(child.handlers).toEqual({})
       expect(grandchild.handlers).toEqual({})
-      expect(child.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID))
-      expect(grandchild.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID))
+      const ownerKey =
+        kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
+      expect(child.processEnv[ownerKey]).toBe(String(SELF_PID))
+      expect(grandchild.processEnv[ownerKey]).toBe(String(SELF_PID))
       expect(child.fetchMock).not.toHaveBeenCalled()
       expect(child.spawnMock).not.toHaveBeenCalled()
     }
   )
 
   it('reports agent_end for a top-level run (including non-interactive) and claims the pane by pid', async () => {
-    // Why: non-interactive top-level runs still own their pane and must report.
     const harness = createHarness({ kind: 'pi', pid: SELF_PID, argv: ['node', 'pi', '-p'] })
 
     await harness.callHook('agent_end')
@@ -434,8 +328,7 @@ describe('getPiAgentStatusExtensionSource', () => {
   })
 
   it('keeps reporting after the lead re-runs the extension factory on reload', async () => {
-    // Why: Pi reloads extensions in-process, so the lead must recognize its PID
-    // instead of mistaking its own marker for a nested child.
+    // In-process reload must recognize its own PID rather than suppress the lead as a nested child.
     const harness = createHarness({ kind: 'pi', pid: SELF_PID })
 
     expect(harness.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID))
@@ -480,6 +373,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(command).toBe('/mnt/c/Windows/System32/curl.exe')
     expect(args).toEqual([
       '-sS',
+      '--fail',
       '--connect-timeout',
       '3',
       '--max-time',
@@ -498,8 +392,7 @@ describe('getPiAgentStatusExtensionSource', () => {
       '@-',
       'http://127.0.0.1:4321/hook/omp'
     ])
-    // Why: delivery must be fire-and-forget off the pi event loop — no
-    // blocking wait — with the payload fed via stdin, never argv.
+    // Send stdin asynchronously so loopback delivery never blocks Pi's event loop.
     expect(options).toEqual({ stdio: ['pipe', 'ignore', 'ignore'] })
     const child = harness.spawnedChildren[0]
     expect(child?.on).toHaveBeenCalledWith('error', expect.any(Function))
@@ -515,6 +408,31 @@ describe('getPiAgentStatusExtensionSource', () => {
         payload: { hook_event_name: 'agent_start' }
       })
     )
+  })
+
+  it('uses current Windows coordinates when a same-token guest endpoint is stale', async () => {
+    const endpointPath = '/home/u/.orca-wsl/agent-hooks/instance-test/endpoint.env'
+    const harness = createHarness({
+      kind: 'prime-agent',
+      env: { WSL_DISTRO_NAME: 'Ubuntu', ORCA_AGENT_HOOK_ENDPOINT: endpointPath },
+      existsSync: (path) => path === '/mnt/c/Windows/System32/curl.exe',
+      statSync: () => ({ mtimeMs: 1, size: 80, ino: 1 }),
+      readFileSync: (path) => {
+        if (path === endpointPath) {
+          return 'ORCA_AGENT_HOOK_PORT=9999\nORCA_AGENT_HOOK_TOKEN=token-1\n'
+        }
+        throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
+      },
+      fetchImpl: vi.fn(async () => {
+        throw new Error('stale guest relay')
+      })
+    })
+
+    await harness.callHook('agent_start')
+
+    expect(harness.fetchMock.mock.calls[0]?.[0]).toBe('http://127.0.0.1:9999/hook/prime-agent')
+    await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(1))
+    expect(harness.spawnMock.mock.calls[0]?.[1]).toContain('http://127.0.0.1:4321/hook/prime-agent')
   })
 
   it('probes WSL evidence and the curl path once per process', async () => {
@@ -536,8 +454,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     await harness.callHook('agent_end')
 
     await vi.waitFor(() => expect(harness.spawnMock).toHaveBeenCalledTimes(2))
-    // Why: WSL-ness and curl.exe presence are process-lifetime constants;
-    // the per-event failure path must not re-probe /proc or /mnt/c.
+    // WSL detection and curl.exe location are process-constant; failed deliveries must not re-probe.
     const procReads = harness.fsMock.readFileSync.mock.calls.filter(([path]) =>
       String(path).startsWith('/proc/')
     )
@@ -578,8 +495,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     })
     await Promise.resolve()
 
-    // Why: Pi awaits extension handlers, so loopback status delivery cannot
-    // remain on the agent's critical path when Orca is stalled or restarting.
+    // Pi awaits handlers; stalled loopback delivery must stay off the agent's critical path.
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
     await vi.waitFor(() => expect(handlerReturned).toBe(true))
 
@@ -587,12 +503,12 @@ describe('getPiAgentStatusExtensionSource', () => {
     await handlerCall
   })
 
-  it('leaves runtime shutdown to PTY teardown instead of reporting turn completion', () => {
+  it('leaves runtime shutdown to PTY teardown instead of reporting turn completion', async () => {
     const harness = createHarness({ kind: 'pi' })
 
-    // Why: Pi emits session_shutdown for reload/new/resume/fork while its PTY
-    // stays alive. agent_end is the only extension event that proves done.
-    expect(harness.handlers.session_shutdown).toBeUndefined()
+    // Session shutdown also means reload/new/resume/fork; only agent_end proves turn completion.
+    await harness.callHook('session_shutdown')
+    expect(harness.fetchMock).not.toHaveBeenCalled()
   })
 
   it('bounds stalled delivery to one active request and the latest pending status', async () => {
@@ -748,10 +664,10 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   })
 
-  it('keeps reporting legacy Pi and OMP once their agent_end handlers settle', async () => {
+  it('keeps polling Pi and Prime until their agent_end handlers settle', async () => {
     vi.useFakeTimers()
     try {
-      for (const kind of ['pi', 'omp'] as const) {
+      for (const kind of ['pi', 'prime-agent'] as const) {
         const harness = createHarness({ kind })
         let idle = false
         const context = { isIdle: vi.fn(() => idle) }
@@ -763,6 +679,7 @@ describe('getPiAgentStatusExtensionSource', () => {
         idle = true
         await vi.advanceTimersByTimeAsync(100)
         expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+        expect(harness.handlers.agent_settled).toBeTypeOf('function')
       }
     } finally {
       vi.useRealTimers()
@@ -771,6 +688,16 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('keeps immediate agent_end fallback for runtimes without an idle context', async () => {
     const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook('agent_end')
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not report a non-terminal OMP agent_end without an idle context', async () => {
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook('agent_end', { willContinue: true })
+    expect(harness.fetchMock).not.toHaveBeenCalled()
 
     await harness.callHook('agent_end')
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))

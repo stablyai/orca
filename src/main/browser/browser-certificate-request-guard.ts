@@ -1,7 +1,10 @@
 import type { Session } from 'electron'
 
 import { toSecureCertificateEndpoint } from '../../shared/browser-url'
+import { getProxySessionApplicationReadiness } from '../network/proxy-settings'
 import { MAX_CERTIFICATE_GRANTS, type CertificateTrustGrant } from './browser-certificate-challenge'
+import { answerBrowserSessionBeforeRequest } from './browser-session-request-decisions'
+import { reportBrowserSessionWebRequest } from './browser-session-web-request-observer'
 
 type CertificateIdentity = Pick<
   CertificateTrustGrant,
@@ -43,10 +46,22 @@ export class BrowserCertificateRequestGuard {
     if (this.guardedSessions.has(session)) {
       return
     }
-    // Why: Chromium caches certificate continuations at session scope. This
-    // request gate restores the narrower per-WebContents approval boundary.
+    // Chromium caches trust per session; gate requests to preserve approval per WebContents.
     session.webRequest.onBeforeRequest((details, callback) => {
-      callback(this.shouldBlockRequest(session, details) ? { cancel: true } : {})
+      reportBrowserSessionWebRequest(session, 'onBeforeRequest', details)
+      const readiness = getProxySessionApplicationReadiness(session)
+      const answer = (ready: boolean): void => {
+        if (!ready || this.shouldBlockRequest(session, details)) {
+          callback({ cancel: true })
+        } else {
+          answerBrowserSessionBeforeRequest(session, details, callback)
+        }
+      }
+      if (typeof readiness === 'boolean') {
+        answer(readiness)
+      } else {
+        void readiness.then(answer)
+      }
     })
     this.guardedSessions.add(session)
   }
@@ -69,8 +84,7 @@ export class BrowserCertificateRequestGuard {
       return false
     }
     const accepted = this.acceptedIdentityBySession.get(session)?.get(identity.secureEndpoint)
-    // Why: the request gate cannot inspect TLS after Chromium caches a decision.
-    // Never accept a second bad leaf for one endpoint in the same app process.
+    // Cached TLS decisions hide later certificates; pin one identity per endpoint in this session.
     return !accepted || certificateIdentitiesMatch(accepted, identity)
   }
 
@@ -80,14 +94,11 @@ export class BrowserCertificateRequestGuard {
     }
     let acceptedByEndpoint = this.acceptedIdentityBySession.get(session)
     const accepted = acceptedByEndpoint?.get(grant.secureEndpoint)
-    // Why: once one leaf is accepted for an endpoint in this session, Chromium
-    // caches the TLS decision. Refuse a conflicting pending leaf so proceed()
-    // cannot report success when the next certificate-error will still fail.
+    // Reject conflicting pending identities before proceed can report success.
     if (accepted && !certificateIdentitiesMatch(accepted, grant)) {
       return false
     }
-    // Why: pin the identity at grant time, not only on the later certificate
-    // callback, so a concurrent sibling proceed cannot race in a second leaf.
+    // Pin before the certificate callback so concurrent sibling approvals cannot accept a second identity.
     if (!acceptedByEndpoint) {
       acceptedByEndpoint = new Map()
       this.acceptedIdentityBySession.set(session, acceptedByEndpoint)

@@ -59,8 +59,7 @@ export async function readCurrentProcessMacSystemResolverHealth(
     }
     timer = setTimeout(() => {
       child.kill()
-      // Why: this runs inside the daemon request path, so the timeout must
-      // cap the RPC even if scutil is slow to exit after SIGTERM.
+      // Bound the daemon RPC even if scutil takes longer to exit after SIGTERM.
       finish()
     }, MAC_RESOLVER_CHECK_TIMEOUT_MS)
     child.stdout.setEncoding('utf8')

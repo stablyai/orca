@@ -1,9 +1,4 @@
-import type { Repo } from '../../../../shared/types'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 
 export type PaletteHostBadge = {
@@ -11,27 +6,25 @@ export type PaletteHostBadge = {
   label: string
 }
 
-// Why: Cmd+J only needs a host label when there's a live remote to disambiguate
-// from. A merely-configured-but-disconnected SSH/runtime host shouldn't tag every
-// row with the local host label, so we require an actually-reachable non-local host —
-// unlike the sidebar gate, which lists disconnected hosts so users can connect.
+// Show unfiltered host labels only with a reachable remote; sidebar headers also list disconnected hosts for connection.
 function hasActiveRemoteHost(hostOptions: readonly SidebarHostOption[]): boolean {
   return hostOptions.some(
-    (host) => host.id !== LOCAL_EXECUTION_HOST_ID && host.health !== 'disconnected'
+    (host) => host.id !== LOCAL_EXECUTION_HOST_ID && host.health === 'available'
   )
 }
 
 export function getPaletteHostBadge(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | null | undefined,
-  hostOptions: readonly SidebarHostOption[]
+  hostId: ExecutionHostId | null | undefined,
+  hostOptions: readonly SidebarHostOption[],
+  // Filtered rows need their host label to explain inclusion even while every remote is disconnected.
+  alwaysShowHostLabel = false
 ): PaletteHostBadge | null {
-  if (!repo || !hasActiveRemoteHost(hostOptions)) {
+  if (!alwaysShowHostLabel && !hasActiveRemoteHost(hostOptions)) {
     return null
   }
-  const hostId = getRepoExecutionHostId(repo)
   const host = hostOptions.find((option) => option.id === hostId)
   if (!host) {
     return null
   }
-  return { hostId, label: host.label }
+  return { hostId: host.id, label: host.label }
 }

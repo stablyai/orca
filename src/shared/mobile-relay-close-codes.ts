@@ -9,11 +9,17 @@ export const MOBILE_RELAY_CLOSE_CODE = {
 
 export type MobileRelayCloseCode =
   (typeof MOBILE_RELAY_CLOSE_CODE)[keyof typeof MOBILE_RELAY_CLOSE_CODE]
+
+// Mirror cloud/packages/relay-contract RELAY_PHONE_CLOSE_REASON for phone sockets, distinct from host control closes. Older peers omit unknown reasons.
+export const MOBILE_RELAY_PHONE_CLOSE_REASON = {
+  // 4404 with live control but missed data attach deadline; allow one quick same-cell redial.
+  HOST_ATTACH_TIMEOUT: 'attach-timeout'
+} as const
 export type MobileRelayLeg = 'host-control' | 'host-data' | 'phone-invite' | 'phone-resume'
 
 export type MobileRelayRecovery =
   | { kind: 'disable-relay-credential'; directUnaffected: true }
-  | { kind: 'wait-for-host-revival' }
+  | { kind: 'retry-after-host-offline'; fullJitter: true }
   | { kind: 'reconnect-fresh-e2ee'; fullJitter: true }
   | { kind: 'resolve-invite-through-director-ws'; requireStrictlyNewerEpoch: true }
   | { kind: 'resolve-resume-through-director-post' }
@@ -29,7 +35,7 @@ export function mobileRelayRecoveryFor(
     case MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL:
       return { kind: 'disable-relay-credential', directUnaffected: true }
     case MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE:
-      return { kind: 'wait-for-host-revival' }
+      return { kind: 'retry-after-host-offline', fullJitter: true }
     case MOBILE_RELAY_CLOSE_CODE.PEER_DROPPED:
       return { kind: 'reconnect-fresh-e2ee', fullJitter: true }
     case MOBILE_RELAY_CLOSE_CODE.WRONG_CELL:

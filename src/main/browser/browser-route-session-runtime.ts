@@ -1,0 +1,116 @@
+import { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
+import { installBrowserRoutePartitionPolicies } from './browser-session-route-policies'
+import { session, webContents } from 'electron'
+import { setBrowserClientRouteWebContentsProbe } from './browser-client-download-routing'
+import type { BrowserRoutePartitionBindingStore } from './browser-route-partition-binding-store'
+import {
+  configureBrowserRoutePartitionBindingsForOrcaProfile,
+  currentBrowserRoutePartitionBindingStore
+} from './browser-route-partition-binding-runtime'
+import { releaseEvictedBrowserRoutePartitionStorage } from './browser-route-partition-storage-dependencies'
+import { isBrowserRouteGuestPopup } from './browser-route-guest-popup-ownership'
+import { browserManager } from './browser-manager'
+import {
+  isBrowserRoutePartitionRetainedByAnyOwner,
+  registerBrowserRoutePartitionRetentionProbe
+} from './browser-route-partition-retention'
+import { BrowserRouteSessionRegistry } from './browser-route-session-registry'
+import { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
+import { browserSessionRegistry } from './browser-session-registry'
+
+const routeWebContentsRegistryRef: {
+  current: BrowserRouteWebContentsRegistry | null
+} = { current: null }
+
+const currentBindingStore = (): BrowserRoutePartitionBindingStore =>
+  currentBrowserRoutePartitionBindingStore({
+    isPartitionRetained: isBrowserRoutePartitionRetainedByAnyOwner
+  })
+
+const bindingStore = {
+  get: (partition: string): string | null => currentBindingStore().get(partition),
+  set: (
+    partition: string,
+    fingerprint: string,
+    storageScope: string,
+    alias?: string
+  ): readonly string[] => currentBindingStore().set(partition, fingerprint, storageScope, alias),
+  touch: (partition: string): void => currentBindingStore().touch(partition),
+  findPartitionByFingerprint: (fingerprint: string): string | null =>
+    currentBindingStore().findPartitionByFingerprint(fingerprint),
+  rebind: (partition: string, fingerprint: string, storageScope: string, alias?: string): void =>
+    currentBindingStore().rebind(partition, fingerprint, storageScope, alias)
+}
+
+export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
+  validateProfile: (browserProfileId, metadata) => {
+    if (metadata) {
+      if (BrowserClientProfileMetadata.parse(metadata).id !== browserProfileId) {
+        throw new Error('browser_route_partition_profile_unavailable')
+      }
+    } else {
+      browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
+    }
+  },
+  getSession: (partition) => session.fromPartition(partition),
+  setupPolicies: ({ partition, browserProfileId, profileMetadata }) => {
+    // Default profiles arrive without metadata.
+    const profile = profileMetadata
+      ? { ...BrowserClientProfileMetadata.parse(profileMetadata), partition, source: null }
+      : browserSessionRegistry.getProfile(browserProfileId)
+    if (!profile) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+    // Keep remote profile permissions in the session; their ids may collide with local profiles.
+    return installBrowserRoutePartitionPolicies(profile, partition, { sitePermissions: 'session' })
+  },
+  clearPolicies: ({ partition }) => {
+    browserSessionRegistry.clearRoutePartitionPolicies(partition)
+  },
+  retirePageAuthority: (retirement) =>
+    routeWebContentsRegistryRef.current?.retirePageAuthority(retirement) ?? false,
+  bindingStore,
+  releaseEvictedPartitions: (partitions) => {
+    void releaseEvictedBrowserRoutePartitionStorage(
+      partitions,
+      isBrowserRoutePartitionRetainedByAnyOwner
+    )
+  }
+})
+
+registerBrowserRoutePartitionRetentionProbe((partition) =>
+  browserRouteSessionRegistry.isPartitionRetained(partition)
+)
+
+export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegistry({
+  getPartitionForSession: (routeSession) =>
+    browserRouteSessionRegistry.getPartitionForSession(routeSession),
+  getPreparedPageAuthority: (page) => browserRouteSessionRegistry.getPreparedPageAuthority(page),
+  rekeyPreparedPage: (previous, next) =>
+    browserRouteSessionRegistry.rekeyPreparedPage(previous, next),
+  retirePreparedPage: (page) => browserRouteSessionRegistry.retirePreparedPage(page),
+  retirePreparedPagesOwnedByRenderer: (rendererWebContentsId) =>
+    browserRouteSessionRegistry.retirePreparedPagesOwnedByRenderer(rendererWebContentsId),
+  reportBlockedPopup: (blocked) => browserManager.reportRouteGuestPopupBlocked(blocked)
+})
+routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
+
+// Identify route guests and popups so downloads fail closed when remote ownership is unavailable.
+setBrowserClientRouteWebContentsProbe((webContentsId) => {
+  if (isBrowserRouteGuestPopup(webContentsId)) {
+    return true
+  }
+  const contents = webContents.fromId(webContentsId)
+  return Boolean(
+    contents &&
+    !contents.isDestroyed() &&
+    browserRouteSessionRegistry.getPartitionForSession(contents.session) !== null
+  )
+})
+
+export function configureRouteSessionsForOrcaProfile(options: {
+  orcaProfileId: string
+  profileDirectory: string
+}): void {
+  configureBrowserRoutePartitionBindingsForOrcaProfile(options)
+}

@@ -1,11 +1,11 @@
 import React, { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { buildCommitMessageGenerationParams } from './SourceControlTextGenerationDialog'
+import { buildCommitMessageGenerationParams } from './source-control/ai/text-generation-dialog'
 import {
   getDefaultSourceControlTextGenerationSaveTargetKey,
   SourceControlTextGenerationDialogForm
-} from './SourceControlTextGenerationDialogForm'
+} from './source-control/ai/text-generation-dialog-form'
 import {
   applyCommitMessageGenerationDefaults,
   applySourceControlTextGenerationDefaults
@@ -110,8 +110,7 @@ describe('buildCommitMessageGenerationParams', () => {
     expect(markup).toContain('You are generating a single git commit message.')
   })
 
-  // Why: with no preview the chips fall back to the synthetic `123`, promising an unlinked
-  // workspace `Fixes #123` where it renders `Fixes #`.
+  // Missing chip previews fall back to synthetic 123, falsely promising an unlinked workspace Fixes #123.
   it.each([
     { label: 'the linked issue', linkedIssue: 42, expected: '42' },
     { label: 'an empty value when unlinked', linkedIssue: null, expected: '' }
@@ -160,8 +159,7 @@ describe('buildCommitMessageGenerationParams', () => {
     expect(markup).not.toContain('linkedIssue')
   })
 
-  // Why: the recipe saves repo- or globally scoped, so gating on the active workspace's
-  // empty `{linkedIssue}` would block a global write.
+  // Repo/global recipe saves must not depend on the active workspace having a linked issue.
   it.each([
     { label: 'a linked workspace', linkedIssue: 42 },
     { label: 'an unlinked workspace', linkedIssue: null }
@@ -171,16 +169,13 @@ describe('buildCommitMessageGenerationParams', () => {
       linkedIssue
     })
 
-    // Why: the "Command input is empty." copy is click-driven state, so `disabled=""` is the
-    // only gate static markup can observe.
+    // Empty-input copy appears after clicks; static markup can observe only the disabled gate.
     expect(markup).toContain('Save defaults')
     expect(markup).toContain('Generate commit message')
     expect(markup).not.toContain('disabled=""')
   })
 
   it('still disables both actions for a template that renders empty for everyone', () => {
-    // Why: negative control — without it the two cases above pass even if the buttons could
-    // never disable at all.
     const markup = renderTextGenerationForm({ commandInputTemplate: '   ', linkedIssue: 42 })
 
     expect(markup).toContain('disabled=""')

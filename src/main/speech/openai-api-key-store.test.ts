@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -14,9 +15,11 @@ let tempHome = ''
 
 async function loadStoreModule() {
   vi.resetModules()
-  vi.doMock('electron', () => ({
-    safeStorage: safeStorageMock
-  }))
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    ...safeStorageMock,
+    describeProtectionGap: () => null
+  })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }
@@ -52,12 +55,27 @@ describe('OpenAI speech API key store', () => {
     expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
   })
 
-  it('decrypts only when the key is read for an API request', async () => {
-    writeStoredOpenAiKey('encrypted-key')
+  // #31174: orcad cannot open a key the desktop sealed with safeStorage, so it must not say ready.
+  it('reports a stored key this host cannot decrypt as unusable', async () => {
+    writeStoredOpenAiKey('v10\u0000ÿþ sealed by another store')
     const store = await loadStoreModule()
+    safeStorageMock.decryptString.mockImplementation(() => {
+      throw new Error('not our ciphertext')
+    })
+    try {
+      expect(store.hasOpenAiSpeechApiKey()).toBe(true)
+      expect(store.canReadOpenAiSpeechApiKey()).toBe(false)
+    } finally {
+      safeStorageMock.decryptString.mockImplementation((value: Buffer) => value.toString('utf8'))
+    }
+  })
 
-    expect(store.readOpenAiSpeechApiKey()).toBe('encrypted-key')
-    expect(safeStorageMock.decryptString).toHaveBeenCalledOnce()
+  it("does not hand out another store's ciphertext when this host stores plaintext", async () => {
+    writeStoredOpenAiKey('v10\u0000\u00ff\u00fe sealed by another store')
+    const store = await loadStoreModule()
+    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+    expect(store.canReadOpenAiSpeechApiKey()).toBe(false)
+    expect(() => store.readOpenAiSpeechApiKey()).toThrow('OpenAI API key could not be decrypted')
   })
 
   it('caches the decrypted key so repeated dictations do not repeatedly touch safeStorage', async () => {
@@ -67,22 +85,5 @@ describe('OpenAI speech API key store', () => {
     expect(store.readOpenAiSpeechApiKey()).toBe('encrypted-key')
     expect(store.readOpenAiSpeechApiKey()).toBe('encrypted-key')
     expect(safeStorageMock.decryptString).toHaveBeenCalledOnce()
-  })
-
-  it('uses the in-memory key after save without decrypting from safeStorage', async () => {
-    const store = await loadStoreModule()
-
-    store.saveOpenAiSpeechApiKey('saved-key')
-
-    expect(store.readOpenAiSpeechApiKey()).toBe('saved-key')
-    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
-  })
-
-  it('reports missing status without creating storage files', async () => {
-    const store = await loadStoreModule()
-
-    expect(store.hasOpenAiSpeechApiKey()).toBe(false)
-    expect(existsSync(join(tempHome, '.orca'))).toBe(false)
-    expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
   })
 })

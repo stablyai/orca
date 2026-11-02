@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -13,39 +15,45 @@ const updateWorktreeMeta = vi.fn()
 let WorktreeCard: typeof WorktreeCardComponent
 let sshConnectionStates = new Map<string, { status: string }>()
 let sshTargetLabels = new Map<string, string>()
+let removedSshTargetLabels = new Map<string, string>()
 let runtimeStatusByEnvironmentId = new Map<string, { status?: unknown }>()
 let runtimeEnvironments: { id: string; name: string }[] = []
 let sshStateByEnvironment = new Map()
 let worktreesByRepo: Record<string, Worktree[]> = {}
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      fetchLinearIssue,
-      gitConflictOperationByWorktree: {},
-      hostedReviewCache: {},
-      issueCache: {},
-      linearIssueCache: {},
-      openModal,
-      projectGroups: [],
-      remoteBranchConflictByWorktreeId: {},
-      runtimeEnvironments,
-      runtimeStatusByEnvironmentId,
-      removedSshTargetLabels: new Map(),
-      settings: null,
-      sshConnectionStates,
-      sshStateByEnvironment,
-      sshTargetLabels,
-      sshTargetsHydrated: true,
-      updateWorktreeMeta,
-      worktreesByRepo,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    deleteStateByWorktreeId: {},
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue,
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    openModal,
+    projectGroups: [],
+    remoteBranchConflictByWorktreeId: {},
+    runtimeEnvironments,
+    runtimeStatusByEnvironmentId,
+    removedSshTargetLabels,
+    settings: null,
+    sshConnectionStates,
+    sshStateByEnvironment,
+    sshTargetLabels,
+    sshTargetsHydrated: true,
+    updateWorktreeMeta,
+    worktreesByRepo,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState,
+      subscribe: () => () => {}
     })
-}))
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -70,27 +78,12 @@ vi.mock('./use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'idle'
 }))
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: ({
-    open,
-    status,
-    targetLabel
-  }: {
-    open: boolean
-    status: string
-    targetLabel: string
-  }) => (
-    <div
-      data-ssh-disconnected-dialog={open ? 'open' : 'closed'}
-      data-ssh-status={status}
-      data-ssh-target-label={targetLabel}
-    />
-  )
+vi.mock('./use-worktree-sleep-state', () => ({
+  useIsSleepingWorktree: () => false
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
@@ -137,6 +130,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     vi.clearAllMocks()
     sshConnectionStates = new Map()
     sshTargetLabels = new Map()
+    removedSshTargetLabels = new Map()
     runtimeStatusByEnvironmentId = new Map()
     runtimeEnvironments = []
     sshStateByEnvironment = new Map()
@@ -144,7 +138,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     worktreeCardProperties = ['status']
   })
 
-  it('does not auto-open the blocking reconnect dialog for a restored active disconnected SSH worktree', () => {
+  it('offers an inline reconnect control and never a blocking dialog for a disconnected SSH worktree', () => {
     sshConnectionStates.set('ssh-target-1', { status: 'disconnected' })
     sshTargetLabels.set('ssh-target-1', 'Remote target')
 
@@ -152,25 +146,107 @@ describe('WorktreeCard SSH reconnect prompt', () => {
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={true} />
     )
 
-    // The dialog is blocking, so being the active/restored card must not steal
-    // focus app-wide; it only opens on deliberate click (see handleClick).
-    expect(markup).toContain('data-ssh-disconnected-dialog="closed"')
-    // The disconnected state is still discoverable via the non-blocking card chip.
-    expect(markup).toContain('SSH disconnected')
+    expect(markup).toContain('Connect to SSH host Remote target')
+    expect(markup).toContain('Connect')
+    expect(markup).not.toContain('ssh-disconnected-dialog')
+    // Root opacity would also dim the reconnect tint/spinner that must remain visible.
+    expect(markup).not.toContain('opacity-60')
   })
 
-  it('marks a runtime-host worktree disconnected when its environment has no status', () => {
+  it('names the failure state in the control verb rather than a generic Connect', () => {
+    sshConnectionStates.set('ssh-target-1', { status: 'auth-failed' })
+    sshTargetLabels.set('ssh-target-1', 'Remote target')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('Reconnect SSH host Remote target')
+    expect(markup).toContain('authentication failed')
+  })
+
+  it('renders the passive host glyph, not a control, when the SSH host is connected', () => {
+    sshConnectionStates.set('ssh-target-1', { status: 'connected' })
+    sshTargetLabels.set('ssh-target-1', 'Remote target')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('Project on SSH host Remote target')
+    expect(markup).not.toContain('Connect to SSH host')
+  })
+
+  // connectionId is independent of workspace kind; SSH folders need the same reconnect control.
+  it('offers the control for a folder workspace on a disconnected SSH host', () => {
+    sshConnectionStates.set('ssh-target-1', { status: 'error' })
+    sshTargetLabels.set('ssh-target-1', 'Remote target')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={{ ...makeRepo(), kind: 'folder' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Retry SSH connection to Remote target')
+  })
+
+  // Runtime-owned SSH targets are excluded from listTargets; absence cannot establish removal.
+  it('never reports a runtime-owned SSH target as removed', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={{ ...makeRepo(), connectionId: 'runtime-ssh-abc123' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('was removed')
+    expect(markup).toContain('Project on SSH host')
+  })
+
+  it('reports a removed SSH host once the target list no longer carries it', () => {
+    sshConnectionStates.set('ssh-target-1', { status: 'error' })
+    removedSshTargetLabels.set('ssh-target-1', 'Remote target (removed)')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('was removed')
+    expect(markup).not.toContain('Retry SSH connection')
+  })
+
+  it('marks a runtime-host worktree disconnected once a probe finds it unreachable', () => {
+    runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
+    runtimeStatusByEnvironmentId.set('env-1', { status: null })
+    const runtimeRepo: Repo = {
+      ...makeRepo(),
+      connectionId: undefined,
+      executionHostId: 'runtime:env-1'
+    }
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
+    )
+    expect(markup).toContain('Remote Mac disconnected')
+  })
+
+  // Unprobed hosts must not appear disconnected/dimmed during launch.
+  it('leaves a runtime-host worktree undimmed before its first probe answers', () => {
     runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
     const runtimeRepo: Repo = {
       ...makeRepo(),
       connectionId: undefined,
       executionHostId: 'runtime:env-1'
     }
-    // No status entry for env-1 → host is disconnected.
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
     )
-    expect(markup).toContain('Remote Mac disconnected')
+    expect(markup).not.toContain('Remote Mac disconnected')
+    expect(markup).toContain('Project on Remote Mac')
+    expect(markup).not.toContain('opacity-60')
   })
 
   it('distinguishes connected worktrees on different Orca servers', () => {

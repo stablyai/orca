@@ -1,5 +1,6 @@
 import type React from 'react'
-import type { GlobalSettings, LeftSidebarAppearanceMode } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { LeftSidebarAppearanceMode } from '../../../../shared/ui-chrome-types'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
@@ -31,13 +32,13 @@ export function LeftSidebarAppearanceSetting({
           'Left Sidebar Appearance'
         )}
         description={translate(
-          'auto.components.settings.AppearancePane.leftSidebarAppearance.rowDescription',
-          'Make the left sidebar match your terminal, stay default, or use a tint.'
+          'auto.components.settings.AppearancePane.leftSidebarAppearance.tintDescription',
+          'Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme.'
         )}
         control={
           <SettingsSegmentedControl<LeftSidebarAppearanceMode>
             size="sm"
-            value={settings.leftSidebarAppearanceMode ?? 'default'}
+            value={settings.leftSidebarAppearanceMode === 'tinted' ? 'tinted' : 'default'}
             onChange={(leftSidebarAppearanceMode) => updateSettings({ leftSidebarAppearanceMode })}
             ariaLabel={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
@@ -52,13 +53,6 @@ export function LeftSidebarAppearanceSetting({
                 )
               },
               {
-                value: 'match-terminal',
-                label: translate(
-                  'auto.components.settings.AppearancePane.leftSidebarAppearance.matchTerminal',
-                  'Match Terminal'
-                )
-              },
-              {
                 value: 'tinted',
                 label: translate(
                   'auto.components.settings.AppearancePane.leftSidebarAppearance.tinted',
@@ -69,7 +63,7 @@ export function LeftSidebarAppearanceSetting({
           />
         }
       />
-      {(settings.leftSidebarAppearanceMode ?? 'default') === 'tinted' ? (
+      {settings.leftSidebarAppearanceMode === 'tinted' ? (
         <div className="space-y-2">
           <ColorField
             label={translate(

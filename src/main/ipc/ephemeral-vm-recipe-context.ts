@@ -1,10 +1,15 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { loadHooks } from '../hooks'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import { isFolderRepo, isGitRepoKind } from '../../shared/repo-kind'
-import type { OrcaVmRecipe } from '../../shared/types'
+import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import {
+  EphemeralVmFailureError,
+  ephemeralVmFailure,
+  type EphemeralVmFailure
+} from '../../shared/ephemeral-vm-failure-copy'
 
 export type EphemeralVmRecipeListResult = {
   status: 'ok' | 'error'
@@ -12,6 +17,8 @@ export type EphemeralVmRecipeListResult = {
   recipes: OrcaVmRecipe[]
   diagnostics: NonNullable<ReturnType<typeof loadHooks>>['environmentRecipeDiagnostics']
   message?: string
+  messageCode?: string
+  messageParams?: Record<string, string | number>
 }
 
 export type EphemeralVmRecipeCatalogEntry = {
@@ -24,38 +31,38 @@ export type EphemeralVmRecipeCatalogEntry = {
 
 export type RecipeRepoResult =
   | { ok: true; repo: Exclude<ReturnType<Store['getRepo']>, null | undefined> }
-  | { ok: false; message: string; doctor: (recipeId: string) => EphemeralVmRecipeDoctorResult }
+  | {
+      ok: false
+      message: string
+      failure: EphemeralVmFailure
+      doctor: (recipeId: string) => EphemeralVmRecipeDoctorResult
+    }
 
-export function listRecipes(store: Store, repoId: string): EphemeralVmRecipeListResult {
+export function listRecipes(
+  store: Store,
+  repoId: string,
+  pluginRecipes: readonly OrcaVmRecipe[] = []
+): EphemeralVmRecipeListResult {
   const repo = store.getRepo(repoId)
   if (!repo || isFolderRepo(repo)) {
-    return {
-      status: 'error',
-      repoPath: null,
-      recipes: [],
-      diagnostics: [],
-      message: `Repo not found: ${repoId}`
-    }
+    return failedRecipeList(null, ephemeralVmFailure('repoNotFound', { repoId }))
   }
   if (repo.connectionId) {
-    return {
-      status: 'error',
-      repoPath: repo.path,
-      recipes: [],
-      diagnostics: [],
-      message: 'Ephemeral VM recipes run on the local desktop host in v1.'
-    }
+    return failedRecipeList(repo.path, ephemeralVmFailure('remoteRepoUnsupported'))
   }
   const hooks = loadHooks(repo.path)
   return {
     status: 'ok',
     repoPath: repo.path,
-    recipes: hooks?.environmentRecipes ?? [],
+    recipes: combineEphemeralVmRecipes(hooks?.environmentRecipes ?? [], pluginRecipes),
     diagnostics: hooks?.environmentRecipeDiagnostics ?? []
   }
 }
 
-export function listRecipeCatalog(store: Store): EphemeralVmRecipeCatalogEntry[] {
+export function listRecipeCatalog(
+  store: Store,
+  pluginRecipes: readonly OrcaVmRecipe[] = []
+): EphemeralVmRecipeCatalogEntry[] {
   return store
     .getRepos()
     .filter((repo) => isGitRepoKind(repo) && !isFolderRepo(repo) && !repo.connectionId)
@@ -65,7 +72,7 @@ export function listRecipeCatalog(store: Store): EphemeralVmRecipeCatalogEntry[]
         repoId: repo.id,
         repoName: repo.displayName,
         repoPath: repo.path,
-        recipes: hooks?.environmentRecipes ?? [],
+        recipes: combineEphemeralVmRecipes(hooks?.environmentRecipes ?? [], pluginRecipes),
         diagnostics: hooks?.environmentRecipeDiagnostics ?? []
       }
     })
@@ -75,10 +82,10 @@ export function listRecipeCatalog(store: Store): EphemeralVmRecipeCatalogEntry[]
 export function getRecipeRepo(store: Store, repoId: string): RecipeRepoResult {
   const repo = store.getRepo(repoId)
   if (!repo || isFolderRepo(repo)) {
-    return failedRecipeRepo(null, `Repo not found: ${repoId}`)
+    return failedRecipeRepo(null, ephemeralVmFailure('repoNotFound', { repoId }))
   }
   if (repo.connectionId) {
-    return failedRecipeRepo(repo.path, 'Ephemeral VM recipes run on the local desktop host in v1.')
+    return failedRecipeRepo(repo.path, ephemeralVmFailure('remoteRepoUnsupported'))
   }
   return { ok: true, repo }
 }
@@ -94,28 +101,57 @@ export function getRuntimeRecipeContext(
 } {
   const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
   if (!runtime) {
-    throw new Error(`Unknown ephemeral VM runtime: ${runtimeId}`)
+    throw new EphemeralVmFailureError(ephemeralVmFailure('runtimeNotFound', { runtimeId }))
   }
   if (!runtime.repoId) {
-    throw new Error(`Ephemeral VM runtime has no repo id: ${runtimeId}`)
+    throw new EphemeralVmFailureError(ephemeralVmFailure('runtimeRepoMissing', { runtimeId }))
   }
   const repo = getRecipeRepo(store, runtime.repoId)
   if (!repo.ok) {
-    throw new Error(repo.message)
+    throw new EphemeralVmFailureError(repo.failure)
   }
-  const recipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
-    (entry) => entry.id === runtime.recipeId
-  )
+  // Legacy runtimes lack snapshots; never substitute a newer same-ID plugin recipe for their repo-owned recipe.
+  const recipe =
+    runtime.recipe ??
+    (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
+      (entry) => entry.id === runtime.recipeId
+    )
   if (!recipe) {
-    throw new Error(`Recipe not found: ${runtime.recipeId}`)
+    throw new EphemeralVmFailureError(
+      ephemeralVmFailure('recipeNotFound', { recipeId: runtime.recipeId })
+    )
   }
   return { runtime, repo, recipe }
 }
 
-function failedRecipeRepo(repoPath: string | null, message: string): RecipeRepoResult {
+export function resolveRecipeForRepo(
+  repoPath: string,
+  recipeId: string,
+  pluginRecipes: readonly OrcaVmRecipe[] = []
+): OrcaVmRecipe | null {
+  return (
+    combineEphemeralVmRecipes(loadHooks(repoPath)?.environmentRecipes ?? [], pluginRecipes).find(
+      (recipe) => recipe.id === recipeId
+    ) ?? null
+  )
+}
+
+/** Project-owned recipes are authoritative for their repository and shadow
+ * same-id global plugin recipes without disabling the rest of the pack. */
+export function combineEphemeralVmRecipes(
+  repoRecipes: readonly OrcaVmRecipe[],
+  pluginRecipes: readonly OrcaVmRecipe[]
+): OrcaVmRecipe[] {
+  const repoIds = new Set(repoRecipes.map((recipe) => recipe.id))
+  return [...repoRecipes, ...pluginRecipes.filter((recipe) => !repoIds.has(recipe.id))]
+}
+
+function failedRecipeRepo(repoPath: string | null, failure: EphemeralVmFailure): RecipeRepoResult {
+  const message = failure.error
   return {
     ok: false,
     message,
+    failure,
     doctor: (recipeId) => ({
       recipeId,
       repoPath: repoPath ?? '',
@@ -129,5 +165,20 @@ function failedRecipeRepo(repoPath: string | null, message: string): RecipeRepoR
         }
       ]
     })
+  }
+}
+
+function failedRecipeList(
+  repoPath: string | null,
+  failure: EphemeralVmFailure
+): EphemeralVmRecipeListResult {
+  return {
+    status: 'error',
+    repoPath,
+    recipes: [],
+    diagnostics: [],
+    message: failure.error,
+    ...(failure.errorCode ? { messageCode: failure.errorCode } : {}),
+    ...(failure.errorParams ? { messageParams: failure.errorParams } : {})
   }
 }

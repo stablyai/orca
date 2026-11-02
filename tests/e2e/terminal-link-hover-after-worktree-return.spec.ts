@@ -18,18 +18,8 @@ import {
 } from './helpers/terminal'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
-/**
- * Repro for: a clickable terminal link (file path, URL, …) becomes dead after
- * switching to another worktree and returning, until the user scrolls the
- * terminal a little.
- *
- * xterm's Linkifier only re-runs link providers on mousemove when the hovered
- * buffer cell changes vs its `_lastBufferCell` cache. Hiding the surface fires
- * mouseleave (clearing the current link) but leaves that cache, so returning
- * the pointer to the same cell short-circuits and the link is never
- * re-established — `currentLink` stays null. File-path links are the worst case
- * because their geometry click fallback does not compensate after reveal.
- */
+// After worktree hide, Linkifier clears currentLink but retains _lastBufferCell; returning to the same cell skips providers until scroll.
+// File-path links lack a compensating click fallback, so require relinkification on reveal.
 type HoverProbe = { col: number; row: number; tabId: string }
 
 async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe> {
@@ -56,7 +46,7 @@ async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe>
         continue
       }
       const idx = line.translateToString(true).indexOf(needle)
-      if (idx >= 0) {
+      if (idx !== -1) {
         hit = { row, col: idx }
         break
       }
@@ -68,8 +58,7 @@ async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe>
     if (!screen) {
       throw new Error('xterm-screen element unavailable')
     }
-    // Aim at the middle of the link text so the pointer lands squarely inside
-    // the link range regardless of rounding.
+    // Aim at link center to tolerate rounding.
     return {
       col: hit.col + Math.floor(needle.length / 2),
       row: hit.row,
@@ -78,11 +67,7 @@ async function locateHoverProbe(page: Page, needle: string): Promise<HoverProbe>
   }, needle)
 }
 
-/**
- * Dispatch a hover mousemove at the probe coordinates and return the text of
- * the link the linkifier considers active (or null). Callers poll this because
- * Orca's file-path provider resolves link candidates asynchronously.
- */
+// Dispatch hover and return the active link; poll because file-path candidates resolve asynchronously.
 async function hoverAndReadActiveLinkText(page: Page, probe: HoverProbe): Promise<string | null> {
   await page.evaluate(({ col, row, tabId }) => {
     const manager = window.__paneManagers?.get(tabId)
@@ -98,14 +83,21 @@ async function hoverAndReadActiveLinkText(page: Page, probe: HoverProbe): Promis
       new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX, clientY })
     )
   }, probe)
-  return page.evaluate(({ tabId }) => {
-    const manager = window.__paneManagers?.get(tabId)
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    const core = pane?.terminal as unknown as
-      | { _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } } }
-      | undefined
-    return core?._core?.linkifier?.currentLink?.link?.text ?? null
-  }, probe)
+  return readActiveLinkText(page, probe.tabId)
+}
+
+async function readActiveLinkText(page: Page, tabId: string): Promise<string | null> {
+  return page.evaluate(
+    ({ tabId }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      const core = pane?.terminal as unknown as
+        | { _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } } }
+        | undefined
+      return core?._core?.linkifier?.currentLink?.link?.text ?? null
+    },
+    { tabId }
+  )
 }
 
 async function readTerminalCursor(page: Page, tabId: string): Promise<string | null> {
@@ -167,8 +159,7 @@ async function dispatchScreenMouseLeave(page: Page, tabId: string): Promise<void
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
-    // Mimics the pointer leaving as the surface hides on a worktree switch:
-    // clears the linkifier's current link but keeps its cell cache.
+    // Model surface hide: clear current link while retaining its cell cache.
     screen?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false, cancelable: true }))
   }, tabId)
 }
@@ -185,11 +176,7 @@ async function activeWorktreePath(page: Page): Promise<string> {
   })
 }
 
-/**
- * Drive the full repro and assert the link re-establishes on hover after
- * returning to the worktree. `contains` accommodates the file provider's
- * display text differing slightly from the raw echoed token.
- */
+// Require hover relinkification after worktree return; contains tolerates provider display text differing from the echoed token.
 async function assertLinkRecoversAfterReturn(
   page: Page,
   args: {
@@ -201,7 +188,6 @@ async function assertLinkRecoversAfterReturn(
 ): Promise<HoverProbe> {
   const probe = await locateHoverProbe(page, args.needle)
 
-  // Baseline: hovering establishes the link before any switch.
   await expect
     .poll(() => hoverAndReadActiveLinkText(page, probe), {
       timeout: 5_000,
@@ -212,8 +198,7 @@ async function assertLinkRecoversAfterReturn(
   await dispatchScreenMouseLeave(page, probe.tabId)
   await switchToWorktree(page, args.secondWorktreeId)
   await waitForActiveTerminalManager(page, 30_000)
-  // Wait for React to commit the intermediate hidden surface; switching back
-  // before that commit would batch away the lifecycle transition under test.
+  // Wait for the intermediate hidden commit so React cannot batch away the lifecycle transition.
   await expect.poll(() => isTerminalSurfaceVisible(page, probe.tabId)).toBe(false)
 
   await switchToWorktree(page, args.firstWorktreeId)
@@ -221,8 +206,7 @@ async function assertLinkRecoversAfterReturn(
   await waitForActiveTerminalManager(page, 30_000)
   await expect.poll(() => isTerminalSurfaceVisible(page, probe.tabId)).toBe(true)
 
-  // Hover the SAME cell without scrolling. Pre-fix this never re-establishes
-  // the link (dead until a scroll); post-fix the reveal reset re-linkifies.
+  // Hover the same cell without scroll; reveal reset must re-linkify it.
   await expect
     .poll(() => hoverAndReadActiveLinkText(page, probe), {
       timeout: 5_000,
@@ -230,8 +214,7 @@ async function assertLinkRecoversAfterReturn(
     })
     .toContain(args.expectContains)
 
-  // The pointer cursor is the user-visible hover affordance; currentLink is
-  // also checked above because it is the backing state xterm requires to click.
+  // Require pointer affordance plus currentLink, which xterm needs for click activation.
   await expect.poll(() => readTerminalCursor(page, probe.tabId)).toBe('pointer')
   return probe
 }
@@ -239,6 +222,46 @@ async function assertLinkRecoversAfterReturn(
 test.describe('Terminal link hover after worktree return', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
+  })
+
+  test('re-establishes a URL link on hover after the pointer leaves the terminal', async ({
+    orcaPage
+  }) => {
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
+
+    const url = `https://example.com/orca-link-${randomUUID()}`
+    await sendToTerminal(orcaPage, ptyId, `echo ${url}\r`)
+    await expect
+      .poll(() => getTerminalContent(orcaPage, 4000), {
+        timeout: 10_000,
+        message: 'URL fixture did not reach the terminal buffer'
+      })
+      .toContain(url)
+
+    // Let streamed-output reset finish before building the mouseleave cache state.
+    await orcaPage.waitForTimeout(300)
+    const probe = await locateHoverProbe(orcaPage, url)
+    await expect
+      .poll(() => hoverAndReadActiveLinkText(orcaPage, probe), {
+        timeout: 5_000,
+        message: 'baseline hover never established the URL link'
+      })
+      .toContain(url)
+
+    await dispatchScreenMouseLeave(orcaPage, probe.tabId)
+    await expect.poll(() => readActiveLinkText(orcaPage, probe.tabId)).toBeNull()
+    await expect.poll(() => readTerminalCursor(orcaPage, probe.tabId)).not.toBe('pointer')
+
+    await expect
+      .poll(() => hoverAndReadActiveLinkText(orcaPage, probe), {
+        timeout: 5_000,
+        message: 'URL link did not re-establish after terminal mouseleave'
+      })
+      .toContain(url)
+    await expect.poll(() => readTerminalCursor(orcaPage, probe.tabId)).toBe('pointer')
   })
 
   test('re-establishes a file-path link on hover after switching worktrees and back', async ({
@@ -280,8 +303,7 @@ test.describe('Terminal link hover after worktree return', () => {
         expectContains: fileName
       })
       await activateHoveredLink(orcaPage, probe)
-      // The editor header is the user-visible result of a successful terminal
-      // link activation; store state alone could pass with a blank editor.
+      // Require rendered editor header after activation; store state alone can hide a blank editor.
       await expect(orcaPage.locator('.editor-header-path').first()).toContainText(fileName, {
         timeout: 20_000
       })

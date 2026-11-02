@@ -1,3 +1,13 @@
+import {
+  TERMINAL_CTRL_BACKSPACE_INPUT,
+  TERMINAL_KITTY_SHIFT_ENTER_INPUT
+} from '../../../src/shared/terminal-modified-enter-encoding'
+import {
+  SPECIAL_KEY_LABELS,
+  TERMINAL_ACCESSORY_KEY_DEFINITIONS,
+  TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS
+} from './terminal-key-definitions'
+
 export type TerminalAccessoryKey = {
   id: string
   label: string
@@ -62,6 +72,14 @@ const SHIFTED_PRINTABLE: Record<string, string> = {
 const CTRL_PRINTABLE_BYTES: Record<string, string> = {
   ' ': '\x00',
   '@': '\x00',
+  '2': '\x00',
+  '3': '\x1b',
+  '4': '\x1c',
+  '5': '\x1d',
+  '6': '\x1e',
+  '7': '\x1f',
+  '8': '\x7f',
+  '/': '\x1f',
   '`': '\x00',
   '[': '\x1b',
   '{': '\x1b',
@@ -73,66 +91,6 @@ const CTRL_PRINTABLE_BYTES: Record<string, string> = {
   '~': '\x1e',
   _: '\x1f',
   '?': '\x7f'
-}
-
-const SPECIAL_KEY_LABELS: Record<string, string> = {
-  escape: 'Esc',
-  tab: 'Tab',
-  enter: 'Enter',
-  backspace: '⌫',
-  delete: 'Del',
-  insert: 'Ins',
-  arrowUp: '↑',
-  arrowDown: '↓',
-  arrowLeft: '←',
-  arrowRight: '→',
-  home: 'Home',
-  end: 'End',
-  pageUp: 'PgUp',
-  pageDown: 'PgDn',
-  space: 'Space',
-  f1: 'F1',
-  f2: 'F2',
-  f3: 'F3',
-  f4: 'F4',
-  f5: 'F5',
-  f6: 'F6',
-  f7: 'F7',
-  f8: 'F8',
-  f9: 'F9',
-  f10: 'F10',
-  f11: 'F11',
-  f12: 'F12'
-}
-
-const SPECIAL_KEY_ACCESSIBILITY_LABELS: Record<string, string> = {
-  escape: 'Escape',
-  tab: 'Tab',
-  enter: 'Enter',
-  backspace: 'Backspace',
-  delete: 'Forward delete',
-  insert: 'Insert',
-  arrowUp: 'Arrow up',
-  arrowDown: 'Arrow down',
-  arrowLeft: 'Arrow left',
-  arrowRight: 'Arrow right',
-  home: 'Home',
-  end: 'End',
-  pageUp: 'Page up',
-  pageDown: 'Page down',
-  space: 'Space',
-  f1: 'F1',
-  f2: 'F2',
-  f3: 'F3',
-  f4: 'F4',
-  f5: 'F5',
-  f6: 'F6',
-  f7: 'F7',
-  f8: 'F8',
-  f9: 'F9',
-  f10: 'F10',
-  f11: 'F11',
-  f12: 'F12'
 }
 
 const CSI_FINAL_SPECIAL_KEYS: Record<string, string> = {
@@ -165,87 +123,9 @@ const CSI_TILDE_SPECIAL_KEYS: Record<string, number> = {
   f12: 24
 }
 
-export const TERMINAL_SHORTCUT_SPECIAL_KEYS: TerminalShortcutSpecialKey[] = [
-  'escape',
-  'tab',
-  'enter',
-  'backspace',
-  'delete',
-  'insert',
-  'arrowUp',
-  'arrowDown',
-  'arrowLeft',
-  'arrowRight',
-  'home',
-  'end',
-  'pageUp',
-  'pageDown',
-  'space',
-  'f1',
-  'f2',
-  'f3',
-  'f4',
-  'f5',
-  'f6',
-  'f7',
-  'f8',
-  'f9',
-  'f10',
-  'f11',
-  'f12'
-].map((id) => ({
-  id,
-  label: SPECIAL_KEY_LABELS[id]!,
-  accessibilityLabel: SPECIAL_KEY_ACCESSIBILITY_LABELS[id]!
-}))
+export const TERMINAL_SHORTCUT_SPECIAL_KEYS = TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS
 
-export const TERMINAL_ACCESSORY_KEYS: TerminalAccessoryKey[] = [
-  { id: 'escape', label: 'Esc', bytes: '\x1b', accessibilityLabel: 'Escape' },
-  { id: 'tab', label: 'Tab', bytes: '\t', accessibilityLabel: 'Tab' },
-  { id: 'enter', label: 'Enter', bytes: '\r', accessibilityLabel: 'Enter' },
-  // Why: terminal apps recognize ESC [ Z as the reverse-tab sequence.
-  { id: 'shiftTab', label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
-  { id: 'space', label: 'Space', bytes: ' ', accessibilityLabel: 'Space' },
-  { id: 'backspace', label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
-  {
-    id: 'delete',
-    label: 'Del',
-    bytes: '\x1b[3~',
-    accessibilityLabel: 'Forward delete',
-    repeatable: true
-  },
-  { id: 'arrowUp', label: '↑', bytes: '\x1b[A', accessibilityLabel: 'Arrow Up', repeatable: true },
-  {
-    id: 'arrowDown',
-    label: '↓',
-    bytes: '\x1b[B',
-    accessibilityLabel: 'Arrow Down',
-    repeatable: true
-  },
-  {
-    id: 'arrowLeft',
-    label: '←',
-    bytes: '\x1b[D',
-    accessibilityLabel: 'Arrow Left',
-    repeatable: true
-  },
-  {
-    id: 'arrowRight',
-    label: '→',
-    bytes: '\x1b[C',
-    accessibilityLabel: 'Arrow Right',
-    repeatable: true
-  },
-  { id: 'ctrlC', label: 'Ctrl+C', bytes: '\x03', accessibilityLabel: 'Interrupt terminal' },
-  { id: 'ctrlD', label: 'Ctrl+D', bytes: '\x04', accessibilityLabel: 'Send EOF' },
-  { id: 'ctrlL', label: 'Ctrl+L', bytes: '\x0c', accessibilityLabel: 'Clear screen' },
-  { id: 'ctrlZ', label: 'Ctrl+Z', bytes: '\x1a', accessibilityLabel: 'Suspend process' },
-  { id: 'ctrlR', label: 'Ctrl+R', bytes: '\x12', accessibilityLabel: 'Reverse search' },
-  { id: 'ctrlA', label: 'Ctrl+A', bytes: '\x01', accessibilityLabel: 'Start of line' },
-  { id: 'ctrlE', label: 'Ctrl+E', bytes: '\x05', accessibilityLabel: 'End of line' },
-  { id: 'ctrlW', label: 'Ctrl+W', bytes: '\x17', accessibilityLabel: 'Delete word backward' },
-  { id: 'ctrlU', label: 'Ctrl+U', bytes: '\x15', accessibilityLabel: 'Clear line before cursor' }
-]
+export const TERMINAL_ACCESSORY_KEYS = TERMINAL_ACCESSORY_KEY_DEFINITIONS
 
 export function buildTerminalShortcutKey(
   binding: TerminalShortcutBinding
@@ -282,8 +162,7 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
   }
   const csiFinal = CSI_FINAL_SPECIAL_KEYS[key]
   if (csiFinal) {
-    // Why: xterm encodes unmodified F1-F4 as SS3 (ESC O P/S). Once a
-    // modifier is present it switches to the CSI 1;N form like arrows.
+    // Modifiers switch F1–F4 from SS3 to CSI 1;N, matching xterm.
     if (SS3_BASE_SPECIAL_KEYS.has(key) && csiModifierParameter(modifiers) === 1) {
       return `${ESC}O${csiFinal}`
     }
@@ -305,10 +184,17 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
     return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'enter') {
+    // Saved keys carry no pane; the send path encodes this for the pane's negotiated keyboard modes.
+    if (hasOnlyModifier(modifiers, 'shift')) {
+      return TERMINAL_KITTY_SHIFT_ENTER_INPUT
+    }
     const bytes = '\r'
     return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'backspace') {
+    if (hasOnlyModifier(modifiers, 'ctrl')) {
+      return TERMINAL_CTRL_BACKSPACE_INPUT
+    }
     const bytes = modifiers.includes('ctrl') ? '\b' : '\x7f'
     return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
@@ -316,6 +202,13 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
     return buildPrintableShortcutBytes(key, modifiers)
   }
   return null
+}
+
+function hasOnlyModifier(
+  modifiers: TerminalShortcutModifier[],
+  modifier: TerminalShortcutModifier
+): boolean {
+  return modifiers.length === 1 && modifiers[0] === modifier
 }
 
 function buildPrintableShortcutBytes(

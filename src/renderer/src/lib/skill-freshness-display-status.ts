@@ -1,7 +1,8 @@
+import type { BundledSkillPlan } from '../../../shared/bundled-skill-plan'
 import {
-  SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
-  type SkillFreshnessInventory
-} from '../../../shared/skill-freshness'
+  bundledSkillPlanState,
+  type BundledSkillPlanState
+} from '../../../shared/bundled-skill-summary'
 
 export type SkillFreshnessDisplayStatus =
   | 'installed'
@@ -9,53 +10,41 @@ export type SkillFreshnessDisplayStatus =
   | 'update-available'
   | 'needs-attention'
 
-export function getSkillFreshnessDisplayStatus(
-  inventory: SkillFreshnessInventory | null,
-  skillName: string
-): SkillFreshnessDisplayStatus {
-  if (inventory?.eligibleUpdateNames.includes(skillName)) {
-    return 'update-available'
-  }
-
-  let hasPlacement = false
-  let hasBlockedCopy = false
-  for (const installation of inventory?.installations ?? []) {
-    if (installation.name !== skillName) {
-      continue
-    }
-    hasPlacement = true
-    if (installation.status !== 'current') {
-      hasBlockedCopy = true
-    }
-  }
-  // Why: with no scan yet (or nothing found) the only honest answer is presence.
-  // Reporting attention here would flash amber on every launch before the first scan.
-  if (!hasPlacement) {
-    return 'installed'
-  }
-  // Why: no eligible update is not proof a copy is fine — it can equally mean a copy
-  // is out of date somewhere the update command cannot reach. Saying "Installed" there
-  // reads as all-clear and hides real drift, so that case gets its own attention state.
-  return hasBlockedCopy ? 'needs-attention' : 'up-to-date'
+function planState(plan: BundledSkillPlan | null, skillName: string): BundledSkillPlanState | null {
+  const entry = plan?.skills.find((skill) => skill.name === skillName)
+  return entry ? bundledSkillPlanState(entry) : null
 }
 
-/**
- * Whether a copy needs the user's own hands — it is not current, and running the update
- * would not resolve it. This is what marks the review affordance as carrying a problem
- * rather than a routine update, so the badge can stay a badge and the dialog explains.
- */
+export function getSkillFreshnessDisplayStatus(
+  plan: BundledSkillPlan | null,
+  skillName: string
+): SkillFreshnessDisplayStatus {
+  switch (planState(plan, skillName)) {
+    // Why: no plan yet, or no copy of Orca's here; the only honest answer is presence.
+    case null:
+      return 'installed'
+    case 'update':
+      return 'update-available'
+    case 'repair':
+    case 'attention':
+      return 'needs-attention'
+    // Why: linking a newly detected agent is "Install for <agent>", not a stale skill.
+    case 'install':
+    case 'current':
+      return 'up-to-date'
+  }
+}
+
+/** Whether the Update skills dialog has anything to show or do for this skill. */
+export function skillPlanHasDetails(plan: BundledSkillPlan | null, skillName: string): boolean {
+  const state = planState(plan, skillName)
+  return state !== null && state !== 'current'
+}
+
+/** A copy the update leaves for the user, or an interrupted update to repair. */
 export function hasSkillCopyNeedingAttention(
-  inventory: SkillFreshnessInventory | null,
+  plan: BundledSkillPlan | null,
   skillName: string
 ): boolean {
-  return (inventory?.installations ?? []).some(
-    (installation) =>
-      installation.name === skillName &&
-      installation.status !== 'current' &&
-      // Why: an out-of-date copy the command converges is ordinary work, not a problem.
-      !(
-        SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
-        installation.status === 'outdated'
-      )
-  )
+  return getSkillFreshnessDisplayStatus(plan, skillName) === 'needs-attention'
 }

@@ -5,7 +5,8 @@ import {
   type KeybindingDefinition
 } from '../../../../shared/keybindings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { localizeKeybindingDefinition } from './keybinding-title-copy'
 
 export type ShortcutGroup = {
   title: string
@@ -20,19 +21,21 @@ export function disabledAgentTabActionIds(
   return normalizeDisabledTuiAgents(disabledTuiAgents).map((agent) => agentTabActionId(agent))
 }
 
-export function groupDefinitions(disabledTuiAgents: readonly TuiAgent[]): ShortcutGroup[] {
-  // Why: per-agent launch rows only make sense for agents the user keeps
-  // enabled in Settings → Agents; hiding disabled ones keeps the Agents group
-  // scoped to what the chord could actually launch.
+export function groupDefinitions(
+  disabledTuiAgents: readonly TuiAgent[],
+  additionalDefinitions: readonly KeybindingDefinition[] = []
+): ShortcutGroup[] {
+  // Hide launch bindings for disabled agents because those chords cannot launch them.
   const hiddenAgentActionIds = new Set<KeybindingActionId>(
     disabledAgentTabActionIds(disabledTuiAgents)
   )
   const groups = new Map<string, KeybindingDefinition[]>()
-  for (const definition of KEYBINDING_DEFINITIONS) {
+  for (const definition of [...KEYBINDING_DEFINITIONS, ...additionalDefinitions]) {
     if (hiddenAgentActionIds.has(definition.id)) {
       continue
     }
-    groups.set(definition.group, [...(groups.get(definition.group) ?? []), definition])
+    const localized = localizeKeybindingDefinition(definition)
+    groups.set(localized.group, [...(groups.get(localized.group) ?? []), localized])
   }
   return Array.from(groups.entries()).map(([title, items]) => ({ title, items }))
 }

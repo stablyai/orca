@@ -1,37 +1,119 @@
-import type { Repo } from '../shared/types'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../shared/execution-host'
+import type { Repo } from '../shared/repo-types'
+import type { RepoHostTarget } from '../shared/repo-host-identity'
+import { githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
+import { isUnresolvedSshHostAlias } from '../shared/git-remote-host-alias'
+import { getProjectProviderIdentity } from '../shared/project-host-setup-projection'
+import { getStoredRepoExecutionHostId } from './repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
+import { getProjectRuntimeReadGitOptions } from './project-runtime-git-options'
+import { isLocalGitRuntimeRouterInstalled } from './git/command-runner/local-git-runtime-route'
+import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
+import { isWslMoveRepoBlocked } from './persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { blockedWslDistroForPath, wslDistroForPath } from './wsl/wsl-unc-access-gate'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
+// Refresh renamed/transferred projects without probing on every list call.
+const RESOLVED_IDENTITY_REFRESH_TTL_MS = 6 * 60 * 60 * 1000
+// Avoid probing every resolved repo immediately after a restart.
+const RESOLVED_IDENTITY_REFRESH_STARTUP_DELAY_MS = 5 * 60 * 1000
+// Bound speculative probes so large repo lists do not stall a sweep.
+const MAX_IDENTITY_REFRESHES_PER_SWEEP = 4
 
-type RepoIdentityStore = {
+type RepoIdentityStore = ProjectRuntimeResolutionStore & {
   getRepos(): Repo[]
-  getRepo?(id: string): Repo | undefined
-  updateRepo(id: string, updates: Pick<Partial<Repo>, 'gitRemoteIdentity'>): Repo | null
+  getRepo?(id: string, hostId?: ExecutionHostId): Repo | undefined
+  updateRepo(
+    target: RepoHostTarget,
+    updates: Pick<Partial<Repo>, 'gitRemoteIdentity' | 'repoIcon'>
+  ): Repo | null
 }
 
 type EnrichmentOptions = {
   onChanged?: () => void
 }
 
-const inFlightProbesByLocation = new Map<string, Promise<boolean>>()
-const noIdentityRetryAfterByLocation = new Map<string, number>()
-
-function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
-  return `${repo.connectionId ?? 'local'}\0${repo.path}`
+type InFlightProbe = {
+  controller: AbortController
+  promise: Promise<boolean>
 }
 
-function getCurrentRepo(store: RepoIdentityStore, id: string): Repo | undefined {
-  return store.getRepo?.(id) ?? store.getRepos().find((repo) => repo.id === id)
+const inFlightProbesByLocation = new Map<string, InFlightProbe>()
+const probeRetryAfterByLocation = new Map<string, number>()
+// Use stable callback references: coalesced callers share notifications until all reruns settle.
+const pendingChangeListeners = new Set<() => void>()
+let sweepInFlight: Promise<void> | null = null
+let rerunRequested = false
+
+function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>): string {
+  return `${getRepoExecutionHostId(repo)}\0${repo.path}`
 }
 
-function isSameUnenrichedRepo(snapshot: Repo, current: Repo | undefined): boolean {
+// Bare runtime stamps address files here; nested SSH targets belong to the peer.
+function getRepoProbeHostId(repo: Repo): ExecutionHostId | null {
+  const hostId = getStoredRepoExecutionHostId(repo)
+  return hostId === LOCAL_EXECUTION_HOST_ID && getRepoSshConnectionId(repo) ? null : hostId
+}
+
+function getCurrentRepo(store: RepoIdentityStore, snapshot: Repo): Repo | undefined {
+  const hostId = getRepoExecutionHostId(snapshot)
+  const found = store.getRepo?.(snapshot.id, hostId)
+  return found && getRepoExecutionHostId(found) === hostId
+    ? found
+    : store
+        .getRepos()
+        .find((repo) => repo.id === snapshot.id && getRepoExecutionHostId(repo) === hostId)
+}
+
+function isSameProbedRepo(snapshot: Repo, current: Repo | undefined): current is Repo {
   return (
     !!current &&
     current.kind !== 'folder' &&
-    !current.gitRemoteIdentity &&
     current.path === snapshot.path &&
-    (current.connectionId ?? null) === (snapshot.connectionId ?? null)
+    getRepoExecutionHostId(current) === getRepoExecutionHostId(snapshot)
   )
+}
+
+function shouldWriteProbedIdentity(current: Repo, probed: Repo['gitRemoteIdentity']): boolean {
+  const existing = current.gitRemoteIdentity
+  if (!existing) {
+    // Repeated no-remote answers must not churn repo-list consumers.
+    return !(probed === null && existing === null)
+  }
+  // Missing identities permit access; retain resolved identities when probes find nothing.
+  return !!probed && probed.canonicalKey !== existing.canonicalKey
+}
+
+function getAutomaticGitHubIconRefresh(
+  current: Repo,
+  probed: NonNullable<Repo['gitRemoteIdentity']>
+): RepoIcon | undefined {
+  if (
+    (current.upstream?.owner && current.upstream.repo) ||
+    current.repoIcon?.type !== 'image' ||
+    current.repoIcon.source !== 'github'
+  ) {
+    return undefined
+  }
+  const identity = getProjectProviderIdentity({
+    upstream: null,
+    repoIcon: undefined,
+    gitRemoteIdentity: probed
+  })
+  if (!identity || (identity.host && isUnresolvedSshHostAlias(identity.host))) {
+    return undefined
+  }
+  const icon = githubAvatarIcon(identity)
+  return icon.type === 'image' &&
+    current.repoIcon.src === icon.src &&
+    current.repoIcon.label === icon.label
+    ? undefined
+    : icon
 }
 
 function writeIdentity(
@@ -39,72 +121,153 @@ function writeIdentity(
   snapshot: Repo,
   gitRemoteIdentity: Repo['gitRemoteIdentity']
 ): boolean {
-  const current = getCurrentRepo(store, snapshot.id)
-  if (!isSameUnenrichedRepo(snapshot, current)) {
+  if (!getRepoProbeHostId(snapshot)) {
     return false
   }
-  // Why: the no-remote marker is re-derived on every retry; skip the redundant
-  // write so repo-list consumers do not churn.
-  if (gitRemoteIdentity === null && current?.gitRemoteIdentity === null) {
+  const current = getCurrentRepo(store, snapshot)
+  if (!isSameProbedRepo(snapshot, current)) {
     return false
   }
-  return !!store.updateRepo(snapshot.id, { gitRemoteIdentity })
+  const writeRemote = shouldWriteProbedIdentity(current, gitRemoteIdentity)
+  const icon = gitRemoteIdentity
+    ? getAutomaticGitHubIconRefresh(current, gitRemoteIdentity)
+    : undefined
+  // Store writes match the row's stamp even when its files are probed locally.
+  const update = (updates: Pick<Partial<Repo>, 'gitRemoteIdentity' | 'repoIcon'>): Repo | null => {
+    return store.updateRepo(snapshot, updates)
+  }
+  if (icon) {
+    return !!update({ ...(writeRemote ? { gitRemoteIdentity } : {}), repoIcon: icon })
+  }
+  return writeRemote && !!update({ gitRemoteIdentity })
 }
 
 async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo): Promise<boolean> {
+  const hostId = getRepoProbeHostId(repo)
+  // Leave no deadline so the first sweep after a move can retry.
+  if (!hostId || isWslMoveRepoBlocked(repo)) {
+    return false
+  }
   const locationKey = getRepoLocationKey(repo)
-  const retryAfter = noIdentityRetryAfterByLocation.get(locationKey) ?? 0
+  const retryAfter = probeRetryAfterByLocation.get(locationKey) ?? 0
   if (retryAfter > Date.now()) {
     return false
   }
   const inFlight = inFlightProbesByLocation.get(locationKey)
   if (inFlight) {
-    return inFlight
+    return inFlight.promise
   }
-  const probe = (async () => {
-    const result = await probeGitRemoteIdentity(repo.path, repo.connectionId)
+  // Resolved repos on unreachable hosts need no frequent retries.
+  const missTtlMs = repo.gitRemoteIdentity
+    ? RESOLVED_IDENTITY_REFRESH_TTL_MS
+    : NO_IDENTITY_RETRY_TTL_MS
+  const controller = new AbortController()
+  const promise = (async () => {
+    // A local project's runtime may run its Git in a distro, whatever its path.
+    const git = getProjectRuntimeReadGitOptions(store, repo)
+    // E9: git on a stopped distro's repo boots it; no deadline, so the next sweep retries once it runs.
+    // Checked synchronously first so host repos keep probing without an extra await.
+    if (
+      wslDistroForPath(repo.path, git.wslDistro) &&
+      (await blockedWslDistroForPath(repo.path, git.wslDistro))
+    ) {
+      return false
+    }
+    const result = await probeGitRemoteIdentity(repo.path, hostId, {
+      signal: controller.signal,
+      // Only the D1c router reads it, to wait for a stopped distro; main's sweep keeps its tier.
+      ...(isLocalGitRuntimeRouterInstalled() ? { admissionTier: 'background' as const } : {}),
+      ...git
+    })
+    // Aborted probes resolve as unavailable; prevent retired probes from re-seeding deadlines.
+    if (controller.signal.aborted) {
+      return false
+    }
+    if (isWslMoveRepoBlocked(repo)) {
+      probeRetryAfterByLocation.delete(locationKey)
+      return false
+    }
     if (result.status !== 'resolved') {
-      // Why: repos without a parseable remote are common; cache misses briefly so
-      // list calls stay cheap while still allowing recent remote changes to land.
-      noIdentityRetryAfterByLocation.set(locationKey, Date.now() + NO_IDENTITY_RETRY_TTL_MS)
-      // Why: only a probe that actually reached git settles "no usable remote".
-      // An unreachable host leaves the identity unknown so consumers can keep
-      // treating the repo as pending instead of ineligible.
+      probeRetryAfterByLocation.set(locationKey, Date.now() + missTtlMs)
+      // Unreachable hosts leave identity pending; only a successful git read can settle no-remote.
       return result.status === 'no-remote' ? writeIdentity(store, repo, null) : false
     }
 
-    noIdentityRetryAfterByLocation.delete(locationKey)
+    probeRetryAfterByLocation.set(locationKey, Date.now() + RESOLVED_IDENTITY_REFRESH_TTL_MS)
     return writeIdentity(store, repo, result.identity)
   })().finally(() => {
-    if (inFlightProbesByLocation.get(locationKey) === probe) {
+    // Retirement may have replaced this entry while the probe was running.
+    if (inFlightProbesByLocation.get(locationKey)?.controller === controller) {
       inFlightProbesByLocation.delete(locationKey)
     }
   })
-  inFlightProbesByLocation.set(locationKey, probe)
-  return probe
+  inFlightProbesByLocation.set(locationKey, { controller, promise })
+  return promise
+}
+
+function isIdentityRefreshDue(repo: Repo, now: number): boolean {
+  const locationKey = getRepoLocationKey(repo)
+  const dueAt = probeRetryAfterByLocation.get(locationKey)
+  if (dueAt === undefined) {
+    probeRetryAfterByLocation.set(locationKey, now + RESOLVED_IDENTITY_REFRESH_STARTUP_DELAY_MS)
+    return false
+  }
+  return dueAt <= now
+}
+
+function retireRemovedLocations(allRepos: Repo[]): void {
+  const liveKeys = new Set(
+    allRepos.filter((repo) => repo.kind !== 'folder').map(getRepoLocationKey)
+  )
+  for (const locationKey of probeRetryAfterByLocation.keys()) {
+    if (!liveKeys.has(locationKey)) {
+      probeRetryAfterByLocation.delete(locationKey)
+    }
+  }
+  for (const [locationKey, entry] of inFlightProbesByLocation) {
+    // A wedged probe may never reach finally; retire it before this location can be re-added.
+    if (!liveKeys.has(locationKey)) {
+      entry.controller.abort()
+      inFlightProbesByLocation.delete(locationKey)
+    }
+  }
+}
+
+function selectEnrichmentCandidates(store: RepoIdentityStore): Repo[] {
+  const now = Date.now()
+  const repos = store
+    .getRepos()
+    .filter((repo) => repo.kind !== 'folder' && getRepoProbeHostId(repo) !== null)
+  // Retry settled null markers: repos can gain remotes later.
+  const candidates = repos.filter((repo) => !repo.gitRemoteIdentity)
+  let refreshes = 0
+  for (const repo of repos) {
+    if (refreshes >= MAX_IDENTITY_REFRESHES_PER_SWEEP) {
+      break
+    }
+    if (repo.gitRemoteIdentity && isIdentityRefreshDue(repo, now)) {
+      candidates.push(repo)
+      refreshes += 1
+    }
+  }
+  return candidates
 }
 
 async function enrichMissingRepoGitRemoteIdentitiesInBackground(
-  store: RepoIdentityStore,
-  options: EnrichmentOptions
+  store: RepoIdentityStore
 ): Promise<void> {
-  // Why: the settled `null` marker stays a candidate on purpose — a repo that
-  // gains a remote later must still resolve. Do not tighten this to
-  // `=== undefined`; the retry TTL already bounds the cost and `writeIdentity`
-  // skips the redundant rewrite.
-  const candidates = store
-    .getRepos()
-    .filter((repo) => repo.kind !== 'folder' && !repo.gitRemoteIdentity)
+  const candidates = selectEnrichmentCandidates(store)
   let changed = false
   for (const repo of candidates) {
-    // Why: enrichment runs later; capture the location we probed so a mutable
-    // store cannot make the stale-write guard compare against changed fields.
+    // Snapshot the probed location so store mutations cannot bypass stale-write checks.
     if (await enrichRepoGitRemoteIdentity(store, { ...repo })) {
       changed = true
     }
   }
   if (changed) {
-    options.onChanged?.()
+    for (const listener of pendingChangeListeners) {
+      listener()
+    }
   }
 }
 
@@ -112,16 +275,51 @@ export function enrichMissingRepoGitRemoteIdentities(
   store: RepoIdentityStore,
   options: EnrichmentOptions = {}
 ): void {
-  void enrichMissingRepoGitRemoteIdentitiesInBackground(store, options).catch((error: unknown) => {
-    console.error('[repo-identity] Failed to enrich git remote identities:', error)
-  })
+  // Retire even during a stuck sweep so removed repos do not retain probes.
+  try {
+    retireRemovedLocations(store.getRepos())
+  } catch (error: unknown) {
+    console.error('[repo-identity] Failed to retire removed repo locations:', error)
+  }
+  if (options.onChanged) {
+    pendingChangeListeners.add(options.onChanged)
+  }
+  if (sweepInFlight) {
+    // A repo added mid-pass needs a follow-up without stacking whole sweeps.
+    rerunRequested = true
+    return
+  }
+  sweepInFlight = enrichMissingRepoGitRemoteIdentitiesInBackground(store)
+    .catch((error: unknown) => {
+      console.error('[repo-identity] Failed to enrich git remote identities:', error)
+    })
+    .finally(() => {
+      sweepInFlight = null
+      if (rerunRequested) {
+        rerunRequested = false
+        enrichMissingRepoGitRemoteIdentities(store)
+      } else {
+        // Coalesced callers still need notifications from queued reruns.
+        pendingChangeListeners.clear()
+      }
+    })
 }
 
 export async function flushRepoGitRemoteIdentityEnrichmentForTests(): Promise<void> {
-  await Promise.all(inFlightProbesByLocation.values())
+  // A queued rerun replaces sweepInFlight when the current pass settles.
+  while (sweepInFlight) {
+    await sweepInFlight
+  }
+  await Promise.all([...inFlightProbesByLocation.values()].map((entry) => entry.promise))
 }
 
 export function resetRepoGitRemoteIdentityEnrichmentForTests(): void {
+  for (const entry of inFlightProbesByLocation.values()) {
+    entry.controller.abort()
+  }
   inFlightProbesByLocation.clear()
-  noIdentityRetryAfterByLocation.clear()
+  probeRetryAfterByLocation.clear()
+  pendingChangeListeners.clear()
+  sweepInFlight = null
+  rerunRequested = false
 }

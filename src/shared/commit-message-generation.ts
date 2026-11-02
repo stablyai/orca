@@ -1,5 +1,5 @@
 import { cleanGeneratedCommitMessage, truncateDiffForPrompt } from './commit-message-prompt'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export type CommitMessageDraftAgent = TuiAgent | 'custom'
 
@@ -9,14 +9,6 @@ export type CommitMessageDraftContext = {
   stagedPatch: string
   /** Workspace-linked GitHub issue number. Omitted entirely when none resolves. */
   linkedIssue?: number | null
-}
-
-export type CommitMessageDraftOptions = {
-  agentId: CommitMessageDraftAgent
-  model: string
-  thinkingLevel?: string
-  customPrompt?: string
-  customAgentCommand?: string
 }
 
 export type GeneratedCommitMessage = {
@@ -35,12 +27,12 @@ function limitSection(value: string, maxChars: number): string {
 
 export function buildCommitMessagePrompt(
   context: CommitMessageDraftContext,
-  customPrompt: string
+  customPrompt: string,
+  diffBudget?: number
 ): string {
-  // Why: the staged patch is dropped when it's too large to read, so fall back to
-  // the file summary and tell the agent why the diff is missing.
+  // Oversized patches are omitted; use the file summary and tell the agent why.
   const patch = context.stagedPatch.trim()
-    ? truncateDiffForPrompt(context.stagedPatch)
+    ? truncateDiffForPrompt(context.stagedPatch, diffBudget)
     : '(diff omitted — too large to read; infer the change from the staged file list above)'
   const base = [
     'You are generating a single git commit message.',

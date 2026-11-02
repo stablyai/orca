@@ -1,0 +1,132 @@
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { editor } from 'monaco-editor'
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
+import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
+import {
+  installEditorAddReviewNoteShortcut,
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from './editor-shortcuts'
+import {
+  getMonacoMarkdownSelectionAnnotationTarget,
+  type MonacoMarkdownSelectionAnnotationTarget
+} from './monaco-markdown-selection-annotation'
+import { handleMonacoLargeTextPaste, MONACO_PASTE_MAX_BYTES } from './monaco-large-text-paste'
+import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
+import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
+
+type MonacoEditorInputBindingsParams = {
+  editorInstance: editor.IStandaloneCodeEditor
+  worktreeId: string | undefined
+  editorContainerRef: MutableRefObject<HTMLDivElement | null>
+  propsRef: MonacoEditorPropsRef
+  readOnlyRef: MutableRefObject<boolean>
+  commentPopoverRef: MutableRefObject<MarkdownCommentPopoverState | null>
+  shouldShowMarkdownAnnotationsRef: MutableRefObject<boolean>
+  setCommentPopover: Dispatch<SetStateAction<MarkdownCommentPopoverState | null>>
+  setSelectionAnnotationTarget: Dispatch<
+    SetStateAction<MonacoMarkdownSelectionAnnotationTarget | null>
+  >
+}
+
+// Share teardown so editor disposal preserves shortcut and paste cleanup order.
+export function installMonacoEditorInputBindings(params: MonacoEditorInputBindingsParams): {
+  disposeInputBindings: () => void
+} {
+  const {
+    editorInstance,
+    worktreeId,
+    editorContainerRef,
+    propsRef,
+    readOnlyRef,
+    commentPopoverRef,
+    shouldShowMarkdownAnnotationsRef,
+    setCommentPopover,
+    setSelectionAnnotationTarget
+  } = params
+
+  const editorDomNode = editorInstance.getContainerDomNode()
+  const pasteCaptureNode = editorContainerRef.current ?? editorDomNode
+  const cleanupSaveShortcut = installEditorSaveShortcut(editorDomNode, () => {
+    const value = editorInstance.getValue()
+    propsRef.current.onSave(value)
+  })
+  const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+  const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
+    // Preserve open drafts during same-tick chords before the composer guard mounts.
+    if (commentPopoverRef.current) {
+      return true
+    }
+    if (!shouldShowMarkdownAnnotationsRef.current) {
+      return false
+    }
+    // Read the live selection because the rendered annotation target lags by one render.
+    const target = getMonacoMarkdownSelectionAnnotationTarget(
+      editorInstance,
+      editorInstance.getSelection(),
+      getDiffCommentPopoverLeft(editorInstance, editorContainerRef.current) ?? undefined
+    )
+    if (!target) {
+      return false
+    }
+    commentPopoverRef.current = target
+    setCommentPopover(target)
+    setSelectionAnnotationTarget(null)
+    return true
+  })
+  const searchInFilesAction = editorInstance.addAction({
+    id: 'orca.searchInFiles',
+    label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 2,
+    run: () => {
+      if (!worktreeId) {
+        return
+      }
+      const query = getMonacoCodebaseSearchQuery(
+        editorInstance.getModel(),
+        editorInstance.getSelection(),
+        editorInstance.getPosition()
+      )
+      if (!query) {
+        return
+      }
+      const state = useAppStore.getState()
+      state.showRightSidebarSearch({ query })
+    }
+  })
+  const onLargeTextPaste = (event: ClipboardEvent): void => {
+    if (!event.composedPath().includes(editorDomNode)) {
+      return
+    }
+    // Why: chunking re-serializes the document per chunk via @monaco-editor/react's onChange, so only enforce the cap.
+    handleMonacoLargeTextPaste(editorInstance, event, {
+      readOnly: readOnlyRef.current,
+      directMaxBytes: MONACO_PASTE_MAX_BYTES,
+      onPasteResult: (result) => {
+        if (result.status === 'rejected' && result.reason === 'too-large') {
+          toast.error(
+            translate(
+              'auto.components.editor.MonacoEditor.largePasteTooLarge',
+              'Paste is too large.'
+            )
+          )
+        }
+      }
+    })
+  }
+  pasteCaptureNode.addEventListener('paste', onLargeTextPaste, { capture: true })
+
+  return {
+    disposeInputBindings: () => {
+      cleanupSaveShortcut()
+      cleanupFindShortcut()
+      cleanupAddReviewNoteShortcut()
+      pasteCaptureNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
+      searchInFilesAction.dispose()
+    }
+  }
+}

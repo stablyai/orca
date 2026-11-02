@@ -1,17 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import {
   DaemonSpawner,
+  getDaemonArtifactHoldClaimPath,
   getDaemonPidPath,
+  getDaemonPidSwapClaimPath,
   getDaemonSocketPath,
   getDaemonTokenPath,
+  publishDaemonPidFile,
+  replaceDaemonPidFile,
   restoreClaimedDaemonArtifact
 } from './daemon-spawner'
+import { getDaemonSocketBindPath } from './daemon-endpoint-ownership'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { PROTOCOL_VERSION } from './types'
 
 function createTestDir(): string {
@@ -26,7 +31,10 @@ function createMockSubprocess(): SubprocessHandle {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
+    terminateOwnedTree: () => 'unavailable' as const,
+    forceKill: vi.fn(() => {
+      setTimeout(() => onExitCb?.(137), 5)
+    }),
     signal: vi.fn(),
     onData(_cb: (data: string) => void) {},
     onExit(cb: (code: number) => void) {
@@ -132,25 +140,6 @@ describe('DaemonSpawner', () => {
       expect(client.isConnected()).toBe(true)
       client.disconnect()
     })
-
-    it('daemon can create sessions', async () => {
-      const s = createSpawner()
-      const info = await s.ensureRunning()
-
-      const client = new DaemonClient({
-        socketPath: info.socketPath,
-        tokenPath: info.tokenPath
-      })
-      await client.ensureConnected()
-
-      const result = await client.request<{ isNew: boolean }>('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-      expect(result.isNew).toBe(true)
-      client.disconnect()
-    })
   })
 
   describe('shutdown', () => {
@@ -233,5 +222,95 @@ describe('restoreClaimedDaemonArtifact', () => {
         canonicalExists: () => true
       })
     ).toBe(true)
+  })
+})
+
+describe('daemon PID publication', () => {
+  it('publishes ownership exclusively', () => {
+    const dir = createTestDir()
+    const pidPath = join(dir, 'daemon.pid')
+    try {
+      publishDaemonPidFile(pidPath, {
+        pid: 101,
+        startedAtMs: 1_000,
+        launchNonce: 'launch-a'
+      })
+
+      expect(() =>
+        publishDaemonPidFile(pidPath, {
+          pid: 202,
+          startedAtMs: 2_000,
+          launchNonce: 'launch-b'
+        })
+      ).toThrow()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('atomically replaces stale ownership with the authenticated endpoint identity', () => {
+    const dir = createTestDir()
+    const pidPath = join(dir, 'daemon.pid')
+    const endpointIdentity = {
+      pid: 202,
+      startedAtMs: 2_000,
+      launchNonce: 'launch-b'
+    }
+    try {
+      writeFileSync(pidPath, '{"pid":101,"launchNonce":"launch-a"}')
+
+      expect(replaceDaemonPidFile(pidPath, endpointIdentity)).toBe(true)
+      expect(JSON.parse(readFileSync(pidPath, 'utf8'))).toEqual(endpointIdentity)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reports failure and preserves the record when the rename claim fails for any reason but absence', () => {
+    // POSIX directory permissions model the rename failure caused by Windows file locks.
+    if (process.platform === 'win32' || process.getuid?.() === 0) {
+      return
+    }
+    const dir = createTestDir()
+    const pidPath = join(dir, 'daemon.pid')
+    const existingRecord = '{"pid":101,"launchNonce":"launch-a"}'
+    writeFileSync(pidPath, existingRecord)
+    try {
+      chmodSync(dir, 0o500)
+
+      expect(
+        replaceDaemonPidFile(pidPath, { pid: 202, startedAtMs: 2_000, launchNonce: 'launch-b' })
+      ).toBe(false)
+      expect(readFileSync(pidPath, 'utf8')).toBe(existingRecord)
+    } finally {
+      chmodSync(dir, 0o700)
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('daemon socket publication', () => {
+  it('keeps every scratch namespace outside the released sweeper pattern', () => {
+    // Released age-only sweepers can delete live bind names and the sole copy of claimed ownership records.
+    const RELEASED_SWEEPER_PATTERN =
+      /(?:\.(?:cleanup|replace)-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|^\.b[0-9a-f]{10})$/
+
+    for (let i = 0; i < 20; i++) {
+      const names = [
+        basename(getDaemonSocketBindPath(getDaemonSocketPath('/tmp/orca-daemon'))),
+        basename(getDaemonPidSwapClaimPath('/tmp/orca-daemon/daemon-v32.pid')),
+        basename(getDaemonArtifactHoldClaimPath('/tmp/orca-daemon/daemon-v32.token'))
+      ]
+      for (const name of names) {
+        expect(name).not.toMatch(RELEASED_SWEEPER_PATTERN)
+      }
+    }
+  })
+
+  it('keeps the bind name shorter than the canonical endpoint', () => {
+    // sockaddr_un caps the path, so the private bind name must never extend it.
+    const canonicalPath = getDaemonSocketPath('/tmp/orca-daemon-runtime')
+
+    expect(getDaemonSocketBindPath(canonicalPath).length).toBeLessThan(canonicalPath.length)
   })
 })

@@ -1,10 +1,10 @@
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { access, readdir, readFile, realpath } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -15,23 +15,26 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
-// The oauth2.js relative path inside a @google/gemini-cli-core package.
 const OAUTH2_SUBPATH = path.join('dist', 'src', 'code_assist', 'oauth2.js')
 
 async function resolveGeminiBinary(): Promise<string | null> {
-  const whichCmd = process.platform === 'win32' ? 'where gemini' : 'which gemini'
+  const [lookup, args] =
+    process.platform === 'win32' ? ['where.exe', ['gemini']] : ['which', ['gemini']]
   try {
-    const { stdout } = await execAsync(whichCmd, { encoding: 'utf-8' })
+    // Shell execution defeats Windows console hiding; use execFile (#14543, #10488).
+    const { stdout } = await execFileAsync(lookup, args, {
+      encoding: 'utf-8',
+      windowsHide: true
+    })
     const fromPath = stdout.trim().split(/\r?\n/)[0]
     if (fromPath && (await fileExists(fromPath))) {
       return fromPath
     }
   } catch {
-    // ignore which/where failure
+    // Fall through to known install prefixes when lookup fails.
   }
 
-  // Why: on macOS/Linux GUI apps, the PATH might not include the binary.
-  // Checking common installation prefixes as fallbacks.
+  // GUI PATH may omit common macOS/Linux install prefixes.
   if (process.platform !== 'win32') {
     const fallbacks = [
       '/usr/local/bin/gemini',
@@ -49,9 +52,7 @@ async function resolveGeminiBinary(): Promise<string | null> {
   return null
 }
 
-// Why: on all platforms the gemini binary may be a symlink (e.g. Homebrew's bin/
-// symlinks into Cellar). We must resolve it before deriving sibling paths — otherwise
-// dirname points to the symlink directory, not the real installation root.
+// Resolve symlinks before deriving package siblings (e.g. Homebrew Cellar installs).
 async function resolveSymlink(filePath: string): Promise<string> {
   try {
     return await realpath(filePath)
@@ -80,8 +81,7 @@ async function tryReadCredentials(
   }
 }
 
-// Why: these are the known stable layouts for every major Gemini CLI install method.
-// Checking explicit paths is fast and avoids walking the entire directory tree.
+// Probe known install layouts without recursively walking the filesystem.
 async function extractFromKnownPaths(
   realGeminiPath: string
 ): Promise<{ clientId: string; clientSecret: string } | null> {
@@ -102,7 +102,7 @@ async function extractFromKnownPaths(
       'gemini-cli-core',
       OAUTH2_SUBPATH
     ),
-    // Homebrew alternate (some versions skip the extra nesting)
+    // Alternate Homebrew layout without extra nesting.
     path.join(
       baseDir,
       'lib',
@@ -140,9 +140,7 @@ async function extractFromKnownPaths(
   return null
 }
 
-// Why: newer Gemini CLI versions (>=0.38) ship everything bundled into hash-named
-// chunks with no oauth2.js source file. Scanning the bundle dir for the credential
-// constants is the only reliable fallback for those installs.
+// Gemini >=0.38 can bundle oauth2.js into hashed chunks; inspect the bundle when source lookup fails.
 async function extractFromBundleDir(
   geminiCliPackageRoot: string
 ): Promise<{ clientId: string; clientSecret: string } | null> {
@@ -168,9 +166,7 @@ async function extractFromBundleDir(
   return null
 }
 
-// Resolves the gemini-cli package root directory by walking up the directory
-// tree from the real binary path, looking for package.json with the right name,
-// or the global Node layout under lib/node_modules.
+// Find the named package within bounded ancestors or known global Node layouts.
 async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | null> {
   const MAX_ASCENTS = 8
   let current = path.dirname(realGeminiPath)
@@ -185,7 +181,7 @@ async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | n
           return current
         }
       } catch {
-        // malformed package.json — keep walking
+        // Malformed package metadata must not stop the ancestor search.
       }
     }
 
@@ -235,13 +231,11 @@ export async function extractOAuthClientCredentials(): Promise<{
 
   const realPath = await resolveSymlink(geminiPath)
 
-  // 1. Known static paths (fast, covers most installs with source layout)
   const fromKnown = await extractFromKnownPaths(realPath)
   if (fromKnown) {
     return fromKnown
   }
 
-  // 2. Walk up to find the package root, then try source layout + bundle dir
   const packageRoot = await findGeminiPackageRoot(realPath)
   if (packageRoot) {
     const fromSource =

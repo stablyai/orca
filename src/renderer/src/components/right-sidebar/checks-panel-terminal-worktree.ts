@@ -1,11 +1,12 @@
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
-  isPathInsideOrEqual,
+  createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import type { TerminalLayoutSnapshot, Worktree } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 type TerminalPtyContext = {
   activeTabId: string | null
@@ -19,7 +20,8 @@ type WorktreeCandidate = {
   source: 'current-path' | 'prior-path'
 }
 
-/** Resolve the active terminal PTY that should provide Checks panel cwd context. */
+type MatchedWorktreeCandidate = WorktreeCandidate & { normalizedPathLength: number }
+
 export function resolveChecksPanelTerminalPtyId(context: TerminalPtyContext): string | null {
   if (!context.activeTabId) {
     return null
@@ -43,7 +45,6 @@ export function resolveChecksPanelTerminalPtyId(context: TerminalPtyContext): st
   return firstLiveLayoutPtyId ?? livePtyIds.at(-1) ?? null
 }
 
-/** Resolve the worktree whose current or prior path contains the terminal cwd. */
 export function resolveChecksPanelWorktreeFromTerminalCwd(
   cwd: string | null,
   worktrees: readonly Worktree[]
@@ -53,10 +54,21 @@ export function resolveChecksPanelWorktreeFromTerminalCwd(
     return null
   }
 
-  const best = buildWorktreeCandidates(worktrees)
-    .filter((candidate) => isTerminalCwdInsideWorktree(candidate.path, terminalCwd))
-    .sort(compareWorktreeCandidates)[0]
-
+  const normalizedCwd = normalizeRuntimePathForComparison(terminalCwd)
+  let best: MatchedWorktreeCandidate | undefined
+  for (const candidate of buildWorktreeCandidates(worktrees)) {
+    if (!isTerminalCwdInsideWorktree(candidate.path, normalizedCwd)) {
+      continue
+    }
+    // Normalize path lengths only after filtering; most candidates never match.
+    const matched = {
+      ...candidate,
+      normalizedPathLength: normalizeRuntimePathForComparison(candidate.path).length
+    }
+    if (!best || compareWorktreeCandidates(matched, best) < 0) {
+      best = matched
+    }
+  }
   return best?.worktree ?? null
 }
 
@@ -84,19 +96,20 @@ function hasUsablePath(pathValue: string): boolean {
 }
 
 function isTerminalCwdInsideWorktree(worktreePath: string, terminalCwd: string): boolean {
-  if (isPathInsideOrEqual(worktreePath, terminalCwd)) {
+  if (createNormalizedPathInsideOrEqualMatcher(worktreePath)(terminalCwd)) {
     return true
   }
 
   // Windows hosts store WSL worktrees as UNC paths, while the terminal reports Linux paths.
   const wslPath = parseWslUncPath(worktreePath)
-  return wslPath ? isPathInsideOrEqual(wslPath.linuxPath, terminalCwd) : false
+  return wslPath ? createNormalizedPathInsideOrEqualMatcher(wslPath.linuxPath)(terminalCwd) : false
 }
 
-function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandidate): number {
-  const lengthDifference =
-    normalizeRuntimePathForComparison(right.path).length -
-    normalizeRuntimePathForComparison(left.path).length
+function compareWorktreeCandidates(
+  left: MatchedWorktreeCandidate,
+  right: MatchedWorktreeCandidate
+): number {
+  const lengthDifference = right.normalizedPathLength - left.normalizedPathLength
   if (lengthDifference !== 0) {
     return lengthDifference
   }

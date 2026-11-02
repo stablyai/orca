@@ -26,6 +26,7 @@ import {
   type ContextualTourFloatingPosition
 } from './contextual-tour-floating-position'
 import { translate } from '@/i18n/i18n'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -60,14 +61,33 @@ type ContextualTourOverlaySurfaceProps = {
   onOverlayKeyDownCapture: (event: KeyboardEvent<HTMLDivElement>) => void
 }
 
+function disposeContextualTourGlobalKeyGuard(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const guardedWindow = window as Window & {
+    __orcaContextualTourGlobalKeyGuardInstalled?: boolean
+  }
+  if (!guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled) {
+    return
+  }
+  removeAppKeyListener('keydown', handleContextualTourGlobalKeyDown)
+  delete guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled
+}
+
 if (typeof window !== 'undefined') {
   const guardedWindow = window as Window & {
     __orcaContextualTourGlobalKeyGuardInstalled?: boolean
   }
   if (!guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled) {
     guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled = true
-    window.addEventListener('keydown', handleContextualTourGlobalKeyDown, true)
+    addAppKeyListener('keydown', handleContextualTourGlobalKeyDown)
   }
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Dispose the global key guard on HMR to avoid retaining old module closures.
+  import.meta.hot.dispose(disposeContextualTourGlobalKeyGuard)
 }
 
 const PANEL_BASE_CLASSES =
@@ -107,7 +127,12 @@ export function ContextualTourOverlaySurface({
   const stepKey = `${activeTourId}-${renderState.progress.current}`
   const defaultPrimaryAction = {
     kind: renderState.isLastStep ? 'complete' : 'next',
-    label: renderState.isLastStep ? 'Done' : 'Next'
+    label: renderState.isLastStep
+      ? translate('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Done')
+      : translate(
+          'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
+          'Next'
+        )
   } satisfies ContextualTourStepAction
   const primaryAction =
     renderState.primaryAction ?? (renderState.hidePrimaryAction ? null : defaultPrimaryAction)
@@ -134,8 +159,7 @@ export function ContextualTourOverlaySurface({
       return
     }
 
-    // Why: hide only until the new step's first measurement; autoUpdate then
-    // tracks the target continuously, so the panel never blinks mid-step.
+    // Hide until the new step’s first measurement; continuous tracking must not blink an existing step.
     setFloatingPosition(null)
     return watchContextualTourFloatingPosition({
       arrowElement,
@@ -248,8 +272,7 @@ export function ContextualTourOverlaySurface({
   return (
     <div
       className={cn(
-        // Why: tours are callouts, not modality. Let pointer events reach the
-        // underlying surface; only the panel itself captures interaction.
+        // Tours leave underlying UI interactive; only the callout panel captures pointer events.
         'fixed inset-0 z-[70] pointer-events-none'
       )}
       data-contextual-tour-overlay=""
@@ -279,8 +302,7 @@ export function handleContextualTourOverlayKeyDown(event: KeyboardEvent<HTMLDivE
     skipButton?.click()
   }
 
-  // Why: tours are non-modal callouts over live UI. Keyboard users must be able
-  // to tab into the highlighted surface just as pointer users can click it.
+  // Leave highlighted UI keyboard-reachable, matching pointer access through the non-modal overlay.
 }
 
 export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEvent): void {

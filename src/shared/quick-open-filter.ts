@@ -1,14 +1,6 @@
-/**
- * Shared, pure Quick Open (Cmd/Ctrl+P) file-listing filter policy used by both the local main
- * process and the SSH relay. No IO, Electron, WSL, or auth — callers own process execution and
- * transport-specific path translation.
- *
- * Centralized to stop local/relay listFiles from drifting on blocklist, ignores, exclusions,
- * timeouts, and buffering. See docs/design/share-quick-open-file-listing.md.
- */
-import { posix, win32 } from 'node:path'
-
-// ─── Hidden-dir blocklist ────────────────────────────────────────────
+/** Pure listing policy shared by main/SSH relay to keep pruning, exclusions and limits aligned; callers own I/O and path translation
+ * (docs/design/share-quick-open-file-listing.md). */
+import { isWindowsAbsolutePathLike, relativePathInsideRoot } from './cross-platform-path'
 
 // Blocklist (not allowlist) keeps novel dotfiles discoverable; entries here are tool-generated
 // caches/state, never hand-edited. Do NOT add user-authored dotdirs (.config, .ssh, .github) — users open files there.
@@ -46,11 +38,7 @@ function containsBlockedRelPath(path: string, blockedPath: string): boolean {
   )
 }
 
-/**
- * Returns true if `path` (`/`-separated, root-relative) traverses no blocklisted segment.
- * Correctness backstop after the rg/git pruning globs, in case a blocked dir slips through.
- * Walks segment-by-segment (no split allocation) since it runs once per file on ~100k-file repos.
- */
+/** Segment-walk without split allocation for ~100k-file repos; backstop rg/git pruning when blocked paths slip through. */
 export function shouldIncludeQuickOpenPath(path: string): boolean {
   for (const blockedPath of HIDDEN_PATH_BLOCKLIST) {
     if (containsBlockedRelPath(path, blockedPath)) {
@@ -73,52 +61,21 @@ export function shouldIncludeQuickOpenPath(path: string): boolean {
   return true
 }
 
-// ─── Path flavor detection ───────────────────────────────────────────
-
-// Why: local-OS path.relative is wrong for remote roots (app OS vs relay OS); pick win32 vs posix by root shape.
-function pathFlavor(rootPath: string): typeof posix | typeof win32 {
-  // Drive letter like C:\ or C:/
-  if (/^[a-zA-Z]:[\\/]/.test(rootPath)) {
-    return win32
-  }
-  // UNC \\server\share or //server/share
-  if (rootPath.startsWith('\\\\') || rootPath.startsWith('//')) {
-    return win32
-  }
-  return posix
-}
-
-// ─── Exclude-path normalization ──────────────────────────────────────
-
-/**
- * Normalize `excludePaths` (renderer-sent absolute paths for nested worktrees) into `/`-separated,
- * root-relative prefixes. Malformed/outside-root/root-equal values are silently dropped so a stale
- * or typo'd exclude path can't fail the request.
- */
+/** Normalize absolute excludes to root-relative slash prefixes; ignore malformed/outside/equal-root inputs so stale paths cannot fail listing. */
 export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknown): string[] {
   if (!Array.isArray(excludePaths)) {
     return []
   }
-  const flavor = pathFlavor(rootPath)
-  // Trim trailing separators so comparison is stable.
-  const trimmedRoot = rootPath.replace(/[\\/]+$/, '')
-  const normalizedRoot = `${trimmedRoot.replace(/\\/g, '/')}/`
   const out: string[] = []
   for (const raw of excludePaths) {
     if (typeof raw !== 'string' || raw.length === 0) {
       continue
     }
-    // Fast path: input already under the root with the same separator shape.
-    const rawFwd = raw.replace(/\\/g, '/')
-    let rel: string
-    if (rawFwd === normalizedRoot.slice(0, -1)) {
-      // Root-equal — refuse to exclude the whole tree.
+    const relativePath = relativePathInsideRoot(rootPath, raw)
+    if (relativePath === null) {
       continue
     }
-    rel = rawFwd.startsWith(normalizedRoot)
-      ? rawFwd.slice(normalizedRoot.length)
-      : // Fall back to path-flavor relative so remote paths don't get local-OS semantics.
-        flavor.relative(trimmedRoot, raw).replace(/\\/g, '/')
+    let rel = isWindowsAbsolutePathLike(rootPath) ? relativePath.replace(/\\/g, '/') : relativePath
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }
@@ -132,10 +89,7 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
   return out
 }
 
-/**
- * Segment-boundary exclude check (`relPath` is `/`-separated, root-relative).
- * Why segment boundary: a raw `startsWith` would match `packages/app2` against exclusion `packages/app`.
- */
+/** Match segment boundaries so excluding packages/app does not hide packages/app2. */
 export function shouldExcludeQuickOpenRelPath(
   relPath: string,
   excludePathPrefixes: readonly string[]
@@ -144,16 +98,14 @@ export function shouldExcludeQuickOpenRelPath(
     if (relPath === prefix) {
       return true
     }
-    if (relPath.length > prefix.length && relPath.startsWith(`${prefix}/`)) {
+    if (relPath[prefix.length] === '/' && relPath.startsWith(prefix)) {
       return true
     }
   }
   return false
 }
 
-// ─── Glob escaping ───────────────────────────────────────────────────
-
-// rg/git glob metacharacters; escape embedded dir names so a dir named `feature[1]` doesn't exclude `feature1`.
+// Escape literal directory names so feature[1] cannot accidentally exclude feature1.
 const GLOB_META = new Set<string>(['*', '?', '[', ']', '{', '}', '\\'])
 
 function escapeGlob(segment: string): string {
@@ -175,13 +127,7 @@ function isParentRelativePath(relPath: string): boolean {
   return relPath === '..' || relPath.startsWith('../')
 }
 
-// ─── rg traversal-pruning globs ──────────────────────────────────────
-
-/**
- * Build the hidden-dir traversal-pruning glob args for rg (includes `node_modules`).
- * Uses directory-match form `!**\/name` not contents form `!**\/name/**`: rg still descends into a
- * dir matched only by the contents form, so only the directory form actually prunes traversal.
- */
+/** Directory-match globs prune traversal, unlike contents-only exclusions; include node_modules. */
 export function buildHiddenDirExcludeGlobs(): string[] {
   const names = [NON_DOTTED_PRUNE, ...HIDDEN_DIR_BLOCKLIST]
   const out: string[] = []
@@ -194,10 +140,9 @@ export function buildHiddenDirExcludeGlobs(): string[] {
   return out
 }
 
-// ─── rg arg builder ──────────────────────────────────────────────────
-
 export type RgArgsOptions = {
-  /** rg positional search target: absolute root (strip prefix from output) or `.` (cwd-relative); both need cwd: rootPath. */
+  /** Symlink traversal is opt-in; opening discovered paths still requires authorization. */
+  followSymlinks?: boolean
   searchRoot: string
   /** Root-relative, `/`-separated prefixes (from buildExcludePathPrefixes). */
   excludePathPrefixes: readonly string[]
@@ -208,16 +153,14 @@ export type RgArgsOptions = {
 export type RgArgs = {
   /** Main pass: all non-ignored files, hidden dotfiles included. */
   primary: string[]
-  /** Second pass: ignored files, hidden dotfiles included. */
+  /** Broader pass: primary files plus gitignored files, hidden dotfiles included. */
   ignoredPass: string[]
 }
 
-/**
- * Build the two rg arg arrays for Quick Open. Caller must spawn with `cwd: rootPath` — root-relative
- * globs are evaluated against rg's cwd, so omitting it silently breaks nested-worktree exclusions.
- * Deliberately omits `--follow` so symlinks can't escape the authorized root or cause traversal loops.
- */
+/** Run both passes with cwd:rootPath so root-relative nested-worktree exclusions work. Explicit symlink following
+ * does not authorize opening the resulting paths. */
 export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
+  const followArgs = opts.followSymlinks ? ['--follow'] : []
   const sepArgs = opts.forceSlashSeparator ? ['--path-separator', '/'] : []
   const hiddenDirGlobs = buildHiddenDirExcludeGlobs()
   const excludeGlobs: string[] = []
@@ -229,7 +172,10 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
 
   const primary = [
     '--files',
+    '--no-config',
+    '--null',
     '--hidden',
+    ...followArgs,
     ...sepArgs,
     ...hiddenDirGlobs,
     ...excludeGlobs,
@@ -239,8 +185,11 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
   // Ignored pass: --no-ignore-vcs broadens to gitignored/parent/global ignored files; blocklist globs still guard.
   const ignoredPass = [
     '--files',
+    '--no-config',
+    '--null',
     '--hidden',
     '--no-ignore-vcs',
+    ...followArgs,
     ...sepArgs,
     ...hiddenDirGlobs,
     ...excludeGlobs,
@@ -250,29 +199,21 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
   return { primary, ignoredPass }
 }
 
-// ─── rg stdout line normalization ────────────────────────────────────
-
 export type RgOutputMode =
   /** rg was invoked with an absolute search target; output paths are absolute. */
   | { kind: 'absolute'; rootPath: string }
   /** rg invoked with cwd: rootPath and searchRoot '.'; output is cwd-relative, usually `./`-prefixed. */
   | { kind: 'cwd-relative' }
 
-/**
- * Convert one rg --files stdout line into a root-relative, `/`-separated path.
- * Returns `null` for lines that escape the root (symlink edge cases) or can't be normalized.
- * Callers do any WSL translation first, keeping WSL out of the shared module.
- */
+/** Normalize NUL-delimited records inside the root; callers translate WSL paths before entering this platform-neutral policy. */
 export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMode): string | null {
-  let line = rawLine
-  // Strip CR so CRLF from rg on Windows doesn't leak into results.
-  if (line.length > 0 && line.charCodeAt(line.length - 1) === 13) {
-    line = line.substring(0, line.length - 1)
-  }
+  const line = rawLine
   if (!line) {
     return null
   }
-  const normalized = line.replace(/\\/g, '/')
+  const windowsPath =
+    outputMode.kind === 'absolute' && isWindowsAbsolutePathLike(outputMode.rootPath)
+  const normalized = windowsPath ? line.replace(/\\/g, '/') : line
   if (outputMode.kind === 'cwd-relative') {
     let rel = normalized
     if (rel.startsWith('./')) {
@@ -285,9 +226,9 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
     }
     return rel
   }
-  // Absolute mode: strip the root prefix.
-  // Why: only replace backslashes; collapsing repeated slashes would break Windows UNC roots (`\\server\share`).
-  const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
+  // Only replace backslashes; collapsing repeated slashes would corrupt Windows UNC roots.
+  const root = windowsPath ? outputMode.rootPath.replace(/\\/g, '/') : outputMode.rootPath
+  const normalizedRoot = `${root.replace(/\/+$/, '')}/`
   if (normalized.startsWith(normalizedRoot)) {
     const rel = normalized.substring(normalizedRoot.length)
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
@@ -298,17 +239,12 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
   return null
 }
 
-// ─── git ls-files arg builder ────────────────────────────────────────
-
 export type GitLsFilesArgs = {
   primary: string[]
   ignoredPass: string[]
 }
 
-/**
- * Build the two `git ls-files` arg arrays for Quick Open. A positive `.` pathspec is prepended
- * so the exclude-only `:(exclude,glob)` pathspecs don't depend on git's edge-case defaults.
- */
+/** Prepend positive . pathspec before exclude-only specs to avoid Git’s edge-case default selection. */
 export function buildGitLsFilesArgsForQuickOpen(
   excludePathPrefixes: readonly string[] = []
 ): GitLsFilesArgs {

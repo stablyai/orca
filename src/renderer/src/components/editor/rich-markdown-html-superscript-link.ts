@@ -1,5 +1,8 @@
 import { Node } from '@tiptap/core'
-import type { RichMarkdownSourceTransport } from './rich-markdown-source-transport'
+import {
+  skipInlineTransportStartScan,
+  type RichMarkdownSourceTransport
+} from './rich-markdown-source-transport'
 import {
   HTML_SUPERSCRIPT_LINK_SOURCE_LIMIT,
   parseHtmlSuperscriptLinkSource,
@@ -41,7 +44,7 @@ export function createRichMarkdownHtmlSuperscriptLink(
     markdownTokenizer: {
       name: 'richMarkdownHtmlSuperscriptLink',
       level: 'inline',
-      start: transport.startFor('html-superscript-link'),
+      start: skipInlineTransportStartScan,
       tokenize(source) {
         const matched = transport.match(source, 'html-superscript-link')
         if (!matched) {
@@ -146,7 +149,7 @@ function parseStructuredPayload(value: string): HtmlSuperscriptLinkSource | null
   } catch {
     return null
   }
-  if (!isCitationShape(candidate)) {
+  if (!isCitationSource(candidate)) {
     return null
   }
   const parsed = parseHtmlSuperscriptLinkSource(candidate.source)
@@ -194,7 +197,7 @@ function hasOnlyAttributes(element: Element, allowed: string[]): boolean {
   return Array.from(element.attributes).every((attribute) => allowedSet.has(attribute.name))
 }
 
-function isCitationShape(value: unknown): value is HtmlSuperscriptLinkSource {
+function isCitationSource(value: unknown): value is HtmlSuperscriptLinkSource {
   if (!value || typeof value !== 'object') {
     return false
   }

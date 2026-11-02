@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import {
   buildSubmoduleChildNodes,
   collectListSelectionEntries,
@@ -9,7 +9,7 @@ import {
   isExpandableSubmoduleEntry,
   type SubmoduleSectionTreeNode,
   type SubmoduleStatusState
-} from './source-control-submodule-expansion'
+} from './source-control/listing/submodule-expansion'
 
 const LOADING = 'Loading submodule changes…'
 const EMPTY = 'No changes in submodule'
@@ -427,8 +427,6 @@ describe('collectListSelectionEntries', () => {
       EMPTY
     )
 
-    // The expanded submodule's child file must be selectable, mirroring the rows
-    // that actually render in list view.
     expect(collectListSelectionEntries(rows)).toEqual([
       { key: 'unstaged::flutter_mine', entry, area: 'unstaged' },
       {

@@ -1,8 +1,10 @@
 import {
+  admitLegacyAgentStatus,
   clearPaneCacheState,
-  type AgentHookEventPayload,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from './agent-status-legacy-adapter'
 import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
 
 export const MAX_AGENT_HOOK_STATUS_CACHE_PANES = 500
@@ -22,8 +24,17 @@ export function upsertBoundedAgentHookStatus(
     throw new RangeError('Agent hook status cache limit must be a positive safe integer')
   }
 
-  state.lastStatusByPaneKey.delete(entry.paneKey)
-  state.lastStatusByPaneKey.set(entry.paneKey, entry)
+  if (
+    !admitLegacyAgentStatus(
+      state,
+      'shared-bounded-status-cache',
+      entry,
+      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
+      { moveToEnd: true }
+    )
+  ) {
+    return []
+  }
   const evicted: AgentHookStatusCacheEviction[] = []
   const now = options.now ?? Date.now()
   while (state.lastStatusByPaneKey.size > maxPanes) {

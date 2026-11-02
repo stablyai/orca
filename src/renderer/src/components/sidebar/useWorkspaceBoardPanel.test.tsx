@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  OPEN_WORKSPACE_BOARD_EVENT,
+  TOGGLE_WORKSPACE_BOARD_EVENT,
   useWorkspaceBoardPanel,
   type WorkspaceBoardPanelState
 } from './useWorkspaceBoardPanel'
@@ -52,10 +52,21 @@ async function updatePanel(update: (state: WorkspaceBoardPanelState) => void): P
   })
 }
 
-async function pressEscape(): Promise<void> {
+async function pressEscape(from: EventTarget = document): Promise<void> {
   await act(async () => {
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    from.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   })
+}
+
+function appendInput(inside: 'board' | 'app'): HTMLInputElement {
+  const host = document.createElement('div')
+  if (inside === 'board') {
+    host.setAttribute('data-workspace-board-sheet', '')
+  }
+  const field = document.createElement('input')
+  host.appendChild(field)
+  document.body.appendChild(host)
+  return field
 }
 
 describe('useWorkspaceBoardPanel', () => {
@@ -88,16 +99,24 @@ describe('useWorkspaceBoardPanel', () => {
     expect(mocks.recordFeatureInteraction).toHaveBeenCalledOnce()
   })
 
-  it('opens the board from the shortcut bridge event', async () => {
+  it('toggles the board from the shortcut bridge event', async () => {
     await renderHookProbe()
 
     await act(async () => {
-      window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
+      window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
     })
 
     expect(panelState().workspaceBoardOpen).toBe(true)
     expect(panelState().workspaceBoardRenderedOpen).toBe(true)
     expect(mocks.recordFeatureInteraction).toHaveBeenCalledExactlyOnceWith('workspace-board')
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+    })
+
+    expect(panelState().workspaceBoardOpen).toBe(false)
+    expect(panelState().workspaceBoardRenderedOpen).toBe(false)
+    expect(mocks.recordFeatureInteraction).toHaveBeenCalledOnce()
   })
 
   it('renders a drag preview without recording an open interaction', async () => {
@@ -188,6 +207,45 @@ describe('useWorkspaceBoardPanel', () => {
     await pressEscape()
 
     expect(panelState().workspaceBoardOpen).toBe(true)
+  })
+
+  it('defers Escape to a text field inside the board', async () => {
+    // Document capture runs before React; board fields must own Escape to cancel their edits before dismissal.
+    await renderHookProbe()
+    const field = appendInput('board')
+
+    await updatePanel((state) => state.openWorkspaceBoard())
+    await pressEscape(field)
+
+    expect(panelState().workspaceBoardOpen).toBe(true)
+  })
+
+  it('still closes the board on Escape from a text field outside it', async () => {
+    await renderHookProbe()
+    const field = appendInput('app')
+    const fieldKeyDown = vi.fn()
+    field.addEventListener('keydown', fieldKeyDown)
+
+    await updatePanel((state) => state.openWorkspaceBoard())
+    await pressEscape(field)
+
+    expect(panelState().workspaceBoardOpen).toBe(false)
+    expect(fieldKeyDown).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the dismissal Escape from reaching a focused terminal', async () => {
+    await renderHookProbe()
+    const terminalInput = document.createElement('textarea')
+    terminalInput.className = 'xterm-helper-textarea'
+    document.body.appendChild(terminalInput)
+    const terminalKeyDown = vi.fn()
+    terminalInput.addEventListener('keydown', terminalKeyDown)
+
+    await updatePanel((state) => state.openWorkspaceBoard())
+    await pressEscape(terminalInput)
+
+    expect(panelState().workspaceBoardOpen).toBe(false)
+    expect(terminalKeyDown).not.toHaveBeenCalled()
   })
 
   it('keeps the board open on Escape while a nested dialog is open', async () => {

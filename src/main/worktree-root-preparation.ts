@@ -1,17 +1,24 @@
 import { mkdir } from 'node:fs/promises'
-import type { GlobalSettings, Repo } from '../shared/types'
+import type { GlobalSettings } from '../shared/global-settings-types'
+import type { Repo } from '../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { isFolderRepo } from '../shared/repo-kind'
-import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
+import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
+import { getWorktreeMirrorDistro } from './project-runtime-git-options'
+import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
+import { blockedWslDistroForPath } from './wsl/wsl-unc-access-gate'
 
-type WorktreeRootPreparationSettings = Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>
+// Match create's mirror-distro resolution so root preparation cannot target a different directory.
+type WorktreeRootPreparationSettings = Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &
+  Partial<Pick<GlobalSettings, 'localWindowsRuntimeDefault'>>
 type WorktreeRootPreparationStore = {
   getSettings: () => WorktreeRootPreparationSettings
   getRepos: () => Repo[]
+  getProjects?: ProjectRuntimeResolutionStore['getProjects']
 }
 
 export async function prepareLocalWorktreeRootForRepo(
-  store: Pick<WorktreeRootPreparationStore, 'getSettings'>,
+  store: Pick<WorktreeRootPreparationStore, 'getSettings' | 'getProjects'>,
   repo: Repo
 ): Promise<void> {
   if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || isFolderRepo(repo)) {
@@ -19,17 +26,27 @@ export async function prepareLocalWorktreeRootForRepo(
   }
 
   try {
-    const root = computeWorkspaceRoot(repo.path, getWorktreePathSettings(repo, store.getSettings()))
-    // Why: mkdir touches the current root to preflight macOS TCC, while
-    // access remains scoped by recomputed settings instead of a permanent grant.
+    const root = await computeWorkspaceRootAsync(
+      repo.path,
+      getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
+    )
+    // Touch the current root to preflight macOS TCC; recomputed settings still scope access.
     await mkdir(root, { recursive: true })
   } catch (error) {
     console.warn(`[worktree-root] failed to prepare worktree root for ${repo.path}:`, error)
   }
 }
 
+/** A settings edit is no act on every repo's WSL distro: stopped ones are skipped (E9). */
 export async function prepareLocalWorktreeRootsForRepos(
   store: WorktreeRootPreparationStore
 ): Promise<void> {
-  await Promise.all(store.getRepos().map((repo) => prepareLocalWorktreeRootForRepo(store, repo)))
+  await Promise.all(
+    store.getRepos().map(async (repo) => {
+      if (await blockedWslDistroForPath(repo.path, getWorktreeMirrorDistro(store, repo))) {
+        return
+      }
+      await prepareLocalWorktreeRootForRepo(store, repo)
+    })
+  )
 }

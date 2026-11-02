@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  createGitStatusRefreshPacing,
   createGitStatusRefreshScheduler,
+  type GitStatusRefreshPacing,
   type GitStatusRefreshReason
 } from './git-status-refresh-scheduler'
 
@@ -19,17 +21,19 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 function createScheduler(
-  task: (request: { reason: GitStatusRefreshReason; signal: AbortSignal }) => Promise<void>
+  task: (request: { reason: GitStatusRefreshReason; signal: AbortSignal }) => Promise<void>,
+  pacing?: GitStatusRefreshPacing
 ) {
   return createGitStatusRefreshScheduler(task, {
     safetyIntervalMs: 60_000,
     activityDebounceMs: 125,
     activityMinGapMs: 3000,
     slowTaskBackoff: {
-      idleMultiplier: 5,
+      idleMultiplier: 1,
       changeSignalMultiplier: 1,
       maxIntervalMs: 5 * 60_000
-    }
+    },
+    ...(pacing ? { pacing } : {})
   })
 }
 
@@ -106,7 +110,7 @@ describe('createGitStatusRefreshScheduler', () => {
 
     calls[0]?.resolve()
     await flushMicrotasks()
-    // Why: the trailing refresh respects the 3s activity floor from run end.
+    // Trailing refresh waits the 3s activity floor after completion.
     expect(task).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(3000)
     expect(task).toHaveBeenCalledTimes(2)
@@ -172,11 +176,11 @@ describe('createGitStatusRefreshScheduler', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(task).toHaveBeenCalledTimes(2)
 
-    // The second scan is also slow; the next safety waits max(60s, 5x) = 150s.
+    // The second scan is also slow; the next safety waits max(60s, 1x) = 60s.
     await vi.advanceTimersByTimeAsync(30_000)
     calls[1]?.resolve()
     await flushMicrotasks()
-    await vi.advanceTimersByTimeAsync(149_999)
+    await vi.advanceTimersByTimeAsync(59_999)
     expect(task).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(task).toHaveBeenCalledTimes(3)
@@ -203,7 +207,7 @@ describe('createGitStatusRefreshScheduler', () => {
     calls[0]?.resolve()
     await flushMicrotasks()
 
-    // Why: the reveal catch-up rides the paced activity lane (3s floor).
+    // Reveal catch-up uses the paced activity lane with its 3s floor.
     await vi.advanceTimersByTimeAsync(3000)
     expect(task).toHaveBeenCalledTimes(2)
     expect(signals[1]?.aborted).toBe(false)
@@ -222,9 +226,7 @@ describe('createGitStatusRefreshScheduler', () => {
     const scheduler = createScheduler(task)
 
     scheduler.resumeSafety()
-    // A long scan is aborted by pause (window hide). Its wall time must not
-    // become the next activity idle gap, or reveal catch-up waits tens of
-    // seconds for work that never applied.
+    // Aborted scans produced no result; their duration must not delay reveal catch-up.
     await vi.advanceTimersByTimeAsync(30_000)
     scheduler.pause()
     scheduler.resumeSafety()
@@ -256,6 +258,115 @@ describe('createGitStatusRefreshScheduler', () => {
     await flushMicrotasks()
     await vi.advanceTimersByTimeAsync(120_000)
     expect(task).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the activity floor across scheduler recreation when pacing is shared', async () => {
+    vi.useFakeTimers()
+    const task = vi.fn(async () => {})
+    const pacing = createGitStatusRefreshPacing()
+
+    const first = createScheduler(task, pacing)
+    first.resumeSafety()
+    await flushMicrotasks()
+    expect(task).toHaveBeenCalledTimes(1)
+    first.dispose()
+
+    // Scheduler rebuilds must retain the previous pacing floor rather than permit an immediate run.
+    const second = createScheduler(task, pacing)
+    second.resumeSafety()
+    await flushMicrotasks()
+    expect(task).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(task).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(task).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps slow-scan backoff across scheduler recreation when pacing is shared', async () => {
+    vi.useFakeTimers()
+    const calls: ReturnType<typeof deferred>[] = []
+    const task = vi.fn(() => {
+      const call = deferred()
+      calls.push(call)
+      return call.promise
+    })
+    const pacing = createGitStatusRefreshPacing()
+
+    const first = createScheduler(task, pacing)
+    first.resumeSafety()
+    await vi.advanceTimersByTimeAsync(30_000)
+    calls[0]?.resolve()
+    await flushMicrotasks()
+    first.dispose()
+
+    const second = createScheduler(task, pacing)
+    second.resumeSafety()
+    await flushMicrotasks()
+    // The 30s scan duration still paces the next run: max(3s floor, 1x 30s).
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(task).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(task).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an older disposed run erase replacement backoff', async () => {
+    vi.useFakeTimers()
+    const calls: ReturnType<typeof deferred>[] = []
+    const task = vi.fn(() => {
+      const call = deferred()
+      calls.push(call)
+      return call.promise
+    })
+    const pacing = createGitStatusRefreshPacing()
+
+    const first = createScheduler(task, pacing)
+    first.resumeSafety()
+    first.dispose()
+
+    const second = createScheduler(task, pacing)
+    second.resumeSafety()
+    await vi.advanceTimersByTimeAsync(30_000)
+    calls[1]?.resolve()
+    await flushMicrotasks()
+
+    await vi.advanceTimersByTimeAsync(1)
+    calls[0]?.resolve()
+    await flushMicrotasks()
+    second.signal()
+
+    await vi.advanceTimersByTimeAsync(29_998)
+    expect(task).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(task).toHaveBeenCalledTimes(3)
+  })
+
+  it('lets an aborted old run pace repeated rebuilds until a replacement finishes', async () => {
+    vi.useFakeTimers()
+    const calls: ReturnType<typeof deferred>[] = []
+    const task = vi.fn(() => {
+      const call = deferred()
+      calls.push(call)
+      return call.promise
+    })
+    const pacing = createGitStatusRefreshPacing()
+
+    const first = createScheduler(task, pacing)
+    first.resumeSafety()
+    first.dispose()
+
+    const second = createScheduler(task, pacing)
+    second.resumeSafety()
+    calls[0]?.resolve()
+    await flushMicrotasks()
+    second.dispose()
+
+    const third = createScheduler(task, pacing)
+    third.resumeSafety()
+    expect(task).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(task).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(task).toHaveBeenCalledTimes(3)
   })
 
   it('cleans up debounce and safety timers on dispose', async () => {

@@ -1,12 +1,15 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { prepareAutomationLaunchSetup } from './automation-capability-probe'
 import type {
   Automation,
   AutomationCreateInput,
   AutomationRun,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
+import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 type RuntimeAutomationCreateInput = Omit<
   AutomationCreateInput,
@@ -26,12 +29,44 @@ export type AutomationHostTarget =
   | { kind: 'local' }
   | { kind: 'environment'; environmentId: string }
 
+export function getAutomationHostTargetKey(target: AutomationHostTarget): string {
+  return target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
+}
+
+export function getAutomationHostTargetFromKey(key: string | null): AutomationHostTarget | null {
+  if (!key) {
+    return null
+  }
+  if (key.startsWith('environment:')) {
+    return { kind: 'environment', environmentId: key.slice('environment:'.length) }
+  }
+  return { kind: 'local' }
+}
+
 export function getAutomationTargetFromHostId(
   hostId: string | null | undefined
 ): AutomationHostTarget {
   const parsed = parseExecutionHostId(hostId)
   return parsed?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsed.environmentId }
+    : { kind: 'local' }
+}
+
+/** Map paired web local/SSH hosts to the server runtime authority that the catalog lists. */
+export function getAutomationListedTargetFromHostId(
+  hostId: string | null | undefined,
+  state: { runtimeEnvironments?: readonly { id: string }[] }
+): AutomationHostTarget {
+  const target = getAutomationTargetFromHostId(hostId)
+  const environmentId = target.kind === 'local' ? getPairedWebClientEnvironmentId(state) : null
+  return environmentId ? { kind: 'environment', environmentId } : target
+}
+
+export function getAutomationAuthorityTarget(
+  authority: StableAutomationAuthorityRef
+): AutomationHostTarget {
+  return authority.kind === 'runtime'
+    ? { kind: 'environment', environmentId: authority.environmentId }
     : { kind: 'local' }
 }
 
@@ -52,38 +87,35 @@ export function getAutomationOwnerTarget(
   return getAutomationTargetFromHostId(automation.runContext?.hostId)
 }
 
-export function getAutomationCreateTarget(input: AutomationCreateInput): AutomationHostTarget {
-  return getAutomationTargetFromHostId(input.runContext?.hostId)
-}
-
-function toRuntimeAutomationCreateInput(
+/** Renames the desktop input's target fields to the wire contract every authority speaks. */
+export function toRuntimeAutomationCreateInput(
   input: AutomationCreateInput
 ): RuntimeAutomationCreateInput {
   const { projectId, workspaceId, ...rest } = input
   return {
     ...rest,
-    repo: projectId,
-    workspace: input.workspaceMode === 'existing' ? (workspaceId ?? undefined) : undefined
+    // Machine selectors must not fall back to path/name matching on a remote host.
+    repo: `id:${projectId}`,
+    workspace: input.workspaceMode === 'existing' && workspaceId ? `id:${workspaceId}` : undefined
   }
 }
-
-function toRuntimeAutomationUpdateInput(
+/** Renames the desktop input's target fields to the wire contract every authority speaks. */
+export function toRuntimeAutomationUpdateInput(
   input: AutomationUpdateInput
 ): RuntimeAutomationUpdateInput {
   const { projectId, workspaceId, ...rest } = input
   return {
     ...rest,
-    ...(projectId !== undefined ? { repo: projectId } : {}),
-    ...(workspaceId !== undefined ? { workspace: workspaceId ?? undefined } : {})
+    ...(projectId !== undefined ? { repo: `id:${projectId}` } : {}),
+    ...(workspaceId !== undefined
+      ? { workspace: workspaceId ? `id:${workspaceId}` : undefined }
+      : {})
   }
 }
 
 export async function listAutomationsForTarget(
   target: AutomationHostTarget
 ): Promise<Automation[]> {
-  if (target.kind === 'local') {
-    return await window.api.automations.list()
-  }
   const result = await callRuntimeRpc<{ automations: Automation[] }>(
     target,
     'automation.list',
@@ -93,34 +125,19 @@ export async function listAutomationsForTarget(
   return result.automations
 }
 
+/** Fetch one automation’s history; list usage comes from authority projections so page cost cannot scale with all retained runs. */
 export async function listAutomationRunsForTarget(
   target: AutomationHostTarget,
-  automationId?: string
+  automationId: string,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<AutomationRun[]> {
-  if (target.kind === 'local') {
-    return await window.api.automations.listRuns(automationId ? { automationId } : undefined)
-  }
   const result = await callRuntimeRpc<{ runs: AutomationRun[] }>(
     target,
     'automation.runs',
-    automationId ? { automationId } : {},
-    { timeoutMs: 15_000 }
+    { automationId },
+    { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
   )
   return result.runs
-}
-
-export async function createAutomationForTarget(input: AutomationCreateInput): Promise<Automation> {
-  const target = getAutomationCreateTarget(input)
-  if (target.kind === 'local') {
-    return await window.api.automations.create(input)
-  }
-  const result = await callRuntimeRpc<{ automation: Automation }>(
-    target,
-    'automation.create',
-    toRuntimeAutomationCreateInput(input),
-    { timeoutMs: 15_000 }
-  )
-  return result.automation
 }
 
 export async function updateAutomationForTarget(
@@ -129,13 +146,16 @@ export async function updateAutomationForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
-  if (target.kind === 'local') {
-    return await window.api.automations.update({ id: automation.id, updates })
-  }
+  const prepared = await prepareAutomationLaunchSetup(
+    target.kind === 'environment'
+      ? { kind: 'runtime', environmentId: target.environmentId, pairingRevision: 0 }
+      : { kind: 'desktop' },
+    updates
+  )
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',
-    { id: automation.id, updates: toRuntimeAutomationUpdateInput(updates) },
+    { id: automation.id, updates: toRuntimeAutomationUpdateInput(prepared) },
     { timeoutMs: 15_000 }
   )
   return result.automation
@@ -146,10 +166,6 @@ export async function deleteAutomationForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<void> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
-  if (target.kind === 'local') {
-    await window.api.automations.delete({ id: automation.id })
-    return
-  }
   await callRuntimeRpc(target, 'automation.delete', { id: automation.id }, { timeoutMs: 15_000 })
 }
 
@@ -158,9 +174,6 @@ export async function runAutomationNowForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<AutomationRun> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
-  if (target.kind === 'local') {
-    return await window.api.automations.runNow({ id: automation.id })
-  }
   const result = await callRuntimeRpc<{ run: AutomationRun }>(
     target,
     'automation.runNow',

@@ -1,0 +1,48 @@
+{
+  "_fixtureProvenance": {
+    "description": "Legacy Orca workspace session with one daemon-backed terminal tab, used to verify upgrade and relaunch recovery.",
+    "sourceVersion": "legacy production workspaceSession shape",
+    "minimizedAt": "2026-07-01",
+    "notes": [
+      "The pre-fix shape intentionally omits sleepingAgentSessionsByPaneKey.",
+      "Legacy tab and layout PTY ids are materialized from the update-surviving daemon session."
+    ]
+  },
+  "activeRepoId": "__REPO_ID__",
+  "activeWorktreeId": "__WORKTREE_ID__",
+  "activeTabId": "production-agent-tab",
+  "tabsByWorktree": {
+    "__WORKTREE_ID__": [
+      {
+        "id": "production-agent-tab",
+        "ptyId": "__PTY_ID__",
+        "worktreeId": "__WORKTREE_ID__",
+        "title": "Production agent session",
+        "defaultTitle": "Terminal 1",
+        "generatedTitle": "Production agent session",
+        "customTitle": "Production agent session",
+        "color": null,
+        "sortOrder": 0,
+        "createdAt": 1717444800000,
+        "launchAgent": "codex"
+      }
+    ]
+  },
+  "terminalLayoutsByTabId": {
+    "production-agent-tab": {
+      "root": { "type": "leaf", "leafId": "pane:production-agent" },
+      "activeLeafId": "pane:production-agent",
+      "expandedLeafId": null,
+      "ptyIdsByLeafId": {
+        "pane:production-agent": "__PTY_ID__"
+      },
+      "titlesByLeafId": {
+        "pane:production-agent": "Production agent session"
+      }
+    }
+  },
+  "activeWorktreeIdsOnShutdown": ["__WORKTREE_ID__"],
+  "activeTabIdByWorktree": {
+    "__WORKTREE_ID__": "production-agent-tab"
+  }
+}

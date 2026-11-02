@@ -1,3 +1,4 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import type { Page } from '@stablyai/playwright-test'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
@@ -47,8 +48,6 @@ async function probeSmallMouseWheelReports(
       const reports: string[] = []
       const disposable = pane.terminal.onData((data) => reports.push(data))
       try {
-        await new Promise<void>((resolve) => pane.terminal.write('\x1b[?1003h\x1b[?1006h', resolve))
-        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
         if (!pane.terminal.element.classList.contains('enable-mouse-events')) {
           throw new Error('Mouse reporting mode did not activate')
         }
@@ -60,8 +59,9 @@ async function probeSmallMouseWheelReports(
 
         const rect = screen.getBoundingClientRect()
         const cellHeight =
-          pane.terminal._core?._renderService?.dimensions?.css?.cell?.height ??
-          rect.height / pane.terminal.rows
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+          (pane.terminal as XtermWithRenderDimensions)._core?._renderService?.dimensions?.css?.cell
+            ?.height ?? rect.height / pane.terminal.rows
         const scrollSensitivity = Number(pane.terminal.options.scrollSensitivity ?? 1)
         // Why: this is a notched mouse wheel event that Chromium can surface as a
         // small pixel delta; xterm's <50px damping accumulates it for four ticks.
@@ -87,11 +87,7 @@ async function probeSmallMouseWheelReports(
             value: physicalMouseWheelDelta
           })
           pane.terminal.element.dispatchEvent(event)
-          // Why: space notches past TUI_WHEEL_BURST_MAX_INTERVAL_MS (45ms) so
-          // burst-acceleration (which intentionally coalesces fast trackpad
-          // flicks into multi-row reports) does not engage — a notched mouse
-          // wheel maps 1:1. At setTimeout(0) the ticks land <45ms apart and
-          // the burst path fires, yielding [1,1,3,3] instead of [1,1,1,1].
+          // Space notches beyond the 45ms burst interval; faster timing enables acceleration ([1,1,3,3]) instead of 1:1 [1,1,1,1].
           await new Promise((resolve) => setTimeout(resolve, 60))
           samples.push({
             reportCount: reports.length,
@@ -139,8 +135,6 @@ async function probeTimedSmallMouseWheelReports(
       const reports: string[] = []
       const disposable = pane.terminal.onData((data) => reports.push(data))
       try {
-        await new Promise<void>((resolve) => pane.terminal.write('\x1b[?1003h\x1b[?1006h', resolve))
-        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
         if (!pane.terminal.element.classList.contains('enable-mouse-events')) {
           throw new Error('Mouse reporting mode did not activate')
         }
@@ -152,8 +146,9 @@ async function probeTimedSmallMouseWheelReports(
 
         const rect = screen.getBoundingClientRect()
         const cellHeight =
-          pane.terminal._core?._renderService?.dimensions?.css?.cell?.height ??
-          rect.height / pane.terminal.rows
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+          (pane.terminal as XtermWithRenderDimensions)._core?._renderService?.dimensions?.css?.cell
+            ?.height ?? rect.height / pane.terminal.rows
         const scrollSensitivity = Number(pane.terminal.options.scrollSensitivity ?? 1)
         // Why: this is a notched mouse wheel event that Chromium can surface as a
         // small pixel delta; xterm's <50px damping accumulates it for four ticks.
@@ -284,6 +279,18 @@ async function dispatchTuiWheel(
   }, options)
 }
 
+// Let a running TUI own mouse mode; late shell startup output can reset injected modes.
+async function startTuiFixture(page: Page): Promise<void> {
+  const ptyId = await waitForActivePanePtyId(page)
+  await execInTerminal(page, ptyId, `node ${JSON.stringify(VISIBLE_TUI_FIXTURE_PATH)}`)
+  await expect
+    .poll(() => readVisibleTuiOffset(page), {
+      timeout: 10_000,
+      message: 'fullscreen TUI did not render numbered rows'
+    })
+    .toBe(0)
+}
+
 test.describe('terminal TUI wheel reports', () => {
   test('notched mouse wheel ticks produce immediate mouse-reporting TUI scroll reports', async ({
     orcaPage
@@ -296,6 +303,7 @@ test.describe('terminal TUI wheel reports', () => {
       window.__store?.getState().updateSettings({ terminalTuiScrollSensitivity: 1 })
     )
 
+    await startTuiFixture(orcaPage)
     const samples = await probeSmallMouseWheelReports(orcaPage, 4)
 
     expect(
@@ -338,15 +346,7 @@ test.describe('terminal TUI wheel reports', () => {
       window.__store?.getState().updateSettings({ terminalTuiScrollSensitivity: 1 })
     )
 
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    await execInTerminal(orcaPage, ptyId, `node ${JSON.stringify(VISIBLE_TUI_FIXTURE_PATH)}`)
-
-    await expect
-      .poll(() => readVisibleTuiOffset(orcaPage), {
-        timeout: 10_000,
-        message: 'visible fullscreen TUI did not render numbered rows'
-      })
-      .toBe(0)
+    await startTuiFixture(orcaPage)
 
     await dispatchTuiWheel(orcaPage, {
       deltaY: 10,
@@ -399,6 +399,7 @@ test.describe('terminal TUI wheel reports', () => {
       window.__store?.getState().updateSettings({ terminalTuiScrollSensitivity: 5 })
     )
 
+    await startTuiFixture(orcaPage)
     const slow = await probeTimedSmallMouseWheelReports(orcaPage, {
       drainWaitMs: 120,
       intervalMs: 220,

@@ -1,4 +1,4 @@
-import type { BrowserViewportOverride, BrowserViewportPresetId } from './types'
+import type { BrowserViewportOverride, BrowserViewportPresetId } from './browser-workspace-types'
 
 export type BrowserViewportPreset = {
   id: BrowserViewportPresetId
@@ -9,9 +9,7 @@ export type BrowserViewportPreset = {
   mobile: boolean
 }
 
-// Why: deviceScaleFactor=2 on mobile/tablet mirrors Chrome's device toolbar so
-// retina-aware sites pick the correct asset tier; mobile=true enables touch
-// emulation + small-viewport CSS. Dimensions match Chrome DevTools presets.
+// Match Chrome DevTools dimensions and 2x mobile/tablet assets; mobile enables touch and small-viewport CSS.
 export const BROWSER_VIEWPORT_PRESETS = [
   {
     id: 'mobile-s',

@@ -1,0 +1,288 @@
+import React, { useCallback } from 'react'
+import { Pencil, StickyNote } from 'lucide-react'
+import { HoverCardContent } from '@/components/ui/hover-card'
+import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
+import { translate } from '@/i18n/i18n'
+import CommentMarkdown from '../sidebar/CommentMarkdown'
+import { DetailHeader, MetadataActionIcon } from '../sidebar/WorktreeCardMetadataControls'
+import {
+  WorktreeCardDetailSection,
+  WorktreeCardDetailSectionContent
+} from '../sidebar/WorktreeCardDetailSection'
+import { WorktreeCardTaskDetailSection } from '../sidebar/WorktreeCardTaskDetailSection'
+import { getWorktreeCardTaskActions } from '../sidebar/worktree-card-task-actions'
+import { WorktreeCardReviewDetailSection } from '../sidebar/WorktreeCardReviewDetailSection'
+import { WorktreeCardAutomationDetailSection } from '../sidebar/WorktreeCardAutomationDetailSection'
+import { WorktreeCardCliDetailSection } from '../sidebar/WorktreeCardCliDetailSection'
+import { WorktreeCardPortsDetails } from '../sidebar/WorktreeCardPorts'
+import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '../sidebar/WorktreeContextMenu'
+import { useWorktreeCardDetailsHoverControl } from '../sidebar/worktree-card-details-hover-state'
+import { useWorktreeCardFoundation } from '../sidebar/use-worktree-card-foundation'
+import { useWorktreeCardReviewDetails } from '../sidebar/use-worktree-card-review-details'
+import { useWorktreeCardLinkedDetails } from '../sidebar/use-worktree-card-linked-details'
+import { useWorktreeCardLifecycleEffects } from '../sidebar/use-worktree-card-lifecycle-effects'
+import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-secondary-details'
+import { useWorkspaceReferenceLinkActions } from '../sidebar/use-workspace-reference-link-actions'
+import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
+import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
+import { ActivityThreadHoverCardRoot } from './activity-thread-hover-card-root'
+import type { AgentPaneThread } from './activity-thread-types'
+
+export type ActivityThreadHoverCardProps = {
+  thread: AgentPaneThread
+  children: React.ReactElement
+  // Keyboard focus only; pointer hover opens on rest (see activity-thread-hover-card-intent).
+  openDelay?: number
+  closeDelay?: number
+  onJumpToWorkspace?: (thread: AgentPaneThread) => void
+  canJumpToWorkspace?: boolean
+  /** Keeps the preview closed, e.g. while the row's right-click menu covers it. */
+  suppressed?: boolean
+}
+
+export function ActivityThreadHoverCard({
+  thread,
+  children,
+  openDelay = 200,
+  closeDelay = 120,
+  onJumpToWorkspace,
+  canJumpToWorkspace,
+  suppressed = false
+}: ActivityThreadHoverCardProps): React.JSX.Element {
+  const detailsHoverControl = useWorktreeCardDetailsHoverControl()
+  const open = detailsHoverControl.hoverOpen && !suppressed
+  const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
+    useWorkspaceReferenceLinkActions(thread.worktree.id, detailsHoverControl)
+
+  return (
+    <ActivityThreadHoverCardRoot
+      open={open}
+      onOpenChange={detailsHoverControl.handleHoverOpenChange}
+      openDelay={openDelay}
+      closeDelay={closeDelay}
+      enabled={!suppressed}
+      trigger={children}
+    >
+      <span className="contents" onClick={(event) => event.stopPropagation()}>
+        <LinkActionPopover {...linkActionPopoverProps} />
+      </span>
+      {open ? (
+        <ActivityThreadHoverCardContent
+          thread={thread}
+          onOpenLink={onOpenLink}
+          onAuxClickCapture={onAuxClickCapture}
+          detailsHoverControl={detailsHoverControl}
+          onJumpToWorkspace={onJumpToWorkspace}
+          canJumpToWorkspace={canJumpToWorkspace}
+        />
+      ) : null}
+    </ActivityThreadHoverCardRoot>
+  )
+}
+
+function ActivityThreadHoverCardContent({
+  thread,
+  onOpenLink,
+  onAuxClickCapture,
+  detailsHoverControl,
+  onJumpToWorkspace,
+  canJumpToWorkspace
+}: {
+  thread: AgentPaneThread
+  onOpenLink: (url: string, event: React.MouseEvent) => void
+  onAuxClickCapture: (event: React.MouseEvent) => void
+  detailsHoverControl: ReturnType<typeof useWorktreeCardDetailsHoverControl>
+  onJumpToWorkspace?: (thread: AgentPaneThread) => void
+  canJumpToWorkspace?: boolean
+}): React.JSX.Element {
+  const { worktree, repo } = thread
+  const foundation = useWorktreeCardFoundation({ worktree, repo: repo ?? undefined })
+  const review = useWorktreeCardReviewDetails({
+    worktree,
+    repo: repo ?? undefined,
+    settings: foundation.settings,
+    projectGroups: foundation.projectGroups,
+    cardProps: foundation.cardProps,
+    newCardStyle: foundation.newCardStyle
+  })
+  const linked = useWorktreeCardLinkedDetails({
+    worktree,
+    newCardStyle: foundation.newCardStyle,
+    deleteState: foundation.deleteState,
+    branch: review.branch,
+    issueEntry: review.issueEntry,
+    linearIssueEntry: review.linearIssueEntry,
+    linearIssueFallbackEntry: review.linearIssueFallbackEntry,
+    prDisplay: review.prDisplay
+  })
+
+  useWorktreeCardLifecycleEffects({
+    worktree,
+    repo: repo ?? undefined,
+    isFolder: review.isFolder,
+    hostedReviewCacheKey: review.hostedReviewCacheKey,
+    cachedBranchFallbackGitHubPRNumber: review.cachedBranchFallbackGitHubPRNumber,
+    linkedGitLabMR: review.linkedGitLabMR,
+    linkedBitbucketPR: review.linkedBitbucketPR,
+    linkedAzureDevOpsPR: review.linkedAzureDevOpsPR,
+    linkedGiteaPR: review.linkedGiteaPR,
+    branch: review.branch,
+    fetchHostedReviewForBranch: foundation.fetchHostedReviewForBranch,
+    shouldRefreshHostedReview: false,
+    newCardStyle: true,
+    hoverDetailsOpen: detailsHoverControl.hoverOpen,
+    showIssue: true,
+    issueCacheKey: review.issueCacheKey,
+    fetchIssue: foundation.fetchIssue,
+    showLinearIssue: true,
+    fetchLinearIssue: foundation.fetchLinearIssue,
+    linearSourceContext: review.linearSourceContext,
+    linearWorkspaceId: review.linearWorkspaceId
+  })
+
+  const secondary = useWorktreeCardSecondaryDetails({
+    worktree,
+    repo: repo ?? undefined,
+    statusPrDisplay: null,
+    showStatus: true,
+    showIssue: true,
+    showLinearIssue: true,
+    showJiraIssue: true,
+    showPR: true,
+    showAutomation: true,
+    showCli: true,
+    showComment: true,
+    showPorts: true,
+    issueDisplay: linked.issueDisplay,
+    linearIssue: linked.linearIssue,
+    linearIssueDisplay: linked.linearIssueDisplay,
+    jiraIssueDisplay: linked.jiraIssueDisplay,
+    prDisplay: review.prDisplay,
+    linkedGitLabMR: review.linkedGitLabMR,
+    linkedBitbucketPR: review.linkedBitbucketPR,
+    linkedAzureDevOpsPR: review.linkedAzureDevOpsPR,
+    linkedGiteaPR: review.linkedGiteaPR,
+    newCardStyle: foundation.newCardStyle,
+    compactCards: foundation.compactCards,
+    cardDetails: foundation.cardDetails,
+    agentActivityDisplayMode: foundation.agentActivityDisplayMode,
+    workspacePorts: foundation.workspacePorts,
+    openTaskPage: foundation.openTaskPage,
+    updateWorktreeMeta: foundation.updateWorktreeMeta,
+    settings: foundation.settings
+  })
+
+  const taskActions = getWorktreeCardTaskActions(detailsHoverControl.closeHover, {
+    onEditIssue: foundation.handleEditIssue,
+    onOpenGitHubIssueInOrca: secondary.handleOpenGitHubIssueInOrca,
+    onOpenIssueInBrowser: secondary.handleOpenIssueInBrowser,
+    onOpenLinearIssueInOrca: secondary.handleOpenLinearIssueInOrca
+  })
+
+  const dismissAndRun = useCallback(
+    (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
+      detailsHoverControl.closeHover()
+      handler?.(event)
+    },
+    [detailsHoverControl]
+  )
+
+  return (
+    <HoverCardContent
+      side="right"
+      align="start"
+      sideOffset={8}
+      className="w-80 max-h-[30rem] overflow-y-auto p-3 text-xs scrollbar-sleek"
+      {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onAuxClickCapture={onAuxClickCapture}
+    >
+      <SelectedTextCopyMenu className="space-y-3">
+        <ActivityThreadHoverCardSummary
+          thread={thread}
+          settings={foundation.settings}
+          onJumpToWorkspace={
+            onJumpToWorkspace ? dismissAndRun(() => onJumpToWorkspace(thread)) : undefined
+          }
+          canJumpToWorkspace={canJumpToWorkspace}
+        />
+        {/* Pull Request / Review */}
+        <WorktreeCardReviewDetailSection
+          review={secondary.hoverReview}
+          onManageLinks={dismissAndRun(foundation.handleManageLinks)}
+          reviewMenuOpen={detailsHoverControl.reviewMenuOpen}
+          onReviewMenuOpenChange={detailsHoverControl.handleReviewMenuOpenChange}
+          onOpenReviewInOrca={secondary.handleOpenReviewInOrca}
+          onOpenLink={onOpenLink}
+          onUnlinkReview={secondary.canUnlinkReview ? secondary.handleUnlinkReview : undefined}
+          closeHover={detailsHoverControl.closeHover}
+        />
+
+        <WorktreeCardTaskDetailSection
+          issue={secondary.hoverIssue}
+          linearIssue={secondary.hoverLinearIssue}
+          jiraIssue={secondary.hoverJiraIssue}
+          actions={taskActions}
+          onMenuOpenChange={detailsHoverControl.handleIssueMenuOpenChange}
+          onOpenLink={onOpenLink}
+          onManageLinks={dismissAndRun(foundation.handleManageLinks)}
+        />
+
+        {/* Automation Provenance */}
+        {secondary.metaAutomationProvenance && (
+          <WorktreeCardAutomationDetailSection
+            provenance={secondary.metaAutomationProvenance}
+            onOpenAutomation={
+              foundation.handleOpenAutomation
+                ? dismissAndRun(foundation.handleOpenAutomation)
+                : undefined
+            }
+            onOpenAutomationRun={
+              foundation.handleOpenAutomationRun
+                ? dismissAndRun(foundation.handleOpenAutomationRun)
+                : undefined
+            }
+          />
+        )}
+
+        {/* CLI Provenance */}
+        {secondary.metaCliProvenance && (
+          <WorktreeCardCliDetailSection provenance={secondary.metaCliProvenance} />
+        )}
+
+        {/* Notes / Comment */}
+        {(secondary.hoverComment ?? '').trim().length > 0 && (
+          <WorktreeCardDetailSection>
+            <DetailHeader
+              icon={<StickyNote className="size-3 text-muted-foreground" />}
+              label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
+              actions={
+                <MetadataActionIcon
+                  label={translate(
+                    'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
+                    'Edit notes'
+                  )}
+                  onClick={foundation.handleEditComment}
+                >
+                  <Pencil className="size-3" />
+                </MetadataActionIcon>
+              }
+            />
+            <WorktreeCardDetailSectionContent className="space-y-2">
+              <CommentMarkdown
+                content={secondary.hoverComment ?? ''}
+                className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
+              />
+            </WorktreeCardDetailSectionContent>
+          </WorktreeCardDetailSection>
+        )}
+
+        {/* Ports */}
+        {foundation.workspacePorts.length > 0 && (
+          <WorktreeCardPortsDetails ports={foundation.workspacePorts} />
+        )}
+      </SelectedTextCopyMenu>
+    </HoverCardContent>
+  )
+}

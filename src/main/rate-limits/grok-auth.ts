@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 
-// Why: when GROK_HOME is set, auth.json must be the same path Grok CLI uses.
 export function getGrokHome(): string {
   return resolveGrokHomeDir()
 }
@@ -40,8 +39,7 @@ function getGrokAuthReadError(err: unknown): string {
   if (err instanceof SyntaxError) {
     return 'Grok auth file is invalid'
   }
-  // Why: filesystem errors often include the full auth path; renderer/mobile
-  // account state should not expose local usernames or custom GROK_HOME values.
+  // Keep filesystem paths/usernames out of renderer and mobile account state.
   return 'Unable to read Grok auth file'
 }
 
@@ -64,7 +62,7 @@ function parseExpiresAtMs(iso: string | undefined): number | null {
   return Number.isFinite(ms) ? ms : null
 }
 
-// Why: stale alternate issuers can precede the default xAI OAuth session in auth.json.
+// Prefer default xAI OAuth over stale alternate issuers.
 const PREFERRED_GROK_AUTH_ISSUER = 'https://auth.x.ai'
 
 function sessionFromAuthEntry(authEntry: TokenizedGrokAuthEntry): GrokAuthSession {
@@ -114,13 +112,12 @@ export function readGrokAuthSession(): GrokAuthReadResult {
         fallback = session
       }
     }
-    // Why: alternate issuers are compatibility fallbacks only when no default entry exists.
+    // Alternate issuers are fallback only when no default entry exists.
     const selectedSession = expiredPreferred ?? (preferredKeySeen ? null : fallback)
     if (selectedSession) {
       return { status: 'ok', session: selectedSession }
     }
-    // Why: a token-less file (e.g. after grok logout) means signed out, not a
-    // failure — 'error' would keep a status-bar alert visible for that user.
+    // A tokenless logout is missing auth, not a persistent status-bar error.
     return { status: 'missing' }
   } catch (err) {
     return {
@@ -130,15 +127,11 @@ export function readGrokAuthSession(): GrokAuthReadResult {
   }
 }
 
-export function hasGrokAuthSession(): boolean {
-  return readGrokAuthSession().status === 'ok'
-}
-
 const TOKEN_SKEW_MS = 5 * 60 * 1000
 
 export function isGrokAccessTokenFresh(session: GrokAuthSession): boolean {
   if (session.expiresAtMs === null) {
-    // Why: auth.json may lack expiry; a bad token still surfaces as billing HTTP 401.
+    // Missing expiry is inconclusive; the billing endpoint can still reject the token.
     return true
   }
   return session.expiresAtMs - Date.now() > TOKEN_SKEW_MS

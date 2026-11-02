@@ -1,4 +1,4 @@
-// Why: reproduce the renderer Pi spinner pipeline (pty:data IPC → onTitleChange); electron verification showed frames arrive but the store never sees "⠋ Pi".
+// Why: reproduce the renderer Pi spinner pipeline (pty:data IPC → onTitleChange); electron verification showed frames arrive but the store never sees the canonicalized "⠋ π - cwd" working title.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -105,7 +105,6 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
 
     expect(dispatcherCallback).not.toBeNull()
 
-    // Simulate main firing pty:data IPC — dispatcher routes to ptyDataHandlers.get('pty-pi'), the same path a real Pi session uses.
     dispatcherCallback?.({ id: 'pty-pi', data: idleTitle() })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠙') })
@@ -113,7 +112,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
-    expect(seenTitles).toContain('⠋ Pi')
+    expect(seenTitles).toContain('⠋ π - cwd')
 
     transport.disconnect()
   })
@@ -133,7 +132,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
-    expect(seenTitles).toContain('⠋ Pi')
+    expect(seenTitles).toContain('⠋ π - cwd')
 
     transport.disconnect()
   })
@@ -153,13 +152,13 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
-    expect(seenTitles).toContain('⠋ Pi')
+    expect(seenTitles).toContain('⠋ π - cwd')
 
     transport.disconnect()
   })
 
-  it('reproduces "Pi is idle" state: after working→idle, onTitleChange ends on Pi', async () => {
-    // Why: bug shows the store stuck at idle "Pi" while working — assert both working and idle labels reach onTitleChange, in order.
+  it('reproduces "Pi is idle" state: after working→idle, onTitleChange ends on the idle title', async () => {
+    // Why: bug shows the store stuck at the idle title while working — assert both working and idle titles reach onTitleChange, in order.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
 
@@ -173,15 +172,15 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
-    const workingIdx = seenTitles.indexOf('⠋ Pi')
-    const finalIdleIdx = seenTitles.lastIndexOf('Pi')
+    const workingIdx = seenTitles.indexOf('⠋ π - cwd')
+    const finalIdleIdx = seenTitles.lastIndexOf('π - cwd')
     expect(workingIdx).toBeGreaterThanOrEqual(0)
     expect(finalIdleIdx).toBeGreaterThan(workingIdx)
 
     transport.disconnect()
   })
 
-  // Why: regression for cursor's "solid after 500ms" bug — cursor re-emits its bare native title mid-turn; it must not overwrite the synthesized spinner frame.
+  // Cursor’s bare native redraw must not overwrite the synthesized working spinner mid-turn.
   it('drops cursor-agent native "Cursor Agent" title so it cannot overwrite the synthesized spinner', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
@@ -189,7 +188,6 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     const transport = createIpcPtyTransport({ onTitleChange })
     await transport.connect({ url: '', callbacks: {} })
 
-    // Realistic interleave: synthesized working frame, cursor's bare native title, next spinner frame, etc.
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠋ Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠙ Cursor Agent${BEL}` })

@@ -9,8 +9,7 @@ import { TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES } from './terminal-history
 const ALT_SCREEN_ON = '\x1b[?1049h'
 const ALT_SCREEN_OFF = '\x1b[?1049l'
 
-// Why: handles the upgrade transition where sessions created before the
-// checkpoint migration still have scrollback.bin but no checkpoint.json.
+// Sessions predating checkpoints may have only scrollback.bin.
 export async function detectColdRestoreFromLegacyScrollback(
   basePath: string,
   sessionId: string,
@@ -45,34 +44,25 @@ export async function detectColdRestoreFromLegacyScrollback(
   }
 }
 
-// Why: raw scrollback from TUI sessions (vim, less, htop) contains
-// alternate-screen switches that produce garbled output when replayed.
-// Truncate before the outermost unmatched alt-screen-on so only normal
-// terminal output is restored.
+// Exclude an unfinished alternate-screen session to avoid replaying a partial TUI.
 function truncateAltScreen(data: string): string {
   let depth = 0
   let outermostUnmatchedOnIdx = -1
 
-  let searchFrom = 0
-  while (searchFrom < data.length) {
-    const onIdx = data.indexOf(ALT_SCREEN_ON, searchFrom)
-    const offIdx = data.indexOf(ALT_SCREEN_OFF, searchFrom)
-
-    if (onIdx === -1 && offIdx === -1) {
-      break
-    }
-
+  let onIdx = data.indexOf(ALT_SCREEN_ON)
+  let offIdx = data.indexOf(ALT_SCREEN_OFF)
+  while (onIdx !== -1 || offIdx !== -1) {
     if (onIdx !== -1 && (offIdx === -1 || onIdx < offIdx)) {
       if (depth === 0) {
         outermostUnmatchedOnIdx = onIdx
       }
       depth++
-      searchFrom = onIdx + ALT_SCREEN_ON.length
+      onIdx = data.indexOf(ALT_SCREEN_ON, onIdx + ALT_SCREEN_ON.length)
     } else {
       if (depth > 0) {
         depth--
       }
-      searchFrom = offIdx + ALT_SCREEN_OFF.length
+      offIdx = data.indexOf(ALT_SCREEN_OFF, offIdx + ALT_SCREEN_OFF.length)
     }
   }
 

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -49,24 +49,10 @@ function deferred<T>() {
 describe('useQuickCommands', () => {
   let renderer: ReactTestRenderer | null = null
   let state: ReturnType<typeof useQuickCommands> | null = null
-  let consoleSpy: MockInstance
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    const original = console.error
-    consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
-    })
-  })
-
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
     state = null
-    consoleSpy.mockRestore()
   })
 
   async function mount(client: RpcClient, enabled = true): Promise<void> {
@@ -112,7 +98,6 @@ describe('useQuickCommands', () => {
 
     await mount(client)
 
-    // Initial attempt + 5 replays, then give up rather than loop forever.
     expect(client.sendRequest).toHaveBeenCalledTimes(6)
     expect(state?.ready).toBe(false)
     expect(state?.error).toBe('RPC interrupted by connection migration')
@@ -293,7 +278,6 @@ describe('useQuickCommands', () => {
       sendRequest: vi
         .fn()
         .mockResolvedValueOnce(success([FIRST]))
-        // The host applies the targeted upsert to a list that desktop changed.
         .mockResolvedValueOnce(success([edited, SECOND]))
     } as unknown as RpcClient
     await mount(client)

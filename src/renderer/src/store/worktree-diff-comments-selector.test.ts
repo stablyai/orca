@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { DiffComment, Worktree } from '../../../shared/types'
+import type { DiffComment } from '../../../shared/diff-comment-types'
+
+import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
 import {
   selectWorktreeDiffComments,

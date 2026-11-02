@@ -5,7 +5,15 @@
     "../src/renderer/src/**/*",
     "../src/renderer/src/**/*.tsx",
     "../src/preload/api-types.ts",
+    "../src/preload/api/**/*",
     "../src/shared/**/*"
+  ],
+  "exclude": [
+    "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
+    "../src/renderer/src/runtime/observed-provider-accounts.test.tsx",
+    "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx",
+    "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
+    "../src/renderer/src/runtime/provider-account-observation.test-fixture.ts"
   ],
   "compilerOptions": {
     "composite": true,

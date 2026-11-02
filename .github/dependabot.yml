@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Automate only bundled ripgrep’s single pin; its hash invalidates SSH cache. Other dependency updates stay manual.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    allow:
+      - dependency-name: '@vscode/ripgrep-universal'
+    open-pull-requests-limit: 1

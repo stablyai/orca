@@ -1,27 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   SCRCPY_CONTROL_MSG_TYPE,
-  encodeBackOrScreenOn,
+  SCRCPY_INJECT_TEXT_MAX_BYTES,
   encodeInjectKeycode,
   encodeInjectText,
-  encodeInjectTouchEvent
+  encodeInjectTouchEvent,
+  splitScrcpyInjectText
 } from './scrcpy-control-protocol'
-
-describe('SCRCPY_CONTROL_MSG_TYPE', () => {
-  it('pins the v2.4 control message type codes', () => {
-    expect(SCRCPY_CONTROL_MSG_TYPE.INJECT_KEYCODE).toBe(0)
-    expect(SCRCPY_CONTROL_MSG_TYPE.INJECT_TEXT).toBe(1)
-    expect(SCRCPY_CONTROL_MSG_TYPE.INJECT_TOUCH_EVENT).toBe(2)
-    expect(SCRCPY_CONTROL_MSG_TYPE.INJECT_SCROLL_EVENT).toBe(3)
-    expect(SCRCPY_CONTROL_MSG_TYPE.BACK_OR_SCREEN_ON).toBe(4)
-  })
-})
 
 describe('encodeInjectTouchEvent', () => {
   it('encodes a touch-down event with the full 32-byte field layout', () => {
     const buf = encodeInjectTouchEvent({
       action: 'down',
-      pointerId: 0x1122334455667788n,
       x: 100,
       y: 200,
       screenWidth: 1080,
@@ -29,10 +19,9 @@ describe('encodeInjectTouchEvent', () => {
     })
 
     expect(buf.length).toBe(32)
-    expect(buf.readUInt8(0)).toBe(SCRCPY_CONTROL_MSG_TYPE.INJECT_TOUCH_EVENT)
-    expect(buf.readUInt8(0)).toBe(2)
+    expect(buf.readUInt8(0)).toBe(2) // SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT
     expect(buf.readUInt8(1)).toBe(0) // AMOTION_EVENT_ACTION_DOWN
-    expect(buf.readBigUInt64BE(2)).toBe(0x1122334455667788n)
+    expect(buf.readBigInt64BE(2)).toBe(-2n) // POINTER_ID_GENERIC_FINGER
     expect(buf.readInt32BE(10)).toBe(100)
     expect(buf.readInt32BE(14)).toBe(200)
     expect(buf.readUInt16BE(18)).toBe(1080)
@@ -42,164 +31,78 @@ describe('encodeInjectTouchEvent', () => {
     expect(buf.readUInt32BE(28)).toBe(1) // buttons set while pressed
   })
 
-  it('encodes a move event with action code 2 and full default pressure', () => {
-    const buf = encodeInjectTouchEvent({
-      action: 'move',
-      pointerId: 1n,
-      x: 5,
-      y: 6,
-      screenWidth: 720,
-      screenHeight: 1280
-    })
+  it('encodes move and up actions, releasing pressure and buttons on up', () => {
+    const position = { x: 5, y: 6, screenWidth: 720, screenHeight: 1280 }
+    const move = encodeInjectTouchEvent({ action: 'move', ...position })
+    const up = encodeInjectTouchEvent({ action: 'up', ...position })
 
-    expect(buf.length).toBe(32)
-    expect(buf.readUInt8(1)).toBe(2) // AMOTION_EVENT_ACTION_MOVE
-    expect(buf.readUInt16BE(22)).toBe(0xffff)
-    expect(buf.readUInt32BE(28)).toBe(1)
+    expect(move.readUInt8(1)).toBe(2) // AMOTION_EVENT_ACTION_MOVE
+    expect(move.readUInt16BE(22)).toBe(0xffff)
+    expect(up.readUInt8(1)).toBe(1) // AMOTION_EVENT_ACTION_UP
+    expect(up.readUInt16BE(22)).toBe(0)
+    expect(up.readUInt32BE(28)).toBe(0)
   })
 
-  it('encodes an up event with zero default pressure and cleared buttons', () => {
-    const buf = encodeInjectTouchEvent({
-      action: 'up',
-      pointerId: 1n,
-      x: 5,
-      y: 6,
-      screenWidth: 720,
-      screenHeight: 1280
-    })
+  it('encodes pressure as the same u16 fixed point as the official client', () => {
+    const pressureField = (pressure: number): number =>
+      encodeInjectTouchEvent({
+        action: 'down',
+        x: 0,
+        y: 0,
+        screenWidth: 1,
+        screenHeight: 1,
+        pressure
+      }).readUInt16BE(22)
 
-    expect(buf.length).toBe(32)
-    expect(buf.readUInt8(1)).toBe(1) // AMOTION_EVENT_ACTION_UP
-    expect(buf.readUInt16BE(22)).toBe(0) // default pressure 0 on up
-    expect(buf.readUInt32BE(24)).toBe(1) // actionButton stays primary
-    expect(buf.readUInt32BE(28)).toBe(0) // buttons cleared on up
-  })
-
-  it('writes negative coordinates as signed int32', () => {
-    const buf = encodeInjectTouchEvent({
-      action: 'move',
-      pointerId: 1n,
-      x: -3,
-      y: -7,
-      screenWidth: 1,
-      screenHeight: 1
-    })
-
-    expect(buf.readInt32BE(10)).toBe(-3)
-    expect(buf.readInt32BE(14)).toBe(-7)
-  })
-
-  it('encodes explicit fractional pressure as fixed-point u16', () => {
-    const buf = encodeInjectTouchEvent({
-      action: 'down',
-      pointerId: 1n,
-      x: 0,
-      y: 0,
-      screenWidth: 1,
-      screenHeight: 1,
-      pressure: 0.5
-    })
-
-    expect(buf.readUInt16BE(22)).toBe(Math.round(0.5 * 0xffff))
-  })
-
-  it('clamps pressure above 1 and below 0', () => {
-    const high = encodeInjectTouchEvent({
-      action: 'down',
-      pointerId: 1n,
-      x: 0,
-      y: 0,
-      screenWidth: 1,
-      screenHeight: 1,
-      pressure: 2
-    })
-    expect(high.readUInt16BE(22)).toBe(0xffff)
-
-    const low = encodeInjectTouchEvent({
-      action: 'down',
-      pointerId: 1n,
-      x: 0,
-      y: 0,
-      screenWidth: 1,
-      screenHeight: 1,
-      pressure: -1
-    })
-    expect(low.readUInt16BE(22)).toBe(0)
+    expect(pressureField(0.5)).toBe(0x8000)
+    expect(pressureField(2)).toBe(0xffff)
+    expect(pressureField(-1)).toBe(0)
+    expect(pressureField(Number.NaN)).toBe(0)
   })
 })
 
 describe('encodeInjectKeycode', () => {
-  it('encodes a keycode-down event (14 bytes) with round-tripped fields', () => {
-    const buf = encodeInjectKeycode({
-      action: 'down',
-      keycode: 66, // AKEYCODE_ENTER
-      repeat: 3,
-      metaState: 0x1000
-    })
+  it('encodes a 14-byte keycode event with repeat and meta state', () => {
+    const buf = encodeInjectKeycode({ action: 'up', keycode: 66, repeat: 3, metaState: 0x1000 })
 
     expect(buf.length).toBe(14)
     expect(buf.readUInt8(0)).toBe(SCRCPY_CONTROL_MSG_TYPE.INJECT_KEYCODE)
-    expect(buf.readUInt8(0)).toBe(0)
-    expect(buf.readUInt8(1)).toBe(0) // AKEY_EVENT_ACTION_DOWN
+    expect(buf.readUInt8(1)).toBe(1) // AKEY_EVENT_ACTION_UP
     expect(buf.readInt32BE(2)).toBe(66)
     expect(buf.readInt32BE(6)).toBe(3)
     expect(buf.readInt32BE(10)).toBe(0x1000)
   })
-
-  it('encodes a keycode-up event and applies repeat/metaState defaults', () => {
-    const buf = encodeInjectKeycode({ action: 'up', keycode: 4 }) // AKEYCODE_BACK
-
-    expect(buf.length).toBe(14)
-    expect(buf.readUInt8(1)).toBe(1) // AKEY_EVENT_ACTION_UP
-    expect(buf.readInt32BE(2)).toBe(4)
-    expect(buf.readInt32BE(6)).toBe(0) // default repeat
-    expect(buf.readInt32BE(10)).toBe(0) // default metaState
-  })
 })
 
 describe('encodeInjectText', () => {
-  it('encodes the type byte, UTF-8 byte length header, and payload', () => {
-    const buf = encodeInjectText('hello')
+  it('prefixes the UTF-8 byte length, not the UTF-16 length', () => {
+    const buf = encodeInjectText('añ')
 
     expect(buf.readUInt8(0)).toBe(SCRCPY_CONTROL_MSG_TYPE.INJECT_TEXT)
-    expect(buf.readUInt8(0)).toBe(1)
-    expect(buf.readUInt32BE(1)).toBe(5)
-    expect(buf.subarray(5).toString('utf8')).toBe('hello')
-    expect(buf.length).toBe(5 + 5)
+    expect(buf.readUInt32BE(1)).toBe(3)
+    expect(buf.subarray(5).toString('utf8')).toBe('añ')
   })
 
-  it('uses UTF-8 byte length (not string length) for multi-byte characters', () => {
-    const text = 'é' // one JS char, two UTF-8 bytes
-    const buf = encodeInjectText(text)
-
-    expect(text.length).toBe(1)
-    expect(buf.readUInt32BE(1)).toBe(2)
-    expect(buf.length).toBe(5 + 2)
-    expect(buf.subarray(5).toString('utf8')).toBe('é')
-  })
-
-  it('encodes an empty string as a 5-byte header with zero length', () => {
-    const buf = encodeInjectText('')
-
-    expect(buf.length).toBe(5)
-    expect(buf.readUInt32BE(1)).toBe(0)
+  it('rejects payloads the server-side protocol would not expect', () => {
+    expect(() => encodeInjectText('a'.repeat(SCRCPY_INJECT_TEXT_MAX_BYTES + 1))).toThrow(RangeError)
   })
 })
 
-describe('encodeBackOrScreenOn', () => {
-  it('encodes a 2-byte down message', () => {
-    const buf = encodeBackOrScreenOn('down')
+describe('splitScrcpyInjectText', () => {
+  it('keeps chunks within the byte limit without splitting a code point', () => {
+    // 299 ASCII bytes leave room for neither the 2-byte ñ nor the 4-byte emoji.
+    const text = `${'a'.repeat(299)}ñ😀${'b'.repeat(400)}`
+    const chunks = splitScrcpyInjectText(text)
 
-    expect(buf.length).toBe(2)
-    expect(buf.readUInt8(0)).toBe(SCRCPY_CONTROL_MSG_TYPE.BACK_OR_SCREEN_ON)
-    expect(buf.readUInt8(0)).toBe(4)
-    expect(buf.readUInt8(1)).toBe(0) // AKEY_EVENT_ACTION_DOWN
+    expect(chunks.join('')).toBe(text)
+    expect(chunks.slice(0, 2)).toEqual(['a'.repeat(299), `ñ😀${'b'.repeat(294)}`])
+    for (const chunk of chunks) {
+      expect(Buffer.byteLength(chunk, 'utf8')).toBeLessThanOrEqual(SCRCPY_INJECT_TEXT_MAX_BYTES)
+      expect(() => encodeInjectText(chunk)).not.toThrow()
+    }
   })
 
-  it('encodes a 2-byte up message', () => {
-    const buf = encodeBackOrScreenOn('up')
-
-    expect(buf.length).toBe(2)
-    expect(buf.readUInt8(1)).toBe(1) // AKEY_EVENT_ACTION_UP
+  it('returns no chunks for empty text', () => {
+    expect(splitScrcpyInjectText('')).toEqual([])
   })
 })

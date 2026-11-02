@@ -1,8 +1,8 @@
-import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
+import type { PRCheckDetail } from '../../shared/github/check-types'
+import type { CheckStatus, IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
+import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
-// ── REST API check-runs mapping ───────────────────────────────────────
-// The REST check-runs endpoint returns separate status + conclusion fields
-// (unlike gh pr checks which merges them into a single "state" string).
+// REST check runs separate status/conclusion; gh pr checks combines them into one state.
 
 export function mapCheckRunRESTStatus(status: string): PRCheckDetail['status'] {
   const s = status?.toLowerCase()
@@ -40,8 +40,7 @@ export function mapCheckRunRESTConclusion(
   return conclusionMap[conclusion.toLowerCase()] ?? null
 }
 
-// ── REST API commit status mapping ──────────────────────────────────────
-// Legacy Jenkins/Prow integrations report commit statuses, not check runs.
+// Legacy integrations report commit statuses instead of check runs.
 
 export function mapCommitStatusRESTStatus(state: string): PRCheckDetail['status'] {
   const s = state?.toLowerCase()
@@ -61,8 +60,6 @@ export function mapCommitStatusRESTConclusion(state: string): PRCheckDetail['con
   }
   return null
 }
-
-// ── gh pr checks mapping (single "state" string) ─────────────────────
 
 export function mapCheckStatus(state: string): PRCheckDetail['status'] {
   const s = state?.toUpperCase()
@@ -121,9 +118,7 @@ export function mapPRState(state: string, isDraft?: boolean): PRInfo['state'] {
   return 'open'
 }
 
-// ── Issue mapping ────────────────────────────────────────────────────
-// REST API returns html_url + lowercase state; gh issue view returns url + mixed-case state.
-// This helper normalises both shapes into IssueInfo.
+// Accept REST html_url/lowercase state and gh url/mixed-case state.
 
 export function mapIssueInfo(data: {
   number: number
@@ -132,55 +127,18 @@ export function mapIssueInfo(data: {
   url?: string
   html_url?: string
   labels?: { name: string }[]
+  body?: string | null
 }): IssueInfo {
   return {
     number: data.number,
     title: data.title,
     state: data.state?.toLowerCase() === 'open' ? 'open' : 'closed',
     url: data.html_url ?? data.url ?? '',
-    labels: (data.labels || []).map((l) => l.name)
+    labels: (data.labels || []).map((l) => l.name),
+    ...(typeof data.body === 'string' ? { description: data.body } : {})
   }
 }
 
 export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
-  if (!rollup || !Array.isArray(rollup) || rollup.length === 0) {
-    return 'neutral'
-  }
-
-  let hasFailure = false
-  let hasPending = false
-
-  for (const check of rollup as { status?: string; conclusion?: string; state?: string }[]) {
-    const conclusion = check.conclusion?.toUpperCase()
-    const status = check.status?.toUpperCase()
-    const state = check.state?.toUpperCase()
-
-    if (
-      conclusion === 'FAILURE' ||
-      conclusion === 'TIMED_OUT' ||
-      conclusion === 'CANCELLED' ||
-      // Why: action_required (e.g. an unapproved workflow run) blocks merge until
-      // someone acts; treat it as needs-attention rather than a silent pass.
-      conclusion === 'ACTION_REQUIRED' ||
-      state === 'FAILURE' ||
-      state === 'ERROR'
-    ) {
-      hasFailure = true
-    } else if (
-      status === 'IN_PROGRESS' ||
-      status === 'QUEUED' ||
-      status === 'PENDING' ||
-      state === 'PENDING'
-    ) {
-      hasPending = true
-    }
-  }
-
-  if (hasFailure) {
-    return 'failure'
-  }
-  if (hasPending) {
-    return 'pending'
-  }
-  return 'success'
+  return derivePRCheckStatusFromRollup(rollup)
 }

@@ -1,3 +1,4 @@
+import { isImeOwnedKeyboardEvent } from './ime-composition-keyboard-event'
 import { getShortcutPlatform } from './shortcut-platform'
 
 type ScreenSubmitShortcutEvent = {
@@ -6,21 +7,22 @@ type ScreenSubmitShortcutEvent = {
   ctrlKey?: boolean
   metaKey?: boolean
   shiftKey?: boolean
+  keyCode?: number
   isComposing?: boolean
   nativeEvent?: {
+    keyCode?: number
     isComposing?: boolean
   }
 }
 
 export function isScreenSubmitShortcut(event: ScreenSubmitShortcutEvent): boolean {
-  if (event.isComposing || event.nativeEvent?.isComposing) {
+  if (isImeOwnedKeyboardEvent(event)) {
     return false
   }
   if (event.key !== 'Enter' || event.altKey || event.shiftKey) {
     return false
   }
-  // Why: screen submit is form-local behavior, so it stays fixed to the
-  // platform convention instead of reading user-configurable app keybindings.
+  // Screen submit is form-local platform convention, independent of configurable app shortcuts.
   const platform = getShortcutPlatform()
   return platform === 'darwin'
     ? Boolean(event.metaKey) && !event.ctrlKey

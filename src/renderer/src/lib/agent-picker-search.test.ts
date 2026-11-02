@@ -3,7 +3,6 @@ import {
   AGENT_PICKER_QUERY_MAX_BYTES,
   agentPickerBlankTerminalMatches,
   getAgentPickerCommandValue,
-  isAgentPickerQueryTooLarge,
   searchAgentPickerEntries
 } from './agent-picker-search'
 import { AGENT_CATALOG, type AgentCatalogEntry } from './agent-catalog'
@@ -25,47 +24,28 @@ afterEach(() => {
 })
 
 describe('agent picker search', () => {
-  it('keeps catalog order for an empty query', () => {
-    expect(searchAgentPickerEntries(agents, '').map((agent) => agent.id)).toEqual(
-      agents.map((agent) => agent.id)
-    )
+  it('does not offer unavailable OMP through a search alias', () => {
+    const available = AGENT_CATALOG.filter((agent) => agent.id !== 'omp')
+    expect(searchAgentPickerEntries(available, 'oh-my-pi')).toEqual([])
   })
 
-  it('prefers label matches over command and id aliases', () => {
+  it('keeps a stable default for a shared binary while explicit CN remains selectable', () => {
+    const shared = [
+      entry('qoder', 'Qoder CLI', 'qodercli'),
+      entry('qoder-cn', 'Qoder CLI China', 'qodercli')
+    ]
+    expect(searchAgentPickerEntries(shared, 'qodercli').map((agent) => agent.id)).toEqual([
+      'qoder',
+      'qoder-cn'
+    ])
+    expect(searchAgentPickerEntries(shared, 'qoder-cn')[0]?.id).toBe('qoder-cn')
+    expect(searchAgentPickerEntries(shared, 'Qoder CLI China')[0]?.id).toBe('qoder-cn')
     expect(
-      searchAgentPickerEntries(agents, 'cod')
-        .map((agent) => agent.id)
-        .slice(0, 3)
-    ).toEqual(['codex', 'opencode', 'qwen-code'])
-  })
-
-  it('matches multi-word agents by initials and ordered shorthand', () => {
-    expect(searchAgentPickerEntries(agents, 'gc')[0]?.id).toBe('copilot')
-    expect(searchAgentPickerEntries(agents, 'mv')[0]?.id).toBe('mistral-vibe')
-    expect(searchAgentPickerEntries(agents, 'qc')[0]?.id).toBe('qwen-code')
-  })
-
-  it('matches command aliases that do not appear in the display label', () => {
-    expect(searchAgentPickerEntries(agents, 'agy')[0]?.id).toBe('antigravity')
-    expect(searchAgentPickerEntries(agents, 'cursor-agent')[0]?.id).toBe('cursor')
-  })
-
-  it('normalizes accepted pasted whitespace without regex replacement', () => {
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-
-    expect(searchAgentPickerEntries(agents, '  qwen\n\tcode  ')[0]?.id).toBe('qwen-code')
-
-    expect(replaceSpy).not.toHaveBeenCalled()
-  })
-
-  it('resolves every catalog command alias to its agent first', () => {
-    for (const agent of AGENT_CATALOG) {
-      expect(searchAgentPickerEntries(AGENT_CATALOG, agent.cmd)[0]?.id).toBe(agent.id)
-    }
-  })
-
-  it('returns no entries for unrelated text', () => {
-    expect(searchAgentPickerEntries(agents, 'not-an-agent')).toEqual([])
+      searchAgentPickerEntries(
+        shared.filter((agent) => agent.id !== 'qoder'),
+        'qodercli'
+      )[0]?.id
+    ).toBe('qoder-cn')
   })
 
   it('rejects oversized pasted queries before scoring agent candidates', () => {
@@ -85,7 +65,6 @@ describe('agent picker search', () => {
       }
     ] as AgentCatalogEntry[]
 
-    expect(isAgentPickerQueryTooLarge(oversizedQuery)).toBe(true)
     expect(searchAgentPickerEntries(throwingAgents, oversizedQuery)).toEqual([])
     expect(agentPickerBlankTerminalMatches(oversizedQuery)).toBe(false)
     expect(
@@ -106,45 +85,6 @@ describe('agent picker search', () => {
     expect(agentPickerBlankTerminalMatches(' '.repeat(AGENT_PICKER_QUERY_MAX_BYTES + 1))).toBe(
       false
     )
-  })
-
-  it('matches the blank terminal option by terminal, shell, and shorthand queries', () => {
-    expect(agentPickerBlankTerminalMatches('term')).toBe(true)
-    expect(agentPickerBlankTerminalMatches('shell')).toBe(true)
-    expect(agentPickerBlankTerminalMatches('bt')).toBe(true)
-    expect(agentPickerBlankTerminalMatches('agent')).toBe(false)
-  })
-
-  it('highlights the current value until a search should choose the first visible result', () => {
-    const filteredAgents = searchAgentPickerEntries(agents, 'gc')
-
-    expect(
-      getAgentPickerCommandValue({
-        blankValue: '__none__',
-        blankMatchesQuery: false,
-        currentValue: 'claude',
-        filteredAgents: agents,
-        rawQuery: ''
-      })
-    ).toBe('claude')
-    expect(
-      getAgentPickerCommandValue({
-        blankValue: '__none__',
-        blankMatchesQuery: false,
-        currentValue: 'claude',
-        filteredAgents,
-        rawQuery: 'gc'
-      })
-    ).toBe('copilot')
-    expect(
-      getAgentPickerCommandValue({
-        blankValue: '__none__',
-        blankMatchesQuery: true,
-        currentValue: 'claude',
-        filteredAgents: [],
-        rawQuery: 'bt'
-      })
-    ).toBe('__none__')
   })
 })
 

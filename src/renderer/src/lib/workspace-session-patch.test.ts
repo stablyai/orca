@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 
@@ -54,6 +54,7 @@ function createSnapshot(
     activeTabTypeByWorktree: { 'wt-1': 'editor', 'wt-2': 'terminal' },
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    remoteBrowserPageHandlesByPageId: {},
     activeBrowserTabIdByWorktree: {},
     browserUrlHistory: [],
     unifiedTabsByWorktree: {},
@@ -87,6 +88,23 @@ describe('buildWorkspaceSessionPatch', () => {
     ])
 
     expect(patch).toEqual({ activeTabId: 'tab-2' })
+  })
+
+  it('writes a changed workspace key and host so a refocus replaces the persisted ones', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        activeWorktreeId: 'wt-2',
+        activeWorkspaceKey: 'worktree:wt-2',
+        activeWorkspaceExecutionHostId: null
+      }),
+      ['activeWorktreeId', 'activeWorkspaceKey', 'activeWorkspaceExecutionHostId']
+    )
+
+    expect(patch).toEqual({
+      activeWorktreeId: 'wt-2',
+      activeWorkspaceKey: 'worktree:wt-2',
+      activeWorkspaceExecutionHostId: null
+    })
   })
 
   it('derives only editor session keys for open file changes', () => {
@@ -181,7 +199,15 @@ describe('buildWorkspaceSessionPatch', () => {
               title: 'shell',
               ptyId: 'pty-1',
               worktreeId: localWorktreeId,
-              pendingActivationSpawn: true
+              pendingActivationSpawn: true,
+              recovery: {
+                attemptedAt: [1],
+                generation: 1,
+                outcome: 'pending',
+                startedAt: 1,
+                reason: 'reattach-unverifiable',
+                tabGeneration: 1
+              }
             } as never
           ]
         },
@@ -205,19 +231,73 @@ describe('buildWorkspaceSessionPatch', () => {
 
     expect(Object.keys(patch).sort()).toEqual(
       [
-        // Why: the reconnect list derives from remote session ids, so any
-        // patch that rewrites remoteSessionIdsByTabId must carry it too —
-        // otherwise a crash between patches strands a stale target on disk.
+        // Remote-session patches must carry derived reconnect targets too, or crash between writes strands stale target IDs.
         'activeConnectionIdsAtShutdown',
         'activeWorktreeIdsOnShutdown',
+        'localOnlyScrollbackByTabId',
         'remoteSessionIdsByTabId',
         'tabsByWorktree',
         'terminalLayoutsByTabId'
       ].sort()
     )
     expect('pendingActivationSpawn' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
+    // Recovery ledgers describe live mounted heals; persisting them blocks legitimate post-restart recovery.
+    expect('recovery' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
     expect(patch.terminalLayoutsByTabId?.['tab-local'].buffersByLeafId).toBeUndefined()
     expect(patch.terminalLayoutsByTabId?.['tab-local'].scrollbackRefsByLeafId).toBeUndefined()
+  })
+
+  it('patches the local-only scrollback home on its own, pruned like the shared one', () => {
+    const remoteWorktreeId = 'repo-ssh::/remote/worktree'
+    const localWorktreeId = 'repo-1::/local/worktree'
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        tabsByWorktree: {
+          [remoteWorktreeId]: [
+            {
+              id: 'tab-remote',
+              title: 'shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'pty-r',
+              worktreeId: remoteWorktreeId
+            }
+          ],
+          [localWorktreeId]: [
+            {
+              id: 'tab-local',
+              title: 'shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'pty-l',
+              worktreeId: localWorktreeId
+            }
+          ]
+        },
+        localOnlyScrollbackByTabId: {
+          'tab-remote': { 'pane:1': 'remote-park' },
+          'tab-local': { 'pane:1': 'local-park' }
+        },
+        repos: [createRepo('repo-1', null), createRepo('repo-ssh', 'conn-1')]
+      }),
+      ['localOnlyScrollbackByTabId']
+    )
+
+    // Local-only and remote layouts change independently; do not resend all layouts after local-only parks.
+    expect(Object.keys(patch)).toEqual(['localOnlyScrollbackByTabId'])
+    expect(patch.localOnlyScrollbackByTabId).toEqual({ 'tab-remote': { 'pane:1': 'remote-park' } })
+  })
+
+  it('writes an emptied local-only scrollback home as an empty map so the clear sticks', () => {
+    const patch = buildWorkspaceSessionPatch(createSnapshot({ localOnlyScrollbackByTabId: {} }), [
+      'localOnlyScrollbackByTabId'
+    ])
+
+    expect(patch).toEqual({ localOnlyScrollbackByTabId: {} })
   })
 
   it('keeps optional clearing keys in patches', () => {
@@ -327,13 +407,134 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(patch.defaultTerminalTabsAppliedByWorktreeId).toBeUndefined()
   })
 
-  it('keeps sleeping agent session clearing keys in patches', () => {
+  it('clears the last sleeping agent session with an empty map the host split keeps', () => {
     const patch = buildWorkspaceSessionPatch(
       createSnapshot({ sleepingAgentSessionsByPaneKey: {} }),
       ['sleepingAgentSessionsByPaneKey']
     )
 
-    expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
-    expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    // undefined would be dropped before the write, leaving the record on disk until quit.
+    expect(patch.sleepingAgentSessionsByPaneKey).toEqual({})
+  })
+
+  it('keeps a staged browser tab out of incremental patches too', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        browserTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'staged-1',
+              activePageId: 'staged-page',
+              pageIds: ['staged-page'],
+              worktreeId: 'wt-1'
+            } as never
+          ]
+        },
+        browserPagesByWorkspace: {
+          'staged-1': [{ id: 'staged-page', workspaceId: 'staged-1', worktreeId: 'wt-1' } as never]
+        },
+        remoteBrowserPageHandlesByPageId: {
+          'staged-page': { environmentId: 'env-1', remotePageId: 'staged-page', staged: true }
+        },
+        activeBrowserTabIdByWorktree: { 'wt-1': 'staged-1' }
+      }),
+      ['browserTabsByWorktree', 'browserPagesByWorkspace', 'activeBrowserTabIdByWorktree']
+    )
+
+    expect(patch.browserTabsByWorktree).toEqual({ 'wt-1': [] })
+    expect(patch.browserPagesByWorkspace).toEqual({})
+    expect(patch.activeBrowserTabIdByWorktree).toEqual({ 'wt-1': null })
+  })
+
+  // Clearing staged flags can leave row bytes unchanged; handle-map changes alone can make tabs persistable.
+  it('persists an adopted browser tab when only the handle map changed', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        browserTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'adopted-1',
+              activePageId: 'adopted-page',
+              pageIds: ['adopted-page'],
+              worktreeId: 'wt-1'
+            } as never
+          ]
+        },
+        browserPagesByWorkspace: {
+          'adopted-1': [
+            { id: 'adopted-page', workspaceId: 'adopted-1', worktreeId: 'wt-1' } as never
+          ]
+        },
+        remoteBrowserPageHandlesByPageId: {
+          'adopted-page': { environmentId: 'env-1', remotePageId: 'host-page-1' }
+        },
+        activeBrowserTabIdByWorktree: { 'wt-1': 'adopted-1' },
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'unified-1',
+              entityId: 'adopted-1',
+              contentType: 'browser',
+              worktreeId: 'wt-1',
+              groupId: 'group-1'
+            } as never
+          ]
+        },
+        groupsByWorktree: {
+          'wt-1': [
+            { id: 'group-1', worktreeId: 'wt-1', activeTabId: 'unified-1', tabOrder: ['unified-1'] }
+          ] as never
+        },
+        layoutByWorktree: { 'wt-1': { type: 'leaf', groupId: 'group-1' } }
+      }),
+      ['remoteBrowserPageHandlesByPageId']
+    )
+
+    expect(patch.browserTabsByWorktree?.['wt-1']).toHaveLength(1)
+    expect(patch.browserPagesByWorkspace?.['adopted-1']).toHaveLength(1)
+    expect(patch.activeBrowserTabIdByWorktree).toEqual({ 'wt-1': 'adopted-1' })
+    expect(patch.unifiedTabs?.['wt-1']).toHaveLength(1)
+  })
+
+  // Quit uses incremental writes; preserving remote-page identity only in full payloads still loses it on actual shutdown.
+  it('stamps the remote page identity onto incrementally patched browser page rows', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        browserTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'adopted-1',
+              activePageId: 'adopted-page',
+              pageIds: ['adopted-page'],
+              worktreeId: 'wt-1'
+            } as never
+          ]
+        },
+        browserPagesByWorkspace: {
+          'adopted-1': [
+            { id: 'adopted-page', workspaceId: 'adopted-1', worktreeId: 'wt-1' } as never
+          ]
+        },
+        remoteBrowserPageHandlesByPageId: {
+          'adopted-page': {
+            environmentId: 'env-1',
+            remotePageId: 'host-page-1',
+            placement: {
+              kind: 'client',
+              browserHostClientId: 'host-a',
+              browserHostGeneration: 1,
+              pageHostGeneration: 1
+            }
+          }
+        },
+        activeBrowserTabIdByWorktree: { 'wt-1': 'adopted-1' }
+      }),
+      ['browserPagesByWorkspace']
+    )
+
+    expect(patch.browserPagesByWorkspace?.['adopted-1']?.[0]).toMatchObject({
+      remoteBrowserPageId: 'host-page-1',
+      remoteBrowserPageClientHosted: true
+    })
   })
 })

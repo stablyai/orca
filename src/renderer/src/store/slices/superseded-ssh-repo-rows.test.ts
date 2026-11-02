@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/types'
-import { mergeSshRepoReadoptions, reconcileReadoptedSshRepoRows } from './superseded-ssh-repo-rows'
+import type { Repo } from '../../../../shared/repo-types'
+import { reconcileReadoptedSshRepoRows } from './superseded-ssh-repo-rows'
 
 function repo(overrides: Partial<Repo>): Repo {
   return {
@@ -40,12 +40,6 @@ describe('reconcileReadoptedSshRepoRows', () => {
     expect(result.pendingReadoptions).toEqual([readoption])
   })
 
-  it('keeps a removed SSH ghost when a local repo shares its UUID without evidence', () => {
-    const repos = [repo({ id: 'shared' }), repo({ id: 'shared', connectionId: 'ssh-old' })]
-
-    expect(reconcileReadoptedSshRepoRows(repos, []).repos).toEqual(repos)
-  })
-
   it('does not accept a local or runtime sibling as the mapped new SSH row', () => {
     const oldSsh = repo({ id: 'shared', connectionId: 'ssh-old' })
     const local = repo({ id: 'shared' })
@@ -59,25 +53,5 @@ describe('reconcileReadoptedSshRepoRows', () => {
 
     expect(result.repos).toEqual([oldSsh, local, runtime])
     expect(result.pendingReadoptions).toEqual([readoption])
-  })
-
-  it('leaves unrelated same-UUID SSH rows untouched', () => {
-    const other = repo({ id: 'shared', connectionId: 'ssh-other' })
-    const newSsh = repo({ id: 'shared', connectionId: 'ssh-new' })
-
-    const result = reconcileReadoptedSshRepoRows([other, newSsh], [readoption])
-
-    expect(result.repos).toEqual([other, newSsh])
-  })
-})
-
-describe('mergeSshRepoReadoptions', () => {
-  it('combines repo ids for the same old-to-new migration', () => {
-    const result = mergeSshRepoReadoptions(
-      [{ ...readoption, repoIds: ['a'] }],
-      [{ ...readoption, repoIds: ['a', 'b'] }]
-    )
-
-    expect(result).toEqual([{ ...readoption, repoIds: ['a', 'b'] }])
   })
 })

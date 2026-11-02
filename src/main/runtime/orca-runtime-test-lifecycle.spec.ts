@@ -1,0 +1,337 @@
+import * as mocks from './orca-runtime-test-mocks.spec'
+import type { MockInstance } from 'vitest'
+import * as worktreeChangeInvalidators from '../ipc/worktree-change-invalidators'
+import { awaitBackgroundRemovalsInRuntimeTests } from './orca-runtime-background-removal-test-support'
+import { commitFakeSpawnsInRuntimeTests } from './bind-first-pane.test-fixture'
+import {
+  _resetPendingWorktreeRemovalsForTests,
+  _settlePendingWorktreeRemovalsForTests
+} from '../worktree-background-removal'
+import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
+
+const { MOCK_GIT_WORKTREES, RuntimeBrowserCommands, _resetTerminalViewAttributesForTest } = mocks
+const { addGitHubIssueCommentMock, addGitHubPRReviewCommentMock } = mocks
+const { addGitHubPRReviewCommentReplyMock, addGitLabIssueCommentMock, addGitLabMRCommentMock } =
+  mocks
+const { addGitLabMRInlineCommentMock, addSparseWorktree, addWorktree, advertisedUrlWatcher } = mocks
+const { afterEach, applyAgentStatusHooksEnabledMock, assertWorktreeCleanForRemoval, beforeEach } =
+  mocks
+const { cancelLegacyWorkerTerminalRecoveryRetriesForTests, closeGitLabMRMock } = mocks
+const { clearConfiguredWorktreeSharedDirectoriesCacheForTests } = mocks
+const { closeLocalWatcherForWorktreePathMock } = mocks
+const { computeWorktreePathMock, countGitHubWorkItemsMock, createGitHubIssueMock } = mocks
+const { createGitLabIssueMock, createHostedReviewMock, createSetupRunnerScript } = mocks
+const { createStackedHostedReviewMock, detectInstalledAgentsWithShellPathHydrationMock } = mocks
+const { electronMocks, ensurePathWithinWorkspaceMock } = mocks
+const { findExistingWorktreeSymlinkPathsMock, forceDeleteLocalBranchMock } = mocks
+const { forgetLocalWatcherRemovalSnapshotMock } = mocks
+const { describeCreatedWorktree } = mocks
+const { getDefaultTabsLaunch, getEffectiveHooks } = mocks
+const { getEffectiveHooksFromConfig, getGitHubPRCheckDetailsMock, getGitHubPRChecksMock } = mocks
+const { getGitHubPRCommentsMock, getGitHubPRFileContentsMock, getGitHubWorkItemByOwnerRepoMock } =
+  mocks
+const { getGitHubWorkItemDetailsMock, getGitHubWorkItemMock, getGitLabJobTraceMock } = mocks
+const { getGitLabProjectRefForRemoteMock, getGitLabWorkItemByProjectRefMock } = mocks
+const { getGitLabWorkItemDetailsMock, getGlabKnownHostsMock } = mocks
+const { getHostedReviewCreationEligibilityMock, getHostedReviewForBranchMock, getIssueMock } = mocks
+const { getPRForBranchMock, getPRForBranchOutcomeMock, getPullRequestPushTargetMock } = mocks
+const { getRepoSlugMock, getRepoUpstreamMock, hasHooksFile } = mocks
+const { installFakeAppEnvironment, invalidateAuthorizedRootsCacheMock } = mocks
+const { listGitHubAssignableUsersMock, listGitHubIssuesMock, listGitHubLabelsMock } = mocks
+const { listGitHubWorkItemsMock, listGitLabIssuesMock, listGitLabLabelsMock } = mocks
+const {
+  listGitLabMergeRequestsMock,
+  listGitLabTodosMock,
+  listGitLabWorkItemsMock,
+  listWorktrees,
+  listWorktreesSharedStrict
+} = mocks
+const { listWorktreesStrict, loadHooks, markCodexProjectTrustedMock } = mocks
+const { markCopilotFolderTrustedMock, markCursorWorkspaceTrustedMock, mergeGitHubPRMock } = mocks
+const { mergeGitLabMRMock, parseOrcaYaml, prepareLocalWorktreeRootForRepoMock } = mocks
+const { removeGitHubPRReviewersMock, removeWorktree } = mocks
+const { removeWorktreeLinkedPathsMock, reopenGitLabMRMock, requestGitHubPRReviewersMock } = mocks
+const { rerunGitHubPRChecksMock, resetPlatform, resolveGitHubReviewThreadMock } = mocks
+const { resolveGitLabMRDiscussionMock, resolveLocalGitUsernameMock, resolveSetupRunnerShell } =
+  mocks
+const { restoreLocalWatcherAfterFailedRemovalMock } = mocks
+const { retryGitLabJobMock, runHook, scanLocalRepoWorktreesForResolutionMock } = mocks
+const { setGitHubPRAutoMergeMock, setGitHubPRFileViewedMock, setRuntimeBrowserCommandsFactory } =
+  mocks
+const { setRuntimeBrowserUnavailableCause, setRuntimeDesktopSurface } = mocks
+const { setRuntimeTerminalUnavailableCause, shouldRunSetupForCreate } = mocks
+const { updateGitHubIssueMock } = mocks
+const { updateGitHubPRDetailsMock, updateGitHubPRStateMock, updateGitHubPRTitleMock } = mocks
+const { updateGitLabIssueMock, updateGitLabMRMock, updateGitLabMRReviewersMock, vi } = mocks
+
+awaitBackgroundRemovalsInRuntimeTests(mocks.OrcaRuntimeService.prototype)
+commitFakeSpawnsInRuntimeTests(mocks.OrcaRuntimeService.prototype)
+
+function resetRuntimeTestMocks(): void {
+  _resetCanonicalRepoKeyCacheForTests()
+  _resetPendingWorktreeRemovalsForTests()
+  // Chromium commands install only at Electron entry; Node hosts must refuse browser RPCs without them.
+  setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+    clientHosting: true
+  })
+  setRuntimeBrowserUnavailableCause(null)
+  setRuntimeTerminalUnavailableCause(null)
+  // Runtime uses the injected desktop surface; Electron mocks alone cannot drive these assertions.
+  setRuntimeDesktopSurface({
+    showNotification: () => true,
+    findWindowById: (id) => electronMocks.BrowserWindow.fromId(id) as never,
+    onIpc: (channel, listener) => electronMocks.ipcMain.on(channel, listener as never),
+    removeIpcListener: (channel, listener) =>
+      electronMocks.ipcMain.removeListener(channel, listener as never)
+  })
+  resetPlatform()
+  electronMocks.app.isPackaged = false
+  // AppEnvironment owns runtime paths/package flag; delegate to Electron mocks to retain per-test toggles.
+  installFakeAppEnvironment({
+    getPath: () => electronMocks.app.getPath(),
+    isPackaged: () => electronMocks.app.isPackaged
+  })
+  // Deferred worker recovery re-arms forever; cancel it before shared git stubs leak across cases.
+  cancelLegacyWorkerTerminalRecoveryRetriesForTests()
+  clearConfiguredWorktreeSharedDirectoriesCacheForTests()
+  _resetTerminalViewAttributesForTest()
+  advertisedUrlWatcher.clear()
+  electronMocks.BrowserWindow.fromId.mockReset()
+  electronMocks.BrowserWindow.fromId.mockReturnValue(null)
+  electronMocks.webContents.fromId.mockReset()
+  electronMocks.webContents.fromId.mockReturnValue(null)
+  electronMocks.ipcMain.on.mockClear()
+  electronMocks.ipcMain.removeListener.mockClear()
+  electronMocks.ipcMain.emit.mockClear()
+  closeLocalWatcherForWorktreePathMock.mockReset().mockResolvedValue(undefined)
+  restoreLocalWatcherAfterFailedRemovalMock.mockReset().mockResolvedValue(undefined)
+  forgetLocalWatcherRemovalSnapshotMock.mockReset()
+  vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
+  vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
+  vi.mocked(describeCreatedWorktree).mockResolvedValue(undefined)
+  // Strict-create and listing reads share production repo state; delegate mocks so both see identical rows.
+  vi.mocked(listWorktreesSharedStrict).mockImplementation((repoPath, options) =>
+    options ? listWorktrees(repoPath, options) : listWorktrees(repoPath)
+  )
+  scanLocalRepoWorktreesForResolutionMock
+    .mockReset()
+    .mockImplementation(async (repoPath: string, options: { wslDistro?: string }) => {
+      try {
+        const worktrees = options.wslDistro
+          ? await listWorktrees(repoPath, options)
+          : await listWorktrees(repoPath)
+        return { ok: true, worktrees }
+      } catch {
+        return { ok: false, worktrees: [] }
+      }
+    })
+  vi.mocked(addWorktree).mockReset()
+  vi.mocked(addSparseWorktree).mockReset()
+  vi.mocked(assertWorktreeCleanForRemoval).mockReset()
+  vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
+  vi.mocked(removeWorktree).mockReset()
+  findExistingWorktreeSymlinkPathsMock.mockReset().mockResolvedValue([])
+  removeWorktreeLinkedPathsMock.mockReset()
+  resolveLocalGitUsernameMock.mockReset().mockResolvedValue('')
+  vi.mocked(forceDeleteLocalBranchMock).mockReset()
+  vi.mocked(forceDeleteLocalBranchMock).mockResolvedValue(undefined)
+  applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
+  vi.mocked(createSetupRunnerScript).mockReset()
+  vi.mocked(getEffectiveHooks).mockReset()
+  vi.mocked(getEffectiveHooksFromConfig).mockReset()
+  vi.mocked(getDefaultTabsLaunch).mockReset()
+  vi.mocked(loadHooks).mockReset()
+  vi.mocked(resolveSetupRunnerShell).mockReset()
+  vi.mocked(hasHooksFile).mockReset()
+  vi.mocked(parseOrcaYaml).mockReset()
+  vi.mocked(runHook).mockReset()
+  vi.mocked(shouldRunSetupForCreate).mockReset()
+  vi.mocked(shouldRunSetupForCreate).mockImplementation((_repo, decision) => decision === 'run')
+  vi.mocked(getEffectiveHooks).mockReturnValue(null)
+  vi.mocked(getEffectiveHooksFromConfig).mockReturnValue(null)
+  vi.mocked(getDefaultTabsLaunch).mockReturnValue(undefined)
+  vi.mocked(loadHooks).mockReturnValue(null)
+  vi.mocked(resolveSetupRunnerShell).mockReturnValue(undefined)
+  vi.mocked(hasHooksFile).mockReturnValue(false)
+  vi.mocked(parseOrcaYaml).mockReturnValue(null)
+  computeWorktreePathMock.mockReset()
+  ensurePathWithinWorkspaceMock.mockReset()
+  invalidateAuthorizedRootsCacheMock.mockReset()
+  prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
+  createHostedReviewMock.mockReset()
+  createHostedReviewMock.mockResolvedValue({
+    ok: true,
+    provider: 'github',
+    number: 1,
+    url: 'https://example.com/pull/1'
+  })
+  createStackedHostedReviewMock.mockReset()
+  createStackedHostedReviewMock.mockResolvedValue({
+    ok: true,
+    number: 2,
+    url: 'https://example.com/pull/2',
+    stackNumber: 10,
+    parentReview: { number: 1, url: 'https://example.com/pull/1' }
+  })
+  getHostedReviewCreationEligibilityMock.mockReset()
+  getHostedReviewCreationEligibilityMock.mockResolvedValue({
+    provider: 'github',
+    review: null,
+    canCreate: true,
+    blockedReason: null,
+    nextAction: null,
+    defaultBaseRef: 'main',
+    head: 'feature/foo',
+    title: null,
+    body: null
+  })
+  getHostedReviewForBranchMock.mockReset()
+  getHostedReviewForBranchMock.mockResolvedValue(null)
+  getPRForBranchMock.mockReset()
+  getPRForBranchMock.mockResolvedValue(null)
+  getPRForBranchOutcomeMock.mockReset()
+  getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 0 })
+  getRepoSlugMock.mockReset()
+  getRepoSlugMock.mockResolvedValue(null)
+  getRepoUpstreamMock.mockReset()
+  getRepoUpstreamMock.mockResolvedValue(null)
+  getGitHubWorkItemMock.mockReset()
+  getGitHubWorkItemMock.mockResolvedValue(null)
+  getPullRequestPushTargetMock.mockReset()
+  getPullRequestPushTargetMock.mockResolvedValue(null)
+  getGitHubWorkItemByOwnerRepoMock.mockReset()
+  getGitHubWorkItemByOwnerRepoMock.mockResolvedValue(null)
+  getGitHubWorkItemDetailsMock.mockReset()
+  getGitHubWorkItemDetailsMock.mockResolvedValue(null)
+  getGitHubPRFileContentsMock.mockReset()
+  getGitHubPRFileContentsMock.mockResolvedValue({ original: '', modified: '' })
+  getGitHubPRChecksMock.mockReset()
+  getGitHubPRChecksMock.mockResolvedValue([])
+  rerunGitHubPRChecksMock.mockReset()
+  rerunGitHubPRChecksMock.mockResolvedValue({ ok: true, count: 0 })
+  getGitHubPRCheckDetailsMock.mockReset()
+  getGitHubPRCheckDetailsMock.mockResolvedValue(null)
+  getGitHubPRCommentsMock.mockReset()
+  getGitHubPRCommentsMock.mockResolvedValue([])
+  resolveGitHubReviewThreadMock.mockReset()
+  resolveGitHubReviewThreadMock.mockResolvedValue(true)
+  setGitHubPRFileViewedMock.mockReset()
+  setGitHubPRFileViewedMock.mockResolvedValue(true)
+  updateGitHubPRTitleMock.mockReset()
+  updateGitHubPRTitleMock.mockResolvedValue(true)
+  updateGitHubPRDetailsMock.mockReset()
+  updateGitHubPRDetailsMock.mockResolvedValue({ ok: true })
+  mergeGitHubPRMock.mockReset()
+  mergeGitHubPRMock.mockResolvedValue({ ok: true })
+  setGitHubPRAutoMergeMock.mockReset()
+  setGitHubPRAutoMergeMock.mockResolvedValue({ ok: true })
+  updateGitHubPRStateMock.mockReset()
+  updateGitHubPRStateMock.mockResolvedValue({ ok: true })
+  requestGitHubPRReviewersMock.mockReset()
+  requestGitHubPRReviewersMock.mockResolvedValue({ ok: true })
+  removeGitHubPRReviewersMock.mockReset()
+  removeGitHubPRReviewersMock.mockResolvedValue({ ok: true })
+  addGitHubPRReviewCommentMock.mockReset()
+  addGitHubPRReviewCommentMock.mockResolvedValue({ ok: true })
+  addGitHubPRReviewCommentReplyMock.mockReset()
+  addGitHubPRReviewCommentReplyMock.mockResolvedValue({ ok: true })
+  listGitHubIssuesMock.mockReset()
+  listGitHubIssuesMock.mockResolvedValue({ items: [] })
+  listGitHubWorkItemsMock.mockReset()
+  listGitHubWorkItemsMock.mockResolvedValue({ items: [] })
+  countGitHubWorkItemsMock.mockReset()
+  countGitHubWorkItemsMock.mockResolvedValue(0)
+  createGitHubIssueMock.mockReset()
+  createGitHubIssueMock.mockResolvedValue({ ok: true, number: 1, url: 'https://example.com/1' })
+  updateGitHubIssueMock.mockReset()
+  updateGitHubIssueMock.mockResolvedValue({ ok: true })
+  addGitHubIssueCommentMock.mockReset()
+  addGitHubIssueCommentMock.mockResolvedValue({ ok: true })
+  listGitHubLabelsMock.mockReset()
+  listGitHubLabelsMock.mockResolvedValue([])
+  listGitHubAssignableUsersMock.mockReset()
+  listGitHubAssignableUsersMock.mockResolvedValue([])
+  detectInstalledAgentsWithShellPathHydrationMock.mockReset()
+  detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue([])
+  markCodexProjectTrustedMock.mockReset()
+  markCopilotFolderTrustedMock.mockReset()
+  markCursorWorkspaceTrustedMock.mockReset()
+  listGitLabMergeRequestsMock.mockReset()
+  listGitLabMergeRequestsMock.mockResolvedValue({ items: [] })
+  listGitLabWorkItemsMock.mockReset()
+  listGitLabWorkItemsMock.mockResolvedValue({ items: [] })
+  listGitLabIssuesMock.mockReset()
+  listGitLabIssuesMock.mockResolvedValue({ items: [] })
+  listGitLabLabelsMock.mockReset()
+  listGitLabLabelsMock.mockResolvedValue(['bug'])
+  listGitLabTodosMock.mockReset()
+  listGitLabTodosMock.mockResolvedValue([])
+  getGitLabProjectRefForRemoteMock.mockReset()
+  getGitLabProjectRefForRemoteMock.mockResolvedValue({ host: 'gitlab.example', path: 'group/repo' })
+  getGlabKnownHostsMock.mockReset()
+  getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])
+  getGitLabWorkItemByProjectRefMock.mockReset()
+  getGitLabWorkItemByProjectRefMock.mockResolvedValue(null)
+  createGitLabIssueMock.mockReset()
+  createGitLabIssueMock.mockResolvedValue({
+    ok: true,
+    number: 1,
+    url: 'https://gitlab.example/i/1'
+  })
+  updateGitLabIssueMock.mockReset()
+  updateGitLabIssueMock.mockResolvedValue({ ok: true })
+  addGitLabIssueCommentMock.mockReset()
+  addGitLabIssueCommentMock.mockResolvedValue({ ok: true })
+  addGitLabMRCommentMock.mockReset()
+  addGitLabMRCommentMock.mockResolvedValue({ ok: true })
+  addGitLabMRInlineCommentMock.mockReset()
+  addGitLabMRInlineCommentMock.mockResolvedValue({ ok: true })
+  resolveGitLabMRDiscussionMock.mockReset()
+  resolveGitLabMRDiscussionMock.mockResolvedValue({ ok: true })
+  getGitLabJobTraceMock.mockReset()
+  getGitLabJobTraceMock.mockResolvedValue({ ok: true, trace: 'log' })
+  retryGitLabJobMock.mockReset()
+  retryGitLabJobMock.mockResolvedValue({ ok: true })
+  mergeGitLabMRMock.mockReset()
+  mergeGitLabMRMock.mockResolvedValue({ ok: true })
+  closeGitLabMRMock.mockReset()
+  closeGitLabMRMock.mockResolvedValue({ ok: true })
+  reopenGitLabMRMock.mockReset()
+  reopenGitLabMRMock.mockResolvedValue({ ok: true })
+  updateGitLabMRMock.mockReset()
+  updateGitLabMRMock.mockResolvedValue({ ok: true })
+  getGitLabWorkItemDetailsMock.mockReset()
+  getGitLabWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
+  updateGitLabMRReviewersMock.mockReset()
+  updateGitLabMRReviewersMock.mockResolvedValue({ ok: true, reviewers: [] })
+  getIssueMock.mockReset()
+  getIssueMock.mockResolvedValue(null)
+}
+
+let registrationSpy:
+  | MockInstance<typeof worktreeChangeInvalidators.registerWorktreeChangeInvalidator>
+  | undefined
+
+beforeEach(() => {
+  resetRuntimeTestMocks()
+  registrationSpy = vi.spyOn(worktreeChangeInvalidators, 'registerWorktreeChangeInvalidator')
+})
+afterEach(async () => {
+  try {
+    await _settlePendingWorktreeRemovalsForTests()
+  } finally {
+    try {
+      for (const result of registrationSpy?.mock.results ?? []) {
+        if (result.type === 'return') {
+          result.value()
+        }
+      }
+    } finally {
+      registrationSpy?.mockRestore()
+      registrationSpy = undefined
+      resetRuntimeTestMocks()
+    }
+  }
+})
+
+export { resetRuntimeTestMocks }

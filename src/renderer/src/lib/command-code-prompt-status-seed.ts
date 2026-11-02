@@ -2,12 +2,9 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getConnectionIdFromState } from './connection-owner-resolution'
 import { resolveLiveAgentStatusConnectionRouting } from './agent-status-connection-ownership'
+import { rendererAgentStatusObservations } from './renderer-agent-status-observations'
 
-/**
- * Why: Command Code has no prompt-submit hook, so when Orca submits a generated
- * prompt after the TUI is ready, seed `working` at delivery time so sidebar and
- * activity surfaces don't stay idle until the first real hook event arrives.
- */
+// Command Code lacks prompt-submit hooks; seed working when generated input is delivered so rows do not stay idle until its next hook.
 export function seedCommandCodeSubmittedPromptStatus(
   worktreeId: string,
   tabId: string,
@@ -35,7 +32,16 @@ export function seedCommandCodeSubmittedPromptStatus(
   try {
     state.setAgentStatus(
       paneKey,
-      { state: 'working', prompt, agentType: 'command-code' },
+      {
+        state: 'working',
+        prompt,
+        agentType: 'command-code',
+        observation: rendererAgentStatusObservations.observe(paneKey, {
+          origin: 'process',
+          observedAt: Date.now(),
+          kind: 'transition'
+        })
+      },
       undefined,
       undefined,
       routing

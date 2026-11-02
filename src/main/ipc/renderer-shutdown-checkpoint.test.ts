@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { syncHandlers } = vi.hoisted(() => ({
+const { syncHandlers, invokeHandlers } = vi.hoisted(() => ({
   syncHandlers: new Map<
     string,
     (event: { returnValue?: unknown }, args: Record<string, unknown>) => void
-  >()
+  >(),
+  invokeHandlers: new Map<string, () => Promise<{ ok: boolean }>>()
 }))
 
 vi.mock('electron', () => ({
@@ -16,30 +17,55 @@ vi.mock('electron', () => ({
       ) => {
         syncHandlers.set(channel, handler)
       }
-    )
+    ),
+    handle: vi.fn((channel: string, handler: () => Promise<{ ok: boolean }>) => {
+      invokeHandlers.set(channel, handler)
+    })
   }
 }))
 
-import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import {
+  registerRendererShutdownCheckpointHandler,
+  SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS
+} from './renderer-shutdown-checkpoint'
+import {
+  resetWslMoveWindowWriteHoldForTests,
+  holdWslMoveWindowWrites,
+  setWslMoveReloadableWindow
+} from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+
+const AWAIT_CHANNEL = 'app:await-before-unload-checkpoint'
+
+const windowSave = (state: Partial<WorkspaceSessionState>): unknown =>
+  ORCA_LAYOUT_OWNER_IS_MAIN ? expect.any(Object) : state
 
 describe('registerRendererShutdownCheckpointHandler', () => {
   beforeEach(() => {
     syncHandlers.clear()
+    invokeHandlers.clear()
+    vi.restoreAllMocks()
   })
 
-  it('commits every shutdown state mutation before flushing both stores', () => {
+  it('stages every shutdown mutation before queueing persistence', () => {
     const callOrder: string[] = []
     const store = {
-      setWorkspaceSession: vi.fn((_state, hostId?: string) => {
+      // Read by the switch-on staging, which keeps main's own layout.
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      stageWorkspaceSessionBeforeUnload: vi.fn((_state, hostId?: string) => {
         callOrder.push(`session:${hostId ?? 'local'}`)
       }),
       updateUI: vi.fn(() => callOrder.push('ui')),
-      flushOrThrow: vi.fn(() => callOrder.push('flush')),
-      flushActiveViewPreferenceOrThrow: vi.fn(() => callOrder.push('active-view'))
+      flushPendingOrThrowAsync: vi.fn(() => {
+        callOrder.push('persist')
+        return Promise.resolve()
+      })
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
     expect(handler).toBeDefined()
     const event: { returnValue?: unknown } = {}
     const localSession = { activeWorktreeId: 'local-worktree' }
@@ -49,76 +75,165 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       ui: { activeView: 'settings' }
     })
 
-    expect(store.setWorkspaceSession).toHaveBeenNthCalledWith(1, localSession, undefined)
-    expect(store.setWorkspaceSession).toHaveBeenNthCalledWith(2, remoteSession, 'runtime:host-1')
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
+      1,
+      windowSave(localSession),
+      undefined
+    )
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
+      2,
+      windowSave(remoteSession),
+      'runtime:host-1'
+    )
     expect(store.updateUI).toHaveBeenCalledWith({ activeView: 'settings' })
-    expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
-    expect(store.flushActiveViewPreferenceOrThrow).toHaveBeenCalledTimes(1)
-    expect(callOrder).toEqual([
-      'session:local',
-      'session:runtime:host-1',
-      'ui',
-      'flush',
-      'active-view'
-    ])
+    expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
+    // Fence this staged generation without waiting for unrelated live mutations.
+    expect(store.flushPendingOrThrowAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ drainToStableGeneration: false })
+    )
+    expect(callOrder).toEqual(['session:local', 'session:runtime:host-1', 'ui', 'persist'])
     expect(event.returnValue).toEqual({ ok: true })
   })
 
-  it('reports a failed durable checkpoint so the renderer can retry', () => {
+  it('stages nothing of a window a WSL move holds, and still flushes', () => {
     const store = {
-      setWorkspaceSession: vi.fn(),
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
       updateUI: vi.fn(),
-      flushOrThrow: vi.fn(() => {
-        throw new Error('disk full')
-      }),
-      flushActiveViewPreferenceOrThrow: vi.fn()
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls the four methods stubbed above.
     registerRendererShutdownCheckpointHandler(store as never)
-
-    const handler = syncHandlers.get('app:persist-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
-    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
-
-    expect(event.returnValue).toEqual({ ok: false })
-  })
-
-  it('still flushes the active-view sidecar when the durable flush throws', () => {
-    // Why: the two stores are independent; a durable-state failure must not drop
-    // the tiny active-view checkpoint (and vice versa).
-    const store = {
-      setWorkspaceSession: vi.fn(),
-      updateUI: vi.fn(),
-      flushOrThrow: vi.fn(() => {
-        throw new Error('disk full')
-      }),
-      flushActiveViewPreferenceOrThrow: vi.fn()
-    }
-    registerRendererShutdownCheckpointHandler(store as never)
-
-    const handler = syncHandlers.get('app:persist-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
-    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
-
-    expect(store.flushActiveViewPreferenceOrThrow).toHaveBeenCalledTimes(1)
-    expect(event.returnValue).toEqual({ ok: false })
-  })
-
-  it('flushes the durable store even when the active-view flush throws', () => {
-    const store = {
-      setWorkspaceSession: vi.fn(),
-      updateUI: vi.fn(),
-      flushOrThrow: vi.fn(),
-      flushActiveViewPreferenceOrThrow: vi.fn(() => {
-        throw new Error('disk full')
+    setWslMoveReloadableWindow(() => ({
+      isDestroyed: () => false,
+      reload: () => {},
+      allowUnload: () => () => {},
+      onLoadedOrGone: () => () => {}
+    }))
+    holdWslMoveWindowWrites()
+    try {
+      const event: { returnValue?: unknown } = {}
+      syncHandlers.get('app:stage-before-unload-sync')?.(event, {
+        sessions: [{ state: {} }],
+        ui: { activeView: 'settings' }
       })
+
+      expect(store.stageWorkspaceSessionBeforeUnload).not.toHaveBeenCalled()
+      expect(store.updateUI).not.toHaveBeenCalled()
+      expect(store.flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
+      expect(event.returnValue).toEqual({ ok: true })
+    } finally {
+      resetWslMoveWindowWriteHoldForTests()
+      setWslMoveReloadableWindow(() => null)
+    }
+  })
+
+  it('never stages the source partition of a fenced host', () => {
+    const store = {
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      getSshTarget: vi.fn(() => ({ orcadFence: { environmentId: 'env-1' } })),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const event: { returnValue?: unknown } = {}
+    syncHandlers.get('app:stage-before-unload-sync')?.(event, {
+      sessions: [{ state: {} }, { state: {}, hostId: 'ssh:target-1' }],
+      ui: {}
+    })
+
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledTimes(1)
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenCalledWith(windowSave({}), undefined)
+    expect(event.returnValue).toEqual({ ok: true })
+  })
+
+  it('does not queue persistence when staging is incomplete', async () => {
+    const store = {
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    store.updateUI.mockImplementation(() => {
+      throw new Error('invalid state')
+    })
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
     const event: { returnValue?: unknown } = {}
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
-    expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
-    expect(event.returnValue).toEqual({ ok: false })
+    expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
+    expect(event.returnValue).toEqual({ ok: false, error: 'invalid state' })
+    await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: false })
+  })
+
+  it('holds the checkpoint open until the durable write settles', async () => {
+    let resolveFlush!: () => void
+    const store = {
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(
+        () =>
+          new Promise<void>((next) => {
+            resolveFlush = next
+          })
+      )
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
+    const checkpoint = invokeHandlers.get(AWAIT_CHANNEL)?.()
+    let settled: unknown = 'pending'
+    void checkpoint?.then((result) => {
+      settled = result
+    })
+
+    await Promise.resolve()
+    expect(settled).toBe('pending')
+
+    resolveFlush()
+    await expect(checkpoint).resolves.toEqual({ ok: true })
+  })
+
+  it('reports a failed durable write instead of a successful checkpoint', async () => {
+    const store = {
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.reject(new Error('disk full')))
+    }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    const event: { returnValue?: unknown } = {}
+    syncHandlers.get('app:stage-before-unload-sync')?.(event, { sessions: [], ui: {} })
+
+    expect(event.returnValue).toEqual({ ok: true })
+    await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: false })
+  })
+
+  it('fails the checkpoint when the durable write outlives its deadline', async () => {
+    const store = {
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(
+        (_options: { signal: AbortSignal }) => new Promise<void>(() => {})
+      )
+    }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
+    try {
+      registerRendererShutdownCheckpointHandler(store as never)
+      syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
+      const checkpoint = invokeHandlers.get(AWAIT_CHANNEL)?.()
+
+      await vi.advanceTimersByTimeAsync(SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)
+
+      await expect(checkpoint).resolves.toEqual({ ok: false })
+      expect(store.flushPendingOrThrowAsync.mock.calls[0]?.[0]?.signal.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

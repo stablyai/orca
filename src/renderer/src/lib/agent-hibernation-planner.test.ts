@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
-  MAX_AGENT_HIBERNATION_IDLE_MS,
-  MIN_AGENT_HIBERNATION_IDLE_MS,
-  getEffectiveAgentHibernationIdleMs,
   planAgentHibernationCandidates,
   type AgentHibernationPlannerSnapshot
 } from './agent-hibernation-planner'
@@ -87,7 +85,7 @@ function plannedPaneKeys(input: AgentHibernationPlannerSnapshot): string[] {
 }
 
 describe('agent sleep planner', () => {
-  it('selects nothing when disabled, active, or foreground', () => {
+  it('selects nothing when disabled or foreground', () => {
     expect(
       plannedWorktrees(
         snapshot({
@@ -98,8 +96,22 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([])
-    expect(plannedWorktrees(snapshot({ activeWorktreeId: 'wt-bg' }))).toEqual([])
     expect(plannedWorktrees(snapshot({ foregroundTerminalTabIds: ['tab-1'] }))).toEqual([])
+  })
+
+  it('never plans automatic hibernation for a floating-workspace pane', () => {
+    expect(plannedWorktrees(snapshot())).toEqual(['wt-bg'])
+    const floating = entry({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    expect(
+      plannedWorktrees(
+        snapshot({
+          tabsByWorktree: {
+            [FLOATING_TERMINAL_WORKTREE_ID]: [tab('tab-1', FLOATING_TERMINAL_WORKTREE_ID)]
+          },
+          agentStatusByPaneKey: { [floating.paneKey]: floating }
+        })
+      )
+    ).toEqual([])
   })
 
   it('requires done resumable provider-session entries', () => {
@@ -111,6 +123,21 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [interrupted.paneKey]: interrupted } }))
     ).toEqual([])
+    // A failure ranks like a completion for attention, but a failed pane is never passive.
+    const failed = entry({ mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: OLD } })
+    expect(
+      plannedWorktrees(snapshot({ agentStatusByPaneKey: { [failed.paneKey]: failed } }))
+    ).toEqual([])
+    // A main agent that finished while its subagents still run is live work, whatever its verdict.
+    for (const outcome of ['success', 'failure'] as const) {
+      const held = entry({
+        state: 'working',
+        mainAgent: { state: 'done', outcome, stateStartedAt: OLD }
+      })
+      expect(
+        plannedWorktrees(snapshot({ agentStatusByPaneKey: { [held.paneKey]: held } }))
+      ).toEqual([])
+    }
     const noSession = entry({ providerSession: undefined })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [noSession.paneKey]: noSession } }))
@@ -134,8 +161,50 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
+  it('blocks done panes until their live subagent roster clears', () => {
+    const withIdleTeammate = entry({
+      subagents: [
+        {
+          id: 'reviewer-1',
+          agentType: 'reviewer',
+          state: 'idle',
+          startedAt: OLD
+        }
+      ]
+    })
+    expect(
+      plannedPaneKeys(
+        snapshot({ agentStatusByPaneKey: { [withIdleTeammate.paneKey]: withIdleTeammate } })
+      )
+    ).toEqual([])
+
+    const cleared = { ...withIdleTeammate, subagents: undefined }
+    expect(
+      plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [cleared.paneKey]: cleared } }))
+    ).toEqual([cleared.paneKey])
+  })
+
+  it.each([undefined, 'pending', 'dispatched'] as const)(
+    'blocks orchestration panes while dispatch status is %s',
+    (dispatchStatus) => {
+      const orchestrated = entry({
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          ...(dispatchStatus ? { dispatchStatus } : {})
+        }
+      })
+
+      expect(
+        plannedPaneKeys(
+          snapshot({ agentStatusByPaneKey: { [orchestrated.paneKey]: orchestrated } })
+        )
+      ).toEqual([])
+    }
+  )
+
   it('requires the idle threshold and blocks input after done', () => {
-    const fresh = entry({ updatedAt: NOW - 1_000 })
+    const fresh = entry({ stateStartedAt: NOW - 1_000, updatedAt: NOW - 1_000 })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [fresh.paneKey]: fresh } }))
     ).toEqual([])
@@ -145,17 +214,14 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD - 1 } }))
     ).toEqual(['wt-bg'])
-    // A millisecond tie between the input stamp and the done transition
-    // resolves toward blocking — the keystroke may be a draft character.
+    // A millisecond tie may be a draft keystroke; block hibernation.
     expect(
       plannedWorktrees(snapshot({ lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD } }))
     ).toEqual([])
   })
 
   it('blocks hibernation when real input arrived after the turn started', () => {
-    // Regression: a draft typed while the agent was still working lands before
-    // the done timestamp, so the old input-after-done compare was blind to it
-    // and the hibernation kill discarded the TUI composer's contents.
+    // A draft typed while working precedes done; checking only post-done input would lose it on PTY kill.
     const turnStartedAt = OLD - 60_000
     const withTurn = entry({
       stateHistory: [{ state: 'working', prompt: 'make it so', startedAt: turnStartedAt }]
@@ -190,11 +256,7 @@ describe('agent sleep planner', () => {
   })
 
   it('attributes input to its state segment across working/waiting cycles', () => {
-    // A turn can pause for permission (working → waiting → working → done). A
-    // draft typed during the FIRST working segment is older than the last
-    // working start, so a last-working-start guard misses it; and a permission
-    // answer typed during the waiting segment must NOT block, or every session
-    // with a mid-turn permission prompt would never hibernate.
+    // Inspect all working segments to protect early drafts; waiting-segment permission answers are consumed and must not block.
     const multiSegment = entry({
       stateHistory: [
         { state: 'working', prompt: 'make it so', startedAt: OLD - 90_000 },
@@ -202,7 +264,6 @@ describe('agent sleep planner', () => {
         { state: 'working', prompt: 'make it so', startedAt: OLD - 30_000 }
       ]
     })
-    // Draft typed during the first working segment: blocked.
     expect(
       plannedWorktrees(
         snapshot({
@@ -211,7 +272,6 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([])
-    // Permission answer typed during the waiting segment: consumed, eligible.
     expect(
       plannedWorktrees(
         snapshot({
@@ -220,8 +280,7 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual(['wt-bg'])
-    // A submission typed in a PREVIOUS done segment that already transitioned
-    // onward was consumed and must not block the next completion.
+    // Input in a previous done segment was consumed when the next turn started.
     const resubmitted = entry({
       stateHistory: [
         { state: 'done', prompt: 'earlier turn', startedAt: OLD - 90_000 },
@@ -236,9 +295,7 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual(['wt-bg'])
-    // Boundary ties resolve toward blocking: input stamped exactly at a
-    // working-segment start blocks, and a tie at a waiting-segment start also
-    // blocks because it could belong to the preceding working segment.
+    // A tie at working or waiting start may belong to a working segment; block conservatively.
     expect(
       plannedWorktrees(
         snapshot({
@@ -257,37 +314,7 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
-  it('uses foreground terminal tab last-seen as the idle baseline when it is newer', () => {
-    expect(
-      plannedWorktrees(
-        snapshot({
-          foregroundTerminalLastSeenAtByTabId: {
-            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
-          }
-        })
-      )
-    ).toEqual([])
-    expect(
-      plannedWorktrees(
-        snapshot({
-          foregroundTerminalLastSeenAtByTabId: {
-            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
-          }
-        })
-      )
-    ).toEqual(['wt-bg'])
-    expect(
-      plannedWorktrees(
-        snapshot({
-          foregroundTerminalLastSeenAtByTabId: {
-            'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
-          },
-          lastTerminalInputAtByPaneKey: { [`tab-1:${LEAF}`]: OLD + 1 }
-        })
-      )
-    ).toEqual([])
-  })
-
+  // Use the active worktree to catch wholesale exclusion (#16211); lever from @sanshengai’s #16214.
   it('does not let one foreground terminal tab reset a sibling tab in the same worktree', () => {
     const siblingEntry = entry({
       paneKey: `tab-2:${OTHER_LEAF}`,
@@ -298,6 +325,7 @@ describe('agent sleep planner', () => {
     expect(
       plannedPaneKeys(
         snapshot({
+          activeWorktreeId: 'wt-bg',
           foregroundTerminalTabIds: ['tab-1'],
           foregroundTerminalLastSeenAtByTabId: {
             'tab-1': NOW
@@ -320,50 +348,27 @@ describe('agent sleep planner', () => {
     ).toEqual([`tab-2:${OTHER_LEAF}`])
   })
 
-  it('includes the effective idle start in the candidate signature', () => {
-    const oldEntry = entry({
-      updatedAt: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 10_000,
-      stateStartedAt: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 10_000
-    })
-    const [withoutVisit] = planAgentHibernationCandidates(
-      snapshot({ agentStatusByPaneKey: { [oldEntry.paneKey]: oldEntry } })
-    )
-    const [withVisit] = planAgentHibernationCandidates(
-      snapshot({
-        agentStatusByPaneKey: { [oldEntry.paneKey]: oldEntry },
-        foregroundTerminalLastSeenAtByTabId: {
-          'tab-1': NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
-        }
-      })
-    )
-
-    expect(withoutVisit.signature).not.toEqual(withVisit.signature)
-  })
-
-  it('emits a pane candidate when a sibling shell PTY is live', () => {
-    expect(
-      planAgentHibernationCandidates(
-        snapshot({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] } })
-      )
-    ).toMatchObject([
-      {
-        id: `wt-bg|tab-1:${LEAF}`,
-        worktreeId: 'wt-bg',
-        paneKey: `tab-1:${LEAF}`,
-        tabId: 'tab-1',
-        leafId: LEAF,
-        targetPtyIds: ['pty-1'],
-        expectedRuntimePtyIds: ['pty-1'],
-        paneKeys: [`tab-1:${LEAF}`]
-      }
-    ])
-  })
-
   it('rejects panes without live PTYs and already-sleeping panes', () => {
     expect(plannedWorktrees(snapshot({ ptyIdsByTabId: { 'tab-1': [] } }))).toEqual([])
     expect(
       plannedWorktrees(
-        snapshot({ sleepingAgentSessionsByPaneKey: { [`tab-1:${LEAF}`]: {} as never } })
+        snapshot({
+          sleepingAgentSessionsByPaneKey: {
+            [`tab-1:${LEAF}`]: {
+              paneKey: `tab-1:${LEAF}`,
+              tabId: 'tab-1',
+              worktreeId: 'wt-bg',
+              agent: 'claude',
+              providerSession: { key: 'session_id', id: 'session-1' },
+              prompt: '',
+              state: 'done',
+              capturedAt: OLD,
+              updatedAt: OLD,
+              // A real sleep capture, not this pane's own live anchor.
+              origin: 'worktree-sleep'
+            } as never
+          }
+        })
       )
     ).toEqual([])
   })
@@ -409,54 +414,6 @@ describe('agent sleep planner', () => {
     }
   )
 
-  it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {
-    expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])
-  })
-
-  it('does not let a mobile-locked sibling PTY block an unlocked target pane', () => {
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] },
-          mobileLockedPtyIds: ['pty-shell']
-        })
-      )
-    ).toEqual([`tab-1:${LEAF}`])
-  })
-
-  it('selects runtime-backed live PTYs when the renderer live map is empty', () => {
-    const [candidate] = planAgentHibernationCandidates(
-      snapshot({
-        ptyIdsByTabId: { 'tab-1': [] },
-        runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1'] },
-        runtimeLivenessRequiredWorktreeIds: ['wt-bg']
-      })
-    )
-
-    expect(candidate).toMatchObject({
-      worktreeId: 'wt-bg',
-      paneKeys: [`tab-1:${LEAF}`],
-      expectedRuntimePtyIds: ['pty-1']
-    })
-  })
-
-  it('matches wrapped remote renderer PTY IDs to raw runtime PTY IDs', () => {
-    const [candidate] = planAgentHibernationCandidates(
-      snapshot({
-        terminalLayoutsByTabId: { 'tab-1': layout(LEAF, 'remote:env-1@@terminal-1') },
-        ptyIdsByTabId: { 'tab-1': ['remote:env-1@@terminal-1'] },
-        runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['terminal-1'] },
-        runtimeLivenessRequiredWorktreeIds: ['wt-bg']
-      })
-    )
-
-    expect(candidate).toMatchObject({
-      worktreeId: 'wt-bg',
-      paneKeys: [`tab-1:${LEAF}`],
-      expectedRuntimePtyIds: ['terminal-1']
-    })
-  })
-
   it('does not select layout-only stale PTYs without runtime liveness', () => {
     expect(
       plannedWorktrees(
@@ -486,31 +443,6 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
-  it('allows runtime-backed worktrees with sibling live PTYs', () => {
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          ptyIdsByTabId: { 'tab-1': [] },
-          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1', 'pty-shell'] },
-          runtimeLivenessRequiredWorktreeIds: ['wt-bg']
-        })
-      )
-    ).toEqual([`tab-1:${LEAF}`])
-  })
-
-  it('applies mobile locks to runtime-backed PTYs', () => {
-    expect(
-      plannedWorktrees(
-        snapshot({
-          ptyIdsByTabId: { 'tab-1': [] },
-          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1'] },
-          runtimeLivenessRequiredWorktreeIds: ['wt-bg'],
-          mobileLockedPtyIds: ['pty-1']
-        })
-      )
-    ).toEqual([])
-  })
-
   it('applies mobile locks across wrapped remote and raw runtime PTY IDs', () => {
     expect(
       plannedWorktrees(
@@ -524,50 +456,75 @@ describe('agent sleep planner', () => {
       )
     ).toEqual([])
   })
+})
 
-  it('selects each eligible done agent pane independently', () => {
-    expect(plannedWorktrees(snapshot())).toEqual(['wt-bg'])
-    const second = entry({
-      paneKey: `tab-1:${OTHER_LEAF}`,
-      providerSession: { key: 'session_id', id: 'session-2' }
-    })
+describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
+  it('keeps the signature stable across such a repaint so confirmation can match', () => {
+    const before = entry({ stateStartedAt: OLD, updatedAt: OLD })
+    const after = entry({ stateStartedAt: OLD, updatedAt: NOW - 1 })
+    const sigFor = (e: AgentStatusEntry): string =>
+      planAgentHibernationCandidates(
+        snapshot({
+          agentStatusByPaneKey: { [e.paneKey]: e },
+          ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
+        })
+      )[0]!.signature
+    expect(sigFor(after)).toBe(sigFor(before))
+  })
+
+  it('invalidates the signature when agent kind or resume identity changes', () => {
+    const base = entry({ stateStartedAt: OLD, updatedAt: OLD })
+    const sigFor = (e: AgentStatusEntry): string =>
+      planAgentHibernationCandidates(
+        snapshot({
+          agentStatusByPaneKey: { [e.paneKey]: e },
+          ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
+        })
+      )[0]!.signature
+    const baseline = sigFor(base)
+    expect(
+      sigFor(
+        entry({
+          stateStartedAt: OLD,
+          updatedAt: OLD,
+          providerSession: { key: 'session_id', id: 'session-2' }
+        })
+      )
+    ).not.toBe(baseline)
+    expect(sigFor(entry({ stateStartedAt: OLD, updatedAt: OLD, agentType: 'codex' }))).not.toBe(
+      baseline
+    )
+    expect(
+      sigFor(
+        entry({
+          stateStartedAt: OLD,
+          updatedAt: OLD,
+          providerSession: {
+            key: 'session_id',
+            id: 'session-1',
+            transcriptPath: '/tmp/moved.jsonl'
+          }
+        })
+      )
+    ).not.toBe(baseline)
+  })
+})
+
+describe('PTY binding and boundary floors', () => {
+  it('defers a pane whose PTY binding was first seen this tick', () => {
+    expect(
+      plannedPaneKeys(snapshot({ ptyBindingFirstSeenAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } }))
+    ).toEqual([])
+  })
+
+  it('defers a boundary done that only just became a real completion', () => {
     expect(
       plannedPaneKeys(
         snapshot({
-          terminalLayoutsByTabId: {
-            'tab-1': {
-              root: {
-                type: 'split',
-                direction: 'horizontal',
-                first: { type: 'leaf', leafId: LEAF },
-                second: { type: 'leaf', leafId: OTHER_LEAF }
-              },
-              activeLeafId: LEAF,
-              expandedLeafId: null,
-              ptyIdsByLeafId: { [LEAF]: 'pty-1', [OTHER_LEAF]: 'pty-2' }
-            }
-          },
-          ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] },
-          agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [second.paneKey]: second }
+          ptyBindingFirstSeenAtByPaneKey: { [`tab-1:${LEAF}`]: OLD },
+          boundaryResolvedAtByPaneKey: { [`tab-1:${LEAF}`]: NOW }
         })
       )
-    ).toEqual([`tab-1:${LEAF}`, `tab-1:${OTHER_LEAF}`])
-  })
-
-  it('clamps corrupt or out-of-range idle durations to the default', () => {
-    expect(getEffectiveAgentHibernationIdleMs(0)).toBe(DEFAULT_AGENT_HIBERNATION_IDLE_MS)
-    expect(getEffectiveAgentHibernationIdleMs(Number.NaN)).toBe(DEFAULT_AGENT_HIBERNATION_IDLE_MS)
-    expect(getEffectiveAgentHibernationIdleMs(MIN_AGENT_HIBERNATION_IDLE_MS - 1)).toBe(
-      DEFAULT_AGENT_HIBERNATION_IDLE_MS
-    )
-    expect(getEffectiveAgentHibernationIdleMs(MAX_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
-      DEFAULT_AGENT_HIBERNATION_IDLE_MS
-    )
-    expect(getEffectiveAgentHibernationIdleMs(MIN_AGENT_HIBERNATION_IDLE_MS)).toBe(
-      MIN_AGENT_HIBERNATION_IDLE_MS
-    )
-    expect(getEffectiveAgentHibernationIdleMs(DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
-      DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
-    )
+    ).toEqual([])
   })
 })

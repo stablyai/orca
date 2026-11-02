@@ -24,8 +24,7 @@ export async function startHeadlessPairingRuntime({
   logStep('0', 'Starting temporary desktop runtime for mobile pairing...')
   const runDir = mkdtempSync(path.join(os.tmpdir(), 'orca-mobile-run.'))
   const userData = path.join(runDir, 'userData')
-  // Why: the main-process E2E boot guard refuses to start with the real user
-  // home, so the pairing runtime must hand it a matching disposable HOME.
+  // Give pairing runtime disposable HOME matching main-process E2E boot guard.
   const homeDir = path.join(runDir, 'home')
   mkdirSync(homeDir, { recursive: true, mode: 0o700 })
   const pairingAddress = primaryLanIp(lanIpCandidates)
@@ -85,7 +84,9 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
     process: child,
     env: {
       ...process.env,
-      ORCA_USER_DATA_PATH: userData
+      ORCA_USER_DATA_PATH: userData,
+      // orca-dev ignores ORCA_USER_DATA_PATH; override derived profile so CLI addresses disposable runtime. Plain orca ignores this.
+      ORCA_DEV_USER_DATA_PATH: userData
     },
     stop
   })

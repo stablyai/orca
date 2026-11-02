@@ -1,0 +1,304 @@
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useAppStore } from '../../store'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import { serializeTerminalLayout } from './layout-serialization'
+import { mergeCapturedLeafState } from './merge-captured-leaf-state'
+import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
+import { clearWebRuntimeTerminalBuffer } from '@/runtime/web-runtime-terminal-buffer-actions'
+import {
+  isSyntheticSinglePaneTitle,
+  sanitizeTerminalLayoutPaneTitles
+} from '../../../../shared/terminal-pane-title-sanitization'
+import type { TerminalPaneStartupController } from './use-terminal-pane-startup-actions'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { notePendingPaneTitleRename } from '@/runtime/pending-pane-title-renames'
+import {
+  mergeLayoutTitlesByLeafId,
+  retainLayoutScrollback
+} from './terminal-pane-layout-snapshot-merge'
+import { retireLeavesFromTerminalLayout } from '../../../../shared/terminal-layout-leaf-retirement'
+
+export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
+  const {
+    clearedScrollbackLeafIdsRef,
+    chatLeafId,
+    containerRef,
+    isChatViewMode,
+    expandedPaneIdRef,
+    managerRef,
+    paneCount,
+    paneTitles,
+    paneTitlesRef,
+    paneTransportsRef,
+    remotePaneLayoutPusherRef,
+    removedTitleLeafIdsRef,
+    savedLayout,
+    setPaneTitles,
+    setTabLayout,
+    tabId,
+    terminalTab,
+    worktreeId
+  } = controller
+  // Exclude host-dropped layouts from writes while their panes finish exiting, or persistence can resurrect them.
+  const hostRetiredLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
+  const chatOwnerRef = useRef({ chatLeafId, isChatViewMode })
+  useLayoutEffect(() => {
+    chatOwnerRef.current = { chatLeafId, isChatViewMode }
+  }, [chatLeafId, isChatViewMode])
+  const persistLayoutSnapshot = useCallback((): void => {
+    const manager = managerRef.current
+    const container = containerRef.current
+    if (!manager || !container) {
+      return
+    }
+    const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
+    const leafIdByPaneId = manager.getLeafIdMap()
+    let layout = serializeTerminalLayout(
+      container,
+      activePaneId,
+      expandedPaneIdRef.current,
+      leafIdByPaneId
+    )
+    const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+    const currentPanes = manager.getPanes()
+    const currentLeafIds = new Set(currentPanes.map((pane) => pane.leafId))
+    // PaneManager retains this callback for its entire mount.
+    const { chatLeafId, isChatViewMode } = chatOwnerRef.current
+    if (isChatViewMode && chatLeafId && currentPanes.some((pane) => pane.leafId === chatLeafId)) {
+      layout.chatLeafId = chatLeafId
+    }
+    const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
+    const scrollbackPreserveLeafIds = new Set(
+      [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
+    )
+    retainLayoutScrollback(layout, existing, scrollbackPreserveLeafIds)
+    const livePtyEntries = currentPanes
+      .map(
+        (pane) => [pane.leafId, paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null] as const
+      )
+      .filter(
+        (entry): entry is readonly [(typeof currentPanes)[number]['leafId'], string] =>
+          entry[1] !== null
+      )
+    const mergedPtyIds = mergeCapturedLeafState({
+      prior: existing?.ptyIdsByLeafId,
+      fresh: Object.fromEntries(livePtyEntries),
+      currentLeafIds
+    })
+    if (Object.keys(mergedPtyIds).length > 0) {
+      layout.ptyIdsByLeafId = mergedPtyIds
+    }
+    layout.activeLeafId = resolveTerminalLayoutActiveLeafId({
+      root: layout.root,
+      activeLeafId: layout.activeLeafId,
+      ptyIdsByLeafId: mergedPtyIds
+    })
+    const removedTitleLeafIds = removedTitleLeafIdsRef.current
+    const titlesByLeafId = mergeLayoutTitlesByLeafId(
+      currentPanes,
+      existing?.titlesByLeafId,
+      paneTitlesRef.current,
+      removedTitleLeafIds
+    )
+    if (Object.keys(titlesByLeafId).length > 0) {
+      layout.titlesByLeafId = titlesByLeafId
+    }
+    const hostRetiredLeafIds = hostRetiredLeafIdsRef.current
+    if (hostRetiredLeafIds.size > 0) {
+      // Why: never retire the last pane here; the host drops a whole tab by itself.
+      layout = retireLeavesFromTerminalLayout(layout, hostRetiredLeafIds) ?? layout
+    }
+    setTabLayout(tabId, layout)
+    const hasRemotePane = Object.values(mergedPtyIds).some(
+      (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
+    )
+    if (hasRemotePane) {
+      // Why: a host keeps its titles when the field is absent, so clearing the last one sends {}.
+      const clearedEveryTitle =
+        !layout.titlesByLeafId &&
+        [...currentLeafIds].some((leafId) => removedTitleLeafIds.has(leafId))
+      remotePaneLayoutPusherRef.current?.push({
+        worktreeId,
+        tabId,
+        layout: clearedEveryTitle ? { ...layout, titlesByLeafId: {} } : layout
+      })
+    }
+    for (const leafId of currentLeafIds) {
+      clearedScrollbackLeafIds.delete(leafId)
+    }
+  }, [
+    tabId,
+    setTabLayout,
+    worktreeId,
+    clearedScrollbackLeafIdsRef,
+    containerRef,
+    expandedPaneIdRef,
+    managerRef,
+    paneTitlesRef,
+    paneTransportsRef,
+    remotePaneLayoutPusherRef,
+    removedTitleLeafIdsRef
+  ])
+
+  useEffect(() => {
+    persistLayoutSnapshot()
+  }, [chatLeafId, isChatViewMode, persistLayoutSnapshot])
+
+  const clearPaneScrollback = useCallback(
+    (pane: ManagedPane): void => {
+      clearedScrollbackLeafIdsRef.current.add(pane.leafId)
+      clearTerminalScrollbackAndFollowOutput(pane.terminal)
+      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      const clearedRemoteHostBuffer = clearWebRuntimeTerminalBuffer(ptyId)
+      if (!clearedRemoteHostBuffer && ptyId) {
+        window.api.pty.clearBuffer(ptyId)
+      }
+      persistLayoutSnapshot()
+    },
+    [paneTransportsRef, persistLayoutSnapshot, clearedScrollbackLeafIdsRef]
+  )
+
+  const removePaneTitleLocally = useCallback(
+    (paneId: number) => {
+      setPaneTitles((previous) => {
+        if (!(paneId in previous)) {
+          return previous
+        }
+        const next = { ...previous }
+        delete next[paneId]
+        return next
+      })
+      if (paneId in paneTitlesRef.current) {
+        const next = { ...paneTitlesRef.current }
+        delete next[paneId]
+        paneTitlesRef.current = next
+      }
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      if (leafId) {
+        removedTitleLeafIdsRef.current.add(leafId)
+      }
+      persistLayoutSnapshot()
+    },
+    [persistLayoutSnapshot, managerRef, paneTitlesRef, removedTitleLeafIdsRef, setPaneTitles]
+  )
+  const setPaneTitleLocally = useCallback(
+    (paneId: number, title: string) => {
+      setPaneTitles((previous) => ({ ...previous, [paneId]: title }))
+      paneTitlesRef.current = { ...paneTitlesRef.current, [paneId]: title }
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      if (leafId) {
+        removedTitleLeafIdsRef.current.delete(leafId)
+      }
+      persistLayoutSnapshot()
+    },
+    [persistLayoutSnapshot, managerRef, paneTitlesRef, removedTitleLeafIdsRef, setPaneTitles]
+  )
+  const showPaneTitle = useCallback(
+    (paneId: number, title: string | null): void =>
+      title === null ? removePaneTitleLocally(paneId) : setPaneTitleLocally(paneId, title),
+    [removePaneTitleLocally, setPaneTitleLocally]
+  )
+  const changePaneTitle = useCallback(
+    (paneId: number, title: string | null) => {
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      const showTitle = (): void => {
+        if (leafId) {
+          const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+          notePendingPaneTitleRename({ leafId, title, layout })
+        }
+        showPaneTitle(paneId, title)
+      }
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        leafId &&
+        sendLayoutCommandToOwner(
+          worktreeId,
+          { type: 'renamePane', tabId, leafId, title },
+          { apply: () => {}, asToday: showTitle }
+        )
+      ) {
+        return
+      }
+      showTitle()
+    },
+    [showPaneTitle, tabId, worktreeId, managerRef]
+  )
+  const removePaneTitle = useCallback(
+    (paneId: number) => changePaneTitle(paneId, null),
+    [changePaneTitle]
+  )
+  const handleClearPaneTitleShortcut = useCallback(
+    (paneId: number) => {
+      if (!paneTitlesRef.current[paneId]) {
+        return
+      }
+      removePaneTitle(paneId)
+    },
+    [removePaneTitle, paneTitlesRef]
+  )
+
+  useEffect(() => {
+    if (!terminalTab) {
+      return
+    }
+    const sanitized = sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab)
+    if (sanitized !== savedLayout) {
+      setTabLayout(tabId, sanitized)
+    }
+  }, [savedLayout, setTabLayout, tabId, terminalTab])
+
+  useEffect(() => {
+    if (!terminalTab) {
+      return
+    }
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    const panes = manager.getPanes()
+    if (panes.length !== 1) {
+      return
+    }
+    const paneId = panes[0].id
+    const currentTitle = paneTitlesRef.current[paneId]
+    if (!currentTitle || !isSyntheticSinglePaneTitle(currentTitle, terminalTab)) {
+      return
+    }
+    const nextTitles = { ...paneTitlesRef.current }
+    delete nextTitles[paneId]
+    paneTitlesRef.current = nextTitles
+    setPaneTitles((previous) => {
+      if (!previous[paneId] || !isSyntheticSinglePaneTitle(previous[paneId], terminalTab)) {
+        return previous
+      }
+      const next = { ...previous }
+      delete next[paneId]
+      return next
+    })
+    persistLayoutSnapshot()
+  }, [
+    paneCount,
+    paneTitles,
+    persistLayoutSnapshot,
+    terminalTab,
+    managerRef,
+    paneTitlesRef,
+    setPaneTitles
+  ])
+
+  return {
+    hostRetiredLeafIdsRef,
+    persistLayoutSnapshot,
+    clearPaneScrollback,
+    changePaneTitle,
+    showPaneTitle,
+    removePaneTitle,
+    handleClearPaneTitleShortcut
+  }
+}
+
+export type TerminalPaneLayoutController = TerminalPaneStartupController &
+  ReturnType<typeof useTerminalPaneLayoutPersistence>

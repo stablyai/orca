@@ -16,6 +16,8 @@ import {
   readHostHeaderRects,
   type HostHeaderRect
 } from './host-header-drag-dom'
+import { hasPointerBeenReleased } from './header-drag-pointer-release'
+import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 
 export type HostDragState = {
   draggingHostId: ExecutionHostId | null
@@ -86,8 +88,7 @@ export function useHostHeaderDrag({
       if (!session || !container) {
         return null
       }
-      // Why: dragging host headers temporarily collapses their sections, so
-      // live rects are the source of truth after the first promoted move.
+      // Promotion collapses host sections, so recompute their live geometry.
       const rects = readHostHeaderRects(container)
       if (rects.length === 0 || rects.length < orderedIdsRef.current.length) {
         return null
@@ -157,17 +158,7 @@ export function useHostHeaderDrag({
       session.preview?.remove()
       setSidebarPointerDragDocumentStyles(false)
       if (session.promoted) {
-        const handleEl = session.handleEl
-        const swallow = (e: MouseEvent): void => {
-          const target = e.target as Node | null
-          if (target && handleEl.contains(target)) {
-            e.stopPropagation()
-            e.preventDefault()
-          }
-          window.removeEventListener('click', swallow, true)
-        }
-        window.addEventListener('click', swallow, true)
-        setTimeout(() => window.removeEventListener('click', swallow, true), 0)
+        swallowNextClickOnDragHandle(session.handleEl)
       }
       const finalIndex =
         commit && session.promoted
@@ -204,6 +195,10 @@ export function useHostHeaderDrag({
     const onPointerMove = (e: PointerEvent): void => {
       const session = dragSessionRef.current
       if (!session || e.pointerId !== session.pointerId) {
+        return
+      }
+      if (hasPointerBeenReleased(e)) {
+        endDrag(false)
         return
       }
       if (!session.promoted) {

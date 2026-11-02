@@ -5,7 +5,7 @@ import {
   refreshGitStatusForWorktreeStrict,
   type GitStatusRefreshDeps
 } from './git-status-refresh'
-import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
 
 function makeDeps(): GitStatusRefreshDeps {
   return {
@@ -55,6 +55,8 @@ describe('refreshGitStatusForWorktree', () => {
     const deps = makeDeps()
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       connectionId: 'ssh-1',
@@ -63,13 +65,18 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(gitStatus).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: 'ssh-1'
+      connectionId: 'ssh-1',
+      admissionTier: 'status'
     })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-1', status)
-    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-1', {
-      head: 'abc123',
-      branch: 'refs/heads/feature'
-    })
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith(
+      'wt-1',
+      {
+        head: 'abc123',
+        branch: 'refs/heads/feature'
+      },
+      null
+    )
     expect(deps.setUpstreamStatus).toHaveBeenCalledWith('wt-1', status.upstreamStatus)
     expect(deps.fetchUpstreamStatus).not.toHaveBeenCalled()
   })
@@ -90,6 +97,8 @@ describe('refreshGitStatusForWorktree', () => {
     const deps = makeDeps()
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-1',
       worktreePath: '/repo',
       deps
@@ -97,7 +106,7 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-1', '/repo', undefined, undefined, {
-      runtimeTargetSettings: undefined,
+      runtimeTarget: { kind: 'local' },
       applyUpstreamStatus: false
     })
   })
@@ -114,6 +123,8 @@ describe('refreshGitStatusForWorktree', () => {
     const deps = makeDeps()
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-2',
       worktreePath: '/repo',
       connectionId: 'ssh-2',
@@ -121,38 +132,19 @@ describe('refreshGitStatusForWorktree', () => {
     })
 
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-2', status)
-    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-2', {
-      head: 'def456',
-      branch: 'refs/heads/main'
-    })
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith(
+      'wt-2',
+      {
+        head: 'def456',
+        branch: 'refs/heads/main'
+      },
+      null
+    )
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-2', '/repo', 'ssh-2', undefined, {
-      runtimeTargetSettings: undefined,
+      runtimeTarget: { kind: 'local' },
       applyUpstreamStatus: false
     })
-  })
-
-  it('leaves ignored-file discovery to the File Explorer instead of status polling', async () => {
-    const status: GitStatusResult = {
-      entries: [],
-      conflictOperation: 'unknown'
-    }
-    const gitStatus = vi.fn().mockResolvedValue(status)
-    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
-    const deps = makeDeps()
-
-    await refreshGitStatusForWorktree({
-      settings: { activeRuntimeEnvironmentId: null },
-      worktreeId: 'wt-3',
-      worktreePath: '/repo',
-      deps
-    })
-
-    expect(gitStatus).toHaveBeenCalledWith({
-      worktreePath: '/repo',
-      connectionId: undefined
-    })
-    expect(deps.setGitStatus).toHaveBeenCalledWith('wt-3', status)
   })
 
   it('bypasses automatic no-upstream backoff only for strict refreshes', async () => {
@@ -166,11 +158,15 @@ describe('refreshGitStatusForWorktree', () => {
     const deps = makeDeps()
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-normal',
       worktreePath: '/repo',
       deps
     })
     await refreshGitStatusForWorktreeStrict({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-strict',
       worktreePath: '/repo',
       deps
@@ -178,11 +174,13 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(gitStatus).toHaveBeenNthCalledWith(1, {
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      admissionTier: 'status'
     })
     expect(gitStatus).toHaveBeenNthCalledWith(2, {
       worktreePath: '/repo',
       connectionId: undefined,
+      admissionTier: 'interactive',
       bypassEffectiveUpstreamNegativeCache: true
     })
   })
@@ -212,6 +210,8 @@ describe('refreshGitStatusForWorktree', () => {
     const deps = makeDeps()
 
     const automatic = refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-race',
       worktreePath: '/repo',
       deps
@@ -219,6 +219,8 @@ describe('refreshGitStatusForWorktree', () => {
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
 
     await refreshGitStatusForWorktreeStrict({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-race',
       worktreePath: '/repo',
       deps
@@ -248,12 +250,16 @@ describe('refreshGitStatusForWorktree', () => {
     const deps = makeDeps()
 
     const olderRefresh = refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-automatic-race',
       worktreePath: '/repo',
       deps
     })
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-automatic-race',
       worktreePath: '/repo',
       deps
@@ -279,6 +285,8 @@ describe('refreshGitStatusForWorktree', () => {
     const deps = makeDeps()
 
     const olderRefresh = refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-failed-veto',
       worktreePath: '/repo',
       deps
@@ -286,6 +294,8 @@ describe('refreshGitStatusForWorktree', () => {
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
     await expect(
       refreshGitStatusForWorktree({
+        target: { kind: 'local' },
+        ownerHostId: null,
         worktreeId: 'wt-failed-veto',
         worktreePath: '/repo',
         deps
@@ -311,17 +321,44 @@ describe('refreshGitStatusForWorktree', () => {
     }
     vi.stubGlobal('window', { api: { git: { status: vi.fn().mockResolvedValue(status) } } })
     const deps = makeDeps()
+    const onStatusAccepted = vi.fn()
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-stale',
       worktreePath: '/repo',
       deps,
-      request: { shouldApply: () => false }
+      request: { shouldApply: () => false, onStatusAccepted }
     })
 
     expect(deps.setGitStatus).not.toHaveBeenCalled()
     expect(deps.updateWorktreeGitIdentity).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).not.toHaveBeenCalled()
+    expect(onStatusAccepted).not.toHaveBeenCalled()
+  })
+
+  it('publishes upstream watch identity only after accepting the status result', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: { hasUpstream: true, upstreamName: 'origin/feature', ahead: 0, behind: 0 }
+    }
+    vi.stubGlobal('window', { api: { git: { status: vi.fn().mockResolvedValue(status) } } })
+    const deps = makeDeps()
+    const onStatusAccepted = vi.fn()
+
+    await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
+      worktreeId: 'wt-current',
+      worktreePath: '/repo',
+      deps,
+      request: { shouldApply: () => true, onStatusAccepted }
+    })
+
+    expect(onStatusAccepted).toHaveBeenCalledOnce()
+    expect(onStatusAccepted).toHaveBeenCalledWith(status)
   })
 
   it('does not let an older automatic explicit upstream fetch overwrite a strict result', async () => {
@@ -349,6 +386,8 @@ describe('refreshGitStatusForWorktree', () => {
     vi.mocked(deps.fetchUpstreamStatus).mockReturnValueOnce(automaticFetch.promise)
 
     const automatic = refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-fetch-race',
       worktreePath: '/repo',
       deps
@@ -356,6 +395,8 @@ describe('refreshGitStatusForWorktree', () => {
     await vi.waitFor(() => expect(deps.fetchUpstreamStatus).toHaveBeenCalledTimes(1))
 
     await refreshGitStatusForWorktreeStrict({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-fetch-race',
       worktreePath: '/repo',
       deps
@@ -381,14 +422,20 @@ describe('refreshGitStatusForWorktree', () => {
     const deps = makeDeps()
 
     await refreshGitStatusForWorktree({
+      target: { kind: 'local' },
+      ownerHostId: null,
       worktreeId: 'wt-detached',
       worktreePath: '/repo',
       deps
     })
 
-    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-detached', {
-      head: 'abc123456789',
-      branch: null
-    })
+    expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith(
+      'wt-detached',
+      {
+        head: 'abc123456789',
+        branch: null
+      },
+      null
+    )
   })
 })

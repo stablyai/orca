@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { buildImageDataUri, validateRasterImageDataUri } from './image-data-uri'
 
@@ -39,10 +40,14 @@ describe('buildImageDataUri', () => {
     expect(buildImageDataUri('application/octet-stream', 'AAAA')).toBeNull()
   })
 
-  it('rejects malformed and oversized known rasters before native decode', () => {
-    expect(buildImageDataUri('image/png', 'bmV3')).toBeNull()
+  it('rejects oversized known rasters before native decode', () => {
     expect(buildImageDataUri('image/png', pngBase64(32_769, 1))).toBeNull()
     expect(buildImageDataUri('image/png', pngBase64(8192, 8192))).toBeNull()
+  })
+
+  it('still renders bytes whose header we cannot measure', () => {
+    // Unreadable headers do not prove oversize; decoder-supported formats beyond this parser must remain visible.
+    expect(buildImageDataUri('image/png', 'bmV3')).toBe('data:image/png;base64,bmV3')
   })
 
   it('preserves SVG behavior because vectors do not have encoded raster dimensions', () => {
@@ -53,6 +58,28 @@ describe('buildImageDataUri', () => {
 })
 
 describe('validateRasterImageDataUri', () => {
+  it('preserves malformed parameter lists without exponential backtracking', () => {
+    const input = `data:image/png;${';'.repeat(32_768)}`
+    const result = runInNewContext(
+      'validate(input)',
+      { validate: validateRasterImageDataUri, input },
+      {
+        timeout: 250
+      }
+    )
+    expect(result).toBe(input)
+  })
+
+  it('finds base64 among multiple parameters and preserves payload commas', () => {
+    const content = pngBase64()
+    expect(validateRasterImageDataUri(`data:image/png;charset=utf-8;;BASE64;,${content}`)).toBe(
+      `data:image/png;base64,${content}`
+    )
+    expect(validateRasterImageDataUri('data:text/plain;charset=utf-8,one,two')).toBe(
+      'data:text/plain;charset=utf-8,one,two'
+    )
+  })
+
   it('accepts a safe inline raster and rejects an oversized one', () => {
     const safe = `data:image/png;base64,${pngBase64()}`
     expect(validateRasterImageDataUri(safe)).toBe(safe)

@@ -1,53 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 
+const desktop = { isQuitting: false, isServeMode: false }
+
 describe('shouldQuitWhenAllWindowsClosed', () => {
-  it('keeps headless serve alive when its offscreen browser windows close', () => {
-    expect(
-      shouldQuitWhenAllWindowsClosed({
-        platform: 'linux',
-        isQuitting: false,
-        isServeMode: true
-      })
-    ).toBe(false)
-  })
+  it.each(['win32', 'linux'] as const)(
+    'keeps %s startup alive when a helper window closes before the main window exists',
+    (platform) => {
+      expect(
+        shouldQuitWhenAllWindowsClosed({ ...desktop, platform, hasOpenedMainWindow: false })
+      ).toBe(false)
+    }
+  )
 
-  it('keeps normal macOS close-all behavior outside quit', () => {
+  it.each(['win32', 'linux'] as const)('quits %s after the last main window closes', (platform) => {
     expect(
-      shouldQuitWhenAllWindowsClosed({
-        platform: 'darwin',
-        isQuitting: false,
-        isServeMode: false
-      })
-    ).toBe(false)
-  })
-
-  it('quits desktop Linux when all windows close', () => {
-    expect(
-      shouldQuitWhenAllWindowsClosed({
-        platform: 'linux',
-        isQuitting: false,
-        isServeMode: false
-      })
+      shouldQuitWhenAllWindowsClosed({ ...desktop, platform, hasOpenedMainWindow: true })
     ).toBe(true)
   })
 
-  it('continues a committed quit on macOS after all windows close', () => {
+  it('keeps macOS alive and quits once a quit is in progress', () => {
+    expect(
+      shouldQuitWhenAllWindowsClosed({ ...desktop, platform: 'darwin', hasOpenedMainWindow: true })
+    ).toBe(false)
     expect(
       shouldQuitWhenAllWindowsClosed({
         platform: 'darwin',
         isQuitting: true,
-        isServeMode: false
-      })
-    ).toBe(true)
-  })
-
-  it('continues a committed quit after a serve owner was promoted to desktop', () => {
-    expect(
-      shouldQuitWhenAllWindowsClosed({
-        platform: 'darwin',
-        isQuitting: true,
-        isServeMode: true
+        isServeMode: true,
+        hasOpenedMainWindow: false
       })
     ).toBe(true)
   })

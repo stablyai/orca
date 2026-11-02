@@ -1,30 +1,15 @@
-// Why: SFTP-backed equivalents of `installer-utils.ts` for the remote-install
-// flow. Each function takes an `sftp` handle plus paths the agent CLI expects
-// on the remote (e.g. `~/.claude/settings.json`). Lives in `agent-hooks/`
-// because it shares the contract with the local installer (script body,
-// hook-event shape, atomic-rename semantics) and any drift between them is
-// exactly the bug we want to avoid.
-//
-// We deliberately keep the JSON merge logic in the existing
-// `installer-utils.ts` and only swap fs primitives — the JSON shape and
-// managed-command matching must stay identical to the local install.
-//
-// See docs/design/agent-status-over-ssh.md §8 (commit #8).
+// Share parsing and merge rules with local installation; replace only filesystem operations.
 
 import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
 
-import { isPlainObject, type HooksConfig } from './installer-utils'
+import type { HooksConfig } from './installer-utils'
+import { parseHooksJsonText } from './hooks-json-read'
 
 const DEFAULT_REMOTE_CONFIG_MODE = 0o600
 const REMOTE_SFTP_OPERATION_TIMEOUT_MS = 10_000
 
-/** Read+JSON-parse a remote file. Returns `null` on parse failure (caller
- *  surfaces "could not parse" status to the UI), `{}` on missing file
- *  (matches local behavior — first-install case). Rethrows on other I/O
- *  failures (permission denied, EIO, channel closed) so the caller can
- *  distinguish transient SFTP errors from a malformed-JSON case rather
- *  than collapsing both into a misleading "could not parse" diagnostic. */
+/** Null means invalid JSON, {} means missing; propagate other I/O failures. */
 export async function readHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string
@@ -38,39 +23,30 @@ export async function readHooksJsonRemote(
     }
     throw err
   }
-  try {
-    const parsed = JSON.parse(body)
-    return isPlainObject(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  return parseHooksJsonText(body)
 }
 
-/** Atomically write a JSON config to the remote — write to a tmp path then
- *  rename, mirroring the local writeHooksJson contract. The .bak rotation is
- *  intentionally NOT carried over: the remote file is the user's, and a
- *  per-target backup convention belongs alongside the remote installer UI
- *  (out of scope for this commit). */
+/** Atomically replace the remote config without rotating local-style backups. */
 export async function writeHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string,
-  config: HooksConfig
+  config: Record<string, unknown>,
+  // JSONC callers can supply text edited in place.
+  options?: { serialized?: string }
 ): Promise<void> {
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
-  const serialized = `${JSON.stringify(config, null, 2)}\n`
-  // Why: skip the write when on-disk content is identical so repeated
-  // install() calls do not bump the file's mtime / inode unnecessarily.
+  const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
+  // Preserve mtime and inode on repeated installs.
   try {
     const existing = await readFile(sftp, remotePath)
     if (existing === serialized) {
       return
     }
   } catch {
-    // ENOENT or read error — fall through to the write below.
+    // Retry through the write path after a failed read.
   }
-  // Why: tmp + rename so a partial network drop mid-write does not leave a
-  // truncated settings.json that the agent CLI would refuse to load.
+  // Atomic replacement prevents interrupted writes from truncating live settings.
   const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
   try {
     const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
@@ -78,18 +54,15 @@ export async function writeHooksJsonRemote(
     await chmod(sftp, tmp, mode)
     await rename(sftp, tmp, remotePath)
   } finally {
-    // Best-effort cleanup if rename failed.
     try {
       await unlink(sftp, tmp)
     } catch {
-      // already gone or never created
+      // Cleanup is best effort.
     }
   }
 }
 
-/** Write the managed hook script to the remote and chmod 0o755. POSIX-only —
- *  the relay deliberately does not support Windows-remote in v1 (see design
- *  doc §3 + §6). */
+/** POSIX SSH targets only: paths and script payloads follow POSIX conventions. */
 export async function writeManagedScriptRemote(
   sftp: SFTPWrapper,
   remotePath: string,
@@ -104,12 +77,10 @@ export async function writeManagedScriptRemote(
       return
     }
   } catch {
-    // ENOENT or read error — fall through to the atomic write below.
+    // Retry through the atomic write path after a failed read.
   }
 
-  // Why: existing configs may already invoke this script. Write/chmod a temp
-  // file first, then rename it into place so interrupted reinstalls do not
-  // leave the configured hook path truncated or non-executable.
+  // Publish only a complete executable script; existing configs may invoke it during reinstall.
   const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
   try {
     await writeFile(sftp, tmp, content, 0o755)
@@ -119,7 +90,7 @@ export async function writeManagedScriptRemote(
     try {
       await unlink(sftp, tmp)
     } catch {
-      // already gone or never created
+      // Cleanup is best effort.
     }
   }
 }
@@ -130,6 +101,21 @@ export async function readTextFileRemote(
 ): Promise<string | null> {
   try {
     return await readFile(sftp, remotePath)
+  } catch (err) {
+    if (isNoEntryError(err)) {
+      return null
+    }
+    throw err
+  }
+}
+
+/** Null means the directory is missing; propagate other I/O failures. */
+export async function listRemoteDirectory(
+  sftp: SFTPWrapper,
+  remotePath: string
+): Promise<string[] | null> {
+  try {
+    return (await readdir(sftp, remotePath)).map((entry) => entry.filename)
   } catch (err) {
     if (isNoEntryError(err)) {
       return null
@@ -151,7 +137,7 @@ export async function writeTextFileRemoteAtomic(
       return
     }
   } catch {
-    // ENOENT or read error — fall through to the atomic write below.
+    // Retry through the atomic write path after a failed read.
   }
 
   const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
@@ -164,12 +150,10 @@ export async function writeTextFileRemoteAtomic(
     try {
       await unlink(sftp, tmp)
     } catch {
-      // already gone or never created
+      // Cleanup is best effort.
     }
   }
 }
-
-// ─── Private SFTP primitives ────────────────────────────────────────
 
 function sftpOperation<T>(
   label: string,
@@ -182,8 +166,7 @@ function sftpOperation<T>(
         return
       }
       settled = true
-      // Why: remote hook installation must fail open; a wedged SFTP callback
-      // should degrade hook status, not block SSH workspace startup forever.
+      // A wedged SFTP callback must not block workspace startup indefinitely.
       reject(new Error(`Timed out waiting for SFTP ${label}`))
     }, REMOTE_SFTP_OPERATION_TIMEOUT_MS)
     if (typeof timer === 'object' && 'unref' in timer) {
@@ -265,14 +248,11 @@ async function rename(sftp: SFTPWrapper, src: string, dst: string): Promise<void
     }
   }
 
-  // Why: servers without OpenSSH overwrite-rename cannot safely replace an
-  // existing live config path. Renaming dst aside would leave settings.json
-  // missing if the SFTP channel dies before src is moved into place, so fail
-  // closed and keep the existing file intact.
+  // Never rename the live destination aside: a dropped connection could leave the config missing.
   await renamePlain(sftp, src, dst)
 }
 
-async function renamePlain(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
+export async function renamePlain(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
   await sftpOperation<void>(`rename ${src}`, (callback) => {
     sftp.rename(src, dst, callback)
   })
@@ -312,9 +292,7 @@ async function mkdirpRemote(sftp: SFTPWrapper, remotePath: string): Promise<void
   if (remotePath === '/' || remotePath === '' || remotePath === '.') {
     return
   }
-  // Why: walk the path top-down rather than bottom-up so an existing parent
-  // chain doesn't cost a full readdir per segment. POSIX-only — Windows-
-  // remote is out of scope for v1.
+  // Walk POSIX paths top-down to avoid rescanning the full parent chain for each segment.
   const segments = remotePath.split('/').filter((s) => s.length > 0)
   let current = remotePath.startsWith('/') ? '' : '.'
   for (const seg of segments) {
@@ -325,9 +303,7 @@ async function mkdirpRemote(sftp: SFTPWrapper, remotePath: string): Promise<void
       try {
         await mkdir(sftp, current)
       } catch (err) {
-        // Why: re-raise only when the dir really isn't there. SSH_FX_FAILURE
-        // on a concurrent mkdir from another client is harmless — readdir on
-        // the next iteration will succeed.
+        // Concurrent mkdir may report SSH_FX_FAILURE; subsequent operations still verify the path.
         if (!isAlreadyExistsError(err)) {
           throw err
         }
@@ -356,9 +332,7 @@ function isAlreadyExistsError(err: unknown): boolean {
   if (!err || typeof err !== 'object') {
     return false
   }
-  // SSH_FX_FAILURE (4) is OpenSSH's catch-all for "exists" alongside other
-  // mkdir failures; we accept the ambiguity and let the next readdir prove
-  // success.
+  // SSH_FX_FAILURE (4) can mean "exists"; tolerate it here and let later operations expose other failures.
   return (err as { code?: unknown }).code === 4
 }
 

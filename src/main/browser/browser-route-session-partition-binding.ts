@@ -1,0 +1,51 @@
+import type {
+  BrowserRoutePartitionIdentity,
+  DerivedBrowserRoutePartition
+} from './browser-route-identity'
+import {
+  resolveBrowserRoutePartitionBinding,
+  type ResolvedBrowserRoutePartition
+} from './browser-route-partition-migration'
+import type { BrowserRouteSessionRegistryDependencies } from './browser-route-session-registry-contract'
+import type { BrowserRoutePreparePageInput } from './browser-route-session-state'
+
+export function resolveBrowserRouteSessionPartition(
+  dependencies: BrowserRouteSessionRegistryDependencies,
+  input: BrowserRoutePreparePageInput,
+  derivePartition: (identity: BrowserRoutePartitionIdentity) => DerivedBrowserRoutePartition
+): ResolvedBrowserRoutePartition {
+  const derived = resolveBrowserRoutePartitionBinding({
+    bindings: dependencies.bindingStore,
+    identity: input.identity,
+    ...(input.compatibleIdentity ? { compatibleIdentity: input.compatibleIdentity } : {}),
+    legacyIdentity: input.legacyIdentity ?? null,
+    storageScope: input.storageScope,
+    derivePartition
+  })
+  const persisted = dependencies.bindingStore.get(derived.partition)
+  if (persisted !== null && persisted !== derived.bindingFingerprint) {
+    throw new Error('browser_route_partition_binding_conflict')
+  }
+  return derived
+}
+
+// Write binding metadata before preparing storage; evictions need separate storage cleanup.
+export function persistBrowserRouteSessionBinding(
+  dependencies: BrowserRouteSessionRegistryDependencies,
+  derived: ResolvedBrowserRoutePartition,
+  storageScope: string
+): void {
+  if (dependencies.bindingStore.get(derived.partition) !== null) {
+    dependencies.bindingStore.touch(derived.partition)
+    return
+  }
+  const evicted = dependencies.bindingStore.set(
+    derived.partition,
+    derived.bindingFingerprint,
+    storageScope,
+    derived.aliasFingerprint
+  )
+  if (evicted.length > 0) {
+    dependencies.releaseEvictedPartitions?.(evicted)
+  }
+}

@@ -7,12 +7,18 @@ const getClients = vi.fn()
 const clearToken = vi.fn()
 const isAuthError = vi.fn()
 
-vi.mock('./client', () => ({
+vi.mock('./linear-request-concurrency', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
-  release: vi.fn(),
-  getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: (...args: unknown[]) => isAuthError(...args),
+  release: vi.fn()
+}))
+
+vi.mock('./linear-token-store', () => ({
   clearToken: (...args: unknown[]) => clearToken(...args)
+}))
+
+vi.mock('./client', () => ({
+  getClients: (...args: unknown[]) => getClients(...args),
+  isAuthError: (...args: unknown[]) => isAuthError(...args)
 }))
 
 function makeEntry(): LinearClientForWorkspace {
@@ -195,6 +201,36 @@ describe('Linear project queries', () => {
     const { listProjects } = await import('./projects')
 
     await expect(listProjects(undefined, 20, 'workspace-1', true)).rejects.toThrow(error.message)
+  })
+
+  it('maps project detail reads and preserves missing/error outcomes at the request seam', async () => {
+    const project = {
+      ...rawProject('project-detail'),
+      content: 'Project plan',
+      projectMilestones: { nodes: [{ id: 'milestone-1', name: 'Launch' }] },
+      externalLinks: {
+        nodes: [{ id: 'link-1', url: 'https://example.invalid/plan', label: 'Plan' }]
+      }
+    }
+    const failure = new Error('fetch failed')
+    rawRequest
+      .mockResolvedValueOnce({ data: { project } })
+      .mockResolvedValueOnce({ data: { project: null } })
+      .mockRejectedValueOnce(failure)
+    const { getProject } = await import('./projects')
+
+    await expect(getProject('project-detail', 'workspace-1')).resolves.toMatchObject({
+      id: 'project-detail',
+      workspaceId: 'workspace-1',
+      content: 'Project plan',
+      milestones: [{ id: 'milestone-1', name: 'Launch' }],
+      resources: [
+        { id: 'link-1', title: 'Plan', url: 'https://example.invalid/plan', type: 'link' }
+      ]
+    })
+    expect(rawRequest.mock.calls[0]?.[1]).toEqual({ id: 'project-detail' })
+    await expect(getProject('missing', 'workspace-1')).resolves.toBeNull()
+    await expect(getProject('failed', 'workspace-1')).rejects.toBe(failure)
   })
 
   it('lets manual project issue refresh bypass older in-flight reads', async () => {
@@ -382,6 +418,8 @@ describe('Linear project queries', () => {
         targetDate: '2026-08-01'
       }
     })
+    expect(rawRequest.mock.calls[0]?.[0]).toContain('mutation OrcaLinearProjectCreate')
+    expect(rawRequest.mock.calls[0]?.[0]).toContain('projectCreate(input: $input)')
   })
 
   it('lets manual custom view list refresh bypass older in-flight reads', async () => {

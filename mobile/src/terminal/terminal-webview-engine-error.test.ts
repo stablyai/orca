@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalWebView } from './TerminalWebView'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const nativeWebViewMethods = vi.hoisted(() => ({
   postMessage: vi.fn<(message: string) => void>(),
@@ -41,35 +42,18 @@ vi.mock('lucide-react-native', () => ({
   RefreshCw: 'RefreshCw'
 }))
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
-// Why: mounting TerminalWebView arms the web-ready watchdog; tests must
-// unmount so the timer can't survive into later tests and fire in teardown.
+// Unmount every WebView so readiness watchdogs cannot survive into another test.
 let activeRenderer: ReactTestRenderer | null = null
 
 function createTerminalWebViewRenderer(
   onEngineError = vi.fn(),
   props: Record<string, unknown> = {}
 ) {
-  let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    act(() => {
-      renderer = create(createElement(TerminalWebView, { onEngineError, ...props }))
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  const mounted: { renderer?: ReactTestRenderer } = {}
+  act(() => {
+    mounted.renderer = create(createElement(TerminalWebView, { onEngineError, ...props }))
+  })
+  const renderer = mounted.renderer
   if (!renderer) {
     throw new Error('TerminalWebView did not render')
   }
@@ -78,15 +62,14 @@ function createTerminalWebViewRenderer(
 }
 
 function postWebViewMessage(renderer: ReactTestRenderer, payload: Record<string, unknown>) {
-  const webView = renderer.root.findByType('WebView')
+  const webView = findByHostType(renderer.root, 'WebView')
   act(() => {
     webView.props.onMessage({ nativeEvent: { data: JSON.stringify(payload) } })
   })
 }
 
 function renderedText(renderer: ReactTestRenderer): string {
-  return renderer.root
-    .findAllByType('Text')
+  return findAllByHostType(renderer.root, 'Text')
     .flatMap((node) => node.props.children)
     .join(' ')
 }
@@ -156,9 +139,7 @@ describe('TerminalWebView engine errors', () => {
     expect(renderedText(renderer)).not.toContain('watchdog cascade')
   })
 
-  // Why: if the document dies before the glue can post anything (or the RN
-  // bridge never comes up), no message and no native error handler fires —
-  // the watchdog must convert that silence into the visible fatal overlay.
+  // Watchdog silence catches failures before document code or the bridge can report anything.
   it('paints the fatal overlay when web-ready never arrives', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -222,7 +203,13 @@ describe('TerminalWebView engine errors', () => {
     expect(postedCommands().map((command) => command.type)).toEqual(['ping'])
 
     postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id })
-    expect(postedCommands().map((command) => command.type)).toEqual(['ping', 'set-theme', 'write'])
+    expect(postedCommands().map((command) => command.type)).toEqual([
+      'ping',
+      'set-interaction-active',
+      'set-theme',
+      'write'
+    ])
+    expect(postedCommands()[1]).toMatchObject({ type: 'set-interaction-active', active: true })
     expect(onWebReady).toHaveBeenCalledTimes(1)
   })
 
@@ -248,6 +235,7 @@ describe('TerminalWebView engine errors', () => {
     const terminalRef = createRef<TerminalWebViewHandle>()
     const { onEngineError, renderer } = createTerminalWebViewRenderer(vi.fn(), {
       ref: terminalRef,
+      interactionActive: false,
       terminalTheme: {
         mode: 'light',
         theme: { background: '#ffffff', foreground: '#111111' }
@@ -255,7 +243,7 @@ describe('TerminalWebView engine errors', () => {
     })
     postWebViewMessage(renderer, { type: 'web-ready' })
     nativeWebViewMethods.postMessage.mockClear()
-    const webView = renderer.root.findByType('WebView')
+    const webView = findByHostType(renderer.root, 'WebView')
 
     act(() => {
       webView.props.onContentProcessDidTerminate({ nativeEvent: {} })
@@ -267,6 +255,11 @@ describe('TerminalWebView engine errors', () => {
     expect(onEngineError).not.toHaveBeenCalled()
 
     postWebViewMessage(renderer, { type: 'web-ready' })
-    expect(postedCommands().map((command) => command.type)).toEqual(['set-theme', 'write'])
+    expect(postedCommands().map((command) => command.type)).toEqual([
+      'set-interaction-active',
+      'set-theme',
+      'write'
+    ])
+    expect(postedCommands()[0]).toMatchObject({ type: 'set-interaction-active', active: false })
   })
 })

@@ -2,13 +2,22 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal-quick-command-prompt-limit'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
 
 const mountedRoots: Root[] = []
 
-async function renderDialog(command: TerminalQuickCommand): Promise<void> {
+async function renderDialog(
+  command: TerminalQuickCommand,
+  props: {
+    defaultAdvancedOpen?: boolean
+    agentPromptMaxLength?: number | null
+    onSave?: (command: TerminalQuickCommand) => Promise<boolean> | boolean
+    onOpenChange?: (open: boolean) => void
+  } = {}
+): Promise<void> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -21,24 +30,20 @@ async function renderDialog(command: TerminalQuickCommand): Promise<void> {
         mode="add"
         command={command}
         repos={[]}
-        onOpenChange={vi.fn()}
-        onSave={vi.fn()}
+        defaultAdvancedOpen={props.defaultAdvancedOpen}
+        agentPromptMaxLength={props.agentPromptMaxLength}
+        onOpenChange={props.onOpenChange ?? vi.fn()}
+        onSave={props.onSave ?? vi.fn(() => true)}
       />
     )
   })
 }
 
-function findAnimatedRowContaining(text: string): HTMLElement {
-  const row = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden]')).find(
-    (element) => element.textContent?.includes(text)
-  )
-  if (!row) {
-    throw new Error(`Could not find animated row containing ${text}`)
-  }
-  return row
-}
-
 describe('TerminalQuickCommandDialog animation structure', () => {
+  beforeEach(() => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+  })
+
   afterEach(async () => {
     await act(async () => {
       for (const root of mountedRoots.splice(0)) {
@@ -46,11 +51,12 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       }
     })
     document.body.innerHTML = ''
+    vi.unstubAllGlobals()
   })
 
-  it('keeps agent-only fields mounted as collapsed animated rows in terminal mode', async () => {
+  it('selects all text in editable fields with Cmd+A', async () => {
     await renderDialog({
-      id: 'qc-1',
+      id: 'qc-select-all',
       label: 'Start dev server',
       action: 'terminal-command',
       command: 'npm run dev',
@@ -58,13 +64,186 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       scope: { type: 'global' }
     })
 
-    const agentRow = findAnimatedRowContaining('Agent')
-    const promptHelpRow = findAnimatedRowContaining('Supports skills')
+    const fields = [
+      document.body.querySelector<HTMLInputElement>('input'),
+      document.body.querySelector<HTMLTextAreaElement>('textarea[aria-label="Command"]')
+    ]
 
-    expect(agentRow.getAttribute('aria-hidden')).toBe('true')
-    expect(agentRow.className).toContain('transition-[grid-template-rows]')
-    expect(agentRow.className).toContain('grid-rows-[0fr]')
-    expect(promptHelpRow.getAttribute('aria-hidden')).toBe('true')
-    expect(promptHelpRow.className).toContain('grid-rows-[0fr]')
+    for (const field of fields) {
+      expect(field).not.toBeNull()
+      if (!field) {
+        continue
+      }
+      field.setSelectionRange(field.value.length, field.value.length)
+      await act(async () => {
+        field.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'a',
+            code: 'KeyA',
+            metaKey: true,
+            bubbles: true,
+            cancelable: true
+          })
+        )
+      })
+
+      expect([field.selectionStart, field.selectionEnd]).toEqual([0, field.value.length])
+    }
+  })
+
+  it('refuses to save a prompt over an older host cap instead of truncating it', async () => {
+    const onSave = vi.fn()
+    await renderDialog(
+      {
+        id: 'qc-6',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'claude',
+        prompt: 'x'.repeat(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1),
+        scope: { type: 'global' }
+      },
+      { onSave, agentPromptMaxLength: LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH }
+    )
+
+    const save = Array.from(document.body.querySelectorAll('button')).find((button) =>
+      button.textContent?.startsWith('Save')
+    )
+    expect(save?.disabled).toBe(true)
+    const alert = document.body.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('Too long for this host')
+    const textareaEl = document.body.querySelector('textarea')
+    expect(textareaEl?.getAttribute('aria-invalid')).toBe('true')
+    expect(textareaEl?.getAttribute('aria-describedby')?.split(' ')).toContain(alert?.id)
+
+    const textarea = document.body.querySelector('textarea')!
+    await act(async () => {
+      textarea.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true })
+      )
+    })
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
+  it('keeps the over-cap alert text static while the count changes', async () => {
+    await renderDialog(
+      {
+        id: 'qc-10',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'claude',
+        prompt: 'x'.repeat(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1),
+        scope: { type: 'global' }
+      },
+      { agentPromptMaxLength: LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH }
+    )
+    const before = document.body.querySelector('[role="alert"]')
+    const beforeText = before?.textContent
+
+    const textarea = document.body.querySelector('textarea')!
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+    await act(async () => {
+      setValue.call(textarea, `${textarea.value}y`)
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    expect(document.body.textContent).toContain('6,002')
+    const after = document.body.querySelector('[role="alert"]')
+    // A screen reader re-reads an alert whose text changes, so only the plain count may move.
+    expect(after).toBe(before)
+    expect(after?.textContent).toBe(beforeText)
+    expect(after?.textContent).not.toMatch(/\d/)
+  })
+
+  it('locks the submitted draft until save settles, then permits editing and retry after refusal', async () => {
+    const prompt = 'x'.repeat(100_000)
+    const onOpenChange = vi.fn()
+    let answer: (saved: boolean) => void = () => {}
+    const onSave = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)))
+    await renderDialog(
+      {
+        id: 'qc-11',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'claude',
+        prompt,
+        scope: { type: 'global' }
+      },
+      { onSave, onOpenChange }
+    )
+    expect(document.body.textContent).not.toContain('characters')
+    expect(document.body.textContent).toContain('Drag corner to resize')
+    const textarea = document.body.querySelector('textarea')!
+    const cancel = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Cancel'
+    )!
+    const save = Array.from(document.body.querySelectorAll('button')).find((button) =>
+      button.textContent?.startsWith('Save')
+    )!
+    const submit = async (target: HTMLElement = textarea): Promise<void> => {
+      await act(async () => {
+        target.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Enter',
+            metaKey: true,
+            bubbles: true,
+            cancelable: true
+          })
+        )
+      })
+    }
+
+    const agentSelect = document.body.querySelector<HTMLButtonElement>('[role="combobox"]')!
+    await submit(agentSelect)
+    expect(agentSelect.getAttribute('data-state')).toBe('open')
+    expect(onSave).not.toHaveBeenCalled()
+    const codex = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(
+      (option) => option.textContent?.trim() === 'Codex'
+    )!
+    expect(textarea.closest('fieldset')?.contains(codex)).toBe(false)
+    await submit(codex)
+    expect(onSave).not.toHaveBeenCalled()
+    expect(agentSelect.textContent).toContain('Codex')
+
+    await submit(agentSelect)
+    await submit()
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', prompt }))
+    expect(agentSelect.disabled).toBe(true)
+    const options = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]'))
+    expect(options.length).toBeGreaterThan(0)
+    expect(options.every((option) => option.getAttribute('aria-disabled') === 'true')).toBe(true)
+    await act(async () => options.find((option) => option.textContent?.includes('Claude'))?.click())
+    expect(agentSelect.textContent).toContain('Codex')
+    expect(textarea.closest('fieldset')?.disabled).toBe(true)
+    expect(cancel.disabled).toBe(true)
+    expect(save.disabled).toBe(true)
+    await act(async () => {
+      cancel.click()
+      textarea.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      )
+    })
+    await submit()
+    expect(onSave).toHaveBeenCalledTimes(1)
+    expect(onOpenChange).not.toHaveBeenCalled()
+
+    await act(async () => answer(false))
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
+    expect(document.body.querySelector('textarea')?.value).toBe(prompt)
+    expect(textarea.closest('fieldset')?.disabled).toBe(false)
+    expect(cancel.disabled).toBe(false)
+    expect(save.disabled).toBe(false)
+
+    const updatedPrompt = `${prompt}Keep this later edit.`
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+    await act(async () => {
+      setValue.call(textarea, updatedPrompt)
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    await submit()
+    await act(async () => answer(true))
+    expect(onSave).toHaveBeenCalledTimes(2)
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: updatedPrompt }))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

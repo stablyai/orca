@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+
 import type { SkillScanRoot } from './skill-discovery-sources'
-import { buildWslSkillDiscoveryCommand, parseWslSkillDiscoveryOutput } from './skill-discovery-wsl'
+import { parseWslSkillDiscoveryOutput } from './skill-discovery-wsl'
 
 const homeRoot: SkillScanRoot = {
   id: 'home-codex',
@@ -38,7 +39,6 @@ describe('WSL skill discovery', () => {
         '/home/alice/.codex/skills/.system/review/SKILL.md',
         '/opt/orca/review/SKILL.md',
         '1700000000',
-        '7',
         markdown
       ),
       record(
@@ -47,7 +47,6 @@ describe('WSL skill discovery', () => {
         '/work/project/.agents/skills/review/SKILL.md',
         '/opt/orca/review/SKILL.md',
         '1700000001',
-        '9',
         markdown
       )
     ].join('')
@@ -62,7 +61,6 @@ describe('WSL skill discovery', () => {
         sourceKind: 'bundled',
         rootPath: homeRoot.path,
         skillFilePath: '/home/alice/.codex/skills/.system/review/SKILL.md',
-        fileCount: 7,
         updatedAt: 1_700_000_000_000
       })
     ])
@@ -74,23 +72,39 @@ describe('WSL skill discovery', () => {
     )
   })
 
-  it('builds a distro-side scan for enumeration, reads, and canonical identity', () => {
-    const command = buildWslSkillDiscoveryCommand([
-      { ...repoRoot, path: "/work/alice's project/.agents/skills" }
-    ])
-    const encoded = /printf %s '([^']+)'/.exec(command)?.[1]
-    expect(encoded).toBeTruthy()
-    const script = Buffer.from(encoded!, 'base64').toString('utf8')
-
-    expect(script).toContain('find -L "$root_path"')
-    expect(script).toContain('realpath -- "$skill_file"')
-    expect(script).toContain('head -c 262144 -- "$skill_file"')
-    expect(script).toContain(`'/work/alice'\\''s project/.agents/skills'`)
-  })
-
-  it('rejects malformed host responses instead of reporting an empty scan', () => {
-    expect(() => parseWslSkillDiscoveryOutput(record('S', '9'), [homeRoot])).toThrow(
-      'unknown source'
+  it('uses the TypeScript summary parser for uncertain WSL name candidates', () => {
+    const blockName = Buffer.from('\uFEFF---\nname: >-\n  Agent\n  Orchestration\n---\n').toString(
+      'base64'
     )
+    const headingName = Buffer.from('# Computer Use\n\nUse the computer.\n').toString('base64')
+    const output = [
+      record('R', '0', '1'),
+      record(
+        'S',
+        '0',
+        '/home/alice/.agents/skills/renamed-a/SKILL.md',
+        '/home/alice/.agents/skills/renamed-a/SKILL.md',
+        '1700000000',
+        blockName
+      ),
+      record(
+        'S',
+        '0',
+        '/home/alice/.agents/skills/renamed-b/SKILL.md',
+        '/home/alice/.agents/skills/renamed-b/SKILL.md',
+        '1700000000',
+        headingName
+      )
+    ].join('')
+
+    expect(
+      parseWslSkillDiscoveryOutput(
+        output,
+        [homeRoot],
+        42,
+        ['home'],
+        ['agent orchestration', 'computer use']
+      ).skills.map((skill) => skill.name)
+    ).toEqual(['Agent Orchestration', 'Computer Use'])
   })
 })

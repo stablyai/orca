@@ -1,8 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { guideModuleLoadMock, runtimeClientConstructorMock } = vi.hoisted(() => ({
+const { guideModuleLoadMock, previewMock, runtimeClientConstructorMock } = vi.hoisted(() => ({
   guideModuleLoadMock: vi.fn(),
+  previewMock: vi.fn(),
   runtimeClientConstructorMock: vi.fn()
+}))
+
+// Installer behavior is covered separately in skills-install.test.ts.
+vi.mock('../main/skills/bundled-skill-install/cli-entry', () => ({
+  localBundledSkillInput: previewMock,
+  previewBundledSkillInstall: previewMock,
+  installBundledSkills: previewMock
 }))
 
 vi.mock('./bundled-skill-guides.js', () => {
@@ -13,44 +21,36 @@ vi.mock('./bundled-skill-guides.js', () => {
         name: 'zeta',
         description: 'Use when zeta work\nspans lines.',
         markdown: '# Zeta\n',
-        fullMarkdown: '# Zeta\n\n## References\n\nZeta reference.\n',
-        aliases: []
+        aliases: [],
+        references: []
       },
       {
         name: 'alpha',
         description: 'Use when alpha work is needed.',
         markdown: '# Alpha\n\nShort.\n',
-        fullMarkdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n',
-        aliases: ['legacy-alpha']
+        aliases: ['legacy-alpha'],
+        references: [{ name: 'deep', markdown: '# Deep\n\nFull.\n' }]
+      },
+      {
+        name: 'gamma',
+        description:
+          'Use when gamma work spans several sentences describing exactly how a ' +
+          'coding agent should decide whether gamma applies to the current task at hand.',
+        markdown: '# Gamma\n',
+        aliases: [],
+        references: []
       }
     ]
   }
 })
 
-vi.mock('./runtime-client', () => {
+vi.mock('./runtime-client', async () => {
+  // Error formatting uses instanceof, so the mock must preserve the production classes.
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import('./runtime/types.js')
+
   class RuntimeClient {
     constructor() {
       runtimeClientConstructorMock()
-    }
-  }
-
-  class RuntimeClientError extends Error {
-    readonly code: string
-    readonly data?: unknown
-
-    constructor(code: string, message: string, data?: unknown) {
-      super(message)
-      this.code = code
-      this.data = data
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
     }
   }
 
@@ -70,7 +70,13 @@ describe('orca skills CLI', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     runtimeClientConstructorMock.mockClear()
+    previewMock.mockReset()
     process.exitCode = undefined
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('keeps the bundled table off the eager command-registry path', async () => {
@@ -102,7 +108,10 @@ describe('orca skills CLI', () => {
     await main(['skills', 'list'], '/tmp/repo')
 
     expect(stdoutText(stdoutSpy)).toBe(
-      'alpha: Use when alpha work is needed.\nzeta: Use when zeta work spans lines.\n'
+      'alpha: Use when alpha work is needed.\n' +
+        'gamma: Use when gamma work spans several sentences describing exactly how a ' +
+        'coding agent should decide whether gamma applies to the current task at hand.\n' +
+        'zeta: Use when zeta work spans lines.\n'
     )
     expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
   })
@@ -112,7 +121,9 @@ describe('orca skills CLI', () => {
 
     await main(['skills', 'get', 'alpha', '--full'], '/tmp/repo')
 
-    expect(stdoutText(stdoutSpy)).toBe('# Alpha\n\nShort.\n\n## References\n\nFull.\n')
+    expect(stdoutText(stdoutSpy)).toBe(
+      '# Alpha\n\nShort.\n\n---\n\n# Bundled references\n\nThese references belong to the version-matched guide above. Read only the documents named by its action gates.\n\n<!-- bundled-reference: references/deep.md -->\n\n# Deep\n\nFull.\n'
+    )
   })
 
   it('supports the canonical single-item show verb as an alias', async () => {
@@ -133,6 +144,12 @@ describe('orca skills CLI', () => {
         {
           topics: [
             { name: 'alpha', description: 'Use when alpha work is needed.' },
+            {
+              name: 'gamma',
+              description:
+                'Use when gamma work spans several sentences describing exactly how a ' +
+                'coding agent should decide whether gamma applies to the current task at hand.'
+            },
             { name: 'zeta', description: 'Use when zeta work spans lines.' }
           ]
         },
@@ -152,7 +169,8 @@ describe('orca skills CLI', () => {
         {
           name: 'alpha',
           full: true,
-          markdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n'
+          markdown:
+            '# Alpha\n\nShort.\n\n---\n\n# Bundled references\n\nThese references belong to the version-matched guide above. Read only the documents named by its action gates.\n\n<!-- bundled-reference: references/deep.md -->\n\n# Deep\n\nFull.\n'
         },
         null,
         2
@@ -168,15 +186,22 @@ describe('orca skills CLI', () => {
     await main(['--help'], '/tmp/repo')
 
     expect(String(logSpy.mock.calls[0]?.[0])).toContain(
-      'Usage: orca skills get <topic> [--full] [--json]'
+      'Usage: orca skills get <topic> [--full | --reference <name>] [--json]'
     )
     expect(String(logSpy.mock.calls[1]?.[0])).toContain(
-      'Commands:\n  list               List version-matched skill guides'
+      'Commands:\n  installed          List installed skill selectors'
     )
     expect(String(logSpy.mock.calls[1]?.[0])).toContain(
       'get                Print a version-matched skill guide'
     )
-    expect(String(logSpy.mock.calls[2]?.[0])).toContain('Skills:\n  skills list')
+    expect(String(logSpy.mock.calls[1]?.[0])).toContain(
+      'install            Install bundled Orca skills'
+    )
+    expect(String(logSpy.mock.calls[1]?.[0])).toContain(
+      'update             Update Orca skills to the version this Orca build ships'
+    )
+    expect(String(logSpy.mock.calls[2]?.[0])).toContain('Skills:\n  skills installed')
+    expect(String(logSpy.mock.calls[2]?.[0])).toContain('skills update')
     expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
   })
 
@@ -187,9 +212,119 @@ describe('orca skills CLI', () => {
 
     expect(process.exitCode).toBe(1)
     expect(errorSpy).toHaveBeenCalledWith(
-      'Unknown skill topic "missing". Available topics: alpha, zeta'
+      'Unknown skill topic "missing". Available topics: alpha, gamma, zeta'
     )
     expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+  })
+
+  it('lists installable skills when no --skill/--all is given', async () => {
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    await main(['skills', 'install'], '/tmp/repo')
+
+    expect(stdoutText(stdoutSpy)).toBe(
+      [
+        'Choose one or more skills to install:',
+        '  alpha',
+        '  gamma',
+        '  zeta',
+        '',
+        'Usage: orca skills install --skill <name> [--skill <name> ...]',
+        '   or: orca skills install --all',
+        ''
+      ].join('\n')
+    )
+    expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
+  })
+
+  it('gives install --json (no selection) a stable schema', async () => {
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    await main(['skills', 'install', '--json'], '/tmp/repo')
+
+    expect(stdoutText(stdoutSpy)).toBe(
+      `${JSON.stringify({ availableSkills: ['alpha', 'gamma', 'zeta'] }, null, 2)}\n`
+    )
+  })
+
+  it('rejects combining --all with --skill', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--all', '--skill', 'alpha'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('Use either --all or --skill, not both.')
+  })
+
+  it('rejects an unknown --skill name', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--skill', 'missing'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unknown skill "missing". Available skills: alpha, gamma, zeta'
+    )
+  })
+
+  it('rejects --skill without a value', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--skill'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith('--skill requires a value; it was passed with none.')
+  })
+
+  it('lists updatable skills when no --skill/--all is given', async () => {
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    await main(['skills', 'update'], '/tmp/repo')
+
+    expect(stdoutText(stdoutSpy)).toBe(
+      [
+        'Choose one or more skills to update:',
+        '  alpha',
+        '  gamma',
+        '  zeta',
+        '',
+        'Usage: orca skills update --skill <name> [--skill <name> ...]',
+        '   or: orca skills update --all',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('refuses a real run when the shell forwards orca to the Orca host', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '/home/alice/wt')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('writes to the machine that runs it')
+    expect(previewMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses --dry-run through the host-forwarding shim too', async () => {
+    vi.stubEnv('ORCA_CLI_CWD', '/home/alice/wt')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--skill', 'alpha', '--dry-run'], '/tmp/repo')
+
+    expect(process.exitCode).toBe(1)
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain('writes to the machine that runs it')
+    expect(previewMock).not.toHaveBeenCalled()
+  })
+
+  it('documents --agent for skills install rather than the terminal-launch flag', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['skills', 'install', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0]?.[0])
+    expect(help).toContain('--agent <names>')
+    expect(help).not.toContain('Launch a known TUI agent')
   })
 })
 

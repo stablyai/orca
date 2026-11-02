@@ -1,12 +1,17 @@
+import {
+  closeTestStores,
+  createStore,
+  testState,
+  readPersistedStateJson,
+  writePersistedStateJson
+} from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { AutomationService } from './service'
-
-const testState = { dir: '' }
 
 vi.mock('electron', () => ({
   app: {
@@ -19,11 +24,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-async function createStore() {
-  vi.resetModules()
-  const { Store, initDataPath } = await import('../persistence')
-  initDataPath()
-  return new Store()
+/** Inject persisted drift that normal creation would resolve. */
+function mutateDataFile(mutate: (state: { automations: Record<string, unknown>[] }) => void): void {
+  const file = join(testState.dir, 'orca-data.json')
+  const state = JSON.parse(readPersistedStateJson(file))
+  mutate(state)
+  writePersistedStateJson(file, JSON.stringify(state))
 }
 
 const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
@@ -41,7 +47,8 @@ describe('AutomationService', () => {
     vi.useFakeTimers()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
   })
@@ -130,21 +137,24 @@ describe('AutomationService', () => {
       prompt: 'Check the repo',
       agentId: 'claude',
       projectId: 'r1',
-      runContext: {
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    mutateDataFile((state) => {
+      state.automations[0].runContext = {
         kind: 'workspace-run',
         projectId: 'project-1',
         hostId: 'local',
         projectHostSetupId: 'missing-setup',
         repoId: 'r1',
         path: '/repo'
-      },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+      }
     })
+    const reloaded = await createStore()
     const send = vi.fn()
-    const service = new AutomationService(store, { tickMs: 60_000 })
+    const service = new AutomationService(reloaded, { tickMs: 60_000 })
     service.setWebContents({
       isDestroyed: () => false,
       send
@@ -168,21 +178,24 @@ describe('AutomationService', () => {
       prompt: 'Check the repo',
       agentId: 'claude',
       projectId: 'r1',
-      runContext: {
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    mutateDataFile((state) => {
+      state.automations[0].runContext = {
         kind: 'workspace-run',
         projectId: setup.projectId,
         hostId: setup.hostId,
         projectHostSetupId: setup.id,
         repoId: setup.repoId,
         path: '/repo/old'
-      },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+      }
     })
+    const reloaded = await createStore()
     const send = vi.fn()
-    const service = new AutomationService(store, { tickMs: 60_000 })
+    const service = new AutomationService(reloaded, { tickMs: 60_000 })
     service.setWebContents({
       isDestroyed: () => false,
       send
@@ -200,26 +213,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const send = vi.fn()
     const service = new AutomationService(store, { tickMs: 60_000 })
     service.setWebContents({
@@ -239,26 +256,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const send = vi.fn()
     const service = new AutomationService(store, {
       tickMs: 60_000,
@@ -286,26 +307,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Remote check',
-      prompt: 'Check the remote repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Remote check',
+        prompt: 'Check the remote repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-14T00:00:00Z').getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
+      { resolvedRepo: repo }
+    )
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
@@ -358,26 +383,30 @@ describe('AutomationService', () => {
     vi.setSystemTime(beforeRunAt)
     const store = await createStore()
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
-    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const repo = makeRepo({ executionHostId: runtimeHostId })
+    store.addRepo(repo)
     const setup = store.getProjectHostSetups()[0]!
-    const automation = store.createAutomation({
-      name: 'Morning check',
-      prompt: 'Check the repo',
-      agentId: 'claude',
-      projectId: 'r1',
-      runContext: {
-        kind: 'workspace-run',
-        projectId: setup.projectId,
-        hostId: runtimeHostId,
-        projectHostSetupId: setup.id,
-        repoId: setup.repoId,
-        path: setup.path
+    const automation = store.createAutomation(
+      {
+        name: 'Morning check',
+        prompt: 'Check the repo',
+        agentId: 'claude',
+        projectId: 'r1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: setup.projectId,
+          hostId: runtimeHostId,
+          projectHostSetupId: setup.id,
+          repoId: setup.repoId,
+          path: setup.path
+        },
+        workspaceMode: 'new_per_run',
+        timezone,
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date(2026, 4, 12, 0, 0).getTime()
       },
-      workspaceMode: 'new_per_run',
-      timezone,
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date(2026, 4, 12, 0, 0).getTime()
-    })
+      { resolvedRepo: repo }
+    )
 
     const headlessDispatcher = vi.fn().mockResolvedValue({
       workspaceId: 'wt1',
@@ -562,8 +591,7 @@ describe('AutomationService', () => {
       terminalSessionId: 'tab-1',
       error: null
     })
-    // While usage collection is awaited the run is already final, so a
-    // scheduler tick creating newer runs can prune it away mid-flight.
+    // New runs can prune this finalized run while usage collection waits.
     const getAutomationRunUsage = vi.fn().mockImplementation(async () => {
       for (let i = 1; i <= 120; i++) {
         const later = store.createAutomationRun(automation, base + i * 60_000)
@@ -590,7 +618,6 @@ describe('AutomationService', () => {
     })
 
     expect(updated.id).toBe(run.id)
-    // The run really was evicted; the usage write was skipped instead of throwing.
     expect(store.listAutomationRuns(automation.id).some((entry) => entry.id === run.id)).toBe(false)
   })
 
@@ -629,5 +656,153 @@ describe('AutomationService', () => {
 
     expect(updated.usage?.status).toBe('unavailable')
     expect(updated.usage?.unavailableReason).toBe('provider_unsupported')
+  })
+
+  // Name sorting evaluates the poison record before the healthy one.
+  it('keeps evaluating later due automations after an unreadable schedule throws', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:59:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const poison = store.createAutomation({
+      name: 'A poison schedule',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00').getTime()
+    })
+    const healthy = store.createAutomation({
+      name: 'B healthy schedule',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00').getTime()
+    })
+    mutateDataFile((state) => {
+      const entry = state.automations.find((automation) => automation.id === poison.id)!
+      entry.rrule = 'FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0'
+    })
+    const reloaded = await createStore()
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+    const send = vi.fn()
+    const service = new AutomationService(reloaded, { tickMs: 60_000 })
+    service.setWebContents({ isDestroyed: () => false, send })
+
+    service.start()
+    service.setRendererReady()
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.any(Object))
+    )
+    service.stop()
+
+    const [, payload] = send.mock.calls[0]
+    expect(payload.automation.id).toBe(healthy.id)
+    expect(reloaded.listAutomationRuns(healthy.id)[0]?.status).toBe('dispatching')
+    const poisonRun = reloaded.listAutomationRuns(poison.id)[0]
+    expect(poisonRun?.status).toBe('skipped_unavailable')
+    expect(poisonRun?.error).toBe(
+      'Orca could not evaluate this automation and skipped the occurrence.'
+    )
+    expect(logged).toHaveBeenCalled()
+  })
+
+  it('keeps evaluating later due automations after an unreadable cron schedule throws', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:59:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const poison = store.createAutomation({
+      name: 'A poison cron',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: '0 9 * * *',
+      dtstart: new Date('2026-05-12T00:00:00').getTime()
+    })
+    const healthy = store.createAutomation({
+      name: 'B healthy cron',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: '0 9 * * *',
+      dtstart: new Date('2026-05-12T00:00:00').getTime()
+    })
+    mutateDataFile((state) => {
+      const entry = state.automations.find((automation) => automation.id === poison.id)!
+      entry.rrule = '0 9 32 * *'
+    })
+    const reloaded = await createStore()
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+    const send = vi.fn()
+    const service = new AutomationService(reloaded, { tickMs: 60_000 })
+    service.setWebContents({ isDestroyed: () => false, send })
+
+    service.start()
+    service.setRendererReady()
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.any(Object))
+    )
+    service.stop()
+
+    const [, payload] = send.mock.calls[0]
+    expect(payload.automation.id).toBe(healthy.id)
+    expect(reloaded.listAutomationRuns(healthy.id)[0]?.status).toBe('dispatching')
+    expect(reloaded.listAutomationRuns(poison.id)[0]?.error).toBe(
+      'Orca could not evaluate this automation and skipped the occurrence.'
+    )
+    expect(logged).toHaveBeenCalled()
+  })
+
+  it('marks the run dispatch_failed when the renderer send throws', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:59:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Renderer gone',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: '0 9 * * *',
+      dtstart: new Date('2026-05-12T00:00:00').getTime()
+    })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    logged.mockClear()
+
+    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+    const send = vi.fn(() => {
+      throw new Error('renderer is gone')
+    })
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({ isDestroyed: () => false, send })
+
+    service.start()
+    service.setRendererReady()
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+    service.stop()
+
+    const runs = store.listAutomationRuns(automation.id)
+    expect(runs).toHaveLength(1)
+    expect(runs[0]?.status).toBe('dispatch_failed')
+    expect(runs[0]?.error).toBe('renderer is gone')
+    expect(logged).not.toHaveBeenCalled()
   })
 })

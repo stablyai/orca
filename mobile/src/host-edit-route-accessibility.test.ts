@@ -2,10 +2,11 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import EditHostScreen from '../app/h/[hostId]/edit'
+import { findAllByHostType } from './test-support/react-test-renderer-host-nodes'
 
 const dependencies = vi.hoisted(() => ({
   back: vi.fn(),
-  forceReconnectHost: vi.fn(),
+  refreshHostClient: vi.fn(),
   loadHosts: vi.fn(),
   primeHosts: vi.fn(),
   updateHostNameAndEndpoint: vi.fn()
@@ -41,34 +42,17 @@ vi.mock('./transport/host-store', () => ({
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 
-vi.mock('./transport/client-context', () => ({
-  useForceReconnect: () => dependencies.forceReconnectHost,
-  usePrimeHosts: () => dependencies.primeHosts
+vi.mock('./transport/host-client-hooks', () => ({
+  usePrimeHosts: () => dependencies.primeHosts,
+  useRefreshHostClient: () => dependencies.refreshHostClient
 }))
-
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
 
 async function renderEditHostRoute(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    await act(async () => {
-      renderer = create(createElement(EditHostScreen))
-      await Promise.resolve()
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  await act(async () => {
+    renderer = create(createElement(EditHostScreen))
+    await Promise.resolve()
+  })
   if (!renderer) {
     throw new Error('Edit host route did not render')
   }
@@ -77,7 +61,6 @@ async function renderEditHostRoute(): Promise<ReactTestRenderer> {
 
 describe('edit host route accessibility', () => {
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     dependencies.loadHosts.mockReset().mockResolvedValue([
       {
         id: 'host-1',
@@ -97,7 +80,7 @@ describe('edit host route accessibility', () => {
   it('exposes stable accessible names for both editable fields', async () => {
     const renderer = await renderEditHostRoute()
 
-    const inputs = renderer.root.findAllByType('TextInput')
+    const inputs = findAllByHostType(renderer.root, 'TextInput')
     expect(inputs).toHaveLength(2)
     expect(inputs.map((input) => input.props.accessibilityLabel)).toEqual(['Name', 'Address'])
 

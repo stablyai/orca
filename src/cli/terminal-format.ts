@@ -1,3 +1,6 @@
+import { PTY_LIVE_NOTE, describeUnconfirmedCloseStop } from '../shared/pty-liveness-verdict'
+import { describeTerminalWaitBlockedReason } from '../shared/terminal-wait-blocked-reason-legacy-alias'
+import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
@@ -10,26 +13,31 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
 } from '../shared/runtime-types'
 
-export function formatTerminalList(result: RuntimeTerminalListResult): string {
+export function formatTerminalList(
+  result: WithAnnotatedHostScope<RuntimeTerminalListResult>
+): string {
+  const scope = formatListingHostScope(result.hostScope)
   if (result.terminals.length === 0) {
-    return 'No live terminals.'
+    return `No terminals listed.\n${scope}`
   }
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}${terminal.orphaned ? '  orphaned' : ''}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
   const bodyWithLayout = visualLayout ? `${body}\n\nvisual layout:\n${visualLayout}` : body
+  const bodyWithScope = `${bodyWithLayout}\n\n${scope}`
   return result.truncated
-    ? `${bodyWithLayout}\n\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
-    : bodyWithLayout
+    ? `${bodyWithScope}\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
+    : bodyWithScope
 }
 
 function formatTerminalVisualLayouts(
@@ -91,14 +99,30 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
   return [
     `handle: ${terminal.handle}`,
     `title: ${terminal.title ?? '(untitled)'}`,
+    ...(terminal.paneTitle ? [`paneTitle: ${terminal.paneTitle}`] : []),
     `worktree: ${terminal.worktreePath}`,
     `branch: ${terminal.branch}`,
     `leaf: ${terminal.leafId}`,
     `ptyId: ${terminal.ptyId ?? 'none'}`,
+    ...(terminal.orphaned ? ['orphaned: true'] : []),
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
+    `agentWait: ${formatAgentWait(terminal.agentWait)}`,
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
+}
+
+function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
+  if (agentWait === undefined) {
+    return 'unknown (not evaluated)'
+  }
+  if (!agentWait) {
+    return 'none'
+  }
+  if (!agentWait.reason) {
+    return `interactive prompt (via ${agentWait.source})`
+  }
+  return `${describeTerminalWaitBlockedReason(agentWait.reason)} (via ${agentWait.source})`
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
@@ -111,11 +135,18 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
+    ...(terminal.source ? [`source: ${terminal.source}`] : []),
+    ...(terminal.draft ? [`draft: ${JSON.stringify(terminal.draft)}`] : []),
     ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
     ...oldestCursor,
     ...latestCursor,
     ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
-    ...(limitedWarning ? [limitedWarning] : [])
+    ...(limitedWarning ? [limitedWarning] : []),
+    ...(terminal.source === 'screen-unavailable'
+      ? [
+          'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
+        ]
+      : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
 }
@@ -143,13 +174,63 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
 }
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
-  return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
+  if (!result.send.accepted) {
+    const reason = result.send.refusedReason ? `: ${result.send.refusedReason}` : ''
+    return `Input refused by ${result.send.handle}${reason}.`
+  }
+  const prompt = result.send.prompt
+  if (!prompt) {
+    return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
+  }
+  return [
+    `Prompt ${prompt.requestId} on ${result.send.handle}: ${prompt.stages.join(' -> ')}.`,
+    `provider: ${prompt.provider}`,
+    `delivery observation: ${prompt.observation}`,
+    ...terminalSendWarnings(result.send).map((warning) => `warning: ${warning}`)
+  ].join('\n')
+}
+
+/** The same warnings the text formatter prints, so a --json caller sees them too. */
+export function terminalSendWarnings(send: RuntimeTerminalSend): string[] {
+  const warning = send.accepted && send.prompt ? promptObservationWarning(send.prompt) : null
+  return warning ? [warning] : []
+}
+
+function promptObservationWarning(
+  prompt: NonNullable<RuntimeTerminalSend['prompt']>
+): string | null {
+  if (prompt.observation === 'permission') {
+    return `delivery was not observed because the provider requires permission. Resolve the permission prompt in the terminal, then reissue the exact command with --retry-request ${prompt.requestId} and --wait-submit <seconds>.`
+  }
+  if (prompt.observation === 'incarnation_replaced') {
+    return 'delivery was not observed because the terminal process was replaced. Inspect the current terminal before sending a new prompt; do not retry with this request ID.'
+  }
+  // Providers need swallowed-Enter recovery without turn_started, even if submit observation failed.
+  if (prompt.provider !== 'unsupported' && prompt.provider !== 'old-host') {
+    return prompt.stages.includes('turn_started')
+      ? null
+      : `input was accepted but no turn start was observed, so the Enter may have been swallowed. Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID replays the receipt instead of sending the prompt again.`
+  }
+  if (prompt.observation === 'unsupported') {
+    return prompt.provider === 'old-host'
+      ? 'this host predates durable prompt receipts. Update Orca on the execution host, and inspect the terminal before retrying an ambiguous send.'
+      : 'input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying.'
+  }
+  return null
 }
 
 export function formatTerminalRename(result: { rename: RuntimeTerminalRename }): string {
   return result.rename.title
     ? `Renamed terminal ${result.rename.handle} to "${result.rename.title}".`
     : `Cleared title for terminal ${result.rename.handle}.`
+}
+
+export function formatTerminalSetPaneTitle(result: {
+  paneTitle: RuntimeTerminalSetPaneTitle
+}): string {
+  return result.paneTitle.title
+    ? `Set title of pane ${result.paneTitle.leafId} to "${result.paneTitle.title}".`
+    : `Cleared title of pane ${result.paneTitle.leafId}.`
 }
 
 export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
@@ -164,15 +245,31 @@ export function formatTerminalSplit(result: { split: RuntimeTerminalSplit }): st
 }
 
 export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): string {
+  if (result.focus.navigated === false) {
+    return `Focus request for terminal ${result.focus.handle} was superseded or host navigation was skipped (tab ${result.focus.tabId}).`
+  }
   return `Focused terminal ${result.focus.handle} (tab ${result.focus.tabId}).`
+}
+
+/** "PTY killed." is a claim of observed death, so only a confirmed kill earns it. */
+function describePtyStop(close: RuntimeTerminalClose): string {
+  if (close.ptyKilled) {
+    return ' PTY killed.'
+  }
+  if (close.ptyStopVerdict === 'live') {
+    return ` ${PTY_LIVE_NOTE}`
+  }
+  if (close.ptyStopVerdict === 'unverifiable') {
+    return ` ${describeUnconfirmedCloseStop(close)}`
+  }
+  return ''
 }
 
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
   if (result.close.closeMode === 'tab') {
     return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
   }
-  const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
-  return `Closed terminal ${result.close.handle}.${ptyNote}`
+  return `Closed terminal ${result.close.handle}.${describePtyStop(result.close)}`
 }
 
 export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {
@@ -184,7 +281,7 @@ export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): strin
     `exitCode: ${result.wait.exitCode ?? 'null'}`
   ]
   if (result.wait.blockedReason) {
-    lines.push(`blockedReason: ${result.wait.blockedReason}`)
+    lines.push(`blockedReason: ${describeTerminalWaitBlockedReason(result.wait.blockedReason)}`)
   }
   return lines.join('\n')
 }

@@ -1,11 +1,6 @@
-// Why: will-quit defers app.quit() until teardown settles. Teardown members
-// are individually bounded, but a wedged transport (half-open post-sleep
-// socket) can leave one unsettled forever and make Force Quit the only way
-// out (#9447). Racing a deadline guarantees quit always completes.
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../shared/quit-teardown-deadline'
 
-// Why: generous enough for daemon checkpoint writes on a slow disk; small
-// enough that a wedged teardown never needs Force Quit.
-export const WILL_QUIT_TEARDOWN_DEADLINE_MS = 20_000
+export { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../shared/quit-teardown-deadline'
 
 export type NamedQuitTeardown = {
   name: string
@@ -32,4 +27,31 @@ export async function settleTeardownWithinDeadline(
   const outcome = await Promise.race([settled, deadline])
   clearTimeout(timer)
   return outcome === 'deadline' ? [...pendingNames] : []
+}
+
+export type SettledWithinMs<T> =
+  | { outcome: 'settled'; value: T }
+  | { outcome: 'failed'; error: unknown }
+  | { outcome: 'timed-out' }
+
+// Keep failures distinct from timeouts so quit diagnostics remain accurate.
+export async function settleWithinMs<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<SettledWithinMs<T>> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise.then(
+        (value): SettledWithinMs<T> => ({ outcome: 'settled', value }),
+        (error): SettledWithinMs<T> => ({ outcome: 'failed', error })
+      ),
+      new Promise<SettledWithinMs<T>>((resolve) => {
+        timer = setTimeout(() => resolve({ outcome: 'timed-out' }), timeoutMs)
+        timer.unref?.()
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
 }

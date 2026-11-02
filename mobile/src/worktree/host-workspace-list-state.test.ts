@@ -1,0 +1,108 @@
+import { describe, expect, it } from 'vitest'
+import {
+  selectHostWorkspaceListState,
+  type HostWorkspaceListStateInput
+} from './host-workspace-list-state'
+
+function input(overrides: Partial<HostWorkspaceListStateInput>): HostWorkspaceListStateInput {
+  return {
+    connState: 'connected',
+    connectionVerdict: { kind: 'normal', label: 'Connected' },
+    worktreesLoaded: true,
+    displayCount: 0,
+    sectionCount: 0,
+    catalogError: null,
+    ...overrides
+  }
+}
+
+describe('selectHostWorkspaceListState', () => {
+  it('reports catalog-error instead of empty when the fetch failed with no rows', () => {
+    expect(selectHostWorkspaceListState(input({ catalogError: 'forbidden' }))).toBe('catalog-error')
+    expect(
+      selectHostWorkspaceListState(input({ catalogError: 'forbidden', worktreesLoaded: false }))
+    ).toBe('catalog-error')
+  })
+
+  it('keeps showing cached rows (no overlay) when a later fetch fails', () => {
+    expect(
+      selectHostWorkspaceListState(
+        input({ catalogError: 'network_error', displayCount: 3, sectionCount: 2 })
+      )
+    ).toBeNull()
+  })
+
+  it('still reports empty for a filtered-out cached list during a failure', () => {
+    expect(
+      selectHostWorkspaceListState(
+        input({ catalogError: 'network_error', displayCount: 3, sectionCount: 0 })
+      )
+    ).toBe('empty')
+  })
+
+  it('reports empty only after a successful load confirmed zero workspaces', () => {
+    expect(selectHostWorkspaceListState(input({}))).toBe('empty')
+    expect(selectHostWorkspaceListState(input({ worktreesLoaded: false }))).toBe('loading')
+  })
+
+  it('shows the spinner for an empty connecting list, including a prior error', () => {
+    expect(
+      selectHostWorkspaceListState(input({ connState: 'reconnecting', catalogError: 'x' }))
+    ).toBe('loading')
+    expect(
+      selectHostWorkspaceListState(
+        input({ connState: 'connecting', worktreesLoaded: false, catalogError: null })
+      )
+    ).toBe('loading')
+  })
+
+  it('reports an outage instead of spinning once the connection verdict escalates', () => {
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'reconnecting',
+          connectionVerdict: { kind: 'warning', label: "Can't connect" },
+          worktreesLoaded: false
+        })
+      )
+    ).toBe('unreachable')
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'disconnected',
+          connectionVerdict: { kind: 'normal', label: 'Disconnected' },
+          worktreesLoaded: false
+        })
+      )
+    ).toBe('unreachable')
+  })
+
+  it('keeps spinning through a relay redial and leaves a refused pairing to its banner', () => {
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'disconnected',
+          connectionVerdict: { kind: 'normal', label: 'Connecting via Relay…', dialing: true },
+          worktreesLoaded: false
+        })
+      )
+    ).toBe('loading')
+    expect(
+      selectHostWorkspaceListState(
+        input({
+          connState: 'disconnected',
+          connectionVerdict: { kind: 'auth-failed', label: 'Pairing invalid' },
+          worktreesLoaded: false
+        })
+      )
+    ).toBeNull()
+  })
+
+  it('renders nothing while disconnected with cached rows', () => {
+    expect(
+      selectHostWorkspaceListState(
+        input({ connState: 'disconnected', displayCount: 2, sectionCount: 1 })
+      )
+    ).toBeNull()
+  })
+})

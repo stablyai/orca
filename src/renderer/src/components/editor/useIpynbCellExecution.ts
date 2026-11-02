@@ -1,0 +1,154 @@
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { resolveNotebookExecutionHost, type NotebookExecutionHost } from './ipynb-execution-host'
+import { clearIpynbOutputs, updateIpynbCellRuns, withIpynbCellIds } from './ipynb-cell-mutations'
+import { toStoredOutputs } from './ipynb-kernel-outputs'
+import {
+  forgetFinishedRuns,
+  markRunCommitted,
+  runCells,
+  trustNotebook
+} from './ipynb-kernel-session'
+import {
+  getCellRun,
+  getSession,
+  useUncommittedRunKeys,
+  type QueuedCell
+} from './ipynb-kernel-store'
+import { parseIpynb } from './ipynb-parse'
+import { getIpynbCellKey } from './useIpynbDocumentEditing'
+
+function executionRefusal(host: NotebookExecutionHost, language: string): string | null {
+  switch (host) {
+    case 'remote':
+      return translate(
+        'auto.components.editor.IpynbViewer.localOnly',
+        'Notebook cells can only run for files on this computer.'
+      )
+    case 'unresolved':
+      return translate(
+        'auto.components.editor.IpynbViewer.ownerUnresolved',
+        "Orca can't tell which computer this notebook is on yet, so its cells can't run."
+      )
+    case 'local':
+      return language === 'python'
+        ? null
+        : translate(
+            'auto.components.editor.IpynbViewer.pythonOnly',
+            'Only Python notebooks can run in Orca.'
+          )
+  }
+}
+
+type UseIpynbCellExecutionArgs = {
+  filePath: string
+  worktreeId: string
+  /** The workspace root, where the search for a project `.venv` stops. */
+  rootPath: string | null
+  flushSourceDrafts: () => string
+  applyContent: (content: string) => void
+}
+
+export function useIpynbCellExecution({
+  filePath,
+  worktreeId,
+  rootPath,
+  flushSourceDrafts,
+  applyContent
+}: UseIpynbCellExecutionArgs) {
+  const uncommittedRunKeys = useUncommittedRunKeys(filePath)
+  const [pendingRun, setPendingRun] = useState<QueuedCell[] | null>(null)
+
+  // Keep completed outputs in the kernel session until the notebook document mounts to consume them.
+  useEffect(() => {
+    if (uncommittedRunKeys.length === 0) {
+      return
+    }
+    const latestContent = flushSourceDrafts()
+    let nextContent = latestContent
+    try {
+      const cells = parseIpynb(latestContent).cells
+      const updates: {
+        index: number
+        outputs: Record<string, unknown>[]
+        executionCount: number | null
+      }[] = []
+      for (const key of uncommittedRunKeys) {
+        const run = getCellRun(filePath, key)
+        const index = cells.findIndex((cell, cellIndex) => getIpynbCellKey(cell, cellIndex) === key)
+        if (run && index !== -1) {
+          updates.push({
+            index,
+            outputs: toStoredOutputs(run.outputs),
+            executionCount: run.executionCount
+          })
+        }
+      }
+      nextContent = updateIpynbCellRuns(latestContent, updates)
+    } catch {
+      // An unparseable document has no cells to take outputs; drop them.
+    }
+    for (const key of uncommittedRunKeys) {
+      markRunCommitted(filePath, key)
+    }
+    if (nextContent !== latestContent) {
+      applyContent(nextContent)
+    }
+  }, [applyContent, filePath, flushSourceDrafts, uncommittedRunKeys])
+
+  const run = (indexes: number[]): void => {
+    const drafted = flushSourceDrafts()
+    const notebook = parseIpynb(drafted)
+    const codeIndexes = indexes.filter((index) => notebook.cells[index]?.kind === 'code')
+    if (codeIndexes.length === 0) {
+      return
+    }
+    const refusal = executionRefusal(
+      resolveNotebookExecutionHost(useAppStore.getState(), worktreeId),
+      notebook.language
+    )
+    if (refusal) {
+      toast.error(refusal)
+      return
+    }
+    // Why: id-less (nbformat 4.4) cells are keyed by index, so a move mid-run would misroute output.
+    const content = withIpynbCellIds(drafted)
+    if (content !== drafted) {
+      applyContent(content)
+    }
+    const { cells } = parseIpynb(content)
+    const queued = codeIndexes.flatMap((index) => {
+      const cell = cells[index]
+      return cell ? [{ key: getIpynbCellKey(cell, index), code: cell.source }] : []
+    })
+    if (getSession(filePath).trusted) {
+      void runCells(filePath, queued, rootPath)
+    } else {
+      setPendingRun(queued)
+    }
+  }
+
+  const confirmPendingRun = (): void => {
+    trustNotebook(filePath)
+    setPendingRun(null)
+    if (pendingRun) {
+      void runCells(filePath, pendingRun, rootPath)
+    }
+  }
+
+  const clearAllOutputs = (): void => {
+    applyContent(clearIpynbOutputs(flushSourceDrafts()))
+    forgetFinishedRuns(filePath)
+  }
+
+  return {
+    pendingRun,
+    cancelPendingRun: () => setPendingRun(null),
+    confirmPendingRun,
+    runCell: (index: number) => run([index]),
+    runAll: (cellCount: number) => run([...Array(cellCount).keys()]),
+    clearAllOutputs
+  }
+}

@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/react'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { richMarkdownAnnotationHighlightPluginKey } from './rich-markdown-annotation-highlight'
 import {
   getRichMarkdownAnnotationHighlightRanges,
