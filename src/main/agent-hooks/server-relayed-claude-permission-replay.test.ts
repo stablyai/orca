@@ -181,6 +181,18 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
 })
 
 const decline = captures.claudeDecline
+
+/** The relay's own cached pane row (what it would replay), read without a production accessor. */
+function relayRow(relay: RelayAgentHookServer): unknown {
+  const state: unknown = Reflect.get(relay, 'state')
+  const rows =
+    typeof state === 'object' && state !== null
+      ? Reflect.get(state, 'lastStatusByPaneKey')
+      : undefined
+  const get: unknown =
+    typeof rows === 'object' && rows !== null ? Reflect.get(rows, 'get') : undefined
+  return typeof get === 'function' ? get.call(rows, PANE) : undefined
+}
 const declineBatch = decline.findIndex((raw) => raw.hook_event_name === 'PostToolBatch')
 
 /** A relay and desktop pair whose forwarding can be cut, filtered, or moved to a fresh relay process. */
@@ -230,19 +242,26 @@ async function startDeclinePair(
 }
 
 describe('a relayed request bound to its single in-flight call (recorded decline)', () => {
-  it('clears live at the batch that settles it, and forwards no batch that settles nothing shown', async () => {
+  it('clears live at the batch that settles it; batches that settle nothing shown change neither side’s row', async () => {
     const pair = await startDeclinePair()
     for (const raw of decline.slice(0, declineBatch)) {
       await pair.post(raw)
     }
     expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
     expect(await pair.post(decline[declineBatch])).toBe('working')
-    for (const raw of decline.slice(declineBatch + 1, -3)) {
-      await pair.post(raw)
-    }
-    expect(pair.forwarded.filter((envelope) => envelope.hookEventName === 'PostToolBatch')).toEqual(
-      [expect.objectContaining({ claudeSettledRequests: [{ toolUseId: 'tool_use_id-1' }] })]
-    )
+    await pair.post(decline[declineBatch + 1])
+    await pair.post(decline[declineBatch + 2])
+    const cached = relayRow(pair.relay)
+    const shown = row(pair.desktop)
+    // The next recorded batch settles a call no one is waiting on.
+    await pair.post(decline[declineBatch + 3])
+    expect(row(pair.desktop)).toEqual(shown)
+    expect(relayRow(pair.relay)).toBe(cached)
+    expect(
+      pair.forwarded
+        .filter((envelope) => envelope.hookEventName === 'PostToolBatch')
+        .map((envelope) => envelope.claudeBatchSettledRequests)
+    ).toEqual([[{ toolUseId: 'tool_use_id-1' }], [{ toolUseId: 'tool_use_id-2' }]])
   })
 
   it('clears on reconnect when the batch settled it while the desktop was away', async () => {
@@ -259,13 +278,92 @@ describe('a relayed request bound to its single in-flight call (recorded decline
     expect(row(pair.desktop).state).toBe('working')
   })
 
-  it('lets a restarted relay’s first batch settle the wait the desktop still shows', async () => {
+  it('lets a restarted relay settle the held wait after the recorded Notification arrives first', async () => {
     const pair = await startDeclinePair()
-    for (const raw of decline.slice(0, declineBatch)) {
+    for (const raw of decline.slice(0, declineBatch - 1)) {
       await pair.post(raw)
     }
     await pair.restart()
+    expect(await pair.post(decline[declineBatch - 1])).toBe('waiting')
     expect(await pair.post(decline[declineBatch])).toBe('working')
+  })
+
+  it('settles a held call listed after the 16th entry of a live batch', async () => {
+    const pair = await startDeclinePair()
+    const [start, submit] = decline
+    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+    await pair.post(start)
+    await pair.post(submit)
+    const ids = Array.from({ length: 20 }, (_, i) => `call-${i}`)
+    for (const [i, id] of ids.entries()) {
+      await pair.post({
+        ...root,
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_use_id: id,
+        tool_input: { file_path: `/f${i}` }
+      })
+    }
+    expect(
+      await pair.post({
+        ...root,
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'Read',
+        tool_input: { file_path: '/f18' }
+      })
+    ).toBe('waiting')
+    // Another owner's batch naming the same id is not this request's settlement.
+    expect(
+      await pair.post({
+        ...root,
+        hook_event_name: 'PostToolBatch',
+        agent_id: 'child-a',
+        tool_calls: [{ tool_use_id: 'call-18' }]
+      })
+    ).toBe('waiting')
+    expect(
+      await pair.post({
+        ...root,
+        hook_event_name: 'PostToolBatch',
+        tool_calls: ids.map((tool_use_id) => ({ tool_use_id }))
+      })
+    ).toBe('working')
+  })
+
+  it('never lets replayed batch evidence clear a request it could not name, as on main', async () => {
+    const pair = await startDeclinePair()
+    const [start, submit] = decline
+    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+    const tool = { tool_name: 'Read', tool_input: { file_path: '/same' } }
+    for (const raw of [start, submit]) {
+      await pair.post(raw)
+    }
+    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'T', ...tool })
+    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'U', ...tool })
+    // Two identical calls in flight: the request cannot be named and takes main's path.
+    expect(await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })).toBe(
+      'waiting'
+    )
+    pair.connected = false
+    await pair.post({
+      ...root,
+      hook_event_name: 'PostToolBatch',
+      tool_calls: [{ tool_use_id: 'T' }, { tool_use_id: 'U' }]
+    })
+    await pair.post({
+      ...root,
+      hook_event_name: 'PreToolUse',
+      tool_use_id: 'W',
+      tool_name: 'Bash',
+      tool_input: { command: 'ls' }
+    })
+    pair.connected = true
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(pair.forwarded.at(-1)).toMatchObject({
+      isReplay: true,
+      claudeBatchSettledRequests: [{ toolUseId: 'T' }, { toolUseId: 'U' }]
+    })
+    expect(row(pair.desktop).state).toBe('waiting')
   })
 
   it('keeps main’s behavior for a desktop paired with a relay that predates bound requests', async () => {

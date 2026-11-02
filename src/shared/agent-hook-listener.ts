@@ -292,7 +292,7 @@ export function normalizeHookPayload(
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
     toolUseId: readFirstString(hookPayload, ['tool_use_id', 'toolUseId']),
-    ...(binding?.settled ? { claudeSettledRequests: binding.settled } : {}),
+    ...(binding?.settled ? { claudeBatchSettledRequests: binding.settled } : {}),
     toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
     teammateName:
       source === 'claude' && eventName === 'TeammateIdle'

@@ -47,6 +47,7 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'hostTurnRevision'
   | 'claudePermissionBound'
   | 'claudeSettledRequests'
+  | 'claudeBatchSettledRequests'
   | 'promptInteractionKey'
   | 'programStatus'
   | 'programStatusOnly'

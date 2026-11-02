@@ -5,7 +5,10 @@ import {
 } from '../../../shared/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
+import {
+  isClaudePermissionSettledByReplay,
+  isSameClaudeReplayRun
+} from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 /** Retain the shell-work fact only with the main-agent observation that established it. */
@@ -56,28 +59,46 @@ export function withHeldChildWaitMainAgent(
 
 type ClaudeSettlementEvidence = Pick<
   AgentHookEventPayload,
-  'hookEventName' | 'toolUseId' | 'claudeSettledRequests' | 'connectionId' | 'toolAgentId'
+  | 'hookEventName'
+  | 'toolUseId'
+  | 'claudeBatchSettledRequests'
+  | 'connectionId'
+  | 'toolAgentId'
+  | 'isReplay'
+  | 'launchToken'
+  | 'providerSession'
 >
 
-/** The bound tool use's own start or end, or a batch listing it, from the same owner. */
+/** The bound tool use's own start or end, or batch evidence listing it, from the same owner. */
 function endsBoundClaudePermission(
   previous: AgentHookEventPayload,
   next: ClaudeSettlementEvidence
 ): boolean {
   const toolUseId = previous.toolUseId?.trim()
-  if (
-    !toolUseId ||
-    previous.connectionId !== next.connectionId ||
-    (previous.toolAgentId?.trim() || undefined) !== (next.toolAgentId?.trim() || undefined)
-  ) {
+  const owner = previous.toolAgentId?.trim() || undefined
+  if (!toolUseId) {
     return false
   }
-  return next.hookEventName === 'PostToolBatch'
-    ? next.claudeSettledRequests?.some((request) => request.toolUseId === toolUseId) === true
-    : (next.hookEventName === 'PreToolUse' ||
-        next.hookEventName === 'PostToolUse' ||
-        next.hookEventName === 'PostToolUseFailure') &&
-        next.toolUseId?.trim() === toolUseId
+  // A replay carries the relay's recent batch settlements beside whatever row it restates.
+  const batch =
+    next.isReplay === true
+      ? isSameClaudeReplayRun(previous, next)
+        ? next.claudeBatchSettledRequests
+        : undefined
+      : next.hookEventName === 'PostToolBatch' && previous.connectionId === next.connectionId
+        ? next.claudeBatchSettledRequests
+        : undefined
+  if (batch?.some((request) => request.toolUseId === toolUseId && request.toolAgentId === owner)) {
+    return true
+  }
+  return (
+    previous.connectionId === next.connectionId &&
+    owner === (next.toolAgentId?.trim() || undefined) &&
+    (next.hookEventName === 'PreToolUse' ||
+      next.hookEventName === 'PostToolUse' ||
+      next.hookEventName === 'PostToolUseFailure') &&
+    next.toolUseId?.trim() === toolUseId
+  )
 }
 
 /** A live batch only ever settles a held bound request; anything else is main's no-op and never becomes the row. */

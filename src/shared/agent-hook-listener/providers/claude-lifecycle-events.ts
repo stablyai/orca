@@ -1,3 +1,4 @@
+import { retireClaudeInFlightOwnersMatching } from '../claude-permission-binding'
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
 import {
   markClaudeBackgroundAgentRunning,
@@ -66,6 +67,10 @@ export function normalizeClaudeSubagentLifecycleEvent(
     }
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
+    )
+    // An idle teammate's turn has ended, so its calls have too.
+    retireClaudeInFlightOwnersMatching(state, paneKey, (owner) =>
+      claudeTeammateIdMatchesName(owner, teammateName)
     )
   } else {
     const agentId = lifecycleId

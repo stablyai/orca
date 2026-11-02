@@ -8,6 +8,7 @@ export type CachedPaneEnvelopeMeta = {
   env?: string
   version?: string
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
+  claudeBatchSettledRequests?: readonly ClaudeSettledRequest[]
 }
 
 export type CachedPaneReplaySelection = {
@@ -24,9 +25,16 @@ export function buildCachedPaneReplayEnvelope({
     isReplay: true
   })
   // Why not on a wait: a replayed wait replaces any held one, so the evidence would be unused.
-  return meta.claudeSettledRequests && event.payload.state !== 'waiting'
-    ? { ...envelope, claudeSettledRequests: meta.claudeSettledRequests }
-    : envelope
+  if (event.payload.state === 'waiting') {
+    return envelope
+  }
+  return {
+    ...envelope,
+    ...(meta.claudeSettledRequests ? { claudeSettledRequests: meta.claudeSettledRequests } : {}),
+    ...(meta.claudeBatchSettledRequests
+      ? { claudeBatchSettledRequests: meta.claudeBatchSettledRequests }
+      : {})
+  }
 }
 
 // Skip retired pane surfaces to prevent ghost status and auto-resume onto an orphan’s live transcript.

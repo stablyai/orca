@@ -38,7 +38,9 @@ export function buildRelayHookEnvelope(
     grokPromptBoundary: event.grokPromptBoundary,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
-    ...(event.claudeSettledRequests ? { claudeSettledRequests: event.claudeSettledRequests } : {}),
+    ...(event.claudeBatchSettledRequests
+      ? { claudeBatchSettledRequests: event.claudeBatchSettledRequests }
+      : {}),
     toolAgentId: event.toolAgentId,
     teammateName: event.teammateName,
     toolAgentType: event.toolAgentType,

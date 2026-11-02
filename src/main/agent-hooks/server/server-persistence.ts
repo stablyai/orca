@@ -52,6 +52,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         isReplay: _isReplay,
         claudePermissionBound: _claudePermissionBound,
         claudeSettledRequests: _claudeSettledRequests,
+        claudeBatchSettledRequests: _claudeBatchSettledRequests,
         // Terminal handles belong to this runtime and cannot safely rejoin a hydrated row.
         terminalHandle: _terminalHandle,
         hostTurnRevision: _hostTurnRevision,

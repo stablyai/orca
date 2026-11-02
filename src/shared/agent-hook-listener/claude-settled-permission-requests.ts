@@ -21,8 +21,11 @@ function readId(value: unknown): string | undefined {
 }
 
 /** Validates the optional wire field; anything malformed is dropped whole, never partially trusted. */
-export function readClaudeSettledRequests(value: unknown): ClaudeSettledRequest[] | undefined {
-  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CLAUDE_SETTLED_REQUESTS) {
+export function readClaudeSettledRequests(
+  value: unknown,
+  max = MAX_CLAUDE_SETTLED_REQUESTS
+): ClaudeSettledRequest[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > max) {
     return undefined
   }
   const requests: ClaudeSettledRequest[] = []
@@ -69,6 +72,23 @@ function settledRequestOf(event: AgentHookEventPayload): ClaudeSettledRequest | 
   }
 }
 
+/** Batch settlements a relay forwarded, kept apart from tool settlements so they never prove an unbound wait. */
+export function retainClaudeBatchSettledRequests(
+  retained: readonly ClaudeSettledRequest[] | undefined,
+  previous: AgentHookEventPayload | undefined,
+  next: AgentHookEventPayload
+): readonly ClaudeSettledRequest[] | undefined {
+  const kept = previous && sameClaudeRun(previous, next) ? [...(retained ?? [])] : []
+  for (const settled of next.claudeBatchSettledRequests ?? []) {
+    const existing = kept.findIndex((request) => sameRequest(request, settled))
+    if (existing !== -1) {
+      kept.splice(existing, 1)
+    }
+    kept.push(settled)
+  }
+  return kept.length > 0 ? kept.slice(-MAX_CLAUDE_SETTLED_REQUESTS) : undefined
+}
+
 function sameClaudeRun(previous: AgentHookEventPayload, next: AgentHookEventPayload): boolean {
   return (
     previous.launchToken === next.launchToken &&
@@ -87,9 +107,8 @@ export function retainClaudeSettledRequests(
     return undefined
   }
   const kept = previous && sameClaudeRun(previous, next) ? [...(retained ?? [])] : []
-  const own = settledRequestOf(next)
-  // A batch's settlement list rides on the batch row itself; a tool row settles only its own call.
-  for (const settled of next.claudeSettledRequests ?? (own ? [own] : [])) {
+  const settled = settledRequestOf(next)
+  if (settled) {
     const existing = kept.findIndex((request) => sameRequest(request, settled))
     if (existing !== -1) {
       kept.splice(existing, 1)
@@ -107,6 +126,19 @@ function sameRequest(a: ClaudeSettledRequest, b: ClaudeSettledRequest): boolean 
   )
 }
 
+/** Replay settlement must come from the waiting row's own connection, launch and session. */
+export function isSameClaudeReplayRun(
+  waiting: Pick<AgentHookEventPayload, 'connectionId' | 'launchToken' | 'providerSession'>,
+  next: Pick<AgentHookEventPayload, 'connectionId' | 'launchToken' | 'providerSession'>
+): boolean {
+  return (
+    waiting.connectionId === next.connectionId &&
+    (waiting.launchToken === undefined || waiting.launchToken === next.launchToken) &&
+    (waiting.providerSession?.id === undefined ||
+      waiting.providerSession.id === next.providerSession?.id)
+  )
+}
+
 /** A replayed row whose host saw this exact request end: the held wait is over, whatever came after. */
 export function isClaudePermissionSettledByReplay(
   waiting: AgentHookEventPayload,
@@ -117,10 +149,7 @@ export function isClaudePermissionSettledByReplay(
     next.isReplay !== true ||
     !toolUseId ||
     !next.claudeSettledRequests ||
-    waiting.connectionId !== next.connectionId ||
-    (waiting.launchToken !== undefined && waiting.launchToken !== next.launchToken) ||
-    (waiting.providerSession?.id !== undefined &&
-      waiting.providerSession.id !== next.providerSession?.id)
+    !isSameClaudeReplayRun(waiting, next)
   ) {
     return false
   }

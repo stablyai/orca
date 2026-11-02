@@ -686,12 +686,29 @@ describe('Claude requests bound to their single in-flight call', () => {
       expect(await post(done('U', readAt(100), typed))).toBe('waiting')
       const held = server.getStatusSnapshot()[0]
       expect(await post(batch(['U'], typed))).toBe('waiting')
+      // Another owner's batch naming the same id is not this request's settlement either.
+      expect(await post(batch(['T'], child))).toBe('waiting')
       expect(server.getStatusSnapshot()[0]).toEqual(held)
       expect(await post(hook('PostToolUseFailure', { tool_use_id: 'T', ...typed }))).toBe('working')
 
       await post(pre('W', readAt(1)))
       expect(await post(ask(readAt(1)))).toBe('waiting')
       expect(await post(batch(['W']))).toBe('working')
+    })
+  })
+
+  it('settles a held call listed after the 16th entry of a batch', async () => {
+    await withClaudePane(async (post) => {
+      await post(start)
+      await post(submit)
+      const ids = Array.from({ length: 20 }, (_, i) => `call-${i}`)
+      for (const [i, id] of ids.entries()) {
+        await post(pre(id, { tool_name: 'Read', tool_input: { file_path: `/f${i}` } }))
+      }
+      expect(await post(ask({ tool_name: 'Read', tool_input: { file_path: '/f18' } }))).toBe(
+        'waiting'
+      )
+      expect(await post(batch(ids))).toBe('working')
     })
   })
 

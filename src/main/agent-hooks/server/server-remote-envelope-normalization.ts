@@ -4,10 +4,9 @@ import {
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
-import {
-  readClaudeSettledRequests,
-  type ClaudeSettledRequest
-} from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
+import { MAX_CLAUDE_BATCH_SETTLEMENT } from '../../../shared/agent-hook-listener/claude-permission-binding'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { readClaudeSettledRequests } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
 export type RemoteAgentStatusEnvelope = {
   paneKey: string
@@ -27,6 +26,7 @@ export type RemoteAgentStatusEnvelope = {
   compactTrigger?: unknown
   toolUseId?: string
   claudeSettledRequests?: unknown
+  claudeBatchSettledRequests?: unknown
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
@@ -54,11 +54,39 @@ export type RemoteEnvelopeFields = {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
-  claudeSettledRequests?: readonly ClaudeSettledRequest[]
+  claudeSettlement: Pick<
+    AgentHookEventPayload,
+    'claudeSettledRequests' | 'claudeBatchSettledRequests'
+  >
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
   providerSession?: NonNullable<ReturnType<typeof normalizeAgentProviderSession>>
+}
+
+/** Live tool hooks settle their own requests; a live batch lists all of its calls; replays repair gaps. */
+function readRemoteClaudeSettlement(
+  source: AgentHookSource | undefined,
+  envelope: {
+    hookEventName?: string
+    isReplay?: boolean
+    claudeSettledRequests?: unknown
+    claudeBatchSettledRequests?: unknown
+  }
+): RemoteEnvelopeFields['claudeSettlement'] {
+  if (source !== 'claude') {
+    return {}
+  }
+  const replay = envelope.isReplay === true
+  const settled = replay ? readClaudeSettledRequests(envelope.claudeSettledRequests) : undefined
+  const batch =
+    replay || envelope.hookEventName?.trim() === 'PostToolBatch'
+      ? readClaudeSettledRequests(envelope.claudeBatchSettledRequests, MAX_CLAUDE_BATCH_SETTLEMENT)
+      : undefined
+  return {
+    ...(settled ? { claudeSettledRequests: settled } : {}),
+    ...(batch ? { claudeBatchSettledRequests: batch } : {})
+  }
 }
 
 export function normalizeRemoteEnvelopeFields(envelope: {
@@ -71,6 +99,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   promptInteractionKey?: string
   toolUseId?: string
   claudeSettledRequests?: unknown
+  claudeBatchSettledRequests?: unknown
   isReplay?: boolean
   toolAgentId?: string
   teammateName?: string
@@ -110,12 +139,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
-    // Live tool hooks settle their own requests; a live batch lists its settlements; replays repair gaps.
-    claudeSettledRequests:
-      source === 'claude' &&
-      (envelope.isReplay === true || envelope.hookEventName?.trim() === 'PostToolBatch')
-        ? readClaudeSettledRequests(envelope.claudeSettledRequests)
-        : undefined,
+    claudeSettlement: readRemoteClaudeSettlement(source, envelope),
     toolAgentId:
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
         ? envelope.toolAgentId.trim()

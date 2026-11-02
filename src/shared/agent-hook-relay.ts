@@ -81,8 +81,10 @@ export type AgentHookRelayEnvelope = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
-  /** Claude requests a live batch settled, or (replay) the relay saw end while this receiver was away. */
+  /** Optional, replay only: Claude requests the relay saw end while this receiver may have been away. */
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
+  /** Claude calls a live batch settled; on replay, the relay's recent batch settlements. Bound waits only. */
+  claudeBatchSettledRequests?: readonly ClaudeSettledRequest[]
   /** Claude subagent identity, when the source hook provides one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */

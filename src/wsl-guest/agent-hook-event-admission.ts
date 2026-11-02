@@ -5,7 +5,10 @@ import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
-import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
+import {
+  retainClaudeBatchSettledRequests,
+  retainClaudeSettledRequests
+} from '../shared/agent-hook-listener/claude-settled-permission-requests'
 import { reduceHostTurnEnd } from '../shared/agent-hook-turn-end-timing'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
@@ -53,6 +56,20 @@ export function applyRelayHookEvent(
       process: incoming.agentPresence?.process
     })
   ) {
+    return undefined
+  }
+  if (incoming.hookEventName === 'PostToolBatch' && incoming.claudeBatchSettledRequests) {
+    // A batch settles calls without changing what the pane shows: forward it whole, never cache it as the row.
+    const meta = host.metadata.get(incoming.paneKey)
+    if (meta) {
+      meta.claudeBatchSettledRequests = retainClaudeBatchSettledRequests(
+        meta.claudeBatchSettledRequests,
+        previous,
+        incoming
+      )
+    }
+    host.forward(buildRelayHookEnvelope(incoming, source, env, version, options))
+    // No row changed here, so nothing downstream (retries, polls) may follow it as one.
     return undefined
   }
   const cancellation = reconcileRelayClaudeCancel(host.state, previous, incoming, source)
@@ -108,12 +125,18 @@ export function applyRelayHookEvent(
     previous,
     event
   )
+  const claudeBatchSettledRequests = retainClaudeBatchSettledRequests(
+    host.metadata.get(event.paneKey)?.claudeBatchSettledRequests,
+    previous,
+    event
+  )
   host.metadata.delete(event.paneKey)
   host.metadata.set(event.paneKey, {
     source,
     env,
     version,
-    ...(claudeSettledRequests ? { claudeSettledRequests } : {})
+    ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
+    ...(claudeBatchSettledRequests ? { claudeBatchSettledRequests } : {})
   })
   options.onAccepted?.(event)
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))

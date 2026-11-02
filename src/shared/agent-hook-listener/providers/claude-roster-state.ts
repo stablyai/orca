@@ -1,4 +1,4 @@
-import { retireClaudeInFlightCalls } from '../claude-permission-binding'
+import { retireClaudeInFlightOwners } from '../claude-permission-binding'
 import type {
   AgentMainAgentStatus,
   AgentStatusState,
@@ -111,8 +111,11 @@ export function foldClaudeBackgroundInventory(
   foldClaudeBackgroundTasksIntoRoster(roster, inventory.tasks, Date.now(), {
     inventoryComplete: !inventory.truncated
   })
-  const ended = new Set(before.filter((id) => !roster.has(id)))
-  retireClaudeInFlightCalls(state, paneKey, (owner) => ended.has(owner))
+  retireClaudeInFlightOwners(
+    state,
+    paneKey,
+    before.filter((id) => !roster.has(id))
+  )
 }
 
 /** Only fresh inventory retires a reported shell; lead verdicts cannot override positive process evidence. */
@@ -179,7 +182,7 @@ export function markClaudeLeadTurnDone(
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
-  retireClaudeInFlightCalls(state, paneKey, (owner) => owner === '')
+  retireClaudeInFlightOwners(state, paneKey, [''])
   const record = setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome })
   const resolved = resolveClaudePaneStatus(state, paneKey, record)
   const mainAgent = claudeMainAgentStatusForPayload(record)
@@ -258,7 +261,6 @@ export function clearClaudePendingWaitForAgent(
   paneKey: string,
   ownsWait: (waitingAgentId: string) => boolean
 ): void {
-  retireClaudeInFlightCalls(state, paneKey, (owner) => owner !== '' && ownsWait(owner))
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
     return

@@ -80,20 +80,23 @@ describe('Claude permission binding', () => {
     expect(h.inFlight()?.owners.get(child.agent_id)).toBeUndefined()
   })
 
-  it('publishes a batch only when it settles the bound request, or when a cold host cannot know', () => {
+  it('forwards every batch’s owner-scoped calls for the receiver to judge, with a row even without a lead', () => {
     const h = harness()
     h.pre('T', read(0))
     h.ask(read(0))
-    const released = h.batch(['T'])
-    expect(released).toMatchObject({
+    expect(h.batch(['T'])).toMatchObject({
       hookEventName: 'PostToolBatch',
-      claudeSettledRequests: [{ toolUseId: 'T' }],
+      claudeBatchSettledRequests: [{ toolUseId: 'T' }],
       payload: { state: 'working', mainAgent: { state: 'working' } }
     })
     h.pre('U', read(1))
     h.pre('V', read(1))
     h.ask(read(1))
-    expect(h.batch(['U', 'V'])).toBeNull()
+    // This host has no bound request here, but a receiver might still hold one; it decides.
+    expect(h.batch(['U', 'V'])?.claudeBatchSettledRequests).toEqual([
+      { toolUseId: 'U' },
+      { toolUseId: 'V' }
+    ])
 
     // A child's own batch restores the lead its request displaced.
     h.send('SubagentStart', child)
@@ -101,41 +104,129 @@ describe('Claude permission binding', () => {
     h.ask(read(2), child)
     expect(h.batch(['C'], child)).toMatchObject({
       toolAgentId: child.agent_id,
-      claudeSettledRequests: [{ toolUseId: 'C', toolAgentId: child.agent_id }],
+      claudeBatchSettledRequests: [
+        { toolUseId: 'C', toolAgentId: child.agent_id, toolAgentType: child.agent_type }
+      ],
       payload: { state: 'working' }
     })
 
-    const cold = harness({ cold: true })
-    const ids = Array.from({ length: 20 }, (_, i) => `cold-${i}`)
-    expect(cold.batch(ids)?.claudeSettledRequests).toHaveLength(16)
+    // A restarted host after an unrelated hook still forwards every call, the 20th included.
+    const restarted = harness({ cold: true })
+    restarted.send('Notification', { notification_type: 'permission_prompt' })
+    const ids = Array.from({ length: 20 }, (_, i) => `call-${i}`)
+    expect(restarted.batch(ids)).toMatchObject({
+      payload: { state: 'working' },
+      claudeBatchSettledRequests: ids.map((toolUseId) => ({ toolUseId }))
+    })
   })
 
-  it('keeps in-flight memory to live calls and falls back once an owner outgrows the bound (N vs 10N)', () => {
-    for (const turns of [50, 500]) {
-      const h = harness()
-      for (let turn = 0; turn < turns; turn++) {
-        h.pre(`call-${turn}`, read(turn))
-        h.send('PostToolUse', { ...read(turn), tool_use_id: `call-${turn}` })
-        h.batch([`call-${turn}`])
-      }
-      expect({ turns, size: h.inFlight()?.size, owners: h.inFlight()?.owners.size }).toEqual({
-        turns,
-        size: 0,
-        owners: 1
+  it('keeps retained records and retirement work independent of completed history (N vs 10N), linear in current work, and bounded when saturated', () => {
+    // Test-side counters only: every element production code reads from these maps, sets and arrays.
+    const visits = { count: 0 }
+    const counted = <T extends object>(target: T): T =>
+      new Proxy(target, {
+        get(object, property) {
+          const value: unknown = Reflect.get(object, property, object)
+          if (typeof value !== 'function') {
+            if (typeof property === 'string' && /^\d+$/.test(property)) {
+              visits.count++
+            }
+            return value
+          }
+          if (property === 'get' || property === 'has') {
+            return (key: unknown) => {
+              visits.count++
+              return value.call(object, key)
+            }
+          }
+          if (
+            property === Symbol.iterator ||
+            ['entries', 'keys', 'values'].includes(String(property))
+          ) {
+            return function* () {
+              for (const item of value.call(object)) {
+                visits.count++
+                yield item
+              }
+            }
+          }
+          return value.bind(object)
+        }
       })
+    const instrument = (h: ReturnType<typeof harness>) => {
+      const table = h.inFlight()
+      if (!table) {
+        throw new Error('no in-flight table')
+      }
+      table.owners = counted(table.owners)
+      table.lossy = counted(table.lossy)
+      const roster = h.state.claudeSubagentRosterByPaneKey.get(pane)
+      if (roster) {
+        h.state.claudeSubagentRosterByPaneKey.set(pane, counted(roster))
+      }
+      visits.count = 0
+    }
+    const liveWork = (h: ReturnType<typeof harness>, children: number) => {
+      const ids = Array.from({ length: children }, (_, i) => `child-${i}`)
+      for (const id of ids) {
+        h.send('SubagentStart', { agent_id: id, agent_type: 'general-purpose' })
+        h.pre(`${id}-call`, read(1), { agent_id: id })
+      }
+      instrument(h)
+      h.pre('root-call', read(0))
+      h.ask(read(0))
+      h.batch(['root-call'])
+      const tasks = ids.map((id) => ({ id, type: 'subagent', status: 'running' }))
+      h.send('Stop', { background_tasks: counted(tasks) })
+      return visits.count
     }
 
-    // Calls whose settlement never arrived: past the bound, a missed equal call could bind wrongly.
+    // Completed hook-agent owners never report an end; their settled calls must leave nothing behind.
+    const afterHistory = [20, 200].map((owners) => {
+      const h = harness()
+      for (let i = 0; i < owners; i++) {
+        const agent = { agent_id: `hook-agent-${i}` }
+        h.pre(`call-${i}`, read(i), agent)
+        h.send('PostToolUse', { ...read(i), tool_use_id: `call-${i}`, ...agent })
+      }
+      h.send('Stop', { background_tasks: [] })
+      h.send('UserPromptSubmit', { prompt: 'Again' })
+      const retained = { owners: h.inFlight()?.owners.size, lossy: h.inFlight()?.lossy.size }
+      return { retained, visits: liveWork(h, 3) }
+    })
+    expect(afterHistory[0]).toEqual({
+      retained: { owners: 0, lossy: 0 },
+      visits: afterHistory[0].visits
+    })
+    expect(afterHistory[1]).toEqual(afterHistory[0])
+
+    // Current roster and inventory: work grows with them, not faster.
+    const [small, large] = [5, 50].map((children) => liveWork(harness(), children))
+    expect(large).toBeGreaterThan(small)
+    expect(large).toBeLessThanOrEqual(10 * small)
+
+    // Saturated: many distinct owners that cannot be admitted leave bounded records and a lasting fallback.
     const h = harness()
-    for (let call = 0; call < 300; call++) {
-      h.pre(`lost-${call}`, read(call))
+    for (let call = 0; call < 256; call++) {
+      h.pre(`root-${call}`, read(1000 + call))
     }
-    expect(h.inFlight()?.size).toBe(256)
-    expect(h.ask(read(0))?.toolUseId).toBeUndefined()
+    for (let owner = 0; owner < 500; owner++) {
+      h.pre(`lost-${owner}`, read(owner), { agent_id: `hook-agent-${owner}` })
+    }
+    expect({
+      owners: h.inFlight()?.owners.size,
+      lossy: h.inFlight()?.lossy.size,
+      degraded: h.inFlight()?.degraded
+    }).toEqual({ owners: 1, lossy: 64, degraded: true })
     h.send('Stop')
     h.send('UserPromptSubmit', { prompt: 'Again' })
     h.pre('fresh', read(0))
-    expect(h.ask(read(0))?.toolUseId).toBe('fresh')
+    // A root turn end does not cover the lost hook-agent calls, so binding stays off until the session ends.
+    expect(h.ask(read(0))?.toolUseId).toBeUndefined()
+    h.send('SessionStart', { source: 'clear' })
+    h.send('UserPromptSubmit', { prompt: 'Cleared' })
+    h.pre('after-clear', read(0))
+    expect(h.ask(read(0))?.toolUseId).toBe('after-clear')
   })
 
   it('preserves the recorded Codex decline Interrupt and next-turn approval contract', () => {

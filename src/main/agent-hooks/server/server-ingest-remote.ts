@@ -116,7 +116,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       worktreeId,
       promptInteractionKey,
       toolUseId,
-      claudeSettledRequests,
+      claudeSettlement,
       toolAgentId,
       teammateName,
       toolAgentType,
@@ -125,7 +125,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     if (
       this.dropsClaudeSettlement(paneKey, {
         hookEventName,
-        claudeSettledRequests,
+        ...claudeSettlement,
         toolAgentId,
         connectionId: trimmedConnectionId,
         isReplay: envelope.isReplay
@@ -274,7 +274,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       grokPromptBoundary,
       compactTrigger,
       toolUseId,
-      ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
+      ...claudeSettlement,
       toolAgentId,
       teammateName,
       toolAgentType,
