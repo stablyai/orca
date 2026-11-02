@@ -98,49 +98,55 @@ export function useSourceControlAgentActionDialog({
     basePrompt: baseCommandInput
   })
   const trimmedCommandInput = commandInput.trim()
-  const { deliveryPlan, resetDeliveryPlan, cancelStart, isStarting, handleStart } =
-    useSourceControlAgentActionStart({
-      open,
-      connectionId,
-      selectedAgent,
-      commandInput,
-      trimmedCommandInput,
-      agentArgsApply: choice.launchAppliesAgentArgs,
-      recipe: choice.canSaveSurface ? recipe : (({ surface: _surface, ...rest }) => rest)(recipe),
-      prepareRecipe: (agent) => {
-        const submitted = argumentsEdited
-          ? commitSourceControlActionArguments(currentSelection, agent).recipe
-          : recipe
-        return choice.canSaveSurface
-          ? submitted
-          : (({ surface: _surface, ...rest }) => rest)(submitted)
-      },
-      saveLaunchRecipe,
-      saveTargetValue,
-      actionId,
-      repoId,
-      settings,
-      agentLaunchPreferences: choice.observation.preferences,
-      repo,
-      worktreeId,
-      groupId,
-      promptDelivery,
-      launchPlatform,
-      // Why: an SSH host runs the plain `orca` shim; keep the previewed command
-      // label aligned with the real remote launch (no `orca-ide` rename).
-      isRemote: typeof connectionId === 'string',
-      launchSource,
-      recoveryContext,
-      connectionUnavailable,
-      detectedAgents,
-      launchChoice: selection.choice,
-      onStart,
-      onSaveAgentDefault,
-      onLaunchAccepted,
-      onLaunchAborted,
-      onLaunched,
-      onClose: closeDialog
-    })
+  const {
+    deliveryPlan,
+    resetDeliveryPlan,
+    cancelStart,
+    isStarting,
+    isCreateAccepted,
+    handleStart
+  } = useSourceControlAgentActionStart({
+    open,
+    connectionId,
+    selectedAgent,
+    commandInput,
+    trimmedCommandInput,
+    agentArgsApply: choice.launchAppliesAgentArgs,
+    recipe: choice.canSaveSurface ? recipe : (({ surface: _surface, ...rest }) => rest)(recipe),
+    prepareRecipe: (agent) => {
+      const submitted = argumentsEdited
+        ? commitSourceControlActionArguments(currentSelection, agent).recipe
+        : recipe
+      return choice.canSaveSurface
+        ? submitted
+        : (({ surface: _surface, ...rest }) => rest)(submitted)
+    },
+    saveLaunchRecipe,
+    saveTargetValue,
+    actionId,
+    repoId,
+    settings,
+    agentLaunchPreferences: choice.observation.preferences,
+    repo,
+    worktreeId,
+    groupId,
+    promptDelivery,
+    launchPlatform,
+    // Why: an SSH host runs the plain `orca` shim; keep the previewed command
+    // label aligned with the real remote launch (no `orca-ide` rename).
+    isRemote: typeof connectionId === 'string',
+    launchSource,
+    recoveryContext,
+    connectionUnavailable,
+    detectedAgents,
+    launchChoice: selection.choice,
+    onStart,
+    onSaveAgentDefault,
+    onLaunchAccepted,
+    onLaunchAborted,
+    onLaunched,
+    onClose: closeDialog
+  })
 
   const canStart =
     Boolean(trimmedCommandInput) &&
@@ -239,6 +245,7 @@ export function useSourceControlAgentActionDialog({
     deliveryPlan,
     canStart,
     isStarting,
+    isCreateAccepted,
     onAgentPick,
     onAgentArgsChange,
     onCommandTemplateChange,

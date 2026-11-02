@@ -3,7 +3,8 @@ import { CUSTOM_EDITOR_DOCUMENT_MAX_BYTES } from '../../../../shared/plugins/fra
 import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
 import { createPanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 import { createPluginFrameMessageHandler } from '../right-sidebar/plugin-frame-host'
-import { createCustomEditorHost, type CustomEditorHostOptions } from './plugin-custom-editor-host'
+import { createCustomEditorHost } from './plugin-custom-editor-host'
+import type { CustomEditorHostOptions } from './plugin-custom-editor-host-types'
 
 vi.mock('../right-sidebar/plugin-panel-design-token-css', () => ({
   currentPluginFrameTheme: () => ({ colorScheme: 'light', tokens: '' })
@@ -419,6 +420,24 @@ describe('custom editor document channel', () => {
     expect(answers(20)).toEqual([{ orca: 1, kind: 'res', id: 20, result: null }])
     // The frame's newest change was lost, so a save must not mark the tab clean.
     await expect(flushed).resolves.toBe(false)
+  })
+
+  it('commits a held edit when a save starts, and every edit during the save at once', async () => {
+    const { host, onEdit, send, answers, answerFlushes } = setup({ text: 'a', maxEdits: 1 })
+    send(READY)
+    send(edit('b', 1, 22))
+    send(edit('c', 1, 23))
+    expect(answers(23)).toEqual([])
+    const flushed = host.flush()
+    // The frame answers a save only once its edits settle, so the held one commits first.
+    expect(onEdit).toHaveBeenLastCalledWith('c')
+    expect(answers(23)).toEqual([{ orca: 1, kind: 'res', id: 23, result: null }])
+    send(edit('d', 1, 24))
+    expect(onEdit).toHaveBeenLastCalledWith('d')
+    answerFlushes()
+    await expect(flushed).resolves.toBe(true)
+    send(edit('e', 1, 25))
+    expect(answers(25)).toEqual([])
   })
 
   it('never spends the edit budget on chords or flush replies', () => {
