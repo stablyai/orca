@@ -7,7 +7,6 @@ import type {
   GhosttyImportSource,
   GlobalSettings
 } from '../../shared/global-settings-types'
-import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
 import type { Store } from '../persistence/loading-store/store'
 import { translateMain } from '../i18n/main-i18n'
 import { validateImportSource } from '../import-source-validation'
@@ -80,7 +79,7 @@ type ThemeReferencePatch = {
 // A slot whose theme the import selects gets exactly the config's explicit colors; other slots keep merging them.
 async function themeReferencePatch(
   rawTheme: string | string[] | undefined,
-  explicitColors: TerminalColorOverrides | undefined,
+  explicit: Partial<GlobalSettings>,
   pickedConfigDir: string | undefined,
   currentSettings: GlobalSettings
 ): Promise<ThemeReferencePatch> {
@@ -95,10 +94,14 @@ async function themeReferencePatch(
   if (themeNames.dark === undefined && themeNames.light === undefined) {
     return { diff: {}, unsupportedKeys }
   }
-  const colors = explicitColors ?? {}
+  const colors = explicit.terminalColorOverrides ?? {}
+  // Explicit config keys (e.g. split-divider-color) override what the theme supplies, as in Ghostty.
+  const themeDefaults = Object.fromEntries(
+    Object.entries(diff).filter(([key]) => !Object.hasOwn(explicit, key))
+  )
   return {
     diff: {
-      ...diff,
+      ...themeDefaults,
       terminalColorOverrides:
         themeNames.dark !== undefined
           ? colors
@@ -187,7 +190,7 @@ export async function previewGhosttyImport(
   const currentSettings = store.getSettings()
   const theme = await themeReferencePatch(
     rawTheme,
-    rawDiff.terminalColorOverrides,
+    rawDiff,
     validatedSource.kind === 'chooseFile' ? path.dirname(readPaths[0]) : undefined,
     currentSettings
   )

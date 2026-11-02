@@ -65,13 +65,13 @@ function resourceThemeDirs(home: string, plat: NodeJS.Platform): string[] {
   return []
 }
 
-// User themes shadow bundled themes, matching Ghostty lookup order; a picked config's sibling themes dir comes first.
+// User themes shadow bundled themes, matching Ghostty lookup order; a picked config's sibling themes dir only fills gaps.
 export function getGhosttyThemeSearchDirs(pickedConfigDir?: string): string[] {
   const home = homedir()
   const plat = platform()
   return [
-    ...(pickedConfigDir ? [pathFor(plat).join(pickedConfigDir, 'themes')] : []),
     ...userThemeDirs(home, plat),
+    ...(pickedConfigDir ? [pathFor(plat).join(pickedConfigDir, 'themes')] : []),
     ...resourceThemeDirs(home, plat)
   ]
 }

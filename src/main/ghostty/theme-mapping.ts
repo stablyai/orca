@@ -107,12 +107,19 @@ function hasSamePalette(terminal: TerminalColorOverrides, builtIn: unknown): boo
   )
 }
 
-type ResolvedTheme = { selection: string; name: string; custom?: TerminalCustomTheme }
+type ResolvedTheme = {
+  selection: string
+  name: string
+  custom?: TerminalCustomTheme
+  dividerColor?: string
+}
 
 async function resolveTheme(
   themeName: string,
+  slot: TerminalThemeSlot,
   pickedConfigDir: string | undefined,
-  existingThemes: TerminalCustomTheme[]
+  existingThemes: TerminalCustomTheme[],
+  claimedThemes: Map<string, TerminalCustomTheme>
 ): Promise<ResolvedTheme | null> {
   const colors = await resolveGhosttyThemeColors(themeName, pickedConfigDir)
   const builtIn = findBuiltInThemeName(themeName)
@@ -120,17 +127,23 @@ async function resolveTheme(
     return builtIn ? { selection: builtIn, name: builtIn } : null
   }
 
-  const terminal = ghosttyThemeTerminalColors(
-    mapGhosttyToOrca(colors).diff.terminalColorOverrides ?? {}
-  )
+  const themeDiff = mapGhosttyToOrca(colors).diff
+  const terminal = ghosttyThemeTerminalColors(themeDiff.terminalColorOverrides ?? {})
+  const dividerColor = themeDiff.terminalDividerColorDark
   // A Ghostty theme Orca already ships selects the built-in instead of adding a same-named duplicate.
   if (builtIn && hasSamePalette(terminal, TERMINAL_THEME_CATALOG[builtIn])) {
-    return { selection: builtIn, name: builtIn }
+    return { selection: builtIn, name: builtIn, dividerColor }
   }
   const fileName = normalizeTerminalThemeName(path.basename(themeName.replaceAll('\\', '/')))
   // Ghostty's palette differs from Orca's same-named built-in, so the label tells the two apart.
-  const name = builtIn ? `${fileName} (Ghostty)` : fileName
-  const id = `ghostty:${normalizeTerminalThemeId(name)}`
+  let name = builtIn ? `${fileName} (Ghostty)` : fileName
+  let id = `ghostty:${normalizeTerminalThemeId(name)}`
+  const claimed = claimedThemes.get(id)
+  // Two different files with one basename (light:/a/x,dark:/b/x) must not overwrite each other.
+  if (claimed && JSON.stringify(claimed.terminal) !== JSON.stringify(terminal)) {
+    name = `${name} (${slot === 'dark' ? 'Dark' : 'Light'})`
+    id = `ghostty:${normalizeTerminalThemeId(name)}`
+  }
   const existing = existingThemes.find((theme) => theme.id === id)
   // Re-importing an unchanged theme keeps its record so the preview does not report a no-op change.
   const custom: TerminalCustomTheme =
@@ -144,7 +157,7 @@ async function resolveTheme(
           terminal,
           importedAt: new Date().toISOString()
         }
-  return { selection: makeCustomTerminalThemeSelection(id), name, custom }
+  return { selection: makeCustomTerminalThemeSelection(id), name, custom, dividerColor }
 }
 
 export async function importGhosttyTheme(
@@ -176,7 +189,13 @@ export async function importGhosttyTheme(
   const importedThemes = new Map<string, TerminalCustomTheme>()
   let newThemeCount = 0
   for (const [slot, themeName] of requests) {
-    const resolved = await resolveTheme(themeName, pickedConfigDir, existingThemes)
+    const resolved = await resolveTheme(
+      themeName,
+      slot,
+      pickedConfigDir,
+      existingThemes,
+      importedThemes
+    )
     if (resolved === null) {
       unsupportedKeys.push(`theme (${themeName}: not found)`)
       continue
@@ -194,6 +213,13 @@ export async function importGhosttyTheme(
     }
     diff[slot === 'dark' ? 'terminalThemeDark' : 'terminalThemeLight'] = resolved.selection
     themeNames[slot] = resolved.name
+    // A theme's divider color follows its slot; a single theme paints both appearances.
+    if (resolved.dividerColor && (slot === 'light' || !isPair)) {
+      diff.terminalDividerColorLight = resolved.dividerColor
+    }
+    if (resolved.dividerColor && slot === 'dark') {
+      diff.terminalDividerColorDark = resolved.dividerColor
+    }
   }
 
   // A single Ghostty theme paints both appearances, which Orca expresses as the dark slot alone.

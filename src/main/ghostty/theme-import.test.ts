@@ -124,6 +124,25 @@ describe('previewGhosttyImport theme references', () => {
     ])
   })
 
+  it('keeps same-named theme files from different folders apart and imports their divider colors', async () => {
+    mockFiles({
+      [CONFIG_PATH]: 'theme = light:/Users/alice/a/theme,dark:/Users/alice/b/theme\n',
+      '/Users/alice/a/theme':
+        'background = #ffffff\nforeground = #000000\nsplit-divider-color = #cccccc\n',
+      '/Users/alice/b/theme':
+        'background = #000000\nforeground = #ffffff\nsplit-divider-color = #333333\n'
+    })
+
+    const result = await previewGhosttyImport(createStore())
+
+    expect(result.diff).toMatchObject({
+      terminalThemeDark: 'custom:ghostty:theme',
+      terminalThemeLight: 'custom:ghostty:theme-light',
+      terminalDividerColorDark: '#333333',
+      terminalDividerColorLight: '#cccccc'
+    })
+  })
+
   it('reports nothing to change when the same theme is imported again', async () => {
     mockFiles({
       [CONFIG_PATH]: 'theme = night\n',
