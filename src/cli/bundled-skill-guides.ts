@@ -3847,8 +3847,10 @@ const ORCHESTRATION_MARKDOWN = [
   "  `references/recovery-and-cleanup.md`.",
   "- To talk to a worker, use",
   "  `ORCA orchestration send --to dispatch:<dispatch_id> --subject \"<topic>\" --body \"<message>\"`",
-  "  in any state: a working worker reads it now; a finished or closed one gets it",
-  "  as a follow-up Task and reports with `worker_done`. The receipt says which.",
+  "  in any state: a working worker reads it now, inside its running turn (a new",
+  "  Task given to a busy chat waits for the turn to end instead); a finished or",
+  "  closed one gets it as a follow-up Task and reports with `worker_done`. The",
+  "  receipt says which.",
   "  Except on a paired server: a finished worker there refuses `send`, so start",
   "  new work there with `worker-start --on <server>` (load",
   "  `references/placement-and-remote.md` first).",
@@ -3973,6 +3975,10 @@ const ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN = [
   "```text",
   "ORCA orchestration worker-start --task <task_id> --terminal <handle> --worktree <its_workspace> --json",
   "```",
+  "",
+  "A Task given to a chat this way, while that chat is mid-turn, waits as a queued",
+  "card and starts when the turn ends. To reach a working agent inside its running",
+  "turn, `send` to its dispatch instead.",
   "",
 ].join('\n')
 
