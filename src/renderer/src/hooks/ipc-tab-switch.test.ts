@@ -118,7 +118,12 @@ describe('handleSwitchTerminalTab', () => {
       { type: 'terminal', id: 'term-2', tabId: 'tab-2' }
     ])
     const store = makeStore('agent-session', {
-      getActiveTab: () => ({ contentType: 'agent-session', entityId: 'chat-1' })
+      groupsByWorktree: { 'wt-1': [{ id: 'group-1', activeTabId: 'tab-chat' }] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          { id: 'tab-chat', entityId: 'chat-1', groupId: 'group-1', contentType: 'agent-session' }
+        ]
+      }
     })
     getStateMock.mockReturnValue(store)
 

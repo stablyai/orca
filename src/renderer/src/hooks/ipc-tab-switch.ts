@@ -321,6 +321,10 @@ export function handleSwitchTerminalTab(direction: number): boolean {
     return false
   }
   store.setActiveTab(next.id)
+  // Exact unified ID keeps focus in the right split when a terminal has copies in several groups.
+  if (next.tabId) {
+    store.activateTab?.(next.tabId)
+  }
   store.setActiveTabType('terminal', worktreeId)
   activateCycledTabOnOwner(worktreeId, next)
   return true
