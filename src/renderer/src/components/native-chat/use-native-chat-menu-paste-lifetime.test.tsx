@@ -72,7 +72,6 @@ async function fixture(acceptsImages = true, source: 'menu' | 'event' = 'menu') 
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: scope('menu'),
       allowWithoutTarget: true,
-      imageReferences: true,
       acceptsImages,
       caret: 0,
       disabled: false,
@@ -138,7 +137,6 @@ it.each(
         attachmentScopeKey: scope('menu'),
         acceptsImages,
         allowWithoutTarget: true,
-        imageReferences: true,
         caret: 0,
         disabled: false,
         isComposing: () => false,

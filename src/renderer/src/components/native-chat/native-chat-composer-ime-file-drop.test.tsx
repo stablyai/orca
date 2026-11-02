@@ -113,7 +113,6 @@ function ComposerProbe({
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: `pane:${workspaceId}`,
     allowWithoutTarget: structured,
-    imageReferences: structured,
     caret,
     disabled,
     isComposing: imeEnterGesture.isComposing,
@@ -276,7 +275,7 @@ describe('OS file drops through the real composing chat field', () => {
     }
   )
 
-  it('numbers images dropped together 1, 2, 3, each with its chip in the prompt', async () => {
+  it('keeps images dropped together ordered in the tray and leaves the editor untouched', async () => {
     render(
       <NativeChatPaneFileDropSurface className="chat">
         <ComposerProbe />
@@ -288,7 +287,11 @@ describe('OS file drops through the real composing chat field', () => {
       [...editor.querySelectorAll('[data-native-chat-image-reference]')].map(
         (chip) => chip.textContent
       )
-    ).toEqual(['Image #1', 'Image #2', 'Image #3'])
+    ).toEqual([])
+    expect(promptValue(editor)).toBe('')
+    expect(
+      [...document.querySelectorAll('[data-image-attachment]')].map((image) => image.textContent)
+    ).toEqual(['/drop/a.png', '/drop/b.png', '/drop/c.png'])
   })
 
   it('preserves a mixed drop and subsequent question through accepted send', async () => {
@@ -346,7 +349,10 @@ describe('OS file drops through the real composing chat field', () => {
         [...editor.querySelectorAll('[data-native-chat-image-reference]')].map(
           (pill) => pill.textContent
         )
-      ).toEqual(['Image #1', 'Image #2', 'Image #3'])
+      ).toEqual([])
+      expect(
+        [...document.querySelectorAll('[data-image-attachment]')].map((image) => image.textContent)
+      ).toEqual(['/drop/b.png', '/drop/a.png', '/drop/b.png'])
     }
     assertDraftMatchesDocument()
     // Browser-native End movement is exercised in Electron; here selection uses real editor commands.
@@ -377,7 +383,7 @@ describe('OS file drops through the real composing chat field', () => {
     )
     const [text, images] = send.mock.calls[0] ?? []
     expect(text).toContain(question)
-    expect(text?.match(/\[Image #\d+\]/g)).toEqual(['[Image #1]', '[Image #2]', '[Image #3]'])
+    expect(text).toBe(submitted.text)
     expect(images?.map(({ path }) => path)).toEqual(['/drop/b.png', '/drop/a.png', '/drop/b.png'])
     expect(promptValue(editor)).toBe('')
     expect(readNativeChatComposerDraft('pane:worktree-1').text).toBe('')

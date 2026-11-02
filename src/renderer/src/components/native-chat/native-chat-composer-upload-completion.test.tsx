@@ -99,7 +99,6 @@ async function uploadFixture(
       return useNativeChatComposerAttachments({
         attachmentScopeKey: draftScope,
         allowWithoutTarget: true,
-        imageReferences: true,
         caret: 0,
         disabled: false,
         isComposing: () => false,

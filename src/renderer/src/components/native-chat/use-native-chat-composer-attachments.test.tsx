@@ -11,7 +11,6 @@ import * as draftCache from './native-chat-draft-cache'
 import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attachment-cache'
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
-import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 import { useAppStore } from '@/store'
@@ -370,7 +369,7 @@ describe('useNativeChatComposerAttachments', () => {
   })
 
   it.each([false, true])(
-    'marks each image in the prompt only in a structured chat (structured=%s)',
+    'keeps image context outside the prompt (structured=%s)',
     async (structured) => {
       const scope = structured ? 'structured-1' : 'pty-1'
       const probe = await renderProbe(scope, structured)
@@ -381,19 +380,18 @@ describe('useNativeChatComposerAttachments', () => {
 
       const ids = probe.latest().imageAttachments.map(({ id }) => id)
       expect(ids).toHaveLength(2)
-      expect(readNativeChatDraftCache(scope)).toBe(
-        structured ? ids.map(imageReferenceToken).join('\n\n') : ''
-      )
+      expect(readNativeChatDraftCache(scope)).toBe('')
       act(() => probe.root.unmount())
     }
   )
 
-  it('takes the chip of an image still on its way out of the prompt when the composer is disabled', async () => {
+  it('removes a pending image from the tray when the composer is disabled', async () => {
     const probe = await renderProbe('structured-1', true)
     act(() => {
       probe.latest().beginPendingImageAttachment()
     })
-    expect(readNativeChatDraftCache('structured-1')).not.toBe('')
+    expect(probe.latest().imageAttachments).toHaveLength(1)
+    expect(readNativeChatDraftCache('structured-1')).toBe('')
 
     await probe.rerender('structured-1', true)
     expect(probe.latest().imageAttachments).toEqual([])
