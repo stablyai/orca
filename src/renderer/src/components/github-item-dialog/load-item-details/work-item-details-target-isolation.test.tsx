@@ -21,7 +21,6 @@ import {
 import { installGitHubProjectAccounts } from '../../../../../main/github/github-project-account'
 import { GITHUB_PULL_REQUEST_METHODS } from '../../../../../main/runtime/rpc/methods/github-pull-request-methods'
 import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-compatibility-cache'
-import { invalidateWorkItemDetailsCacheForKey } from './work-item-details-cache'
 
 import type * as GitRunner from '../../../../../main/git/runner'
 import type * as GitHubClient from '../../../../../main/github/client'
@@ -52,7 +51,8 @@ import { useGitHubWorkItemDetails } from './use-github-work-item-details'
 import {
   workItemDetailsCache,
   patchCachedWorkItemBody,
-  subscribeWorkItemDetailsCache
+  subscribeWorkItemDetailsCache,
+  invalidateWorkItemDetailsCacheForKey
 } from './work-item-details-cache'
 import { useAppStore } from '@/store'
 import { RpcDispatcher } from '../../../../../main/runtime/rpc/dispatcher'

@@ -1,8 +1,10 @@
 import { createElement } from 'react'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { useGitHubWorkItemDetails } from './use-github-work-item-details'
 import { useRepoLabels } from '@/hooks/useGitHubRepoMetadata'
