@@ -109,6 +109,10 @@ const STATIC_TITLE_COPY = {
   'editor.save': () => translate('keybindings.title.6a99c55b2d', 'Save file'),
   'editor.markdownPreview': () =>
     translate('keybindings.title.e25a3e5f9a', 'Show Markdown preview'),
+  'editor.toggleChanges': () =>
+    translate('keybindings.title.editorToggleChanges', 'Toggle Changes'),
+  'editor.cycleViewMode': () =>
+    translate('keybindings.title.editorCycleViewMode', 'Cycle Editor View'),
   'editor.toggleWordWrap': () => translate('keybindings.title.2f207aa199', 'Toggle word wrap'),
   'editor.toggleChangesView': () =>
     translate('keybindings.title.editorToggleChangesView', 'Toggle changes view'),
