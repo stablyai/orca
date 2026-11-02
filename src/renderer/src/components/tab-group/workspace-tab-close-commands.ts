@@ -114,11 +114,16 @@ export function createWorkspaceTabCloseCommands({
     } else {
       // Why: a custom editor frame may still hold edits the dirty check must see.
       runAfterEditorFramesFlush(useAppStore.getState(), [item.entityId], (deferred) => {
-        const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
-        if (deferred && !tabs.some((tab) => tab.id === item.id)) {
+        // A rename during the flush keeps the tab id but moves its entity; act on the live one.
+        const live = deferred
+          ? (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
+              (tab) => tab.id === item.id
+            )
+          : item
+        if (!live || !isEditorTabContentType(live.contentType)) {
           return
         }
-        if (closeEditorIfUnreferenced(item.entityId, item.id, whenEmptied)) {
+        if (closeEditorIfUnreferenced(live.entityId, item.id, whenEmptied)) {
           closeUnifiedTab(item.id)
           whenEmptied?.()
         }

@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
-import { runAfterEditorFramesFlush } from './editor/editor-pending-flush'
+import { hasEditorFrameFlush, runAfterEditorFramesFlush } from './editor/editor-pending-flush'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
@@ -97,9 +97,13 @@ export function useTerminalBulkCloseActions(
     (tabIds: string[]) => {
       const state = useAppStore.getState()
       const tabs = activeWorktreeId ? (state.unifiedTabsByWorktree[activeWorktreeId] ?? []) : []
-      const fileIds = tabIds.map((id) => tabs.find((tab) => tab.id === id)?.entityId ?? id)
-      // Why: a custom editor frame may still hold edits the dirty checks must see.
-      runAfterEditorFramesFlush(state, fileIds, () => closeTabBarTabsNow(tabIds))
+      const fileIdOf = (id: string): string => tabs.find((tab) => tab.id === id)?.entityId ?? id
+      // Why: a custom editor frame may still hold edits the dirty checks must see; only its tabs wait.
+      const framed = tabIds.filter((id) => hasEditorFrameFlush(state, fileIdOf(id)))
+      closeTabBarTabsNow(tabIds.filter((id) => !framed.includes(id)))
+      if (framed.length > 0) {
+        runAfterEditorFramesFlush(state, framed.map(fileIdOf), () => closeTabBarTabsNow(framed))
+      }
     },
     [activeWorktreeId, closeTabBarTabsNow]
   )
