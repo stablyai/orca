@@ -11,6 +11,8 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
+import { awaitAcpTurnEnd } from './acp-structured-stop'
+import { isAcpReadySession } from './acp-structured-child'
 import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
@@ -53,6 +55,68 @@ function answersCancels(agent: AcpScriptedAgent): void {
 }
 
 describe('permission changes with already admitted ACP input', () => {
+  it('releases deadline and abort waiters without disturbing the active input', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    await sendHello(rig, 'still running')
+    const prompt = await rig.frame('session/prompt')
+    rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'working'))
+    await rig.settle()
+    const session = rig.adapter['children'].sessions.get(ADAPTER_SESSION)
+    if (!isAcpReadySession(session)) {
+      throw new Error('ACP session did not become ready')
+    }
+    for (const population of [1, 10]) {
+      for (let index = 0; index < population; index++) {
+        await awaitAcpTurnEnd(session, Date.now(), 0)
+      }
+      expect(session.turns['idleWaiters'].size).toBe(0)
+      expect(session.lane['turnWatchers'].size).toBe(0)
+    }
+    const abort = new AbortController()
+    const reason = new Error('caller stopped waiting')
+    const aborted = expect(awaitAcpTurnEnd(session, Date.now(), 10_000, abort.signal)).rejects.toBe(
+      reason
+    )
+    abort.abort(reason)
+    await aborted
+    expect(session.turns['idleWaiters'].size).toBe(0)
+    expect(session.lane['turnWatchers'].size).toBe(0)
+    const successor = awaitAcpTurnEnd(session, Date.now(), 500)
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    await successor
+    expect(session.turns.running).toBe(false)
+    expect(session.lane.openTurnId).toBeNull()
+  })
+
+  it('settles a provider-initiated turn and delivers the new-policy input once', async () => {
+    const { host, rig } = await openAttachedHostRig()
+    const original = rig.child()
+    original.agent.notify('session/update', replyChunk(GROK_TURN, 'background task finished'))
+    await rig.settle()
+    await host.flushStreamedEvents(SESSION)
+    original.agent.on('session/cancel', () => endsGrokTurn(original.agent))
+    const fields = { key: 'permissionMode', value: 'full-access' }
+    expect(
+      await host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', fields),
+        ...fields
+      })
+    ).toMatchObject({ ok: true })
+    const id = await send(host, 'new policy')
+    await waitFor(() => expect(original.exited).toBe(true))
+    expect(framesOf(original, 'session/cancel')).toHaveLength(1)
+    expect(framesOf(original, 'session/prompt')).toHaveLength(0)
+    const prompt = await rig.frame('session/prompt')
+    expect(promptIdOf(prompt)).toBe(`prompt:${id}`)
+    rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'done'))
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    await waitFor(() => expect(journal.submission(id)?.dispatchState).toBe('accepted'))
+    expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
+    await host.close(SESSION, 'user-close')
+  })
+
   it.each(['drained', 'deadline'] as const)(
     'preserves the earlier steer when the transition is %s',
     async (outcome) => {

@@ -615,3 +615,33 @@ it.each(['refused', 'grace'] as const)(
     expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/steer')).toBe(false)
   }
 )
+
+it('settles the old policy when a steer refused after the saved choice changed falls back to start', async () => {
+  const { codex, permissionSend, began, pick, starts, row } = codexInputFinalizationFixture()
+  await began(await permissionSend('running full access'))
+  const refusal = Promise.withResolvers<unknown>()
+  codex.routes['turn/steer'] = () => refusal.promise
+  const changed = await permissionSend('exact pending input')
+  await vi.waitFor(() =>
+    expect(codex.connections[0]?.calls.some((call) => call.method === 'turn/steer')).toBe(true)
+  )
+  await pick('ask')
+  refusal.reject(new CodexAppServerRequestError('turn/steer', -32600, 'steer refused'))
+  await vi.waitFor(() => expect(starts()).toHaveLength(2))
+  const calls = codex.connections[0]!.calls
+  const interrupt = calls.findIndex((call) => call.method === 'turn/interrupt')
+  const fresh = calls.findIndex(
+    (call) => call.method === 'turn/start' && call.params?.clientUserMessageId === changed
+  )
+  expect(interrupt).toBeGreaterThan(-1)
+  expect(fresh).toBeGreaterThan(interrupt)
+  expect(starts()[1]?.params).toMatchObject({
+    clientUserMessageId: changed,
+    approvalPolicy: 'on-request',
+    sandboxPolicy: { type: 'readOnly' }
+  })
+  expect(codex.connections).toHaveLength(1)
+  await began(changed)
+  expect((await row(changed))?.dispatchState).toBe('accepted')
+  expect(starts().filter((call) => call.params?.clientUserMessageId === changed)).toHaveLength(1)
+})

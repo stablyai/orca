@@ -27,6 +27,7 @@ import { codexTurnRequestOptions } from './codex-structured-service-tier'
 import type { CodexSession } from './codex-structured-session-state'
 import {
   codexRunningOrOpeningTurn,
+  codexStopTarget,
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
 import {
@@ -103,6 +104,15 @@ export async function startCodexTurn(
     mode = host.permissions?.acquiredMode
   ) => {
     checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
+    // turn/start can steer too; a refused steer must not bypass the final policy boundary.
+    if (
+      host.permissions &&
+      mode &&
+      mode !== (host.permissions.appliedMode ?? host.permissions.acquiredMode) &&
+      codexStopTarget(host) !== null
+    ) {
+      throw new StructuredAgentSessionInputNotAdmitted(undefined, 'permission')
+    }
     previousApplied = host.appliedTurnOptions
     previousOptions = input.turnOptions ? new Map(host.options) : null
     if (input.turnOptions) {

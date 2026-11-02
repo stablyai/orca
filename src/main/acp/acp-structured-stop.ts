@@ -23,23 +23,29 @@ export function interruptAcpTurn(session: AcpStoppableSession): void {
 export async function awaitAcpTurnEnd(
   session: AcpStoppableSession,
   stoppedAt: number,
-  graceMs: number
+  graceMs: number,
+  signal?: AbortSignal
 ): Promise<void> {
+  const waiting = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
   const elapsed = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, Math.max(0, stoppedAt + graceMs - Date.now()))
   })
   const turnId = session.lane.openTurnId
   try {
-    await Promise.race([
-      Promise.all([
-        session.turns.whenIdle(),
-        turnId === null ? undefined : session.lane.whenTurnLeaves(turnId)
+    await waitForPromiseWithSignal(
+      Promise.race([
+        Promise.all([
+          session.turns.whenIdle(waiting.signal),
+          turnId === null ? undefined : session.lane.whenTurnLeaves(turnId, waiting.signal)
+        ]),
+        elapsed
       ]),
-      elapsed
-    ])
+      signal
+    )
   } finally {
     clearTimeout(timer)
+    waiting.abort()
   }
 }
 
@@ -68,7 +74,7 @@ export async function settleAcpPermissionTransition(
     return false
   }
   session.turns.interruptForPermissionTransition()
-  await waitForPromiseWithSignal(awaitAcpTurnEnd(session, Date.now(), graceMs), input.signal)
+  await awaitAcpTurnEnd(session, Date.now(), graceMs, input.signal)
   return (
     !session.ended &&
     !session.closeRequested &&
