@@ -1,6 +1,6 @@
 import { isAbsolute } from 'node:path'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { dispatchPerforceOperation } from '../../shared/perforce/perforce-operations'
 import { runWithDesktopPerforceSettings } from '../perforce/perforce-desktop-settings'
 import { resolvePerforceBackend } from '../perforce/perforce-ssh-backend'

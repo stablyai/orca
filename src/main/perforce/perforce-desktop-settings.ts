@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { runWithPerforceSettings } from '../../shared/perforce/p4-settings-context'
 import {
   normalizePerforceSettings,

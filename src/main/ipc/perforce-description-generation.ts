@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolvePerforceBackend } from '../perforce/perforce-ssh-backend'
 import {
   generatePerforceDescription,

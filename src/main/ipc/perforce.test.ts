@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { registerPerforceHandlers } from './perforce'
 
 const mocks = vi.hoisted(() => ({

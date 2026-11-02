@@ -11,7 +11,7 @@ import {
   getPerforceCopyWorktreeId,
   isPerforceCopyWorktreeIdForRepo
 } from '../../shared/worktree/perforce-copy-worktree'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 export type CopyWorktreeStore = Pick<
