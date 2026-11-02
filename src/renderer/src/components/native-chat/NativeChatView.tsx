@@ -19,6 +19,7 @@ export default function NativeChatView(props: NativeChatViewProps): React.JSX.El
           target={props.target}
           sessionId={props.sessionId}
           tabId={props.tabId}
+          isFocusedGroup={props.isFocusedGroup}
         >
           <NativeChatFileLinkExistenceProvider tabId={props.tabId}>
             <NativeChatMarkdownImageOwnerProvider

@@ -11,6 +11,14 @@ export type NativeChatVisualOwner = {
 
 export const NativeChatVisualOwnerContext = createContext<NativeChatVisualOwner | null>(null)
 
+/** Whether the chat below it may take reader actions like editing a reply's code block; false in
+ *  a dimmed split group, whose pane stays interactive but is not the one being read. */
+export const NativeChatVisualEditingContext = createContext(true)
+
+/** True outside a chat (where it is irrelevant) and in the focused chat; false when dimmed. */
+export function useNativeChatVisualEditingAllowed(): boolean {
+  return useContext(NativeChatVisualEditingContext)
+}
 /** Null outside a structured chat's transcript, where no visual can be read. */
 export function useNativeChatVisualOwner(): NativeChatVisualOwner | null {
   return useContext(NativeChatVisualOwnerContext)
@@ -20,11 +28,13 @@ export function NativeChatVisualOwnerProvider({
   target,
   sessionId,
   tabId,
+  isFocusedGroup,
   children
 }: {
   target: RuntimeClientTarget
   sessionId: string
   tabId: string
+  isFocusedGroup: boolean
   children: ReactNode
 }): React.JSX.Element {
   // Until the tab's workspace is known there is no workspace to open a visual's tab in.
@@ -45,7 +55,9 @@ export function NativeChatVisualOwnerProvider({
   )
   return (
     <NativeChatVisualOwnerContext.Provider value={owner}>
-      {children}
+      <NativeChatVisualEditingContext.Provider value={isFocusedGroup}>
+        {children}
+      </NativeChatVisualEditingContext.Provider>
     </NativeChatVisualOwnerContext.Provider>
   )
 }
