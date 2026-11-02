@@ -32,7 +32,10 @@ export function NativeChatCrewFrame({
 }): React.JSX.Element {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <NativeChatCrewPanel {...crew} />
+      {/* Clips the panel to the transcript even when it is shorter than the panel's header. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <NativeChatCrewPanel {...crew} />
+      </div>
       {children}
     </div>
   )
