@@ -10,7 +10,7 @@ import {
 } from './structured/launch/claude-structured-provider-fallback'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
-import { claudeResultUserMessageUuids } from './claude-replay-turn-resolution'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 import type { ClaudeJournalTranslatorDeps } from './claude-journal-translator-contract'
 
@@ -64,13 +64,13 @@ export function journalClaudeResult(
   message: Record<string, unknown>,
   observedAt: number
 ): void {
-  // Child results can report failures but must never settle the root turn.
-  const settlesTurn =
-    isRootClaudeFrame(message) && turn.settlesWithResult(claudeResultUserMessageUuids(message))
-  const endedTurnScope = turn.turnScope
+  // Child results can report failures but must never settle the root turn; another cycle's result settles nothing here.
+  const settlesTurn = isRootClaudeFrame(message) && turn.resultEndsRun(message)
+  const foreign = isRootClaudeFrame(message) && !settlesTurn
+  const endedTurnScope = foreign ? AGENT_JOURNAL_THREAD_SCOPE : turn.turnScope
   const endedTurnIdentity = turn.identity
   const usageEvidence = turn.usageLimitEvidence
-  const endedTurnStartedAt = turn.startedAt
+  const endedTurnStartedAt = foreign ? null : turn.startedAt
   const turnId = settlesTurn ? turn.id : null
   const leftToStop = turnId !== null && sink.journalStopDecidesTurn?.(turnId, observedAt) === true
   // Retry owed prompt cancellations before a command result can return.

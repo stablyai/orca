@@ -54,11 +54,17 @@ type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 /** Missing baseline makes first observation silent; settled/prompts track already-accounted edges. */
 type SessionBaseline = CompletionFeedCursor & {
   settled: RequestMark | null
+  /** The request last seen running; only its own settling is news. */
+  running?: RequestMark
   prompts: ReadonlySet<string>
 }
 
 function settledMark(request: StructuredAgentSessionLatestRequest | null): RequestMark | null {
   return request && request.turnState !== 'running' ? { kind: request.kind, id: request.id } : null
+}
+
+function sameRequest(mark: RequestMark | null | undefined, request: RequestMark): boolean {
+  return mark?.kind === request.kind && mark.id === request.id
 }
 
 export class StructuredAgentSessionTurnCompletionFeed {
@@ -118,6 +124,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
       baseline.epoch = cursor.epoch
       baseline.sequence = cursor.sequence
       baseline.settled = settledMark(request)
+      delete baseline.running
       baseline.prompts = prompts
       return
     }
@@ -173,21 +180,22 @@ export class StructuredAgentSessionTurnCompletionFeed {
   ): AgentSessionTurnCompletion | null {
     const request = state.latestRequest
     if (request?.turnState === 'running') {
-      // Clear on running so each running-to-settled transition can fire, even for a reused ID.
-      baseline.settled = null
+      // Remember what runs so its own running-to-settled transition fires, even for a reused ID.
+      baseline.running = { kind: request.kind, id: request.id }
       return null
     }
     // Wait until all owed sends are answered; pending prompts announce immediately.
-    // Withdrawn sends expose the older request without making it news.
+    // A withdrawn run exposes the older settled request without making it news.
     if (
       state.owesWork ||
       !request ||
-      (baseline.settled?.kind === request.kind && baseline.settled.id === request.id) ||
+      (!sameRequest(baseline.running, request) && sameRequest(baseline.settled, request)) ||
       this.heldByLiveWork(sessionId, state, request)
     ) {
       return null
     }
     baseline.settled = settledMark(request)
+    delete baseline.running
     // No outcome means unknown; inferring success would alert on failures.
     if (!request.outcome) {
       return null

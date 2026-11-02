@@ -18,14 +18,8 @@ import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
 import { refineClaudeQuotaTurnEnd } from './claude-terminal-failure'
 import type { ClaudeUsageLimitEvidence } from './claude-usage-limits'
-import type { ClaudeStartedSend } from './structured/claude-structured-session-state'
-
-export type ClaudeOfferedInput = {
-  sessionId: string
-  sentUuid: string
-  clientMessageId: string
-  requestedAt?: number
-}
+import { ClaudeInputRuns, type ClaudeOfferedInput } from './claude-input-runs'
+import { isRootClaudeFrame } from './claude-turn-opening'
 
 export type ClaudeOpenTurnDeps = {
   sink: StructuredAgentSessionEventSink
@@ -45,10 +39,7 @@ export class ClaudeOpenTurn {
   private cycleWorkObserved = false
   /** Input choices follow actual work; correlation also includes API errors. */
   inputChoiceWorkObserved = false
-  private startedSend: ClaudeStartedSend | null = null
-  /** Opened at handoff: the previous cycle's late idle is not this run's end. */
-  private awaitingProviderCycle = false
-  private openedAtHandoff = false
+  private readonly runs = new ClaudeInputRuns()
   private readonly opener: (
     frame: Record<string, unknown>,
     source: ClaudeTurnSource | null,
@@ -59,12 +50,12 @@ export class ClaudeOpenTurn {
     this.opener = createClaudeTurnOpener({
       isTurnOpen: () => this.isOpen,
       isSuppressed: () => this.reopenSuppressed,
-      startedSend: () => this.startedSend,
-      open: (turn, observedAt) => {
-        if (this.startedSend) {
+      successor: () => this.runs.successor,
+      open: (turn, observedAt, owed) => {
+        if (owed) {
           this.allowReopen()
         }
-        this.open(turn, observedAt)
+        this.open(turn, observedAt, owed?.clientMessageId)
       }
     })
   }
@@ -93,30 +84,13 @@ export class ClaudeOpenTurn {
     return this.current?.startedAt ?? null
   }
 
-  get userItemId(): string | null {
-    return this.current?.userItemId ?? null
-  }
-
   get isOpen(): boolean {
     return this.current !== null
   }
 
-  /** A run opened at handoff runs on its first input's choices until it settles. */
+  /** A run with Orca inputs runs on its first input's choices until it ends. */
   get hasInputWork(): boolean {
-    return this.current !== null && (this.inputChoiceWorkObserved || this.openedAtHandoff)
-  }
-
-  get settlesAtIdle(): boolean {
-    return !this.awaitingProviderCycle
-  }
-
-  /** Before this run's cycle starts, a result naming only other sends ended an earlier cycle. */
-  settlesWithResult(userMessageUuids: readonly string[]): boolean {
-    return (
-      !this.awaitingProviderCycle ||
-      userMessageUuids.length === 0 ||
-      userMessageUuids.includes(this.current?.turnId ?? '')
-    )
+    return this.current !== null && (this.inputChoiceWorkObserved || this.runs.tracked)
   }
 
   /** An open cycle with prior root work can fold a send; its first send remains the opener. */
@@ -124,67 +98,85 @@ export class ClaudeOpenTurn {
     return this.current !== null && this.cycleWorkObserved
   }
 
-  /** Reset per frame so send ownership cannot leak into later frames. */
-  observeStartedSend(send: ClaudeStartedSend | null): void {
-    this.startedSend = send
+  /** The echo of an input this run owns confirms delivery into it rather than opening another. */
+  adoptsEcho(clientMessageId: string): boolean {
+    return this.current !== null && this.runs.owns(clientMessageId)
   }
 
-  observeProviderCycleStart(): void {
-    this.awaitingProviderCycle = false
-    this.cycleWorkObserved = false
-    this.inputChoiceWorkObserved = false
-  }
-
-  observeProviderCycleWork(): void {
-    this.awaitingProviderCycle = false
-    this.cycleWorkObserved = true
-  }
-
-  observeProviderRunning(): void {
-    this.awaitingProviderCycle = false
-  }
-
-  /** The handoff owns the run it starts; a follow-up joins the live run and its echo folds as usual. */
-  offerInput(input: ClaudeOfferedInput, observedAt: number): void {
-    if (this.current) {
+  /** Attribute each frame to the run's inputs and cycle before its effects apply. */
+  observeFrame(message: Record<string, unknown>, startsTurn: boolean, clientMessageId?: string) {
+    if (!isRootClaudeFrame(message)) {
       return
     }
-    this.allowReopen()
-    this.open(
-      {
-        sessionId: input.sessionId,
-        turnId: input.sentUuid,
-        startedAt: observedAt,
-        ...(input.requestedAt === undefined ? {} : { requestedAt: input.requestedAt }),
-        userItemId: agentJournalSubmissionKey(input.clientMessageId)
-      },
-      observedAt
-    )
-    this.openedAtHandoff = true
-    this.awaitingProviderCycle = true
+    this.runs.observe(message, clientMessageId, this.current !== null && this.cycleWorkObserved)
+    // Root init starts a cycle; replays after root work fold into it, while task frames do not mark cycle work.
+    if (message.type === 'system' && message.subtype === 'init') {
+      this.cycleWorkObserved = false
+      this.inputChoiceWorkObserved = false
+    } else if (startsTurn || message.type === 'assistant' || message.type === 'stream_event') {
+      this.cycleWorkObserved = true
+      this.inputChoiceWorkObserved ||=
+        message.type !== 'assistant' || message.is_api_error_message !== true
+    }
   }
 
-  /** Claude never ran the input that opened this unworked run: retract the run, it did not end. */
+  resultEndsRun(message: Record<string, unknown>): boolean {
+    return this.runs.resultEndsRun(message)
+  }
+
+  endsAtIdle(): boolean {
+    return this.runs.endsAtIdle()
+  }
+
+  /** Orca's handoff owns the run it starts; a live run gains the input as a member. */
+  offerInput(input: ClaudeOfferedInput, observedAt: number): void {
+    if (!this.runs.offer(input, this.current !== null)) {
+      return
+    }
+    const anchor = this.runs.oldestOwed ?? input
+    this.allowReopen()
+    this.open(
+      this.runTurn(input.sessionId, anchor, observedAt),
+      observedAt,
+      anchor.clientMessageId,
+      true
+    )
+  }
+
+  /** Claude never ran this input: it leaves its run, and an unworked run left with no input is retracted. */
   withdrawInput(clientMessageId: string): void {
     const current = this.current
-    if (
-      !current ||
-      current.userItemId !== agentJournalSubmissionKey(clientMessageId) ||
-      this.cycleWorkObserved
-    ) {
+    const outcome = this.runs.withdraw(clientMessageId)
+    if (!current || current.command || outcome === 'kept') {
+      return
+    }
+    if (outcome === 'reanchor' && this.runs.anchor) {
+      this.current = this.runTurn(
+        current.sessionId,
+        this.runs.anchor,
+        current.startedAt,
+        current.turnId
+      )
+      this.publish(this.current)
       return
     }
     this.current = null
-    this.resetRun()
+    this.runs.end()
     this.deps.sink.appendTombstone(claudeCurrentTurnIdentity(current), { lifecycle: true })
     this.deps.sink.publish({ lifecycle: true })
     this.deps.sink.setActivity?.(null)
   }
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
-  open(turn: ClaudeCurrentTurn, observedAt: number): void {
+  open(
+    turn: ClaudeCurrentTurn,
+    observedAt: number,
+    anchorClientMessageId?: string,
+    offered = false
+  ): void {
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
+    this.runs.end()
     if (this.current) {
       this.deps.turnSuperseded()
       this.deps.endOpenWork(observedAt)
@@ -195,7 +187,7 @@ export class ClaudeOpenTurn {
       })
     }
     this.current = turn
-    this.resetRun()
+    this.runs.begin(anchorClientMessageId ?? null, offered, true)
     this.publish(turn)
     this.deps.sink.setActivity?.(null)
   }
@@ -213,8 +205,9 @@ export class ClaudeOpenTurn {
         outcome: 'superseded'
       })
     }
+    this.runs.end()
     this.current = turn
-    this.resetRun()
+    this.runs.begin(null, false, false)
     this.deps.sink.setActivity?.(null)
   }
 
@@ -230,7 +223,7 @@ export class ClaudeOpenTurn {
       this.usageLimitEvidence = null
       this.inputChoiceWorkObserved = false
       this.current = null
-      this.resetRun()
+      this.runs.end()
     }
   }
 
@@ -253,7 +246,7 @@ export class ClaudeOpenTurn {
     this.cycleWorkObserved = false
     this.inputChoiceWorkObserved = false
     this.usageLimitEvidence = null
-    this.resetRun()
+    this.runs.end()
     // End suppressed work even when no turn is open.
     this.deps.endOpenWork(end.completedAt)
     if (this.current) {
@@ -267,8 +260,10 @@ export class ClaudeOpenTurn {
     this.reopenSuppressed = false
   }
 
+  /** The child is gone, so nothing it was handed can still run. */
   suppressReopen(): void {
     this.reopenSuppressed = true
+    this.runs.reset()
   }
 
   /** Keep failure suppression latched until a new accepted send. */
@@ -276,9 +271,19 @@ export class ClaudeOpenTurn {
     this.reopenSuppressed ||= failed
   }
 
-  private resetRun(): void {
-    this.awaitingProviderCycle = false
-    this.openedAtHandoff = false
+  private runTurn(
+    sessionId: string,
+    anchor: ClaudeOfferedInput,
+    startedAt: number,
+    turnId = anchor.sentUuid
+  ): ClaudeCurrentTurn {
+    return {
+      sessionId,
+      turnId,
+      startedAt,
+      ...(anchor.requestedAt === undefined ? {} : { requestedAt: anchor.requestedAt }),
+      userItemId: agentJournalSubmissionKey(anchor.clientMessageId)
+    }
   }
 
   private publish(

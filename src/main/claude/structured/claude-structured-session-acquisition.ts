@@ -2,7 +2,6 @@ import type { AgentSessionAcquisition } from '../../native-chat/agent-session-wi
 import { openClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from '../claude-replay-turn-resolution'
-import { claudeRootWorkSend } from '../claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from '../claude-request-end-wait'
 import {
@@ -124,7 +123,6 @@ export async function acquireClaudeSession({
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
-    const startedSend = !startsTurn && liveSession ? claudeRootWorkSend(liveSession) : null
     // Retain send ownership during publication until the host receives its settlement.
     const session = liveSession
     const reported = session?.unreportedSettlements
@@ -155,7 +153,6 @@ export async function acquireClaudeSession({
           ...(startsTurn ? { startsTurn: true } : {}),
           ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
           ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
-          ...(startedSend ? { startedSend } : {}),
           ...observedAt
         })
         // Final snapshots and the turn settlement must reach the journal before its leaf can move.

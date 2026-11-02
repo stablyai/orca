@@ -572,6 +572,26 @@ describe('Claude accepted message choices', () => {
     expect(connection.sent).toHaveLength(2)
   })
 
+  it('keeps a handed-over run on its first choices before any receipt or echo', async () => {
+    const claude = fakeClaude({ replayUuid: null, routes: { list_models: () => MODELS } })
+    const adapter = await acquired(claude)
+    const connection = claude.connections[0]!
+    const send = (clientMessageId: string, model: string) =>
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId,
+        body: USER_MESSAGE,
+        executionOptions: { model },
+        fence: 7
+      })
+    const models = () =>
+      connection.calls.flatMap((call) => (call.subtype === 'set_model' ? [call.params?.model] : []))
+    await expect(send('opens', 'sonnet')).resolves.toMatchObject({ state: 'admitted' })
+    await expect(send('joins', 'opus')).resolves.toMatchObject({ state: 'admitted' })
+    expect(models()).toEqual(['sonnet'])
+    expect(connection.sent).toHaveLength(2)
+  })
+
   it('keeps a running turn on its choices and applies new ones at the next turn', async () => {
     const claude = fakeClaude({
       initModels: MODELS.map((model) => ({ ...model, supportsFastMode: true })),

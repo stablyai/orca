@@ -1,7 +1,10 @@
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { AgentSessionPreDispatchError } from '../../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
@@ -107,6 +110,12 @@ it.each(['exit', 'capacity'] as const)(
   }
 )
 
+function isSdkUserMessage(
+  message: Record<string, unknown>
+): message is Record<string, unknown> & SDKUserMessage {
+  return message.type === 'user'
+}
+
 function handoffRig() {
   const queue = createClaudeUserMessageQueue()
   const session = sessionFor()
@@ -118,7 +127,9 @@ function handoffRig() {
   }
   session.translator = createClaudeJournalTranslator({ sink })
   session.connection.send = (message, beforeDispatch) =>
-    queue.push(message as unknown as SDKUserMessage, beforeDispatch)
+    isSdkUserMessage(message)
+      ? queue.push(message, beforeDispatch)
+      : Promise.reject(new Error('dispatch wrote a non-user frame'))
   const pump = queue.messages[Symbol.asyncIterator]()
   const turnRow = (turnId: string) =>
     rows.get(agentJournalItemKey(claudeTurnLifecycleIdentity('provider-session', turnId)))
@@ -186,4 +197,31 @@ it('keeps the run when a write may have reached Claude', async () => {
   await expect(ambiguous).resolves.toMatchObject({ state: 'unknown' })
   expect(rig.session.translator?.currentTurnId).toBe(opener)
   expect(rig.turnRow(opener)).toMatchObject({ state: 'running' })
+})
+
+it('keeps the run for the input that survives when Claude refuses the one that opened it', async () => {
+  const rig = handoffRig()
+  const first = rig.offer('client-a')
+  await rig.pump.next()
+  const joined = rig.offer('client-b')
+  await rig.pump.next()
+  await expect(first).resolves.toMatchObject({ state: 'admitted' })
+  const [opener, follower] = rig.session.dispatchWaiters.map((waiter) => waiter.sentUuid)
+  const refuse = (uuid: string) =>
+    rejectClaudeDispatchWaiters(rig.session, [uuid!], agentSessionFailureFact('providerRejected'))
+
+  refuse(opener!)
+  // Same run and Stop target, now anchored at the input still owed.
+  expect(rig.session.translator?.currentTurnId).toBe(opener)
+  expect(rig.turnRow(opener!)).toMatchObject({
+    state: 'running',
+    userItemId: agentJournalSubmissionKey('client-b')
+  })
+
+  refuse(follower!)
+  expect(rig.session.translator?.currentTurnId).toBeNull()
+  expect(rig.turnRow(opener!)).toBe('tombstone')
+  rig.queue.end()
+  await rig.pump.next()
+  await expect(joined).resolves.toMatchObject({ state: 'admitted' })
 })

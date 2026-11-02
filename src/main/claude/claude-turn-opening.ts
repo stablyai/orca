@@ -5,7 +5,7 @@ import {
   type ClaudeMessageEnvelope
 } from './structured/journal/claude-structured-item-translation'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { ClaudeStartedSend } from './structured/claude-structured-session-state'
+import type { ClaudeOfferedInput } from './claude-input-runs'
 import {
   claudeProviderResumedTurnTimingAnchor,
   type ClaudeCurrentTurn
@@ -69,32 +69,33 @@ export function claudeStreamTurnStartSource(
     : null
 }
 
-/** Root output opens once; a started send lifts suppression, otherwise the provider resumed on its own. */
+/** Root output opens once; an owed Orca input lifts suppression, otherwise the provider resumed on its own. */
 export function createClaudeTurnOpener(deps: {
   isTurnOpen: () => boolean
   isSuppressed: () => boolean
-  startedSend: () => ClaudeStartedSend | null
-  open: (turn: ClaudeCurrentTurn, observedAt: number) => void
+  successor: () => ClaudeOfferedInput | null
+  open: (turn: ClaudeCurrentTurn, observedAt: number, owed: ClaudeOfferedInput | null) => void
 }): (frame: Record<string, unknown>, source: ClaudeTurnSource | null, observedAt: number) => void {
   return (frame, source, observedAt) => {
     if (!source?.assistant || !isRootClaudeFrame(frame)) {
       return
     }
-    const send = deps.startedSend()
-    if ((!send && deps.isSuppressed()) || deps.isTurnOpen()) {
+    const owed = deps.successor()
+    if ((!owed && deps.isSuppressed()) || deps.isTurnOpen()) {
       return
     }
     deps.open(
       {
         sessionId: source.sessionId,
-        turnId: source.uuid,
+        turnId: owed?.sentUuid ?? source.uuid,
         startedAt: observedAt,
-        ...(send?.requestedAt === undefined ? {} : { requestedAt: send.requestedAt }),
-        userItemId: send
-          ? agentJournalSubmissionKey(send.clientMessageId)
+        ...(owed?.requestedAt === undefined ? {} : { requestedAt: owed.requestedAt }),
+        userItemId: owed
+          ? agentJournalSubmissionKey(owed.clientMessageId)
           : claudeProviderResumedTurnTimingAnchor(source.sessionId, source.uuid)
       },
-      observedAt
+      observedAt,
+      owed
     )
   }
 }

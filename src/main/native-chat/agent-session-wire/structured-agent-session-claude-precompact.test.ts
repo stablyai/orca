@@ -147,32 +147,48 @@ it.each([
   }
 )
 
-it('hands a follow-up over during pre-echo compaction and keeps both sends in one run', async () => {
-  const connection = fixture.claude.connections[0]!
-  const first = await sendUnechoed(connection)
-  const written = connection.sent.at(-1)!
-  status(connection, 'compacting', 'pre-echo-compaction')
-  const [opened] = await turns()
-  expect(opened).toMatchObject({ turnId: written.uuid, state: 'running' })
+it.each([
+  ['exact', false],
+  ['reminted', true]
+])(
+  'hands a follow-up over during pre-echo compaction and keeps both sends in one run, %s echo',
+  async (_label, reminted) => {
+    const connection = fixture.claude.connections[0]!
+    const first = await sendUnechoed(connection)
+    const written = connection.sent.at(-1)!
+    status(connection, 'compacting', 'pre-echo-compaction')
+    const [opened] = await turns()
+    expect(opened).toMatchObject({ turnId: written.uuid, state: 'running' })
 
-  // The run exists, so the follow-up is not held until the first echo.
-  const second = await send('Then say FOUR.')
-  await eventually(() => expect(connection.sent).toHaveLength(2))
-  const secondWritten = connection.sent.at(-1)!
-  status(connection, null, 'compaction-ended')
-  // An init before the echoes changes the provider cycle, not the run's identity.
-  frame(connection, { type: 'system', subtype: 'init', uuid: 'post-compact-init' })
-  frame(connection, { ...written, parent_tool_use_id: null })
-  frame(connection, { ...secondWritten, parent_tool_use_id: null })
+    // The run exists, so the follow-up is not held until the first echo.
+    const second = await send('Then say FOUR.')
+    await eventually(() => expect(connection.sent).toHaveLength(2))
+    const secondWritten = connection.sent.at(-1)!
+    status(connection, null, 'compaction-ended')
+    // An init before the echoes changes the provider cycle, not the run's identity.
+    frame(connection, { type: 'system', subtype: 'init', uuid: 'post-compact-init' })
+    frame(connection, { ...written, parent_tool_use_id: null })
+    // A joined input's echo confirms delivery into the run it joined, whatever uuid Claude gives it.
+    frame(connection, {
+      ...secondWritten,
+      ...(reminted ? { uuid: 'reminted-follow-up' } : {}),
+      parent_tool_use_id: null
+    })
 
-  expect(await turns()).toEqual([opened])
-  expect(await dispatch(first)).toMatchObject({ state: 'accepted' })
-  expect(await dispatch(second)).toMatchObject({ state: 'accepted' })
-  frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'batched-result' })
-  expect(await turns()).toEqual([
-    expect.objectContaining({ ...opened, state: 'completed', outcome: 'success' })
-  ])
-})
+    expect(await turns()).toEqual([opened])
+    expect(await dispatch(first)).toMatchObject({ state: 'accepted' })
+    expect(await dispatch(second)).toMatchObject({ state: 'accepted' })
+    frame(connection, {
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      uuid: 'batched-result'
+    })
+    expect(await turns()).toEqual([
+      expect.objectContaining({ ...opened, state: 'completed', outcome: 'success' })
+    ])
+  }
+)
 
 it.each([
   ['an untargeted Stop', false],
@@ -239,3 +255,71 @@ it('gives root compaction without a send to the resumed provider and never opens
     expect.objectContaining({ turnId: 'autonomous-compaction', state: 'running' })
   ])
 })
+
+it('ends a handed-over run that Claude started then cancelled, without init, running, echo or result', async () => {
+  const connection = fixture.claude.connections[0]!
+  await openTurn(connection, 'Say the word TWO.')
+  frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'prior-result' })
+  const clientMessageId = await send('Then say THREE.')
+  await eventually(() => expect(connection.sent).toHaveLength(2))
+  const written = connection.sent.at(-1)!
+  lifecycle(connection, 'started', written.uuid)
+  status(connection, 'compacting', 'compaction')
+  status(connection, null, 'compaction-ended')
+  lifecycle(connection, 'cancelled', written.uuid)
+  sessionState(connection, 'idle')
+  await laneDrained()
+
+  expect((await turns()).map((turn) => turn.state)).toEqual(['completed', 'completed'])
+  expect(await dispatch(clientMessageId)).toMatchObject({ state: 'unknown' })
+})
+
+it.each([
+  ['Claude cancels it', false],
+  ['a Stop cancels it', true]
+])(
+  'retracts an unrun send without announcing the earlier reply again when %s',
+  async (_label, viaStop) => {
+    const connection = fixture.claude.connections[0]!
+    const completions: string[] = []
+    fixture.host.subscribeTurnCompletions({
+      id: 'precompact-completions',
+      includePrompts: true,
+      emit: (event) => {
+        if (event.type === 'completion') {
+          completions.push(event.completion.turnId)
+        }
+      }
+    })
+    const prior = await openTurn(connection, 'Say the word TWO.')
+    frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'prior-result' })
+    await laneDrained()
+    expect(completions).toEqual([prior])
+
+    const unrun = await sendUnechoed(connection)
+    const written = connection.sent.at(-1)!
+    lifecycle(connection, 'queued', written.uuid)
+    if (viaStop) {
+      fixture.claude.routes.interrupt = () => ({ cancelled: [written.uuid], still_queued: [] })
+      await expect(stop()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+    } else {
+      lifecycle(connection, 'cancelled', written.uuid)
+    }
+    await eventually(async () => expect(await dispatch(unrun)).toMatchObject({ state: 'rejected' }))
+    await laneDrained()
+    expect((await turns()).map((turn) => turn.turnId)).toEqual([prior])
+    expect(completions).toEqual([prior])
+
+    // A genuine later reply still announces, on whichever child the Stop left.
+    await send('Say the word FOUR.')
+    const live = await eventually(() => {
+      const latest = fixture.claude.connections.at(-1)!
+      expect(latest.sent.some((message) => JSON.stringify(message).includes('FOUR'))).toBe(true)
+      return latest
+    })
+    frame(live, { ...live.sent.at(-1)!, parent_tool_use_id: null })
+    frame(live, { type: 'result', subtype: 'success', is_error: false, uuid: 'next-result' })
+    await eventually(() => expect(completions).toHaveLength(2))
+    expect(completions[1]).not.toBe(prior)
+  }
+)
