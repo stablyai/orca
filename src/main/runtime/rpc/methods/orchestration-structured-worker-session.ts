@@ -12,7 +12,7 @@ import {
   agentSessionFailureDetailText,
   readAgentSessionFailureFact
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { quotedProviderDetail } from '../../../../shared/agent-session-failure-quoted-detail'
+import { quotedProviderDetail } from '../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission

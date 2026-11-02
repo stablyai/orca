@@ -2,11 +2,11 @@ import type {
   StructuredAgentSessionStatusPublisher,
   StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-ownership'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   AGENT_SESSION_TURN_PREVIEW_CHARS,
   type AgentSessionLastTurn
-} from '../../../shared/agent-session-last-turn'
+} from '../../../shared/agent-session/lifecycle/agent-session-last-turn'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StatusPublication } from './structured-agent-session-status-feed-deps'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'

@@ -1,5 +1,5 @@
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalInputOrder } from './journal-input-order'
 import type { JournalReducerState } from './journal-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
