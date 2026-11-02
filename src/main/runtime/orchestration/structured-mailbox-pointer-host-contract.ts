@@ -13,6 +13,8 @@ export type StructuredPointerSendOutcome =
   | { kind: 'unattached' }
   /** A check took or a waiter claimed its mail before admission; nothing ran. */
   | { kind: 'obsolete' }
+  /** Written before the person's Stop, which still holds: it waits for their send or Resume. */
+  | { kind: 'held' }
 
 /** What became of one earlier send, as the chat's host answers it without replaying it. */
 export type StructuredMailSendState = StructuredSendAnswer
@@ -27,6 +29,8 @@ export type StructuredMailboxPointerHost = {
     body: AgentJournalMessageItem
     /** Rechecked at admission: the mail may have been taken, or its owner changed, while the send waited. */
     stillOwed: () => boolean
+    /** When the mail was written, in whole seconds on the host's clock, to compare with a Stop. */
+    createdAt: number
   }) => Promise<StructuredPointerSendOutcome>
   observe: (sessionId: string, operationId: string) => Promise<StructuredMailSendState>
   /** Have the chat's queue look again: a card it passed over may be decidable now. */

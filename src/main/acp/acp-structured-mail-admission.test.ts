@@ -45,7 +45,8 @@ it('queues mail behind an answerable ACP question without interrupting it', asyn
       operationId,
       expectedRuntimeFence,
       body,
-      stillOwed: () => true
+      stillOwed: () => true,
+      createdAt: 0
     })
   ).toEqual({ kind: 'queued' })
   const after = await host.journalSnapshot(SESSION)

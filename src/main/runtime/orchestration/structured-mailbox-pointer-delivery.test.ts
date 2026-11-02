@@ -415,6 +415,19 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.watching.has('session-1')).toBe(false)
   })
 
+  it("holds mail from before the person's Stop, sends later mail, and sends it on their next send", async () => {
+    const h = harness()
+    h.receive('m1')
+    h.receive('m2')
+    h.answers.push(async () => ({ kind: 'held' }))
+    await h.deliver()
+    expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: null })
+    expect(h.mail.get('m2')?.read).toBe(1)
+    // Their send writes Resume: a journal edge, with nothing new in the mailbox.
+    await h.journal()
+    expect(h.mail.get('m1')?.read).toBe(1)
+  })
+
   it('sends the rest of a batch to the new owner after a takeover during the first send', async () => {
     const h = harness({ busy: true })
     h.receive('m1')

@@ -17,7 +17,11 @@ import type { AgentSessionRefusalReason } from '../../../shared/agent-session/fa
 import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import {
+  composeJournalOperationReceipts,
+  type JournalOperationReceipt
+} from '../agent-session-journal/journal-row-writer'
+import type { JournalSendAdmission } from '../agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   classifyJournalOpenFailure,
@@ -87,6 +91,22 @@ export function agentSessionAttachmentExpiredRefusal(error: AgentSessionAttachme
   }
 }
 
+/** An automated send's admission, asked in its row transaction before its ledger answer: a throw
+ *  rolls the send back, so a Stop committed while it waited is seen. */
+export function admittedSendReceipt(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'operationReceipt'>,
+  admit: JournalSendAdmission | undefined
+): JournalOperationReceipt | undefined {
+  if (!admit) {
+    return ctx.operationReceipt
+  }
+  const asked = {
+    write: () => admit(ctx.journal.queuedMessages.userStopInForce()?.event ?? null),
+    committed: () => {}
+  }
+  return ctx.operationReceipt ? composeJournalOperationReceipts(asked, ctx.operationReceipt) : asked
+}
+
 /** Accept once per ID; existing submissions replay without redelivery because unknown cannot prove non-delivery.
  * Delivery runs separately; a fresh send after terminal rejection needs a fresh ID. */
 export async function performSend(
@@ -101,8 +121,10 @@ export async function performSend(
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>
+    admit?: JournalSendAdmission
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
+  const { admit, ...send } = input
   const existing = ctx.journal
     .submissions()
     .find((entry) => entry.clientMessageId === input.clientMessageId)
@@ -122,14 +144,27 @@ export async function performSend(
   if ('refusal' in captured) {
     return { ok: false, refusal: captured.refusal }
   }
+  // The admission's refusal is its caller's answer, never a failed write.
+  let refused: unknown
   try {
     await ctx.journal.appendSubmission(
-      { ...input, options: captured.options, fence: ctx.fence, handoverRecorded: true },
+      { ...send, options: captured.options, fence: ctx.fence, handoverRecorded: true },
       undefined,
-      ctx.operationReceipt
+      admittedSendReceipt(
+        ctx,
+        admit &&
+          ((stop) => {
+            try {
+              admit(stop)
+            } catch (error) {
+              refused = error
+              throw error
+            }
+          })
+      )
     )
   } catch (error) {
-    if (error instanceof CommandReceiptExistsError) {
+    if (error instanceof CommandReceiptExistsError || (refused && error === refused)) {
       throw error
     }
     ctx.logger.warn('recording a message failed', {

@@ -10,6 +10,7 @@ import { agentMessageRelation } from './agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'
 import type { OrchestrationCliCommand } from './cli-command'
 import { formatMessageBanner, formatMessagePointer } from './formatter'
+import { exposeUtcTimestamp } from './db/utc-timestamp'
 import { structuredAgentSessionBlocksTooLarge } from '../../../shared/rpc-contract/structured-agent-session-message-params'
 
 export type MailSourceMessage = Pick<
@@ -106,6 +107,21 @@ export function structuredMailMessage(input: {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: pointer }], from },
     whole: false
   }
+}
+
+/** When a message was written, in whole seconds; a Dispatch's mail counts from no earlier than the
+ *  Dispatch, since moved follow-up mail keeps its old time. Unreadable is NaN, never after a Stop. */
+export function structuredMailWrittenAt(
+  db: OrchestrationDb,
+  mailboxHandle: string,
+  message: MessageRow
+): number {
+  const seconds = (at: string | undefined) =>
+    Math.floor(Date.parse(exposeUtcTimestamp(at ?? null) ?? '') / 1000)
+  const dispatch = mailboxHandle.startsWith('dispatch:')
+    ? db.getDispatchContextById?.(mailboxHandle.slice('dispatch:'.length))
+    : undefined
+  return Math.max(seconds(message.created_at), dispatch ? seconds(dispatch.created_at) : -Infinity)
 }
 
 /** Whether a message goes to a chat whole, rather than as a pointer at `check`. */

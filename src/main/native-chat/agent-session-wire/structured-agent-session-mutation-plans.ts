@@ -137,6 +137,7 @@ export function sendPlan(
     /** Host-sent personal text; userSend always implies this. */
     personsMessage?: true
     beforeRun?: () => void
+    admit?: Parameters<typeof performSend>[1]['admit']
   }
 ): MutationPlan<AgentSessionSendResult> {
   // Match operation ID to optimistic client message ID for durable reconciliation.
@@ -159,6 +160,7 @@ export function sendPlan(
         clientMessageId,
         ...(params.options ? { options: params.options } : {}),
         ...(params.selection !== undefined ? { selection: params.selection } : {}),
+        ...(params.admit ? { admit: params.admit } : {}),
         // Body-only, so the reducer's echo aliasing never sees control fields or the sender.
         payloadFingerprint: agentSessionSendBodyFingerprint(params.envelope.sessionId, params.body),
         body: params.body

@@ -29,11 +29,13 @@ import type {
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   type AgentSessionTurnContext,
+  admittedSendReceipt,
   agentSessionAttachmentExpiredRefusal
 } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import type { JournalSendAdmission } from '../agent-session-journal/journal-store-contracts'
 import {
   selectStructuredAgentSessionInput,
   structuredInputExecutionWorking
@@ -90,7 +92,7 @@ export function nextStructuredQueuedMessage(
   return selected.kind === 'card' ? selected.card : null
 }
 
-/** Queue behind work/actionable backlog; held or returned cards cannot trap a fresh send that lifts their pause. */
+/** Queue behind work/actionable backlog; held, Stop-held or returned cards cannot trap a fresh send. */
 export function shouldQueueStructuredAgentSessionSend(
   input: StructuredQueueGateInput & { journal: AgentSessionJournal; fromAgent?: boolean }
 ): boolean {
@@ -140,6 +142,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     /** A person's send at a chat surface: every attachment it names must still be stored. */
     userSend?: true
     personsMessage?: true
+    admit?: JournalSendAdmission
   }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
@@ -192,9 +195,10 @@ export async function maybeQueueStructuredAgentSessionSend(
         messageId: clientMessageId,
         body: params.body,
         options: captured.options,
-        ...(params.userSend ? { requireAttachments: true } : {})
+        ...(params.userSend ? { requireAttachments: true } : {}),
+        ...(params.userSend || params.personsMessage ? { person: true } : {})
       },
-      ctx.operationReceipt
+      admittedSendReceipt(ctx, params.admit)
     )
   } catch (error) {
     if (isAgentSessionAttachmentExpiredError(error)) {

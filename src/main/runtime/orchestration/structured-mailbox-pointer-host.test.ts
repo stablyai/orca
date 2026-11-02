@@ -115,7 +115,8 @@ describe('structured mailbox pointer host', () => {
           operationId: 'op1',
           expectedRuntimeFence: 1,
           body: { kind: 'message', role: 'user', blocks: [] },
-          stillOwed: () => true
+          stillOwed: () => true,
+          createdAt: 0
         })
       ).resolves.toEqual({ kind: 'sent', state: dispatchState })
       expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
@@ -141,13 +142,42 @@ describe('structured mailbox pointer host', () => {
         operationId: 'op1',
         expectedRuntimeFence: 1,
         body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
-        stillOwed: () => true
+        stillOwed: () => true,
+        createdAt: 0
       })
     ).resolves.toEqual({ kind: 'queued' })
     expect(send.mock.calls[0]![1]).toMatchObject({
       body: { from: NOTICE_SOURCE },
       delivery: 'queue-if-active'
     })
+  })
+
+  it("holds mail written by the person's Stop, the same second included, and lets later mail go", async () => {
+    const stop = { reason: 'user-stop' as const, at: 1_700_000_000_900 }
+    // The chat's write lane asks the admission with the Stop in force.
+    hostRef.current = {
+      send: async (_caller: unknown, payload: { admit: (stop: unknown) => void }) => {
+        payload.admit(stop)
+        return {
+          ok: true,
+          value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
+        }
+      }
+    }
+    const send = (createdAt: number) =>
+      createStructuredMailboxPointerHost().send({
+        sessionId: 's1',
+        dispatchId: 'd1',
+        operationId: 'op1',
+        expectedRuntimeFence: 1,
+        body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE },
+        stillOwed: () => true,
+        createdAt
+      })
+    expect(await send(1_699_999_999)).toEqual({ kind: 'held' })
+    expect(await send(1_700_000_000)).toEqual({ kind: 'held' })
+    expect(await send(Number.NaN)).toEqual({ kind: 'held' })
+    expect(await send(1_700_000_001)).toEqual({ kind: 'sent', state: 'accepted' })
   })
 
   it('consumes mail once an accepted nudge is delivered while the worker starts (W10)', async () => {
