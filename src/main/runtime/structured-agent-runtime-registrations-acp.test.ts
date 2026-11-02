@@ -10,7 +10,17 @@ describe('ACP agents in the runtime registrations', () => {
   it('registers Grok beside Claude and Codex with its declared capabilities', () => {
     expect(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(({ definition }) => definition.agent)
-    ).toEqual(['pi', 'codex', 'claude', 'grok', 'opencode', 'opencode2', 'omp', 'antigravity'])
+    ).toEqual([
+      'pi',
+      'codex',
+      'claude',
+      'grok',
+      'opencode',
+      'opencode2',
+      'omp',
+      'gemini',
+      'antigravity'
+    ])
     expect(structuredAgentRuntimeRegistration('codex')?.definition.capabilities.contextUsage).toBe(
       true
     )

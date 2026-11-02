@@ -189,7 +189,7 @@ it.each(['typed', 'legacy', 'chat'] as const)(
     expect(() =>
       agentLaunchSettingsMutationUpdates(
         settings,
-        { type: 'permission', agent: 'gemini', choice: 'ask' },
+        { type: 'permission', agent: 'gemini', choice: 'auto' },
         'linux'
       )
     ).toThrow('This agent does not offer that permission')

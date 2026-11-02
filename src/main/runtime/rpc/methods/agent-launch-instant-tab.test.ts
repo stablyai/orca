@@ -849,7 +849,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
     it('publishes a terminal fallback in terminal view while Chat UI is on', async () => {
       const runtime = hostWithWindow({ settings: STRUCTURED_PREFERENCE })
 
-      await replayLaunch(runtime, { agent: 'gemini' }, CLI)
+      await replayLaunch(runtime, { agent: 'cursor' }, CLI)
 
       expect(runtime.published[0]?.viewMode).toBe('terminal')
       expect(terminalOptions(runtime)).toMatchObject({ viewMode: 'terminal' })

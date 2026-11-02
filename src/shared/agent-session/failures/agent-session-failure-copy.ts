@@ -22,6 +22,8 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
   providerStartFailed: '{{agent}} stopped before it finished starting.',
+  providerResumeUnavailable:
+    '{{agent}} cannot safely reopen this chat. Start a new chat or continue in the terminal.',
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',
   sendAgainToTryOnceMore: 'Send your message again to try once more.',

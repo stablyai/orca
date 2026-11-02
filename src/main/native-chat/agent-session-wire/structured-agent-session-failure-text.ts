@@ -44,6 +44,7 @@ const TYPED_START_REFUSALS = [
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
+  'providerResumeUnavailable',
   'fullAccessAsRoot',
   'launchPreparationFailed',
   'conversationOpenInTerminal',
@@ -130,12 +131,17 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
     })
   }
   const typed = typedStartRefusal(
-    cause instanceof AgentSessionAcquisitionRefusal ? cause.reason : undefined
+    cause instanceof AgentSessionAcquisitionRefusal || isAgentSessionPreSpawnError(cause)
+      ? cause.reason
+      : undefined
   )
   if (typed) {
     return agentSessionFailureFact(typed, {
       ...(cause instanceof AgentSessionAcquisitionRefusal ? { account: cause.account } : {}),
-      detail: providerDiagnosticOf(cause)
+      detail:
+        typed === 'launchPreparationFailed'
+          ? (launchPreparationDiagnosticOf(cause) ?? providerDiagnosticOf(cause))
+          : providerDiagnosticOf(cause)
     })
   }
   if (providerExecutableMissing(cause)) {

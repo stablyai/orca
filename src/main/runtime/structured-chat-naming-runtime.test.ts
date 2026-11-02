@@ -213,9 +213,21 @@ describe('structured chat naming runtime', () => {
     )
   })
 
+  it('reports unsupported Gemini CLI naming without selecting another agent', async () => {
+    const state = rig()
+    const record = agentSessionRecordFixture()
+    record.provider = 'gemini'
+    record.accountHome = { variable: 'GEMINI_CLI_HOME', path: '/pinned-account' }
+    expect(await state.deps.generate(record, 'Repair login')).toMatchObject({
+      error: expect.stringContaining('Agent "gemini" does not support chat names.')
+    })
+    expect(mocks.generate).not.toHaveBeenCalled()
+    expect(mocks.native).not.toHaveBeenCalled()
+  })
+
   it.each(
     STRUCTURED_AGENT_RUNTIME_CATALOG.map(({ metadata }) => metadata.definition.agent).filter(
-      (agent) => agent !== 'pi' && agent !== 'omp'
+      (agent) => agent !== 'pi' && agent !== 'omp' && agent !== 'gemini'
     )
   )('names a %s chat with its own agent regardless of global selection', async (provider) => {
     const state = rig()
@@ -236,9 +248,11 @@ describe('structured chat naming runtime', () => {
                   ? 'CLAUDE_CONFIG_DIR'
                   : provider === 'grok'
                     ? 'GROK_HOME'
-                    : provider === 'antigravity'
-                      ? 'GEMINI_HOME'
-                      : 'PI_CODING_AGENT_DIR',
+                    : provider === 'gemini'
+                      ? 'GEMINI_CLI_HOME'
+                      : provider === 'antigravity'
+                        ? 'GEMINI_HOME'
+                        : 'PI_CODING_AGENT_DIR',
             path: '/pinned-account'
           }
     const shouldExecute = () => true

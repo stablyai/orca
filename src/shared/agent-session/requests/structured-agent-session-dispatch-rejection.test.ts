@@ -30,6 +30,7 @@ describe('classifyDispatchRejection', () => {
     ['hostRestarted', 'undelivered', null],
     ['chatClosed', 'undelivered', null],
     ['notDelivered', 'undelivered', null],
+    ['providerResumeUnavailable', 'startFailed', 'failure'],
     // Orca stopped a start that hung: the agent failed, and the message never reached it.
     ['hostStopped', 'undelivered', 'failure'],
     ['writeFailed', 'transport', 'failure'],
