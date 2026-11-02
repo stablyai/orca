@@ -11,6 +11,14 @@ declare module 'orca/testing' {
     PluginRequests,
     Undeclared
   } from 'orca'
+  import type {
+    OrcaWorkerApi,
+    PluginEventName,
+    PluginEvents,
+    PluginHookName,
+    PluginHooks
+  } from 'orca/worker'
+  import type { EditorContent, OrcaFrameApi } from 'orca/frame'
 
   /** One element of the drawn panel. Actions take it, or a query that finds it. */
   export type TestElement = {
@@ -26,7 +34,10 @@ declare module 'orca/testing' {
     disabled: boolean
     path: string
   }
-  /** Every field given must match; `text` and `label` match exactly (whitespace folded) or by RegExp. */
+  /**
+   * Every field given must match; `text` and `label` match exactly (whitespace folded) or by RegExp.
+   * Finders see what Orca draws: not the content of unselected tabs or closed Collapsibles.
+   */
   export type TestQuery = {
     type?: string
     role?: string
@@ -44,9 +55,13 @@ declare module 'orca/testing' {
   export type PanelIssue = { kind: 'plugin' | 'refused'; message: string; stack?: string }
   export type HostError = Error & { code: string; retryable: boolean; retryAfterMs?: number }
 
+  /** A call Orca itself would refuse, recorded even when the plugin caught the error. */
+  export type MockHostRefusal = { method: string; code: string; message: string }
   export type MockHost = {
     /** Every call that reached the host, in order, refused ones included. */
     readonly calls: readonly { method: string; params: unknown }[]
+    /** `capability_denied`, `not_permitted`, `invalid_params` or `unknown_method` calls. */
+    readonly refusals: readonly MockHostRefusal[]
     callsOf(method: string): unknown[]
     respond(method: string, result: unknown): void
     /** The plugin's storage, settings and secrets as they are now. */
@@ -83,6 +98,53 @@ declare module 'orca/testing' {
    */
   export function mockHost(options?: MockHostOptions): MockHost
   export function hostError(code: string, message?: string, retryAfterMs?: number): HostError
+  /** The file a mock custom editor host starts with. */
+  export type MockEditorFile = { text: string } | { bytes: ArrayBuffer | Uint8Array }
+  export type MockEditorHostOptions = {
+    readOnly?: boolean
+    /** Default `dark`. */
+    colorScheme?: 'light' | 'dark'
+    /** Default `en-US`. */
+    locale?: string
+    /** Bytes documents: the manifest suffix that matched, e.g. `xlsx`. */
+    fileType?: string
+  }
+  export type MockEditorEdit = {
+    baseVersion: number
+    content: EditorContent
+    /** The refusal's code, such as `conflict`; absent when Orca applied the edit. */
+    refused?: string
+  }
+  export type MockEditorHost = {
+    /** The frame API, also installed as `globalThis.orca`. */
+    readonly orca: OrcaFrameApi
+    /** The file as Orca holds it now; undefined for a bytes file. */
+    readonly text: string | undefined
+    readonly bytes: Uint8Array | undefined
+    /** Rises with each document sent to the editor. */
+    readonly version: number
+    /** Every `applyEdit`, in order, refused ones included. */
+    readonly edits: readonly MockEditorEdit[]
+    /** An outside change, such as an agent writing the file. */
+    replace(next: string | ArrayBuffer | Uint8Array): void
+    /** Refuses the next edit with `conflict`, after landing `outside` first when given. */
+    conflictNext(outside?: string | ArrayBuffer | Uint8Array): void
+    /** As a save does: asks the editor for pending edits and waits for its answer (1 s);
+     *  rejects, as Orca refuses to save, after an edit too large to apply. */
+    flush(): Promise<void>
+    setTheme(colorScheme: 'light' | 'dark'): void
+    /** Removes `globalThis.orca`. */
+    dispose(): void
+  }
+  /**
+   * A stand-in for Orca's custom editor host, backed by an in-memory file: installs
+   * `globalThis.orca` with the real frame shell's document API and `session()`, so sync logic
+   * tests in Node. Answers only document calls. One at a time: a new one disposes the last.
+   */
+  export function mockEditorHost(
+    file: MockEditorFile,
+    options?: MockEditorHostOptions
+  ): MockEditorHost
   /** A persisted value an older version wrote, to test an atom's `migrate`. */
   export function stored(value: unknown, version: number): unknown
 
@@ -106,6 +168,8 @@ declare module 'orca/testing' {
     readonly errors: readonly PanelIssue[]
     /** Props and components Orca would drop, as Orca would warn. */
     readonly warnings: readonly string[]
+    /** Host calls Orca would refuse (a missing capability, no press), even ones the panel caught. */
+    readonly refusals: readonly MockHostRefusal[]
     /** What persisted atoms hold now, by scope and key; `storage` is the plugin's storage. */
     readonly persisted: {
       plugin: Record<string, unknown>
@@ -117,6 +181,9 @@ declare module 'orca/testing' {
     findAll(query: TestQuery): TestElement[]
     /** The drawn tree as plain data, for snapshots; handlers show as `[handler]`. */
     tree(): TreeSnapshot | string | null
+    /** One line per thing a person notices first: headings, callouts, empty states, table and
+     *  tree sizes, the selected tab, loading placeholders, danger or warning text and boxes. */
+    summary(): string[]
     /** Each act grants one gesture (a press) and resolves once the panel has settled. */
     press(target: Target): Promise<void>
     /** Types after what the field holds (`replace` clears it first); `submit` presses Enter. */
@@ -126,9 +193,31 @@ declare module 'orca/testing' {
       options?: { replace?: boolean; submit?: boolean }
     ): Promise<void>
     submit(target: Target): Promise<void>
+    /** A Switch, Checkbox or Collapsible. */
     toggle(target: Target): Promise<void>
+    /** A Select or RadioGroup option, or a Tabs tab, by value. */
     select(target: Target, value: string): Promise<void>
-    /** What Orca shows in an Input, Switch or Select. */
+    slide(target: Target, value: number): Promise<void>
+    /** Table: a header click (ascending first, then flipping). */
+    sort(target: Target, column: string): Promise<void>
+    /** Table: replaces the selection with exactly these rows. */
+    selectRows(target: Target, keys: readonly string[]): Promise<void>
+    /** Table: Enter or a double click on a row. */
+    activateRow(target: Target, key: string): Promise<void>
+    /** Table: scrolls to the end of the loaded rows (needs `hasMore` and `onLoadMore`). */
+    loadMore(target: Target): Promise<void>
+    /** Tree: expand or collapse an item, calling `onToggle`. */
+    expand(target: Target, key: string): Promise<void>
+    collapse(target: Target, key: string): Promise<void>
+    selectItem(target: Target, key: string): Promise<void>
+    activateItem(target: Target, key: string): Promise<void>
+    /** Tree: the items Orca shows expanded. */
+    expandedOf(target: Target): string[]
+    /** Table: the column keys Orca shows at `width` px (wide when omitted), after `hideBelow`. */
+    columnsOf(target: Target, view?: { width?: number }): string[]
+    /** Table: row keys in the order Orca draws them. */
+    rowsOf(target: Target): string[]
+    /** What Orca shows in a value control: text, a flag, a number, a tab, or selected keys. */
     valueOf(target: Target): unknown
     /** An Orca event: `theme`, or a workspace or agent event the panel subscribed to. */
     emit<E extends keyof OrcaEvents>(event: E, payload: OrcaEvents[E]): Promise<void>
@@ -154,7 +243,87 @@ declare module 'orca/testing' {
     options?: MountOptions
   ): Promise<TestPanel>
 
-  /** Node's `node:test`, re-exported so a test type-checks without @types/node. */
+  /** A worker `main` module: `import * as worker from './worker'`. */
+  export type WorkerModule = {
+    default?: (orca: OrcaWorkerApi) => unknown
+    deactivate?: () => unknown
+    [name: string]: unknown
+  }
+  export type MountWorkerOptions = {
+    host?: MockHost
+    /** Events delivered to the worker; defaults to the manifest's `contributes.events`. */
+    events?: readonly string[]
+    /** Commands it may register; defaults to the manifest's `contributes.commands`. */
+    commands?: readonly string[]
+    /** Hooks Orca runs through it (a name, or `{ event, onError }`); defaults to the manifest's
+     *  `contributes.hooks`. */
+    hooks?: readonly (string | { event: string; onError?: 'pass' | 'deny' })[]
+  }
+  /** What a hook chain decided: Orca goes on with `event` (as changed), or a handler refused. */
+  export type HookDecision<H extends PluginHookName> =
+    | { kind: 'continue'; event: PluginHooks[H]['event'] }
+    | { kind: 'deny'; reason: string }
+  export type TestWorker = {
+    readonly host: MockHost
+    /** What the worker passed to `orca.log`. */
+    readonly logs: readonly string[]
+    readonly refusals: readonly MockHostRefusal[]
+    /** What the worker sent with `orca.panels.post`, in order. */
+    readonly posts: readonly { event: string; payload?: unknown; panel?: string }[]
+    /** Delivers an event as Orca would (checked against Orca's payload schema) and waits for every handler. */
+    emit<E extends PluginEventName>(event: E, payload: PluginEvents[E]): Promise<void>
+    readonly hooks: {
+      /** Runs a hook as Orca would, with this worker as the only plugin: the same deadline, the
+       *  fields `next` may change, and the same checks on its result. A throw or timeout counts as
+       *  passing and lands in `logs`. */
+      fire<H extends PluginHookName>(
+        hook: H,
+        event: PluginHooks[H]['event']
+      ): Promise<HookDecision<H>>
+    }
+    /** Runs a registered command and resolves with its result. */
+    command(commandId: string, args?: unknown): Promise<unknown>
+    /** A panel's `plugin.request`, answered by the worker's `orca.panels.handle`; `panel` names the
+     *  calling panel's contribution id. An unhandled name rejects with `unknown_method`. */
+    request<K extends keyof PluginRequests>(
+      name: K,
+      input?: PluginRequestInput<K>,
+      caller?: { panel?: string }
+    ): Promise<PluginRequestOutput<K>>
+    request<N extends string>(
+      name: Undeclared<N, PluginRequests>,
+      input?: JsonValue,
+      caller?: { panel?: string }
+    ): Promise<unknown>
+    /** Runs the module's `deactivate` and drops its handlers. */
+    deactivate(): Promise<void>
+  }
+  /**
+   * Calls the worker's default-exported `activate(orca)` with the `orca` object Orca passes, backed
+   * by `mockHost` (worker methods, the manifest's capabilities). `.ts` mains load as Orca loads them.
+   */
+  export function mountWorker(
+    module: WorkerModule,
+    options?: MountWorkerOptions
+  ): Promise<TestWorker>
+
+  /** One render `orca plugin check` makes: the host it runs on, persisted values, and Orca events
+   *  delivered after it first draws. */
+  export type CheckScenario = MockHostOptions & {
+    persisted?: MountOptions['persisted']
+    theme?: 'light' | 'dark'
+    events?: readonly {
+      [E in keyof OrcaEvents]: { event: E; payload: OrcaEvents[E] }
+    }[keyof OrcaEvents][]
+  }
+  /**
+   * Named scenarios for `orca plugin check`, as the default export of `<entry>.check.ts` beside the
+   * panel (`src/panel.check.ts` for `src/panel.tsx`). Check renders the panel once per scenario,
+   * with the plugin's worker on the same host; without the file it renders once with defaults.
+   */
+  export function defineCheck<S extends Record<string, CheckScenario>>(scenarios: S): S
+
+  /** Node's `node:test`, re-exported so a test type-checks without the Node typings. */
   export function test(name: string, fn: () => unknown): Promise<void>
   export function describe(name: string, fn: () => unknown): Promise<void>
   export function beforeEach(fn: () => unknown): void

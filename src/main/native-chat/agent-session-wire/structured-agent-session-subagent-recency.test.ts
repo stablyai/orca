@@ -8,7 +8,7 @@ import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agen
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {

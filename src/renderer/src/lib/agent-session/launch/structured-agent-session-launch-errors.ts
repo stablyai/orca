@@ -29,6 +29,16 @@ export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSes
 /** The source disappeared before any create was sent; no host cancellation is owed. */
 export class StructuredAgentSessionCreateAbandonedError extends StructuredAgentSessionCreateRefusalError {}
 
+/** What a source-gated create waits for: true sends it, false abandons it, a refusal fails its chat. */
+export type StructuredAgentSessionCreateGate = boolean | StructuredAgentSessionCreateRefusalError
+
+/** The source a create waited on was retired but couldn't hand over; its chat says why in these words. */
+export class StructuredAgentSessionCreateSourceFailedError extends StructuredAgentSessionCreateRefusalError {
+  constructor(readonly causeText: string) {
+    super(causeText)
+  }
+}
+
 // Refusal without proven absence is ambiguous: sibling creation could duplicate an existing host session. Reconcile/replay it like a lost reply, never classify it as definitive refusal.
 export class StructuredAgentSessionCreateUnknownOutcomeError extends StructuredAgentSessionCreateError {
   constructor(message: string, code: string, refusal?: AgentSessionRefusalReference) {

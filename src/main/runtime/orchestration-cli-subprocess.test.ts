@@ -33,7 +33,7 @@ import {
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')

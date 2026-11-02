@@ -29,6 +29,7 @@ import {
   hasPtyFromRuntimeController,
   getPtyAvailabilityFromRuntimeController,
   hasRendererSerializerFromRuntimeController,
+  supportsForegroundObservationFromRuntimeController,
   inspectProcessFromRuntimeController,
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
@@ -76,6 +77,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
+    supportsForegroundObservation: (ptyId) =>
+      supportsForegroundObservationFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),

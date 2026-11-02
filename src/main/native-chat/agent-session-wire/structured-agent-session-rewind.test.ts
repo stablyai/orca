@@ -15,11 +15,17 @@ import {
   agentJournalSubmissionKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import {
+  appendRewindUsageLimitedTurn,
+  expectRestoredUsageLimitCancelled,
+  expectUsageLimitRewindCancellation,
+  expectReopenedUsageLimitCancellation
+} from './structured-agent-session-rewind-usage-limit.test-fixture'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type {
   StructuredAgentSessionAdapter,
@@ -209,6 +215,31 @@ async function params(itemId: string, epoch?: string) {
 const LATE = { provider: 'codex' as const, threadId: HOST_TEST_THREAD, turnId: 'late', ordinal: 0 }
 
 describe('host rewind', () => {
+  it('keeps an older limited turn idle when rewind removes its superseding message', async () => {
+    vi.spyOn(store, 'cancelUsageLimitContinue').mockRejectedValue(
+      new Error('optional cancel unavailable')
+    )
+    host.deps.usageLimitAutoContinue = {
+      isEnabled: () => true,
+      isWorkspaceAsleep: () => false,
+      subscribe: () => () => {}
+    }
+    const target = await seed()
+    await store.setSessionTabVisibility(HOST_TEST_SESSION, true)
+    await expectUsageLimitRewindCancellation({ host, store, target, params, clock })
+    const retained = (await host.journalSnapshot(HOST_TEST_SESSION)).items.find(
+      (item) => item.body.kind === 'message' && item.body.role === 'user'
+    )!
+    rewind.mockResolvedValueOnce({ ok: false, reason: 'provider-refused' })
+    expect(await host.rewind(caller, await params(retained.itemId))).toMatchObject({ ok: false })
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('refused')
+    await host.flushAllStreamedEvents()
+    store = await openTestAgentSessionRecordStore(directory)
+    host = new StructuredAgentSessionHost({ ...host.deps, store })
+    clock += 75_000
+    await expectReopenedUsageLimitCancellation(host, store)
+  })
+
   it('answers a saved rewind after floor damage without another provider rewind', async () => {
     const request = await params(await seed())
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
@@ -758,24 +789,26 @@ describe('host rewind', () => {
   })
 
   it('settles the existing epoch after a crash between journal commit and record completion', async () => {
+    host.deps.usageLimitAutoContinue = {
+      isEnabled: () => true,
+      isWorkspaceAsleep: () => false,
+      subscribe: () => () => {}
+    }
     const target = await seed()
+    await store.setSessionTabVisibility(HOST_TEST_SESSION, true)
+    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const cut = await appendRewindUsageLimitedTurn(journal, clock)
     const request = await params(target)
-    const transition = store.transitionHandoff.bind(store)
-    const checkpoint = vi
-      .spyOn(store, 'transitionHandoff')
-      .mockImplementation((sessionId, update) =>
-        transition(sessionId, (record) => {
-          const next = update(record)
-          if (next.rewind?.phase === 'completed') {
-            throw new Error('completion write failed')
-          }
-          return next
-        })
-      )
+    const db = openTestJournalHostDatabase(directory).db
+    db.exec(`CREATE TEMP TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
+      WHEN instr(NEW.record_json, '"phase":"completed"') > 0
+      BEGIN SELECT RAISE(ABORT, 'completion write failed'); END`)
     await expect(host.rewind(caller, request)).rejects.toThrow('completion write failed')
     const committed = await host.journalSnapshot(HOST_TEST_SESSION)
     expect(committed.cursor.epoch).not.toBe(request.expectedEpoch)
-    checkpoint.mockRestore()
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
+    expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toBeUndefined()
+    db.exec('DROP TRIGGER fail_rewind_completion')
     const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
     expect(
       await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
@@ -783,6 +816,12 @@ describe('host rewind', () => {
     expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(committed)
     expect(replace).not.toHaveBeenCalled()
     replace.mockRestore()
+    await expectRestoredUsageLimitCancelled(host, store, cut)
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
+    await host.flushAllStreamedEvents()
+    store = await openTestAgentSessionRecordStore(directory)
+    host = new StructuredAgentSessionHost({ ...host.deps, store })
+    clock += 75_000
+    await expectReopenedUsageLimitCancellation(host, store)
   })
 })

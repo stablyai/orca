@@ -15,6 +15,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'web' },
   StyleSheet: { create: <T,>(v: T) => v, hairlineWidth: 1, absoluteFill: {} },
   useWindowDimensions: () => ({ width: 382, height: 800 }),
+  BackHandler: { addEventListener: () => ({ remove: () => {} }) },
   AccessibilityInfo: {
     isReduceMotionEnabled: () => Promise.resolve(false),
     addEventListener: () => ({ remove: () => {} })
@@ -57,7 +58,7 @@ vi.mock('lucide-react-native', () => ({
   Trash2: 'Icon',
   ListChecks: 'Icon'
 }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children, ...props }: { children: ReactNode; visible: boolean }) =>
     createElement('Drawer', props, props.visible ? children : null)
 }))

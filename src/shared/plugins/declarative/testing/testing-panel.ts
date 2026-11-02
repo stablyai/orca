@@ -23,6 +23,9 @@ import { createTestingPanelFacades } from './testing-panel-facades'
 import { seedPersisted } from './testing-persisted'
 
 export { stored, type StoredValue } from './testing-persisted'
+import { createPanelActions, type Target } from './testing-panel-actions'
+import { activeTab, visibleElements } from './testing-visibility'
+import { summarizeElements } from './testing-summary'
 
 export type PanelIssue = { kind: 'plugin' | 'refused'; message: string; stack?: string }
 type Stored = { version: number; value: unknown }
@@ -42,8 +45,6 @@ export type MountOptions = {
   /** Values persisted by an earlier run: plain values are stored at version 1; see `stored()`. */
   persisted?: { plugin?: Record<string, unknown>; workspace?: Record<string, unknown> }
 }
-
-type Target = TestElement | TestQuery
 
 function isElement(target: Target): target is TestElement {
   return 'path' in target
@@ -177,12 +178,15 @@ export async function mountPanel(
     throw new Error('the panel did not settle: it keeps re-rendering (an update loop?)')
   }
 
+  // What Orca draws: no content of unselected tabs or closed Collapsibles.
+  const elements = (): TestElement[] =>
+    visibleElements(listElements(shown.tree), (element) => controls.valueOf(element))
   const findAll = (query: TestQuery): TestElement[] =>
-    innermost(listElements(shown.tree).filter((element) => matchesQuery(element, query)))
+    innermost(elements().filter((element) => matchesQuery(element, query)))
 
   function resolve(target: Target, verb: string): TestElement {
     const found = isElement(target)
-      ? listElements(shown.tree).find((element) => element.path === target.path)
+      ? elements().find((element) => element.path === target.path)
       : findAll(target)[0]
     if (!found) {
       throw new Error(
@@ -224,6 +228,7 @@ export async function mountPanel(
       })
     )
   await settled()
+  const actions = createPanelActions({ host, controls, resolve, elements, dispatch, settled })
 
   return {
     host,
@@ -231,58 +236,36 @@ export async function mountPanel(
     errors,
     /** Props and components Orca would drop, as it would warn about them. */
     warnings,
+    /** Host calls Orca would refuse (missing capability, no press, ...), even ones the panel caught. */
+    get refusals() {
+      return host.refusals
+    },
     find: (query: TestQuery): TestElement | null => findAll(query)[0] ?? null,
     findAll,
     tree: (): TreeSnapshot | string | null => (shown.tree ? snapshotTree(shown.tree) : null),
+    /** The validated tree exactly as Orca draws it (handlers as `{ $callback }`), for replay. */
+    drawnTree: (): PluginDeclarativeNode | null => shown.tree,
+    /** One line per thing a person notices first: headings, callouts, empty states, table sizes. */
+    summary: (): string[] => {
+      const all = listElements(shown.tree)
+      const visible = elements()
+      const tabs = new Map(
+        visible
+          .filter((element) => element.type === 'Tabs')
+          .map((tabsElement) => [
+            tabsElement.path,
+            activeTab(tabsElement, all, controls.valueOf(tabsElement))?.label ?? ''
+          ])
+      )
+      return summarizeElements(visible, tabs)
+    },
     get persisted(): PersistedState {
       const read = (scope: 'plugin' | 'workspace') =>
         Object.fromEntries([...storage[scope]].map(([key, entry]) => [key, entry.value]))
       return { plugin: read('plugin'), workspace: read('workspace'), storage: host.data().storage }
     },
     settled,
-    async press(target: Target): Promise<void> {
-      const element = resolve(target, 'press')
-      const { href, onPress } = element.props
-      if (element.type === 'Link' && typeof href === 'string') {
-        // Orca opens a Link's href itself, spending the press; onPress then runs without one.
-        host.grantGesture()
-        void host.bridge.call('shell.openExternal', { url: href }).catch(() => undefined)
-      } else if (onPress === undefined) {
-        throw new Error(`press: the ${element.type} has no onPress`)
-      } else {
-        host.grantGesture()
-      }
-      dispatch(onPress, [])
-      await settled()
-    },
-    async type(target: Target, text: string, typing: { replace?: boolean; submit?: boolean } = {}) {
-      const element = resolve(target, 'type')
-      for (const edit of controls.typeInto(element, text, typing.replace === true)) {
-        dispatch(element.props.onChange, [edit.value], edit.id)
-        await settled()
-      }
-      if (typing.submit) {
-        dispatch(element.props.onSubmit, [controls.valueOf(element)])
-        await settled()
-      }
-    },
-    async submit(target: Target): Promise<void> {
-      const element = resolve(target, 'submit')
-      dispatch(element.props.onSubmit, [controls.valueOf(element)])
-      await settled()
-    },
-    async toggle(target: Target): Promise<void> {
-      const element = resolve(target, 'toggle')
-      const edit = controls.toggle(element)
-      dispatch(element.props.onChange, [edit.value], edit.id)
-      await settled()
-    },
-    async select(target: Target, value: string): Promise<void> {
-      const element = resolve(target, 'select')
-      const edit = controls.select(element, value)
-      dispatch(element.props.onChange, [edit.value], edit.id)
-      await settled()
-    },
+    ...actions,
     /** What Orca shows in a value control (what the person typed, until the panel resets it). */
     valueOf: (target: Target): unknown => controls.valueOf(resolve(target, 'valueOf')),
     async emit(event: string, payload: unknown): Promise<void> {

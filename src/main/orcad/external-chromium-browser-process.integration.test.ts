@@ -18,7 +18,16 @@ describe('ExternalChromiumBrowserProcess integration', () => {
       const fixturePath = join(root, 'fixture.html')
       await writeFile(
         fixturePath,
-        '<!doctype html><title>External Chromium</title><main>external-ready</main><input>'
+        `<!doctype html><title>External Chromium</title><main>external-ready</main><input>
+        <h1>Heading</h1><input id="off" disabled value="kept"><input id="num" type="number">
+        <div id="combo" role="combobox" tabindex="0">Pick</div><textarea>one two</textarea>
+        <div id="keys" tabindex="0"></div>
+        <script>
+          keys.addEventListener('keydown', (event) => {
+            if (event.key.length === 1) keys.textContent += (event.shiftKey ? '^' : '') + event.key
+            event.preventDefault()
+          })
+        </script>`
       )
       const provider = await resolveOrcadBrowserProvider({
         userDataPath: root,
@@ -78,6 +87,33 @@ describe('ExternalChromiumBrowserProcess integration', () => {
           await commands.browserType({ page, input: text })
           await expect(inputValue()).resolves.toMatchObject({ result: text })
         }
+        const read = (expression: string): Promise<unknown> =>
+          commands.browserEval({ page, expression: `JSON.stringify(${expression})` })
+        await commands.browserFill({ page, element: 'input', value: 'focused' })
+        for (const [element, value] of [
+          ['h1', 'stray'],
+          ['#off', 'x'],
+          ['#num', 'abc']
+        ]) {
+          await expect(commands.browserFill({ page, element, value })).rejects.toMatchObject({
+            code: 'browser_element_not_interactable'
+          })
+        }
+        await expect(
+          read('[...document.querySelectorAll("input")].map((input) => input.value)')
+        ).resolves.toMatchObject({ result: '["focused","kept",""]' })
+        await expect(
+          commands.browserSelect({ page, element: '#combo', value: 'Pick' })
+        ).rejects.toMatchObject({ code: 'browser_element_not_interactable' })
+        await commands.browserFocus({ page, element: '#keys' })
+        await commands.browserType({ page, input: 'Hi @1' })
+        await expect(read('keys.textContent')).resolves.toMatchObject({ result: '"^Hi ^@1"' })
+        await commands.browserSelectAll({ page, element: 'textarea' })
+        await expect(
+          read(
+            '[document.querySelector("textarea").selectionStart, document.querySelector("textarea").selectionEnd]'
+          )
+        ).resolves.toMatchObject({ result: '[0,7]' })
         await expect(
           commands.browserScreenshot({ page: 'external-page', format: 'png' })
         ).resolves.toMatchObject({ data: expect.stringMatching(/\S+/), format: 'png' })

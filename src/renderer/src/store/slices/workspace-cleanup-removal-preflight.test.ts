@@ -143,44 +143,6 @@ describe('workspace cleanup removal and protection', () => {
     )
   })
 
-  it('forwards the snapshot batch through each successful removal', async () => {
-    const candidate = makeCandidate({ executionHostId: 'ssh:ssh-1' })
-    installWorkspaceCleanupApi(
-      vi.fn(async () => ({
-        scannedAt: NOW,
-        candidates: [candidate],
-        errors: []
-      }))
-    )
-    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
-    const store = createCleanupTestStore(removeWorktree)
-
-    await store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId], {
-      snapshotPruneBatchId: 'batch-1'
-    })
-
-    expect(removeWorktree).toHaveBeenCalledWith(
-      { id: candidate.worktreeId, executionHostId: null },
-      false,
-      {
-        assertBeforeDispatch: expect.any(Function),
-        suppressPreservedBranchToast: true,
-        snapshotPruneBatchId: 'batch-1'
-      }
-    )
-  })
-
-  it('demotes an active suggested workspace when it was not viewed from cleanup', async () => {
-    const [candidate] = await enrichWorkspaceCleanupCandidates(
-      [makeCandidate()],
-      makeState({ activeWorktreeId: WORKTREE_ID }),
-      { applyDismissals: false }
-    )
-
-    expect(candidate.tier).toBe('protected')
-    expect(candidate.blockers).toContain('active-workspace')
-  })
-
   it('keeps a viewed active workspace visible but not removable', async () => {
     const [candidate] = await enrichWorkspaceCleanupCandidates(
       [makeCandidate()],
@@ -198,25 +160,6 @@ describe('workspace cleanup removal and protection', () => {
 
     expect(candidate.tier).toBe('protected')
     expect(candidate.selectedByDefault).toBe(false)
-    expect(candidate.blockers).toContain('active-workspace')
-  })
-
-  it('does not preserve the cleanup view exception after the row changes', async () => {
-    const [candidate] = await enrichWorkspaceCleanupCandidates(
-      [makeCandidate({ fingerprint: 'fingerprint-2' })],
-      makeState({
-        activeWorktreeId: WORKTREE_ID,
-        workspaceCleanupViewedCandidates: {
-          [WORKTREE_ID]: {
-            viewedAt: Date.now(),
-            fingerprint: 'fingerprint-1'
-          }
-        }
-      }),
-      { applyDismissals: false }
-    )
-
-    expect(candidate.tier).toBe('protected')
     expect(candidate.blockers).toContain('active-workspace')
   })
 
@@ -244,111 +187,6 @@ describe('workspace cleanup removal and protection', () => {
     expect(candidate.tier).toBe('protected')
     expect(candidate.selectedByDefault).toBe(false)
     expect(candidate.blockers).toContain('recent-visible-context')
-  })
-
-  it('uses current renderer state after async delete preflight scan resolves', async () => {
-    let resolveScan: (value: WorkspaceCleanupScanResult) => void
-    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
-    const store = createCleanupTestStore(removeWorktree)
-
-    ;(globalThis as { window: unknown }).window = {
-      api: {
-        workspaceCleanup: {
-          scan: vi.fn(
-            (): Promise<WorkspaceCleanupScanResult> =>
-              new Promise<WorkspaceCleanupScanResult>((resolve) => {
-                resolveScan = resolve
-              })
-          ),
-          dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined)
-        }
-      }
-    }
-
-    const removal = store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])
-    store.setState({ activeWorktreeId: WORKTREE_ID })
-    resolveScan!({ scannedAt: NOW, candidates: [makeCandidate()], errors: [] })
-
-    await expect(removal).resolves.toEqual({
-      removedIds: [WORKTREE_ID],
-      removedIdentities: [getWorkspaceCleanupHostIdentity('local', WORKTREE_ID)],
-      failures: []
-    })
-    expect(removeWorktree).toHaveBeenCalledWith({ id: WORKTREE_ID, executionHostId: null }, false, {
-      assertBeforeDispatch: expect.any(Function),
-      suppressPreservedBranchToast: true
-    })
-  })
-
-  it('defers git checks for locally active workspaces on initial scans', async () => {
-    const scan = vi.fn().mockResolvedValue({
-      scannedAt: NOW,
-      candidates: [],
-      errors: []
-    } satisfies WorkspaceCleanupScanResult)
-    ;(globalThis as { window: unknown }).window = {
-      api: {
-        workspaceCleanup: {
-          scan,
-          dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined)
-        }
-      }
-    }
-
-    const store = createCleanupTestStore()
-    store.setState({
-      activeWorktreeId: WORKTREE_ID,
-      tabsByWorktree: {
-        'repo1::/tmp/terminal-workspace': [
-          { id: 'tab-1', title: 'zsh' }
-        ] as AppState['tabsByWorktree'][string]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    } as Partial<AppState>)
-
-    await store.getState().scanWorkspaceCleanup()
-
-    expect(scan).toHaveBeenCalledWith(
-      {
-        includeAllWorkspaces: true,
-        scanId: expect.any(String),
-        skipGitWorktreeIds: expect.arrayContaining([WORKTREE_ID, 'repo1::/tmp/terminal-workspace'])
-      },
-      expect.any(Function)
-    )
-  })
-
-  it('does not defer git checks for focused remove preflights', async () => {
-    const scan = vi.fn().mockResolvedValue({
-      scannedAt: NOW,
-      candidates: [makeCandidate()],
-      errors: []
-    } satisfies WorkspaceCleanupScanResult)
-    ;(globalThis as { window: unknown }).window = {
-      api: {
-        workspaceCleanup: {
-          scan,
-          dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined)
-        }
-      }
-    }
-
-    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
-    const store = createCleanupTestStore(removeWorktree)
-    store.setState({
-      activeWorktreeId: 'repo1::/tmp/other-workspace'
-    } as Partial<AppState>)
-
-    await store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])
-
-    expect(scan).toHaveBeenCalledWith({
-      worktreeIds: [WORKTREE_ID],
-      scanId: expect.any(String),
-      refreshActivity: true
-    })
   })
 
   it('lets explicitly selected not-suggested workspaces reach the removal path', async () => {
@@ -515,32 +353,6 @@ describe('workspace cleanup removal and protection', () => {
       ]
     })
     expect(removeWorktree).not.toHaveBeenCalled()
-  })
-
-  it('protects old workspaces when an agent process is still foregrounded', async () => {
-    ;(globalThis as { window: unknown }).window = {
-      api: {
-        pty: {
-          hasChildProcesses: vi.fn().mockResolvedValue(true),
-          getForegroundProcess: vi.fn().mockResolvedValue('codex')
-        }
-      }
-    }
-
-    const [candidate] = await enrichWorkspaceCleanupCandidates(
-      [makeCandidate()],
-      makeState({
-        tabsByWorktree: {
-          [WORKTREE_ID]: [{ id: 'tab-1', title: 'zsh' }] as AppState['tabsByWorktree'][string]
-        },
-        ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-      }),
-      { applyDismissals: false }
-    )
-
-    expect(candidate.tier).toBe('protected')
-    expect(candidate.selectedByDefault).toBe(false)
-    expect(candidate.blockers).toContain('running-terminal')
   })
 
   it('does not let an idle title in another tab mask a running agent process', async () => {

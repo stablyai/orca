@@ -2,7 +2,7 @@ import { memo, useContext, useMemo, type ComponentProps } from 'react'
 import {
   MobileNativeChatItemSourceContext,
   MobileNativeChatRootItemSourceContext
-} from '../../mobile-native-chat-item-read'
+} from '../mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import {
   resolveMobileNativeChatRowProps,

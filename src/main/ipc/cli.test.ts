@@ -29,7 +29,9 @@ vi.mock('../cli/wsl-cli-registration-registry', () => ({
   recordWslCliRegistrationRemoved: recordRemovedMock,
   forgetWslCliRegistration: forgetMock
 }))
-vi.mock('../persistence', () => ({ getCanonicalUserDataPath: () => '/canonical-user-data' }))
+vi.mock('../persistence/loading-store/user-data-path', () => ({
+  getCanonicalUserDataPath: () => '/canonical-user-data'
+}))
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: vi.fn(async () => ({ ok: false })),
   mergePathSegments: vi.fn()

@@ -1,8 +1,9 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
+import { isBundledPluginKey } from '../plugins/plugin-bundled-bootstrap'
 import {
   installPluginFromGit,
   installPluginFromLocalPath,
@@ -17,6 +18,9 @@ import type { PluginService } from '../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
 import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
+import { registerPluginStatusBarHandlers } from './plugin-status-bar-ipc'
+import { registerPluginEditorSaveHookHandler } from './plugin-editor-save-hook-ipc'
+import { readPluginPanelImage } from '../plugins/panels/plugin-panel-image'
 import {
   bindPluginFrameGuests,
   clearPluginFrameStorage
@@ -51,7 +55,9 @@ const readNewFileTemplateArgsSchema = z.object({
 const invokeCommandArgsSchema = z.object({
   pluginKey: z.string().min(1),
   commandId: z.string().min(1),
-  args: z.unknown().optional()
+  args: z.unknown().optional(),
+  /** Run only if the worker can start it within this many ms (a replacement's fallback). */
+  timeoutMs: z.number().int().positive().max(60_000).optional()
 })
 
 const installArgsSchema = z.discriminatedUnion('kind', [
@@ -151,6 +157,8 @@ export function registerPluginHandlers(
   bindPluginFrameGuests(pluginService)
   registerPluginFrameEntryHandlers(store, pluginService)
   registerPluginPanelPushHandlers(pluginService)
+  registerPluginStatusBarHandlers(pluginService)
+  registerPluginEditorSaveHookHandler()
   registerPluginSettingsHandlers(pluginService)
 
   ipcMain.handle('plugins:readNewFileTemplate', async (_event, args: unknown) => {
@@ -184,10 +192,24 @@ export function registerPluginHandlers(
     )
   })
 
+  // Components panels' Image files: bytes from inside the plugin, never a URL the renderer loads.
+  ipcMain.handle('plugins:panelImage', async (event, args: unknown) => {
+    await pluginService.whenReady()
+    const owner = rendererPanelOwner(event.sender.id)
+    return readPluginPanelImage(
+      {
+        resolveComponentsPanelRoot: (token) =>
+          pluginService.panels.componentsPanelRoot(owner, token)
+      },
+      args
+    )
+  })
+
   ipcMain.handle('plugins:invokeCommand', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = invokeCommandArgsSchema.parse(args)
-    return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args)
+    const startBy = parsed.timeoutMs === undefined ? undefined : Date.now() + parsed.timeoutMs
+    return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args, startBy)
   })
 
   ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>
@@ -231,13 +253,19 @@ export function registerPluginHandlers(
     if (!canRemoveInstalledPlugin(pluginService, parsed.pluginKey, lock)) {
       throw new Error(`cannot remove protected or non-installed plugin ${parsed.pluginKey}`)
     }
+    // Why: Orca republishes a copy it ships on the next launch; it must come back off, not on.
+    const { bundledPluginRoot } = pluginService.options
+    const shipped =
+      bundledPluginRoot !== undefined &&
+      (await isBundledPluginKey(bundledPluginRoot, parsed.pluginKey))
     await pluginService.removePlugin(parsed.pluginKey, () =>
       removeInstalledPlugin({
         pluginsDir,
         pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
         pluginKey: parsed.pluginKey,
         // Why before deletion: a crash mid-delete must not leave an approved half-removed plugin.
-        beforeRemove: () => clearRemovedPluginSettings(store, parsed.pluginKey)
+        beforeRemove: () =>
+          clearRemovedPluginSettings(store, parsed.pluginKey, { keepDisabled: shipped })
       })
     )
     await clearPluginFrameStorage(parsed.pluginKey)

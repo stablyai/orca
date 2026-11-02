@@ -6,6 +6,8 @@ import type {
   PluginDevWatchStatus
 } from './plugin-dev-watch-events'
 import { PluginLogFollower } from './plugin-log-follower'
+import { devLoadWithApproval, type PluginDevWatchConfirm } from './plugin-dev-watch-approval'
+import { PluginFrameLogDedupe, type PluginDevWatchLogLine } from './plugin-frame-log-dedupe'
 import {
   createPluginDevWatchCheckQueue,
   type PluginDevWatchCheckResult
@@ -19,7 +21,8 @@ import {
 /** What the loop asks of the Orca host; the handler binds it to RPC for one folder. */
 export type PluginDevWatchHost = {
   refreshTypes(): Promise<string[]>
-  devLoad(): Promise<DevLoadResult>
+  /** `approvalFingerprint` overrides `--approve` once the person approved at the prompt. */
+  devLoad(approvalFingerprint?: string): Promise<DevLoadResult>
   list(): Promise<PluginHostListEntry[]>
   logs(pluginKey: string, after: string | undefined): Promise<LogsResult>
   /** Re-checks the folder's approval; null when it needs none. */
@@ -40,6 +43,8 @@ export type PluginDevWatchDeps = {
   onInterrupt(listener: () => void): () => void
   exitNow(code: number): void
   isConnectionLost(error: unknown): boolean
+  /** Only for a person at a terminal without `--json`: asks to approve a first load that needs it. */
+  confirm?: PluginDevWatchConfirm
 }
 
 // Why these rates: logs feel live at 500 ms, and the plugin list (a projection of every plugin) is
@@ -130,11 +135,12 @@ async function startShooter(
 }
 
 /** Loads the folder, then streams its logs and reload status until interrupted. Returns the exit
- *  code. A failed first load throws (approval_required exits 3 like `orca plugin dev load`). */
+ *  code. A failed first load throws (approval_required exits 3 like `orca plugin dev load`) unless
+ *  the person approves it at the `confirm` prompt. */
 export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<number> {
   const { host, emit } = deps
   const typeFiles = await host.refreshTypes()
-  const loaded = await host.devLoad()
+  const loaded = await devLoadWithApproval((fingerprint) => host.devLoad(fingerprint), deps.confirm)
   const { pluginKey } = loaded
   let snapshot = snapshotOf(loaded.plugin)
   emit({
@@ -177,13 +183,17 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
       : null
   afterLoad?.request()
   const follower = new PluginLogFollower()
+  const dedupe = new PluginFrameLogDedupe()
+  const emitLogs = (lines: readonly PluginDevWatchLogLine[]): void => {
+    for (const line of lines) {
+      emit({ type: 'log', pluginKey, ...line })
+    }
+  }
   let otherKeys: ReadonlySet<string> | null = null
   let lastWarning: string | null = null
 
   const pollLogs = async (): Promise<void> => {
-    for (const line of follower.take(await host.logs(pluginKey, follower.cursor))) {
-      emit({ type: 'log', pluginKey, ...line })
-    }
+    emitLogs(dedupe.take(follower.take(await host.logs(pluginKey, follower.cursor))))
   }
 
   const pollStatus = async (): Promise<void> => {
@@ -196,6 +206,7 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
         : 0
     const error = next.error ? { error: next.error } : {}
     if (changes > 0) {
+      emitLogs(dedupe.flush())
       emit({ type: 'reloaded', pluginKey, changes, status: next.status, ...error })
     } else if (next.status !== snapshot.status || next.error !== snapshot.error) {
       emit({
@@ -251,6 +262,7 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     }
     // A check or shot that is still running reports before the unload line.
     await afterLoad?.idle()
+    emitLogs(dedupe.flush())
     if (!loaded.added) {
       emit({ type: 'unloaded', pluginKey, path: loaded.path, removed: false })
       return 0

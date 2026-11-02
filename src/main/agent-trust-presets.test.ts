@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { runCodexAppServerSession } from './codex/codex-app-server-session'
+import { runCodexAppServerSession } from './codex/app-server/codex-app-server-session'
 
 const testState = {
   fakeHomeDir: '',

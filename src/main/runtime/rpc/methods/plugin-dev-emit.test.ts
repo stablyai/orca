@@ -57,6 +57,7 @@ async function realService() {
     commands: [],
     invokeCommand: vi.fn(async () => null),
     requestFromPanel: vi.fn(),
+    runHook: vi.fn(),
     notifyDataChanged: vi.fn(),
     deliverEvent,
     lastActivityAt: () => 1_700_000_000_000,
@@ -118,7 +119,7 @@ describe('plugins.devEmit', () => {
         },
         context
       )
-    ).rejects.toThrow(/does not subscribe to workspace.removed/)
+    ).rejects.toThrow(/Nothing in samples.demo listens for workspace.removed/)
     expect(factory).not.toHaveBeenCalled()
   })
 })

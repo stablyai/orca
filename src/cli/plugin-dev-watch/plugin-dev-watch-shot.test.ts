@@ -113,7 +113,7 @@ describe('plugin dev watch --shot', () => {
       {
         check: async () => {
           order.push('check')
-          return { ok: true, invalid: [], panels: [] }
+          return { ok: true, invalid: [], panels: [], editors: [] }
         },
         shot: host
       },
@@ -215,6 +215,22 @@ describe('plugin dev watch --shot', () => {
     const last = ofType(events, 'shot').at(-1)
     expect(last && formatPluginDevWatchEvent(last)).toBe(
       'shot /work/shots/acme.todos-todos.png (360x700), not finished drawing\n  error: boom'
+    )
+  })
+
+  it('carries pendingRequests into the shot event and notes it only when some are unanswered', async () => {
+    const outcomes = [
+      { ...SHOT, pendingRequests: 2 },
+      { ...SHOT, pendingRequests: 0 }
+    ]
+    const { host } = shotHost(async () => outcomes.shift() ?? SHOT)
+    const shots = ofType(await watch({ shot: host }), 'shot')
+    expect(shots.map((shot) => shot.pendingRequests)).toEqual([2, 0])
+    expect(formatPluginDevWatchEvent(shots[0]!)).toBe(
+      'shot /work/shots/acme.todos-todos.png (360x700)\n  note: 2 host call(s) were still unanswered; the panel may show its loading state'
+    )
+    expect(formatPluginDevWatchEvent(shots[1]!)).toBe(
+      'shot /work/shots/acme.todos-todos.png (360x700)'
     )
   })
 })

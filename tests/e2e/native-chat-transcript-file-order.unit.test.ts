@@ -172,7 +172,7 @@ describe('canonical source positions', () => {
     const { applyMobileNativeChatStreamFrame } =
       await import('../../mobile/src/session/native-chat/mobile-native-chat-stream-frame')
     const { foldMobileNativeChatMessages } =
-      await import('../../mobile/src/session/mobile-native-chat-render-data')
+      await import('../../mobile/src/session/native-chat/mobile-native-chat-render-data')
     const filePath = await transcriptFile(
       lines(
         ...[

@@ -1,50 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { revealActivationDeferredTabs } from './background-terminal-worktree-mount'
 import {
   createDeferredNarrowingUndo,
-  planTerminalPrewarmTabMount,
   undoTerminalPrewarmNarrowing
 } from './terminal-worktree-prewarm'
-
-function tab(id: string, ptyId: string | null): TerminalTab {
-  return {
-    id,
-    ptyId,
-    worktreeId: 'wt',
-    title: id,
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 0
-  }
-}
-
-const plan = (
-  tabs: TerminalTab[],
-  revealTabIds: string[],
-  options: { live?: string[]; sleeping?: string[]; lostSessions?: string[] } = {}
-) =>
-  planTerminalPrewarmTabMount({
-    tabs,
-    revealTabIds: new Set(revealTabIds),
-    isTabLive: (tabId) => options.live?.includes(tabId) === true,
-    isTabRestorable: (candidate) => candidate.ptyId !== null,
-    isTabSleeping: (tabId) => options.sleeping?.includes(tabId) === true,
-    isSessionConfirmedLive: (candidate) => options.lostSessions?.includes(candidate.id) !== true
-  })
-
-describe('planTerminalPrewarmTabMount', () => {
-  it('never mounts a revealable tab that would spawn a shell or wake a sleeping agent', () => {
-    expect(plan([tab('a', null)], ['a'])).toBeNull()
-    expect(plan([tab('a', 'pty-a')], ['a'], { sleeping: ['a'] })).toBeNull()
-  })
-
-  it('never reattaches a revealable tab whose session the daemon did not confirm alive', () => {
-    // A reattach to a lost session spawns a replacement process, so the plan must decline it.
-    expect(plan([tab('a', 'pty-a'), tab('b', 'pty-b')], ['a'], { lostSessions: ['a'] })).toBeNull()
-  })
-})
 
 describe('undoTerminalPrewarmNarrowing', () => {
   it('leaves an activated workspace able to admit its deferred tabs after the lease releases', () => {

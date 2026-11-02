@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { OrchestrationDb } from '../runtime/orchestration/db'
 import {
   structuredWorkerOpenTaskTitle,
@@ -26,7 +26,7 @@ import {
   type AgentSessionUserNameWrite,
   compareAndSetAgentSessionRecordName,
   setAgentSessionRecordUserName
-} from '../runtime/agent-session-record-conversation-name'
+} from '../runtime/agent-session/records/agent-session-record-conversation-name'
 import {
   createStructuredChatNamingHandler,
   type StructuredChatNameGeneration,

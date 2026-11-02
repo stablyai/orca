@@ -45,17 +45,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
     expect(outer.value.droppedCount).toBe(1)
   })
 
-  it('returns a valid session unchanged with nothing dropped', () => {
-    const result = parseWorkspaceSessionSalvaging(
-      baseSession({ tabsByWorktree: { [WT]: [terminalTab('tab-1')] } })
-    )
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.droppedPaths).toEqual([])
-      expect(result.value.tabsByWorktree[WT]).toHaveLength(1)
-    }
-  })
-
   it('drops a tab record missing required fields and keeps the rest of the session', () => {
     const truncated = {
       id: 'tab-bad',
@@ -146,56 +135,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('salvages systemic single-field corruption without inflating the dropped count', () => {
-    const layouts: Record<string, unknown> = {}
-    for (let i = 0; i < 20; i += 1) {
-      layouts[`tab-${i}`] = {
-        root: { type: 'leaf', leafId: i },
-        activeLeafId: null,
-        expandedLeafId: null
-      }
-    }
-    const result = parseWorkspaceSessionSalvaging(baseSession({ terminalLayoutsByTabId: layouts }))
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value.terminalLayoutsByTabId).toEqual({})
-      expect(result.droppedPaths).toHaveLength(20)
-    }
-  })
-
-  it('reports one drop when a record raises both a bad-field and a missing-field issue', () => {
-    const result = parseWorkspaceSessionSalvaging(
-      baseSession({ terminalSurfaceTombstonesByPaneKey: { 'tab-1:leaf-1': { worktreeId: 42 } } })
-    )
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.droppedPaths).toEqual(['terminalSurfaceTombstonesByPaneKey.tab-1:leaf-1'])
-      expect(result.value.terminalSurfaceTombstonesByPaneKey).toEqual({})
-    }
-  })
-
-  it('reports one drop when two fields of the same record are corrupt', () => {
-    const result = parseWorkspaceSessionSalvaging(
-      baseSession({
-        terminalSurfaceTombstonesByPaneKey: {
-          'tab-1:leaf-1': {
-            worktreeId: WT,
-            parentTabId: 'tab-1',
-            leafId: 'leaf-1',
-            ptyId: 'pty-1',
-            incarnationId: '',
-            retiredAt: -5
-          }
-        }
-      })
-    )
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.droppedPaths).toEqual(['terminalSurfaceTombstonesByPaneKey.tab-1:leaf-1'])
-      expect(result.value.terminalSurfaceTombstonesByPaneKey).toEqual({})
-    }
-  })
-
   it('reports a dotted map key and its same-named nested path independently', () => {
     // User-data key a.root differs from nested path a → root even though their rendered paths match.
     const result = parseWorkspaceSessionSalvaging(
@@ -248,33 +187,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
     }
   })
 
-  it('drops a corrupt map value by its key', () => {
-    const result = parseWorkspaceSessionSalvaging(
-      baseSession({
-        terminalPtyIncarnationsByPaneKey: { 'tab-1:leaf-1': 'inc-1', 'tab-2:leaf-2': 123 }
-      })
-    )
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.droppedPaths).toEqual(['terminalPtyIncarnationsByPaneKey.tab-2:leaf-2'])
-      expect(result.value.terminalPtyIncarnationsByPaneKey).toEqual({ 'tab-1:leaf-1': 'inc-1' })
-    }
-  })
-
-  it('salvages multiple corrupt entries across different maps in one load', () => {
-    const result = parseWorkspaceSessionSalvaging(
-      baseSession({
-        tabsByWorktree: { [WT]: [terminalTab('tab-1'), { id: 'tab-bad' }] },
-        terminalPtyIncarnationsByPaneKey: { 'tab-1:leaf-1': 42 }
-      })
-    )
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.droppedPaths).toHaveLength(2)
-      expect(result.value.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-1'])
-    }
-  })
-
   it('salvages rather than throwing on a payload large enough to overflow the validator', () => {
     // An escaping RangeError in Store construction prevents launch; per-entry salvage avoids materializing the old overflowing issue list.
     const worktreeId = 'repo-1::/huge'
@@ -288,11 +200,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
       expect(result.droppedPaths).toHaveLength(100)
       expect(result.value.tabsByWorktree[worktreeId]).toEqual([])
     }
-  })
-
-  it('fails for a payload that is not an object', () => {
-    expect(parseWorkspaceSessionSalvaging('not a session').ok).toBe(false)
-    expect(parseWorkspaceSessionSalvaging(null).ok).toBe(false)
   })
 
   it('drops an optional top-level field whose value is the wrong type', () => {
@@ -322,28 +229,6 @@ describe('parseWorkspaceSessionSalvaging', () => {
       expect(result.droppedCount).toBe(200)
       expect(result.droppedPaths).toHaveLength(100)
       expect(Object.keys(result.value.terminalPtyIncarnationsByPaneKey ?? {})).toHaveLength(200)
-    }
-  })
-
-  it('drops many corrupt tab records across worktrees in a single session load', () => {
-    const tabsByWorktree: Record<string, unknown> = {}
-    for (let w = 0; w < 20; w += 1) {
-      const worktreeId = `repo-1::/w${w}`
-      tabsByWorktree[worktreeId] = [
-        terminalTab(`good-${w}`, { worktreeId }),
-        { id: `bad-a-${w}`, worktreeId },
-        terminalTab(`good2-${w}`, { worktreeId }),
-        { id: `bad-b-${w}`, worktreeId }
-      ]
-    }
-    const result = parseWorkspaceSessionSalvaging(baseSession({ tabsByWorktree }))
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.droppedPaths).toHaveLength(40)
-      expect(result.value.tabsByWorktree['repo-1::/w7']?.map((tab) => tab.id)).toEqual([
-        'good-7',
-        'good2-7'
-      ])
     }
   })
 

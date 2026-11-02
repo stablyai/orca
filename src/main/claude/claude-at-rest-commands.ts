@@ -11,7 +11,7 @@ import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-
 import { structuredSlashCommands } from '../../shared/agent-session/view/structured-agent-session-composer'
 import { discoverSkills } from '../skills/discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
-import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
+import { supportsClaudeStructuredLocation } from './structured/launch/claude-structured-location-support'
 import type { ClaudeCommandCatalogProbe } from './claude-command-catalog-probe'
 import {
   AT_REST_COMMANDS_TTL_MS,

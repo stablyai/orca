@@ -60,7 +60,8 @@ export class StructuredAgentSessionClientDelivery {
     private readonly publications?: Pick<
       StructuredAgentSessionConversations,
       'publish' | 'endPublications'
-    >
+    >,
+    readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue']
   ) {
     this.requestFailures = createStructuredAgentSessionHostRequestFailures(sessions, deps)
     this.savedStatus = new StructuredAgentSessionSavedStatus(deps)
@@ -72,13 +73,15 @@ export class StructuredAgentSessionClientDelivery {
       currentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       deps,
       onAgentStarted,
-      onChildWorkChanged
+      onChildWorkChanged,
+      readUsageLimitContinue
     })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
       sessions,
       now,
       readStatusState: (sessionId, journal) =>
-        this.statusFeed.journalProjection(sessionId, journal)?.state ?? null
+        this.statusFeed.journalProjection(sessionId, journal)?.state ?? null,
+      readChildWork: (sessionId) => this.statusFeed.readChildWork(sessionId)
     })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.settlementReading(sessionId, this.requireJournal(sessionId))
@@ -156,6 +159,8 @@ export class StructuredAgentSessionClientDelivery {
     }
   }
 
+  readUsageLimitCut = (id: string) => this.statusFeed.journalProjection(id)?.usageLimitCut ?? null
+
   drainStatusWrites = (): Promise<void> => this.savedStatus.drain()
 
   publishSavedStatusGroup = (
@@ -173,7 +178,11 @@ export class StructuredAgentSessionClientDelivery {
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
-  ): void => this.statusFeed.publishChildWork(sessionId, evidence, producer)
+  ): void => {
+    this.statusFeed.publishChildWork(sessionId, evidence, producer)
+    // A drain can be the moment a held turn becomes finished.
+    this.turnCompletionFeed.observe(sessionId)
+  }
 
   readStopping = (sessionId: string): boolean => {
     const projection = this.statusFeed.journalProjection(sessionId)

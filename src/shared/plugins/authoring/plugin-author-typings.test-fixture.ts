@@ -6,6 +6,9 @@ const RESOURCES = path.resolve(__dirname, '../../../../resources/plugins')
 /** The files `orca plugin types` copies, as checked in. */
 export const AUTHOR_TYPINGS_FILES = [
   path.join(RESOURCES, 'declarative', 'orca.d.ts'),
+  path.join(RESOURCES, 'declarative', 'orca-components.d.ts'),
+  path.join(RESOURCES, 'declarative', 'orca-components-layout.d.ts'),
+  path.join(RESOURCES, 'declarative', 'orca-components-data.d.ts'),
   path.join(RESOURCES, 'types', 'orca-host.d.ts'),
   path.join(RESOURCES, 'types', 'orca-frame.d.ts'),
   path.join(RESOURCES, 'types', 'orca-worker.d.ts'),

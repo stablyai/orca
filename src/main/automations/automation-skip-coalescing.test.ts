@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { Automation } from '../../shared/automations-types'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   closeTestStores,
   createStore,

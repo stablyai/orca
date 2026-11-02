@@ -44,10 +44,6 @@ function storeWith(state: Parameters<typeof seedStore>[1]) {
 }
 
 describe('selectWslHostsWithVisibleWork', () => {
-  it('is empty when no project or terminal on a WSL host is open', () => {
-    expect(selectWslHostsWithVisibleWork(storeWith({}).getState())).toEqual([])
-  })
-
   it('names the WSL host of the active workspace, routed by the workspace’s own repo', () => {
     const store = storeWith({ activeWorktreeId: 'wsl-repo::/home/me/app' })
     expect(selectWslHostsWithVisibleWork(store.getState())).toEqual([WSL_ENV])

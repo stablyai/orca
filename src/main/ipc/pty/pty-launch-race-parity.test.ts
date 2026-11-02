@@ -18,7 +18,7 @@ import { getHiddenRendererPtyIds, isHiddenRendererPty } from './delivery/pty-hid
 import { ptySizes } from './delivery/visibility-state'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import * as paneSpawnReservations from './pane/spawn-reservation'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../runtime/worktree-terminals-sleeping-error'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../shared/workspace-sleep'
 import { RestoredPaneStarter } from '../../runtime/terminal/recovery/restored-pane-start'
 import {
   LAUNCH_RACE_LANES,
@@ -31,8 +31,8 @@ import {
   type LaunchRaceLane
 } from './pty-launch-race-test-fixture'
 
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture

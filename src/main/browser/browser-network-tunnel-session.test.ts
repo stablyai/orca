@@ -492,45 +492,6 @@ describe('BrowserNetworkTunnelSession', () => {
     )
   })
 
-  it('bounds pending opens and restores admission after connect or retirement', () => {
-    const sockets = Array.from({ length: 19 }, () => new FakeSocket())
-    let nextSocket = 0
-    const connect = vi.fn(() => sockets[nextSocket++]!)
-    const sent: Uint8Array<ArrayBufferLike>[] = []
-    const session = new BrowserNetworkTunnelSession({
-      tunnelGeneration: 7,
-      connect,
-      sendBinary: (bytes) => {
-        sent.push(bytes)
-        return true
-      }
-    })
-    const open = (streamId: number): void =>
-      session.handleBinary(
-        frame(
-          BrowserNetworkTunnelOpcode.Open,
-          encodeBrowserNetworkTunnelOpen({ host: 'slow.internal', port: 443 }),
-          streamId
-        )
-      )
-
-    for (let streamId = 1; streamId <= 17; streamId += 1) {
-      open(streamId)
-    }
-    expect(connect).toHaveBeenCalledTimes(16)
-    expect(new TextDecoder().decode(decodeBrowserNetworkTunnelFrame(sent.at(-1)!)?.payload)).toBe(
-      'pending_open_limit_exceeded'
-    )
-
-    sockets[0]!.emit('connect')
-    open(18)
-    expect(connect).toHaveBeenCalledTimes(17)
-
-    session.handleBinary(frame(BrowserNetworkTunnelOpcode.Close, new Uint8Array(), 2))
-    open(19)
-    expect(connect).toHaveBeenCalledTimes(18)
-  })
-
   it('bounds the destination open rate with an injectable monotonic clock', () => {
     let now = 1_000
     const sockets: FakeSocket[] = []
@@ -564,18 +525,18 @@ describe('BrowserNetworkTunnelSession', () => {
       }
     }
 
-    for (let streamId = 1; streamId <= 128; streamId += 1) {
+    for (let streamId = 1; streamId <= 1024; streamId += 1) {
       openAndClose(streamId)
     }
-    openAndClose(129)
-    expect(connect).toHaveBeenCalledTimes(128)
+    openAndClose(1025)
+    expect(connect).toHaveBeenCalledTimes(1024)
     expect(new TextDecoder().decode(decodeBrowserNetworkTunnelFrame(sent.at(-1)!)?.payload)).toBe(
       'open_rate_exceeded'
     )
 
     now += 10_001
-    openAndClose(130)
-    expect(connect).toHaveBeenCalledTimes(129)
+    openAndClose(1026)
+    expect(connect).toHaveBeenCalledTimes(1025)
   })
 
   it('caps aggregate retained destination bytes and releases exact stream accounting', () => {

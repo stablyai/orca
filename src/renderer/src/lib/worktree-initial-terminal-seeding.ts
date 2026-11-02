@@ -14,7 +14,7 @@ import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
-import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+import { seedNativeChatAppliedSessionOptions } from '../../../shared/native-chat/input/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore

@@ -125,8 +125,12 @@ describe('PluginPanelBridge pushes', () => {
     bridge.open({ ...caller, id: 'panel-b' }, 'acme.todos', quiet)
     bridge.subscribe('acme.todos', caller.id, 'agent.status.changed')
     const payload = { workspaceId: null, paneKey: 'p', state: 'done', receivedAt: 1 }
-    bridge.publishEvent('agent.status.changed', payload)
-    bridge.publishEvent('agent.status.changed', { malformed: true })
+    expect(bridge.publishEvent('agent.status.changed', payload)).toBe(1)
+    expect(bridge.publishEvent('agent.status.changed', { malformed: true })).toBe(0)
+    // `dev emit` limits it to one plugin's panels.
+    expect(bridge.publishEvent('agent.status.changed', payload, { pluginKey: 'acme.other' })).toBe(
+      0
+    )
     expect(subscribed).toHaveBeenCalledOnce()
     expect(subscribed).toHaveBeenCalledWith({
       kind: 'event',

@@ -3,7 +3,7 @@ import {
   computeMobileWebBundleId,
   MobileWebBundleRouteSchema
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
-import { MobileWebBundleManifestReadSchema } from '../transport/mobile-web-bundle-reply-schemas'
+import { MobileWebBundleManifestReadSchema } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { readBridgeHostMessage } from './bridge/bridge-envelope'
 import { readShellSession } from './bridge/bridge-client-session'

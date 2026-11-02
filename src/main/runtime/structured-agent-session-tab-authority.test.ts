@@ -6,7 +6,7 @@ import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './rpc/methods/structure
 import {
   seedTestAgentSessionStoreFromNewerBuild,
   editPersistedTestAgentSessionStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from './rpc/methods/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'

@@ -3,7 +3,7 @@ import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView
 } from '../../../shared/agent-session/options/structured-agent-session-option-view'
-import { claudeOpened } from '../../claude/claude-structured-startup-settled-test-support'
+import { claudeOpened } from '../../claude/structured/claude-structured-startup-settled-test-support'
 
 import type { ClaudeStructuredSessionEvent } from '../../claude/structured/claude-structured-session-state'
 
@@ -12,7 +12,7 @@ import {
   fakeClaude,
   claudeFrame,
   USER_MESSAGE
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 
 import {
   applyStructuredAgentSessionOptions,

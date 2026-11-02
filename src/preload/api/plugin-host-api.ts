@@ -1,4 +1,5 @@
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
+import type { EditorSaveHookDecision } from '../../shared/plugins/events/plugin-editor-save-hook'
 import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
 import type {
   PluginAutoUpdateState,
@@ -46,6 +47,7 @@ export type {
   PluginHostStatus
 } from '../../shared/plugins/plugin-list-entry'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import type { PluginStatusBarOverrides } from '../../shared/plugins/contributions/plugin-status-bar-state'
 import type { PluginDeclaredSettingsSnapshot } from '../../shared/plugins/contributions/plugin-settings-values'
 import type { PluginJsonValue } from '../../shared/plugins/workers/plugin-host-api'
 
@@ -178,6 +180,8 @@ export type PluginsApi = {
     pluginKey: string
     commandId: string
     args?: unknown
+    /** Refused unless the worker can start it within this many ms; older hosts ignore it. */
+    timeoutMs?: number
   }) => Promise<unknown>
   /** One frame host call; main enforces consented capabilities and the frame's surface. */
   panelAction: (args: {
@@ -197,6 +201,11 @@ export type PluginsApi = {
     key: string
     value: PluginJsonValue
   }) => Promise<{ ok: true } | { ok: false; error: string }>
+  /** An image file inside a components panel's plugin, or null; see plugin-panel-image.ts. */
+  panelImage?: (args: {
+    sessionToken: string
+    path: string
+  }) => Promise<{ contentType: string; bytes: Uint8Array } | null>
   /** Pins a Git install input to an exact commit without downloading it. */
   resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
@@ -255,6 +264,16 @@ export type PluginsApi = {
   onInstallCountsChanged: (callback: () => void) => () => void
   /** Fires after each automatic update pass, with the plugins it just updated. */
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
+  /** What workers set with `statusBar.update`. Desktop only; older hosts reject. */
+  statusBarState?: () => Promise<PluginStatusBarOverrides>
+  /** Runs plugins' `editor.save.before` on a buffer about to be saved. Older hosts lack it. */
+  editorSaveHook?: (event: {
+    workspaceId: string | null
+    path: string
+    languageId?: string
+    text: string
+  }) => Promise<EditorSaveHookDecision>
+  onStatusBarChanged?: (callback: (overrides: PluginStatusBarOverrides) => void) => () => void
 }
 
 export type PluginAutoUpdateEvent = {

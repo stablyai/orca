@@ -1,6 +1,7 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS } from '../args'
 import { PLUGIN_TEMPLATE_NAMES } from '../plugin-authoring/plugin-template-names'
+import { PLUGIN_DEV_HOOK_COMMAND_SPEC, PLUGIN_DEV_REQUEST_COMMAND_SPEC } from './plugin-dev-request'
 
 const TEMPLATES = PLUGIN_TEMPLATE_NAMES.join('|')
 
@@ -19,6 +20,8 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
       'theme, terminal-theme, icon-theme, syntax and language-pack are content only: loading them never needs approval.',
       'editor and panel run code in a sandboxed frame: loading them prints the access they ask for and needs --approve.',
       'components is a panel written in TSX with Orca components and no build step; it also writes the editor typings to .orca/types (see `orca plugin types`).',
+      'worker-panel is a components panel plus its own TypeScript worker (`main`): requests, posts and storage typed by one src/protocol.ts, with panel and worker tests for `orca plugin test`. It needs --approve to load.',
+      'hook is a worker-only guard on `terminal.send` that refuses dangerous commands and fails closed (`onError: "deny"`), with a test for `orca plugin test`. It needs --approve to load.',
       'The id defaults to the folder name. Leave out --publisher: Orca names the publisher after the repository owner (or `local` for a folder). Pass it only to support Orca older than 1.4.246, and then it must be that owner.',
       'Runs on the machine that runs this command; it does not reach the Orca app.',
       EXIT_CODES_NOTE
@@ -26,7 +29,9 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
     examples: [
       'orca plugin create ./dusk-theme --template theme --publisher acme',
       'orca plugin create ./notes-editor --template editor --name "Notes" --json',
-      'orca plugin create ./todo-panel --template components'
+      'orca plugin create ./todo-panel --template components',
+      'orca plugin create ./counter --template worker-panel',
+      'orca plugin create ./guard --template hook'
     ]
   },
   {
@@ -61,7 +66,7 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['plugin', 'check'],
     summary:
-      'Validate a plugin and render each components panel once on this machine, unsandboxed: only for code you trust',
+      'Validate a plugin, render each components panel once on this machine (unsandboxed: only for code you trust), and statically check each custom editor',
     usage: 'orca plugin check [dir] [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'dir'],
     positionalArgs: ['dir'],
@@ -69,7 +74,7 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
       "Not sandboxed: this runs the plugin's code on this machine with your user's full access, outside Orca's plugin sandbox. Check only code you trust.",
       'Validates like `orca plugin validate`, then mounts each `ui: "components"` panel in Node against a stand-in host with the capabilities the manifest declares, and reports runtime errors (with file:line), layouts Orca would refuse, and props it would drop.',
       'Runs on the `node` on PATH when it is 20.6 or newer, else on the Node built into Orca. It does not reach the Orca app.',
-      'Exit codes: 0 ok, 1 a panel failed to render, 2 the plugin is invalid (plugin_invalid).'
+      'Exit codes: 0 ok, 1 a panel failed to render or an editor failed its static check (plugin_check_failed), 2 the plugin is invalid (plugin_invalid).'
     ],
     examples: ['orca plugin check .', 'orca plugin check ./todo-panel --json']
   },
@@ -203,6 +208,7 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['dir'],
     notes: [
       'The inner loop: loads the folder like `orca plugin dev load` (refreshing its .orca/types), then prints each log line its panels, editors and worker write, every reload a save causes, and status changes such as errored or invalid with the error.',
+      'A first load that needs approval, run in a terminal without --json, shows the grants and asks `Approve and load? [y/N]`; yes loads it with that fingerprint and keeps watching. Anything else, --json or no terminal (agents, pipes) fails like `orca plugin dev load` (exit 3, with the re-run command).',
       'When an edit asks for new access it prints the `orca plugin dev reload <dir> --approve <fingerprint>` command to run from another shell; this one keeps watching.',
       'Ctrl-C unloads the folder (unless it was loaded before this command) and exits 0; a second Ctrl-C exits at once. If the connection to Orca drops it says so and exits 1.',
       "--check runs `orca plugin check` after the load and after each reload and prints the result inline (one `check` event with --json; it fails while Orca does not run the plugin, such as pending approval, even if the panels render). Like `orca plugin check` it runs the plugin's code on this machine, unsandboxed, so use it on code you trust; it needs a local folder.",
@@ -262,14 +268,14 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['plugin', 'dev', 'emit'],
-    summary: "Fire a test event at a development plugin's worker",
+    summary: "Fire a test event at a development plugin's worker and open panels",
     usage: 'orca plugin dev emit <dir|plugin-key> <event> [--data <json>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'target', 'event', 'data'],
     positionalArgs: ['target', 'event'],
     notes: [
-      "Runs the worker's `orca.events.on` handlers without the real trigger. The event goes through the normal delivery rules: the plugin must be an approved development plugin that lists the event in contributes.events, and the worker starts if it is not running.",
+      "Runs the worker's `orca.events.on` handlers and the plugin's open panels' `orca.on` handlers without the real trigger, under the normal rules: the plugin must be an approved development plugin granted the event's capability. The worker hears it when it lists the event in contributes.events (it starts if it is not running); an open panel hears it once it has subscribed. It is refused when nothing listens.",
       "--data is the payload as JSON, checked against the event's schema (the host API reference lists them). An unknown event is refused with the list of events.",
-      "Prints `{ pluginKey, event, delivered: { worker, panels } }`; `panels` is 0, since panels only hear Orca's own events such as `theme`. Handler errors go to `orca plugin logs` and `orca plugin dev watch`.",
+      'Prints `{ pluginKey, event, delivered: { worker, panels } }`: whether the worker got it and how many open panels did. Handler errors go to `orca plugin logs` and `orca plugin dev watch`.',
       'Installed plugins are refused; load the folder with `orca plugin dev load` first.'
     ],
     examples: [
@@ -277,6 +283,8 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
       'orca plugin dev emit acme.notes agent.status.changed --data \'{"workspaceId":null,"paneKey":"p1","state":"done","receivedAt":1}\' --json'
     ]
   },
+  PLUGIN_DEV_HOOK_COMMAND_SPEC,
+  PLUGIN_DEV_REQUEST_COMMAND_SPEC,
   {
     path: ['plugin', 'dev', 'unload'],
     summary: 'Remove a development folder from Orca',

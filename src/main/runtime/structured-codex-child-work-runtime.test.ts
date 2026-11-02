@@ -9,7 +9,7 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
+import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
@@ -18,12 +18,12 @@ import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-sess
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 import { AgentHookServer } from '../agent-hooks/server'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
-import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
+import { AgentSessionRecoveryCapsule } from './agent-session/records/agent-session-recovery-capsule'
 import {
   openStructuredCodexRpcHarness,
   THREAD as RESTART_THREAD,

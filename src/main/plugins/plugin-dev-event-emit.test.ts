@@ -44,7 +44,9 @@ function plugin(rootDir: string, raw: Record<string, unknown> = {}): ValidDiscov
   }
 }
 
-async function harness(options: { plugin?: ValidDiscoveredPlugin; approved?: boolean } = {}) {
+async function harness(
+  options: { plugin?: ValidDiscoveredPlugin; approved?: boolean; openPanels?: number } = {}
+) {
   const folder = await realpath(await mkdtemp(join(tmpdir(), 'orca-dev-emit-')))
   roots.push(folder)
   const target = options.plugin ?? plugin(folder)
@@ -64,7 +66,8 @@ async function harness(options: { plugin?: ValidDiscoveredPlugin; approved?: boo
       isRuntimeApproved: () => options.approved ?? true,
       grantedCapabilities: () => ['workspace:read' as const],
       logWarning: () => () => undefined
-    }
+    },
+    panelBridge: { publishEvent: vi.fn(() => options.openPanels ?? 0) }
   }
   const emit = (event: string, payload: unknown, pick?: { path: string } | { pluginKey: string }) =>
     emitPluginDevEvent({
@@ -73,7 +76,13 @@ async function harness(options: { plugin?: ValidDiscoveredPlugin; approved?: boo
       event,
       payload
     })
-  return { folder, emit, deliverEvent, ensureWorker }
+  return {
+    folder,
+    emit,
+    deliverEvent,
+    ensureWorker,
+    publishEvent: service.panelBridge.publishEvent
+  }
 }
 
 describe('emitPluginDevEvent', () => {
@@ -114,8 +123,11 @@ describe('emitPluginDevEvent', () => {
     expect(ensureWorker).not.toHaveBeenCalled()
   })
 
-  it('refuses an event the plugin does not subscribe to, or while it is not approved', async () => {
+  it('refuses an event nothing listens for, one it lacks the capability for, or while not approved', async () => {
     const { emit } = await harness()
+    await expect(
+      emit('workspace.removed', { workspaceId: 'wt-1', kind: 'worktree', path: '/repo' })
+    ).rejects.toThrow(/Nothing in acme.demo listens for workspace.removed/)
     await expect(
       emit('agent.status.changed', {
         workspaceId: null,
@@ -123,9 +135,35 @@ describe('emitPluginDevEvent', () => {
         state: 'done',
         receivedAt: 1
       })
-    ).rejects.toThrow(/does not subscribe to agent.status.changed/)
+    ).rejects.toThrow(/not granted agent:read/)
     const pending = await harness({ approved: false })
     await expect(pending.emit('workspace.created', CREATED)).rejects.toThrow(/not approved/)
     expect(pending.ensureWorker).not.toHaveBeenCalled()
+    expect(pending.publishEvent).not.toHaveBeenCalled()
+  })
+
+  it("also publishes to the plugin's own open panels, and counts them", async () => {
+    const both = await harness({ openPanels: 2 })
+    await expect(both.emit('workspace.created', CREATED)).resolves.toMatchObject({
+      delivered: { worker: true, panels: 2 }
+    })
+    expect(both.publishEvent).toHaveBeenCalledWith('workspace.created', CREATED, {
+      pluginKey: 'acme.demo'
+    })
+  })
+
+  it('reaches a panel-only plugin without starting a worker', async () => {
+    const folder = await realpath(await mkdtemp(join(tmpdir(), 'orca-dev-emit-panel-')))
+    roots.push(folder)
+    const panelOnly = plugin(folder, {
+      execution: 'sandboxed-ui',
+      main: undefined,
+      contributes: { panels: [{ id: 'p', title: 'P', entry: 'p.html' }] }
+    })
+    const { emit, ensureWorker } = await harness({ plugin: panelOnly, openPanels: 1 })
+    await expect(emit('workspace.created', CREATED)).resolves.toMatchObject({
+      delivered: { worker: false, panels: 1 }
+    })
+    expect(ensureWorker).not.toHaveBeenCalled()
   })
 })

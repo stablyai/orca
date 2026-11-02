@@ -19,7 +19,7 @@ import { prepareStructuredAgentSessionCreateForWorktree } from '../../src/main/r
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentRuntimeMetadata } from '../../src/main/runtime/structured-agent-runtime-metadata'
-import { claudeStructuredSpawnOptions } from '../../src/main/claude/claude-structured-spawn-options'
+import { claudeStructuredSpawnOptions } from '../../src/main/claude/structured/launch/claude-structured-spawn-options'
 import { openCodexThread } from '../../src/main/codex/codex-structured-thread-open'
 import { resolvedCodexMessageOptions } from '../../src/main/codex/codex-structured-message-options'
 import { optionSession } from '../../src/main/codex/codex-structured-option-session.test-fixture'
