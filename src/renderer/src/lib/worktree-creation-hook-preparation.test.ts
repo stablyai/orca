@@ -96,9 +96,14 @@ describe('worktree script preparation', () => {
   })
 
   it('preserves an omitted decision and quietly settles a late cancelled trust failure', async () => {
-    const request = makeRequest()
-    delete request.setupDecision
-    request.hookPreparation = { executionHostId: 'ssh:remote-1' }
+    const request: WorktreeCreationRequest = JSON.parse(
+      JSON.stringify({
+        ...makeRequest(),
+        setupDecision: undefined,
+        hookPreparation: { executionHostId: 'ssh:remote-1' }
+      })
+    )
+    expect(request).not.toHaveProperty('setupDecision')
     expect(
       (await prepareWorktreeCreationHooks('creation-1', request))?.setupDecision
     ).toBeUndefined()
