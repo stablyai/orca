@@ -10,8 +10,8 @@ import { userTabHoldingSession } from './worker-follow-up-choice'
 import { reopenWorkerTerminal } from './worker-follow-up-placement'
 
 const opening = new Map<string, Promise<OrchestrationPartyLocation | null>>()
-// Until its agent reports, a just-resumed pane is found only by the handle this host returned.
-const reopenedByResource = new Map<string, string>()
+// Until its agent reports, a resumed pane is known only by the handle or request this host made.
+const attempts = new Map<string, { mutationId: string; handle?: string }>()
 
 /** Null keeps the lookup's answer: the worker's terminal is still there, or its conversation cannot resume here. */
 export function openClosedWorkerTerminal(
@@ -40,16 +40,23 @@ export function openClosedWorkerTerminal(
     ) {
       return null
     }
-    const earlier = reopenedByResource.get(resource.id)
-    const found =
-      (earlier && runtime.getLiveTerminalPaneKey(earlier) !== null ? earlier : undefined) ??
-      (await userTabHoldingSession(runtime, session)) ??
-      (await reopenWorkerTerminal(runtime, resource.worktree_id, session, randomUUID()))?.handle
-    if (!found) {
+    const earlier = attempts.get(resource.id)
+    if (earlier?.handle && runtime.getLiveTerminalPaneKey(earlier.handle) !== null) {
+      return { kind: 'terminal', handle: earlier.handle }
+    }
+    const held = await userTabHoldingSession(runtime, session)
+    if (held) {
+      return { kind: 'terminal', handle: held }
+    }
+    // A failed request keeps its id, so a retry reconciles the pane it may have started.
+    const mutationId = earlier && !earlier.handle ? earlier.mutationId : randomUUID()
+    attempts.set(resource.id, { mutationId })
+    const reopened = await reopenWorkerTerminal(runtime, resource.worktree_id, session, mutationId)
+    if (!reopened) {
       return null
     }
-    reopenedByResource.set(resource.id, found)
-    return { kind: 'terminal', handle: found }
+    attempts.set(resource.id, { mutationId, handle: reopened.handle })
+    return { kind: 'terminal', handle: reopened.handle }
   })().finally(() => opening.delete(resource.id))
   opening.set(resource.id, open)
   return open

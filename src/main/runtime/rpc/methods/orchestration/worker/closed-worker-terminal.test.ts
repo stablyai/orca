@@ -92,4 +92,17 @@ describe('opening a terminal worker Orca closed', () => {
     expect(placement).toMatchObject({ delivery: 'follow_up', terminal: 'term_reopened' })
     expect(resume).toHaveBeenCalledOnce()
   })
+
+  it('retries an uncertain resume as the same request, so it reconciles the pane it may have started', async () => {
+    const { resource, resume } = await closedHelper()
+    const succeed = resume.getMockImplementation()!
+    resume.mockResolvedValueOnce({ ok: false, reason: 'create_failed' })
+    await expect(open(resource.terminal_handle)).rejects.toThrow()
+    resume.mockImplementation(succeed)
+    expect(await open(resource.terminal_handle)).toEqual({
+      location: { kind: 'terminal', handle: 'term_reopened' }
+    })
+    const [first, second] = resume.mock.calls.map(([, request]) => request.mutationId)
+    expect(second).toBe(first)
+  })
 })
