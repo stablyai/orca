@@ -1,3 +1,5 @@
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../shared/emulator-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -51,6 +53,7 @@ const mockAttachResult = {
 
 describe('openMobileEmulatorTab', () => {
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([])
     mockStoreState.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
     mockStoreState.groupsByWorktree = { 'wt-1': [{ id: 'group-1' }] }
     mockStoreState.unifiedTabsByWorktree = {}
@@ -71,6 +74,18 @@ describe('openMobileEmulatorTab', () => {
     cancelPendingSimulatorPaneShutdown('wt-1')
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('lets a capable pane resolve user preferences instead of prelaunching an arbitrary device', async () => {
+    setLocalRuntimeCapabilitiesForTests([EMULATOR_OPENING_PREFERENCES_CAPABILITY])
+    vi.mocked(ensureSimulatorTab).mockImplementationOnce(() => {
+      expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
+      return 'sim-1'
+    })
+    expect(await openMobileEmulatorTab('wt-1')).toBe('sim-1')
+    expect(ensureSimulatorTab).toHaveBeenCalled()
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
   })
 
   it('rejects web-client invocation before creating a tab or attaching', async () => {

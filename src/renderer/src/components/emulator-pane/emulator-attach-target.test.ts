@@ -30,3 +30,19 @@ describe('attachWithAvdFallback', () => {
     expect(failing).toHaveBeenCalledTimes(1)
   })
 })
+
+it.each(['missing', 'unavailable'] as const)(
+  'recovers a missing AVD serial without overriding an unavailable-device refusal (%s)',
+  async (selectionRequired) => {
+    const onRetarget = vi.fn()
+    const attachTo = vi.fn(async (device?: string) =>
+      device === 'Pixel_9' ? { attached: true } : { attached: false, selectionRequired }
+    )
+    await expect(
+      attachWithAvdFallback(rows, 'emulator-5554', onRetarget, attachTo)
+    ).resolves.toEqual(
+      selectionRequired === 'missing' ? { attached: true } : { attached: false, selectionRequired }
+    )
+    expect(onRetarget.mock.calls).toEqual(selectionRequired === 'missing' ? [['Pixel_9']] : [])
+  }
+)
