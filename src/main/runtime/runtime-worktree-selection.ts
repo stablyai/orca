@@ -17,6 +17,7 @@ export type RuntimeWorktreeRemovalTarget = {
 /** Named options prevent interchangeable safety-waiver booleans from silently authorizing the wrong destructive delete. */
 export type RemoveManagedWorktreeOptions = {
   force?: boolean
+  deleteBranch?: boolean
   runHooks?: boolean
   /** Waives proof that every PTY stopped (#11960). Set by explicit Force Delete only. */
   allowUnverifiedPtyStop?: boolean
@@ -30,7 +31,7 @@ export type RemoveManagedWorktreeOptions = {
 export function getRuntimeWorktreeRemovalOptionsKey(
   options: Pick<
     RemoveManagedWorktreeOptions,
-    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook'
+    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook' | 'deleteBranch'
   >
 ): string {
   // Forced retries must not coalesce onto an attempt refusing unverified PTY stop.
@@ -38,7 +39,13 @@ export function getRuntimeWorktreeRemovalOptionsKey(
   // Archive-waiver retries must not inherit an in-flight attempt's hook refusal.
   const archiveKey = options.allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
   const hooksKey = options.runHooks ? 'run-hooks' : 'skip-hooks'
-  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}`
+  const branchKey =
+    options.deleteBranch === undefined
+      ? 'legacy-branch'
+      : options.deleteBranch
+        ? 'delete-branch'
+        : 'keep-branch'
+  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}:${branchKey}`
 }
 
 // Null host is host-unaware; unstamped legacy rows are adoptable, but either explicit host spelling must match exactly.

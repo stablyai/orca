@@ -8,8 +8,8 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
 import { sentSinceStop } from './structured-agent-session-queued-stop'
-import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 
 /** Personal Stop already records its event; other host stops record cause, while quit uses cut-turn rows. */
 export type StructuredAgentSessionStopEnding =

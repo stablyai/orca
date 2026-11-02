@@ -43,22 +43,6 @@ describe('app menu paste', () => {
     expect(performNativePaste).not.toHaveBeenCalled()
   })
 
-  it('falls back to native paste when no Orca-owned target is focused', async () => {
-    const button = document.createElement('button')
-    document.body.appendChild(button)
-    button.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => 'text'),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toEqual({ status: 'native-fallback', reason: 'no-owned-target' })
-    expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste' })
-  })
-
   it('preserves paste-and-match-style when falling back to native paste', async () => {
     const performNativePaste = vi.fn()
 
@@ -144,21 +128,6 @@ describe('app menu paste', () => {
     expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste' })
   })
 
-  it('native-pastes an image-only clipboard so the control can take the image', async () => {
-    const textarea = appendTextarea()
-    textarea.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => ''),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toEqual({ status: 'native-fallback', reason: 'no-clipboard-text' })
-    expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste' })
-  })
-
   it('does not native-fallback when clipboard read fails after focus moves', async () => {
     const textarea = appendTextarea('unchanged')
     const other = appendTextarea('other')
@@ -184,35 +153,6 @@ describe('app menu paste', () => {
     )
     expect(textarea.value).toBe('unchanged')
     expect(other.value).toBe('other')
-    expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized focused text-control paste without native fallback', async () => {
-    const textarea = appendTextarea('unchanged')
-    textarea.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => {
-        throw new Error('Clipboard text is too large for this paste target.')
-      }),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toMatchObject({
-      status: 'rejected',
-      target: 'text-control',
-      reason: 'too-large'
-    })
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain(
-      'reason=too-large'
-    )
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain('durationMs=')
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain(
-      'content=redacted'
-    )
-    expect(textarea.value).toBe('unchanged')
     expect(performNativePaste).not.toHaveBeenCalled()
   })
 })

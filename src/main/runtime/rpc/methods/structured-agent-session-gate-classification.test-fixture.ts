@@ -7,7 +7,7 @@ import {
   sendParams,
   SESSION
 } from './structured-agent-session-rpc.test-fixture'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 /** Stops or retires work the caller already owns; none of these builds a host. */
 export const CLEANUP_METHODS = [

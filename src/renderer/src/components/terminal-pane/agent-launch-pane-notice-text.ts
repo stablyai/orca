@@ -46,6 +46,20 @@ export function agentLaunchPaneNoticeText(
   const agent =
     tuiAgentDisplayName(agentId ?? '') ??
     translate('auto.components.terminal.pane.AgentLaunchPaneNotice.agent', 'The agent')
+  if (refusal.initialOutputDiagnostic === 'git-bash-console-capacity') {
+    const explanation = translate(
+      'auto.components.terminal.pane.AgentLaunchPaneNotice.gitBashConsoleCapacity',
+      'Git Bash reported its limit of 128 open terminals on this PC while starting {{agent}}. Close some Git Bash terminals and try again.',
+      { agent }
+    )
+    return refusal.kind === 'unconfirmed'
+      ? `${translate(
+          'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',
+          "Couldn't confirm {{agent}} started. Check its terminal before trying again.",
+          { agent }
+        )} ${explanation}`
+      : explanation
+  }
   if (refusal.kind === 'unconfirmed') {
     return translate(
       'auto.components.terminal.pane.AgentLaunchPaneNotice.unconfirmed',

@@ -104,6 +104,7 @@ describe('agent prompt writer: default path', () => {
     }
     const second = target.sendTerminalAgentPrompt(HANDLE, 'second', { inputKind: 'driving' })
     await new Promise((resolve) => setTimeout(resolve, 0))
+    target.registerPty('pty-default-path-respawned', 'repo::/tmp/default-path', null)
     leaf.ptyId = 'pty-default-path-respawned'
     releaseFirst()
 

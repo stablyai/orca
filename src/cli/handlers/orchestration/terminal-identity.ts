@@ -1,12 +1,11 @@
-import type { RuntimeClient } from '../../runtime-client'
 import { getOptionalStringFlag, getPresentStringFlag } from '../../flags'
-import { RuntimeClientError } from '../../runtime-client'
+import { type RuntimeClient, RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
 import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
 import {
   injectedSessionAddress,
   readInjectedAgentSessionId
-} from '../../../shared/agent-session-caller-env'
+} from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { sessionAddressForHost } from '../../session-caller-flags'
 
 // --worktree/--terminal name the command's target, possibly on another host; only the caller's cwd scopes inference.
@@ -51,7 +50,9 @@ export async function resolveOrchestrationTerminalHandle(
   if (flagName === 'from') {
     return await resolveImplicitOrchestrationSender(cwd, client)
   }
-  return await getTerminalHandle(callerScopeFlags(), cwd, client)
+  return await getTerminalHandle(callerScopeFlags(), cwd, client, {
+    purpose: 'orchestration-caller'
+  })
 }
 
 // terminal.show requires a PTY; resolveIdentity also recognizes structured workers without panes.
@@ -185,7 +186,10 @@ async function resolveImplicitOrchestrationSender(
 ): Promise<string> {
   try {
     // An arbitrary active-terminal choice would let this command speak as a sibling worker.
-    return await getTerminalHandle(callerScopeFlags(), cwd, client, { requireUnambiguous: true })
+    return await getTerminalHandle(callerScopeFlags(), cwd, client, {
+      requireUnambiguous: true,
+      purpose: 'orchestration-caller'
+    })
   } catch (err) {
     if (!isNoActiveTerminalError(err)) {
       throw err

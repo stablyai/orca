@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAttentionOrigin } from '../../../../shared/agent-session-attention'
+import type { StructuredAttentionOrigin } from '../../../../shared/agent-session/agent-session-attention'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
 import {

@@ -1,3 +1,4 @@
+import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
 import type { DeviceEntry, DeviceRegistry } from '../device-registry'
@@ -43,6 +44,7 @@ export type AuthenticatedMobileSocket = {
   // Why: a device-key registration proves possession over this exact connection.
   transcriptHashB64: string | null
   clientCapabilities: readonly RuntimeCapability[]
+  capabilitySource?: RuntimeClientCapabilities
   transport: MobileSocketTransportMetadata
 }
 
@@ -222,11 +224,12 @@ export class MobileSocketWiring {
             device,
             transcriptHashB64: channel.transcriptHashB64,
             // Read/write capabilities through the connection-owned channel; getter-only updates throw and strand capable phones.
+            capabilitySource: channel.capabilitySource,
             get clientCapabilities() {
-              return channel.clientCapabilities
+              return channel.capabilitySource.current
             },
             set clientCapabilities(next: readonly RuntimeCapability[]) {
-              channel.clientCapabilities = next
+              channel.capabilitySource.replace(next)
             },
             transport: metadata
           }

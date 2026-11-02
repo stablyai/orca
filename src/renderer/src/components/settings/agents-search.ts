@@ -95,6 +95,8 @@ const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
 const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
 /** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
 export const AGENTS_INSTALLED_SECTION_ID = 'agents-installed'
+/** The top Chat or Terminal tiles that set this computer's default. */
+export const AGENT_DEFAULT_SURFACE_SECTION_ID = 'agents-default-surface'
 const AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID = 'agent-workspace-trust'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 const CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID = 'codex-terminal-server-isolation'
@@ -133,6 +135,19 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
         'installed agents in wsl'
       ),
       ...translateSearchKeyword('auto.components.settings.agents.search.719f53350c', 'path')
+    ]
+  },
+  {
+    targetSectionId: AGENT_DEFAULT_SURFACE_SECTION_ID,
+    title: translate('settings.agents.defaultSurfaceTitle', 'Open agents as'),
+    description: translate(
+      'settings.agents.defaultSurfaceDescription',
+      'The default for agents on this computer.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
+      ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI')
     ]
   },
   {
@@ -246,6 +261,6 @@ export function getAgentsPaneSearchEntries({
     hiddenIds.add(CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID)
   }
   return getAllAgentsPaneSearchEntries().filter(
-    (entry) => !('id' in entry) || !hiddenIds.has(entry.id)
+    (entry) => !('id' in entry) || typeof entry.id !== 'string' || !hiddenIds.has(entry.id)
   )
 }

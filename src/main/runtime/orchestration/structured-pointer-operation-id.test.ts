@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS
-} from '../../../shared/agent-session-host-authority'
+} from '../../../shared/agent-session/agent-session-host-authority'
 import {
   decideStructuredPointerAttempt,
   mintAgentSessionOperationId,

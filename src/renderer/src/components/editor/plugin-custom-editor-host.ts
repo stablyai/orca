@@ -8,8 +8,7 @@ import {
   readCustomEditorEdit,
   readCustomEditorKeyChord,
   type CustomEditorDocument,
-  type CustomEditorEdit,
-  type CustomEditorKeyChord
+  type CustomEditorEdit
 } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { EDITOR_METHODS, FRAME_EVENTS } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import {
@@ -23,53 +22,18 @@ import {
   type PluginEnvelope,
   type PluginError
 } from '../../../../shared/plugins/frames/plugin-protocol'
-import type { PluginFrameEditorChannel } from '../right-sidebar/plugin-frame-host'
 import {
   createPanelMessageBudget,
-  structuredCloneMessageBytes,
-  type PanelMessageBudget
+  structuredCloneMessageBytes
 } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 
-export type CustomEditorEditRefusal = 'oversized' | 'rate_limited'
-
-/** Why an edit has not reached the buffer: held for the rate limit, or lost for size. */
-export type CustomEditorUnappliedEdit = 'held' | 'lost' | null
-
-/** A binary editor's document; a new object means new bytes to send. */
-export type CustomEditorBinaryDocument = { bytes: Uint8Array<ArrayBuffer>; fileType: string }
-
-export type CustomEditorHostOptions = {
-  getFrameWindow: () => Window | null
-  /** The buffer as Orca holds it now. */
-  getDocument: () => { text: string; readOnly: boolean }
-  /** Binary editors only: the document's bytes, or null while they load. */
-  getBinaryDocument?: () => CustomEditorBinaryDocument | null
-  onEdit: (text: string) => void
-  /** Binary editors: the frame's full replacement; the host then treats it as what the frame holds. */
-  onBytesEdit?: (document: CustomEditorBinaryDocument) => void
-  onEditRefused?: (reason: CustomEditorEditRefusal) => void
-  /** The frame holds edits the buffer lacks, or caught up again. */
-  onUnappliedEdit?: (state: CustomEditorUnappliedEdit) => void
-  onKeyChord?: (chord: CustomEditorKeyChord) => void
-  /** The edit lane; every other message spends the frame's shared budget. */
-  budget?: PanelMessageBudget
-  now?: () => number
-  flushTimeoutMs?: number
-}
-
-export type CustomEditorHost = {
-  /** Plugged into the frame host for this editor's frame. */
-  channel: PluginFrameEditorChannel
-  /** Push the buffer when it changed outside the frame (reload, revert, Source edits). */
-  syncDocument: () => void
-  /** Waits for edits still in the frame's debounce window; false on timeout or when an edit
-   *  never reached the buffer, so a save must not mark the tab clean. */
-  flush: () => Promise<boolean>
-  /** The newest text either side holds: the frame's last edit or the buffer last sent. */
-  currentText: () => string
-  /** A new document mounted in the frame; it must announce ready again. */
-  reset: () => void
-}
+import type {
+  CustomEditorBinaryDocument,
+  CustomEditorEditRefusal,
+  CustomEditorHost,
+  CustomEditorHostOptions,
+  CustomEditorUnappliedEdit
+} from './plugin-custom-editor-host-types'
 
 /** The frame only ever holds the document: Orca owns the buffer, dirty state and save. */
 export function createCustomEditorHost(options: CustomEditorHostOptions): CustomEditorHost {
@@ -93,8 +57,12 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   // The newest edit refused for the rate limit, unparsed until applied; full-text, so it wins.
   let heldEdit: unknown = null
   let heldId: number | null = null
+  // Held edits a newer one replaced; they get that edit's answer, so success means committed.
+  let supersededIds: (number | null)[] = []
   let heldTimer: ReturnType<typeof setTimeout> | null = null
   let lostEdit = false
+  // An oversized edit came after the held one, so applying the held one leaves it still lost.
+  let lostAfterHeld = false
   let unapplied: CustomEditorUnappliedEdit = null
 
   const reportUnapplied = (): void => {
@@ -193,8 +161,11 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   const receiveEdit = (data: unknown): void => {
     const message = readPluginEnvelope(data)
     const edit = message?.kind === 'req' ? readCustomEditorEdit(message.params) : null
-    const id = pluginRequestId(data)
-    answer(id, edit ? applyEdit(edit) : pluginError('invalid_params', 'malformed editor edit'))
+    const error = edit ? applyEdit(edit) : pluginError('invalid_params', 'malformed editor edit')
+    answer(pluginRequestId(data), error)
+    for (const id of supersededIds.splice(0)) {
+      answer(id, error)
+    }
   }
 
   const applyHeldEdit = (): void => {
@@ -203,17 +174,23 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       heldTimer = null
     }
     const held = heldEdit
+    const stillLost = lostAfterHeld
     heldEdit = null
     heldId = null
+    lostAfterHeld = false
     if (held !== null) {
       receiveEdit(held)
+      lostEdit ||= stillLost
     }
     reportUnapplied()
   }
 
-  /** A newer full-document edit carries the held one's intent, so the held one succeeds. */
+  /** A newer full-document edit carries the held one's intent, so it shares that edit's answer. */
   const supersedeHeldEdit = (): void => {
-    answer(heldId, null)
+    if (heldEdit !== null) {
+      supersededIds.push(heldId)
+    }
+    lostAfterHeld = false
     heldEdit = null
     heldId = null
   }
@@ -221,7 +198,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   const refuseEdit = (data: unknown, refusal: CustomEditorEditRefusal): void => {
     options.onEditRefused?.(refusal)
     if (refusal === 'oversized') {
-      supersedeHeldEdit()
+      // The held edit stays: an edit Orca refuses carries nothing to replace it with.
+      lostAfterHeld ||= heldEdit !== null
       lostEdit = true
       answer(pluginRequestId(data), CUSTOM_EDITOR_TOO_LARGE)
     } else {
@@ -251,7 +229,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
           now(),
           structuredCloneMessageBytes(data, CUSTOM_EDITOR_DOCUMENT_MAX_BYTES)
         )
-        if (refusal) {
+        // While a save waits, the edits it asked for commit at once; the rate limit resumes after.
+        if (refusal === 'oversized' || (refusal && pendingFlushes.size === 0)) {
           refuseEdit(data, refusal)
           return true
         }
@@ -265,13 +244,13 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         ready = true
         pushDocument(true)
       },
-      onEvent(event) {
+      onEvent(event, context) {
         const chord =
           event.event === FRAME_EVENTS.editorKeydown
             ? readCustomEditorKeyChord(event.payload)
             : null
         if (chord) {
-          options.onKeyChord?.(chord)
+          options.onKeyChord?.(chord, context)
         }
       },
       onResponse(response) {
@@ -284,6 +263,12 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
     },
     flush() {
       if (!ready) {
+        return Promise.resolve(!lostEdit)
+      }
+      // Drain first: the frame answers only once its edits settle, and a held one would not.
+      applyHeldEdit()
+      // A read-only document takes no edits, and a frame without a window cannot answer.
+      if (options.getDocument().readOnly || !options.getFrameWindow()) {
         return Promise.resolve(!lostEdit)
       }
       const requestId = nextFlushId++

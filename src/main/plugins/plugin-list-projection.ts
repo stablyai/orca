@@ -13,12 +13,16 @@ import { listPluginVmRecipeCommands } from '../../shared/plugins/artifacts/plugi
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
-  pluginSourceLabel
+  pluginSourceLabel,
+  splitQualifiedPluginKey
 } from '../../shared/plugins/catalog/plugin-marketplace'
 import { pluginCatalogTypes } from '../../shared/plugins/catalog/plugin-catalog-types'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { PluginHostListEntry, PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
-import { customEditorContentKind } from '../../shared/plugins/contributions/plugin-custom-editor-contribution'
+import {
+  customEditorContentKind,
+  customEditorFrame
+} from '../../shared/plugins/contributions/plugin-custom-editor-contribution'
 import { pluginExecutionProfile } from '../../shared/plugins/contributions/plugin-execution-profile'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
@@ -57,6 +61,9 @@ function lockEntrySource(
   }
 }
 
+const devChangeCountOf = (plugin: DiscoveredPlugin) =>
+  plugin.devChangeCount === undefined ? {} : { devChangeCount: plugin.devChangeCount }
+
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
 
 export async function buildPluginList(
@@ -88,6 +95,7 @@ export async function buildPluginList(
           needsReconsent: false,
           error: plugin.error,
           isDev: plugin.isDev,
+          ...devChangeCountOf(plugin),
           official: false,
           bundled: false,
           capabilities: [],
@@ -142,7 +150,7 @@ export async function buildPluginList(
         consentFingerprint: plugin.consentFingerprint,
         name: plugin.manifest.name,
         version: plugin.manifest.version,
-        publisher: plugin.manifest.publisher,
+        publisher: splitQualifiedPluginKey(plugin.pluginKey)?.publisher ?? '',
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
         execution: pluginExecutionProfile(plugin.manifest),
         types: pluginCatalogTypes(plugin.manifest),
@@ -158,6 +166,7 @@ export async function buildPluginList(
           ? { error: activationError ?? 'plugin worker crashed repeatedly' }
           : {}),
         isDev: plugin.isDev,
+        ...devChangeCountOf(plugin),
         official,
         bundled,
         capabilities: plugin.manifest.capabilities.map((capability) => ({
@@ -177,6 +186,7 @@ export async function buildPluginList(
           filenames: editor.filenames,
           priority: editor.priority ?? 'default',
           contentKind: customEditorContentKind(editor),
+          frame: customEditorFrame(editor),
           ...contributionIcon(`editor-${index}`, editor.icon)
         })),
         newFiles: plugin.manifest.contributes.newFiles.map((newFile, index) => ({
@@ -192,6 +202,7 @@ export async function buildPluginList(
           handler: command.handler,
           keybindings: command.keybindings
         })),
+        statusBarItems: plugin.manifest.contributes.statusBarItems,
         hasWorker: Boolean(plugin.manifest.main),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,

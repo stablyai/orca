@@ -95,7 +95,7 @@ export async function startProbeServer(): Promise<{ url: string; close: () => Pr
   }
 }
 
-function readProperty(value: unknown, key: string): unknown {
+export function readProperty(value: unknown, key: string): unknown {
   return value !== null && typeof value === 'object' && key in value
     ? Object.getOwnPropertyDescriptor(value, key)?.value
     : undefined

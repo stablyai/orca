@@ -1,3 +1,5 @@
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
@@ -18,14 +20,14 @@ const reads = new PrioritySemaphore(3)
 
 function lookup<T>(
   entry: Entry<T> | undefined,
-  read: () => Promise<T | null>,
+  read: (signal?: AbortSignal) => Promise<T | null>,
   project: (value: T) => WorkspaceReferenceDetails | null
 ) {
   return {
     rawEntry: entry,
     entry: entry && { ...entry, data: entry.data && project(entry.data) },
-    read: async () => {
-      const value = await read()
+    read: async (signal?: AbortSignal) => {
+      const value = await read(signal)
       return value && project(value)
     }
   }
@@ -69,7 +71,18 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     )
     return lookup(
       state.linearIssueCache?.[`${scope}::${workspaceId}::${identifier}`],
-      () => state.fetchLinearIssue(identifier, workspaceId, { sourceContext }),
+      async (signal) => {
+        let issue: LinearIssue | null = null
+        await consumeLinearIssueRead(
+          state.fetchLinearIssue(identifier, workspaceId, { sourceContext }),
+          () => !signal?.aborted,
+          (data) => {
+            issue = data
+          },
+          signal
+        )
+        return issue
+      },
       (issue) =>
         issue.identifier.toLowerCase() === identifier.toLowerCase() &&
         matchesWorkspaceReferenceUrl(item, issue.url) &&
@@ -139,7 +152,9 @@ export async function readWorkspaceReferenceDetails(
     if (signal?.aborted) {
       return null
     }
-    return (await getWorkspaceReferenceLookup(request, useAppStore.getState())?.read()) ?? null
+    return (
+      (await getWorkspaceReferenceLookup(request, useAppStore.getState())?.read(signal)) ?? null
+    )
   } finally {
     // Native reads retain admission until settlement, even after demand disappears.
     release()

@@ -8,7 +8,8 @@ import {
   type PluginRunState
 } from './plugin-supervisor'
 import type { PluginWorkerHandle, PluginWorkerHostCallExecutor } from './plugin-host-process'
-import { PluginWorkerSlotPool } from './plugin-worker-slot-pool'
+import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
+import { PluginWorkerSlots } from './plugin-worker-slot-pool'
 import {
   startPluginWorkerAttempt,
   type PluginWorkerAdmission,
@@ -36,6 +37,7 @@ export type PluginWorkerManagerOptions = {
     method: string,
     params: unknown
   ) => ReturnType<PluginWorkerHostCallExecutor>
+  onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onWorkerStateChange: (pluginKey: string) => void
 }
@@ -54,13 +56,18 @@ export class PluginWorkerManager {
   private readonly known = new Map<string, PluginWorkerAdmission>()
   private readonly generations = new Map<string, number>()
   private readonly stoppingWorkers = new Set<Promise<void>>()
-  private readonly slots: PluginWorkerSlotPool
+  private readonly slots: PluginWorkerSlots
   private readonly idleReapMs: number
   private disposed = false
 
   constructor(private readonly options: PluginWorkerManagerOptions) {
-    this.slots = new PluginWorkerSlotPool(options.maxActive ?? PLUGIN_WORKER_MAX_ACTIVE_DEFAULT)
+    this.slots = new PluginWorkerSlots(options.maxActive ?? PLUGIN_WORKER_MAX_ACTIVE_DEFAULT)
     this.idleReapMs = options.idleReapMs ?? PLUGIN_WORKER_IDLE_REAP_MS
+  }
+
+  /** The live worker, without starting one. */
+  runningHandle(pluginKey: string): PluginWorkerHandle | null {
+    return this.workers.get(pluginKey)?.handle ?? null
   }
 
   runState(pluginKey: string): PluginRunState {
@@ -146,11 +153,12 @@ export class PluginWorkerManager {
           spec,
           generation,
           signal,
-          slots: this.slots,
+          slots: this.slots.for(spec, log),
           entryPath: this.options.entryPath,
           factory: this.options.workerFactory,
           executeHostCall: (method, params) =>
             this.options.executeHostCall(spec.pluginKey, method, params),
+          onPanelPost: (post) => this.options.onPanelPost?.(spec.pluginKey, post),
           log,
           assertActive: () => this.throwIfCancelled(spec.pluginKey, generation, signal),
           verifyBeforeSpawn: this.known.get(spec.pluginKey)?.verifyBeforeSpawn,
@@ -239,6 +247,7 @@ export class PluginWorkerManager {
   reapIdle(now = Date.now()): void {
     for (const [pluginKey, record] of this.workers) {
       if (
+        record.spec.keepWarm ||
         record.handle.inFlightCount() !== 0 ||
         now - record.handle.lastActivityAt() <= this.idleReapMs
       ) {

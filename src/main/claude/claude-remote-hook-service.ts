@@ -9,7 +9,7 @@ import {
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
 import { parseHooksJsonText } from '../agent-hooks/hooks-json-read'
-import { removeClaudeAgentViewRemote } from './agent-view-install'
+import { removeClaudeAgentViewRemote } from './agent-view/agent-view-install'
 import {
   applyManagedHooks,
   removeManagedHooks,

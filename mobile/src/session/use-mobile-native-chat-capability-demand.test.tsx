@@ -8,13 +8,15 @@ import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../transport/mobile-runtime-
 import type { MobileCommandMenuHostFixtureModule } from '../../../src/shared/mobile-queued-edit-host.test-fixture-contract'
 import { useMobileSessionFeedbackCapabilities } from './use-mobile-session-feedback-capabilities'
 import { useMobileSessionTabReconciliation } from './use-mobile-session-tab-reconciliation'
-import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
+import { useMobileNativeChatSessionLane } from './native-chat/use-mobile-native-chat-session-lane'
 import { resolveMobileNativeChat } from './native-chat/mobile-native-chat-eligibility'
 import { useMobileNativeChatStructuredComposer } from './native-chat/composer/use-mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerMenu } from './native-chat/composer/use-mobile-native-chat-composer-menu'
 
 // Transcript/terminal services are outside this capability-to-command ownership contract.
-vi.mock('./use-mobile-native-chat-session', () => ({ useMobileNativeChatSession: () => ({}) }))
+vi.mock('./native-chat/use-mobile-native-chat-session', () => ({
+  useMobileNativeChatSession: () => ({})
+}))
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({ session: {} })
 }))
@@ -22,7 +24,9 @@ const terminal = vi.hoisted(() => ({ recover: vi.fn() }))
 vi.mock('./use-mobile-session-tabs-reconciliation', () => ({
   useMobileSessionTabsReconciliation: () => ({ requestTerminalInventoryRecovery: terminal.recover })
 }))
-vi.mock('react-native', () => ({ Animated: { Value: class {} } }))
+vi.mock('react-native', async () =>
+  (await import('../test-support/react-native-motion-stub')).reactNativeMotionStub()
+)
 const { createMobileCommandMenuHostFixture } =
   await vi.importActual<MobileCommandMenuHostFixtureModule>(
     '../../../src/main/native-chat/agent-session-wire/mobile-queued-edit-host.test-fixture'

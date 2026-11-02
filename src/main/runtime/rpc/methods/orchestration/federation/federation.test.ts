@@ -172,7 +172,7 @@ describe('orchestration federation', () => {
     const task = createHomeTask()
 
     const response = await homeDispatcher.dispatch(
-      startRequest(task.id, { agent: 'grok', model: 'unsupported-model' })
+      startRequest(task.id, { agent: 'gemini', model: 'unsupported-model' })
     )
 
     expect(response).toMatchObject({
@@ -180,7 +180,7 @@ describe('orchestration federation', () => {
       result: {
         state: 'failed',
         launch: {
-          requested: { agent: 'grok', model: 'unsupported-model', effort: null },
+          requested: { agent: 'gemini', model: 'unsupported-model', effort: null },
           effective: null
         }
       }
@@ -756,6 +756,9 @@ describe('orchestration federation', () => {
       async (_selector, method) => {
         if (method === 'status.get') {
           return { runtimeId: workerRuntime.getRuntimeId(), capabilities: workerCapabilities }
+        }
+        if (method === 'orchestration.federationShow') {
+          return {}
         }
         if (method === 'orchestration.federationStop') {
           throw new Error('connection lost')

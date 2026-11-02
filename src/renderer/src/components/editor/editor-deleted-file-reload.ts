@@ -1,3 +1,7 @@
+import type { AppState } from '@/store'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { selectWorktreeHostConnectionPhase } from '@/lib/worktree-host-connection-phase'
+import { WORKTREE_OWNER_NOT_READY_ERROR } from './editor-panel-content-types'
 import type { Dispatch, SetStateAction } from 'react'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -47,4 +51,33 @@ export function applyEditorFileLoadFailure(args: {
     }
     return existing.isStale ? { ...prev, [args.fileId]: { ...existing, isStale: false } } : prev
   })
+}
+
+export function getEditorFileLoadFailureContent(
+  state: AppState,
+  worktreeId: string | undefined,
+  readConnectionId: string | undefined,
+  err: unknown
+): FileContent {
+  const hostConnection = selectWorktreeHostConnectionPhase(state, worktreeId ?? null)
+  // Why: a read through an SSH host that is still connecting failed on the connection,
+  // not the file; the retry gate waits for it rather than showing "connection dropped".
+  const hostConnecting =
+    hostConnection.phase === 'connecting' &&
+    readConnectionId !== undefined &&
+    readConnectionId === hostConnection.targetId
+  const message = hostConnecting
+    ? WORKTREE_OWNER_NOT_READY_ERROR
+    : err instanceof Error
+      ? err.message
+      : String(err)
+  // Why: a host may put prose on the message and the machine token on `.code`;
+  // classifiers downstream must see the token, not only its rendering (#21041).
+  const loadErrorCode = !hostConnecting && err instanceof RuntimeRpcCallError ? err.code : undefined
+  return {
+    content: '',
+    isBinary: false,
+    loadError: message,
+    ...(loadErrorCode ? { loadErrorCode } : {})
+  }
 }

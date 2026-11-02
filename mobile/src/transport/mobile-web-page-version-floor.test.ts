@@ -12,7 +12,7 @@ import {
 import {
   evaluateMobileWebBundleCompat,
   MOBILE_WEB_PAGE_VERSION_FLOOR
-} from './mobile-web-bundle-compat'
+} from './web-bundle/mobile-web-bundle-compat'
 
 describe("the shell's page floor", () => {
   it('accepts the page built beside this shell and refuses a page below its floor', () => {

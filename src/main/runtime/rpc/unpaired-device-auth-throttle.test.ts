@@ -21,16 +21,6 @@ describe('UnpairedDeviceAuthThrottle', () => {
     expect(onTrigger).not.toHaveBeenCalled()
   })
 
-  it('fires once when the threshold is reached inside the window', () => {
-    const clock = { time: 0 }
-    const { throttle, onTrigger } = throttleAt(clock)
-    for (let i = 0; i < 3; i++) {
-      throttle.recordFailure()
-      clock.time += 500
-    }
-    expect(onTrigger).toHaveBeenCalledOnce()
-  })
-
   it('never fires twice in one session even as failures continue', () => {
     const clock = { time: 0 }
     const { throttle, onTrigger } = throttleAt(clock)

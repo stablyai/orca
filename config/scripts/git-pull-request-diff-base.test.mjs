@@ -16,4 +16,10 @@ describe('pull request diff base selection', () => {
       'requested-base'
     )
   })
+
+  it('uses the first parent for main pushes, which carry no payload base', () => {
+    expect(selectPullRequestDiffBase('', ['previous-main'], 'push')).toBe('previous-main')
+    expect(selectPullRequestDiffBase(undefined, ['previous-main'], 'push')).toBe('previous-main')
+    expect(selectPullRequestDiffBase('', [], 'push')).toBe('')
+  })
 })

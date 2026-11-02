@@ -1,6 +1,9 @@
 import { MAX_EDIT_LINES } from '../../../../shared/native-chat/tools/native-chat-edit-model'
 import { describe, expect, it } from 'vitest'
-import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatMessage
+} from '../../../../shared/native-chat/native-chat-types'
 import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 import {
   buildDiffSummaries,

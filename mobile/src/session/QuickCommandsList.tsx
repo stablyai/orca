@@ -1,6 +1,6 @@
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
 import { Check, Plus, Search } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -198,7 +198,7 @@ export function QuickCommandAgentPicker({
 }
 
 const styles = themedStyleSheet(() => ({
-  pressed: { backgroundColor: colors.bgRaised },
+  pressed: { backgroundColor: colors.borderSubtle },
   disabled: { opacity: 0.45 },
   listBody: { gap: spacing.sm, paddingBottom: spacing.sm },
   error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.xs },
@@ -219,14 +219,14 @@ const styles = themedStyleSheet(() => ({
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs
   },
-  group: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
+  group: { backgroundColor: colors.sheetGroup, borderRadius: radii.surface, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center' },
   rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
   rowIcon: {
     width: 26,
     height: 26,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised,
+    borderRadius: radii.tile,
+    backgroundColor: colors.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -235,8 +235,8 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.borderSubtle,

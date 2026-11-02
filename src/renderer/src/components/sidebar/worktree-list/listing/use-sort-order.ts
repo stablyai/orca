@@ -15,7 +15,10 @@ import {
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 // Compute settled order synchronously; selection side effects must not reorder rows under the user.
@@ -48,7 +51,8 @@ function useSettledSidebarWorktreeSortOrder(args: {
       sources: state
     })
     return {
-      sortedIds: ranking.sorted.map((w) => w.id),
+      // Why host identity: same-id copies on two machines are separate cards with their own ranks.
+      sortedIds: ranking.sorted.map(getWorktreeHostIdentity),
       detectedLiveSmartSignal: ranking.detectedLiveSmartSignal
     }
     // settledSortEpoch is an intentional trigger not read in the memo; its change signals a recompute.
@@ -76,7 +80,10 @@ function useSettledSidebarWorktreeSortOrder(args: {
       return
     }
     // Why: sortOrder lives in each host's worktreeMeta, so persist each host's ids on that host.
-    persistWorktreeSortOrderByHost(useAppStore.getState(), sortedIds)
+    persistWorktreeSortOrderByHost(
+      useAppStore.getState(),
+      sortedIds.map(getWorktreeIdFromHostIdentity)
+    )
   }, [sortedIds, sortBy])
 
   return sortedIds

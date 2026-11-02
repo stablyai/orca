@@ -1,13 +1,16 @@
-import { useId, useRef, useState, type PointerEvent } from 'react'
+import { memo, useId, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
+import {
+  useAgentPickerInventoryEntries,
+  type AgentPickerInventorySource
+} from './use-agent-launch-picker-inventory'
 import {
   searchAgentPickerSetups,
   type AgentPickerDraft,
@@ -36,14 +39,14 @@ function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
 }
 
 export function AgentLaunchPickerMenu({
-  model,
   disabled,
   runLaunch,
   entries,
   hideSearch,
-  onSelectAgent
+  onSelectAgent,
+  shortcutLabels
 }: {
-  model: NewTabAgentMenuModel
+  shortcutLabels?: ReadonlyMap<AgentPickerEntry['agent'], string>
   disabled?: boolean
   runLaunch: Launch
   entries: AgentPickerEntry[]
@@ -53,7 +56,6 @@ export function AgentLaunchPickerMenu({
   const [query, setQuery] = useState('')
   const [openSetup, setOpenSetup] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
-  const shortcut = useOptionalShortcutLabel('tab.newAgent')
   const setups = searchAgentPickerSetups(entries, query)
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const visible = entries.filter((entry) =>
@@ -95,11 +97,8 @@ export function AgentLaunchPickerMenu({
           openSetup={openSetup}
           onSetupOpenChange={setOpenSetup}
           label={setup.label}
-          initial={{
-            agent: setup.entry.agent,
-            surface: setup.entry.defaultSurface,
-            choices: setup.choices
-          }}
+          initialModel={setup.choices.model}
+          initialEffort={setup.choices.options?.effort}
           onSelectAgent={onSelectAgent}
           disabled={disabled}
           runLaunch={runLaunch}
@@ -114,11 +113,7 @@ export function AgentLaunchPickerMenu({
           disabled={disabled}
           runLaunch={runLaunch}
           onSelectAgent={onSelectAgent}
-          shortcut={
-            model.state === 'settled' && model.defaultTuiAgent === entry.agent
-              ? (shortcut ?? undefined)
-              : undefined
-          }
+          shortcut={shortcutLabels?.get(entry.agent)}
         />
       ))}
       {!visible.length && !setups.length ? (
@@ -133,12 +128,25 @@ export function AgentLaunchPickerMenu({
   )
 }
 
-function AgentPickerMenuRow({
+// Subscribe here so inventory updates do not re-render the tab bar.
+export function SubscribedAgentLaunchPickerMenu({
+  inventory,
+  ...props
+}: Omit<ComponentProps<typeof AgentLaunchPickerMenu>, 'entries'> & {
+  inventory: AgentPickerInventorySource
+}) {
+  const entries = useAgentPickerInventoryEntries(inventory)
+  return <AgentLaunchPickerMenu {...props} entries={entries} />
+}
+
+// Why: catalog and seed reads land one agent at a time after the menu opens; only that row re-renders.
+const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   entry,
   openSetup,
   onSetupOpenChange,
   label = entry.label,
-  initial,
+  initialModel,
+  initialEffort,
   disabled,
   runLaunch,
   shortcut,
@@ -148,12 +156,24 @@ function AgentPickerMenuRow({
   openSetup: string | null
   onSetupOpenChange: (id: string | null) => void
   label?: string
-  initial?: AgentPickerDraft
+  initialModel?: string
+  initialEffort?: string
   disabled?: boolean
   runLaunch: Launch
   shortcut?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
+  useUiLanguageRevision()
+  const initial: AgentPickerDraft | undefined = initialModel
+    ? {
+        agent: entry.agent,
+        surface: entry.defaultSurface,
+        choices: {
+          model: initialModel,
+          ...(initialEffort ? { options: { effort: initialEffort } } : {})
+        }
+      }
+    : undefined
   const setupId = useId()
   const item = useRef<HTMLDivElement>(null)
   const configured = useRef<AgentPickerDraft | undefined>(undefined)
@@ -207,7 +227,7 @@ function AgentPickerMenuRow({
           onPointerLeave={keepSetupFocus}
         >
           <AgentIcon agent={entry.agent} size={14} />
-          <span className="flex-1">{label}</span>
+          <span className="min-w-0 flex-1 truncate">{label}</span>
           {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
           {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
             <span className="text-xs text-muted-foreground">
@@ -219,4 +239,4 @@ function AgentPickerMenuRow({
       )}
     />
   )
-}
+})

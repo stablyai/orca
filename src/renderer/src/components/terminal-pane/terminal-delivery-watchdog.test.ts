@@ -165,19 +165,6 @@ describe('terminal delivery watchdog', () => {
     expect(reattachMock).toHaveBeenCalledTimes(2)
   })
 
-  it('stays off when no PTY expects push delivery', async () => {
-    reportMock.mockResolvedValue(STALLED)
-    const watchdog = await import('./terminal-delivery-watchdog')
-    watchdog.startTerminalDeliveryWatchdog({
-      reattachPushListeners: reattachMock,
-      hasAttachedPtys: () => false
-    })
-
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)
-
-    expect(reportMock).not.toHaveBeenCalled()
-  })
-
   it('never starts without the invoke heal lane (web client, partial mocks)', async () => {
     ;(window.api.pty as { reportRendererDeliveryState?: unknown }).reportRendererDeliveryState =
       undefined

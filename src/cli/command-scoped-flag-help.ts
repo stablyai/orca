@@ -83,6 +83,37 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   },
   ports: {
     all: '--all                  List every listener on the workspace host, not just this workspace'
+  },
+  snapshot: {
+    interactive:
+      '--interactive          Only interactive elements (buttons, inputs, links); no page text',
+    compact: '--compact              Drop empty structural nodes',
+    depth: '--depth <n>            Limit the tree to n levels',
+    selector: '--selector <css>       Snapshot only the element matching this CSS selector',
+    urls: '--urls                 Include link URLs',
+    delta: '--delta                Return only what changed since the last --delta snapshot',
+    full: '--full                 Return the whole tree and reset the --delta baseline'
+  },
+  screenshot: {
+    'if-changed':
+      '--if-changed           Skip saving when the page looks the same as the last capture',
+    annotate: '--annotate             Label interactive elements; label [N] is ref @eN'
+  },
+  exec: {
+    command: '--command <text>       agent-browser command and arguments, e.g. "get text @e3"'
+  },
+  wait: {
+    selector: '--selector <sel>       Wait for an element by ref or CSS selector',
+    timeout: '--timeout <ms>         How long to wait for the condition, or a plain pause',
+    text: '--text <text>          Wait until this text appears on the page',
+    url: '--url <pattern>        Wait until the page URL contains this text or matches a glob',
+    load: '--load <state>         Wait for load or domcontentloaded (networkidle only on quiet pages)',
+    fn: '--fn <js>              Wait until this JavaScript expression is truthy',
+    state: '--state <state>        With --selector, wait for hidden or visible'
+  },
+  download: {
+    selector: '--selector <ref>       Element ref or CSS selector of the download link',
+    path: '--path <path>          File path to save the download to'
   }
 }
 

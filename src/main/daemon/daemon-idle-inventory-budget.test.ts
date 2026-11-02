@@ -11,7 +11,7 @@ import { DaemonClientConnections } from './daemon-client-connections'
 import { TerminalHost } from './terminal-host'
 import { Session } from './session'
 import { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
-import { isAgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import { isAgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 

@@ -151,7 +151,9 @@ describe('E2EEChannel', () => {
         )
       )
 
-      expect(ctx.channel.clientCapabilities).toEqual([SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY])
+      expect(ctx.channel.capabilitySource.current).toEqual([
+        SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+      ])
       expect(ctx.onReady).toHaveBeenCalledOnce()
     })
 
