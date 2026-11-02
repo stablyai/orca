@@ -77,6 +77,7 @@ export function SourceControlNotesShelf({
         </button>
         <div className="ml-1 flex shrink-0 items-center gap-1.5">
           <DiffNotesSendMenu
+            owner={owner}
             worktreeId={activeWorktreeId}
             groupId={activeGroupId ?? activeWorktreeId}
             comments={diffCommentsForActive}

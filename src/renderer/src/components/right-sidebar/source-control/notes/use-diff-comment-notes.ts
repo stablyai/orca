@@ -1,5 +1,5 @@
-import { useAppStore, type AppState } from '@/store'
-import { readOwnedDiffComments } from '@/store/diff-comment-owner'
+import type { AppState } from '@/store'
+import { useOwnedDiffComments } from '../../../diff-comments/use-diff-comment-owner'
 import { withoutMarkdownReviewNotes } from '@/lib/markdown-review-notes-setting'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -71,9 +71,7 @@ export function useSourceControlDiffCommentNotes({
   }, [diffCommentsForActive, diffCommentsPrompt, showDiffCommentsCopied])
 
   // Count the captured copy's notes, whichever twin is selected now; a copy gone since opening keeps its count so confirming reports the failure.
-  const ownedComments = useAppStore((s) =>
-    pendingDiffCommentsClear ? readOwnedDiffComments(s, pendingDiffCommentsClear.owner) : undefined
-  )
+  const ownedComments = useOwnedDiffComments(pendingDiffCommentsClear?.owner ?? null)
   const pendingDiffCommentsClearCount = useMemo(() => {
     if (!pendingDiffCommentsClear || pendingDiffCommentsClear.worktreeId !== activeWorktreeId) {
       return 0

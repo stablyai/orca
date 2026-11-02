@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { DiffComment } from '../../../shared/diff-comment-types'
 
-import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from './types'
+import { makeWorktree } from './slices/worktrees-slice-test-fixtures'
 import {
   selectWorktreeDiffComments,
   selectWorktreeDiffCommentsOrEmpty
@@ -34,12 +34,13 @@ function measureViewSelectors(rowsPerRepo: number) {
     const repoId = `repo-${repoIndex}`
     worktreesByRepo[repoId] = Array.from({ length: rowsPerRepo }, (_, index) => {
       const id = repoIndex === 9 && index === 0 ? TARGET : `${repoId}::/w/${index}`
-      const worktree = {
+      const worktree = makeWorktree({
+        id,
         repoId,
         path: id.slice(repoId.length + 2),
         hostId: 'local',
         ...(id === TARGET ? { diffComments: comments } : {})
-      } as Worktree
+      })
       Object.defineProperty(worktree, 'id', {
         enumerable: true,
         get: () => {
@@ -57,7 +58,11 @@ function measureViewSelectors(rowsPerRepo: number) {
   > = { worktreesByRepo, activeWorktreeId: TARGET, activeWorkspaceExecutionHostId: 'local' }
   const views = consumers.map((select) => select(state, TARGET))
   expect(views[0].comments).toBe(comments)
-  expect(views[0].owner).toMatchObject({ kind: 'worktree', hostId: 'local' })
+  expect(views[0].owner).toEqual({
+    kind: 'worktree',
+    worktreeId: TARGET,
+    authority: { endpoint: { kind: 'self' }, at: 'local' }
+  })
 
   idReads = 0
   for (let write = 0; write < 200; write += 1) {
@@ -90,8 +95,12 @@ describe('selectWorktreeDiffComments', () => {
   it('reads a replacement worktree snapshot and handles an absent id', () => {
     const firstComments = [makeComment('comment-1')]
     const nextComments = [makeComment('comment-2')]
-    const first = { 'repo-9': [{ id: TARGET, diffComments: firstComments } as Worktree] }
-    const next = { 'repo-9': [{ id: TARGET, diffComments: nextComments } as Worktree] }
+    const first = {
+      'repo-9': [makeWorktree({ id: TARGET, repoId: 'repo-9', diffComments: firstComments })]
+    }
+    const next = {
+      'repo-9': [makeWorktree({ id: TARGET, repoId: 'repo-9', diffComments: nextComments })]
+    }
 
     expect(selectWorktreeDiffComments({ worktreesByRepo: first }, TARGET)).toBe(firstComments)
     expect(selectWorktreeDiffComments({ worktreesByRepo: next }, TARGET)).toBe(nextComments)

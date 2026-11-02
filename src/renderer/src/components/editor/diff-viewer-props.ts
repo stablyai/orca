@@ -13,6 +13,8 @@ export type DiffViewerProps = {
   editable?: boolean
   // Hosted review dialogs may have no workspace for local comments.
   worktreeId?: string
+  /** The diff's server (`null` this app); its review notes belong to that copy. */
+  runtimeEnvironmentId?: string | null
   onAddLineComment?: (args: {
     lineNumber: number
     startLine?: number

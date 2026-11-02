@@ -3,15 +3,8 @@ import type { AppState } from '../types'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import {
-  diffCommentFloorKey,
-  diffCommentRowNotes,
-  findDiffCommentRows,
-  readQueuedDiffComments,
-  type DiffCommentTwin
-} from '../worktree-diff-comments-selector'
-import type { ResolvedDiffCommentOwner } from '../diff-comment-owner'
+import { findCopyRows } from '../worktree-diff-comments-selector'
+import { diffCommentOwnerKey, type DiffCommentOwner } from '../diff-comment-owner'
 import {
   findFolderWorkspaceOwner,
   type getExecutionHostIdForFolderWorkspace
@@ -69,15 +62,17 @@ const lastMutationNextByQueue = new Map<string, DiffComment[]>()
 // Why: bumped on every re-seed, so an in-flight write can tell whether the floor it captured is still the current one.
 const floorSeedEpochByQueue = new Map<string, number>()
 
+/** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
 export type DiffCommentMutation = {
-  owner: ResolvedDiffCommentOwner
+  owner: DiffCommentOwner
   previous: DiffComment[] | undefined
   next: DiffComment[]
-  folderExecutionHostId?: ReturnType<typeof getExecutionHostIdForFolderWorkspace>
-  /** The identity of the rows changed, so a queued save never reads a copy listed later. */
-  twin?: DiffCommentTwin
-  /** The rows' own host, whenever they stamp one; the write names it. */
-  writeHostId?: ExecutionHostId
+}
+
+function folderExecutionHostIdOf(
+  owner: DiffCommentOwner
+): ReturnType<typeof getExecutionHostIdForFolderWorkspace> | undefined {
+  return owner.kind === 'folder' ? owner.executionHostId : undefined
 }
 
 // Why: one key for the queue and both bookkeeping maps, so they can never drift apart.
@@ -97,13 +92,10 @@ export function enqueueDiffCommentPersist(
   get: () => AppState,
   mutation: DiffCommentMutation
 ): Promise<void> {
-  const folderExecutionHostId = mutation.folderExecutionHostId
+  const folderExecutionHostId = folderExecutionHostIdOf(mutation.owner)
   const queueKey = persistQueueKey(worktreeId, folderExecutionHostId)
-  // Continue the floor that produced this list across twin appearance/removal; new chains take the copy’s own floor.
-  const floorKey =
-    [...(floorKeysByQueue.get(queueKey) ?? [])].find(
-      (key) => lastMutationNextByQueue.get(key) === mutation.previous
-    ) ?? diffCommentFloorKey(queueKey, mutation.twin)
+  // Copies sharing an id share one queue; each keeps its own floor, so a floor never restores another copy.
+  const floorKey = diffCommentOwnerKey(mutation.owner)
   floorKeysByQueue.set(queueKey, (floorKeysByQueue.get(queueKey) ?? new Set()).add(floorKey))
   const prior = persistQueueByWorktree.get(queueKey) ?? Promise.resolve()
   // Why: an idle queue means disk still holds the pre-mutation list, so that list is this burst's rollback floor.
@@ -137,19 +129,13 @@ export function enqueueDiffCommentPersist(
         }
         stateList = folderWorkspace.diffComments
         await writeDiffCommentsToHost(mutation.owner, (stateList ?? []).map(normalizeDiffComment))
-      } else {
-        const state = get()
-        const { twin, writeHostId } = mutation
-        const queued = readQueuedDiffComments(state, worktreeId, {
-          twin,
-          hostId: writeHostId,
-          latest: lastMutationNextByQueue.get(floorKey)
-        })
-        // Why: the copy these notes were made on is gone or now unnamed; never send another's list.
-        if (!queued) {
+      } else if (mutation.owner.kind === 'worktree') {
+        const rows = findCopyRows(get(), worktreeId, mutation.owner.authority)
+        // Why: the copy these notes were made on is gone; never send another's list.
+        if (rows.length === 0) {
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
-        stateList = queued.list
+        stateList = rows.at(-1)?.diffComments
         await writeDiffCommentsToHost(mutation.owner, (stateList ?? []).map(normalizeDiffComment))
       }
     } catch (err) {
@@ -189,15 +175,13 @@ export function enqueueDiffCommentPersist(
 // Why: derive the next list inside the `set` updater so concurrent writes can't clobber each other via a stale closure.
 export function mutateDiffComments(
   set: Parameters<StateCreator<AppState>>[0],
-  owner: ResolvedDiffCommentOwner,
+  owner: DiffCommentOwner,
   mutate: (existing: DiffComment[]) => DiffComment[] | null
 ): DiffCommentMutation | null {
   const worktreeId = owner.worktreeId
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   let previous: DiffComment[] | undefined
   let next: DiffComment[] | null = null
-  let folderExecutionHostId: ReturnType<typeof getExecutionHostIdForFolderWorkspace> | undefined
-  let twin: Pick<DiffCommentMutation, 'twin' | 'writeHostId'> = {}
   set((s) => {
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
@@ -208,7 +192,6 @@ export function mutateDiffComments(
       if (!target) {
         return s
       }
-      folderExecutionHostId = owner.executionHostId
       previous = target.diffComments
       const computed = mutate(previous ?? [])
       if (computed === null) {
@@ -225,29 +208,25 @@ export function mutateDiffComments(
       return s
     }
     const repoList = s.worktreesByRepo[repoId]
-    const found = findDiffCommentRows(s, worktreeId, { twin: owner, hostId: owner.writeHostId })
-    if (!repoList || !found) {
+    const rows = findCopyRows(s, worktreeId, owner.authority)
+    if (!repoList || rows.length === 0) {
       return s
     }
-    twin = {
-      ...(found.twin ? { twin: found.twin } : {}),
-      ...(found.hostId ? { writeHostId: found.hostId } : {})
-    }
-    previous = diffCommentRowNotes(found)
+    previous = rows.at(-1)?.diffComments
     const computed = mutate(previous ?? [])
     if (computed === null) {
       return s
     }
     next = computed
     const nextList: Worktree[] = repoList.map((w) =>
-      found.worktrees.includes(w) ? { ...w, diffComments: computed } : w
+      rows.includes(w) ? { ...w, diffComments: computed } : w
     )
     return { worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList } }
   })
   if (next === null) {
     return null
   }
-  return { owner, previous, next, folderExecutionHostId, ...twin }
+  return { owner, previous, next }
 }
 
 // Why: on IPC-write failure, roll back optimistic state so the renderer matches disk (identity-guarded below).
@@ -255,7 +234,7 @@ function rollback(
   set: Parameters<StateCreator<AppState>>[0],
   worktreeId: string,
   previous: DiffComment[] | undefined,
-  { next: expectedCurrent, folderExecutionHostId, owner }: DiffCommentMutation
+  { next: expectedCurrent, owner }: DiffCommentMutation
 ): void {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   set((s) => {
@@ -264,7 +243,7 @@ function rollback(
       if (owner.kind !== 'folder') {
         return s
       }
-      const target = findFolderWorkspaceOwner(s, scope.folderWorkspaceId, folderExecutionHostId)
+      const target = findFolderWorkspaceOwner(s, scope.folderWorkspaceId, owner.executionHostId)
       if (!target || target.diffComments !== expectedCurrent) {
         return s
       }
@@ -279,11 +258,12 @@ function rollback(
       return s
     }
     // Rollback only rows still holding this mutation’s array; later mutations and untouched twins must survive.
-    const found =
+    const targets =
       owner.kind === 'worktree'
-        ? findDiffCommentRows(s, worktreeId, { twin: owner, hostId: owner.writeHostId })
-        : null
-    const targets = found?.worktrees.filter((w) => w.diffComments === expectedCurrent) ?? []
+        ? findCopyRows(s, worktreeId, owner.authority).filter(
+            (w) => w.diffComments === expectedCurrent
+          )
+        : []
     // Removed worktrees return before remapping to avoid pointless identity churn/notifications.
     if (targets.length === 0) {
       return s

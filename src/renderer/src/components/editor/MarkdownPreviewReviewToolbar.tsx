@@ -17,6 +17,7 @@ export function MarkdownPreviewReviewToolbar({
     markdownReviewNotes,
     reviewNotesCopied,
     commentOwner,
+    notesKnown,
     sourceWorktree,
     unsentMarkdownReviewScope,
     clearDeliveredDiffComments
@@ -68,7 +69,8 @@ export function MarkdownPreviewReviewToolbar({
       </button>
       {sourceWorktree ? (
         <NotesSendMenu
-          owner={commentOwner}
+          // Until the shown copy is listed its notes are unknown, not all sent.
+          owner={notesKnown ? commentOwner : null}
           worktreeId={sourceWorktree.id}
           groupId={sourceWorktree.id}
           modeIdParts={['markdown-notes', sourceWorktree.id, filePath, 'preview-toolbar']}

@@ -28,6 +28,7 @@ export function DiffSectionItem({
   isDark,
   sectionHeight,
   worktreeId,
+  runtimeEnvironmentId,
   loadSection,
   loadDeferredSection,
   retrySection,
@@ -50,7 +51,9 @@ export function DiffSectionItem({
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
   // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId)
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId, {
+    runtimeEnvironmentId
+  })
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -129,7 +132,7 @@ export function DiffSectionItem({
     onCreateComment: handleCreateComment,
     draftPlaceholder: addLineCommentPlaceholder,
     draftSubmitLabel: addLineCommentLabel,
-    canOpenDraft: !isLargeDiffLimited,
+    canOpenDraft: !isLargeDiffLimited && (commentOwner !== null || Boolean(onAddLineComment)),
     onDeleteComment: (id) => {
       if (worktreeId) {
         void (commentOwner && deleteDiffComment(commentOwner, id))

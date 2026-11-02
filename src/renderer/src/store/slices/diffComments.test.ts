@@ -3,6 +3,7 @@ import { selectDiffCommentView, type DiffCommentOwner } from '../diff-comment-ow
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { SELF_LOCAL_AUTHORITY } from '../../../../shared/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -813,10 +814,11 @@ describe('worktree diff comment rollback convergence', () => {
 
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
   return (
+    // An unlisted id stands for a copy that is gone, so actions on it are refused.
     selectDiffCommentView(store.getState(), worktreeId).owner ?? {
-      kind: 'unlisted',
+      kind: 'worktree',
       worktreeId,
-      hostId: null
+      authority: SELF_LOCAL_AUTHORITY
     }
   )
 }

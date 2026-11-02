@@ -75,11 +75,11 @@ export function useNotesInFlightVersion(): number {
 
 /** A note's identity for delivery: an edit makes it a new pending note, as for its removal. */
 export function diffCommentSendKey(
-  owner: DiffCommentOwner | null,
+  owner: DiffCommentOwner,
   note: DiffCommentDeliverySnapshot
 ): string {
   return JSON.stringify([
-    owner && diffCommentOwnerKey(owner),
+    diffCommentOwnerKey(owner),
     note.id,
     note.body,
     note.filePath,

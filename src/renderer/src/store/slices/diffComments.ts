@@ -11,11 +11,7 @@ import {
   normalizeDiffComment
 } from './diff-comment-persistence'
 import { selectWorktreeDiffCommentsOrEmpty } from '../worktree-diff-comments-selector'
-import {
-  readOwnedDiffComments,
-  resolveDiffCommentOwner,
-  type DiffCommentOwner
-} from '../diff-comment-owner'
+import { readOwnedDiffComments, type DiffCommentOwner } from '../diff-comment-owner'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -103,9 +99,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   // Why the shared selector: rendered surfaces and actions must read the same twin's notes.
   getDiffComments: (worktreeId) => selectWorktreeDiffCommentsOrEmpty(get(), worktreeId),
 
-  addDiffComment: async (captured, input) => {
-    const owner = resolveDiffCommentOwner(get(), captured)
-    if (!owner || owner.worktreeId !== input.worktreeId) {
+  addDiffComment: async (owner, input) => {
+    if (!readOwnedDiffComments(get(), owner) || owner.worktreeId !== input.worktreeId) {
       return null
     }
     const comment: DiffComment = normalizeDiffComment({
@@ -128,9 +123,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     return comment
   },
 
-  updateDiffComment: async (captured, commentId, body) => {
-    const owner = resolveDiffCommentOwner(get(), captured)
-    if (!owner) {
+  updateDiffComment: async (owner, commentId, body) => {
+    if (!readOwnedDiffComments(get(), owner)) {
       reportLostDiffCommentOwner('save')
       return false
     }
@@ -177,9 +171,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
   },
 
-  clearDeliveredDiffComments: async (captured, comments) => {
-    const owner = resolveDiffCommentOwner(get(), captured)
-    if (!owner) {
+  clearDeliveredDiffComments: async (owner, comments) => {
+    if (!readOwnedDiffComments(get(), owner)) {
       reportLostDiffCommentOwner('clear')
       return false
     }
@@ -209,9 +202,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     return true
   },
 
-  markDiffCommentsSent: async (captured, commentIds, sentAt = Date.now()) => {
-    const owner = resolveDiffCommentOwner(get(), captured)
-    if (!owner) {
+  markDiffCommentsSent: async (owner, commentIds, sentAt = Date.now()) => {
+    if (!readOwnedDiffComments(get(), owner)) {
       return false
     }
     const worktreeId = owner.worktreeId
@@ -243,9 +235,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     return true
   },
 
-  deleteDiffComment: async (captured, commentId) => {
-    const owner = resolveDiffCommentOwner(get(), captured)
-    if (!owner) {
+  deleteDiffComment: async (owner, commentId) => {
+    if (!readOwnedDiffComments(get(), owner)) {
       reportLostDiffCommentOwner('clear')
       return
     }
@@ -265,9 +256,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
   },
 
-  clearDiffComments: async (captured, options) => {
-    const owner = resolveDiffCommentOwner(get(), captured)
-    if (!owner) {
+  clearDiffComments: async (owner, options) => {
+    if (!readOwnedDiffComments(get(), owner)) {
       return false
     }
     const worktreeId = owner.worktreeId
@@ -287,9 +277,8 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
   },
 
-  clearDiffCommentsForFile: async (captured, filePath, options) => {
-    const owner = resolveDiffCommentOwner(get(), captured)
-    if (!owner) {
+  clearDiffCommentsForFile: async (owner, filePath, options) => {
+    if (!readOwnedDiffComments(get(), owner)) {
       return false
     }
     const worktreeId = owner.worktreeId

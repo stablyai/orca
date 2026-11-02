@@ -237,9 +237,7 @@ function renderMenu(
       owner={{
         kind: 'worktree',
         worktreeId: 'wt-1',
-        hostId: 'local',
-        writeHostId: 'local',
-        target: { kind: 'local' }
+        authority: { endpoint: { kind: 'self' }, at: 'local' }
       }}
       worktreeId="wt-1"
       groupId="group-1"
@@ -300,6 +298,17 @@ describe('NotesSendMenu', () => {
     expect(findByType(tree, 'button').props.disabled).toBe(true)
     expect(findByType(tree, 'button').props.title).toBe('All notes sent')
     expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+  })
+
+  it('disables the trigger without claiming the notes were sent while their copy is unknown', () => {
+    const tree = renderMenu({
+      owner: null,
+      scopes: [{ id: 'all', label: 'All unsent notes', notes: [note('1')], formatPrompt: () => '' }]
+    })
+
+    expect(findByType(tree, 'button').props.disabled).toBe(true)
+    expect(findByType(tree, 'button').props.title).toBeUndefined()
+    expect(findAllByType(tree, 'TooltipContent')).toHaveLength(0)
   })
 
   it('uses caller-provided disabled tooltip copy for disabled note actions', () => {

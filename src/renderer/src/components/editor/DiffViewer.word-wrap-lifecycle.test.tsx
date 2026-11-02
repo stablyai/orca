@@ -71,6 +71,7 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/store/diff-comment-owner', () => ({
   createDiffCommentViewSelector: () => () => ({ owner: null, comments: undefined }),
+  selectDiffCommentView: () => ({ owner: null, comments: undefined }),
   diffCommentOwnerKey: () => ''
 }))
 vi.mock('@/lib/monaco-setup', () => ({

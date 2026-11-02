@@ -27,7 +27,7 @@ vi.mock('@/store/diff-comment-owner', () => {
     } satisfies DiffComment
   ]
   return {
-    readOwnedDiffComments: () => undefined,
+    createOwnedDiffCommentsSelector: () => () => undefined,
     createDiffCommentViewSelector: () => () => ({ owner: null, comments })
   }
 })

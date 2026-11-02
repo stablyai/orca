@@ -84,8 +84,13 @@ export function useMarkdownPreviewSourceFoundation({
     resolvedSourceWorktreeId,
     filePath
   )
-  // Twins share an id and path; notes and owner come from the selected copy, as in every editor, not the first listed row.
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(sourceWorktree?.id)
+  // Notes and their owner come from the copy this preview's content does: its source server when known.
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    sourceWorktree?.id,
+    {
+      runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
+    }
+  )
   const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
   const runtimeOwnerId = resolvedSourceRuntimeEnvironmentId?.trim()
   const sourceConnectionIdSelector = useMemo(
@@ -198,6 +203,7 @@ export function useMarkdownPreviewSourceFoundation({
     keybindings,
     worktreesByRepo,
     commentOwner,
+    notesKnown: allDiffComments !== undefined,
     sourceWorktree,
     sourceRoutingWorktreeId,
     sourceConnectionId,

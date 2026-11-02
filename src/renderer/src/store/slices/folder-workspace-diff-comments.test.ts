@@ -6,6 +6,7 @@ import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { SELF_LOCAL_AUTHORITY } from '../../../../shared/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -700,10 +701,11 @@ describe('folder workspace diff comment rollback convergence', () => {
 
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
   return (
+    // An unlisted id stands for a copy that is gone, so actions on it are refused.
     selectDiffCommentView(store.getState(), worktreeId).owner ?? {
-      kind: 'unlisted',
+      kind: 'worktree',
       worktreeId,
-      hostId: null
+      authority: SELF_LOCAL_AUTHORITY
     }
   )
 }

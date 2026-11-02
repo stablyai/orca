@@ -56,6 +56,7 @@ export function useMonacoMarkdownAnnotations(params: {
   content: string
   language: string
   worktreeId: string | undefined
+  runtimeEnvironmentId?: string | null
   markdownAnnotationsEnabled: boolean
 }): MonacoMarkdownAnnotations {
   const {
@@ -65,10 +66,13 @@ export function useMonacoMarkdownAnnotations(params: {
     content,
     language,
     worktreeId,
+    runtimeEnvironmentId,
     markdownAnnotationsEnabled
   } = params
 
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId)
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId, {
+    runtimeEnvironmentId
+  })
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -82,7 +86,7 @@ export function useMonacoMarkdownAnnotations(params: {
   )
 
   const [commentPopover, setCommentPopover, commentPopoverOwnerRef] =
-    useOwnedDiffCommentTarget<MarkdownCommentPopoverState>(worktreeId)
+    useOwnedDiffCommentTarget<MarkdownCommentPopoverState>(worktreeId, { runtimeEnvironmentId })
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
   // Why: claim drafts synchronously so a same-tick second chord can't remount the composer before React commits state.
@@ -92,7 +96,7 @@ export function useMonacoMarkdownAnnotations(params: {
   }, [commentPopover])
 
   const shouldShowMarkdownAnnotations =
-    markdownAnnotationsEnabled && language === 'markdown' && Boolean(worktreeId)
+    markdownAnnotationsEnabled && language === 'markdown' && Boolean(worktreeId && commentOwner)
   // Why: the mount closure installs keydown listeners once, so the shortcut reads current enablement through a ref.
   const shouldShowMarkdownAnnotationsRef = useRef(shouldShowMarkdownAnnotations)
   useEffect(() => {

@@ -1,7 +1,7 @@
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import type { ResolvedDiffCommentOwner } from '../diff-comment-owner'
+import type { DiffCommentOwner } from '../diff-comment-owner'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { callHostRoute } from '@/runtime/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
@@ -9,7 +9,7 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
 /** Writes a workspace's whole review-note list to the host that owns it. */
 export async function writeDiffCommentsToHost(
-  owner: ResolvedDiffCommentOwner,
+  owner: DiffCommentOwner,
   diffComments: DiffComment[]
 ): Promise<void> {
   const worktreeId = owner.worktreeId
@@ -41,14 +41,12 @@ export async function writeDiffCommentsToHost(
   if (owner.kind !== 'worktree') {
     throw new Error('The workspace host is unresolved; review notes were not saved.')
   }
-  const { target, writeHostId } = owner
-  if (!target) {
-    throw new Error('The workspace host is unresolved; review notes were not saved.')
-  }
-  if (target.kind === 'local') {
+  // The captured authority is the route: this app names the place it keeps the copy, a server owns its own.
+  const { endpoint, at } = owner.authority
+  if (endpoint.kind === 'self') {
     const meta = await window.api.worktrees.updateMeta({
       worktreeId,
-      ...(writeHostId ? { executionHostId: writeHostId } : {}),
+      executionHostId: at,
       updates: { diffComments }
     })
     // Why: main answers null when it refuses or drops the write; reporting success would lose the notes.
@@ -58,7 +56,7 @@ export async function writeDiffCommentsToHost(
     return
   }
   await callRuntimeRpc(
-    target,
+    { kind: 'environment', environmentId: endpoint.environmentId },
     'worktree.set',
     { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments },
     { timeoutMs: 15_000 }

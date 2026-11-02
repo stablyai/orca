@@ -48,6 +48,7 @@ export default function DiffViewer({
   sideBySide,
   editable,
   worktreeId,
+  runtimeEnvironmentId,
   onAddLineComment,
   commentableLineNumbers,
   addLineCommentLabel,
@@ -61,7 +62,9 @@ export default function DiffViewer({
   const monacoTheme = useMonacoTheme()
   const diffTypography = useEditorTypography('diff')
   // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId)
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId, {
+    runtimeEnvironmentId
+  })
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
@@ -159,7 +162,8 @@ export default function DiffViewer({
     onCreateComment: handleCreateComment,
     draftPlaceholder: addLineCommentPlaceholder,
     draftSubmitLabel: addLineCommentLabel,
-    canOpenDraft: !renderLimit.limited,
+    // Notes of an unknown copy can't be added to; hosted review comments have no local copy.
+    canOpenDraft: !renderLimit.limited && (commentOwner !== null || Boolean(onAddLineComment)),
     onDeleteComment: (id) => {
       if (worktreeId) {
         void (commentOwner && deleteDiffComment(commentOwner, id))

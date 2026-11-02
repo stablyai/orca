@@ -32,6 +32,7 @@ type UseRichMarkdownReviewControllerOptions = {
   markdownSourceLineOffset: number
   rootRef: MutableRefObject<HTMLDivElement | null>
   scrollContainerRef: MutableRefObject<HTMLDivElement | null>
+  runtimeEnvironmentId?: string | null
   worktreeId: string
   worktreeRoot: string | null
 }
@@ -48,6 +49,7 @@ export function useRichMarkdownReviewController({
   markdownSourceLineOffset,
   rootRef,
   scrollContainerRef,
+  runtimeEnvironmentId,
   worktreeId,
   worktreeRoot
 }: UseRichMarkdownReviewControllerOptions) {
@@ -55,7 +57,7 @@ export function useRichMarkdownReviewController({
     null
   )
   const [annotationPopover, setAnnotationPopover, annotationOwnerRef] =
-    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(worktreeId)
+    useOwnedDiffCommentTarget<RichMarkdownAnnotationTarget>(worktreeId, { runtimeEnvironmentId })
   const annotationPopoverRef = useRef<RichMarkdownAnnotationTarget | null>(null)
   const canAnnotateRichMarkdownRef = useRef(false)
   const markdownCommentsRef = useRef<DiffComment[]>([])

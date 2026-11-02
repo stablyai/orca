@@ -63,7 +63,9 @@ export default function RichMarkdownEditor({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
-  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId)
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(worktreeId, {
+    runtimeEnvironmentId
+  })
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -105,11 +107,13 @@ export default function RichMarkdownEditor({
     editorRef,
     filePath,
     markdownAnnotationFilePath,
-    markdownAnnotationsEnabled,
+    // Notes of an unknown copy can't be added to.
+    markdownAnnotationsEnabled: markdownAnnotationsEnabled && commentOwner !== null,
     markdownReviewContent,
     markdownSourceLineOffset,
     rootRef,
     scrollContainerRef,
+    runtimeEnvironmentId,
     worktreeId,
     worktreeRoot
   })

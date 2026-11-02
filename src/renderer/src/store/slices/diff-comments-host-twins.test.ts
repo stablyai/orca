@@ -18,10 +18,7 @@ import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createTestStore } from './store-test-helpers'
-import {
-  diffCommentTwinHostId,
-  selectWorktreeDiffCommentsOrEmpty
-} from '../worktree-diff-comments-selector'
+import { selectWorktreeDiffCommentsOrEmpty } from '../worktree-diff-comments-selector'
 
 vi.mock('../../runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClient>()),
@@ -153,10 +150,13 @@ describe('diff comments on twin worktrees', () => {
     expect(rowNotes(store, 'local')).toEqual(['local note'])
   })
 
-  it('refuses when no host names the twin instead of editing both', async () => {
+  it('offers no copy to change when no host names one of two twins', () => {
     const store = createTwinStore(null)
 
-    expect(await addNote(store)).toBeNull()
+    expect(selectDiffCommentView(store.getState(), WT)).toEqual({
+      owner: null,
+      comments: undefined
+    })
 
     expect(rowNotes(store, 'ssh:box')).toEqual([])
     expect(rowNotes(store, 'local')).toEqual([])
@@ -363,12 +363,6 @@ describe('diff comments on twin worktrees', () => {
     expect(rowNotes(store, 'ssh:box')).toEqual(['ssh note 1', 'ssh note'])
   })
 
-  it('names the paired server for a proxied SSH twin, as rival servers share the target', () => {
-    expect(diffCommentTwinHostId({ hostId: 'ssh:box', runtimeOwnerEnvironmentId: 'hub-a' })).toBe(
-      'runtime:hub-a'
-    )
-  })
-
   it('edits the duplicate row the notes panel shows', async () => {
     const store = createTwinStore(null)
     store.setState({
@@ -524,13 +518,11 @@ describe('diff comments on twin worktrees', () => {
 })
 
 function capturedOwner(store: { getState: () => AppState }, worktreeId: string): DiffCommentOwner {
-  return (
-    selectDiffCommentView(store.getState(), worktreeId).owner ?? {
-      kind: 'unlisted',
-      worktreeId,
-      hostId: null
-    }
-  )
+  const { owner } = selectDiffCommentView(store.getState(), worktreeId)
+  if (!owner) {
+    throw new Error('No copy of the workspace is shown.')
+  }
+  return owner
 }
 
 describe('captured note owners across delivery and selection', () => {
@@ -618,30 +610,87 @@ describe('captured note owners across delivery and selection', () => {
     store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [sent])] } })
     const stamped = capturedOwner(store, WT)
 
-    expect(stamped).toMatchObject({ hostId: 'local' })
     expect(diffCommentOwnerKey(stamped)).toBe(diffCommentOwnerKey(unstamped))
     expect(isNoteInFlight(diffCommentSendKey(stamped, sent))).toBe(true)
   })
 
-  it('shows no notes while the selected copy is unlisted, and saves to it once listed', async () => {
+  it('keeps a composer opened before its SSH copy lists on that copy, never a local row listed first', async () => {
     const store = createTwinStore('ssh:box')
     store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [note('l1', 'local')])] } })
     const view = selectDiffCommentView(store.getState(), WT)
-    expect(view).toEqual({
-      owner: { kind: 'unlisted', worktreeId: WT, hostId: 'ssh:box' },
-      comments: undefined
+    // Unknown, not empty: the selected copy is not listed, and its sibling's notes are not shown.
+    expect(view.comments).toBeUndefined()
+
+    store.setState({
+      activeWorkspaceExecutionHostId: 'local',
+      worktreesByRepo: { [REPO]: [worktree(undefined, [note('l1', 'local only')])] }
     })
     expect(await addNoteFor(store, view.owner)).toBeNull()
     expect(updateMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo[REPO][0].diffComments?.map((c) => c.body)).toEqual([
+      'local only'
+    ])
 
-    // A composer opened before the copy listed keeps it, whatever is selected at submit.
     store.setState({
-      activeWorkspaceExecutionHostId: 'local',
-      worktreesByRepo: { [REPO]: [worktree('local'), worktree('ssh:box')] }
+      worktreesByRepo: {
+        [REPO]: [worktree(undefined, [note('l1', 'local only')]), worktree('ssh:box')]
+      }
     })
     expect(await addNoteFor(store, view.owner)).not.toBeNull()
-    expect(rowNotes(store, 'ssh:box')).toEqual(['ssh note'])
-    expect(rowNotes(store, 'local')).toEqual([])
+    expect(updateMeta).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: WT,
+      executionHostId: 'ssh:box',
+      updates: { diffComments: [expect.objectContaining({ body: 'ssh note' })] }
+    })
+  })
+
+  it('keeps a paired SSH capture through its server stamp: queued save, rollback, Send cleanup', async () => {
+    const store = createTwinStore('ssh:box')
+    const sent = note('n1', 'sent')
+    store.setState({
+      repos: [{ ...repoBase, connectionId: 'box', executionHostId: 'runtime:hub' }],
+      worktreesByRepo: { [REPO]: [worktree('ssh:box', [sent])] }
+    })
+    const owner = capturedOwner(store, WT)
+    let fail = () => {}
+    vi.mocked(callRuntimeRpc).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (fail = () => reject(new Error('unreachable'))))
+    )
+    const pending = addNoteFor(store, owner)
+    // The listing confirms the server already captured, before the queued save reads the list.
+    const [row] = store.getState().worktreesByRepo[REPO]
+    store.setState({ worktreesByRepo: { [REPO]: [{ ...row, runtimeOwnerEnvironmentId: 'hub' }] } })
+    expect(diffCommentOwnerKey(capturedOwner(store, WT))).toBe(diffCommentOwnerKey(owner))
+    await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(callRuntimeRpc).mock.calls[0][2]).toMatchObject({
+      diffComments: [{ body: 'sent' }, { body: 'ssh note' }]
+    })
+    fail()
+
+    expect(await pending).toBeNull()
+    expect(store.getState().worktreesByRepo[REPO][0].diffComments).toEqual([sent])
+    expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(true)
+    expect(store.getState().worktreesByRepo[REPO][0].diffComments).toEqual([])
+    expect(callRuntimeRpc).toHaveBeenLastCalledWith(
+      { kind: 'environment', environmentId: 'hub' },
+      'worktree.set',
+      expect.objectContaining({ diffComments: [] }),
+      expect.anything()
+    )
+    expect(updateMeta).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+
+    // A rival server proxying the same target is another copy.
+    store.setState({
+      activeWorkspaceExecutionHostId: 'runtime:hub-b',
+      worktreesByRepo: {
+        [REPO]: [
+          ...store.getState().worktreesByRepo[REPO],
+          { ...worktree('ssh:box'), runtimeOwnerEnvironmentId: 'hub-b' }
+        ]
+      }
+    })
+    expect(diffCommentOwnerKey(capturedOwner(store, WT))).not.toBe(diffCommentOwnerKey(owner))
   })
 
   it('reports a copy gone since Send or edit once, through the existing failure toast', async () => {

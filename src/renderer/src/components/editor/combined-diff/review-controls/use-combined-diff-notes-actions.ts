@@ -1,5 +1,6 @@
-import { useAppStore, type AppState } from '@/store'
-import { readOwnedDiffComments, type DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { AppState } from '@/store'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import { useOwnedDiffComments } from '@/components/diff-comments/use-diff-comment-owner'
 import { withoutMarkdownReviewNotes } from '@/lib/markdown-review-notes-setting'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -60,9 +61,7 @@ export function useCombinedDiffNotesActions({
     },
     [clearNotesDialogOpen, diffCommentCount, owner]
   )
-  const ownedComments = useAppStore((s) =>
-    clearTarget ? readOwnedDiffComments(s, clearTarget.owner) : undefined
-  )
+  const ownedComments = useOwnedDiffComments(clearTarget?.owner ?? null)
   // A copy gone since opening keeps its count, so confirming reports the failure.
   const clearNotesCount = React.useMemo(
     () =>
