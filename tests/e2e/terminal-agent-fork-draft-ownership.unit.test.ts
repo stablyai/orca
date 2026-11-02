@@ -76,7 +76,8 @@ it.each(['local', 'web'] as const)(
     expect(mocks.reveal).toHaveBeenLastCalledWith('wt-fork', { sidebarRevealBehavior: 'auto' })
     expect(mocks.createTab).toHaveBeenCalledTimes(local ? 1 : 0)
     expect(dispatch).toHaveBeenCalledTimes(local ? 0 : 1)
-    expect(mocks.toastError).toHaveBeenCalledTimes(local ? 0 : 1)
+    // A refused web paste is reported once, by the persistent notice that keeps the text.
+    expect(mocks.toastError).not.toHaveBeenCalled()
   }
 )
 

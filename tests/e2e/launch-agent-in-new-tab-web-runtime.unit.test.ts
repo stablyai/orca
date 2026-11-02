@@ -17,6 +17,7 @@ import { consumeOldHostPreparedCommand } from './prepared-action-launch.test-fix
 import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
 import { describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 
 describe('launchAgentInNewTab paired web runtime', () => {
   it.each([true, false, 'failed'] as const)('delegates agent quick launch (%s)', async (mode) => {
@@ -540,8 +541,14 @@ describe('launchAgentInNewTab paired web runtime', () => {
     await expect(
       newAgentPromptOutcome({ delivery: result!.promptDeliveryResult! })
     ).resolves.toEqual({ delivered: false })
-    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(/opened a terminal for Claude.*Send the prompt/)
+    // The one report is the persistent notice that keeps the exact prompt for Copy.
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(vi.mocked(toast.message)).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/Claude may have received part of your prompt/),
+      expect.objectContaining({
+        duration: Infinity,
+        action: expect.objectContaining({ label: 'Copy prompt' })
+      })
     )
     expect(store.seedNativeChatLaunchPrompt).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'keep this task' })

@@ -49,20 +49,27 @@ export async function createWebRuntimeAgentSessionTerminal(
 ): Promise<{
   outcome: WebRuntimeTerminalCreateOutcome
   promptDelivered: boolean
+  /** Whether undelivered text may have reached the agent; the caller reports it once. */
+  promptCertainty?: 'not-sent' | 'unconfirmed'
 }> {
   const created = await createWebRuntimeSessionTerminalResult(args)
   if (created.outcome.status === 'failed' || !created.hostTabId) {
     return { outcome: created.outcome, promptDelivered: false }
   }
 
+  let promptCertainty: 'not-sent' | 'unconfirmed' = 'unconfirmed'
   const promptDelivered = await deliverLaunchPromptToAgentTab({
     tabId: toWebTerminalSurfaceTabId(created.hostTabId),
     content: args.promptAfterReady,
     agent: args.agent,
     submit: args.submitPrompt,
-    forcePaste: args.forcePromptPaste
+    forcePaste: args.forcePromptPaste,
+    // A refusal is reported by the caller, so the prompt's failure is said once.
+    onTimeout: (certainty = 'not-sent') => {
+      promptCertainty = certainty
+    }
   }).catch(() => false)
-  return { outcome: created.outcome, promptDelivered }
+  return { outcome: created.outcome, promptDelivered, promptCertainty }
 }
 
 /** Argv-prefill carries draft in the command without post-ready paste; seed the composer once mirrored host tab ID is known. */

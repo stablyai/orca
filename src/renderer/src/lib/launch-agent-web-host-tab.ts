@@ -131,10 +131,12 @@ export async function launchAgentInWebHostTab(args: {
   const handleCreation = ({
     outcome,
     promptDelivered,
+    promptCertainty = 'unconfirmed',
     hostTabId
   }: {
     outcome: Awaited<ReturnType<typeof createWebRuntimeSessionTerminal>>
     promptDelivered: boolean
+    promptCertainty?: 'not-sent' | 'unconfirmed'
     hostTabId?: string
   }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion => {
     if (outcome.status === 'failed') {
@@ -149,7 +151,12 @@ export async function launchAgentInWebHostTab(args: {
     }
     const failureNotified = hasPrompt && !promptDelivered
     if (failureNotified) {
-      showGeneratedInputNotice({ agent, text: args.prompt ?? '', certainty: 'unconfirmed' })
+      showGeneratedInputNotice({
+        agent,
+        text: args.prompt ?? '',
+        certainty: promptCertainty,
+        submitted: pastePromptAfterReady === null || submitPastedPrompt
+      })
     }
     return {
       delivered: promptDelivered,

@@ -1,7 +1,6 @@
 {
   "agentLaunch": {
     "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
-    "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice.",
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",
@@ -1559,14 +1558,8 @@
           "in": {
             "new": {
               "tab": {
-                "11cce5cc77": "Could not launch {{value0}} in a new terminal.",
-                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready."
+                "11cce5cc77": "Could not launch {{value0}} in a new terminal."
               }
-            }
-          },
-          "background": {
-            "session": {
-              "4ca0651d56": "Your automation prompt wasn't sent — open the workspace and paste it."
             }
           }
         },

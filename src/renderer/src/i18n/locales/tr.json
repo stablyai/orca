@@ -5,8 +5,7 @@
       "invalidConfig": "Bu model seçimi OpenCode başlatma yapılandırmasına uygulanamadı. OpenCode başlatma yapılandırmasını kontrol edip yeniden deneyin veya model seçimini kaldırın.",
       "unsupportedLaunch": "Seçilen model bu OpenCode başlatma işleminde kullanılamıyor. Desteklenen başlatma argümanlarıyla yeni bir yerel terminal başlatın veya model seçimini kaldırın."
     },
-    "terminalPreparationFailed": "{{value0}} için terminal açılamadı. Çalışma alanı bağlantısını ve aracı ayarlarını kontrol edip yeniden deneyin.",
-    "terminalPromptFailed": "Orca {{value0}} için bir terminal açtı ancak isteminizi iletemedi. İstemi bu terminalde gönderin."
+    "terminalPreparationFailed": "{{value0}} için terminal açılamadı. Çalışma alanı bağlantısını ve aracı ayarlarını kontrol edip yeniden deneyin."
   },
   "csv": {
     "detectingDelimiter": "Ayırıcı algılanıyor…",
@@ -1447,14 +1446,8 @@
           "in": {
             "new": {
               "tab": {
-                "11cce5cc77": "{{value0}}, yeni bir terminalde başlatılamadı.",
-                "a5a1f7033f": "{{value0}} gönderilmedi, ajan hazır olduğunda yapıştırın."
+                "11cce5cc77": "{{value0}}, yeni bir terminalde başlatılamadı."
               }
-            }
-          },
-          "background": {
-            "session": {
-              "4ca0651d56": "Otomasyon isteminiz gönderilmedi, çalışma alanını açıp yapıştırın."
             }
           }
         },

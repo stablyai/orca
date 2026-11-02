@@ -5,8 +5,7 @@
       "invalidConfig": "OpenCode n’a pas pu appliquer ce modèle à la configuration de lancement. Vérifiez la configuration de lancement d’OpenCode et réessayez, ou ne précisez pas de modèle.",
       "unsupportedLaunch": "OpenCode ne peut pas appliquer ce modèle à ce lancement. Ouvrez un nouveau terminal local avec des arguments de lancement compatibles ou ne précisez pas de modèle."
     },
-    "terminalPreparationFailed": "Impossible d’ouvrir un terminal pour {{value0}}. Vérifiez la connexion de l’espace de travail et les paramètres de l’agent, puis réessayez.",
-    "terminalPromptFailed": "Orca a ouvert un terminal pour {{value0}}, mais n’a pas pu lui transmettre votre prompt. Envoyez le prompt dans ce terminal."
+    "terminalPreparationFailed": "Impossible d’ouvrir un terminal pour {{value0}}. Vérifiez la connexion de l’espace de travail et les paramètres de l’agent, puis réessayez."
   },
   "app": {
     "saving": {
@@ -1245,14 +1244,8 @@
           "in": {
             "new": {
               "tab": {
-                "11cce5cc77": "Impossible de lancer {{value0}} dans un nouveau terminal.",
-                "a5a1f7033f": "Votre {{value0}} n'a pas été envoyé — collez-le dès que l'agent est prêt."
+                "11cce5cc77": "Impossible de lancer {{value0}} dans un nouveau terminal."
               }
-            }
-          },
-          "background": {
-            "session": {
-              "4ca0651d56": "Votre prompt d'automatisation n'a pas été envoyé — ouvrez l'espace de travail et collez-le."
             }
           }
         },

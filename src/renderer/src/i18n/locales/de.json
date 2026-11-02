@@ -5,8 +5,7 @@
       "invalidConfig": "Diese Modellauswahl konnte nicht auf die Startkonfiguration von OpenCode angewendet werden. Die OpenCode-Startkonfiguration prüfen und erneut versuchen oder die Modellauswahl weglassen.",
       "unsupportedLaunch": "OpenCode kann diese Modellauswahl bei diesem Start nicht anwenden. Ein neues lokales Terminal mit unterstützten Startargumenten öffnen oder die Modellauswahl weglassen."
     },
-    "terminalPreparationFailed": "Das Terminal für {{value0}} konnte nicht geöffnet werden. Prüfe die Verbindung zum Arbeitsbereich und die Agenteneinstellungen und versuche es erneut.",
-    "terminalPromptFailed": "Orca hat ein Terminal für {{value0}} geöffnet, konnte aber deinen Prompt nicht übergeben. Sende den Prompt in diesem Terminal."
+    "terminalPreparationFailed": "Das Terminal für {{value0}} konnte nicht geöffnet werden. Prüfe die Verbindung zum Arbeitsbereich und die Agenteneinstellungen und versuche es erneut."
   },
   "csv": {
     "detectingDelimiter": "Trennzeichen wird erkannt…",
@@ -1469,14 +1468,8 @@
           "in": {
             "new": {
               "tab": {
-                "11cce5cc77": "{{value0}} konnte nicht in einem neuen Terminal gestartet werden.",
-                "a5a1f7033f": "{{value0}} wurde nicht gesendet — einfügen, sobald der Agent bereit ist."
+                "11cce5cc77": "{{value0}} konnte nicht in einem neuen Terminal gestartet werden."
               }
-            }
-          },
-          "background": {
-            "session": {
-              "4ca0651d56": "Der Automatisierungs-Prompt wurde nicht gesendet — den Arbeitsbereich öffnen und den Prompt einfügen."
             }
           }
         },

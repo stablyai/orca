@@ -5,8 +5,7 @@
       "invalidConfig": "OpenCode no pudo aplicar este modelo a la configuración de inicio. Revisa la configuración de inicio de OpenCode y vuelve a intentarlo, u omite la selección de modelo.",
       "unsupportedLaunch": "OpenCode no puede aplicar este modelo a este inicio. Abre un terminal local nuevo con argumentos de inicio compatibles u omite la selección de modelo."
     },
-    "terminalPreparationFailed": "No se pudo abrir un terminal para {{value0}}. Comprueba la conexión del espacio de trabajo y la configuración del agente e inténtalo de nuevo.",
-    "terminalPromptFailed": "Orca abrió un terminal para {{value0}}, pero no pudo pasarle tu instrucción. Envíala en ese terminal."
+    "terminalPreparationFailed": "No se pudo abrir un terminal para {{value0}}. Comprueba la conexión del espacio de trabajo y la configuración del agente e inténtalo de nuevo."
   },
   "app": {
     "saving": {
@@ -1025,14 +1024,8 @@
           "in": {
             "new": {
               "tab": {
-                "11cce5cc77": "No se pudo iniciar {{value0}} en una nueva terminal.",
-                "a5a1f7033f": "No se envió tu {{value0}}; pégalo cuando el agente esté listo."
+                "11cce5cc77": "No se pudo iniciar {{value0}} en una nueva terminal."
               }
-            }
-          },
-          "background": {
-            "session": {
-              "4ca0651d56": "No se envió tu prompt de automatización: abre el espacio de trabajo y pégalo."
             }
           }
         },

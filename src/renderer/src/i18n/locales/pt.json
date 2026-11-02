@@ -5,8 +5,7 @@
       "invalidConfig": "O OpenCode não conseguiu aplicar este modelo à configuração de inicialização. Verifique a configuração de inicialização do OpenCode e tente novamente, ou omita a escolha do modelo.",
       "unsupportedLaunch": "O OpenCode não pode aplicar este modelo a esta inicialização. Abra um novo terminal local com argumentos de inicialização compatíveis ou omita a escolha do modelo."
     },
-    "terminalPreparationFailed": "Não foi possível abrir um terminal para {{value0}}. Verifique a conexão do espaço de trabalho e as configurações do agente e tente novamente.",
-    "terminalPromptFailed": "O Orca abriu um terminal para {{value0}}, mas não conseguiu passar seu prompt. Envie o prompt nesse terminal."
+    "terminalPreparationFailed": "Não foi possível abrir um terminal para {{value0}}. Verifique a conexão do espaço de trabalho e as configurações do agente e tente novamente."
   },
   "common": {
     "retry": "Tentar novamente",
@@ -2383,14 +2382,8 @@
           "in": {
             "new": {
               "tab": {
-                "11cce5cc77": "Não foi possível iniciar {{value0}} em um novo terminal.",
-                "a5a1f7033f": "Seu {{value0}} não foi enviado — cole-o quando o agente estiver pronto."
+                "11cce5cc77": "Não foi possível iniciar {{value0}} em um novo terminal."
               }
-            }
-          },
-          "background": {
-            "session": {
-              "4ca0651d56": "Seu prompt de automação não foi enviado — abra o espaço de trabalho e cole-o."
             }
           }
         },

@@ -5,8 +5,7 @@
       "invalidConfig": "OpenCode가 선택한 모델을 시작 구성에 적용하지 못했습니다. OpenCode 시작 구성을 확인하고 다시 시도하거나 모델 선택을 생략하세요.",
       "unsupportedLaunch": "OpenCode가 이번 시작에 선택한 모델을 적용할 수 없습니다. 지원되는 시작 인수를 사용하여 새 로컬 터미널을 열거나 모델 선택을 생략하세요."
     },
-    "terminalPreparationFailed": "{{value0}}의 터미널을 열 수 없습니다. 워크스페이스 연결과 에이전트 설정을 확인한 후 다시 시도하세요.",
-    "terminalPromptFailed": "Orca가 {{value0}}의 터미널을 열었지만 프롬프트를 전달하지 못했습니다. 해당 터미널에서 프롬프트를 보내세요."
+    "terminalPreparationFailed": "{{value0}}의 터미널을 열 수 없습니다. 워크스페이스 연결과 에이전트 설정을 확인한 후 다시 시도하세요."
   },
   "app": {
     "saving": {
@@ -1017,14 +1016,8 @@
           "in": {
             "new": {
               "tab": {
-                "11cce5cc77": "새 terminal에서 {{value0}}을(를) 시작할 수 없습니다.",
-                "a5a1f7033f": "{{value0}}이(가) 전송되지 않았습니다. agent가 준비되면 붙여넣으세요."
+                "11cce5cc77": "새 terminal에서 {{value0}}을(를) 시작할 수 없습니다."
               }
-            }
-          },
-          "background": {
-            "session": {
-              "4ca0651d56": "자동화 프롬프트가 전송되지 않았습니다. 워크스페이스를 열고 붙여넣으세요."
             }
           }
         },

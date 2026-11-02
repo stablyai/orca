@@ -5,8 +5,7 @@
       "invalidConfig": "OpenCode 無法將所選模型套用至啟動設定。請檢查 OpenCode 的啟動設定後重試，或不要指定模型。",
       "unsupportedLaunch": "OpenCode 無法將所選模型套用至此次啟動。請使用受支援的啟動引數開啟新的本機終端機，或不要指定模型。"
     },
-    "terminalPreparationFailed": "無法為 {{value0}} 開啟終端機。請檢查工作區連線與代理程式設定，然後再試一次。",
-    "terminalPromptFailed": "Orca 已為 {{value0}} 開啟終端機，但無法傳遞你的提示。請在該終端機中傳送提示。"
+    "terminalPreparationFailed": "無法為 {{value0}} 開啟終端機。請檢查工作區連線與代理程式設定，然後再試一次。"
   },
   "csv": {
     "detectingDelimiter": "正在偵測分隔符號…",
@@ -1419,14 +1418,8 @@
           "in": {
             "new": {
               "tab": {
-                "11cce5cc77": "無法在新終端機中啟動 {{value0}}。",
-                "a5a1f7033f": "您的 {{value0}} 未傳送 — 代理程式準備好後將其貼上。"
+                "11cce5cc77": "無法在新終端機中啟動 {{value0}}。"
               }
-            }
-          },
-          "background": {
-            "session": {
-              "4ca0651d56": "您的自動化提示詞未傳送 — 開啟工作區並貼上它。"
             }
           }
         },
