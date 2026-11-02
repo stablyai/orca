@@ -551,7 +551,7 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
     const methods = ['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const
     const canonical = methods.map((method) => vi.spyOn(state.queue.cards, method))
     const watched = new Set<object>([state.queue.cards])
-    const owned: (typeof canonical)[number][] = []
+    const owned: { mock: { calls: unknown[] } }[] = []
     const attach = () => {
       const seen = new Set<unknown>()
       const collect = (value: unknown) => {
@@ -565,9 +565,7 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
             : Object.values(Object.getOwnPropertyDescriptors(value)).map((field) => field.value)
         if (value instanceof Map && !watched.has(value)) {
           watched.add(value)
-          owned.push(
-            ...methods.map((method) => vi.spyOn(value as typeof state.queue.cards, method))
-          )
+          owned.push(...methods.map((method) => vi.spyOn(value, method)))
         }
         entries.forEach(collect)
       }
@@ -578,12 +576,13 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
     const visits = vi.spyOn(JournalInputCardIndex.prototype, 'indexCard')
     const sets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
     // Outside the clear's rebuild, every ensure keeps the indexes and walks nothing.
-    const kept = (index: JournalInputCardIndex) => ({
-      index: index['index'],
-      currentCoordinates: index['currentCoordinates'],
-      domains: index['domains'],
-      indexed: index['indexed']
-    })
+    const keptNames = ['index', 'currentCoordinates', 'domains', 'indexed']
+    const kept = (index: JournalInputCardIndex) => [
+      index['index'],
+      index['currentCoordinates'],
+      index['domains'],
+      index['indexed']
+    ]
     const ensure = JournalInputCardIndex.prototype.ensure
     let rebuilding = false
     let ensures = 0
@@ -599,8 +598,7 @@ describe.each([100, 1_000])('queue failures beside %s retained cards', (size) =>
         ensures++
         expect(sum(canonical) + sum(owned)).toBe(walked)
         const after = kept(this)
-        const keys = Object.keys(before) as (keyof typeof before)[]
-        expect(keys.filter((key) => after[key] !== before[key])).toEqual([])
+        expect(keptNames.filter((_, n) => after[n] !== before[n])).toEqual([])
       }
     })
     /** Commits one row; `inDraft` reads before adoption too. No step may visit or place a card. */
