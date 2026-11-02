@@ -4,7 +4,7 @@ import type {
   AgentSessionSwitchDeadline,
   AgentSessionSwitchResult,
   AgentSessionSwitchReceipt
-} from '../../../shared/agent-session-switch-execution'
+} from '../../../shared/agent-session/requests/agent-session-switch-execution'
 import {
   selectStructuredSessionSwitchCommand,
   type SwitchCommand

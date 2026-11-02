@@ -6,7 +6,6 @@ import {
   CUSTOM_EDITOR_TOO_LARGE,
   isCustomEditorEditAttempt,
   readCustomEditorEdit,
-  readCustomEditorKeyChord,
   type CustomEditorDocument,
   type CustomEditorEdit
 } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
@@ -27,6 +26,8 @@ import {
   structuredCloneMessageBytes
 } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 
+import { handleCustomEditorFrameEvent } from './plugin-custom-editor-frame-events'
+import { createPendingOutsideMerge } from './plugin-custom-editor-outside-merge'
 import type {
   CustomEditorBinaryDocument,
   CustomEditorEditRefusal,
@@ -61,6 +62,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
   let supersededIds: (number | null)[] = []
   let heldTimer: ReturnType<typeof setTimeout> | null = null
   let lostEdit = false
+  let mergesOutside = false
+  const outsideMerge = createPendingOutsideMerge()
   // An oversized edit came after the held one, so applying the held one leaves it still lost.
   let lostAfterHeld = false
   let unapplied: CustomEditorUnappliedEdit = null
@@ -86,6 +89,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
 
   const postDocument = (document: CustomEditorDocument, transfer: Transferable[] = []): void => {
     post(pluginEvent(FRAME_EVENTS.editorDocument, document), transfer)
+    options.onFrameProgress?.('delivered')
   }
 
   const pushBinaryDocument = (force: boolean, binary: CustomEditorBinaryDocument | null): void => {
@@ -150,7 +154,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       options.onBytesEdit?.(frameBinary)
       return null
     }
-    if (content.text !== frameText) {
+    // A merge's result always reaches the buffer, even when it equals the disk text just sent.
+    if (outsideMerge.accept(baseVersion, content.text) || content.text !== frameText) {
       frameText = content.text
       options.onEdit(content.text)
     }
@@ -245,13 +250,9 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         pushDocument(true)
       },
       onEvent(event, context) {
-        const chord =
-          event.event === FRAME_EVENTS.editorKeydown
-            ? readCustomEditorKeyChord(event.payload)
-            : null
-        if (chord) {
-          options.onKeyChord?.(chord, context)
-        }
+        // Every event is handled; announcing merge support only adds the capability.
+        const merges = handleCustomEditorFrameEvent(event, context, options)
+        mergesOutside = mergesOutside || merges
       },
       onResponse(response) {
         pendingFlushes.get(response.id)?.(response.error === undefined)
@@ -260,6 +261,16 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
     },
     syncDocument() {
       pushDocument(false)
+    },
+    mergeOutsideChange(diskText, ancestorText) {
+      if (!ready || !mergesOutside || options.getBinaryDocument) {
+        return Promise.resolve(null)
+      }
+      version += 1
+      const ancestor = { kind: 'text' as const, text: ancestorText }
+      const { readOnly } = options.getDocument()
+      postDocument({ version, readOnly, content: { kind: 'text', text: diskText }, ancestor })
+      return outsideMerge.begin(version, flushTimeoutMs)
     },
     flush() {
       if (!ready) {
@@ -296,6 +307,8 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         applyHeldEdit()
       }
       ready = false
+      mergesOutside = false
+      outsideMerge.cancel()
       frameText = null
       frameReadOnly = null
       frameBinary = null
