@@ -107,36 +107,47 @@ describe('federated read RPC transport routing', () => {
     )
   })
 
-  it('keeps enveloped federation mutations on the one-shot transport', async () => {
-    const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'ack-1' }
-    sendRemoteRuntimeRequestMock.mockResolvedValue({
-      id: 'ack',
-      ok: true,
-      result: { acknowledgedThrough: 4 },
-      _meta: { runtimeId: 'runtime-worker' }
-    })
+  it.each([
+    ['orchestration.federationAck', { dispatchId: 'dispatch-1', throughSequence: 4 }],
+    ['orchestration.federationImport', { dispatchId: 'dispatch-1', items: [] }]
+  ])(
+    'routes enveloped %s over shared control with its authority intact',
+    async (method, params) => {
+      const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'relay-1' }
+      sendRemoteRuntimeRequestMock.mockResolvedValue({
+        id: 'status',
+        ok: true,
+        result: { capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY] },
+        _meta: { runtimeId: 'runtime-worker' }
+      })
+      sendRemoteRuntimeSharedControlRequestMock.mockResolvedValue({
+        id: 'relay',
+        ok: true,
+        result: { acknowledgedThrough: 4 },
+        _meta: { runtimeId: 'runtime-worker' }
+      })
 
-    await callRuntimeEnvironment(
-      userDataPath,
-      environmentId,
-      'orchestration.federationAck',
-      { dispatchId: 'dispatch-1', throughSequence: 4 },
-      15_000,
-      undefined,
-      envelope
-    )
+      await callRuntimeEnvironment(
+        userDataPath,
+        environmentId,
+        method,
+        params,
+        15_000,
+        undefined,
+        envelope
+      )
 
-    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
-      expect.any(Object),
-      'orchestration.federationAck',
-      { dispatchId: 'dispatch-1', throughSequence: 4 },
-      15_000,
-      envelope,
-      undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
-    )
-    expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
-  })
+      expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual(['status.get'])
+      expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledWith(
+        environmentId,
+        expect.any(Object),
+        method,
+        params,
+        15_000,
+        envelope
+      )
+    }
+  )
 
   it('falls back to one-shot with the envelope when shared control is unavailable', async () => {
     const envelope = { orchestrationContractVersion: 1 }
