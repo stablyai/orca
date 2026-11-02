@@ -51,7 +51,6 @@ export function buildHostToLocalTabIdMap({
 export function updateHostSessionTabIdMappings(args: {
   environmentId: string
   worktreeId: string
-  terminalSurfaces: readonly TerminalSurface[]
   terminalTabs: readonly MirroredTerminalTab[]
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
@@ -66,12 +65,12 @@ export function updateHostSessionTabIdMappings(args: {
       args.hostGroupIdByTabId.get(hostTabId)
     )
 
-  // A tab's commands name the host its terminal's own id, whatever the tab's id here.
-  const containerByHostTabId = containersByHostTabId(args.terminalTabs)
-  for (const surface of args.terminalSurfaces) {
-    const localId = containerByHostTabId.get(surface.parentTabId)
-    if (localId) {
-      map(localId, surface.parentTabId)
+  // Commands name the host a terminal by its own id, whether they name its tab here or the
+  // terminal itself (the two differ once a host switch put the terminal in another tab).
+  for (const entry of args.terminalTabs) {
+    map(entry.containerId, entry.hostTabId)
+    if (entry.tab.id !== entry.containerId) {
+      map(entry.tab.id, entry.hostTabId)
     }
   }
   for (const entry of [...args.browserTabs, ...args.editorTabs, ...args.agentTabs]) {

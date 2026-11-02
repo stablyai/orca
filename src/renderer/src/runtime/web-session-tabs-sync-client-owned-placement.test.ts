@@ -13,6 +13,7 @@ import {
   resetWebSessionTerminalPlacementsForTests
 } from './web-session-terminal-placement'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import { reconcileClientOwnedTabPlacement } from './web-session-client-owned-tab-placement'
 import {
@@ -289,6 +290,16 @@ describe('client-owned tab placement for paired worktrees', () => {
       expect(groupById(state, HOST_GROUP)?.tabOrder).toEqual([T1, T2, T3])
       expect(groupById(state, HOST_GROUP)?.activeTabId).toBe(T2)
       expect(state.activeTabIdByWorktree[WT]).toBe(T4)
+      // Commands on it (pin, move, view mode) or on its terminal name the host's terminal.
+      for (const tabId of [T2, T4]) {
+        expect(
+          resolveHostSessionTabIdForWebSessionTab(state, {
+            environmentId: ENV,
+            worktreeId: WT,
+            tabId
+          })
+        ).toBe('host-tab-4')
+      }
     }
   )
 

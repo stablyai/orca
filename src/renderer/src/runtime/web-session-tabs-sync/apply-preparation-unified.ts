@@ -235,7 +235,6 @@ export function prepareWebSessionTabsSnapshotUnified(
   updateHostSessionTabIdMappings({
     environmentId,
     worktreeId,
-    terminalSurfaces: terminalSurfaceTabs,
     terminalTabs: mirroredTerminalTabs,
     browserTabs: mirroredBrowserTabs,
     editorTabs: mirroredEditorTabs,

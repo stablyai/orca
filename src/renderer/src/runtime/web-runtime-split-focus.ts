@@ -71,7 +71,11 @@ export function captureWebRuntimeSplitFocusTarget(
   }
   const expectedActiveWorktreeId = state.activeWorktreeId ?? null
   const expectedCurrentLocalTabId = expectedActiveWorktreeId
-    ? resolveWebSessionVisibleTabId(state, expectedActiveWorktreeId)
+    ? shownTerminalId(
+        state,
+        expectedActiveWorktreeId,
+        resolveWebSessionVisibleTabId(state, expectedActiveWorktreeId)
+      )
     : null
   return {
     worktreeId: source.worktreeId,
@@ -85,6 +89,19 @@ export function captureWebRuntimeSplitFocusTarget(
       ? (state.terminalLayoutsByTabId?.[expectedCurrentLocalTabId]?.activeLeafId ?? null)
       : null
   }
+}
+
+/** The terminal a visible tab shows (a host switch may have put it in a tab with another id), or
+ *  the tab's own id for anything else. */
+function shownTerminalId(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string,
+  tabId: string | null
+): string | null {
+  const tab = tabId
+    ? state.unifiedTabsByWorktree?.[worktreeId]?.find((entry) => entry.id === tabId)
+    : undefined
+  return tab?.contentType === 'terminal' ? tab.entityId : tabId
 }
 
 function matchesWebRuntimeSplitFocusTarget(
@@ -104,7 +121,11 @@ function matchesWebRuntimeSplitFocusTarget(
     return false
   }
   const currentTabId = target.expectedActiveWorktreeId
-    ? resolveWebSessionVisibleTabId(state, target.expectedActiveWorktreeId)
+    ? shownTerminalId(
+        state,
+        target.expectedActiveWorktreeId,
+        resolveWebSessionVisibleTabId(state, target.expectedActiveWorktreeId)
+      )
     : null
   if (currentTabId === target.expectedCurrentLocalTabId) {
     const currentLeafId = currentTabId

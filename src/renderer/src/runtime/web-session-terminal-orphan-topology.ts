@@ -1,5 +1,5 @@
 import type { RuntimeTerminalOrphanTopology } from '../../../shared/runtime-types'
-import type { TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -14,6 +14,7 @@ export type WebTerminalOrphanTopologyState = {
   activeGroupIdByWorktree: Record<string, string | null | undefined>
   groupsByWorktree?: Record<string, TabGroup[] | undefined>
   layoutByWorktree?: Record<string, TabGroupLayoutNode | undefined>
+  unifiedTabsByWorktree?: Record<string, Tab[] | undefined>
 }
 
 function prunePaneLayout(
@@ -73,6 +74,13 @@ export function buildWebTerminalOrphanTopologyProposal(
   const hostTabIdByLocalId = new Map(
     candidates.map((tab) => [tab.id, toHostSessionTabId(tab.id)] as const)
   )
+  // Groups name a terminal's tab, which a host switch may have given another id.
+  for (const tab of state.unifiedTabsByWorktree?.[worktreeId] ?? []) {
+    const hostTabId = tab.contentType === 'terminal' && hostTabIdByLocalId.get(tab.entityId)
+    if (hostTabId && tab.id !== tab.entityId) {
+      hostTabIdByLocalId.set(tab.id, hostTabId)
+    }
+  }
   const tabs = candidates.flatMap((tab) => {
     const tabId = hostTabIdByLocalId.get(tab.id)!
     const retainedLeafIds = leafIdsByTabId.get(tabId)
