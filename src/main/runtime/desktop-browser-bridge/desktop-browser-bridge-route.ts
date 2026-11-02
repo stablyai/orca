@@ -57,12 +57,6 @@ export async function routeDesktopBrowserBridgeRpc(options: {
     )
   }
   const params: Record<string, unknown> = isRecord(options.params) ? { ...options.params } : {}
-  if (params.expectUrl !== undefined && !options.registry.newestAttachmentEnforcesExpectUrl()) {
-    throw new BrowserError(
-      BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
-      'The Orca desktop sharing its browser cannot check --expect-url. Update Orca on that desktop or drop the flag.'
-    )
-  }
   if (method === 'browser.openUrl') {
     assertClientOpenableUrl(String(params.url))
   }
@@ -73,6 +67,13 @@ export async function routeDesktopBrowserBridgeRpc(options: {
     params.worktree = `id:${workspaceId}`
   } else {
     delete params.worktree
+  }
+  // After every await: forward picks the newest attachment, which may have changed by now.
+  if (params.expectUrl !== undefined && !options.registry.newestAttachmentEnforcesExpectUrl()) {
+    throw new BrowserError(
+      BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
+      'The Orca desktop sharing its browser cannot check --expect-url. Update Orca on that desktop or drop the flag.'
+    )
   }
   const result = await options.registry.forward(
     { method: forwardedMethod, params, ...(workspaceId ? { workspaceId } : {}) },

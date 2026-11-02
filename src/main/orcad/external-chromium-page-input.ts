@@ -137,7 +137,11 @@ async function selectAll(session: PageInputSession, element: string): Promise<vo
 }
 
 // The helper's `keyboard type` inserts text without key events, which key-driven editors ignore.
-async function type(session: PageInputSession, input: string): Promise<void> {
+async function type(
+  session: PageInputSession,
+  input: string,
+  recheckAfterEnter: boolean
+): Promise<void> {
   let commands: string[][] = []
   const flush = async (): Promise<void> => {
     if (commands.length === 0) {
@@ -158,10 +162,10 @@ async function type(session: PageInputSession, input: string): Promise<void> {
       // Shift is the only modifier a typed character carries; pages read it from the keydown.
       commands.push(['press', step.modifiers & 8 ? `Shift+${step.key}` : step.key])
     }
-    // Enter can submit and navigate, so what follows it starts a new helper run.
+    // Enter can submit and navigate, so a guarded command checks again before what follows it.
     if (
       commands.length >= MAX_KEY_COMMANDS_PER_RUN ||
-      (typeof step !== 'string' && step.key === 'Enter')
+      (recheckAfterEnter && typeof step !== 'string' && step.key === 'Enter')
     ) {
       await flush()
     }
@@ -199,7 +203,7 @@ export async function runExternalChromiumPageInput(
     case 'browserType': {
       const input = String(params.input ?? '')
       await assertClipboardTextWriteWithinLimitWithYield(input)
-      await type(session, input)
+      await type(session, input, typeof params.expectUrl === 'string')
       return { typed: true }
     }
     default:

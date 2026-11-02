@@ -153,15 +153,24 @@ export class ExternalChromiumBrowserProcess {
     }
     const guard = new ExpectedPageUrlGuard(params.expectUrl, page.publicPageId)
     return guard.withReceipt(
-      await this.runOnPage(this.pageSessionRechecking(guard), page, method, params)
+      await this.runOnPage(this.pageSessionRechecking(guard, page, method), page, method, params)
     )
   }
 
   /** Every helper run rechecks; a read and a write sharing one batch share its check. */
-  private pageSessionRechecking(guard: ExpectedPageUrlGuard): PageCommandSession {
+  private pageSessionRechecking(
+    guard: ExpectedPageUrlGuard,
+    page: PageRecord,
+    method: string
+  ): PageCommandSession {
     const verify = async (): Promise<void> => {
-      // Unlike `tab`, `get url` waits out a navigation still replacing the document.
-      const { url } = AgentBrowserCurrentUrl.parse(await this.session.run(['get', 'url']))
+      // Unlike `tab`, `get url` waits out a navigation still replacing the document, and so would
+      // wait forever on a dialog, which blocks the page and any navigation with it.
+      const { url } = AgentBrowserCurrentUrl.parse(
+        method === 'browserDialogAccept' || method === 'browserDialogDismiss'
+          ? await this.tabs.describePage(page)
+          : await this.session.run(['get', 'url'])
+      )
       guard.verifyStep([url])
     }
     return {

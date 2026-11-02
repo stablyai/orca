@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -90,6 +91,18 @@ async function expectUrlGuardsTheChatFixture(
       commands.browserClick({ page, element: '#send', expectUrl: url('/chat/after-enter') })
     ).rejects.toMatchObject(mismatch('/chat/after-enter', '/slow/x'))
     await expect(inPage('sent.length')).resolves.toBe(0)
+
+    await commands.browserWait({ page, load: 'load' })
+    // Delayed past this eval's own reply, which an open dialog would block.
+    await inPage(`setTimeout(() => { window.answer = confirm('Send?') }, 300); 1`)
+    await delay(600)
+    await expect(
+      commands.browserDialogAccept({ page, expectUrl: url('/chat/a') })
+    ).rejects.toMatchObject(mismatch('/chat/a', '/slow/x'))
+    await expect(
+      commands.browserDialogAccept({ page, expectUrl: url('/slow/x') })
+    ).resolves.toMatchObject({ browserPageId: page, checkedUrl: url('/slow/x') })
+    await expect(inPage('window.answer')).resolves.toBe(true)
   } finally {
     server.close()
   }

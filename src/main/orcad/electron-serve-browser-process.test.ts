@@ -563,7 +563,12 @@ describe('ElectronServeBrowserProcess command routing', () => {
         'browser.click': {
           code: 'browser_expected_url_mismatch',
           message: 'moved',
-          data: { expectedUrl: expectUrl, browserPageId: sidecarPage }
+          data: {
+            expectedUrl: expectUrl,
+            actualUrl: 'https://example.test/b',
+            browserPageId: sidecarPage,
+            mayHaveStarted: false
+          }
         }
       }
     })
@@ -572,6 +577,7 @@ describe('ElectronServeBrowserProcess command routing', () => {
       commands.browserClick({ page: 'public-page', element: '@e1', expectUrl })
     ).rejects.toMatchObject({
       code: 'browser_expected_url_mismatch',
+      message: expect.stringContaining('Browser page public-page is at'),
       data: { expectedUrl: expectUrl, browserPageId: 'public-page' }
     })
     expect((await browserRequests()).at(-1)).toMatchObject({

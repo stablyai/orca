@@ -153,6 +153,30 @@ describe('--expect-url', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it.each([[''], [undefined]])(
+    'refuses an empty value (%s) rather than run unguarded',
+    async (value) => {
+      answerRuntime([BROWSER_EXPECT_URL_RUNTIME_CAPABILITY])
+
+      await main(
+        [
+          'click',
+          '--element',
+          '@e1',
+          '--page',
+          'page-1',
+          '--json',
+          '--expect-url',
+          ...(value === undefined ? [] : [value])
+        ],
+        '/tmp/not-an-orca-worktree'
+      )
+
+      expect(callMock).not.toHaveBeenCalled()
+      expect(process.exitCode).toBe(1)
+    }
+  )
+
   it('asks the runtime nothing extra without the flag', async () => {
     answerRuntime(['runtime.v1'])
 

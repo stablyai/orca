@@ -1,6 +1,6 @@
 import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import { getOptionalStringFlag } from '../flags'
+import { getOptionalStringFlag, getPresentStringFlag } from '../flags'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError } from '../runtime/types'
 import {
@@ -31,7 +31,8 @@ async function getEnforceableExpectUrl(
   flags: Map<string, string | boolean>,
   client: RuntimeClient
 ): Promise<string | undefined> {
-  const expectUrl = getOptionalStringFlag(flags, 'expect-url')
+  // An empty value, like an unset shell variable, must fail rather than run unguarded.
+  const expectUrl = getPresentStringFlag(flags, 'expect-url')
   if (expectUrl === undefined) {
     return undefined
   }

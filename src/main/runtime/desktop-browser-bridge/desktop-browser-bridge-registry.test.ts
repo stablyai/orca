@@ -28,6 +28,34 @@ describe('--expect-url through the desktop bridge', () => {
     expect(emit).not.toHaveBeenCalled()
   })
 
+  it('checks the desktop left after resolving the workspace, not the one before', async () => {
+    const registry = new DesktopBrowserBridgeRegistry()
+    const olderEmit = vi.fn()
+    registry.attach({ connectionId: 'old', pairedDeviceId: 'd', emit: olderEmit })
+    const newer = registry.attach({
+      connectionId: 'new',
+      pairedDeviceId: 'd',
+      enforcesExpectUrl: true,
+      emit: vi.fn()
+    })
+
+    await expect(
+      routeDesktopBrowserBridgeRpc({
+        method: 'browser.click',
+        params: { worktree: 'wt', element: '@e1', expectUrl: 'https://example.com/a' },
+        caller: { kind: 'local-cli' },
+        hostEnabled: true,
+        registry,
+        localBrowserAvailable: true,
+        resolveWorkspace: async (selector) => {
+          newer.detach()
+          return { id: selector }
+        }
+      })
+    ).rejects.toMatchObject({ code: 'browser_expect_url_unsupported' })
+    expect(olderEmit).not.toHaveBeenCalled()
+  })
+
   it('forwards it to a desktop that enforces it and keeps the mismatch diagnostics', async () => {
     const registry = new DesktopBrowserBridgeRegistry()
     const events: DesktopBrowserBridgeEvent[] = []

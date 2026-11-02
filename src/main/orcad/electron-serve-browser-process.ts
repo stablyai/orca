@@ -2,7 +2,11 @@ import {
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
 } from '../../shared/browser-runtime-capabilities'
-import { BROWSER_EXPECT_URL_UNSUPPORTED_CODE } from '../../shared/browser-expected-url'
+import {
+  BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
+  BrowserExpectedUrlMismatch
+} from '../../shared/browser-expected-url'
+import { browserExpectedUrlMismatchError } from '../browser/browser-expected-page-url'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { BrowserError } from '../browser/browser-error'
@@ -264,9 +268,12 @@ export class ElectronServeBrowserProcess {
       ) {
         this.tabs.delete(targetPage)
       }
-      throw error instanceof BrowserError && error.data !== undefined
-        ? new BrowserError(error.code, error.message, this.tabs.rewriteResult(error.data))
-        : error
+      // The sidecar named its own page id, which the caller's --page can't use.
+      const mismatch =
+        error instanceof BrowserError
+          ? BrowserExpectedUrlMismatch.safeParse(this.tabs.rewriteResult(error.data))
+          : null
+      throw mismatch?.success ? browserExpectedUrlMismatchError(mismatch.data) : error
     }
     if (method === 'browserTabCreate') {
       const created = BrowserPageResult.parse(result)
