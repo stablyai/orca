@@ -20,6 +20,14 @@ import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
 } from './terminal-agent-phone-push'
+import { ClaudeTerminalSessionNameSync } from './claude-terminal-session-name-sync'
+import { readClaudeTranscriptCustomTitle } from '../claude/claude-terminal-session-name'
+import { createLaunchedAgentWriteGuard } from './launched-agent-write-guard'
+import type { RuntimeTerminalRename } from '../../shared/runtime-terminal-contracts'
+
+// A draft or a long turn holds the rename; past this the user's newer intent is unknown.
+const CLAUDE_RENAME_HOLD_MS = 10 * 60_000
+const CLAUDE_RENAME_RECHECK_MS = 5_000
 
 function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
   const timer = setTimeout(run, delayMs)
@@ -65,6 +73,82 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
 
   private readonly externalConversations = installExternalConversations(this.store, this)
 
+  private readonly claudeSessionNames = new ClaudeTerminalSessionNameSync({
+    isEnabled: () => this.store?.getSettings().claudeSessionNameSync !== false,
+    listRows: () => this.getAgentStatusSnapshotFn?.() ?? [],
+    readTranscriptPath: (paneKey) => {
+      let newest: { at: number; path: string } | null = null
+      for (const row of this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []) {
+        const path = row.agentType === 'claude' ? row.providerSession?.transcriptPath : undefined
+        if (path && (!newest || row.receivedAt > newest.at)) {
+          newest = { at: row.receivedAt, path }
+        }
+      }
+      return newest?.path ?? null
+    },
+    getHandle: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+    waitForEmptyComposer: (handle, signal) => this.waitForEmptyClaudeComposer(handle, signal),
+    sendCommand: async (handle, text, signal) => {
+      // The pane may have returned to its shell since the hook row was written.
+      const guard = createLaunchedAgentWriteGuard(this, 'claude')
+      try {
+        await this.sendTerminalAgentPrompt(handle, text, {
+          inputKind: 'driving',
+          beforeWrite: guard.beforeWrite,
+          acceptQueued: true,
+          observationTimeoutMs: 0,
+          signal
+        })
+      } finally {
+        guard.dispose()
+      }
+    },
+    renameTab: async (handle, name) => {
+      await this.renameTerminal(handle, name)
+    },
+    readCustomTitle: readClaudeTranscriptCustomTitle
+  })
+
+  /** A tab named in the window: its Claude pane takes the name as its session name. */
+  syncClaudeSessionNameForTab(tabId: string, title: string | null): void {
+    this.claudeSessionNames.tabRenamed(tabId, title)
+  }
+
+  override async renameTerminal(
+    handle: string,
+    title: string | null
+  ): Promise<RuntimeTerminalRename> {
+    const rename = await super.renameTerminal(handle, title)
+    if (rename.tabId) {
+      this.claudeSessionNames.tabRenamed(rename.tabId, rename.title)
+    }
+    return rename
+  }
+
+  protected override observeClaudeTerminalTitle(paneKey: string, title: string): void {
+    this.claudeSessionNames.observeTitle(paneKey, title)
+  }
+
+  /** Never type into a draft: it would be submitted with the command. */
+  private async waitForEmptyClaudeComposer(handle: string, signal: AbortSignal): Promise<boolean> {
+    const deadline = Date.now() + CLAUDE_RENAME_HOLD_MS
+    while (!signal.aborted && Date.now() < deadline) {
+      const wait = await this.waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: Math.max(1, deadline - Date.now()),
+        signal
+      })
+      if (wait.satisfied) {
+        const screen = await this.readTerminal(handle, { screen: true, limit: 1 })
+        if (!screen.draft) {
+          return true
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, CLAUDE_RENAME_RECHECK_MS).unref?.())
+    }
+    return false
+  }
+
   /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
   getExternalConversationSeam(): ExternalConversationSeam | null {
     return this.externalConversations.current()
@@ -86,6 +170,11 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
     this.agentTransitions.subscribe((change) => this.terminalWorkerTurnStops.observe(change))
     this.agentTransitions.subscribe((change) => this.workerAutoReleaseActivity.observePane(change))
+    this.agentTransitions.subscribe((change) => {
+      if (change.kind === 'moved') {
+        this.claudeSessionNames.observeTurnChange(change.paneKey)
+      }
+    })
     const saveMovedWorkerSessions = watchMovedWorkerResumeSessions(
       this,
       () => this._orchestrationDb

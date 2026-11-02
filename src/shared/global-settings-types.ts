@@ -399,6 +399,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   codexTerminalServerIsolation?: boolean
   /** Off hides the banner on a typed `codex` that joined Codex's shared server. Absent reads as on. */
   codexSharedServerWarning?: boolean
+  /** Why: a terminal tab's name and its Claude Code session name (`/rename`) follow each other. Absent reads as on. */
+  claudeSessionNameSync?: boolean
   /** Dismissed freshness tuples: no write authority, just suppress re-nudging the same official placement/revision. */
   dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are subjective, so they stay opt-in and manual renames win. */

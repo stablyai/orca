@@ -12,7 +12,8 @@ import {
   TerminalRename,
   TerminalResolveActive,
   TerminalResolvePane,
-  TerminalSetPaneTitle
+  TerminalSetPaneTitle,
+  TerminalSyncAgentSessionName
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
 
 export const TERMINAL_QUERY_METHODS = [
@@ -142,6 +143,15 @@ export const TERMINAL_QUERY_METHODS = [
     handler: async (params, { runtime }) => ({
       rename: await runtime.renameTerminal(params.terminal, params.title || null)
     })
+  }),
+  defineMethod({
+    name: 'terminal.syncAgentSessionName',
+    permission: 'workspace',
+    params: TerminalSyncAgentSessionName,
+    handler: (params, { runtime }) => {
+      runtime.syncClaudeSessionNameForTab(params.tabId, params.title)
+      return { accepted: true }
+    }
   }),
   defineMethod({
     name: 'terminal.setPaneTitle',

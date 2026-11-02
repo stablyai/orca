@@ -15,6 +15,11 @@ import {
   getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
 import {
+  getClaudeSessionNameSyncDescription,
+  getClaudeSessionNameSyncSearchKeywords,
+  getClaudeSessionNameSyncTitle
+} from './claude-session-name-sync-copy'
+import {
   getAgentStatusHooksDescription,
   getAgentStatusHooksSearchKeywords,
   getAgentStatusHooksTitle
@@ -200,6 +205,11 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     title: getAgentGeneratedTabTitlesTitle(),
     description: getAgentGeneratedTabTitlesDescription(),
     keywords: getAgentGeneratedTabTitlesSearchKeywords()
+  },
+  {
+    title: getClaudeSessionNameSyncTitle(),
+    description: getClaudeSessionNameSyncDescription(),
+    keywords: getClaudeSessionNameSyncSearchKeywords()
   },
   {
     title: getAgentAwakeTitle(),
