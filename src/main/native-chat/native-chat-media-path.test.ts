@@ -37,6 +37,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
   clearGrokSessionPathLookupCacheForTests()
@@ -221,7 +222,7 @@ describe('Grok session-owned media resolution', () => {
           worktreeId: 'workspace-1',
           agentType: 'grok',
           providerSession: { key: 'session_id', id, transcriptPath, cwd },
-          launchedAt: Date.now()
+          launchedAt: 0
         })
       try {
         publish('chat-tab', 'provider-1', join(directory, 'chat_history.jsonl'))
@@ -266,6 +267,8 @@ describe('Grok session-owned media resolution', () => {
   )
 
   it('retires source projections on hydration, reset and keep-status teardown', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-02T00:00:00Z'))
     class HydrationServer extends AgentHookServer {
       hydrate(path: string): void {
         this.lastStatusFilePath = path
@@ -286,7 +289,7 @@ describe('Grok session-owned media resolution', () => {
           cwd,
           transcriptPath: join(directory, 'chat_history.jsonl')
         },
-        launchedAt: Date.now()
+        launchedAt: 0
       })
       const file = join(root, 'last-status.json')
       await writeFile(
