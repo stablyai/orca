@@ -45,12 +45,14 @@ function Chat({
   acceptsText = true,
   rewind,
   onFind,
-  actions
+  actions,
+  childInheritsLinkContext = false
 }: {
   acceptsText?: boolean
   rewind?: NativeChatRewindSurface
   onFind?: () => void
   actions?: Partial<NativeChatContextMenuActions>
+  childInheritsLinkContext?: boolean
 }): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle | null>({
@@ -79,6 +81,13 @@ function Chat({
       <div data-native-chat-rewind-item="ask-1">
         <p>User prompt</p>
       </div>
+      <section
+        data-native-chat-child-transcript="child-worker"
+        data-native-chat-inherit-link-context={childInheritsLinkContext ? 'true' : 'false'}
+      >
+        <a href="src/app.ts">child file</a>
+        <div data-native-chat-rewind-item="ask-1">Child prompt</div>
+      </section>
       <p>Empty area</p>
       <textarea aria-label="composer" />
       {menu}
@@ -156,6 +165,30 @@ describe('native chat right-click targets', () => {
     window.getSelection()?.selectAllChildren(screen.getByText('Agent reply words'))
     await rightClick('Agent reply words')
     expect(menuItemNames()).not.toContain('Add to chat')
+  })
+
+  it('keeps a different-workspace child link and prompt from acting on the parent', async () => {
+    const rewind = { disabledReason: null, request: vi.fn() }
+    render(<Chat rewind={rewind} onFind={vi.fn()} />)
+    await rightClick('child file')
+    expect(menuItemNames()).not.toContain('Open file')
+    expect(menuItemNames()).not.toContain('Copy Path')
+    expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+    await rightClick('Child prompt')
+    expect(menuItemNames()).not.toContain('Rewind to here')
+    expect(rewind.request).not.toHaveBeenCalled()
+  })
+
+  it('preserves file actions for a child with the verified parent workspace scope', async () => {
+    render(<Chat childInheritsLinkContext onFind={vi.fn()} />)
+    await rightClick('child file')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open file' }))
+    expect(mocks.openDetectedFilePath).toHaveBeenCalledWith(
+      '/repo/src/app.ts',
+      null,
+      null,
+      expect.objectContaining({ worktreeId: 'wt-1', worktreePath: '/repo' })
+    )
   })
 
   it('rewinds to the right-clicked prompt through the confirm dialog', async () => {
