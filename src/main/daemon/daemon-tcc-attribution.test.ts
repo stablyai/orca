@@ -103,7 +103,6 @@ describe('macOS daemon TCC attribution health', () => {
     let orphanPid: number | null = null
 
     beforeEach(() => {
-      appEnvironment.packaged = true
       Object.defineProperty(process, 'getSystemVersion', {
         configurable: true,
         value: () => '27.2.0'
@@ -125,7 +124,7 @@ describe('macOS daemon TCC attribution health', () => {
     // The intermediate shell exits at once, so launchd adopts the daemon-like process.
     async function writeOrphanedDaemonPidFile(
       spawnerExecPath: string,
-      launchArgs = '--login-session-watch'
+      launchArgs: string
     ): Promise<void> {
       writeFileSync(spawnerExecPath, '', 'utf8')
       const pid = await new Promise<number>((resolve, reject) => {
@@ -152,37 +151,42 @@ describe('macOS daemon TCC attribution health', () => {
       })
     }
 
-    it('reports a forked daemon as severed even though the app binary still exists', async () => {
+    it.each([
+      {
+        name: 'a forked daemon is severed even though the app binary still exists',
+        spawner: 'Orca',
+        launchArgs: '--login-session-watch',
+        packaged: true,
+        health: 'severed'
+      },
+      {
+        name: 'the launchd terminal host is intact because it is its own responsible process',
+        spawner: MAC_TERMINAL_HOST_EXECUTABLE,
+        launchArgs: '--login-session-watch',
+        packaged: true,
+        health: 'intact'
+      },
+      {
+        name: 'an unpackaged fork is intact because a restart would only fork again',
+        spawner: 'Orca',
+        launchArgs: '--login-session-watch',
+        packaged: false,
+        health: 'intact'
+      },
+      {
+        name: 'a headless host is intact because its exited parent may not have been responsible',
+        spawner: 'Orca',
+        launchArgs: '',
+        packaged: true,
+        health: 'intact'
+      }
+    ])('$name', async ({ spawner, launchArgs, packaged, health }) => {
       if (process.platform !== 'darwin') {
         return
       }
-      await writeOrphanedDaemonPidFile(join(dir, 'Orca'))
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('severed')
-    })
-
-    it('reports the launchd terminal host as intact because it is its own responsible process', async () => {
-      if (process.platform !== 'darwin') {
-        return
-      }
-      await writeOrphanedDaemonPidFile(join(dir, MAC_TERMINAL_HOST_EXECUTABLE))
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
-    })
-
-    it('stays intact where a restart would only fork again', async () => {
-      if (process.platform !== 'darwin') {
-        return
-      }
-      appEnvironment.packaged = false
-      await writeOrphanedDaemonPidFile(join(dir, 'Orca'))
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
-    })
-
-    it('stays intact for a headless host, which an exited parent may not have been responsible for', async () => {
-      if (process.platform !== 'darwin') {
-        return
-      }
-      await writeOrphanedDaemonPidFile(join(dir, 'Orca'), '')
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
+      appEnvironment.packaged = packaged
+      await writeOrphanedDaemonPidFile(join(dir, spawner), launchArgs)
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe(health)
     })
   })
 
