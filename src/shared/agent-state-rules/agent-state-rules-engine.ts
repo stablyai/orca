@@ -84,8 +84,9 @@ function compileCondition(
 }
 
 export function compileAgentRules(file: AgentStateRulesFile): CompiledRule[] {
-  return file.rules
-    .toSorted((left, right) => right.priority - left.priority)
+  // A copied sort the phone's JavaScript engine supports (it lacks toSorted).
+  return [...file.rules]
+    .sort((left, right) => right.priority - left.priority)
     .map((rule) => ({
       verdict: { ruleId: rule.id, ...rule.answer },
       region: rule.when.region,
