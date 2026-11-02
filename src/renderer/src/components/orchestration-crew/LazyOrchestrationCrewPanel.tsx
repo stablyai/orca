@@ -1,9 +1,9 @@
-import { Suspense, type ComponentProps } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazy, Suspense, type ComponentProps } from 'react'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import type { OrchestrationCrewPanel as Panel } from './OrchestrationCrewPanel'
 
 // Loaded on first mount, so a user who never turns the experimental panel on never loads its code.
+// Plain lazy, not the app's reloading retry: a failed load just leaves this optional overlay out.
 const OrchestrationCrewPanel = lazy(() =>
   import('./OrchestrationCrewPanel').then((module) => ({ default: module.OrchestrationCrewPanel }))
 )
