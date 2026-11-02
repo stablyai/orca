@@ -76,6 +76,20 @@ describe('connecting the SSH host a paired server uses only for its ports', () =
     expect(mocks.resolve).not.toHaveBeenCalled()
   })
 
+  it("finds a released host's ports-only stop past another server's unfinished ordinary link", async () => {
+    mocks.environments = [
+      { id: 'env-0', name: 'Other', pendingSshAccessOperation: { ...access, operation: 'link' } },
+      {
+        id: 'env-1',
+        name: 'Lab',
+        pendingSshAccessOperation: { ...access, operation: 'unlink', portsOnly: true }
+      }
+    ]
+    await expect(decideHostServer(released)).rejects.toThrow(
+      "The SSH access change for Lab didn't finish."
+    )
+  })
+
   it('decides the server of a released host edited since, which Retry can no longer finish', async () => {
     mocks.environments = [
       {

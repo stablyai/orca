@@ -62,13 +62,14 @@ function portsOnlyEnvironmentOf(target: SshTarget): KnownRuntimeEnvironment | un
     : undefined
 }
 
-/** A change that stopped while the host had no fence, which Retry can still finish on this host. */
+/** A ports-only change that stopped while the host had no fence, which Retry can still finish here. */
 function isRetryableOn(
   operation: RuntimeSshAccessOperation | undefined,
   target: SshTarget
 ): boolean {
   return (
-    operation?.sshTargetId === target.id &&
+    operation?.portsOnly === true &&
+    operation.sshTargetId === target.id &&
     operation.sshTargetGeneration === target.generation &&
     operation.targetFingerprint === fingerprintRuntimeSshTarget(target)
   )
