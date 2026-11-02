@@ -1,8 +1,9 @@
 /** Archive structured journals as transcript-shaped evidence with session identity, rather than pretending a PTY or file exists. */
 
-import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
-import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentType } from '../../../shared/agent-status-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
+import { projectStructuredItemsToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { boundWorkerTranscriptTail } from './worker-transcript-payload'
 import { readRetiredLineageJournalPage } from './structured-worker-journal-page'
 

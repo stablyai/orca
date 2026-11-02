@@ -92,7 +92,41 @@ export const chatUiFeatureTipShownSchema = z
 export const chatUiFeatureTipActionSchema = z
   .object({
     variant: chatUiFeatureTipVariantSchema,
-    action: z.enum(['use_chat_ui', 'stay_in_terminal', 'open_settings', 'dismissed']),
+    action: z.enum([
+      'use_chat_ui',
+      'stay_in_terminal',
+      'switch_to_terminal',
+      'open_settings',
+      'open_live_switching',
+      'live_switching_shown',
+      'dismissed'
+    ]),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+// Fires in both arms when the tip would open, so control has the same exposure moment as treatment.
+export const chatUiFeatureTipExposureSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    launch_tip_cohort: z.enum([
+      'control',
+      'treatment',
+      'treatment-live-switch',
+      'treatment-swapped-buttons',
+      'treatment-center',
+      'unassigned'
+    ]),
+    shown: z.boolean(),
+    targeting: z.enum(['all', 'eligible-harnesses', 'not-switched']).optional(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const agentDefaultSurfaceChangedSchema = z
+  .object({
+    from_mode: nativeChatViewModeSchema,
+    to_mode: nativeChatViewModeSchema,
+    source: z.enum(['launch_card', 'settings']),
+    launch_tip_shown: z.boolean(),
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()

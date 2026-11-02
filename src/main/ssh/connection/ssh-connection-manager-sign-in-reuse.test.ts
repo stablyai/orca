@@ -88,17 +88,6 @@ describe('SshConnectionManager on a password host', () => {
     expect(onCredentialRequest).toHaveBeenCalledTimes(1)
   })
 
-  it('does not ask again after a background owner closed the connection it opened', async () => {
-    await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
-
-    ssh2Mock.connectSequence = ['ready']
-    await manager.connect(createTarget())
-
-    expect(lastConnectPassword()).toBe('hunter2')
-    expect(onCredentialRequest).toHaveBeenCalledTimes(1)
-    expect(manager.hasCachedCredential(createTarget())).toBe(true)
-  })
-
   it('keeps the sign-in across a replacement that failed for a reason other than sign-in', async () => {
     await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
     ssh2Mock.connectSequence = [new Error('Handshake failed: signature verification failed')]

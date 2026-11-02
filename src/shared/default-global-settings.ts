@@ -44,6 +44,8 @@ export function buildDefaultSettings(args: {
     pluginAppTheme: null,
     pluginAppThemeLight: null,
     pluginAppThemeDark: null,
+    editorThemeLight: null,
+    editorThemeDark: null,
     pluginIconTheme: null,
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -85,6 +87,7 @@ export function buildDefaultSettings(args: {
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
     terminalUseSeparateLightTheme: true,
+    terminalColorOverridesSplit: true,
     terminalThemeLight: 'Builtin Tango Light',
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
@@ -109,6 +112,7 @@ export function buildDefaultSettings(args: {
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
+    reduceVisualEffects: false,
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,

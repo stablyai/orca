@@ -15,6 +15,8 @@ export const journalStateLayout = {
   tombstones: 'map',
   removedTurnIds: 'set',
   submissions: 'map',
+  inputEntries: 'map',
+  inputCards: 'map',
   receipts: 'map',
   aliases: 'map',
   itemEchoes: 'map',

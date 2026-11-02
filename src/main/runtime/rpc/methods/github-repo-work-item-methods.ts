@@ -110,7 +110,11 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
         params.repo,
         params.number,
         params.type,
-        ...(params.ownerRepo ? ([params.ownerRepo] as const) : ([] as const))
+        ...(params.canonical !== undefined
+          ? ([params.ownerRepo, params.canonical] as const)
+          : params.ownerRepo
+            ? ([params.ownerRepo] as const)
+            : ([] as const))
       )
   })
 ]

@@ -5,6 +5,14 @@ export const PLUGIN_SCHEMA_SINCE_V1 = '1.4.160'
 export const PLUGIN_MANIFEST_V2_SINCE = '1.4.245'
 /** First release that derives the publisher, so a format 2 manifest may leave `publisher` out. */
 export const PLUGIN_DERIVED_PUBLISHER_SINCE = '1.4.246'
+/** First release that reads panel `ui` (`components` panels) and the extended icon set. */
+export const PLUGIN_PANEL_UI_SINCE = '1.4.246'
+/** First release whose components panels draw catalog 2 (`ui.catalog` 2: Table, Tree, Tabs, ...). */
+export const PLUGIN_COMPONENTS_CATALOG_2_SINCE = '1.4.247'
+/** Build-less `.ts/.tsx/.mts/.jsx` panel and editor files ship with components panels. */
+export const PLUGIN_SOURCE_MODULES_SINCE = PLUGIN_PANEL_UI_SINCE
+/** Panels reach their worker, storage, settings and events; `contributes.settings` arrives. */
+export const PLUGIN_PANEL_BRIDGE_SINCE = PLUGIN_PANEL_UI_SINCE
 
 type PluginFieldDoc = {
   description: string
@@ -14,7 +22,7 @@ type PluginFieldDoc = {
 
 // Why one suffix: these rules are enforced at runtime only (a pattern cannot express them), so
 // every path field states them where an editor shows the field.
-const PATH_RUNTIME_RULES =
+export const PLUGIN_PATH_RUNTIME_RULES =
   'Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.'
 
 /** pluginFieldDoc for a plugin-relative path field. */
@@ -23,7 +31,7 @@ export function pluginPathFieldDoc(
   since: string,
   examples?: readonly unknown[]
 ): PluginFieldDoc {
-  return pluginFieldDoc(`${description} ${PATH_RUNTIME_RULES}`, since, examples)
+  return pluginFieldDoc(`${description} ${PLUGIN_PATH_RUNTIME_RULES}`, since, examples)
 }
 
 /** Metadata the published JSON Schema and the author reference render for one field. */

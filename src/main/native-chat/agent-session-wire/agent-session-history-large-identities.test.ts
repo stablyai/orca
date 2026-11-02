@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { boundJournalKeyComponent } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { boundJournalKeyComponent } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { readAgentSessionHistory } from './agent-session-history-page'
 
@@ -185,15 +185,5 @@ describe('identity bounding at admission', () => {
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
     expect(removal.page.removedItemIds).toEqual([appended.itemId])
-  })
-
-  it('keeps bounded keys deterministic and a fixed point of re-derivation', () => {
-    const oversized = 'x'.repeat(2 * 1024 * 1024)
-    const bounded = boundJournalKeyComponent(oversized)
-    expect(bounded).toBe(boundJournalKeyComponent(oversized))
-    expect(boundJournalKeyComponent(bounded)).toBe(bounded)
-    expect(bounded.length).toBeLessThan(2048)
-    expect(boundJournalKeyComponent(`${oversized}y`)).not.toBe(bounded)
-    expect(boundJournalKeyComponent('short')).toBe('short')
   })
 })

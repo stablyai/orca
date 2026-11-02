@@ -1,10 +1,8 @@
-import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+import type { AgentSessionContextUsage } from '../../shared/agent-session/agent-session-context-usage'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   claudeCurrentTurnIdentity,

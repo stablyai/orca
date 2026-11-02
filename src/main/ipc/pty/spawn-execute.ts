@@ -15,7 +15,7 @@ import {
   PaneOwnerContentionError
 } from './pane/pane-spawn-operation'
 import { isRegisteredAgentSessionOwnerLive } from './provider/liveness'
-import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
 import {
   resumeSpawnRefusal,
   SavedResumeFreshRefusal,

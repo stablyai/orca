@@ -1,6 +1,6 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isNativeChatSupportedAgent } from '../../../../shared/native-chat-agent-support'
+import { isNativeChatSupportedAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import { nativeChatAvailabilityAgent } from '../../../../shared/native-chat-availability'
 
 export type NativeChatPaneResolutionInput = {

@@ -69,7 +69,9 @@ export async function getWorkItemDetails(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference,
-  repositoryOverride?: unknown
+  repositoryOverride?: unknown,
+  // Only an explicit Refresh asks for uncached reads whose required parts fail instead of collapsing to empty.
+  canonical = false
 ): Promise<GitHubWorkItemDetails | null> {
   return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
     let repositoryTarget: GitHubApiRepository | null = null
@@ -113,7 +115,7 @@ export async function getWorkItemDetails(
           connectionId,
           localGitOptions,
           preference,
-          type === 'issue'
+          type === 'issue' && !canonical
         )
     if (!item) {
       return null
@@ -136,7 +138,9 @@ export async function getWorkItemDetails(
                 item.number,
                 resolvedRepository,
                 connectionId,
-                localGitOptions
+                localGitOptions,
+                false,
+                canonical
               )
             : issueDetails
         if (collapsed) {
@@ -147,7 +151,7 @@ export async function getWorkItemDetails(
             ]),
             body: collapsed.body,
             comments: collapsed.comments,
-            assignees: collapsed.assignees,
+            assignees: item.assignees?.map((user) => user.login) ?? collapsed.assignees,
             participants: collapsed.participants,
             timelineItems: collapsed.timelineItems
           }
@@ -158,7 +162,8 @@ export async function getWorkItemDetails(
             item.number,
             resolvedRepository,
             connectionId,
-            localGitOptions
+            localGitOptions,
+            canonical
           ),
           getWorkItemParticipants(repoPath, item, resolvedRepository, connectionId, localGitOptions)
         ])
@@ -175,7 +180,7 @@ export async function getWorkItemDetails(
           item: enrichItemDisplayAvatars(item, mentionParticipants),
           body,
           comments,
-          assignees,
+          assignees: item.assignees?.map((user) => user.login) ?? assignees,
           participants: mentionParticipants,
           timelineItems
         }

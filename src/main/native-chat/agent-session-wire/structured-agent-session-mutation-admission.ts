@@ -7,22 +7,24 @@ import {
   agentSessionFingerprintConflict,
   agentSessionLedgerRefusal,
   computeAgentSessionPayloadFingerprint
-} from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
-} from '../../../shared/agent-session-operation-ledger'
+} from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type {
   AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
-  AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
+import {
+  type AgentSessionWireRefusal,
+  isAgentSessionRefusalError
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision
 } from '../../runtime/agent-session/ownership/agent-session-operation-admission'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   classifyJournalOpenFailure,
   journalOpenRefusal

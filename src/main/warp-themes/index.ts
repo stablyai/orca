@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import type { WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource

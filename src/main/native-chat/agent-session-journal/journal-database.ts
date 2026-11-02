@@ -74,6 +74,8 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
     ensureJournalOutcomeTables(probe)
+    // An earlier build indexed clear successors for a query that no longer exists; writes stop paying for it.
+    probe.exec('DROP INDEX IF EXISTS idx_agent_session_clear_successor')
     ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true

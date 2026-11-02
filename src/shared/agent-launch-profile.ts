@@ -5,7 +5,7 @@ import {
   removeOverriddenAgentSessionArgs,
   resolveAgentSessionOptionLaunch,
   type ResolvedSessionOptionLaunch
-} from './agent-session-option-launch'
+} from './agent-session/options/agent-session-option-launch'
 import type { AgentLaunchProfileSettings } from './tui-agent-launch-defaults'
 import { YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
 import { hasTypedAgentPermission, resolveAgentPermission } from './tui-agent-permission-choice'

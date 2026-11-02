@@ -1,4 +1,4 @@
-import { normalizeAgentProviderSession } from './agent-session-resume'
+import { normalizeAgentProviderSession } from './agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
 import {
   isAgentStatusExecutionId,

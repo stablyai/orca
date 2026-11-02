@@ -6,7 +6,7 @@ import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import {
   CLEANUP_METHODS,
@@ -101,7 +101,10 @@ describe('a host whose agents are set to CLI', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
     expect(hostCalls.close).toHaveBeenCalledWith(SESSION, 'user-close')
     // The durable tab has to be retired too, or the chat comes back on the next sync.
-    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false)
+    expect(hostCalls.setSessionTabVisibility).toHaveBeenCalledWith(SESSION, false, undefined, {
+      deferHiddenNotice: true,
+      check: expect.any(Function)
+    })
   })
 
   it('cancels an in-flight turn', async () => {

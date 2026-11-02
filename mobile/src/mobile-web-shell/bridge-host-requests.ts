@@ -9,7 +9,7 @@ import { openRpcRequestBudget } from '../transport/rpc-request-budget'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
-import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
+import { bridgePendingRequestCap } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'
 import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
@@ -135,8 +135,9 @@ export class BridgeHostRequests {
       this.deps.sendError(id, this.deps.capExceeded('that id is already in flight'))
       return
     }
-    if (this.inFlight >= BRIDGE_MAX_PENDING_REQUESTS) {
-      this.deps.sendError(id, this.deps.capExceeded(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests`))
+    const cap = bridgePendingRequestCap(isBridgeNativeMethod(message.method))
+    if (this.inFlight >= cap) {
+      this.deps.sendError(id, this.deps.capExceeded(`over ${cap} requests`))
       return
     }
     const record: PendingRequest = { live: true }

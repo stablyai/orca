@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import React, { act } from 'react'
+import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createServer, type Server } from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -22,46 +22,25 @@ import {
   createRuntimeStatusSlice,
   clearRuntimeEnvironmentConnectionGenerationsForTests
 } from '@/store/slices/runtime-status'
+import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
+import type { AppState } from '@/store/types'
 import type { RuntimeStatusStoreState } from '@/store/slices/runtime-status-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import type { Repo } from '../../../shared/repo-types'
+import { ROW_COUNT, registeredRows } from './github-metadata-registered-repos.test-fixture'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { resolveGitHubRepoExecution } from '../../../main/github/github-api-repository'
 
 const provider = vi.hoisted(() => ({ exec: vi.fn(), rpc: vi.fn(), evaluations: 0, rows: 0 }))
-function row(host: 'local' | `runtime:${string}`, user: string): Repo {
-  return {
-    id: 'shared',
-    path: '/shared',
-    executionHostId: host,
-    displayName: 'shared',
-    badgeColor: '',
-    addedAt: 0,
-    ghAccount: { host: 'github.corp', user },
-    issueSourcePreference: host === 'local' ? 'upstream' : 'origin'
-  }
-}
-const ROW_COUNT = 250
-function registeredRows() {
-  return [
-    row('local', 'L'),
-    row('runtime:S', 'A'),
-    row('runtime:unused', 'unused'),
-    ...Array.from({ length: ROW_COUNT - 3 }, (_, index) => ({
-      ...row('runtime:unused', 'unused'),
-      id: `other-${index}`,
-      path: `/other-${index}`
-    }))
-  ]
-}
+const metadataSettings = createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'S' })
 const metadataStore = create<
   RuntimeStatusStoreState & {
     unrelated: number
     repos: Repo[]
-    settings: { activeRuntimeEnvironmentId: string | null }
+    settings: AppState['settings']
     recordFeatureInteraction: () => void
     projects: []
     projectHostSetups: []
@@ -76,7 +55,7 @@ const metadataStore = create<
   projectHostSetups: [],
   folderWorkspacePathStatuses: {},
   repos: registeredRows(),
-  settings: { activeRuntimeEnvironmentId: 'S' },
+  settings: metadataSettings,
   recordFeatureInteraction: () => {}
 }))
 const repoActions = createRepoUpdateActions(
@@ -766,7 +745,7 @@ it.each([
       clearRuntimeEnvironmentConnectionGenerationsForTests()
       metadataStore.setState({
         repos: registeredRows(),
-        settings: { activeRuntimeEnvironmentId: focus },
+        settings: { ...metadataSettings, activeRuntimeEnvironmentId: focus },
         runtimeEnvironments: [],
         runtimeStatusByEnvironmentId: new Map()
       })

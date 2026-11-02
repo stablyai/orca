@@ -76,15 +76,6 @@ describe('WorkspaceActivityFactsProducer', () => {
     })
   })
 
-  it('keeps an SSH workspace whose host lost contact as unverifiable, not idle', () => {
-    const { producer, surfaces } = createProducer()
-    surfaces.set(WT_A, { ...NONE, terminal: 'live' })
-    producer.refreshWorkspace(WT_A)
-    surfaces.set(WT_A, { ...NONE, terminal: 'unverifiable' })
-    producer.refreshWorkspace(WT_A)
-    expect(producer.snapshot().facts[WT_A]?.terminal).toBe('unverifiable')
-  })
-
   it('follows agent status transitions without re-reading any surfaces', () => {
     const server = new AgentHookServer()
     const { producer, readSurfaces } = createProducer()

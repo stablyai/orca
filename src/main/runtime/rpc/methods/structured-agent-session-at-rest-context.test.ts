@@ -2,13 +2,13 @@ import '../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
 import { readFile, rm } from 'node:fs/promises'
 import { piRpcDialogPresentation } from '../../../pi/rpc-extension-dialogs'
-import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session-question-answer'
-import type {
-  AgentJournalItemBody,
-  AgentJournalResolution,
-  AgentJournalQuestionItem
-} from '../../../../shared/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
+import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session/agent-session-question-answer'
+import {
+  type AgentJournalItemBody,
+  type AgentJournalResolution,
+  type AgentJournalQuestionItem,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'

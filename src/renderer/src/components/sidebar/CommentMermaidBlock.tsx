@@ -4,7 +4,7 @@ import { useMermaidDiagramExpand } from '@/components/editor/use-mermaid-diagram
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { cn } from '@/lib/utils'
 
-// Resolve live document theme here; disable HTML labels because sanitized SVG foreignObjects disappear on some platforms.
+// Resolve live document theme here; comment markdown components have no theme access.
 export default function CommentMermaidBlock({
   content,
   className,
@@ -22,7 +22,7 @@ export default function CommentMermaidBlock({
   if (pendingContent === undefined) {
     return (
       <div className={cn(className)}>
-        <MermaidBlock content={content} isDark={isDark} htmlLabels={false} onExpand={expand} />
+        <MermaidBlock content={content} isDark={isDark} onExpand={expand} />
       </div>
     )
   }
@@ -31,7 +31,6 @@ export default function CommentMermaidBlock({
     <MermaidBlock
       content={content}
       isDark={isDark}
-      htmlLabels={false}
       className={className}
       pendingContent={pendingContent}
       renderEnabled={renderEnabled}

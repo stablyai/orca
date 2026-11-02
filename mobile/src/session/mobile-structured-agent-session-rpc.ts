@@ -1,18 +1,18 @@
+import type { AgentSessionMutationResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type {
-  AgentSessionMutationResult,
-  AgentSessionWireRefusalCode
-} from '../../../src/shared/agent-session-wire'
-import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
-import { agentSessionWriteNoticeParts } from '../../../src/shared/agent-session-refusal-notice'
+  AgentSessionWireRefusalCode,
+  AgentSessionRefusalReference
+} from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { agentSessionWriteNoticeParts } from '../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
   agentSessionWriteKindForMethod,
   readAgentSessionErrorRefusal,
   type AgentSessionWriteKind
-} from '../../../src/shared/agent-session-write-failure'
+} from '../../../src/shared/agent-session/failures/agent-session-write-failure'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'

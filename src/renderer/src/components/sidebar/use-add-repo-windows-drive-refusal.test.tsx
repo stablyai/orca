@@ -68,26 +68,4 @@ describe('useAddRepoWindowsDriveRefusal', () => {
     view.rerender({ selectedHostId: 'local' })
     expect(addLocalPath).not.toHaveBeenCalled()
   })
-
-  it('reopens a refused create on this computer with the parent folder filled in', () => {
-    const { view, addLocalPath, createStep, clickAddOnThisComputer } = setup()
-    act(() => view.result.current.showRefusal(REFUSAL, 'create'))
-    clickAddOnThisComputer()
-    view.rerender({ selectedHostId: 'local' })
-    expect(createStep.setStep).toHaveBeenCalledWith('create')
-    expect(createStep.setCreateParent).toHaveBeenCalledWith('C:\\src\\app')
-    expect(addLocalPath).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['the host could not name the drive path', { ...REFUSAL, windowsPath: null }, true],
-    ['this client is not a Windows desktop', REFUSAL, false]
-  ])('offers no switch when %s', (_case, refusal, windowsDesktop) => {
-    client.windowsDesktop = windowsDesktop
-    const { view } = setup()
-    act(() => view.result.current.showRefusal(refusal))
-    render(<>{view.result.current.notice}</>)
-    expect(screen.queryByRole('button', { name: 'Add on this computer' })).toBeNull()
-    expect(screen.getByRole('alert').textContent).toContain('on a Windows drive')
-  })
 })

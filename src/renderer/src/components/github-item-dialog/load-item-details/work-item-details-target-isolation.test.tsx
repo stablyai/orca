@@ -1,6 +1,6 @@
+import '../../../../../main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { act } from 'react'
 import type * as GitRunner from '../../../../../main/git/runner'
-import type { GitHubRepoContext } from '../../../../../main/github/github-repository-identity'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 // @vitest-environment happy-dom
 import type {
@@ -25,7 +25,22 @@ import { WorkItemDetails } from '../../../../../shared/rpc-contract/github-repo-
 import { getWorkItemDetails } from '../../../../../main/github/work-item-details'
 import { _resetOriginGitHubApiRepositoryCache } from '../../../../../main/github/github-api-repository'
 import { useGitHubWorkItemDetails } from './use-github-work-item-details'
-import { workItemDetailsCache } from './work-item-details-cache'
+import {
+  workItemDetailsCache,
+  patchCachedWorkItemBody,
+  subscribeWorkItemDetailsCache
+} from './work-item-details-cache'
+import { useAppStore } from '@/store'
+import { RpcDispatcher } from '../../../../../main/runtime/rpc/dispatcher'
+import { OrcaRuntimeService } from '../../../../../main/runtime/orca-runtime'
+import { RuntimeGitHubRepositoryQueryCommands } from '../../../../../main/runtime/runtime-github-repository-query-commands'
+import { GITHUB_REPO_WORK_ITEM_METHODS } from '../../../../../main/runtime/rpc/methods/github-repo-work-item-methods'
+import { RPC_PARAMS_BY_METHOD } from '../../../../../shared/rpc-contract/rpc-params-catalog.generated'
+import { TASK_SOURCE_RUNTIME_CAPABILITIES } from '../../../../../shared/task-source-runtime-capabilities'
+import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
+import type { Repo } from '../../../../../shared/repo-types'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 type Published = {
   onCommentAdded: (comment: PRComment) => void
@@ -81,6 +96,7 @@ const io = vi.hoisted(() => {
     preference: target.preference,
     upstreamIsIssue: false,
     recordInteraction: vi.fn(),
+    toastError: vi.fn(),
     unexpected: new Array<string>()
   }
 })
@@ -88,13 +104,12 @@ vi.mock('../../../../../main/git/runner', async (original) => ({
   ...(await original<typeof GitRunner>()),
   ghExecFileAsync: io.gh
 }))
-vi.mock('../../../../../main/github/gh-utils', () => ({
+vi.mock('../../../../../main/github/gh-utils', async () => ({
   ghExecFileAsync: io.gh,
   classifyGhError: () => ({ type: 'not_found', message: 'Not found' }),
   acquire: vi.fn(),
   release: vi.fn(),
-  ghRepoExecOptions: (context: GitHubRepoContext) => context,
-  githubRepoContext: (repoPath: string) => ({ cwd: repoPath }),
+  ...(await import('../../../../../main/github/github-repository-identity')),
   getOwnerRepoForRemote: async (_path: string, remote: string) =>
     io.host === 'github.com'
       ? { owner: remote === 'origin' ? 'fork' : 'upstream', repo: 'widgets' }
@@ -123,17 +138,11 @@ vi.mock('../../../../../main/github/client', async () => ({
   ...(await import('../../../../../main/github/client/check/get-pr-checks')),
   ...(await import('../../../../../main/github/client/fetch/get-pr-comments'))
 }))
-vi.mock('@/store', () => {
-  const state = {
-    repos: [{ id: 'clone', path: '/clone', issueSourcePreference: 'upstream' }],
-    recordFeatureInteraction: io.recordInteraction
-  }
-  return {
-    useAppStore: Object.assign((select: (value: typeof state) => unknown) => select(state), {
-      getState: () => state
-    })
-  }
+vi.mock('@/store', async () => {
+  const { createTestStore } = await import('@/store/slices/github-slice-test-harness')
+  return { useAppStore: createTestStore() }
 })
+vi.mock('sonner', () => ({ toast: { error: io.toastError } }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: io.rpc,
   runtimeEnvironmentSupportsCapability: async () => io.capable
@@ -161,9 +170,8 @@ function item(owner: string): GitHubWorkItem {
     updatedAt: ''
   }
 }
-let _labels: ReturnType<typeof useRepoLabels>
 function Metadata({ enabled }: { enabled: boolean }) {
-  _labels = useRepoLabels(enabled ? '/clone' : null, enabled ? 'clone' : null)
+  useRepoLabels(enabled ? '/clone' : null, enabled ? 'clone' : null)
   return null
 }
 let view: ReturnType<typeof useGitHubWorkItemDetails>
@@ -191,6 +199,21 @@ function Probe({
 }
 
 beforeEach(() => {
+  useAppStore.setState({
+    repos: [
+      {
+        id: 'clone',
+        path: '/clone',
+        displayName: 'Clone',
+        badgeColor: '',
+        addedAt: 0,
+        issueSourcePreference: 'upstream'
+      }
+    ],
+    recordFeatureInteraction: io.recordInteraction,
+    runtimeStatusByEnvironmentId: new Map()
+  })
+  io.toastError.mockClear()
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   _resetOriginGitHubApiRepositoryCache()
   workItemDetailsCache.clear()
@@ -406,7 +429,8 @@ beforeEach(() => {
             null,
             {},
             io.preference,
-            parsed.ownerRepo
+            parsed.ownerRepo,
+            parsed.canonical
           )
         },
         listLabels: async (args: Parameters<typeof window.api.gh.listLabels>[0]) =>
@@ -578,4 +602,202 @@ it('shared pending work and invalidation settle only their originating resource 
   expect(view.details).toMatchObject({ body: 'upstream body', pullRequestId: 'PR_upstream' })
   expect(workItemDetailsCache.get(aKey)?.details?.pullRequestId).toBe('PR_fork')
   expect(workItemDetailsCache.get(bKey)?.pending).toBeUndefined()
+})
+
+it('carries actual ordinary and Refresh intent through the registered full aggregate and publication owner', async () => {
+  const registered: Repo = {
+    id: 'clone',
+    path: '/clone',
+    displayName: 'Clone',
+    badgeColor: '',
+    addedAt: 0,
+    executionHostId: 'runtime:details-intent',
+    issueSourcePreference: 'upstream',
+    ghAccount: { host: 'github.com', user: 'alice' }
+  }
+  useAppStore.setState({ repos: [registered] })
+  const source = buildTaskSourceContextFromRepo({
+    provider: 'github',
+    projectId: 'clone',
+    repo: registered
+  })!
+  const opened: GitHubWorkItem = {
+    ...item('fork'),
+    id: 'issue:93',
+    type: 'issue',
+    url: 'https://github.com/fork/widgets/issues/93'
+  }
+  const ownerRepo = { owner: 'fork', repo: 'widgets', host: 'github.com' }
+  const commands = new RuntimeGitHubRepositoryQueryCommands({
+    resolveRepo: async (selector) => {
+      expect(selector).toBe('clone')
+      return registered
+    },
+    getLocalGitArgs: () => [{ ghAccount: registered.ghAccount }]
+  })
+  const runtime = new OrcaRuntimeService()
+  vi.spyOn(runtime, 'getRuntimeId').mockReturnValue('details-runtime')
+  vi.spyOn(runtime, 'getRepoWorkItemDetails').mockImplementation(
+    commands.getRepoWorkItemDetails.bind(commands)
+  )
+  const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_REPO_WORK_ITEM_METHODS })
+  const intents: boolean[] = []
+  io.rpc.mockImplementation(
+    async (
+      target: RuntimeClientTarget,
+      method: string,
+      params: unknown,
+      options?: Parameters<typeof callRuntimeRpc>[3]
+    ) => {
+      expect(target).toEqual({ kind: 'environment', environmentId: 'details-intent' })
+      options?.beforeSend?.()
+      if (method === 'status.get') {
+        return {
+          runtimeId: 'details-runtime',
+          capabilities: ['github.exact-work-item-target.v1', ...TASK_SOURCE_RUNTIME_CAPABILITIES]
+        }
+      }
+      expect(method).toBe('github.workItemDetails')
+      const parsed = RPC_PARAMS_BY_METHOD['github.workItemDetails'].parse(params)
+      expect(parsed).toEqual({
+        repo: 'clone',
+        number: 93,
+        type: 'issue',
+        ownerRepo,
+        canonical: parsed.canonical
+      })
+      expect(typeof parsed.canonical).toBe('boolean')
+      intents.push(parsed.canonical === true)
+      const reply = await dispatcher.dispatch({
+        id: 'details',
+        method,
+        params,
+        authToken: 'fixture'
+      })
+      if (!reply.ok) {
+        throw new Error(reply.error.message)
+      }
+      return reply.result
+    }
+  )
+  let failComments = true
+  let body = 'ordinary body'
+  const commentsFailure = new Error('same comments failure')
+  let heldComments: ReturnType<typeof Promise.withResolvers<{ stdout: string }>> | undefined
+  const commentsStarted = Promise.withResolvers<void>()
+  io.gh.mockImplementation(
+    async (args: string[], options: { ghAccount?: { host: string; user: string } }) => {
+      expect(options.ghAccount).toEqual(registered.ghAccount)
+      const route = args.find((arg) => arg.startsWith('repos/'))
+      if (route) {
+        expect(route).toMatch(/^repos\/fork\/widgets\/issues\/93(?:$|\/)/)
+        if (route.includes('/comments?')) {
+          if (heldComments) {
+            commentsStarted.resolve()
+            return heldComments.promise
+          }
+          if (failComments) {
+            throw commentsFailure
+          }
+          return response([])
+        }
+        if (route.includes('/timeline?')) {
+          return response([])
+        }
+        return response({
+          number: 93,
+          title: 'Exact fork',
+          state: 'open',
+          html_url: opened.url,
+          user: null,
+          labels: [],
+          assignees: [],
+          updated_at: '',
+          body
+        })
+      }
+      if (args.includes('graphql')) {
+        return args.some((arg) => arg.includes('$includeItem'))
+          ? response({})
+          : response({ data: { repository: { issue: { participants: { nodes: [] } } } } })
+      }
+      throw new Error(`Unexpected gh command: ${JSON.stringify(args)}`)
+    }
+  )
+  const legacy = await dispatcher.dispatch({
+    id: 'shipped-absent-intent',
+    method: 'github.workItemDetails',
+    authToken: 'fixture',
+    params: { repo: 'clone', number: 93, type: 'issue', ownerRepo }
+  })
+  expect(legacy).toMatchObject({ ok: true, result: { comments: [], item: { url: opened.url } } })
+  let current!: ReturnType<typeof useGitHubWorkItemDetails>
+  function Issue() {
+    current = useGitHubWorkItemDetails({
+      workItem: opened,
+      repoPath: '/clone',
+      effectiveRepoId: 'clone',
+      sourceContext: source
+    })
+    return (
+      <output>
+        {current.details?.body}|{current.error}|{current.refreshing ? 'loading' : 'idle'}
+      </output>
+    )
+  }
+  await act(async () => root.render(<Issue />))
+  expect(intents).toEqual([false])
+  expect(current.details?.comments).toEqual([])
+  expect(current.details?.item.url).toBe(opened.url)
+  expect(current.error).toBeNull()
+  const prior = current.details
+  await act(async () => current.refreshTask())
+  expect(intents).toEqual([false, true])
+  expect(current.details).toBe(prior)
+  expect(current.error).toBeNull()
+  expect(current.refreshing).toBe(false)
+  expect(io.toastError).toHaveBeenCalledExactlyOnceWith('Unable to refresh this task. Try again.')
+  failComments = false
+  body = 'strict body'
+  await act(async () => current.refreshTask())
+  expect(intents).toEqual([false, true, true])
+  expect(current.details?.body).toBe('strict body')
+  expect(current.acceptedRefresh).toBe(1)
+  expect(current.details?.item.url).toBe(opened.url)
+  expect(io.toastError).toHaveBeenCalledTimes(1)
+  const changedBodies: (string | undefined)[] = []
+  const unsubscribe = subscribeWorkItemDetailsCache(() => {
+    changedBodies.push(workItemDetailsCache.get(current.detailsCacheKey!)?.details?.body)
+  })
+  heldComments = Promise.withResolvers<{ stdout: string }>()
+  body = 'superseded body'
+  let crossed!: Promise<void>
+  await act(async () => {
+    crossed = current.refreshTask()
+    await commentsStarted.promise
+  })
+  await act(async () => {
+    patchCachedWorkItemBody(current.detailsCacheKey!, 'saved body')
+    body = 'saved body'
+    const held = heldComments!
+    heldComments = undefined
+    held.resolve(response([]))
+    await crossed
+  })
+  unsubscribe()
+  expect(intents).toEqual([false, true, true, true, true])
+  expect(current.acceptedRefresh).toBe(2)
+  expect(current.details?.body).toBe('saved body')
+  expect(changedBodies).not.toContain('superseded body')
+  expect(io.toastError).toHaveBeenCalledTimes(1)
+  const strictComments = io.gh.mock.calls.filter(([args]) =>
+    args.some((arg: string) => arg.includes('/comments?'))
+  )
+  expect(strictComments).toHaveLength(6)
+  expect(strictComments[0][0]).toContain('--cache')
+  expect(strictComments[1][0]).toContain('--cache')
+  for (const [args] of strictComments.slice(2)) {
+    expect(args).not.toContain('--cache')
+    expect(args).toEqual(expect.arrayContaining(['--paginate', '--slurp']))
+  }
 })

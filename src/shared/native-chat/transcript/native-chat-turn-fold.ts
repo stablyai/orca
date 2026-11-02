@@ -1,10 +1,11 @@
-// Derive settled-turn answers from the last assistant prose or system failure; the journal has no answer marker.
+// Derive settled-turn answers from the last assistant prose or system failure, plus the prose a Stop hook sent back; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 
-import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session-compaction'
-import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../agent-session-orca-stop'
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session/agent-session-compaction'
+import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../agent-session-hook-outcome'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../agent-session/lifecycle/agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../agent-session-turn-notice'
-import { nativeChatRowRendersContent } from '../../native-chat-row-content'
+import { nativeChatRowRendersContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from '../native-chat-stopped-before-start'
 import { nativeChatRowRendersProse } from '../native-chat-trailing-run'
 import {
@@ -12,7 +13,7 @@ import {
   isSubagentGroupBlock,
   type NativeChatMessage,
   type NativeChatRole
-} from '../../native-chat-types'
+} from '../native-chat-types'
 
 /** Each surface supplies its own row-content results so folding sees exactly the prose it renders. */
 export type NativeChatTurnFoldRow = {
@@ -29,6 +30,8 @@ export type NativeChatTurnFoldRow = {
   reportsFailure: boolean
   /** Compaction/interruption/turn notices remain visible; hiding them leaves only generic turn status. */
   explainsTurn: boolean
+  /** A Stop hook sent the agent back after it answered, so the prose before this row is an answer too. */
+  sendsBack: boolean
 }
 
 /** How the fold reads a transcript row, with the same derivation the row renders from. */
@@ -64,7 +67,12 @@ export function nativeChatTurnFoldRow(
         (block.presentation === 'compaction' ||
           block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
           block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
-          block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION)
+          block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||
+          block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION)
+    ),
+    sendsBack: message.blocks.some(
+      (block) =>
+        block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
     )
   }
 }
@@ -81,18 +89,30 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** Last assistant prose/system failure per turn; no answer means fold all work. */
+/** Last assistant prose/system failure per turn and before each send-back; no answer means fold all work. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
-): ReadonlyMap<string, number> {
-  const answers = new Map<string, number>()
+): ReadonlySet<number> {
+  const answers = new Set<number>()
+  const latest = new Map<string, number>()
   for (const [index, row] of rows.entries()) {
+    if (row.turnKey === undefined) {
+      continue
+    }
+    const answer = latest.get(row.turnKey)
+    if (row.sendsBack && answer !== undefined) {
+      answers.add(answer)
+      latest.delete(row.turnKey)
+    }
     const isCandidate =
       row.rendersProse &&
       (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
-    if (row.turnKey !== undefined && isCandidate) {
-      answers.set(row.turnKey, index)
+    if (isCandidate) {
+      latest.set(row.turnKey, index)
     }
+  }
+  for (const index of latest.values()) {
+    answers.add(index)
   }
   return answers
 }
@@ -124,7 +144,7 @@ export function nativeChatTurnFold({
       continue
     }
     // No-prose turns fold wholly behind the status anchor instead of leaving every command expanded.
-    if (index === answers.get(turnKey)) {
+    if (answers.has(index)) {
       continue
     }
     foldableTurnKeys.add(turnKey)

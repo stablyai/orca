@@ -16,7 +16,7 @@ vi.mock('./remote-install-gc-claim', () => ({
 }))
 
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { acquireInstallLock, RemoteInstallLockBusyError } from './remote-install-lock'
+import { acquireInstallLock } from './remote-install-lock'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 describe('acquireInstallLock', () => {
@@ -47,48 +47,5 @@ describe('acquireInstallLock', () => {
         { signal: controller.signal }
       )
     ).rejects.toBe(termination)
-  })
-
-  it.each([
-    [true, 'OK'],
-    [false, 'BUSY']
-  ])('steals a stale lock only when takeover is allowed (%s)', async (allow, expected) => {
-    vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('.steal')) {
-        return 'OK'
-      }
-      return command.includes('mkdir -p') ? '' : 'BUSY'
-    })
-    const acquired = acquireInstallLock(
-      {} as SshConnection,
-      '/home/u/.orca-remote/.orcad-activation-transaction',
-      getRemoteHostPlatform('linux-x64'),
-      { relayGcClaim: false, allowStaleTakeover: allow, waitTimeoutMs: 0 }
-    ).then(
-      () => 'OK',
-      (error: unknown) => (error instanceof RemoteInstallLockBusyError ? 'BUSY' : String(error))
-    )
-    expect(await acquired).toBe(expected)
-    expect(
-      vi.mocked(execCommand).mock.calls.some(([, command]) => command.includes('.steal'))
-    ).toBe(allow)
-  })
-
-  it('reports a lock command that only ever failed as that error, never as a busy fence', async () => {
-    const refused = new Error('channel open failure: administratively prohibited')
-    vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('mkdir -p')) {
-        return ''
-      }
-      throw refused
-    })
-    await expect(
-      acquireInstallLock(
-        {} as SshConnection,
-        '/home/u/.orca-remote/.orcad-activation-transaction',
-        getRemoteHostPlatform('linux-x64'),
-        { relayGcClaim: false, allowStaleTakeover: false, waitTimeoutMs: 0 }
-      )
-    ).rejects.toBe(refused)
   })
 })

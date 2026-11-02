@@ -1,16 +1,17 @@
+import { admitOutcomeFormat2 } from './journal-outcome-format-2'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { z } from 'zod'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity,
-  type AgentSessionJournalProviderHandle
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
+} from '../../../shared/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
   insertTestJournalRowJson,
@@ -21,7 +22,7 @@ import {
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
 import { admitOutcomeFormat1 } from './journal-outcome-format-1'
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { storedFailureFact, storedProviderHandle } from './journal-storage-schema'
 import type { UndeclaredStorageKeys } from './journal-storage-strict'
 import { restoreJournal } from './journal-open'
@@ -32,6 +33,17 @@ import {
   journalStateScalars
 } from './journal-state-layout'
 import { readStoredQueuedMessageRow } from './queued-message-stored-row'
+import { readAgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import { JournalOutcomeCompaction } from './journal-outcome-compaction'
+import { JOURNAL_OUTCOME_FORMAT } from './journal-outcome-format'
+import { parseJournalRow } from './journal-row-schema'
+import {
+  seedOutcomeRows,
+  projectionBase,
+  projectionWriter,
+  expectProjectionMatches
+} from './journal-projection-test-support'
+import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
 
 // Admission keeps the in-memory chat within what this build declares on every path a saved value
 // takes into it, so restating that chat on a new epoch never drops a newer build's key.
@@ -193,7 +205,10 @@ const prefix = z
   )
 
 function plain(state: JournalReducerState): unknown {
-  const fields: Record<string, unknown> = { ...state }
+  const { inputEntries, inputCards, ...ordinary } = state
+  expect([...inputEntries]).toEqual([])
+  expect([...inputCards]).toEqual([['card-2', { introduced: 11 }]])
+  const fields: Record<string, unknown> = ordinary
   return JSON.parse(
     JSON.stringify({
       ...Object.fromEntries(
@@ -223,7 +238,9 @@ it('folds the checked-in input rows into the same chat, every value of which sto
   }
   expect(plain(loaded.state)).toEqual(prefix.expected)
   const collections = journalStateCollections(loaded.state)
-  expect(collections.filter(({ entries }) => [...entries].length === 0)).toEqual([])
+  expect(
+    collections.filter(({ entries }) => [...entries].length === 0).map(({ path }) => path)
+  ).toEqual(['inputEntries'])
   expect(collections.length).toBeGreaterThanOrEqual(15)
   // What restating this chat on a new epoch would store, admitted as this build stores it.
   const stored = [
@@ -247,10 +264,73 @@ it('folds the checked-in input rows into the same chat, every value of which sto
   ]
   expect(stored.length).toBeGreaterThan(20)
   for (const value of stored) {
-    expect(admitOutcomeFormat1({ ...value, deleted: false })).toEqual({
+    const native = value.field === 'inputCards' || value.field === 'inputEntries'
+    if (native) {
+      expect(admitOutcomeFormat1({ ...value, deleted: false })).toBe('unknown')
+    }
+    expect(
+      (native ? admitOutcomeFormat2 : admitOutcomeFormat1)({ ...value, deleted: false })
+    ).toEqual({
       entryKey: JSON.parse(value.key),
       kept: JSON.parse(value.json)
     })
+  }
+})
+
+it('compacts past every collection emitted by the current writer, including native whole values', async () => {
+  const database = openTestJournalHostDatabase(root)
+  // Hybrid golden input (authored plus release-emitted rows), restated by today's production writer.
+  const rows = prefix.rows.map((json) => {
+    const parsed = parseJournalRow(json)
+    if (!parsed.ok) {
+      throw new Error('unreadable golden input')
+    }
+    return parsed.row
+  })
+  const rig = projectionWriter(database, seedOutcomeRows(database, rows))
+  try {
+    await rig.writer.enqueue((seq) => ({
+      ...projectionBase(seq),
+      kind: 'submission',
+      clientMessageId: 'native-pending',
+      payloadFingerprint: 'native-pending',
+      handoverRecorded: true,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'pending' }] },
+      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+    }))
+    for (let revision = 1; revision <= 40; revision++) {
+      await rig.writer.enqueue((seq) => ({
+        ...projectionBase(seq),
+        kind: 'item',
+        itemId: 'after-every-field',
+        revision,
+        body: { kind: 'status', text: `revision ${revision}` }
+      }))
+    }
+    const saved = () =>
+      database.db.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
+    const before = saved()
+    const emitted = new Set(before.map((row) => row.field))
+    for (const { path } of journalStateCollections(rig.state())) {
+      expect(emitted.has(path), path).toBe(true)
+    }
+    expect(new Set(before.map((row) => row.format))).toEqual(new Set([JOURNAL_OUTCOME_FORMAT]))
+    const raw = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+    const compaction = new JournalOutcomeCompaction()
+    while (compaction.page(database)) {
+      /* bounded production pages */
+    }
+    expect(
+      saved().filter((row) => row.field === 'items' && row.entry_key === '"after-every-field"')
+    ).toHaveLength(2)
+    for (const row of saved()) {
+      expect(before).toContainEqual(row)
+    }
+    expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(raw)
+    expectProjectionMatches(database, rig.state())
+  } finally {
+    rig.queue.markClosed()
+    await rig.queue.drain()
   }
 })
 
@@ -274,4 +354,72 @@ it('reads an open string such as an agent type as a value, and still refuses a k
   ).toBeUndefined()
   // @ts-expect-error `host` is a key the stored provider handle does not declare
   expect(declared<UndeclaredStorageKeys<Later, Stored>>()).toBeUndefined()
+})
+
+it.each(['codex', 'future-agent', undefined, 42])(
+  'admits actual start, message and queued sender kind %j without losing the sender',
+  async (agent) => {
+    const journal = await open(journals)
+    const sender = {
+      party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+      name: 'Inspect parser',
+      agent: 'codex'
+    }
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'Mail' }],
+      from: { kind: 'agent' as const, senders: [sender], orchestration: null }
+    }
+    await journal.appendItem(
+      item(0),
+      { kind: 'agent-start', dispatchId: 'dispatch-1', task: 'Inspect parser', worker: sender },
+      SCOPE
+    )
+    await journal.appendItem(item(1), body, SCOPE)
+    await journal.queuedMessages.insert({ messageId: 'queued-1', body })
+    await journals.closeAll()
+    // A later or damaged writer can change this declared optional value without adding any key.
+    const records = db()
+      .prepare(
+        "SELECT generation, seq, ordinal, value_json FROM journal_outcomes WHERE field IN ('items', 'queue.cards')"
+      )
+      .all()
+    expect(records.length).toBeGreaterThanOrEqual(3)
+    for (const row of records) {
+      const json = JSON.stringify(JSON.parse(String(row.value_json)), (key, value) =>
+        key === 'agent' ? agent : value
+      )
+      db()
+        .prepare(
+          'UPDATE journal_outcomes SET value_json = ? WHERE generation = ? AND seq = ? AND ordinal = ?'
+        )
+        .run(json, Number(row.generation), Number(row.seq), String(row.ordinal))
+    }
+    const reopened = await open(journals)
+    const restored = reopened.snapshot().items
+    expect(restored).toHaveLength(2)
+    const fromStart = projectStructuredAgentStartItem(restored[0])?.from
+    const fromMessage = readAgentMessageSource(
+      restored[1].body.kind === 'message' ? restored[1].body.from : undefined
+    )
+    const expected = typeof agent === 'string' ? agent : undefined
+    const queued = reopened.queuedMessages.list()[0]
+    for (const from of [fromStart, fromMessage, readAgentMessageSource(queued.body.from)]) {
+      expect(from?.senders[0]).toMatchObject({ party: sender.party, name: sender.name })
+      expect(from?.senders[0].agent).toBe(expected)
+    }
+  }
+)
+
+it('keeps explicitly opaque annotation values whole without hiding sibling or nested structured keys', () => {
+  type Actual = { annotation: { future: { keys: number[] } }; nested: { kept: string } }
+  type Stored = { annotation?: unknown; nested: { kept: string } }
+  expect(declared<UndeclaredStorageKeys<Actual, Stored>>()).toBeUndefined()
+  // @ts-expect-error an opaque annotation does not declare a sibling key
+  expect(declared<UndeclaredStorageKeys<Actual & { extra: string }, Stored>>()).toBeUndefined()
+  expect(
+    // @ts-expect-error structured siblings still recursively declare their nested keys
+    declared<UndeclaredStorageKeys<Actual & { nested: { kept: string; extra: number } }, Stored>>()
+  ).toBeUndefined()
 })

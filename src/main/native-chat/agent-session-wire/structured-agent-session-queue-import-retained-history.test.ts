@@ -1,11 +1,11 @@
 import { expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { readAgentSessionHistory } from './agent-session-history-page'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'

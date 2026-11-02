@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AddWslHostFormPanel, canAddWslDistro } from './AddWslHostFormPanel'
+import { AddWslHostFormPanel, canAddWslDistro, wslHostAddRequest } from './AddWslHostFormPanel'
 import { useWslDistroList } from './use-wsl-distro-list'
 import { useWslHostServerFilesMissing } from './use-wsl-hosts-enabled'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
@@ -39,11 +39,7 @@ export function AddWslHostDialogBody({
     setError(null)
     onAddingChange(true)
     try {
-      // Start and add explicitly authorizes starting a stopped distro.
-      const result = await addWslHostDistro({
-        distro: selected.name,
-        startIfStopped: selected.state === 'stopped'
-      })
+      const result = await addWslHostDistro(wslHostAddRequest(selected))
       if (!result.ok) {
         setError(wslHostAddRefusalMessage(result))
         if (result.kind === 'distro-stopped') {

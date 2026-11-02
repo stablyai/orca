@@ -56,7 +56,7 @@ export function worktreeCatalogMountAdapters(
           snapshots.fetch(client, HOST).then((result) => {
             fetched = result
             // Admitting is what advances the snapshot token a later poll sends back.
-            admitted = snapshots.admit(result.kind === 'response' ? result.pending : null)
+            admitted = result.kind === 'response' ? snapshots.admit(result.pending) : null
             // The pending catalog carries the live client, which the recorder cannot observe.
             const project = () => projectObservable(result)
             return context.captureObservation

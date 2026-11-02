@@ -44,7 +44,7 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports @orca/process-host, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],
   [
-    'src/transport/mobile-web-bundle-host-slow-link.test.ts',
+    'src/transport/web-bundle/mobile-web-bundle-host-slow-link.test.ts',
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop bundle RPC handlers, which does not check against RN libs, and its implementation sources keep their normal checks'
   ]
 ])

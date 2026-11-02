@@ -170,7 +170,7 @@
       "x-orca-since": "1.4.160"
     },
     "main": {
-      "description": "Node entry run in an out-of-process plugin worker. Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+      "description": "Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
       "x-orca-since": "1.4.160",
       "examples": [
         "dist/main.mjs"
@@ -208,9 +208,9 @@
         },
         "events": {
           "default": [],
-          "description": "Events delivered to the plugin worker. At most 3.",
+          "description": "Events delivered to the plugin worker. At most 4.",
           "x-orca-since": "1.4.160",
-          "maxItems": 3,
+          "maxItems": 4,
           "type": "array",
           "items": {
             "$ref": "#/$defs/EventContribution"
@@ -305,6 +305,16 @@
             "$ref": "#/$defs/NewFileContribution"
           }
         },
+        "settings": {
+          "default": [],
+          "description": "Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.",
+          "x-orca-since": "1.4.246",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SettingContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -342,13 +352,6 @@
         },
         "connections": {
           "description": "Reserved for account connections; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "settings": {
-          "description": "Reserved for plugin settings; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -469,6 +472,36 @@
           "examples": [
             "database"
           ],
+          "x-orca-enum-since": {
+            "add": "1.4.246",
+            "remove": "1.4.246",
+            "delete": "1.4.246",
+            "edit": "1.4.246",
+            "refresh": "1.4.246",
+            "search": "1.4.246",
+            "settings": "1.4.246",
+            "check": "1.4.246",
+            "close": "1.4.246",
+            "info": "1.4.246",
+            "warning": "1.4.246",
+            "error": "1.4.246",
+            "open-external": "1.4.246",
+            "copy": "1.4.246",
+            "download": "1.4.246",
+            "upload": "1.4.246",
+            "play": "1.4.246",
+            "pause": "1.4.246",
+            "stop": "1.4.246",
+            "more": "1.4.246",
+            "expand": "1.4.246",
+            "collapse": "1.4.246",
+            "next": "1.4.246",
+            "filter": "1.4.246",
+            "branch": "1.4.246",
+            "file": "1.4.246",
+            "agent": "1.4.246",
+            "link": "1.4.246"
+          },
           "type": "string",
           "enum": [
             "activity",
@@ -497,7 +530,35 @@
             "star",
             "terminal",
             "wrench",
-            "zap"
+            "zap",
+            "add",
+            "remove",
+            "delete",
+            "edit",
+            "refresh",
+            "search",
+            "settings",
+            "check",
+            "close",
+            "info",
+            "warning",
+            "error",
+            "open-external",
+            "copy",
+            "download",
+            "upload",
+            "play",
+            "pause",
+            "stop",
+            "more",
+            "expand",
+            "collapse",
+            "next",
+            "filter",
+            "branch",
+            "file",
+            "agent",
+            "link"
           ]
         },
         "entry": {
@@ -505,10 +566,22 @@
           "minLength": 1,
           "maxLength": 1024,
           "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
-          "description": "HTML file, relative to the plugin root, rendered inside a panel frame. It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "description": "What the panel runs: an HTML page for `ui: \"html\"`, a `.js`/`.mjs` module for `ui: \"components\"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
           "x-orca-since": "1.4.160",
           "examples": [
             "dist/panel.html"
+          ]
+        },
+        "ui": {
+          "description": "How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "components"
+          ],
+          "type": "string",
+          "enum": [
+            "html",
+            "components"
           ]
         }
       },
@@ -618,14 +691,16 @@
           "enum": [
             "workspace.created",
             "workspace.removed",
-            "agent.status.changed"
+            "agent.status.changed",
+            "workspace.changed"
           ],
           "description": "Event delivered to the plugin worker.",
           "x-orca-since": "1.4.160",
           "x-orca-enum-since": {
             "workspace.created": "1.4.245",
             "workspace.removed": "1.4.245",
-            "agent.status.changed": "1.4.160"
+            "agent.status.changed": "1.4.160",
+            "workspace.changed": "1.4.246"
           }
         }
       },
@@ -958,7 +1033,7 @@
           "minLength": 1,
           "maxLength": 1024,
           "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
-          "description": "HTML file rendered inside an editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "description": "HTML file rendered inside an editor frame, like a panel, or a `.ts`/`.tsx` module that Orca transpiles and loads in a generated page (needs `engines.orca` `>=1.4.246`). It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
           "x-orca-since": "1.4.245",
           "examples": [
             "editor/index.html"
@@ -1060,6 +1135,130 @@
       ],
       "additionalProperties": false,
       "description": "A kind of untitled file the user can create from the tab bar + menu or the command palette, in the active workspace."
+    },
+    "SettingContribution": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
+          "description": "Key code reads and writes, unique in this plugin.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "apiUrl"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Label shown in Settings.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "Server URL"
+          ]
+        },
+        "description": {
+          "description": "Help text shown under the label.",
+          "x-orca-since": "1.4.246",
+          "type": "string",
+          "maxLength": 1000
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean"
+          ],
+          "description": "JSON Schema type of the value.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "string"
+          ]
+        },
+        "default": {
+          "description": "Value read while the person has not set one.",
+          "x-orca-since": "1.4.246",
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "enum": {
+          "description": "Allowed values; Settings shows a picker.",
+          "x-orca-since": "1.4.246",
+          "minItems": 1,
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256
+              },
+              {
+                "type": "number"
+              }
+            ]
+          }
+        },
+        "enumLabels": {
+          "description": "Picker labels, one per `enum` value.",
+          "x-orca-since": "1.4.246",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "minimum": {
+          "description": "Numbers: smallest value.",
+          "x-orca-since": "1.4.246",
+          "type": "number"
+        },
+        "maximum": {
+          "description": "Numbers: largest value.",
+          "x-orca-since": "1.4.246",
+          "type": "number"
+        },
+        "maxLength": {
+          "description": "Strings: most characters.",
+          "x-orca-since": "1.4.246",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "multiline": {
+          "description": "Strings: a multi-line text box.",
+          "x-orca-since": "1.4.246",
+          "type": "boolean"
+        },
+        "placeholder": {
+          "description": "Strings and numbers: hint shown while empty.",
+          "x-orca-since": "1.4.246",
+          "type": "string",
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "A setting shown under the plugin in Settings. Requires the `settings:own` capability, which is also how code reads it."
     },
     "Capability": {
       "type": "object",

@@ -1,16 +1,14 @@
-import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionOptionsResult
-} from './agent-session-wire'
+import type { AgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog-types'
+import type { AgentSessionModelCatalogResult } from './agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from './agent-session/options/agent-session-options-result'
 import { createCoalescingKeyedRunner } from './coalescing-keyed-runner'
-import { cloneStructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
+import { cloneStructuredAgentSessionOptionRecord } from './agent-session/options/structured-agent-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
-} from './structured-agent-session-options'
+} from './agent-session/options/structured-agent-session-options'
 import type { StructuredSessionSelectionController } from './structured-agent-session-selection-operations'
 
 type ReadContext = {
@@ -34,6 +32,7 @@ type ReadSnapshot = {
   optionState: StructuredAgentSessionOptionState
   support: {
     result: AgentSessionOptionsResult
+    owner: readonly unknown[]
     sessionId: string | null
     fence: number | null
   } | null
@@ -51,6 +50,12 @@ export function createStructuredAgentSessionOptionsReadOwner(
   let leases = 0
   let version = 0
   let dirty = true
+  let retries = 0
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+  const cancelRetry = () => {
+    clearTimeout(retryTimer)
+    retryTimer = undefined
+  }
   const listeners = new Set<() => void>()
   const notify = () => listeners.forEach((listener) => listener())
   const run = createCoalescingKeyedRunner<void>()
@@ -78,16 +83,47 @@ export function createStructuredAgentSessionOptionsReadOwner(
       const record = snapshot.optionState.record
       const authority = attached.authority()
       const completed = attached.controller.captureRead()
-      const result = await attached.request()
-      if (
-        lease !== attached ||
-        version !== capturedVersion ||
-        snapshot.optionState.record !== record ||
-        !attached.isCurrent() ||
-        !Object.is(attached.authority(), authority)
-      ) {
+      const isCurrentRead = () =>
+        lease === attached &&
+        version === capturedVersion &&
+        snapshot.optionState.record === record &&
+        attached.isCurrent() &&
+        Object.is(attached.authority(), authority)
+      let result: AgentSessionOptionsResult
+      try {
+        result = await attached.request()
+      } catch {
+        const support = snapshot.support
+        if (
+          isCurrentRead() &&
+          support &&
+          same(support.owner, attached.owner) &&
+          support.result.canSwitchAccount === true
+        ) {
+          snapshot = {
+            ...snapshot,
+            support: { ...support, result: { ...support.result, canSwitchAccount: false } }
+          }
+          notify()
+        }
+        if (isCurrentRead() && !dirty && retries < 2) {
+          retries++
+          retryTimer = setTimeout(() => {
+            retryTimer = undefined
+            if (!isCurrentRead()) {
+              return
+            }
+            dirty = true
+            schedule()
+          }, 250)
+        }
         return
       }
+      if (!isCurrentRead()) {
+        return
+      }
+      retries = 0
+      cancelRetry()
       snapshot = {
         optionState: attached.optionCatalog
           ? applyStructuredAgentSessionOptions(
@@ -97,7 +133,12 @@ export function createStructuredAgentSessionOptionsReadOwner(
               attached
             )
           : snapshot.optionState,
-        support: { result, sessionId: attached.sessionId, fence: attached.fence }
+        support: {
+          result,
+          owner: attached.owner,
+          sessionId: attached.sessionId,
+          fence: attached.fence
+        }
       }
       attached.accepted?.()
       attached.controller.retire(completed)
@@ -105,12 +146,16 @@ export function createStructuredAgentSessionOptionsReadOwner(
     }).catch(() => undefined)
   }
   const invalidate = () => {
+    cancelRetry()
+    retries = 0
     version++
     dirty = true
     schedule()
   }
   return {
     getSnapshot: () => snapshot,
+    supportFor: (owner: readonly unknown[]) =>
+      snapshot.support && same(snapshot.support.owner, owner) ? snapshot.support : null,
     subscribe: (listener: () => void) => {
       listeners.add(listener)
       return () => {
@@ -157,6 +202,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
       invalidate()
       return () => {
         if (lease === attached) {
+          cancelRetry()
           lease = undefined
           version++
           dirty = true

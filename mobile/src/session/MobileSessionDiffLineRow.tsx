@@ -3,7 +3,7 @@ import { MessageSquare, Plus, X } from 'lucide-react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { composerInputStyles } from '../components/composer-input/composer-input-styles'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -110,7 +110,7 @@ export function DiffLineRow({
                   })}
                 </Text>
                 <Pressable
-                  style={styles.diffCommentDeleteButton}
+                  style={({ pressed }) => [styles.diffCommentDeleteButton, pressed && pressedStyle]}
                   disabled={commentsBusy}
                   onPress={() => onDeleteComment(comment.id)}
                   accessibilityLabel={t(

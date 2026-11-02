@@ -27,7 +27,7 @@ export function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'repoUpstream'>>(GITHUB_WEB_RPC_METHODS.repoUpstream, args),
     prForBranch: ({ wakeWslDistro: _wake, ...args }) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
-    refreshPRNow: async ({ candidate, reason }) => {
+    refreshPRNow: async ({ candidate, reason, userRefresh }) => {
       const acceptMergedFallbackPR =
         candidate.linkedPRNumber == null &&
         candidate.fallbackPRNumber != null &&
@@ -40,6 +40,7 @@ export function createGitHubApi(): WebGitHubApi {
         fallbackPRNumber: candidate.fallbackPRNumber ?? null,
         currentHeadOid: candidate.currentHeadOid ?? null,
         ...(reason ? { reason } : {}),
+        ...(userRefresh === true ? { userRefresh: true } : {}),
         ...(acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {})
       })
       return pr
@@ -56,10 +57,11 @@ export function createGitHubApi(): WebGitHubApi {
         ...args,
         ownerRepo
       }),
-    workItemDetails: async ({ ownerRepo, ...args }) => {
+    workItemDetails: async ({ ownerRepo, canonical = false, ...args }) => {
       const details = await callGitHubTargetOperation<WebGitHubResult<'workItemDetails'>>({
         target: { kind: 'environment', environmentId: requireActiveEnvironment().id },
         ownerRepo,
+        canonical,
         read: true,
         method: GITHUB_WEB_RPC_METHODS.workItemDetails,
         params: { ...args, repo: args.repoId ? `id:${args.repoId}` : args.repoPath },

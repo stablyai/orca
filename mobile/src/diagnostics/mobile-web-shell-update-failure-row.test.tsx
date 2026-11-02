@@ -21,6 +21,10 @@ vi.mock('../mobile-web-shell/generation-store-file-system', () => ({
 }))
 vi.mock('../transport/host-store', () => ({ loadHosts: async () => doubles.hosts }))
 vi.mock('./troubleshoot-screen-styles', () => ({ troubleshootScreenStyles: {} }))
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 
 import { MobileWebShellUpdateFailureRow } from './mobile-web-shell-update-failure-row'
 

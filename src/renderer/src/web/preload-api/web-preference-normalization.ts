@@ -1,4 +1,8 @@
 import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch-choices'
+import {
+  hasLegacyMatchTerminalSidebar,
+  syncLegacyMatchTerminalSidebar
+} from '../../../../shared/plugin-theme-settings'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import {
@@ -23,6 +27,7 @@ import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pair
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
+import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-color-overrides'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
@@ -165,7 +170,9 @@ export function migrateStoredWebSettings(
     ...normalizeTerminalCursorStyleDefault(stored),
     ...normalizeOsc52ClipboardDefaultOn(stored),
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
-    ...migratePortugueseUiLanguageOnLoad(stored)
+    ...splitLegacyTerminalColorOverrides(stored),
+    ...migratePortugueseUiLanguageOnLoad(stored),
+    ...(hasLegacyMatchTerminalSidebar(stored) ? syncLegacyMatchTerminalSidebar(stored, true) : {})
   }
 }
 

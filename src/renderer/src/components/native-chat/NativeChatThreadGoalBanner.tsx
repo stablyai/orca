@@ -6,12 +6,12 @@ import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { NativeChatComposerTabStrip } from './NativeChatComposerTabStrip'
-import type { AgentJournalThreadGoal } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalThreadGoal } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalStatusChange
-} from '../../../../shared/agent-session-thread-goal'
-import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session-thread-goal-wire'
+} from '../../../../shared/agent-session/agent-session-thread-goal'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import {
   formatNativeChatThreadGoalElapsed,
   nativeChatThreadGoalStatusLabel

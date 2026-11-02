@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
 import {
   buildMobilePrSidebarIdentity,
   createRepoProbe,
   createSidebarObservation,
+  prSidebarLoadDeps,
+  prSidebarWithFileViewed,
   subscribePrSidebarConnection,
   type PrSidebarControllerInput,
   type PrSidebarSelection
 } from './mobile-pr-sidebar-observation'
-import {
-  fetchGithubRepoSlug,
-  fetchHostedReviewForBranch,
-  fetchPRChecks,
-  fetchPRForBranch,
-  fetchWorkItemDetails
-} from './github-pr-rpc'
+import { backgroundReadFailed, useForegroundFirstLoad } from './pr-sidebar-load-result'
+import { fetchGithubRepoSlug } from './github-pr-rpc'
 import {
   prSidebarResourceKey,
   loadPrSidebarData,
@@ -22,17 +20,14 @@ import {
   resolvePrSidebarDetailsAfterPhase2,
   shouldApplyResult,
   shouldSoftRefreshPrSidebarOnHeadChange,
-  type PrSidebarLoadDeps,
   type PrSidebarState
 } from './mobile-pr-sidebar-state'
-import {
-  clearMobileWorktreeReviewLink,
-  fetchWorktreeGitHubPRLink
-} from '../source-control/mobile-pr-link'
 
 // Load body/comments only when the PR segment opens; the hub chip needs just PR/checks.
 export type PrSidebarLoadOptions = {
   includeDetails?: boolean
+  /** A poll the user did not ask for: a failed read leaves the shown PR in place. */
+  background?: boolean
 }
 
 export { buildMobilePrSidebarIdentity }
@@ -98,20 +93,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
   // Detached HEAD still needs repo eligibility; branching the probe would strand its spinner.
   const probeReady = client !== null && connState === 'connected'
-  const buildDeps = useCallback((): PrSidebarLoadDeps | null => {
-    if (!client) {
-      return null
-    }
-    return {
-      fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
-      fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
-      clearWorktreeReviewLink: (wt, shouldApply) =>
-        clearMobileWorktreeReviewLink(client, wt, shouldApply),
-      fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args),
-      fetchWorkItemDetails: (wt, args) => fetchWorkItemDetails(client, wt, args),
-      fetchPRChecks: (wt, args) => fetchPRChecks(client, wt, args)
-    }
-  }, [client])
+  const buildDeps = useCallback(() => prSidebarLoadDeps(client), [client])
 
   useEffect(() => {
     let cancelled = false
@@ -138,13 +120,13 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [probeReady, client, worktreeId, probeOwner])
 
-  const load = useCallback(
+  const loadOnce = useCallback(
     async (options?: PrSidebarLoadOptions) => {
       const includeDetails = options?.includeDetails ?? true
       const deps = buildDeps()
       const loadIdentity = identity
       if (!owner.live || !deps || !branch || !loadIdentity) {
-        return
+        return 'stale'
       }
       // A chip refresh never downgrades a full query this observation was already asked for.
       owner.demand = { includeDetails: includeDetails || owner.demand?.includeDetails === true }
@@ -160,7 +142,11 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       }
       const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
       if (!owner.live || !shouldApplyResult(seq, owner.loadSeq)) {
-        return
+        return 'stale'
+      }
+      // A poll keeps what is on screen when its read fails and backs off; it marks nothing.
+      if (options?.background && backgroundReadFailed(owner.latest, next)) {
+        return 'failed'
       }
       // A failed refresh is not a departure: keep the accepted PR or no-PR result and mark it until a good read.
       const accepted = owner.latest
@@ -171,7 +157,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         if (!accepted.refreshFailed) {
           publishState({ ...accepted, refreshFailed: true })
         }
-        return
+        return 'failed'
       }
 
       // Keep prior details across phase one so refresh cannot blank the comment tree.
@@ -186,12 +172,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (next.kind === 'ready' && priorDetails != null) {
         publishState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
         if (!includeDetails) {
-          return
+          return 'applied'
         }
       } else {
         publishState(next)
         if (next.kind !== 'ready' || !includeDetails) {
-          return
+          return next.kind === 'ready' || next.kind === 'none' ? 'applied' : 'failed'
         }
       }
 
@@ -213,7 +199,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         owner.latest.kind !== 'ready' ||
         prSidebarResourceKey(owner.latest.data.pr) !== prSidebarResourceKey(next.data.pr)
       ) {
-        return
+        return 'applied'
       }
       // Replace nonfatal null with a placeholder so details cannot spin forever.
       const details = resolvePrSidebarDetailsAfterPhase2({
@@ -223,9 +209,12 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       })
       // Details cannot certify the PR read, so a refresh failure stays marked.
       publishState({ ...owner.latest, data: { ...owner.latest.data, details } })
+      return 'applied'
     },
     [buildDeps, branch, headSha, identity, worktreeId, owner, publishState]
   )
+
+  const load = useForegroundFirstLoad(loadOnce)
 
   const ensurePrSidebarDetails = useCallback(async () => {
     const current = owner.latest
@@ -304,6 +293,17 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [owner, state, load, ensurePrSidebarDetails])
 
+  // Desktop's patchCachedPRFileViewedState: a viewed tick shows at once, and a failed write puts the old state back.
+  const patchPrFileViewed = useCallback(
+    (pullRequestId: string, path: string, viewed: GitHubPRFileViewedState) => {
+      const next = prSidebarWithFileViewed(owner.latest, pullRequestId, path, viewed)
+      if (next) {
+        publishState(next)
+      }
+    },
+    [owner, publishState]
+  )
+
   const retry = useCallback(() => {
     void load({ includeDetails: true })
   }, [load])
@@ -317,7 +317,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     openPRSidebar,
     retryPRSidebar: retry,
     refetchPRSidebar: load,
-    ensurePrSidebarDetails
+    ensurePrSidebarDetails,
+    patchPrFileViewed
   }
 }
 

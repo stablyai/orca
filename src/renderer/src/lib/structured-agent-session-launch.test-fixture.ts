@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
+import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type * as RecoveryModule from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
@@ -48,12 +48,14 @@ const launchErrorMocks = vi.hoisted(() => {
   return { StructuredAgentSessionCreateRefusalError }
 })
 
-vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
-  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>(
+    '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+  )),
   ...launchErrorMocks
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: mocks.launch
 }))
 

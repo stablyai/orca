@@ -1,6 +1,17 @@
+import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
-import type { PrSidebarState } from './mobile-pr-sidebar-state'
+import {
+  clearMobileWorktreeReviewLink,
+  fetchWorktreeGitHubPRLink
+} from '../source-control/mobile-pr-link'
+import {
+  fetchHostedReviewForBranch,
+  fetchPRChecks,
+  fetchPRForBranch,
+  fetchWorkItemDetails
+} from './github-pr-rpc'
+import type { PrSidebarLoadDeps, PrSidebarState } from './mobile-pr-sidebar-state'
 
 export type PrSidebarControllerInput = {
   client: RpcClient | null
@@ -102,5 +113,46 @@ export function subscribePrSidebarConnection(
   return () => {
     stop()
     owner.observed = null
+  }
+}
+
+export function prSidebarLoadDeps(client: RpcClient | null): PrSidebarLoadDeps | null {
+  if (!client) {
+    return null
+  }
+  return {
+    fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
+    fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
+    clearWorktreeReviewLink: (wt, shouldApply) =>
+      clearMobileWorktreeReviewLink(client, wt, shouldApply),
+    fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args),
+    fetchWorkItemDetails: (wt, args) => fetchWorkItemDetails(client, wt, args),
+    fetchPRChecks: (wt, args) => fetchPRChecks(client, wt, args)
+  }
+}
+
+// Desktop's patchCachedPRFileViewedState: a viewed tick shows at once, and a failed write puts the old state back.
+// A write for one PR never lands on another the workspace was relinked to meanwhile; every other field is kept.
+export function prSidebarWithFileViewed(
+  state: PrSidebarState,
+  pullRequestId: string,
+  path: string,
+  viewed: GitHubPRFileViewedState
+): PrSidebarState | null {
+  const details = state.kind === 'ready' ? state.data.details : null
+  if (state.kind !== 'ready' || !details?.files || details.pullRequestId !== pullRequestId) {
+    return null
+  }
+  return {
+    ...state,
+    data: {
+      ...state.data,
+      details: {
+        ...details,
+        files: details.files.map((file) =>
+          file.path === path ? { ...file, viewerViewedState: viewed } : file
+        )
+      }
+    }
   }
 }

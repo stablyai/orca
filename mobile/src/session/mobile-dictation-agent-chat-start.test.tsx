@@ -46,7 +46,7 @@ vi.mock('../platform/haptics', () => ({
   triggerEdgeBump: () => {},
   triggerSelection: () => {}
 }))
-vi.mock('./use-mobile-native-chat-readability', () => ({
+vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => true
 }))
 vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
@@ -66,9 +66,9 @@ vi.mock('./use-mobile-session-view-mode', () => ({
     toggleTabChatView: () => {}
   })
 }))
-vi.mock('./use-mobile-native-chat-controller', async () => {
+vi.mock('./native-chat/use-mobile-native-chat-controller', async () => {
   const { useMobileNativeChatActiveResolution } =
-    await import('./use-mobile-native-chat-active-resolution')
+    await import('./native-chat/use-mobile-native-chat-active-resolution')
   return {
     useMobileNativeChatController: (
       args: Parameters<typeof useMobileNativeChatActiveResolution>[0]

@@ -322,4 +322,29 @@ describe('recorded requests against the host params contract', () => {
       'linear-assigned': { status: 'fulfilled', value: [] }
     })
   })
+
+  // Seed violations absent from the corpus so every contract rule proves it can fire.
+  it('names an unknown method, a refusal, ignored params, a dropped key and a stale entry', () => {
+    const request = (method: string, params: unknown): WireRequest => ({
+      method,
+      params,
+      golden: 'made-up'
+    })
+    const problems = contractProblems(
+      [
+        request('nothing.here', {}),
+        request('worktree.activate', {}),
+        request('settings.get', { verbose: true }),
+        request('terminal.close', { terminal: 'term-1', extra: 1 })
+      ],
+      [{ method: 'terminal.close', path: '.gone', reason: 'made up' }]
+    )
+    expect(problems).toEqual([
+      expect.stringContaining('the host has no method nothing.here'),
+      expect.stringContaining('the host refuses it'),
+      expect.stringContaining('settings.get takes no params; the host ignores these'),
+      expect.stringContaining('the host drops .extra'),
+      'terminal.close .gone: no recorded request sends it any more'
+    ])
+  })
 })

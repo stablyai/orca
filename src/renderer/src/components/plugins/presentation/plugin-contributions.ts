@@ -7,11 +7,14 @@ import {
 } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { customEditorTakeover } from './plugin-custom-editor-takeover'
+import { fileList } from './plugin-contribution-file-list'
 
-/** The manifest points shown as named rows; commands, shortcuts and events have their own lists. */
+/** The manifest points shown as named rows; commands, shortcuts, events and settings have their
+ *  own lists. */
 export type PluginContributionKind = Exclude<
   PluginContributionPoint,
-  'commands' | 'keybindings' | 'events'
+  'commands' | 'keybindings' | 'events' | 'settings'
 >
 
 /** One named thing a plugin adds, ready to show as a row. */
@@ -42,6 +45,8 @@ export type PluginContributionSource = {
     title: string
     extensions: readonly string[]
     filenames: readonly string[]
+    /** Absent when only a catalog summary names the editor. */
+    priority?: 'default' | 'option'
   }[]
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
@@ -58,8 +63,6 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   vmRecipes: [],
   newFiles: []
 }
-
-const FILE_LIST_LIMIT = 4
 
 /** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
 export function nameFromContributionPath(path: string): string {
@@ -93,7 +96,11 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     syntaxes: contributes.syntaxes.map(titled),
     languagePacks: contributes.languagePacks,
     panels: contributes.panels.map((panel) => panel.title),
-    customEditors: contributes.customEditors,
+    // An omitted priority opens files by default.
+    customEditors: contributes.customEditors.map((editor) => ({
+      ...editor,
+      priority: editor.priority ?? 'default'
+    })),
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles
   }
@@ -145,12 +152,6 @@ function withMode(kindLabel: string, mode: 'light' | 'dark' | 'unknown' | undefi
     return `${kindLabel} · ${translate('auto.components.settings.pluginContributions.light', 'Light')}`
   }
   return kindLabel
-}
-
-function fileList(extensions: readonly string[], filenames: readonly string[]): string {
-  const files = [...extensions, ...filenames]
-  const shown = files.slice(0, FILE_LIST_LIMIT).join(', ')
-  return files.length > FILE_LIST_LIMIT ? `${shown} +${files.length - FILE_LIST_LIMIT}` : shown
 }
 
 function languageDetail(coverage: number | undefined): Pick<PluginContribution, 'detail' | 'tone'> {
@@ -266,12 +267,13 @@ export function describePluginContributions(
   for (const [index, editor] of source.customEditors.entries()) {
     const label = translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
     const files = fileList(editor.extensions, editor.filenames)
+    const takeover = customEditorTakeover(editor)
     rows.push({
       key: `customEditors:${index}`,
       kind: 'customEditors',
       title: editor.title,
-      detail: files ? `${label} · ${files}` : label,
-      tone: 'default'
+      detail: [label, files, takeover].filter(Boolean).join(' · '),
+      tone: takeover ? 'warning' : 'default'
     })
   }
   for (const [index, newFile] of source.newFiles.entries()) {

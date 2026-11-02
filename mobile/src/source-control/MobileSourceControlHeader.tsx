@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import type { View } from 'react-native'
 import { ChevronLeft, ExternalLink, MoreHorizontal, RefreshCw, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -18,6 +18,10 @@ type Props = {
   // Keep open-on-web in the header while the PR body scrolls.
   onOpenPrWeb?: () => void
   prNumber?: number | null
+  /** The Changes / Pull Request / Commits switch, under the title like every other screen's. */
+  accessory?: ReactNode
+  /** The active tab's own menu, e.g. the PR tab's; replaces the default refresh/open items. */
+  menuGroups?: ActionSheetAction[][] | null
 }
 
 export function MobileSourceControlHeader({
@@ -28,7 +32,9 @@ export function MobileSourceControlHeader({
   onClose,
   onRefresh,
   onOpenPrWeb,
-  prNumber = null
+  prNumber = null,
+  accessory,
+  menuGroups = null
 }: Props) {
   const t = useMobileTranslation()
   const moreRef = useRef<View>(null)
@@ -81,6 +87,7 @@ export function MobileSourceControlHeader({
         }
         title={t('sourceControl.header.title', 'Source Control')}
         subtitle={worktreeLabel}
+        accessory={accessory}
         trailing={
           <NavBarButton
             ref={moreRef}
@@ -97,7 +104,7 @@ export function MobileSourceControlHeader({
       <PullDownMenu
         visible={menuOpen}
         anchorRef={moreRef}
-        groups={[actions]}
+        groups={menuGroups ?? [actions]}
         onClose={() => setMenuOpen(false)}
       />
     </>

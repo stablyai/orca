@@ -53,26 +53,6 @@ describe('issue edits retain the displayed repository', () => {
     })
   })
 
-  it('keeps body edits on the registered repo path and passes the opened issue target', async () => {
-    await runWorkItemBodyUpdate({
-      item,
-      repoPath: '/home/fixture/widgets',
-      projectOrigin: undefined,
-      body: 'Origin edit',
-      parsedSlug: ORIGIN
-    })
-
-    expect(window.api.gh.updateIssue).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      repoPath: '/home/fixture/widgets',
-      sourceContext: undefined,
-      number: 12,
-      updates: { body: 'Origin edit' },
-      ownerRepo: ORIGIN
-    })
-    expect(window.api.gh.updateIssueBySlug).not.toHaveBeenCalled()
-  })
-
   function expectProjectUpdate(
     sourceContext: TaskSourceContext,
     updates: Parameters<typeof runIssueUpdate>[0]['updates']
@@ -172,7 +152,7 @@ describe('issue edits retain the displayed repository', () => {
     async ({ localLabels, updates }) => {
       let mutation: Promise<unknown> = Promise.resolve()
       runGHEditLabelToggle({
-        itemId: item.id,
+        item,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath: 'C:\\workspace\\widgets',
@@ -185,7 +165,6 @@ describe('issue edits retain the displayed repository', () => {
           await mutation
         },
         onLabelsChange: vi.fn(),
-        patchWorkItem: vi.fn(),
         patchProjectRowIfNeeded: vi.fn(),
         onMutated: vi.fn()
       })

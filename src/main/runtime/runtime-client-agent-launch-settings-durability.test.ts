@@ -2,11 +2,11 @@ import { structuredLaunchSeedOptions } from '../../shared/native-chat/input/nati
 import {
   adoptClaudeStructuredSpawnOptions,
   claudeStructuredSpawnOptions
-} from '../claude/claude-structured-spawn-options'
-import { applyClaudeMessageOptions } from '../claude/claude-structured-message-options'
-import { sessionFor } from '../claude/claude-structured-dispatch-test-support'
-import { fakeClaude } from '../claude/claude-structured-session-test-support'
-import { readAgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
+} from '../claude/structured/launch/claude-structured-spawn-options'
+import { applyClaudeMessageOptions } from '../claude/structured/launch/claude-structured-message-options'
+import { sessionFor } from '../claude/structured/claude-structured-dispatch-test-support'
+import { fakeClaude } from '../claude/structured/claude-structured-session-test-support'
+import { readAgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
 import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
 import { quoteStartupArg, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -25,7 +25,7 @@ import {
 } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
 import { createCodexAtRestSkillCatalog } from '../codex/codex-at-rest-skills-probe'
-import type { CodexAppServerInvocation } from '../codex/codex-app-server-session'
+import type { CodexAppServerInvocation } from '../codex/app-server/codex-app-server-session'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-rest-command-context'
 import { structuredAgentConfiguredArgs } from '../native-chat/structured-agent-configured-args'
@@ -564,7 +564,7 @@ describe('durable execution-host launch settings', () => {
   })
 })
 
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 

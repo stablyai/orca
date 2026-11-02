@@ -29,7 +29,10 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
   preview: z.boolean().optional()
 })
 
-export const WorkItemDetails = WorkItem.extend({ ownerRepo: SlugRepo.optional() })
+export const WorkItemDetails = WorkItem.extend({
+  ownerRepo: SlugRepo.optional(),
+  canonical: z.boolean().optional()
+})
 
 export const WorkItemsCount = RepoSelector.extend({
   query: OptionalString
