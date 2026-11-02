@@ -121,8 +121,8 @@ export function TerminalConfigImportModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-sm">{copy.title}</DialogTitle>
-          <DialogDescription className="text-xs">{copy.description}</DialogDescription>
+          <DialogTitle>{copy.title}</DialogTitle>
+          <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
 
         {!applied ? (
