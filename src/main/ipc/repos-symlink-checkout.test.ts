@@ -15,6 +15,8 @@ import { RuntimeRepositoryCloneController } from '../runtime/runtime-repository-
 import { RuntimeManagedWorktreeQueries } from '../runtime/runtime-managed-worktree-queries'
 import { partialRuntimeStore, storeWorktreeMeta } from '../runtime/runtime-store-partial-fixture'
 import { buildDetectedGitWorktrees } from './worktrees/listing/ssh-worktree-fallback'
+import { listRepoWorktrees } from '../repo-worktrees'
+import { areRuntimePathsEqual } from '../../shared/worktree/ownership'
 import {
   __resetDetectedWorktreeScanCacheForTests,
   listDetectedGitWorktrees
@@ -152,6 +154,17 @@ async function ipcClone(url: string, destination: string): Promise<Repo> {
 
 type Fixture = ReturnType<typeof fixture>
 
+/** Git's spelling of a checkout, which row IDs and metadata keys use (forward slashes on Windows). */
+async function listedPath(repo: Repo, path: string): Promise<string> {
+  const row = (await listRepoWorktrees(repo)).find((worktree) =>
+    areRuntimePathsEqual(worktree.path, path)
+  )
+  if (!row) {
+    throw new Error(`Git does not list ${path}`)
+  }
+  return row.path
+}
+
 async function desktopRows(f: Fixture, repo: Repo) {
   const scan = await listDetectedGitWorktrees(f.ipcStore, repo)
   return buildDetectedGitWorktrees(f.ipcStore, repo, scan.gitWorktrees)
@@ -199,7 +212,7 @@ describe.each(['ipc', 'runtime'] as const)('%s Git project root identity', (entr
       return result.repo
     }
     const repo = await create()
-    expect(repo.path).toBe(await realpath(join(alias, 'new-project')))
+    expect(repo.path).toBe(await listedPath(repo, await realpath(join(alias, 'new-project'))))
     expect((await create()).id).toBe(repo.id)
     expect(f.repos).toHaveLength(1)
     expect(await desktopRows(f, repo)).toEqual([
@@ -215,7 +228,7 @@ describe.each(['ipc', 'runtime'] as const)('%s Git project root identity', (entr
     const f = fixture()
     const clone = () => (entry === 'ipc' ? ipcClone(url, alias) : f.clone.clone(url, alias))
     const repo = await clone()
-    expect(repo.path).toBe(await realpath(join(alias, 'source')))
+    expect(repo.path).toBe(await listedPath(repo, await realpath(join(alias, 'source'))))
     expect((await clone()).id).toBe(repo.id)
     expect(f.repos).toHaveLength(1)
     expect(await desktopRows(f, repo)).toEqual([
@@ -234,7 +247,9 @@ it('reopens a saved alias project without changing its physical workspace ID or 
   const saved = savedRepo('saved-project', join(alias, 'old-project'))
   const serialized = JSON.stringify(saved)
   f.repos.push(JSON.parse(serialized))
-  const id = `${saved.id}::${physical}`
+  const checkout = await listedPath(saved, physical)
+  const external = await listedPath(saved, sibling)
+  const id = `${saved.id}::${checkout}`
   f.meta[id] = storeWorktreeMeta({
     ...getProjectHostSetupWorktreeMeta([], saved),
     instanceId: 'kept-instance',
@@ -249,14 +264,14 @@ it('reopens a saved alias project without changing its physical workspace ID or 
     comment: 'kept details',
     instanceId: 'kept-instance'
   })
-  expect(desktop.find((row) => row.path === sibling)?.visible).toBe(false)
+  expect(desktop.find((row) => row.path === external)?.visible).toBe(false)
   const runtime = await runtimeQueries(f, saved, async () => []).listDetected(saved)
   expect(runtime.worktrees.find((row) => row.id === id)).toMatchObject({
     selectedCheckout: true,
     visible: true,
     comment: 'kept details'
   })
-  expect(runtime.worktrees.find((row) => row.path === sibling)?.visible).toBe(false)
+  expect(runtime.worktrees.find((row) => row.path === external)?.visible).toBe(false)
   const scan = await scanRepoWorktreeRows({ store: f.store, scanRepo }, saved, new Map())
   const resolved = projectRepoWorktreeRows(
     { store: f.store, listFolderWorkspaces: () => [] },
@@ -267,7 +282,7 @@ it('reopens a saved alias project without changing its physical workspace ID or 
   const listed = await runtimeQueries(f, saved, async () => resolved).list(undefined, 10)
   expect(listed.worktrees.map((row) => row.id)).toEqual([id])
   // The scan's proof stays in this process: no published field carries the saved alias.
-  expect(JSON.stringify(listed)).not.toContain(saved.path)
+  expect(JSON.stringify(listed)).not.toContain(JSON.stringify(saved.path).slice(1, -1))
   expect(Object.getOwnPropertySymbols(structuredClone(desktop[0]))).toEqual([])
   expect(JSON.stringify(f.repos[0])).toBe(serialized)
   expect(JSON.stringify(f.meta)).toBe(metadata)
@@ -284,15 +299,17 @@ it('selects an old alias record registered at a linked checkout and keeps its si
   const f = fixture()
   const saved = savedRepo('linked-alias', join(alias, 'linked'))
   f.repos.push(saved)
+  const linkedCheckout = await listedPath(saved, linked)
+  const siblingCheckout = await listedPath(saved, sibling)
   const runtime = await runtimeQueries(f, saved, async () => []).listDetected(saved)
   for (const rows of [await desktopRows(f, saved), runtime.worktrees]) {
-    expect(rows.find((row) => row.path === linked)).toMatchObject({
-      id: `${saved.id}::${linked}`,
+    expect(rows.find((row) => row.path === linkedCheckout)).toMatchObject({
+      id: `${saved.id}::${linkedCheckout}`,
       isMainWorktree: false,
       selectedCheckout: true,
       visible: true
     })
-    expect(rows.find((row) => row.path === sibling)?.visible).toBe(false)
+    expect(rows.find((row) => row.path === siblingCheckout)?.visible).toBe(false)
   }
 })
 
@@ -362,6 +379,7 @@ it('classifies cached rows with no filesystem probes and picks up a retargeted a
   const f = fixture()
   const saved = savedRepo('saved', join(alias, 'saved'))
   f.repos.push(saved)
+  const checkout = await listedPath(saved, physical)
   const rowDeps = { store: f.store, listFolderWorkspaces: () => [] }
   const scan = await scanRepoWorktreeRows({ store: f.store, scanRepo }, saved, new Map())
   const asyncProbe = vi.spyOn(fsPromises, 'realpath')
@@ -386,10 +404,10 @@ it('classifies cached rows with no filesystem probes and picks up a retargeted a
     const resolved = [...projectRepoWorktreeRows(rowDeps, saved, scan, f.meta), ...linked]
     const queries = runtimeQueries(f, saved, async () => resolved)
     expect((await queries.list(undefined, count + 1)).worktrees.map((row) => row.path)).toEqual([
-      physical
+      checkout
     ])
     expect(resolved.filter((row) => queries.isVisible(row)).map((row) => row.path)).toEqual([
-      physical
+      checkout
     ])
   }
   expect(asyncProbe).not.toHaveBeenCalled()
@@ -434,7 +452,7 @@ it('classifies cached rows with no filesystem probes and picks up a retargeted a
     projectRepoWorktreeRows(rowDeps, saved, rescan, f.meta)
   )
   expect((await retargeted.list(undefined, 10)).worktrees.map((row) => row.path)).toEqual([
-    join(moved, 'saved')
+    await listedPath(saved, join(moved, 'saved'))
   ])
 })
 
