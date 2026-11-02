@@ -220,7 +220,8 @@ describe('GitHub source collection lifetime', () => {
     const waiting = owner.awaitSave(store.getState().repos[0])
     await flush()
     recovery.reject(new Error('catalog unreachable'))
-    expect(await waiting).toBeUndefined()
+    const unverified = await waiting
+    expect(unverified !== 'save-failed' && unverified()).toBe(false)
     const readBack = vi.fn(async () => {
       const started = owner.catalogSnapshot()
       store.setState((s) => ({ repos: s.repos.map((row) => owner.adopt({ ...row }, started)) }))
@@ -228,7 +229,7 @@ describe('GitHub source collection lifetime', () => {
     store.setState({ fetchReposForAllHosts: readBack })
     const ready = await owner.awaitSave(store.getState().repos[0])
     expect(readBack).toHaveBeenCalledTimes(1)
-    expect(ready?.()).toBe(true)
+    expect(ready !== 'save-failed' && ready()).toBe(true)
   })
 
   it('retries contradiction recovery on a later refresh after the first catalog read failed', async () => {
@@ -279,28 +280,89 @@ describe('GitHub source collection lifetime', () => {
     expect(store.getState().repos[0].displayName).toBe('New')
   })
 
-  it('answers a Cmd-J search held by a pending source save once that save settles', async () => {
+  it.each([false, true])(
+    'answers a Cmd-J search held by a source save once it settles, or starts nothing once cancelled (cancelled=%s)',
+    async (cancelled) => {
+      const store = setup()
+      store.setState({ preflightStatusChecked: false })
+      const save = Promise.withResolvers<Repo>()
+      mockApi.repos.update.mockReturnValueOnce(save.promise)
+      mockApi.gh.listWorkItems.mockResolvedValue(envelope('fork'))
+      const saving = store
+        .getState()
+        .setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+      const controller = new AbortController()
+      const [search] = createCmdJTaskSearchRequests({
+        query: 'fork',
+        repos: store.getState().repos,
+        settings: createGlobalSettingsFixture({ visibleTaskProviders: ['github'] }),
+        accountBackedTaskSourceHostId: 'local',
+        filter: EMPTY_PALETTE_FILTER,
+        hostLabels: new Map(),
+        signal: controller.signal
+      })
+      const results = search.run().catch(() => undefined)
+      await flush()
+      expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+      if (cancelled) {
+        controller.abort()
+      }
+      save.resolve({ ...repo, issueSourcePreference: 'origin' })
+      await saving
+      expect((await results)?.length).toBe(cancelled ? undefined : 1)
+      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(cancelled ? 0 : 1)
+    }
+  )
+
+  it('ends a held read whose owner is removed and re-added, but keeps an unbound read', async () => {
     const store = setup()
-    store.setState({ preflightStatusChecked: false })
+    const owner = store.getState().githubSourceCollections
     const save = Promise.withResolvers<Repo>()
     mockApi.repos.update.mockReturnValueOnce(save.promise)
-    mockApi.gh.listWorkItems.mockResolvedValue(envelope('fork'))
     const saving = store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
-    const [search] = createCmdJTaskSearchRequests({
-      query: 'fork',
-      repos: store.getState().repos,
-      settings: createGlobalSettingsFixture({ visibleTaskProviders: ['github'] }),
-      accountBackedTaskSourceHostId: 'local',
-      filter: EMPTY_PALETTE_FILTER,
-      hostLabels: new Map(),
-      signal: new AbortController().signal
-    })
-    const results = search.run()
+    const reading = owner.readCurrent(store.getState().repos, () =>
+      store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+    )
     await flush()
-    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    store.setState({ repos: [] })
+    store.setState({ repos: [{ ...repo, issueSourcePreference: 'origin' }] })
     save.resolve({ ...repo, issueSourcePreference: 'origin' })
     await saving
-    expect((await results).map((result) => result.id)).toHaveLength(1)
+    expect(await reading).toBeUndefined()
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(store.getState().workItemsCache).toEqual({})
+    const unbound = await owner.readCurrent([undefined], () =>
+      store.getState().fetchWorkItems('unregistered', '/unregistered', 20, '')
+    )
+    expect(unbound).toHaveLength(1)
+  })
+
+  it('follows superseding saves without spending reads, then reads once', async () => {
+    const store = setup()
+    const saves = [0, 1, 2].map(() => Promise.withResolvers<Repo>())
+    for (const save of saves) {
+      mockApi.repos.update.mockReturnValueOnce(save.promise)
+    }
+    mockApi.gh.listWorkItems.mockResolvedValue(envelope('fork'))
+    const set = () =>
+      store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+    const pending = [set()]
+    const reading = store
+      .getState()
+      .githubSourceCollections.readCurrent(store.getState().repos, () =>
+        store.getState().fetchWorkItems(repo.id, repo.path, 20, '')
+      )
+    for (let superseding = 0; superseding < 2; superseding++) {
+      await flush()
+      pending.push(set())
+    }
+    for (const save of saves) {
+      save.resolve({ ...repo, issueSourcePreference: 'origin' })
+      await flush()
+    }
+    await Promise.all(pending)
+    expect(await reading).toHaveLength(1)
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(1)
   })
 
   it('opens the clicked current-binding row over an older binding copy of the same issue', async () => {
@@ -409,7 +471,8 @@ describe('source mapping and estimate retirement', () => {
     const waiting = owner.awaitSave(store.getState().repos[0])
     const oldCatalog = owner.catalogSnapshot()
     store.setState({ repos: [] })
-    expect(await waiting).toBeUndefined()
+    const removed = await waiting
+    expect(removed !== 'save-failed' && removed()).toBe(false)
     store.setState({ repos: [{ ...repo, issueSourcePreference: 'upstream' }] })
     const replacement = owner.context(store.getState().repos[0])
     save.resolve({ ...repo, issueSourcePreference: 'origin' })

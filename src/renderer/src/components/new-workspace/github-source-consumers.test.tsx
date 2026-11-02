@@ -2,7 +2,11 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
-import { createTestStore, resetRemoteRuntimeMocks } from '@/store/slices/github-slice-test-harness'
+import {
+  createTestStore,
+  mockApi,
+  resetRemoteRuntimeMocks
+} from '@/store/slices/github-slice-test-harness'
 import { useSmartWorkspaceGithubSearch } from './use-smart-workspace-github-search'
 import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
 import * as githubLinks from '../../../../shared/github/links'
@@ -40,6 +44,11 @@ beforeEach(() => {
   holder.store.setState({ repos: [repo] })
 })
 afterEach(cleanup)
+const flush = async () => {
+  for (let i = 0; i < 16; i++) {
+    await Promise.resolve()
+  }
+}
 it('offers duplicates only from the issue repository when fork buckets coexist', () => {
   holder.store!.setState({
     workItemsCache: {
@@ -75,11 +84,10 @@ it('parses no other repository URL, and nothing on a write that leaves the cache
   expect(parse).not.toHaveBeenCalled()
   parse.mockRestore()
 })
-it('re-reads an obsolete smart-search result instead of publishing or dropping it', async () => {
+it('settles an obsolete smart-search result held by no save without clearing or re-reading it', async () => {
   const pending = Promise.withResolvers<readonly GitHubWorkItem[] | undefined>()
-  const warm = [item('fork', 12)],
-    current = [item('fork', 14)]
-  const fetchWorkItems = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValueOnce(current)
+  const warm = [item('fork', 12)]
+  const fetchWorkItems = vi.fn().mockReturnValueOnce(pending.promise)
   const setGithubItems = vi.fn(),
     setGithubLoading = vi.fn()
   const foundation = {
@@ -114,7 +122,72 @@ it('re-reads an obsolete smart-search result instead of publishing or dropping i
       await Promise.resolve()
     }
   })
-  expect(fetchWorkItems).toHaveBeenCalledTimes(2)
-  expect(setGithubItems).toHaveBeenLastCalledWith(current)
+  expect(fetchWorkItems).toHaveBeenCalledTimes(1)
+  expect(setGithubItems).toHaveBeenCalledTimes(1)
   expect(setGithubLoading).toHaveBeenLastCalledWith(false)
 })
+it.each([false, true])(
+  'answers a multi-repo smart search held by one source save, or starts nothing after cleanup (cleanedUp=%s)',
+  async (cleanedUp) => {
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
+    const other: Repo = { ...repo, id: 'other', path: '/other' }
+    const fork = { owner: 'fork', repo: 'r' }
+    const save = Promise.withResolvers<boolean>()
+    holder.store!.setState({ repos: [repo, other], updateRepo: vi.fn(() => save.promise) })
+    mockApi.gh.listWorkItems.mockResolvedValue({
+      items: [item('fork', 12)],
+      sources: { issues: fork, prs: fork, originCandidate: fork, upstreamCandidate: null }
+    })
+    const saving = holder
+      .store!.getState()
+      .setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+    const repos = holder.store!.getState().repos
+    const setGithubItems = vi.fn()
+    const foundation = {
+      debouncedQuery: 'bug',
+      disabled: false,
+      handledCrossRepoUrlRef: { current: '' },
+      repoSlugCacheRef: { current: new Map() },
+      crossRepoSwitchTarget: 'project',
+      repoBackedSearchTargets: repos.map((row) => ({
+        repo: row,
+        githubSourceContext: null,
+        gitlabSourceContext: null
+      })),
+      selectedRepo: null,
+      githubSourceContext: null,
+      repos,
+      getCachedWorkItems: () => null,
+      fetchWorkItems: holder.store!.getState().fetchWorkItems,
+      fetchWorkItemsAcrossRepos: holder.store!.getState().fetchWorkItemsAcrossRepos,
+      setGithubItems,
+      setGithubLoading: vi.fn(),
+      setCrossRepoPrompt: vi.fn()
+    }
+    // SAFETY: this hook consumes only these foundation fields; other providers are not involved in GitHub search.
+    const { unmount } = renderHook(() =>
+      useSmartWorkspaceGithubSearch({
+        foundation: foundation as Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'],
+        sourceQueryWithinLimit: true,
+        shouldQueryGithub: true
+      })
+    )
+    await act(flush)
+    const readsWhileHeld = mockApi.gh.listWorkItems.mock.calls.length
+    if (cleanedUp) {
+      unmount()
+    }
+    await act(async () => {
+      save.resolve(true)
+      await saving
+      await flush()
+    })
+    if (cleanedUp) {
+      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(readsWhileHeld)
+    } else {
+      expect(setGithubItems.mock.lastCall?.[0].map((row: GitHubWorkItem) => row.repoId)).toEqual(
+        expect.arrayContaining([repo.id, other.id])
+      )
+    }
+  }
+)

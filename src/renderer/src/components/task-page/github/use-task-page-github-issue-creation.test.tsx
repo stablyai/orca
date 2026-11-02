@@ -234,6 +234,36 @@ describe('New Issue source-save dependency', () => {
       }
     }
   )
+  it('reports a later unverifiable Submit once as a create failure, then creates once after readback', async () => {
+    const { store, repo, result, setter } = setup()
+    mocks.workItem.mockResolvedValue(null)
+    mocks.updateRepo.mockRejectedValueOnce(new Error('lost acknowledgement'))
+    const recover = vi.fn().mockRejectedValue(new Error('readback failed'))
+    store.setState({ fetchReposForAllHosts: recover })
+    await act(async () => {
+      const save = store.getState().setIssueSourcePreference(repo.id, repo.path, 'origin', 'local')
+      const submit = result.current.handleCreateNewIssue()
+      await save
+      await submit
+    })
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(toast.error).not.toHaveBeenCalledWith('Failed to create issue.')
+    vi.mocked(toast.error).mockClear()
+    await act(() => result.current.handleCreateNewIssue())
+    expect(mocks.createIssue).not.toHaveBeenCalled()
+    expect(vi.mocked(toast.error).mock.calls).toEqual([['Failed to create issue.']])
+    expect(setter).not.toHaveBeenCalledWith('')
+    const owner = store.getState().githubSourceCollections
+    recover.mockImplementation(async () => {
+      const started = owner.catalogSnapshot()
+      store.setState((s) => ({ repos: s.repos.map((row) => owner.adopt({ ...row }, started)) }))
+    })
+    vi.mocked(toast.error).mockClear()
+    await act(() => result.current.handleCreateNewIssue())
+    expect(mocks.createIssue).toHaveBeenCalledTimes(1)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   it('rechecks the target owner immediately before create even with no pending save', async () => {
     const { store, result, setter } = setup()
     await act(async () => {

@@ -10,6 +10,7 @@ import { bindingKey, type TaskBinding } from './task-record-model'
 import { isHostIdentityContinued } from '../host-catalog-fencing'
 import { nextProviderRequestId } from './request-coordination'
 
+const unsafeTarget = () => false
 export const githubCandidateOwner = (repo: Repo) =>
   githubTaskBinding({ ...repo, issueSourcePreference: undefined })
 export const githubCollectionScope = (repo: Repo | undefined, source?: TaskSourceContext | null) =>
@@ -142,22 +143,23 @@ export abstract class GitHubSourceOwnership {
     }
     write.finish(saved && current === write)
   }
-  async awaitSave(repo: Repo) {
+  /** 'save-failed': this press waited on a save whose own toast reports it; otherwise the final target check. */
+  async awaitSave(repo: Repo): Promise<'save-failed' | (() => boolean)> {
     const key = bindingKey(repo)
     const target = this.store.getState().repos.find((row) => bindingKey(row) === key)
     if (!target || githubCandidateOwner(target) !== githubCandidateOwner(repo)) {
-      return undefined
+      return unsafeTarget
     }
     const owner = this.owners.get(key)
     const write = this.writes.get(key)
     if (write?.pending && !(await write.settled)) {
-      return undefined
+      return write.failed === undefined ? unsafeTarget : 'save-failed'
     }
     // Why: a failed write may still have reached the host; only its readback says which source create will use.
     if (write?.failed !== undefined) {
       await this.recover(target, write)
       if ((this.owners.get(key)?.readbacks ?? 0) <= write.failed) {
-        return undefined
+        return unsafeTarget
       }
     }
     const binding = this.store.getState().githubTaskCache.capture(target)
@@ -191,14 +193,55 @@ export abstract class GitHubSourceOwnership {
     }
     return running
   }
-  /** Re-reads an obsolete collection once the repos' source writes settle; bounded so callers never wait forever. */
-  async readCurrent<T>(repos: readonly (Repo | undefined)[], read: () => Promise<T | undefined>) {
-    for (let tries = 1; ; tries++) {
-      const value = await read()
-      if (value !== undefined || tries === 3) {
-        return value
+  /**
+   * Re-reads a collection made obsolete by a searched repo's pending save once that save settles, while the caller
+   * and every owner present at entry live. Store acceptance still decides what the read may publish.
+   */
+  async readCurrent<T>(
+    repos: readonly (Repo | undefined)[],
+    read: () => Promise<T | undefined>,
+    signal?: AbortSignal
+  ) {
+    const entry = repos.map((repo) => {
+      const owner = repo && this.owners.get(bindingKey(repo))
+      return { repo, owner, context: owner?.id }
+    })
+    // Why: a removed/re-added or retired owner, or a changed binding, is another lifetime; a bound read never turns unbound.
+    const live = () =>
+      !signal?.aborted &&
+      entry.every(
+        ({ repo, owner, context }) =>
+          !repo ||
+          (this.owners.get(bindingKey(repo)) === owner &&
+            (!owner ||
+              (owner.id === context && githubTaskBinding(owner.repo) === githubTaskBinding(repo))))
+      )
+    const pending = () =>
+      entry.flatMap(({ repo }) => {
+        const write = repo && this.writes.get(bindingKey(repo))
+        return write?.pending ? [write.settled] : []
+      })
+    let release = () => {}
+    const cancelled = new Promise<void>((resolve) => {
+      release = resolve
+      signal?.addEventListener('abort', release)
+    })
+    try {
+      for (let reads = 0; reads < 3 && live(); reads++) {
+        const held = pending().length
+        const value = await read()
+        // Why: replay only after a held save actually settled, never over unchanged obsolete state.
+        if (value !== undefined || held === 0) {
+          return value
+        }
+        // A superseded save resolves false while its successor is pending; following it spends no read.
+        for (let waiting = pending(); waiting.length && live(); waiting = pending()) {
+          await Promise.race([Promise.all(waiting), cancelled])
+        }
       }
-      await Promise.all(repos.map((repo) => repo && this.writes.get(bindingKey(repo))?.settled))
+      return undefined
+    } finally {
+      signal?.removeEventListener('abort', release)
     }
   }
 

@@ -151,11 +151,13 @@ export function useSmartWorkspaceGithubSearch({
 
     const trimmed = normalizedGhQuery.query.trim()
     const query = trimmed ? normalizedGhQuery.query : ''
-    // Why: a search held by a pending source save is obsolete, not empty; re-read once it settles.
+    // Why: a search held by a pending source save is obsolete, not empty; re-read once it settles, unless cleaned up.
+    const controller = new AbortController()
     const readCurrent = <T>(read: () => Promise<T | undefined>) =>
       useAppStore.getState().githubSourceCollections.readCurrent(
         repoBackedSearchTargets.map((target) => target.repo),
-        read
+        read,
+        controller.signal
       )
     if (repoBackedSearchTargets.length === 1) {
       const target = repoBackedSearchTargets[0]
@@ -225,6 +227,7 @@ export function useSmartWorkspaceGithubSearch({
     }
     return () => {
       stale = true
+      controller.abort()
     }
   }, [
     debouncedQuery,

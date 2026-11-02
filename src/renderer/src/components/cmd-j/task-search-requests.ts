@@ -82,11 +82,20 @@ export function createCmdJTaskSearchRequests(args: {
           }
           if (provider === 'github') {
             // Why: a search held by a pending source save is obsolete, not empty; re-read once it settles.
-            const items = await state.githubSourceCollections.readCurrent([repo], () =>
-              state.fetchWorkItems(repo.id, repo.path, RESULT_LIMIT, `is:issue is:open ${query}`, {
-                sourceContext: source,
-                requireComplete: true
-              })
+            const items = await state.githubSourceCollections.readCurrent(
+              [repo],
+              () =>
+                state.fetchWorkItems(
+                  repo.id,
+                  repo.path,
+                  RESULT_LIMIT,
+                  `is:issue is:open ${query}`,
+                  {
+                    sourceContext: source,
+                    requireComplete: true
+                  }
+                ),
+              signal
             )
             if (!items) {
               throw new Error('GitHub search did not settle.')
