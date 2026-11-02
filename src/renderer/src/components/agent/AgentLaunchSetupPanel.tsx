@@ -209,7 +209,7 @@ export function AgentLaunchSetupPanel({
             agent: entry.label
           })}
         />
-        <CommandList className="max-h-56">
+        <CommandList className="max-h-56" data-focus-behavior="page">
           {catalogMessage ? (
             <div className="px-2 py-1.5 text-xs text-muted-foreground" role="status">
               {catalogMessage}
