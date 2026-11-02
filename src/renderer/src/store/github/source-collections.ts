@@ -151,8 +151,13 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
     }
     const { repo } = attempt
     const sources = envelope.sources
-    const same = (a: WorkItemsCacheSources['issues'], b: WorkItemsCacheSources['issues']) =>
+    const same = (a?: WorkItemsCacheSources['issues'], b?: WorkItemsCacheSources['issues']) =>
       a === b || (!!a && !!b && githubRepoIdentityKey(a) === githubRepoIdentityKey(b))
+    // Why: older hosts omit the raw candidates. Absent is unavailable evidence, never a contradiction (present null is
+    // unresolved): the collection is admitted under the effective issue/PR sources it reports, and candidate knowledge
+    // is neither checked nor replaced by it.
+    const unavailable =
+      sources.originCandidate === undefined || sources.upstreamCandidate === undefined
     const preference = repo?.issueSourcePreference
     const issues =
       preference === 'origin'
@@ -164,6 +169,7 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
         ? sources.originCandidate
         : (sources.upstreamCandidate ?? sources.originCandidate)
     const valid =
+      unavailable ||
       !attempt.binding ||
       !preference ||
       preference === 'auto' ||
@@ -177,7 +183,8 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
         originCandidate: sources.originCandidate,
         upstreamCandidate: sources.upstreamCandidate
       }
-      const mappingChanged = previous && !structuralValuesEqual(previous.sources, candidateSources)
+      const mappingChanged =
+        !unavailable && previous && !structuralValuesEqual(previous.sources, candidateSources)
       const effectiveChanged = Object.values(this.evidence).some(
         (value) =>
           value.attempt.scope === attempt.scope &&
@@ -190,7 +197,7 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
       if (mappingChanged || effectiveChanged || !valid) {
         this.retireOwners([owner])
       }
-      if (!previous || mappingChanged) {
+      if (!unavailable && (!previous || mappingChanged)) {
         owner.candidates = { data: null, sources: candidateSources, fetchedAt: Date.now() }
         this.notify()
       }

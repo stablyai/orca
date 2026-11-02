@@ -8,7 +8,10 @@ import { createGlobalSettingsFixture } from '../../../../shared/global-settings-
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import {
+  Q1,
   Q2,
   upstream,
   fork,
@@ -277,4 +280,114 @@ describe('mounted Tasks source lifetime', () => {
     })
     expect(screen.getByTestId('mounted-rows')).toHaveTextContent(replacement.owner)
   })
+
+  it.each(['upstream', 'origin'] as const)(
+    "settles repeated legacy-host deliveries with explicit source preferences and shows each kind's reported source and count",
+    async (preference) => {
+      clearRuntimeCompatibilityCacheForTests()
+      // A paired host up to v1.4.60: issues follow the saved preference, PRs resolve origin, no originCandidate.
+      const legacy = {
+        issues: preference === 'upstream' ? upstream : fork,
+        prs: fork,
+        upstreamCandidate: upstream
+      }
+      const QP = 'is:pr is:open'
+      const totals: Record<string, number> = { [Q1]: 120, [QP]: 300 }
+      const held: { method: string; query: string; resolve: (response: unknown) => void }[] = []
+      const call = vi.fn(({ method, params }: { method: string; params?: { query?: string } }) => {
+        if (method === 'status.get') {
+          return Promise.resolve(createCompatibleRuntimeStatusResponse())
+        }
+        const { promise, resolve } = Promise.withResolvers<unknown>()
+        // Row decorations such as PR checks are outside the list/count cycle under test.
+        if (method === 'github.listWorkItems' || method === 'github.countWorkItems') {
+          held.push({ method, query: params?.query ?? '', resolve })
+        }
+        return promise
+      })
+      Object.assign(window.api, { runtimeEnvironments: { call } })
+      const recovery = vi.fn(async () => {})
+      const hosted: Repo = {
+        ...repo,
+        path: '/server/project',
+        executionHostId: 'runtime:env-1',
+        issueSourcePreference: preference
+      }
+      useAppStore.setState({
+        repos: [hosted],
+        settings: createGlobalSettingsFixture({ defaultRepoSelection: [hosted.id] }),
+        taskPageData: { taskSource: 'github' },
+        fetchReposForAllHosts: recovery
+      })
+      const { container } = render(<Harness runRequests list />)
+      await act(async () => {
+        view.setAppliedTaskSearch(Q1)
+        view.setTaskResumeApplied(true)
+        await flush()
+      })
+      const collections = useAppStore.getState().githubSourceCollections
+      const lifetime = () => [
+        collections.context(hosted),
+        useAppStore.getState().workItemsInvalidationNonce
+      ]
+      const before = lifetime()
+      // Answers exactly the one list and count this action owes; an unsolicited next request stays held and fails.
+      const deliver = async (query: string) => {
+        expect(held.map((entry) => entry.method).sort()).toEqual([
+          'github.countWorkItems',
+          'github.listWorkItems'
+        ])
+        expect(held.every((entry) => entry.query === query)).toBe(true)
+        const kind = query === QP ? 'pr' : 'issue'
+        const source = kind === 'pr' ? legacy.prs : legacy.issues
+        for (const entry of held.splice(0)) {
+          const result =
+            entry.method === 'github.countWorkItems'
+              ? totals[query]
+              : {
+                  items: [{ ...item(`${source.owner} ${kind}`), id: `${kind}:1`, type: kind }],
+                  sources: legacy
+                }
+          entry.resolve({
+            id: entry.method,
+            ok: true,
+            result,
+            _meta: { runtimeId: 'remote-runtime' }
+          })
+        }
+        await act(flush)
+        await act(flush)
+        expect(held).toEqual([])
+        expect(recovery).not.toHaveBeenCalled()
+        expect(lifetime()).toEqual(before)
+        const slug = `${source.owner}/${source.repo}`
+        expect(screen.getByTestId('mounted-rows')).toHaveTextContent(`${source.owner} ${kind}`)
+        expect(screen.getByTestId('mounted-count')).toHaveTextContent(
+          String(Math.ceil(totals[query] / view.githubPerRepoPageLimit))
+        )
+        expect(container.querySelector('.animate-pulse')).toBeNull()
+        expect(screen.getByTestId('mounted-pending')).toHaveTextContent('false')
+        expect(view.tasksLoading || view.tasksRefreshing || view.tasksFiltering).toBe(false)
+        expect(view.taskSourceContextSummary.title).toContain(`Source: ${slug}`)
+        expect(view.selectedGitHubRepoExternalLink?.label).toBe(slug)
+        expect(screen.queryByRole('group', { name: 'Issue source' })).toBeNull()
+      }
+      await deliver(Q1)
+      await act(async () => {
+        view.setAppliedTaskSearch(QP)
+        await flush()
+      })
+      // The issue total never stands in for the PR query's.
+      expect(screen.getByTestId('mounted-count')).toHaveTextContent('unknown')
+      await deliver(QP)
+      // Two explicit Refreshes with identical answers: one list/count cycle each, then quiet.
+      for (let press = 0; press < 2; press++) {
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Refresh GitHub work' }))
+          await flush()
+        })
+        await deliver(QP)
+      }
+    }
+  )
 })

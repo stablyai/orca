@@ -1,7 +1,7 @@
 import { cleanup } from '@testing-library/react'
-import { useEffect, useLayoutEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { useTaskPageGitHubSearchPagination } from './github/use-task-page-github-search-pagination'
-import { runTaskPageGitHubLandingRefresh } from './github/task-page-github-landing-refresh-run'
+import { useTaskPageGitHubLandingRefresh } from './github/use-task-page-github-landing-refresh'
 import { taskPageGitHubResumeCache } from './github/task-page-github-resume-cache'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import type { AppState } from '@/store/types'
@@ -70,23 +70,6 @@ function useMountedSourceDisplay(runRequests = false) {
   const list = useTaskPageGitHubListState(provider)
   const detail = useTaskPageGitHubDetail(list)
   const reconciled = useTaskPageGitHubCacheReconciliation(detail)
-  useEffect(() => {
-    return runRequests
-      ? runTaskPageGitHubLandingRefresh({
-          ...reconciled,
-          githubWorkItemMutationQueryKey: 'mounted-source-flow'
-        })
-      : undefined
-    // The production landing hook keys its subscription by this same request context.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    runRequests,
-    reconciled.selectedReposKey,
-    reconciled.appliedTaskSearch,
-    reconciled.workItemsInvalidationNonce,
-    reconciled.taskRefreshNonce,
-    reconciled.taskResumeApplied
-  ])
   // Stage 21 derives the kind the same way before handing off to the source display.
   const kindModel = Object.assign(reconciled, {
     activeGithubTaskKind: getGitHubTaskKind(
@@ -98,6 +81,12 @@ function useMountedSourceDisplay(runRequests = false) {
   const paginationInput = kindModel as unknown as typeof kindModel &
     Parameters<typeof useTaskPageGitHubSearchPagination>[0]
   const withKind = useTaskPageGitHubSearchPagination(paginationInput)
+  // Stage 26 as mounted in production; without requests its run stays inert, as before the resume step.
+  useTaskPageGitHubLandingRefresh({
+    ...withKind,
+    taskResumeApplied: runRequests && withKind.taskResumeApplied,
+    githubWorkItemMutationQueryKey: 'mounted-source-flow'
+  })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field the source display reads comes from stages 1-8 or the kind above; stages 9-20 add none of them.
   const sourceDisplayInput = withKind as unknown as typeof withKind &
     Parameters<typeof useTaskPageSourceDisplay>[0]
