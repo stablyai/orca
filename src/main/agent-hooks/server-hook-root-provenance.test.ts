@@ -148,8 +148,15 @@ describe('a relay’s pane-root answer, through the guest to the desktop', () =>
   })
 })
 
+// Orca's own agent-teams launch sets this synthetic TMUX; its Claudes run in no tmux server.
+const AGENT_TEAMS_HINT = '%1 /tmp/orca-claude-agent-teams/team-x'
+const unboundRoot = () => {
+  runningPane(49969, CLAUDE)
+  io.resolveRoot.mockResolvedValueOnce(null)
+}
+
 describe('an empty pane whose first hook cannot be proved', () => {
-  it.each<[string, () => void]>([
+  it.each<[string, () => void, string?]>([
     ['a spawning shim', () => runningPane(49960, ...SHIM)],
     [
       'an ancestor whose argv is unreadable',
@@ -160,38 +167,36 @@ describe('an empty pane whose first hook cannot be proved', () => {
           [49969, 49960, 49960, 'claude', 'S+']
         )
     ],
-    [
-      'a pane whose root its PTY owner has not named yet',
-      () => {
-        runningPane(49969, CLAUDE)
-        io.resolveRoot.mockResolvedValueOnce(null)
-      }
-    ]
-  ])('records %s as main does, as a fallback its own exit retires once', async (_name, setup) => {
-    const server = await createServer()
-    setup()
-    // A trust prompt is an observation, never ownership: the pane is still empty.
-    observe(server, 'waiting')
-    await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Task' })
-    expect(server.row()).toMatchObject({ state: 'working', prompt: 'Task' })
-    expect(server.presence()).toMatchObject({
-      process: capture(49969),
-      session: 'session-a',
-      fallback: true
-    })
-    expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
-    // Its own hooks and terminal reports never turn it into proof.
-    await hook(server, 'PostToolUse', { session: 'session-a' })
-    observe(server, 'working')
-    expect(server.presence()?.fallback).toBe(true)
-    // It keeps main's protection from another provider's process-less hooks.
-    await codexTurn(server, 'Codex task')
-    expect(server.row()?.agentType).toBe('claude')
-    expect(server.presence()).toMatchObject({ agent: 'claude', process: capture(49969) })
-    await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
-    await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
-    expect(server.exits).toBe(1)
-  })
+    ['a pane whose root its PTY owner has not named yet', unboundRoot],
+    ['an agent-teams Claude whose root is not named yet', unboundRoot, AGENT_TEAMS_HINT]
+  ])(
+    'records %s as main does, as a fallback its own exit retires once',
+    async (_name, setup, tmuxPane) => {
+      const server = await createServer()
+      setup()
+      // A trust prompt is an observation, never ownership: the pane is still empty.
+      observe(server, 'waiting')
+      await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Task', tmuxPane })
+      expect(server.row()).toMatchObject({ state: 'working', prompt: 'Task' })
+      expect(server.presence()).toMatchObject({
+        process: capture(49969),
+        session: 'session-a',
+        fallback: true
+      })
+      expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
+      // Its own hooks and terminal reports never turn it into proof.
+      await hook(server, 'PostToolUse', { session: 'session-a' })
+      observe(server, 'working')
+      expect(server.presence()?.fallback).toBe(true)
+      // It keeps main's protection from another provider's process-less hooks.
+      await codexTurn(server, 'Codex task')
+      expect(server.row()?.agentType).toBe('claude')
+      expect(server.presence()).toMatchObject({ agent: 'claude', process: capture(49969) })
+      await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
+      await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
+      expect(server.exits).toBe(1)
+    }
+  )
 
   it('records a first hook whose evidence misses its answer deadline, then upgrades it', async () => {
     const server = await createServer()
@@ -282,39 +287,58 @@ describe('a Claude in a tmux session the pane does not show', () => {
   })
 })
 
-describe('a late answer on a slow host', () => {
-  it('heals an unproven record as the root lands, with no later hook and no replayed prompt', async () => {
-    const server = await createServer()
-    runningPane(49969, CLAUDE)
-    await hook(server, 'UserPromptSubmit', { session: 'older', pid: null, prompt: 'Old task' })
-    const release = slowRoot()
-    await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'New task' })
-    expect(server.presence()?.process).toBeUndefined()
-    release()
-    await settled()
-    expect(server.presence()?.process).toEqual(capture(49969))
-    expect(server.row()).toMatchObject({ state: 'working', prompt: 'New task' })
-    vi.clearAllMocks()
-    vi.setSystemTime(NOW + 15_000)
-    await hook(server, 'PostToolUse', { session: 'session-a' })
-    await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Next' })
-    expect(attempts()).toBe(0)
-  })
+// The late answer lands on an unproven record, or on the status-only record a hinted first hook
+// minted into an empty pane while the read was pending.
+const lateStarts: [string, (server: RootTestServer) => Promise<void>, string?][] = [
+  [
+    'an unproven record',
+    (server) => hook(server, 'UserPromptSubmit', { session: 'older', pid: null, prompt: 'Old' })
+  ],
+  ['an empty pane’s status-only first hook', async () => {}, TMUX_HINT]
+]
 
-  it('retires an unproven record on a late exit proof once, with no later hook', async () => {
-    const server = await createServer()
-    runningPane(49969, CLAUDE)
-    await hook(server, 'UserPromptSubmit', { session: 'older', pid: null, prompt: 'Old task' })
-    const release = slowRoot()
-    await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
-    expect(server.exits).toBe(0)
-    // A compatible status update while the answer is pending keeps the exit owed.
-    observe(server, 'working')
-    release()
-    await settled()
-    expect(server.exits).toBe(1)
-    expect(server.presence()).toMatchObject({ process: capture(49969), ended: true })
-  })
+describe('a late answer on a slow host', () => {
+  it.each(lateStarts)(
+    'heals %s as the root lands, with no later hook or replayed prompt',
+    async (_name, start, tmuxPane) => {
+      const server = await createServer()
+      runningPane(49969, CLAUDE)
+      await start(server)
+      const release = slowRoot()
+      await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'New task', tmuxPane })
+      expect(server.presence()?.process).toBeUndefined()
+      release()
+      await settled()
+      expect(server.presence()?.process).toEqual(capture(49969))
+      expect(server.row()).toMatchObject({ state: 'working', prompt: 'New task' })
+      vi.clearAllMocks()
+      vi.setSystemTime(NOW + 15_000)
+      await hook(server, 'PostToolUse', { session: 'session-a' })
+      await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Next' })
+      expect(attempts()).toBe(0)
+    }
+  )
+
+  it.each(lateStarts)(
+    'retires %s on a late exit proof once, with no later hook',
+    async (_name, start, tmuxPane) => {
+      const server = await createServer()
+      runningPane(49969, CLAUDE)
+      await start(server)
+      const release = slowRoot()
+      if (tmuxPane) {
+        await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Task', tmuxPane })
+      }
+      await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
+      expect(server.exits).toBe(0)
+      // A compatible status update while the answer is pending keeps the exit owed.
+      observe(server, 'working')
+      release()
+      await settled()
+      expect(server.exits).toBe(1)
+      expect(server.presence()).toMatchObject({ process: capture(49969), ended: true })
+    }
+  )
 
   it.each<[string, (server: RootTestServer) => Promise<void> | void]>([
     ['the pane closed', (server) => server.clearPaneState(PANE, { forgetAgentExit: true })],
@@ -330,6 +354,18 @@ describe('a late answer on a slow host', () => {
     release()
     await settled()
     expect(server.exits).toBe(0)
+  })
+
+  it('owes no exit to a record another process minted after the exit was seen', async () => {
+    const server = await createServer()
+    runningPane(49969, CLAUDE)
+    const release = slowRoot()
+    await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
+    await hook(server, 'UserPromptSubmit', { session: 'other', pid: null, prompt: 'Other' })
+    release()
+    await settled()
+    expect(server.exits).toBe(0)
+    expect(server.presence()).toEqual({ agent: 'claude', session: 'other' })
   })
 })
 
@@ -395,6 +431,28 @@ describe('a suspended owner', () => {
     await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
     expect(server.presence()).toMatchObject({ process: capture(49970) })
     expect(server.exits).toBe(0)
+  })
+
+  it('lets its own unproven fallback resume after fg, still a fallback a proved root replaces', async () => {
+    const server = await createServer()
+    runningPane(49960, ...SHIM)
+    await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Before' })
+    await hook(server, 'Stop', { session: 'session-a' })
+    suspend()
+    await server.checkAgentPresence(PANE)
+    expect(server.presence()).toMatchObject({ fallback: true, suspended: true })
+    // fg: the same process posts its next turn.
+    probe.mockImplementation(async (identity) =>
+      identity && live.has(identity.pid) ? 'live' : 'unverifiable'
+    )
+    await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'After fg' })
+    expect(server.row()).toMatchObject({ state: 'working', prompt: 'After fg' })
+    expect(server.presence()).toMatchObject({ process: capture(49969), fallback: true })
+    expect(server.presence()?.suspended).toBeUndefined()
+    runningPane(49969, CLAUDE)
+    await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Proved' })
+    expect(server.presence()).toMatchObject({ process: capture(49969), session: 'session-a' })
+    expect(server.presence()?.fallback).toBeUndefined()
   })
 })
 

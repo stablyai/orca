@@ -137,7 +137,8 @@ describe('hook acquisition deadlines on a slow host', () => {
     const state = createHookListenerState()
     const read = slowReader(800, 'root')
     const exits: unknown[] = []
-    const reconcile = (completion: HookRootCompletion) => exits.push(completion.attempt.exit)
+    const reconcile = (completion: HookRootCompletion) =>
+      exits.push(completion.attempt.exit !== undefined)
     expect(await preflight(state, read, 'SessionEnd', reconcile)).toBeLessThanOrEqual(510)
     await vi.advanceTimersByTimeAsync(800)
     expect(exits).toEqual([true])
@@ -209,6 +210,13 @@ describe('a late answer’s reconciliation', () => {
       'unattached',
       { ...proved, fallback: true },
       proved
+    ],
+    [
+      'keeps its own fallback suspended as it upgrades',
+      'UserPromptSubmit',
+      'root',
+      { ...proved, fallback: true, suspended: true },
+      { ...proved, suspended: true }
     ],
     ['changes nothing for a still-unproven answer', 'UserPromptSubmit', 'unknown', weak, undefined]
   ])('%s', async (_name, event, verdict, later, expected) => {

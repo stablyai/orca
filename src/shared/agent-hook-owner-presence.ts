@@ -99,10 +99,14 @@ export function readHookProcessAdmission(
   const previous = readLocalHookOwnerRow(rows, hook.paneKey, hook.worktreeId)
   const owner = recordedOwner(previous)
   const verdict = readHookProcessVerdict(state, previous, hook)
-  const retired = Boolean(
-    hook.process && owner?.ended && owner.process && isSameAgentProcess(owner.process, hook.process)
+  const own = Boolean(
+    hook.process && owner?.process && isSameAgentProcess(owner.process, hook.process)
   )
-  const displacesSuspended = Boolean(owner?.suspended && !owner.ended && verdict !== undefined)
+  const retired = own && owner?.ended === true
+  // Suspension blocks a replacement, never the owner's own process resuming.
+  const displacesSuspended = Boolean(
+    owner?.suspended && !owner.ended && !own && verdict !== undefined
+  )
   return {
     refused:
       retired ||
@@ -155,7 +159,7 @@ function readHookPaneOwner(
 /** The pane's current row carrying what a late answer settles: the candidate acquires, upgrades
  *  its fallback, retires the weak record on its recorded exit, or loses a fallback it was proved
  *  not to own. Restated as a suspension change is, with no event name or prompt, so nothing
- *  replays or notifies. Undefined when the association it was read against has moved on. */
+ *  replays or notifies. Undefined when a successor took the pane or the exit's record moved on. */
 export function restateHookRoot(
   state: HookListenerState,
   completion: HookRootCompletion,
@@ -175,10 +179,18 @@ export function restateHookRoot(
     owner?.fallback && owner.process && isSameAgentProcess(owner.process, process)
   )
   const verdict = readHookProcessVerdict(state, row, completion)
-  const exit = verdict === 'root' && attempt.exit === true
+  const exit = verdict === 'root' && attempt.exit !== undefined
+  const association = associationOf(row)
+  // Why: a root outranks the same unproven records late as on its next hook; a stopped or retired
+  // owner, and an exit's record, must be the ones the read started against.
+  const outranked =
+    !owner || (!owner.ended && !owner.suspended && (owner.fallback || !owner.process))
   if (
-    (!ownFallback && associationOf(row) !== attempt.association) ||
-    (verdict !== 'root' && (!ownFallback || verdict === 'unknown' || verdict === undefined))
+    verdict === 'root'
+      ? exit
+        ? association !== attempt.exit
+        : !ownFallback && !outranked && association !== attempt.association
+      : !ownFallback || verdict === 'unknown' || verdict === undefined
   ) {
     return undefined
   }
@@ -191,7 +203,8 @@ export function restateHookRoot(
       agent: completion.agent,
       process,
       sessionOwner: true,
-      ...(exit ? { ended: true as const } : {})
+      ...(exit ? { ended: true as const } : {}),
+      ...(ownFallback && owner?.suspended ? { suspended: true as const } : {})
     }
   }
 }

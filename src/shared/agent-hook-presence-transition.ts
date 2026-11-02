@@ -206,9 +206,10 @@ function transitionHookPresence(
     const kept = owner ?? (recorded?.ended ? recorded : undefined)
     return incoming.agentPresence === kept ? incoming : { ...incoming, agentPresence: kept }
   }
-  if (owner && (exit || !owner.suspended)) {
+  const fromOwner = Boolean(owner?.process && sender && isSameAgentProcess(owner.process, sender))
+  // Suspension blocks a replacement, never the owner's own process resuming.
+  if (owner && (exit || fromOwner || !owner.suspended)) {
     if (exit) {
-      const fromOwner = owner.process && sender && isSameAgentProcess(owner.process, sender)
       return fromOwner
         ? {
             ...incoming,
@@ -217,12 +218,12 @@ function transitionHookPresence(
           }
         : undefined
     }
-    if (sender && owner.process && isSameAgentProcess(sender, owner.process)) {
+    if (fromOwner) {
       // The owner's own hook keeps how it was recorded: a fallback is never proved by itself.
-      const session = owner.session
+      const { suspended: _suspended, session, ...kept } = owner
       return {
         ...incoming,
-        agentPresence: { ...owner, ...incoming.agentPresence, ...(session ? { session } : {}) }
+        agentPresence: { ...kept, ...incoming.agentPresence, ...(session ? { session } : {}) }
       }
     }
     // Why: nested agents inherit ORCA_PANE_KEY; their hooks update status, never ownership.

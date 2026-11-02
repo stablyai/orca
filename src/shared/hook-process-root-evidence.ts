@@ -27,10 +27,13 @@ export type HookRootAttempt = {
   answerBy: number
   /** The hook named a tmux pane, so an unfinished read means status without a process. */
   tmux: boolean
-  /** The pane's recorded association when the read started; a late answer applies only to it. */
+  /** The pane's recorded association when the read started. */
   association: string
-  /** A process-ending SessionEnd that missed its answer; a late root retires once, with no hook. */
-  exit?: true
+  /** A process-ending SessionEnd that missed its answer: the association that exit saw, which a
+   *  late root retires once, with no hook. */
+  exit?: string
+  /** A hook went on without this answer, so the answer goes to the host when it lands. */
+  unanswered?: true
 }
 
 /** The root process of the PTY a pane runs in, named by that PTY's owning provider. */

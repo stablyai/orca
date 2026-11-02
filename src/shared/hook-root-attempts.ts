@@ -1,6 +1,6 @@
 import type { HookListenerState } from './agent-hook-listener/listener-state'
 import type { AgentProcessIdentity } from './agent-process-presence'
-import { beforeDeadline, monotonicNow } from './deadline-settle-notifier'
+import { beforeDeadline, DEADLINE_PASSED, monotonicNow } from './deadline-settle-notifier'
 import {
   hookProcessKey,
   type HookRootAttempt,
@@ -75,7 +75,7 @@ export function attemptHookRootEvidence(
   const existing = attempts.get(key)
   if (existing?.pending) {
     if (hook.exit) {
-      existing.exit = true
+      existing.exit = hook.association
     }
     return untilAnswerDeadline(existing)
   }
@@ -92,7 +92,7 @@ export function attemptHookRootEvidence(
     answerBy: existing?.answerBy ?? monotonicNow() + HOOK_ROOT_ANSWER_MS,
     tmux: request.tmux !== undefined,
     association: hook.association,
-    ...(hook.exit ? { exit: true as const } : {})
+    ...(hook.exit ? { exit: hook.association } : {})
   }
   attempts.delete(key)
   attempts.set(key, attempt)
@@ -110,8 +110,8 @@ export function attemptHookRootEvidence(
         clearTimeout(expiry)
         attempt.evidence = evidence ?? null
         attempt.pending = undefined
-        // Why: the hooks that asked already proceeded; an evicted or cleared attempt is dead.
-        if (attempts.get(key) === attempt && monotonicNow() >= attempt.answerBy) {
+        // Why: a hook went on without it; an evicted or cleared attempt is dead.
+        if (attempts.get(key) === attempt && attempt.unanswered) {
           acquisition.reconcile?.({ ...request, attempt })
         }
         attempt.exit = undefined
@@ -129,9 +129,19 @@ export function attemptHookRootEvidence(
   return untilAnswerDeadline(attempt)
 }
 
-/** Past its deadline an attempt costs a hook nothing; its answer reaches the host instead. */
+/** Past its deadline an attempt costs a hook nothing; its answer reaches the host instead. The
+ *  hand-off records what the hook did, since its timer can fire before the clock says so. */
 function untilAnswerDeadline(attempt: HookRootAttempt): Promise<unknown> | undefined {
-  return attempt.pending && monotonicNow() < attempt.answerBy
-    ? beforeDeadline(attempt.pending, attempt.answerBy)
-    : undefined
+  if (!attempt.pending) {
+    return undefined
+  }
+  if (monotonicNow() >= attempt.answerBy) {
+    attempt.unanswered = true
+    return undefined
+  }
+  return beforeDeadline(attempt.pending, attempt.answerBy).then((answer) => {
+    if (answer === DEADLINE_PASSED) {
+      attempt.unanswered = true
+    }
+  })
 }
