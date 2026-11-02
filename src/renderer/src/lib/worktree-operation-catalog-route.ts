@@ -111,23 +111,42 @@ function isUnstampedRowOfSharedLocalProject(
   ) {
     return false
   }
-  let hasLocalRepoRow = false
-  let hasRuntimeRepoRow = false
-  for (const repo of state.repos ?? []) {
-    if (repo.id !== owner.repoId) {
-      continue
-    }
-    const hostId = getRepoExecutionHostId(repo)
-    if (hostId === LOCAL_EXECUTION_HOST_ID) {
-      hasLocalRepoRow = true
-    } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
-      hasRuntimeRepoRow = true
-    } else {
-      // Why: an SSH sibling keeps the existing connection-owned routing.
-      return false
-    }
+  return sharedLocalProjectRepoIds(state.repos).has(owner.repoId)
+}
+
+const sharedLocalProjectIndexCache = new WeakMap<
+  NonNullable<WorktreeOperationRouteState['repos']>,
+  ReadonlySet<string>
+>()
+
+/** Repo ids with local and server setups and no SSH sibling (an SSH sibling keeps connection-owned routing); one pass per repo catalog. */
+function sharedLocalProjectRepoIds(
+  repos: WorktreeOperationRouteState['repos']
+): ReadonlySet<string> {
+  if (!repos) {
+    return new Set()
   }
-  return hasLocalRepoRow && hasRuntimeRepoRow
+  let index = sharedLocalProjectIndexCache.get(repos)
+  if (!index) {
+    const kinds = new Map<string, Set<'local' | 'runtime' | 'other'>>()
+    for (const repo of repos) {
+      const hostId = getRepoExecutionHostId(repo)
+      const kind =
+        hostId === LOCAL_EXECUTION_HOST_ID
+          ? 'local'
+          : parseExecutionHostId(hostId)?.kind === 'runtime'
+            ? 'runtime'
+            : 'other'
+      kinds.set(repo.id, (kinds.get(repo.id) ?? new Set()).add(kind))
+    }
+    index = new Set(
+      [...kinds]
+        .filter(([, seen]) => seen.has('local') && seen.has('runtime') && !seen.has('other'))
+        .map(([repoId]) => repoId)
+    )
+    sharedLocalProjectIndexCache.set(repos, index)
+  }
+  return index
 }
 
 /** An unstamped record's host by the rules above: a shared local project's row is local, else its repo setup; with no setup, or one this app also has, the row was listed here (paired listings stamp ownership). */

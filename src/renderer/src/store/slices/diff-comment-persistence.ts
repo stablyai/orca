@@ -4,11 +4,8 @@ import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { findCopyRows } from '../worktree-diff-comments-selector'
-import { diffCommentOwnerKey, type DiffCommentOwner } from '../diff-comment-owner'
-import {
-  findFolderWorkspaceOwner,
-  type getExecutionHostIdForFolderWorkspace
-} from '@/lib/folder-workspace-runtime-owner'
+import { diffCommentOwnerKey, findOwnedFolder, type DiffCommentOwner } from '../diff-comment-owner'
+import type { getExecutionHostIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
 import { writeDiffCommentsToHost } from './diff-comment-host-write'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -117,13 +114,8 @@ export function enqueueDiffCommentPersist(
     let stateList: DiffComment[] | undefined
     try {
       const scope = parseWorkspaceKey(worktreeId)
-      if (scope?.type === 'folder') {
-        const state = get()
-        const folderWorkspace = findFolderWorkspaceOwner(
-          state,
-          scope.folderWorkspaceId,
-          folderExecutionHostId
-        )
+      if (scope?.type === 'folder' && mutation.owner.kind === 'folder') {
+        const folderWorkspace = findOwnedFolder(get(), mutation.owner)
         if (!folderWorkspace) {
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
@@ -188,7 +180,7 @@ export function mutateDiffComments(
       if (owner.kind !== 'folder') {
         return s
       }
-      const target = findFolderWorkspaceOwner(s, scope.folderWorkspaceId, owner.executionHostId)
+      const target = findOwnedFolder(s, owner)
       if (!target) {
         return s
       }
@@ -243,7 +235,7 @@ function rollback(
       if (owner.kind !== 'folder') {
         return s
       }
-      const target = findFolderWorkspaceOwner(s, scope.folderWorkspaceId, owner.executionHostId)
+      const target = findOwnedFolder(s, owner)
       if (!target || target.diffComments !== expectedCurrent) {
         return s
       }

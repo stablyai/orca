@@ -6,6 +6,7 @@ import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { SELF_LOCAL_AUTHORITY } from '../../../../shared/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -92,6 +93,19 @@ function addNote(
 
 function folderNote(worktreeId: string, body: string): DiffComment {
   return { id: body, worktreeId, filePath: 'README.md', lineNumber: 1, body, createdAt: 1 }
+}
+
+function savedServer(id: string): PublicKnownRuntimeEnvironment {
+  return {
+    id,
+    name: id,
+    createdAt: 1,
+    updatedAt: 1,
+    lastUsedAt: null,
+    runtimeId: id,
+    endpoints: [{ id: 'ws', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://server' }],
+    preferredEndpointId: 'ws'
+  }
 }
 
 function bodies(store: ReturnType<typeof createTestStore>, workspaceKey: string): string[] {
@@ -708,6 +722,70 @@ describe('folder workspace diff comment rollback convergence', () => {
     )
     expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
     expect(bodies(store, key)).toEqual(['local B'])
+  })
+
+  it("keeps an app source on this app's folder: shown beside a server twin, never adopting a lone server folder", () => {
+    const store = createTestStore()
+    const key = folderWorkspaceKey('folder-1')
+    const runtimeWorkspace = makeFolderWorkspace({
+      projectGroupId: 'runtime-group',
+      executionHostId: 'runtime:env-owner',
+      diffComments: [folderNote(key, 'runtime B')]
+    })
+    store.setState({
+      activeWorktreeId: key,
+      activeWorkspaceExecutionHostId: 'runtime:env-owner',
+      folderWorkspaces: [
+        makeFolderWorkspace({ diffComments: [folderNote(key, 'local A')] }),
+        runtimeWorkspace
+      ]
+    })
+    const view = () => selectDiffCommentView(store.getState(), key, { runtimeEnvironmentId: null })
+
+    expect(view().comments?.map((comment) => comment.body)).toEqual(['local A'])
+    expect(view().owner).toMatchObject({ executionHostId: 'local', runtimeEnvironmentId: null })
+
+    store.setState({ folderWorkspaces: [runtimeWorkspace] })
+    expect(view()).toEqual({ owner: null, comments: undefined })
+  })
+
+  it('drops a queued folder save once its catalog endpoint is replaced, touching no other copy', async () => {
+    Object.assign(globalThis, { __ORCA_WEB_CLIENT__: true })
+    try {
+      const store = createTestStore()
+      const key = folderWorkspaceKey('folder-1')
+      const folder = makeFolderWorkspace({ diffComments: [folderNote(key, 'hub A')] })
+      store.setState({
+        activeWorktreeId: key,
+        activeWorkspaceExecutionHostId: 'local',
+        runtimeEnvironments: [savedServer('hub-a')],
+        folderWorkspaces: [folder]
+      })
+      const owner = capturedOwner(store, key)
+      expect(owner).toMatchObject({ runtimeEnvironmentId: 'hub-a' })
+
+      const pending = store.getState().addDiffComment(owner, {
+        worktreeId: key,
+        filePath: 'README.md',
+        lineNumber: 2,
+        body: 'added',
+        side: 'modified'
+      })
+      const replacement = { ...folder, diffComments: [folderNote(key, 'hub B')] }
+      store.setState({
+        runtimeEnvironments: [savedServer('hub-b')],
+        folderWorkspaces: [replacement]
+      })
+
+      expect(await pending).toBeNull()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'folderWorkspace.update' })
+      )
+      expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
+      expect(store.getState().folderWorkspaces).toEqual([replacement])
+    } finally {
+      Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
+    }
   })
 
   it('keeps a failing burst scoped to its own execution host', async () => {

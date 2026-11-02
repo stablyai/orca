@@ -50,7 +50,11 @@ function selectFolderView(
   folderWorkspaceId: string,
   source: WorkspaceCopySource
 ): DiffCommentView {
-  const hostId = resolveSourceFolderHost(state, worktreeId, source)
+  const qualifier = resolveSourceFolderHost(state, worktreeId, folderWorkspaceId, source)
+  if (qualifier.kind !== 'resolved') {
+    return NO_DIFF_COMMENT_VIEW
+  }
+  const hostId = qualifier.owner
   // Without its own host, a retained resource may not fall back to the selected folder.
   const ownerState = source === 'selection' ? state : focusFreeRouteStateOf(state)
   const folder = findFolderWorkspaceOwner(ownerState, folderWorkspaceId, hostId)
@@ -110,27 +114,34 @@ export function diffCommentOwnerKey(owner: DiffCommentOwner): string {
   )
 }
 
+/** A captured folder copy's catalog record, only while the captured endpoint still serves it: reads, mutations, the queue and rollback all use this one lookup. */
+export function findOwnedFolder(
+  state: DiffCommentSelectorState,
+  owner: Extract<DiffCommentOwner, { kind: 'folder' }>
+): ReturnType<typeof findFolderWorkspaceOwner> {
+  const scope = parseWorkspaceKey(owner.worktreeId)
+  if (scope?.type !== 'folder') {
+    return null
+  }
+  const folder = findFolderWorkspaceOwner(state, scope.folderWorkspaceId, owner.executionHostId)
+  return folder &&
+    getRuntimeEnvironmentIdForFolderWorkspace(
+      state,
+      scope.folderWorkspaceId,
+      owner.executionHostId
+    ) === owner.runtimeEnvironmentId
+    ? folder
+    : null
+}
+
 /** The captured copy's notes, or undefined when it is not listed (gone, or not yet arrived). */
 export function readOwnedDiffComments(
   state: DiffCommentSelectorState,
   owner: DiffCommentOwner
 ): DiffComment[] | undefined {
   if (owner.kind === 'folder') {
-    const scope = parseWorkspaceKey(owner.worktreeId)
-    const folder =
-      scope?.type === 'folder'
-        ? findFolderWorkspaceOwner(state, scope.folderWorkspaceId, owner.executionHostId)
-        : null
-    // The same record must still be served by the captured catalog endpoint.
-    return folder &&
-      scope?.type === 'folder' &&
-      getRuntimeEnvironmentIdForFolderWorkspace(
-        state,
-        scope.folderWorkspaceId,
-        owner.executionHostId
-      ) === owner.runtimeEnvironmentId
-      ? (folder.diffComments ?? EMPTY_DIFF_COMMENTS)
-      : undefined
+    const folder = findOwnedFolder(state, owner)
+    return folder ? (folder.diffComments ?? EMPTY_DIFF_COMMENTS) : undefined
   }
   return readCopyNotes(findCopyRows(state, owner.worktreeId, owner.authority))
 }

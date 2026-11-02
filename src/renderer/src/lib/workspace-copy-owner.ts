@@ -17,6 +17,7 @@ import {
 import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import type { OpenFile } from '@/store/slices/editor'
 import { focusFreeRouteStateOf } from './editor-file-operation-provenance'
 import { namedHostForOwnerRef, resolveOwner, resolveOwnerOfRoute } from './resolve-owner'
@@ -190,19 +191,50 @@ export function resolveSourceCopy(
     : listed
 }
 
-/** The host qualifying a folder workspace's catalog record for this source, or none when unknown. */
+/**
+ * The host qualifying the folder catalog record a source shows, by the same evidence and
+ * resolver as worktree copies: each catalog record's owner, filtered by what the source proves.
+ */
 export function resolveSourceFolderHost(
   state: WorktreeOperationRouteState,
   workspaceId: string,
+  folderWorkspaceId: string,
   source: WorkspaceCopySource
-): ExecutionHostId | undefined {
-  if (source === 'selection') {
-    return namedHostForOwnerRef(state, { workspaceId }) ?? undefined
+): ExecutionHostOwnerMatch<ExecutionHostId | undefined> {
+  const named = source === 'selection' ? namedHostForOwnerRef(state, { workspaceId }) : null
+  if (named) {
+    return { kind: 'resolved', owner: named }
   }
-  const provenance = source.operationProvenance
-  if (provenance && !provenance.childRepo && provenance.generation.route.executionHostId) {
-    return provenance.generation.route.executionHostId
+  const ownerState = source === 'selection' ? state : focusFreeRouteStateOf(state)
+  // A file outside the folder names its own SSH target, not the folder catalog's host.
+  const evidence =
+    source === 'selection'
+      ? {}
+      : resourceEvidence(ownerState, workspaceId, { ...source, externalSshTargetId: undefined })
+  const fits = (authority: HostAuthority) =>
+    'at' in evidence
+      ? authorityKey(authority) === authorityKey(evidence)
+      : !evidence.endpoint || sameEndpoint(evidence.endpoint, authority.endpoint)
+  const hosts = new Set<ExecutionHostId | undefined>()
+  for (const folder of selectFolderWorkspaces(ownerState) ?? []) {
+    if (folder.id === folderWorkspaceId) {
+      hosts.add(parseExecutionHostId(folder.executionHostId)?.id)
+    }
   }
-  const environmentId = source.runtimeEnvironmentId?.trim()
-  return environmentId ? toRuntimeExecutionHostId(environmentId) : undefined
+  const copies = new Map<string, ExecutionHostId | undefined>()
+  for (const hostId of hosts) {
+    const owner = resolveOwner(ownerState, { workspaceId, ...(hostId ? { hostId } : {}) })
+    if (owner.kind === 'ambiguous') {
+      return owner
+    }
+    if (owner.kind === 'resolved' && fits(owner.owner)) {
+      copies.set(authorityKey(owner.owner), hostId)
+    }
+  }
+  const [only] = copies.entries()
+  return copies.size > 1
+    ? { kind: 'ambiguous' }
+    : only
+      ? { kind: 'resolved', owner: only[1] }
+      : { kind: 'missing' }
 }

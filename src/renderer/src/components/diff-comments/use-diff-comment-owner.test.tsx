@@ -10,10 +10,12 @@ import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-opera
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { useCombinedDiffNotesActions } from '../editor/combined-diff/review-controls/use-combined-diff-notes-actions'
 import { useMarkdownPreviewSourceFoundation } from '../editor/use-markdown-preview-source-foundation'
 import { useSourceControlDiffCommentNotes } from '../right-sidebar/source-control/notes/use-diff-comment-notes'
 import { useDiffCommentView, useOwnedDiffCommentTarget } from './use-diff-comment-owner'
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
 import { useVisibleWorktreeDiffComments } from './use-visible-worktree-diff-comments'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
@@ -42,6 +44,17 @@ function row(
     diffComments,
     ...(runtimeOwnerEnvironmentId ? { runtimeOwnerEnvironmentId } : {})
   })
+}
+
+function repoOn(id: string, executionHostId: ExecutionHostId): Repo {
+  return {
+    id,
+    path: `/work/${id}`,
+    displayName: id,
+    badgeColor: '#000',
+    addedAt: 0,
+    executionHostId
+  }
 }
 
 function note(id: string, filePath = 'a.ts'): DiffComment {
@@ -164,6 +177,47 @@ describe('note owner views', () => {
       act(() => useAppStore.setState({ editorFontZoomLevel: write }))
     }
     expect(idReads).toBe(0)
+  })
+
+  it('do work linear in the catalog on listing and repo updates, none on unrelated writes', () => {
+    function cost(size: number) {
+      let repoReads = 0
+      const repos = [
+        repoOn(REPO, 'local'),
+        repoOn(REPO, 'runtime:hub'),
+        ...Array.from({ length: size }, (_, index) => repoOn(`unrelated-${index}`, 'local'))
+      ].map((repo) => {
+        const { id } = repo
+        return Object.defineProperty(repo, 'id', {
+          enumerable: true,
+          get: () => {
+            repoReads += 1
+            return id
+          }
+        })
+      })
+      const rows = Array.from({ length: size }, (_, index) =>
+        makeWorktree({ id: `${REPO}::/work/${index}`, repoId: REPO, diffComments: [note('n')] })
+      )
+      useAppStore.setState({ repos, worktreesByRepo: { [REPO]: rows } })
+      const { result, unmount } = renderHook(() =>
+        rows.map((row) => useDiffCommentView(row.id, NO_RESOURCE_EVIDENCE))
+      )
+      expect(result.current.every((view) => view.comments?.length === 1)).toBe(true)
+
+      repoReads = 0
+      act(() => useAppStore.setState({ worktreesByRepo: { [REPO]: [...rows] } }))
+      act(() => useAppStore.setState({ repos: [...repos] }))
+      const updateReads = repoReads
+      repoReads = 0
+      act(() => useAppStore.setState({ editorFontZoomLevel: size }))
+      expect(repoReads).toBe(0)
+      unmount()
+      return updateReads
+    }
+
+    // N views over N rows and N repos: linear growth is 10x, per-record catalog scans 100x.
+    expect(cost(100)).toBeLessThanOrEqual(cost(10) * 20)
   })
 
   it('show a sole paired SSH copy selected through its server alias', () => {
