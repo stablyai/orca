@@ -191,7 +191,10 @@
       "title": "將 {{distro}} 作為主機執行（建議）",
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "accept": "作為主機執行",
-      "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。"
+      "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。",
+      "existingTitle": "新增到 {{distro}} 主機（建議）",
+      "existingWhy": "{{distro}} 已作為主機執行，因此 Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
+      "existingAccept": "新增到主機"
     }
   },
   "app": {
@@ -575,7 +578,7 @@
         "inheritFont": "與 IDE 字型相同",
         "fontPreviewLabel": "聊天字型預覽",
         "fontPreview": "敏捷的棕色狐狸躍過懶狗。",
-        "title": "聊天",
+        "title": "聊天介面",
         "textSize": "文字大小",
         "textSizeDescription": "訊息、工具活動和訊息輸入框。在聊天中按 {{increase}} / {{decrease}} 也會更改此設定。",
         "codeTextSize": "程式碼文字大小",
@@ -7902,7 +7905,6 @@
           "9d3e56ca36": "套用變更",
           "f96688b6bc": "取消",
           "b7ddae600c": "完成",
-          "e4bda7ce6f": "在此系統上未找到 Ghostty 設定檔。",
           "b58d4c9051": "不支援的設定鍵",
           "674b5ccd6b": "無需匯入新設定 — 您目前設定已經符合。",
           "a4c5dec640": "要更新的設定",
@@ -18813,6 +18815,7 @@
       "failureWords": {
         "theAgent": "代理程式",
         "providerStartFailed": "{{agent}} 在完成啟動前已停止。",
+        "savedConversationMissing": "{{agent}} 找不到此聊天已儲存的對話。",
         "runCommandAgain": "請重新執行 /{{command}}。",
         "sendToTryAgain": "請傳送您的訊息以重試。",
         "sendAgainToTryOnceMore": "請重新傳送您的訊息，再試一次。",
@@ -20231,6 +20234,9 @@
         "finished": "暫時的協作工作者已完成 · {{countdown}}後關閉",
         "keepOpen": "保持開啟"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "在 WSL 上執行：{{distro}}（Linux）"
     }
   },
   "dashboardPopout": {
@@ -22275,7 +22281,8 @@
       "changed": "先前已移動，之後又被舊版 Orca 在這裡變更。不會再次移動。",
       "chatsStay": "現有聊天會留在這台電腦上。此專案中的新聊天會在 WSL 主機上開始。",
       "browserLoginsConflict": "瀏覽器登入狀態不會轉移，因為主機的瀏覽器設定檔已在使用中。移動後，請在主機的瀏覽器分頁中重新登入。",
-      "browserLoginsNotCarried": "瀏覽器登入狀態不會轉移到此主機。移動後，請在其瀏覽器分頁中重新登入。"
+      "browserLoginsNotCarried": "瀏覽器登入狀態不會轉移到此主機。移動後，請在其瀏覽器分頁中重新登入。",
+      "why": "之後工作會在 Linux 中、緊鄰你的檔案執行，因此終端機、Git 和檔案變更會更快、更可靠。你的專案不會改變，也可以隨時用「重新在這台電腦上使用」把任何專案移回來。"
     },
     "cancel": "取消",
     "progress": {
@@ -22767,6 +22774,8 @@
     "arguments": "引數",
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
-    "launchTerminal": "啟動終端機"
+    "launchTerminal": "啟動終端機",
+    "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
+    "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案"
   }
 }

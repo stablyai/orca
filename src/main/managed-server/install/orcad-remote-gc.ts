@@ -79,25 +79,7 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boole
               }
             }
           : {}),
-      isDirLive: async (dir) => {
-        try {
-          const probe = await execCommand(
-            options.conn,
-            orcadLivenessProbeCommand(options.host, dir),
-            {
-              wrapCommand: options.host.commandDialect !== 'powershell',
-              signal: options.signal
-            }
-          )
-          return orcadLivenessAnswerBlocksGc(probe)
-        } catch (error) {
-          if (isUnconfirmedSshCommandTermination(error)) {
-            throw error
-          }
-          // Failed probes cannot prove the tree is idle.
-          return true
-        }
-      }
+      isDirLive: (dir) => isOrcadInstallDirLive(options, dir)
     }
   )
   // Remove slots before runtimes so their references are released first.
@@ -109,6 +91,26 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<boole
   }
   // A recent build kept now still needs pruning once it ages.
   return versionsClean && !keptRecent
+}
+
+/** True unless the slot's orcad is proven not running from `dir`. */
+export async function isOrcadInstallDirLive(
+  options: Pick<OrcadGcOptions, 'conn' | 'host' | 'signal'>,
+  dir: string
+): Promise<boolean> {
+  try {
+    const probe = await execCommand(options.conn, orcadLivenessProbeCommand(options.host, dir), {
+      wrapCommand: options.host.commandDialect !== 'powershell',
+      signal: options.signal
+    })
+    return orcadLivenessAnswerBlocksGc(probe)
+  } catch (error) {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    // Failed probes cannot prove the tree is idle.
+    return true
+  }
 }
 
 /** Null means unknown host state and keeps every candidate; otherwise pin anything not proven dead. */

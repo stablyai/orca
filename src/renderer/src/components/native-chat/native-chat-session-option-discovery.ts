@@ -1,7 +1,7 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { createClaudeCatalogOptions } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
-import { catalogModelsFromModelDiscovery } from '../../../../shared/native-chat-discovered-catalog-models'
+import { catalogModelsFromModelDiscovery } from '../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
 import {
   getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
   getCommitMessageModelDiscoveryHostKeyForScope,

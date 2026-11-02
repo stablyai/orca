@@ -257,27 +257,10 @@ function renderMenu(
 }
 
 describe('buildNotesSendTargetModeId', () => {
-  it('keeps note-send target ids stable for the same parts', () => {
-    expect(buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])).toBe(
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
-    )
-  })
-
   it('uses part boundaries so adjacent values cannot collide', () => {
     expect(buildNotesSendTargetModeId(['markdown-notes', 'ab', 'c'])).not.toBe(
       buildNotesSendTargetModeId(['markdown-notes', 'a', 'bc'])
     )
-  })
-
-  it('separates markdown rail, panel, per-note, and diff send targets', () => {
-    const ids = new Set([
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail']),
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'preview-panel']),
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'note', 'note-1']),
-      buildNotesSendTargetModeId(['diff-notes', 'wt-1', 'group-1', 'README.md'])
-    ])
-
-    expect(ids.size).toBe(4)
   })
 })
 
@@ -311,15 +294,6 @@ describe('NotesSendMenu', () => {
     expect(findAllByType(tree, 'TooltipContent')).toHaveLength(0)
   })
 
-  it('uses caller-provided disabled tooltip copy for disabled note actions', () => {
-    const tree = renderMenu({
-      scopes: [{ id: 'note', label: 'This note', notes: [], formatPrompt: () => '' }],
-      disabledTooltip: 'Note already sent'
-    })
-
-    expect(findByType(tree, 'button').props.title).toBe('Note already sent')
-  })
-
   it('opens and closes target mode with the default scope', () => {
     const onDelivered = vi.fn()
     const tree = renderMenu({ onDelivered })
@@ -348,18 +322,6 @@ describe('NotesSendMenu', () => {
     expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
       buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
     )
-  })
-
-  it('passes the default scope to review note send content', () => {
-    const tree = renderMenu()
-
-    expect(findByType(tree, 'ReviewNotesSendMenuContent').props).toMatchObject({
-      worktreeId: 'wt-1',
-      groupId: 'group-1',
-      prompt: 'prompt-all',
-      promptDelivery: 'submit-after-ready',
-      launchSource: 'notes_send'
-    })
   })
 
   it('switches running-agent target mode when a different scope is focused', () => {

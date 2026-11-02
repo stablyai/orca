@@ -595,7 +595,10 @@
       "title": "Executar {{distro}} como host (recomendado)",
       "why": "Git, arquivos e terminais passam a rodar nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "accept": "Executar como host",
-      "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral."
+      "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral.",
+      "existingTitle": "Adicionar no host {{distro}} (recomendado)",
+      "existingWhy": "{{distro}} já roda como host, então Git, arquivos e terminais rodam nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
+      "existingAccept": "Adicionar no host"
     }
   },
   "tray": {
@@ -1280,7 +1283,7 @@
         "inheritFont": "Mesma fonte do IDE",
         "fontPreviewLabel": "Prévia da fonte do chat",
         "fontPreview": "A rápida raposa marrom salta sobre o cão preguiçoso.",
-        "title": "Chat",
+        "title": "Interface de chat",
         "textSize": "Tamanho do texto",
         "textSizeDescription": "Mensagens, atividade das ferramentas e caixa de mensagem. {{increase}} / {{decrease}} em um chat também alteram este tamanho.",
         "codeTextSize": "Tamanho do texto de código",
@@ -7737,7 +7740,6 @@
           "9d3e56ca36": "Aplicar Alterações",
           "f96688b6bc": "Cancelar",
           "b7ddae600c": "Concluído",
-          "e4bda7ce6f": "Nenhuma configuração do Ghostty encontrada neste sistema.",
           "b58d4c9051": "Chaves não suportadas",
           "674b5ccd6b": "Nenhuma configuração nova para importar — suas configurações atuais já correspondem.",
           "a4c5dec640": "Configurações a atualizar",
@@ -20464,6 +20466,7 @@
       "failureWords": {
         "theAgent": "O agente",
         "providerStartFailed": "{{agent}} parou antes de terminar de iniciar.",
+        "savedConversationMissing": "{{agent}} não conseguiu encontrar a conversa salva deste chat.",
         "runCommandAgain": "Execute /{{command}} novamente.",
         "sendToTryAgain": "Envie sua mensagem para tentar novamente.",
         "sendAgainToTryOnceMore": "Envie sua mensagem novamente para fazer outra tentativa.",
@@ -21515,6 +21518,9 @@
         "finished": "Worker temporário de orquestração concluído · Fecha em {{countdown}}",
         "keepOpen": "Manter aberto"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Executa no WSL: {{distro}} (Linux)"
     }
   },
   "csv": {
@@ -22974,7 +22980,9 @@
     "toggleArguments": "Mostrar ou ocultar argumentos",
     "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
     "searchAgentModels": "Pesquisar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos"
+    "legacyModelCount": "{{total}} modelos",
+    "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
+    "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos"
   },
   "wslMove": {
     "entry": {
@@ -23004,7 +23012,8 @@
       "changed": "Foi movido antes e depois alterado aqui por uma versão anterior do Orca. Não será movido novamente.",
       "chatsStay": "Os chats existentes ficam neste computador. Novos chats neste projeto começam no host WSL.",
       "browserLoginsConflict": "Os logins do navegador não serão levados, porque o perfil do navegador do host já está em uso. Entre novamente nas abas do navegador do host após a movimentação.",
-      "browserLoginsNotCarried": "Os logins do navegador não serão levados para este host. Entre novamente nas abas do navegador dele após a movimentação."
+      "browserLoginsNotCarried": "Os logins do navegador não serão levados para este host. Entre novamente nas abas do navegador dele após a movimentação.",
+      "why": "O trabalho passa a rodar dentro do Linux, junto aos seus arquivos, então terminais, Git e alterações de arquivos ficam mais rápidos e confiáveis. Seus projetos não mudam, e você pode trazer qualquer projeto de volta com “Usar novamente neste computador”."
     },
     "cancel": "Cancelar",
     "progress": {

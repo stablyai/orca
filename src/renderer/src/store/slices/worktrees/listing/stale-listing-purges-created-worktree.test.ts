@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -31,6 +31,7 @@ vi.mock('sonner', () => ({
 }))
 
 createStoreCascadesMockApi()
+afterEach(() => vi.useRealTimers())
 
 const REPO_ID = TEST_REPO.id
 const EXISTING_ID = `${REPO_ID}::/tmp/wt-existing`
@@ -278,4 +279,117 @@ describe('a listing versioned before an applied create', () => {
     expect(launchWasCancelled()).toBe(true)
     expect(store.getState().activeWorktreeId).toBeNull()
   })
+})
+
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { recentlyRenamedWorktreeIdExpiry } from '@/hooks/ipc-events/worktree-event-runtime'
+
+it.each([
+  'git',
+  'session-fallback',
+  'non-authoritative',
+  'stale',
+  'renamed',
+  'newer-publication'
+] as const)(
+  'listing preserves ordinary setup input without a launch observation/death policy: %s',
+  (kind) => {
+    vi.setSystemTime(1_000)
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    recentlyRenamedWorktreeIdExpiry.clear()
+    const store = createTestStore()
+    seedCreatedWorkspaceWithPendingLaunch(store, true)
+    const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(CREATED_ID, 'claude', 'local')
+    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+      CREATED_ID,
+      'claude',
+      'ssh:other'
+    )
+    const ordinary = launchDrafts.structuredAgentSessionDraftScopeKey('existing-chat')
+    for (const key of [scope, other, ordinary]) {
+      launchDrafts.updateNativeChatComposerDraft(
+        key,
+        { text: 'keep', owner: { workspaceId: CREATED_ID, executionHostId: 'local' } },
+        'immediate'
+      )
+    }
+    const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
+    if (kind === 'renamed') {
+      recentlyRenamedWorktreeIdExpiry.set(CREATED_ID, 1_000 + 20_000)
+    }
+    if (kind === 'newer-publication') {
+      store.setState({
+        worktreeCatalogVersionByRepoHost: {
+          [worktreeCatalogVersionKey(REPO_ID, 'local')]: { epoch: 'epoch', sequence: 2 }
+        }
+      })
+    }
+    if (kind === 'stale') {
+      store.setState({ repos: [] })
+    }
+    mergeFetchedWorktrees(store.setState, store.getState, {
+      repoId: REPO_ID,
+      hostId: 'local',
+      ownerWasMissingAtStart: false,
+      requestStartedWorktrees: store.getState().worktreesByRepo[REPO_ID],
+      refresh: {
+        status: 'admitted',
+        executionHostId: 'local',
+        result: {
+          repoId: REPO_ID,
+          authoritative: kind !== 'non-authoritative',
+          source: kind === 'session-fallback' ? kind : 'git',
+          worktrees: [detected(store.getState().worktreesByRepo[REPO_ID]![0])],
+          catalogVersion: { epoch: 'epoch', sequence: 1 }
+        }
+      }
+    })
+    expect(attempt.draft?.text).toBe('keep')
+    for (const key of [other, ordinary]) {
+      expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+    }
+    launchDrafts.clearNativeChatComposerDraftsForTests()
+    recentlyRenamedWorktreeIdExpiry.clear()
+  }
+)
+
+it('nested listing does not add a separate setup-death policy before a refused enclosing removal', async () => {
+  launchDrafts.clearNativeChatComposerDraftsForTests()
+  const store = createTestStore()
+  const rows = [EXISTING_ID, CREATED_ID, `${REPO_ID}::/sibling`].map((id) =>
+    makeWorktree({ id, repoId: REPO_ID, hostId: 'local' })
+  )
+  seedStore(store, { worktreesByRepo: { [REPO_ID]: rows } })
+  const scopes = rows.map(({ id }) =>
+    launchDrafts.nativeChatLaunchPromptDraftScopeKey(id, 'codex', 'local')
+  )
+  scopes.forEach((key) =>
+    launchDrafts.updateNativeChatComposerDraft(key, { text: 'task' }, 'immediate')
+  )
+  const attempts = scopes.map(launchDrafts.captureNativeChatComposerSubmission)
+  const parentReply =
+    Promise.withResolvers<Awaited<ReturnType<typeof window.api.worktrees.remove>>>()
+  vi.mocked(window.api.worktrees.remove).mockReturnValueOnce(parentReply.promise)
+  const removing = store
+    .getState()
+    .removeWorktree({ id: EXISTING_ID, executionHostId: 'local' }, false, {
+      approvedNestedWorktrees: [{ path: '/tmp/wt-created', head: 'abc', branch: 'child' }]
+    })
+  await vi.waitFor(() =>
+    expect(window.api.worktrees.remove).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        worktreeId: EXISTING_ID,
+        approvedNestedWorktrees: [{ path: '/tmp/wt-created', head: 'abc', branch: 'child' }]
+      })
+    )
+  )
+  expect(applyListing(store, [rows[0], rows[2]])).toBe('applied')
+  expect(attempts[1].draft?.text).toBe('task')
+  expect(attempts[0].draft?.text).toBe('task')
+  expect(attempts[2].draft?.text).toBe('task')
+  parentReply.reject(new Error('later sibling refused'))
+  expect((await removing).ok).toBe(false)
+  expect(attempts[1].draft?.text).toBe('task')
+  expect(attempts[0].draft?.text).toBe('task')
+  launchDrafts.clearNativeChatComposerDraftsForTests()
 })

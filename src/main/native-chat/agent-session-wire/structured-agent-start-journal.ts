@@ -1,7 +1,7 @@
 import type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-journal-creation-facts'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readJournalSessionEpoch } from '../agent-session-journal/journal-row-table'
