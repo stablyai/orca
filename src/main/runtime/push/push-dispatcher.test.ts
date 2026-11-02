@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PushGatewayClient } from './push-gateway-client'
 import { PushDispatcher } from './push-dispatcher'
 import { mapPushAgentState } from '../../../shared/mobile-push-alert'
+import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
 import {
   createHarness,
   flush,
   notification,
   registration,
+  untranslated,
   type SendCall
 } from './push-dispatcher.test-fixture'
 
@@ -69,6 +71,47 @@ describe('PushDispatcher', () => {
     await flush()
 
     expect(harness.cleared).toEqual(['device-24'])
+  })
+
+  it('names only the alert kind for every phone when details are hidden, keeping routing ids', async () => {
+    const harness = createHarness({
+      devices: [
+        { deviceId: 'a', pushRegistration: registration({ registrationId: 'reg-a' }) },
+        {
+          deviceId: 'b',
+          pushRegistration: registration({ registrationId: 'reg-b', filter: { sound: false } })
+        }
+      ],
+      notificationSettings: {
+        ...getDefaultNotificationSettings(),
+        hidePhoneNotificationDetails: true
+      }
+    })
+
+    harness.dispatcher.enqueue(notification({ agentState: 'blocked', paneKey: 'tab-1:leaf-1' }))
+    harness.dispatcher.enqueue(notification({ source: 'terminal-bell', notificationSeq: 8 }))
+    harness.dispatcher.enqueue(notification({ source: 'plugin', notificationSeq: 9 }))
+    await flush()
+
+    expect(
+      harness.sends.map(({ registrationIds, notification }) => [
+        registrationIds,
+        notification.title,
+        notification.body
+      ])
+    ).toEqual([
+      [['reg-a'], 'Agent needs input', ''],
+      [['reg-b'], 'Agent needs input', ''],
+      [['reg-a'], 'Terminal bell', ''],
+      [['reg-b'], 'Terminal bell', ''],
+      [['reg-a'], 'Plugin notification', ''],
+      [['reg-b'], 'Plugin notification', '']
+    ])
+    expect(harness.sends[0]?.notification).toMatchObject({
+      notificationId: 'agent:one',
+      worktreeId: 'repo::wt1',
+      paneKey: 'tab-1:leaf-1'
+    })
   })
 
   it('pushes a silent dismissal with an absolute expiry', async () => {
@@ -138,6 +181,8 @@ describe('PushDispatcher', () => {
         listDevices: () => devices,
         setPushRegistration: () => true
       },
+      readNotificationSettings: () => undefined,
+      translate: untranslated,
       scheduleRetry: (run, delayMs) => {
         expect(delayMs).toBe(2_000)
         scheduled.push(run)
@@ -178,7 +223,9 @@ describe('PushDispatcher', () => {
           throw new Error('registry unavailable')
         },
         setPushRegistration: () => true
-      }
+      },
+      readNotificationSettings: () => undefined,
+      translate: untranslated
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 

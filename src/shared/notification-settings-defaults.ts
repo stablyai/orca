@@ -11,6 +11,7 @@ export function getDefaultNotificationSettings(): NotificationSettings {
     customSoundPath: null,
     customSoundVolume: 100,
     mutedNotificationSourceIds: [],
-    notifyHiddenWorkspaces: false
+    notifyHiddenWorkspaces: false,
+    hidePhoneNotificationDetails: false
   }
 }

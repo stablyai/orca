@@ -155,6 +155,35 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.notifications.search.ef658bb250',
+      'Hide Phone Notification Details'
+    ),
+    description: translate(
+      'auto.components.settings.notifications.search.220fd32b71',
+      'Send phone notifications without workspace names or agent messages.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.ca8faa40d7',
+        'notifications'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.bc0f863af5',
+        'phone'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.52b673dea1',
+        'mobile'
+      ),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.d5d4a87d19', 'push'),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.fce939828f',
+        'privacy'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.notifications.search.ea8cb8d9ce',
       'Notification Sound'
     ),

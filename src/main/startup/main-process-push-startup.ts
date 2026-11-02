@@ -15,7 +15,8 @@ export function startDesktopPushService(runtimeRpc: OrcaRuntimeRpcServer): void 
     const pushService = DesktopPushService.create({
       runtime,
       runtimeRpc,
-      gatewayUrl: getOrcaPushGatewayUrl()
+      gatewayUrl: getOrcaPushGatewayUrl(),
+      readNotificationSettings: () => state.store?.getSettings().notifications
     })
     pushService?.start()
     state.desktopPushService = pushService

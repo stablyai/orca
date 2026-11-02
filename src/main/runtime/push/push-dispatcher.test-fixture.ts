@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { MobilePushRegistration } from '../../../shared/mobile-push-contract'
+import type { NotificationSettings } from '../../../shared/notification-settings-types'
 import type { MobileNotificationEvent } from '../runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendResult } from './push-gateway-client'
 import { PushDispatcher, type PushDispatcherRegistry } from './push-dispatcher'
@@ -21,6 +22,7 @@ export function createHarness(options: {
   devices: { deviceId: string; pushRegistration?: MobilePushRegistration }[]
   results?: PushSendResult[]
   sendImpl?: () => Promise<never>
+  notificationSettings?: NotificationSettings
 }): {
   dispatcher: PushDispatcher
   sends: SendCall[]
@@ -58,6 +60,8 @@ export function createHarness(options: {
     dispatcher: new PushDispatcher({
       client,
       registry,
+      readNotificationSettings: () => options.notificationSettings,
+      translate: untranslated,
       scheduleRetry: (run) => {
         retry = run
       }
@@ -67,6 +71,8 @@ export function createHarness(options: {
     runRetry: () => retry?.()
   }
 }
+
+export const untranslated = (_key: string, fallback: string): string => fallback
 
 export function notification(
   overrides: Partial<MobileNotificationEvent> = {}

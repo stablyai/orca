@@ -5,9 +5,11 @@ import type {
   MobilePushRegisterInput,
   MobilePushRegisterResult
 } from '../../../shared/mobile-push-contract'
+import type { NotificationSettings } from '../../../shared/notification-settings-types'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 import type { DeviceRegistry } from '../device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import { getRuntimeDesktopSurface } from '../runtime-desktop-surface'
 import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { PushDispatcher } from './push-dispatcher'
 import { PushGatewayClient } from './push-gateway-client'
@@ -23,6 +25,7 @@ type DesktopPushServiceOptions = {
   runtime: OrcaRuntimeService
   runtimeRpc: OrcaRuntimeRpcServer
   gatewayUrl: string
+  readNotificationSettings: () => NotificationSettings | undefined
   /** Inject a gateway client for tests. */
   client?: PushGatewayClient
   /** Inject outbox backoff scheduling for tests. */
@@ -58,7 +61,13 @@ export class DesktopPushService {
     this.registry = registry
     this.client = client
     this.outbox = options.runtimeRpc.getPushUnregisterOutbox()
-    this.dispatcher = new PushDispatcher({ client, registry })
+    this.dispatcher = new PushDispatcher({
+      client,
+      registry,
+      readNotificationSettings: options.readNotificationSettings,
+      translate: (key, fallback) =>
+        getRuntimeDesktopSurface().translateNotification?.(key, fallback) ?? fallback
+    })
     this.registerThrottle = options.registerThrottle ?? new PushRegisterThrottle()
     this.scheduleRetry =
       options.scheduleRetry ??

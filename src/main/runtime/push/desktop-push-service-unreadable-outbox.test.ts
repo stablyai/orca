@@ -54,6 +54,7 @@ it('refuses registration until unreadable cleanup is recovered and settled on re
         } as never,
         client: client as never,
         gatewayUrl: 'https://push.invalid',
+        readNotificationSettings: () => undefined,
         scheduleRetry: vi.fn()
       })!
     const input = { deviceId, platform: 'android' as const, token: 'synthetic', filter: {} }

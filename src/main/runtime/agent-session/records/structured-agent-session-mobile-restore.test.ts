@@ -36,7 +36,8 @@ function wire(host: StructuredAgentSessionHost, controller: RuntimeMobileNotific
       customSoundPath: null,
       customSoundVolume: 1,
       mutedNotificationSourceIds: [],
-      notifyHiddenWorkspaces: true
+      notifyHiddenWorkspaces: true,
+      hidePhoneNotificationDetails: false
     }),
     readWorkspaceLabels: () => ({}),
     isWorkspaceMuted: () => false,
