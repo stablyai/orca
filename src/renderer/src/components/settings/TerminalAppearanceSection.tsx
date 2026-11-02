@@ -282,6 +282,7 @@ export function TerminalAppearanceSection({
             preview={ghostty.preview}
             loading={ghostty.loading}
             onApply={ghostty.handleApply}
+            onChooseFile={ghostty.handleChooseFile}
             applied={ghostty.applied}
             applyError={ghostty.applyError}
           />

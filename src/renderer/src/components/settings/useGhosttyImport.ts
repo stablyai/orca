@@ -1,5 +1,9 @@
-import { useState } from 'react'
-import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
+import { useRef, useState } from 'react'
+import type {
+  GhosttyImportPreview,
+  GhosttyImportSource,
+  GlobalSettings
+} from '../../../../shared/global-settings-types'
 import { useMountedRef } from '../../hooks/useMountedRef'
 import { withImportedTerminalColorOverrides } from '../../../../shared/terminal-theme-selection'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
@@ -11,6 +15,7 @@ export type UseGhosttyImportReturn = {
   applied: boolean
   applyError: string | null
   handleClick: () => Promise<void>
+  handleChooseFile: () => Promise<void>
   handleApply: () => Promise<void>
   handleOpenChange: (open: boolean) => void
 }
@@ -26,14 +31,20 @@ export function useGhosttyImport(
   const [applied, setApplied] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const mountedRef = useMountedRef()
+  const choosingRef = useRef(false)
 
-  async function handleClick(): Promise<void> {
-    setOpen(true)
-    setLoading(true)
+  async function loadPreview(source: GhosttyImportSource): Promise<void> {
+    // The picker phase keeps the current preview visible instead of flashing a loading state behind it.
+    if (source.kind === 'auto') {
+      setLoading(true)
+    }
     try {
-      const result = await window.api.settings.previewGhosttyImport()
-      if (mountedRef.current) {
+      const result = await window.api.settings.previewGhosttyImport(source)
+      // A dismissed picker keeps the preview that was already showing.
+      if (mountedRef.current && !result.canceled) {
         setPreview(result)
+        setApplied(false)
+        setApplyError(null)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -44,6 +55,23 @@ export function useGhosttyImport(
       if (mountedRef.current) {
         setLoading(false)
       }
+    }
+  }
+
+  async function handleClick(): Promise<void> {
+    setOpen(true)
+    await loadPreview({ kind: 'auto' })
+  }
+
+  async function handleChooseFile(): Promise<void> {
+    if (choosingRef.current) {
+      return
+    }
+    choosingRef.current = true
+    try {
+      await loadPreview({ kind: 'chooseFile' })
+    } finally {
+      choosingRef.current = false
     }
   }
 
@@ -88,6 +116,7 @@ export function useGhosttyImport(
     applied,
     applyError,
     handleClick,
+    handleChooseFile,
     handleApply,
     handleOpenChange
   }

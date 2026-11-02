@@ -1,3 +1,4 @@
+import { FileUp } from 'lucide-react'
 import type { GhosttyImportPreview } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import {
@@ -17,6 +18,7 @@ type GhosttyImportModalProps = {
   preview: GhosttyImportPreview | null
   loading: boolean
   onApply: () => void | Promise<void>
+  onChooseFile: () => void | Promise<void>
   applied?: boolean
   applyError?: string | null
 }
@@ -36,6 +38,7 @@ export function GhosttyImportModal({
   preview,
   loading,
   onApply,
+  onChooseFile,
   applied = false,
   applyError = null
 }: GhosttyImportModalProps): React.JSX.Element {
@@ -60,6 +63,24 @@ export function GhosttyImportModal({
             )}
           </DialogDescription>
         </DialogHeader>
+
+        {!applied ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={loading}
+              onClick={() => void onChooseFile()}
+            >
+              <FileUp className="size-4" />
+              {translate(
+                'auto.components.settings.GhosttyImportModal.choose_file',
+                'Choose Config File'
+              )}
+            </Button>
+          </div>
+        ) : null}
 
         {loading ? (
           <p className="text-xs text-muted-foreground">
@@ -146,8 +167,8 @@ export function GhosttyImportModal({
         ) : (
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.GhosttyImportModal.e4bda7ce6f',
-              'No Ghostty config found on this system.'
+              'auto.components.settings.GhosttyImportModal.not_found_choose_file',
+              'No Ghostty config found on this computer. Choose a config file to import one from another location.'
             )}
           </p>
         )}

@@ -155,6 +155,7 @@ const ghosttyMock = {
   applied: true,
   applyError: null,
   handleClick: vi.fn(),
+  handleChooseFile: vi.fn(),
   handleApply: vi.fn(),
   handleOpenChange: vi.fn()
 }
@@ -174,6 +175,7 @@ const warpThemesMock = {
   importSignal: 0,
   selectedThemeIds: new Set<string>(),
   handleClick: vi.fn(),
+  handleChooseFile: vi.fn(),
   handleImportYamlClick: vi.fn(),
   handlePreviewSource: vi.fn(),
   handleToggleTheme: vi.fn(),

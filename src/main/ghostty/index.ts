@@ -1,7 +1,15 @@
 import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
-import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { WebContents } from 'electron'
+import type {
+  GhosttyImportPreview,
+  GhosttyImportSource,
+  GlobalSettings
+} from '../../shared/global-settings-types'
 import type { Store } from '../persistence/loading-store/store'
+import { translateMain } from '../i18n/main-i18n'
+import { validateImportSource } from '../import-source-validation'
+import { chooseTerminalConfigFile } from '../terminal-config-import/choose-config-file'
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'
@@ -9,6 +17,7 @@ import { resolveGhosttyThemeColors } from './theme-resolution'
 
 // Bound config reads to avoid loading arbitrarily large files into main.
 const MAX_CONFIG_BYTES = 1_000_000
+const GHOSTTY_IMPORT_SOURCE_KINDS = ['auto', 'chooseFile'] as const
 
 // Compare nested values structurally with sorted keys while preserving meaningful array order.
 function stableStringify(v: unknown): string {
@@ -90,8 +99,36 @@ async function applyThemeReference(parsed: Record<string, string | string[]>): P
   return []
 }
 
-export async function previewGhosttyImport(store: Store): Promise<GhosttyImportPreview> {
-  const configPaths = await findGhosttyConfigPaths()
+async function resolveConfigPaths(
+  source: GhosttyImportSource,
+  webContents?: WebContents
+): Promise<string[] | null> {
+  switch (source.kind) {
+    case 'auto':
+      return findGhosttyConfigPaths()
+    case 'chooseFile': {
+      const picked = await chooseTerminalConfigFile(
+        translateMain('native.dialog.importGhosttyConfig', 'Import Ghostty Config'),
+        webContents
+      )
+      return picked === null ? null : [picked]
+    }
+  }
+}
+
+export async function previewGhosttyImport(
+  store: Store,
+  source: unknown = { kind: 'auto' },
+  webContents?: WebContents
+): Promise<GhosttyImportPreview> {
+  const validatedSource = validateImportSource(source, GHOSTTY_IMPORT_SOURCE_KINDS)
+  if (!validatedSource) {
+    return { found: false, diff: {}, unsupportedKeys: [], error: 'Invalid Ghostty import source.' }
+  }
+  const configPaths = await resolveConfigPaths(validatedSource, webContents)
+  if (configPaths === null) {
+    return { found: false, canceled: true, diff: {}, unsupportedKeys: [] }
+  }
   if (configPaths.length === 0) {
     return { found: false, diff: {}, unsupportedKeys: [] }
   }

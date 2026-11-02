@@ -8216,7 +8216,6 @@
           "9d3e56ca36": "Apply Changes",
           "f96688b6bc": "Cancel",
           "b7ddae600c": "Done",
-          "e4bda7ce6f": "No Ghostty config found on this system.",
           "b58d4c9051": "Unsupported keys",
           "674b5ccd6b": "No new settings to import — your current settings already match.",
           "a4c5dec640": "Settings to update",
@@ -8225,7 +8224,9 @@
           "2763b0c045": "Review the settings that will be imported from your Ghostty config.",
           "d2f33670a9": "Import from Ghostty",
           "273e7e81fe": "Configs",
-          "1f744a72f4": "Config"
+          "1f744a72f4": "Config",
+          "choose_file": "Choose Config File",
+          "not_found_choose_file": "No Ghostty config found on this computer. Choose a config file to import one from another location."
         },
         "WarpThemeImportModal": {
           "title": "Import from Warp",
@@ -22967,7 +22968,8 @@
       "importWarpFolder": "Import Warp Theme Folder",
       "images": "Images",
       "repoIconImages": "Repo icon images",
-      "audio": "Audio"
+      "audio": "Audio",
+      "importGhosttyConfig": "Import Ghostty Config"
     }
   },
   "taskProviders": {
