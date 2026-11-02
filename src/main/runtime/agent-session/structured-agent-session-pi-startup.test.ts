@@ -27,6 +27,10 @@ import {
 import { readPiRpcModelOptions } from '../../pi/rpc-options'
 import type { AgentModelCatalogLiveListing } from '../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
+import {
+  normalizeConstruction,
+  readyConstruction
+} from '../../native-chat/agent-session-wire/structured-agent-session-construction'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { peekOpenedAgentSessionRecordStore } from './records/agent-session-record-store-slot'
 import {
@@ -84,10 +88,12 @@ async function setup(
     : null
   if (options.initialCatalogListing) {
     const open = host.deps.adapter.open
-    vi.spyOn(host.deps.adapter, 'open').mockImplementation(async (input) => ({
-      ...(await open(input)),
-      catalogListing: options.initialCatalogListing
-    }))
+    vi.spyOn(host.deps.adapter, 'open').mockImplementation(async (input) => {
+      const opened = normalizeConstruction(await open(input))
+      return opened.kind === 'ready'
+        ? readyConstruction({ ...opened.value, catalogListing: options.initialCatalogListing })
+        : opened
+    })
   }
   if (options.catalog) {
     vi.spyOn(host.deps.modelCatalog!, 'read').mockResolvedValue({
@@ -597,6 +603,7 @@ it.each([false, true])(
     await vi.waitFor(() =>
       expect(h.publication!.mock.calls.length).toBeGreaterThanOrEqual(initial ? 2 : 1)
     )
+    expect(h.script.wire()).toContain('get_entries')
     expect(h.host.deps.modelCatalog!.peek(HOST_TEST_SESSION)).toBeNull()
     const answer = await h.host.readOptions(HOST_TEST_SESSION)
     expect(answer.models).toEqual(models)
@@ -629,9 +636,7 @@ it.each([false, true])(
 )
 
 it('sends a typed Pi skill command as typed after recovery and carries saved context on the next message', async () => {
-  const { script, host, caller } = await setup({
-    native: { commands: [{ name: 'skill:review', source: 'skill' }] }
-  })
+  const { script, host, caller } = await setup()
   script.completeTurns = false
   script.releaseHandshake()
   expect((await sendText(host, caller, 'remember the number 42')).ok).toBe(true)
