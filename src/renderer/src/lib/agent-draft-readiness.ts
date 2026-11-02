@@ -34,7 +34,8 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
  * The one decision point for a legacy host that offers no observation at all: no mounted pane, no
  * screen from the host and no streamed text since the agent's last handoff. 'deliver' keeps main's
  * behavior and the common pattern's unknown-endpoint rule (any dialog seen anywhere still vetoes);
- * 'refuse' waits out the budget and offers Copy instead. Pending coordinator decision.
+ * 'refuse' waits out the budget and offers Copy instead. Delivering is the decided behavior: an
+ * older paired server keeps working as it did, with this stated limit.
  */
 export const LEGACY_BLIND_POLICY: 'deliver' | 'refuse' = 'deliver'
 

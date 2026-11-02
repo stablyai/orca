@@ -37,3 +37,23 @@ it('keeps exact prompt text available after Copy until explicit dismissal', asyn
   expect(dismiss).not.toHaveBeenCalled()
   vi.unstubAllGlobals()
 })
+
+// An unsubmitted draft is the user's notes, as before; only a submitted request is a prompt.
+it('names an unsubmitted draft as notes, in its message and its Copy action', () => {
+  vi.mocked(toast.message).mockClear()
+  showGeneratedInputNotice({ agent: 'codex', text: 'n', submitted: false })
+  showGeneratedInputNotice({
+    agent: 'codex',
+    text: 'n',
+    submitted: false,
+    certainty: 'unconfirmed'
+  })
+  const calls = vi.mocked(toast.message).mock.calls
+  expect(calls.map(([message]) => message)).toEqual([
+    "Your notes weren't sent to Codex. Answer any dialog in its terminal, then paste your notes.",
+    'Codex may have received part of your notes. Check its terminal before sending again.'
+  ])
+  for (const [, options] of calls) {
+    expect(options?.action).toMatchObject({ label: 'Copy notes' })
+  }
+})
