@@ -3,6 +3,10 @@ import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/age
 import { namesCliConversation } from '../../shared/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-observation'
+import { forEachWithConcurrency } from '../../shared/map-with-concurrency'
+
+/** The process table's own reader takes about this many reads at once. */
+const WRITER_PROBE_CONCURRENCY = 8
 
 export type CliWriterHost = {
   rows: () => AgentStatusIpcPayload[]
@@ -33,23 +37,30 @@ export async function assertCliConversationWritersExited(
   const closes = (row: AgentStatusIpcPayload) =>
     closing.has(row.paneKey) ||
     (closingPtyIds.size > 0 && closingPtyIds.has(ptyOf?.(row.paneKey) ?? ''))
-  // Probed together: a caller's bounded wait must not run out on one slow probe after another.
-  await Promise.all(
-    host.rows().map(async (row) => {
-      if (row.structuredHost || !namesCliConversation(row, agent, providerSessionId)) {
-        return
-      }
-      const observation = host.observation(row)
-      // A tmux or shared server outlives the pane it started in, so closing that pane frees nothing.
-      if (observation?.topology === 'pane-owned' && closes(row)) {
-        return
-      }
-      // Only a process proven running refuses; no recorded process, exited and unverifiable admit.
-      if ((await observation?.presence()) === 'live' && observation?.current()) {
-        throw agentSessionRefusalError('agent_session_conflict', {
-          reason: 'conversationHeldElsewhere'
-        })
-      }
-    })
-  )
+  // Chosen in one synchronous pass, so pane identity is read at one instant, before any probe waits.
+  const candidates = host.rows().flatMap((row) => {
+    if (row.structuredHost || !namesCliConversation(row, agent, providerSessionId)) {
+      return []
+    }
+    const observation = host.observation(row)
+    // No recorded process admits. A tmux or shared server outlives the pane it started in, so
+    // closing that pane frees nothing.
+    if (!observation || (observation.topology === 'pane-owned' && closes(row))) {
+      return []
+    }
+    return [observation]
+  })
+  let held = false
+  // A few probes at a time: the caller's bounded wait (3 s on this machine) must not run out on one
+  // slow probe after another, nor may a check start every probe at once. None starts once one
+  // holder refuses.
+  await forEachWithConcurrency(candidates, WRITER_PROBE_CONCURRENCY, async (observation) => {
+    // Only a process proven running refuses; exited and unverifiable admit.
+    if (!held && (await observation.presence()) === 'live' && observation.current()) {
+      held = true
+      throw agentSessionRefusalError('agent_session_conflict', {
+        reason: 'conversationHeldElsewhere'
+      })
+    }
+  })
 }

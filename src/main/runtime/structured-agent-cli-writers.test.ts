@@ -10,6 +10,7 @@ import {
 } from './terminal/query/terminal-identity-read-context'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { identityFixture } from './terminal/query/terminal-identity.test-fixture'
+import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-observation'
 
 const row: AgentStatusIpcPayload = {
   paneKey: 'source',
@@ -137,6 +138,81 @@ describe('canonical status store conversation admission', () => {
     await expect(admit([{ ...row, paneKey: 'tab-1:leaf' }], 'shared')).rejects.toMatchObject(
       conflict
     )
+  })
+
+  // Many terminals can name one conversation: a check starts only a few probes at once, and none
+  // once a holder refused.
+  it.each([20, 200])('probes %i matching rows a few at a time, stopping at a holder', async (m) => {
+    let started = 0
+    let inFlight = 0
+    let peak = 0
+    const pending: ((verdict: AgentProcessVerdict) => void)[] = []
+    const observation = (): CliWriterObservation => ({
+      current: () => true,
+      topology: 'pane-owned',
+      presence: () => {
+        started += 1
+        inFlight += 1
+        peak = Math.max(peak, inFlight)
+        return new Promise((resolve) => {
+          pending.push((verdict) => {
+            inFlight -= 1
+            resolve(verdict)
+          })
+        })
+      }
+    })
+    const flush = async () => {
+      for (let tick = 0; tick < 10; tick += 1) {
+        await Promise.resolve()
+      }
+    }
+    const answer = async (verdict: AgentProcessVerdict) => {
+      for (const reply of pending.splice(0)) {
+        reply(verdict)
+      }
+      await flush()
+    }
+    const rows = [
+      ...Array.from({ length: m }, (_, i) => ({ ...row, paneKey: `pane-${i}` })),
+      ...Array.from({ length: m }, (_, i) => ({
+        ...row,
+        paneKey: `other-${i}`,
+        providerSession: { key: 'session_id' as const, id: 'another' }
+      })),
+      ...Array.from({ length: m }, (_, i) => ({
+        ...row,
+        paneKey: `chat-${i}`,
+        structuredHost: 'owned' as const
+      }))
+    ]
+    const check = () =>
+      assertCliConversationWritersExited(
+        { rows: () => rows, observation },
+        'claude',
+        'conversation'
+      )
+
+    // Every row admits: each matching row is probed once, never more than 8 at a time.
+    const admitted = check()
+    while (pending.length > 0) {
+      await answer('exited')
+    }
+    await expect(admitted).resolves.toBeUndefined()
+    expect({ started, peak }).toEqual({ started: m, peak: 8 })
+
+    started = 0
+    peak = 0
+    const refused = check()
+    void refused.catch(() => undefined)
+    const first = pending.shift()
+    first?.('live')
+    await flush()
+    await expect(refused).rejects.toMatchObject(conflict)
+    const startedAtRefusal = started
+    await answer('exited')
+    expect(started).toBe(startedAtRefusal)
+    expect(startedAtRefusal).toBeLessThanOrEqual(8)
   })
 
   // Every create, resume and acquire runs this check: resolving panes for nothing to leave out, or
