@@ -10,6 +10,8 @@ export type DocPreviewOwner =
       worktreeSelector: string
       /** File reads are scoped to this root on the runtime host. */
       worktreeRoot: string
+      /** Outside-workspace documents use the host's file grants instead of workspace reads. */
+      fileAccess?: 'terminal-artifact'
     }
 
 export type DocPreviewGrant = {

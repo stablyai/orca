@@ -100,6 +100,7 @@ function SourceControlAgentActionEditor(
     deliveryPlan,
     canStart,
     isStarting,
+    isCreateAccepted,
     onAgentPick,
     onAgentArgsChange,
     onCommandTemplateChange,
@@ -143,6 +144,7 @@ function SourceControlAgentActionEditor(
           deliveryPlan={deliveryPlan}
           canStart={canStart}
           isStarting={isStarting}
+          isCreateAccepted={isCreateAccepted}
           startLabel={startLabel}
           onAgentPick={onAgentPick}
           onAgentArgsChange={onAgentArgsChange}

@@ -89,4 +89,31 @@ describe('declarative render lane', () => {
     await flush()
     expect(callHostMethod).toHaveBeenCalledOnce()
   })
+
+  it('tracks each relayed host call until it settles, so a shot can wait for the worker', async () => {
+    let answer = (_value: unknown): void => {}
+    const callHostMethod = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+      .mockRejectedValueOnce(new Error('ipc broke'))
+    let pending = 0
+    const trackHostCall = () => {
+      pending += 1
+      return () => {
+        pending -= 1
+      }
+    }
+    const { handle } = declarativeGuest({ callHostMethod, trackHostCall })
+    const request = (id: number, method: string) => ({ orca: 1, kind: 'req', id, method })
+    handle(request(1, 'plugin.request'), guestContext)
+    handle(request(2, 'storage.get'), guestContext)
+    // Refused before it reaches main: nothing to wait for.
+    handle(request(3, 'shell.openExternal'), guestContext)
+    expect(pending).toBe(2)
+    await flush()
+    expect(pending).toBe(1)
+    answer({ ok: true, value: 1 })
+    await flush()
+    expect(pending).toBe(0)
+  })
 })

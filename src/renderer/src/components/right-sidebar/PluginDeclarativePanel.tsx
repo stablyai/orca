@@ -16,6 +16,7 @@ import { usePluginDeclarativeTree } from './use-plugin-declarative-tree'
 import { usePluginDeclarativeState } from './use-plugin-declarative-state'
 import { useReportDeclarativePanelDraw } from './use-plugin-panel-draw-report'
 import { usePluginDeclarativeImages } from './use-plugin-declarative-images'
+import { usePluginPanelActDriver } from './plugin-panel-act-driver'
 import { useAppStore } from '@/store'
 import {
   PluginDeclarativeIssueNotice,
@@ -100,16 +101,6 @@ export function PluginDeclarativePanel({
 
   useReportDeclarativePanelDraw(tabKey, guest.url, rendered?.document ?? null, issue)
 
-  usePluginFrameHost({
-    surface: 'panel',
-    frameRef,
-    frameKey,
-    sessionToken,
-    declarative: channel,
-    consumeHostActivation: consumePress,
-    onUnresponsive
-  })
-
   const shownDocument = rendered?.document ?? ''
   const revision = rendered?.revision ?? 0
   const onEvent = useCallback<PluginDeclarativeEmit>(
@@ -129,6 +120,23 @@ export function PluginDeclarativePanel({
     },
     [admitPress, revision, sendToGuest, shownDocument]
   )
+  const { viewEpoch, trackHostCall } = usePluginPanelActDriver({
+    tabKey,
+    tree: rendered?.tree ?? null,
+    document: rendered?.document ?? null,
+    send: onEvent,
+    sendToGuest
+  })
+  usePluginFrameHost({
+    surface: 'panel',
+    frameRef,
+    frameKey,
+    sessionToken,
+    declarative: channel,
+    consumeHostActivation: consumePress,
+    trackHostCall,
+    onUnresponsive
+  })
   // A click on Orca's own Link (or a Markdown link): no frame-activation check, but its control
   // must have settled, and main keeps the URL allowlist and rate limit.
   const onOpenLink = (href: string, gestureId: string): void => {
@@ -165,8 +173,8 @@ export function PluginDeclarativePanel({
       ) : null}
       {reloads > 0 ? <PluginDeclarativeReloadedNotice key={reloads} /> : null}
       <PluginDeclarativeView
-        // A new guest document starts its value controls' edit counts over.
-        key={shownDocument}
+        // A new guest document starts its value controls' edit counts over; so does a --act restore.
+        key={`${shownDocument}:${viewEpoch}`}
         tree={rendered?.tree ?? null}
         onEvent={onEvent}
         onOpenLink={onOpenLink}

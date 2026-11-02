@@ -35,6 +35,7 @@ export function PluginDeclarativeTabs({
     defaultValue: props.defaultValue,
     fallback: first,
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })
@@ -73,6 +74,7 @@ export function PluginDeclarativeCollapsible({
     defaultValue: props.defaultOpen,
     fallback: false,
     acked: props.$edit,
+    actTarget: props,
     callback: props.onChange?.$callback,
     send: sendValue(emit)
   })

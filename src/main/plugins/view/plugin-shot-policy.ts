@@ -24,3 +24,45 @@ export function isPluginShotWindowShown(window: {
 }): boolean {
   return !window.isDestroyed() && window.isVisible() && !window.isMinimized()
 }
+
+export const PLUGIN_SHOT_ACT_WINDOW_SHOWN_MESSAGE =
+  "shot --act needs Orca's window hidden or minimized, so it never clicks under the user"
+
+/** `--act` drives a components panel, and only while nobody can be using the window. */
+export function pluginShotActRefusal(
+  ui: 'components' | 'html',
+  windowShown: boolean
+): { reason: string; message: string; nextSteps: string[] } | null {
+  if (ui !== 'components') {
+    return {
+      reason: 'act_unsupported',
+      message: 'shot --act drives components panels only; this panel is html.',
+      nextSteps: ['Drive an html panel from its own page script, then run shot without --act.']
+    }
+  }
+  return windowShown
+    ? {
+        reason: 'window_shown',
+        message: PLUGIN_SHOT_ACT_WINDOW_SHOWN_MESSAGE,
+        nextSteps: ['Minimize or hide Orca, then run this again.']
+      }
+    : null
+}
+
+export const PLUGIN_SHOT_REPLAY_WINDOW_SHOWN_MESSAGE =
+  "shot --scenario draws its preview inside Orca's window, so it needs the window hidden or minimized"
+
+/** The preview is drawn over the window's own content, so only while nobody can see it. */
+export function pluginShotReplayRefusal(
+  windowShown: boolean
+): { reason: string; message: string; nextSteps: string[] } | null {
+  return windowShown
+    ? {
+        reason: 'window_shown',
+        message: PLUGIN_SHOT_REPLAY_WINDOW_SHOWN_MESSAGE,
+        nextSteps: [
+          'Minimize or hide Orca, then run this again; `orca plugin check` renders the same scenarios as text.'
+        ]
+      }
+    : null
+}

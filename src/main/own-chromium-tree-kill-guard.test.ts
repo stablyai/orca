@@ -17,7 +17,7 @@ import {
   admitSelfInitiatedTreeKill,
   installMainProcessTreeKillGate
 } from './own-chromium-tree-kill-guard'
-import { killCodexAppServerProcessTree } from './codex/codex-app-server-process-tree-kill'
+import { killCodexAppServerProcessTree } from './codex/app-server/codex-app-server-process-tree-kill'
 import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
 import { resetSelfInitiatedTreeKillLogForTest } from './crash-reporting/self-initiated-tree-kill-log'
 import {

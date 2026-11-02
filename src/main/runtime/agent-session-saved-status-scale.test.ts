@@ -8,7 +8,7 @@ import { scaleStore, scaleJournal, scaleRecord } from './agent-session-scale.tes
 import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { StructuredAgentSessionSavedStatus } from '../native-chat/agent-session-wire/structured-agent-session-saved-status'

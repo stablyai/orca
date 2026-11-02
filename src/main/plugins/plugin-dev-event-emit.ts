@@ -55,9 +55,11 @@ function parseEventName(event: string): PluginEventName {
   return resolved
 }
 
-async function resolveDevPlugin(
-  service: PluginDevEmitService,
-  target: PluginDevFolderTarget
+/** The loaded development plugin `target` names; installed plugins are refused. */
+export async function resolveDevPlugin(
+  service: PluginDevFolderLookup,
+  target: PluginDevFolderTarget,
+  installedRefusal = 'dev emit only fires events at development plugins'
 ): Promise<DiscoveredPlugin> {
   const path = await findLoadedDevFolder(service, target)
   const plugin = path ? discoveredAt(service, path) : null
@@ -68,8 +70,8 @@ async function resolveDevPlugin(
   if (key && service.getDiscovered().some((entry) => entry.pluginKey === key)) {
     throw new PluginCliError(
       'invalid_argument',
-      `${key} is an installed plugin; dev emit only fires events at development plugins.`,
-      { nextSteps: ['Load the plugin folder with `orca plugin dev load <dir>`, then emit at it.'] }
+      `${key} is an installed plugin; ${installedRefusal}.`,
+      { nextSteps: ['Load the plugin folder with `orca plugin dev load <dir>`, then retry.'] }
     )
   }
   throw new PluginCliError(PLUGIN_NOT_FOUND_CODE, 'That is not a loaded development plugin.', {
@@ -117,14 +119,9 @@ function skipError(
   }
 }
 
-/** `orca plugin dev emit`: one event through the real delivery rules, at one development plugin. */
-export async function emitPluginDevEvent(input: {
-  service: PluginDevEmitService
-  target: PluginDevFolderTarget
-  event: string
-  payload: unknown
-}): Promise<PluginDevEmitResult> {
-  const { service } = input
+export function assertPluginSystemEnabled(service: {
+  options: { isPluginSystemEnabled: () => boolean }
+}): void {
   if (!service.options.isPluginSystemEnabled()) {
     throw new PluginCliError(
       PLUGIN_SYSTEM_DISABLED_CODE,
@@ -134,6 +131,17 @@ export async function emitPluginDevEvent(input: {
       }
     )
   }
+}
+
+/** `orca plugin dev emit`: one event through the real delivery rules, at one development plugin. */
+export async function emitPluginDevEvent(input: {
+  service: PluginDevEmitService
+  target: PluginDevFolderTarget
+  event: string
+  payload: unknown
+}): Promise<PluginDevEmitResult> {
+  const { service } = input
+  assertPluginSystemEnabled(service)
   const event = parseEventName(input.event)
   const plugin = await resolveDevPlugin(service, input.target)
   const reason = pluginEventSkipReason(plugin, event, service.eventDelivery)

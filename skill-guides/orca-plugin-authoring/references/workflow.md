@@ -10,11 +10,15 @@ loads the folder (refreshing `.orca/types`) and prints one JSON object per line:
 
 - `loaded`, `unloaded`, `disconnected`, `warning`.
 - `log`: what panels, editors and the worker print. Console errors and uncaught exceptions read
-  `[frame] <file>:<line>:<col> <message>` at your source position.
+  `[frame] <file>:<line>:<col> <message>` at your source position, with engine frames such as
+  `Array.forEach (<anonymous>)` dropped. A `[frame]` line repeated within one reload prints once
+  (`count`: copies that came together, shown `×N`); later copies arrive as one `repeat: true`
+  line with their `count` at the next reload or when the watch ends.
 - `reloaded` (before that reload's logs) and `status` (`errored`/`invalid` with the error).
 - `approval`: an edit asked for new access; it carries the `dev reload … --approve` command to
   show the user. The watch keeps running and never approves.
-- `check` (with `--check`): `orca plugin check` after the load and each reload. `ok` is false
+- `check` (with `--check`): `orca plugin check` after the load and each reload, with `panels`
+  and `editors` (each custom editor checked without running it). `ok` is false
   unless Orca also runs the plugin; `checkOk` is the check alone, `pluginStatus`/`pluginError`
   what Orca reports.
 - `shot` (with `--shot`): `{ path, width, height, settled, errors }` for the panel opened once at
@@ -32,15 +36,72 @@ re-checks changed commands and shortcuts), `ORCA plugin dev unload <dir>`.
 ## Seeing and showing the panel
 
 - `ORCA plugin shot <plugin-key> [--panel <id>] [--theme light|dark] [--width <px>] [--out <png>] --json`
-  waits for the panel's current code to draw, then writes a PNG cropped to it (default
-  `<cwd>/.orca/shots/<plugin-key>-<panel>.png`) and returns `{ path, width, height, theme,
-  themeApplied, themeReason?, settled, errors }`. Check a narrow `--width` and both themes.
-  `--theme` applies only while Orca's window is hidden or minimized; otherwise `themeApplied` is
-  false with a `themeReason`, so nothing on the user's screen repaints.
+  waits for the panel's current code to draw and, for a components panel, for its host calls
+  (`plugin.request` included) to answer and redraw (at most 3s more), then writes a PNG cropped to
+  it (default `.orca/shots/<plugin-key>-<panel>.png` in the plugin folder when run inside one, else
+  in `<cwd>`) and returns `{ path, width, height, theme, themeApplied, themeReason?, settled,
+  errors, pendingRequests?, actions?, restored? }`. `pendingRequests` above 0 means a worker had
+  not answered, so the PNG may show the loading state. Check a narrow `--width` and both themes. `--theme` applies only while Orca's
+  window is hidden or minimized; otherwise `themeApplied` is false with a `themeReason`, so
+  nothing on the user's screen repaints.
+- `--act '<json>'` drives a components panel before the capture, in the test kit's verbs:
+  `[{"type":{"label":"New task"},"text":"Ship","submit":true},{"press":{"text":"Add"}},
+  {"select":{"label":"View"},"value":"done"},{"toggle":{"label":"Hide done"}}]` (at most 20;
+  queries take `text`, `label`, `testId`, `type`, `role`). Also `{"slide":Q,"value":7}`, for a
+  Table `{"sort":Q,"column":"name"}`, `{"selectRows":Q,"keys":["a"]}`,
+  `{"activateRow":Q,"key":"a"}`, `{"loadMore":Q}`, and for a Tree `{"expand":Q,"key":"src"}`,
+  `collapse`, `selectItem`, `activateItem` (same `key`). Each act goes through Orca's own control,
+  then waits for the panel to redraw and its host calls to answer; `actions` has one
+  `{ ok, error? }` each, the first failure skips the rest and exits 1. After the capture the
+  panel's atoms are put back, persisted ones included (`restored`; false if it reloaded
+  meanwhile), but not what handlers changed elsewhere: a `plugin.request` that wrote worker
+  storage stays written. It needs Orca's window hidden or minimized, so it never
+  clicks under the user, and refuses html panels. Acts are not a person's press: a Link's href
+  stays closed and `shell.openExternal` / `files.saveAs` are refused.
+- `ORCA plugin shot <dir> --scenario <name> [--panel <id>] [--theme] [--width] [--out]` shoots
+  one scenario of the panel's `<entry>.check.ts` instead of the live panel: the CLI renders it
+  as `plugin check` does (the panel and the worker against a stand-in host, so the scenario's
+  data never reaches the real panel, storage, settings or worker), then Orca draws that tree in
+  a preview apart from the plugin and captures it; the sidebar is not opened or switched. It
+  runs the plugin's code on this machine, unsandboxed, like `plugin check`. A key works only for
+  a dev plugin, run inside its folder. The result adds `replay: true` and `scenario`, and
+  `errors` has what the render reported; an unknown name fails and lists the scenarios. Limits:
+  a still frame (host-owned control values start from the tree's props), images show their
+  placeholder, no `--act`, local only (no `--environment`), and Orca's window must be hidden
+  or minimized. Default file `.orca/shots/<plugin-key>-<panel>.<scenario>.png`.
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>]` shows the panel in the right
-  sidebar, or a file in the plugin's custom editor. Neither raises the window.
-- Both need the desktop app with a workspace showing. A shot never changes the view: it fails with
+  sidebar, or a file in the plugin's custom editor. Neither raises the window. `--editor` opens the
+  file in the workspace that holds it (its real path counts: `/tmp` is `/private/tmp`), or else
+  opens the file's folder as a folder workspace first.
+
+## Seeing and driving a custom editor
+
+The editor loop: edit the editor's code (a `dev watch` reloads it), then
+`ORCA plugin shot <dir> --editor <file> [--theme light|dark] [--width <px>] [--height <px>]
+[--act '<json>'] --json`, then read the PNG. It opens the file like `plugin open --editor`, loads
+the editor afresh, waits for it to get its document and ask for it (`orca.document.get` or
+`onDidChange`) and paint, then captures exactly the editor with the window hidden. `--act` is real
+input in the editor's own CSS pixels: `[{"click":[200,150]},{"drag":[[200,150],[400,300]]},
+{"key":"r"}]` (`key` takes a name such as `Enter` and optional `"modifiers":["meta"]`), each
+painted before the next; it needs the window hidden or minimized. A shot never changes your file:
+`--act` runs on a copy in a temporary folder workspace that is removed afterwards (`--in-place`
+acts on the file itself and keeps its tab open), and a shot without acts closes the tab it
+opened. Edits only mark the tab dirty, as typing does: to write them to disk, end an `--in-place`
+`--act` with `{"key":"s","modifiers":["meta"]}` (`"control"` on Linux and Windows). Before each `key` Orca focuses the editor's guest, so a canvas keeps getting keys. It exits 1 and lists `errors` when the editor threw, was blocked by its
+content policy, or never asked for its document within 5s; the PNG is written anyway. The theme
+and size are put back. Default file `.orca/shots/<plugin-key>-<editor>.png`.
+
+`ORCA plugin shot <dir> --status-bar [--theme light|dark]` captures Orca's status bar, where your
+status bar items draw, and `--window` the whole window, both from the hidden window. Default files
+`.orca/shots/<plugin-key>-status-bar.png` and `-window.png`.
+
+- Both need the desktop app with a workspace. With none showing, a shot selects one of this
+  machine's workspaces in the hidden window. A shot never changes the view: it fails with
   `no_workspace` while Orca shows Settings or another full page. Without them, use `plugin check`.
+- From an Orca source checkout, `ORCA` is `node config/scripts/orca-dev.mjs` after
+  `pnpm run build:cli` and `pnpm run build:electron-vite`; `ORCA open` starts that checkout's dev
+  app (`ORCA_BACKGROUND_LAUNCH=1` keeps its window hidden). The CLI has no quit command: stop a
+  hidden dev app by ending the Electron process whose arguments name the checkout.
 
 ## Events
 
@@ -48,6 +109,12 @@ re-checks changed commands and shortcuts), `ORCA plugin dev unload <dir>`.
 rules (approved dev plugin, the event's capability, payload checked against its schema). The
 worker hears it when it lists the event in `contributes.events`; each open panel hears it once it
 called `orca.on(event, …)`. Nothing listening is refused. Handler errors arrive as `log` lines.
+
+`ORCA plugin dev request <dir|plugin-key> <name> --data '<json>'` calls the worker's
+`orca.panels.handle(name, …)` handler the way a panel's `plugin.request` does (approved dev plugin
+with `main`; the worker starts if needed) and prints `{ pluginKey, name, result }`. A failure is
+`plugin_request_failed` with the worker's code in `error.data.requestCode` (`unknown_method`,
+`timeout`, ...). `--panel <id>` sets the caller panel id; `--timeout-ms` the handler's deadline.
 
 ## test and check
 
@@ -62,8 +129,10 @@ Both run the plugin's code on this machine, outside Orca's sandbox: only on code
   would refuse, props it would drop, and host calls Orca would refuse (`host refused …` warnings,
   even when the panel caught the error). With a worker (`main`), it mounts the worker on the same
   host first, so the panel's `plugin.request` reaches its `orca.panels.handle` handlers; a worker
-  that fails to activate is an issue named `worker (<file>): …`. Exit `0`, `1`
-  `plugin_check_failed`, `2` invalid.
+  that fails to activate is an issue named `worker (<file>): …`. Each result carries a `summary`
+  of what drew (headings, callouts, empty states, table sizes, the selected tab) and, with
+  `--json`, the whole `tree`: read them to confirm each scenario shows what it should. Exit `0`,
+  `1` `plugin_check_failed`, `2` invalid.
 
 The full kit API, generated from this Orca, is in `references/testing.md`.
 

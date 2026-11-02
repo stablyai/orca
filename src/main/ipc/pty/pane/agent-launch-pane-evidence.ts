@@ -1,6 +1,6 @@
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { IsAgentLaunchPaneLive } from '../../../agent-launch/agent-launch-pane-attachment'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { resolveStablePaneOwner } from './stable-owner'
 

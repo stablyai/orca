@@ -16,7 +16,7 @@ const DEFAULT_PROP: Record<string, string> = {
   selected: 'defaultSelected'
 }
 
-function isControlValue(value: unknown): value is ControlValue {
+export function isControlValue(value: unknown): value is ControlValue {
   return (
     typeof value === 'string' ||
     typeof value === 'boolean' ||

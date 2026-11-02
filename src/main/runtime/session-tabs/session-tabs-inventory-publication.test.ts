@@ -5,7 +5,10 @@ import { OrcaRuntimeService } from '../orca-runtime'
 class InventoryPublicationRuntime extends OrcaRuntimeService {
   setGraph(status: RuntimeGraphStatus, epoch: number): void {
     this.graphStatus = status
-    this.rendererGraphEpoch = epoch
+    if (this.rendererGraphEpoch !== epoch) {
+      this.terminalIdentity.advanceRendererEpoch()
+    }
+    expect(this.rendererGraphEpoch).toBe(epoch)
   }
 
   get epoch(): number | null {

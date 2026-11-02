@@ -9,7 +9,7 @@ import type { RpcResponse } from '../../transport/types'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
-} from '../use-mobile-native-chat-session'
+} from './use-mobile-native-chat-session'
 
 function message(id: string): NativeChatMessage {
   return {

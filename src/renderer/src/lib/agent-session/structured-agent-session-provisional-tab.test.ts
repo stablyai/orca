@@ -36,11 +36,18 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
-  (
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const client = (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
-)
+  return {
+    ...client,
+    callRuntimeRpc: (...args: Parameters<typeof client.callRuntimeRpc>) =>
+      args[1] === 'agentSession.close' || args[1] === 'session.tabs.close'
+        ? Promise.resolve(null)
+        : client.callRuntimeRpc(...args)
+  }
+})
 vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -224,6 +231,33 @@ function openChat(
 }
 
 describe('a provisional structured chat tab', () => {
+  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'cancels a launch whose owning tab main refuses, even if the provider later succeeds',
+    async () => {
+      layoutApplyTestTransport.answerWith((command) =>
+        command.type === 'openAgentSessionTab' ? 'pending' : 'apply'
+      )
+      const launch = beginStructuredAgentSessionProvisionalLaunch({
+        plan: planSettlingAs(new StructuredAgentSessionCreateRefusalError('no'), ''),
+        hooks: {},
+        focusIntent: { request: mocks.focus, cancel: vi.fn() }
+      })
+      if (!launch?.tab) {
+        throw new Error('No provisional chat')
+      }
+      await vi.waitFor(() => expect(mocks.launch).toHaveBeenCalled())
+      layoutApplyTestTransport.answerWith({ refuse: 'group_not_found' })
+      layoutApplyTestTransport.answerPending()
+      await main.settle()
+      expect(wasStructuredAgentLaunchClosedByLocalCancel(launch.tab.entityId)).toBe(true)
+
+      accept({ sessionId: launch.tab.entityId, fence: 1 })
+      expect((await launch.settlement).kind).not.toBe('structured')
+      await main.settle()
+      expect(useAppStore.getState().getTab(launch.tab.id)).toBeNull()
+    }
+  )
+
   it.each(['before', 'after'] as const)(
     'retains a draft initialized %s host publication through close and reopen',
     async (order) => {

@@ -14,8 +14,8 @@ import type * as CodexAdapterModule from '../codex/codex-structured-session-adap
 import type * as PiAdapterModule from '../pi/rpc-session-adapter'
 import type * as ManagedProviderProcessModule from '../provider-process/managed-provider-process'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import type * as StructuredAgentSessionRuntimeModule from './structured-agent-session-runtime'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type * as StructuredAgentSessionRuntimeModule from './agent-session/structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
 const capture = vi.hoisted(() => {
   const pendingEnvToDelete: readonly string[] = []
@@ -57,7 +57,7 @@ vi.mock('../provider-process/managed-provider-process', async (importOriginal) =
     }
   }
 })
-vi.mock('./structured-agent-session-runtime', async (importOriginal) => {
+vi.mock('./agent-session/structured-agent-session-runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof StructuredAgentSessionRuntimeModule>()
   return {
     ...actual,
@@ -141,7 +141,7 @@ import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-se
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { createClaudeCliFlagSupport } from '../claude/claude-cli-flag-support'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
@@ -149,7 +149,7 @@ import {
   type StructuredAgentRuntimeAdapter
 } from './structured-agent-runtime-registrations'
 import { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
-import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
+import { createStructuredAgentSessionDispatchFollowUps } from './agent-session/structured-agent-session-dispatch-followups'
 import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,

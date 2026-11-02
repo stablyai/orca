@@ -115,7 +115,8 @@ describe('startPluginWorker', () => {
     const child = new FakeChild()
     let finish!: (outcome: { ok: true; value: unknown }) => void
     const executeHostCall = vi.fn(
-      () => new Promise<{ ok: true; value: unknown }>((resolve) => (finish = resolve))
+      (_method: string, _params: unknown, _signal?: AbortSignal) =>
+        new Promise<{ ok: true; value: unknown }>((resolve) => (finish = resolve))
     )
     processMocks.fork.mockReturnValue(child)
     const pending = startPluginWorker({
@@ -131,7 +132,7 @@ describe('startPluginWorker', () => {
     await pending
 
     child.emit('message', { orca: 1, kind: 'req', id: 3, method: 'storage.keys', params: {} })
-    expect(executeHostCall).toHaveBeenCalledWith('storage.keys', {})
+    expect(executeHostCall).toHaveBeenCalledWith('storage.keys', {}, expect.any(AbortSignal))
     finish({ ok: true, value: { keys: [] } })
     await vi.waitFor(() =>
       expect(child.send).toHaveBeenLastCalledWith({
@@ -144,6 +145,8 @@ describe('startPluginWorker', () => {
 
     child.emit('message', { orca: 1, kind: 'req', id: 4, method: 'storage.keys', params: {} })
     child.emit('message', { orca: 1, kind: 'cancel', id: 4 })
+    // The cancel reaches the call's effect too, not only its answer.
+    expect(executeHostCall.mock.calls.at(-1)?.[2]?.aborted).toBe(true)
     const sends = child.send.mock.calls.length
     finish({ ok: true, value: { keys: [] } })
     await new Promise((resolve) => setTimeout(resolve, 0))

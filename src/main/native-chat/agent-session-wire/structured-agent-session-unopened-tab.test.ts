@@ -1,6 +1,6 @@
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import {

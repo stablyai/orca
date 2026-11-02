@@ -61,7 +61,7 @@ async function captured<T>(agent: 'codex' | 'claude', scenario: string): Promise
   return lines.map((line) => JSON.parse(line)).filter((line) => line.case === scenario)
 }
 
-function settledRows(items: readonly AgentJournalRenderItem[]) {
+function visibleRows(items: readonly AgentJournalRenderItem[]) {
   expect(withNativeChatCutTurnNotices(items, { agentName: 'Agent' })).toBe(items)
   const messages = projectStructuredItemsToNativeChat(items)
   const turnKeys = nativeChatRowTurnKeys(messages)
@@ -70,9 +70,11 @@ function settledRows(items: readonly AgentJournalRenderItem[]) {
     settledTurnKeys: new Set(turnKeys.flatMap((key) => (key ? [key] : []))),
     expandedTurnKeys: new Set()
   })
-  return messages.flatMap((message, index) =>
-    message.role === 'system' && !foldedRows.has(index) ? message.blocks : []
-  )
+  return messages.filter((_, index) => !foldedRows.has(index))
+}
+
+function settledRows(items: readonly AgentJournalRenderItem[]) {
+  return visibleRows(items).flatMap((message) => (message.role === 'system' ? message.blocks : []))
 }
 
 async function blockedChat(
@@ -209,5 +211,29 @@ describe('a prompt hook that blocked the message', () => {
     const turns = items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
     expect(turns).toEqual([expect.objectContaining({ state: 'completed', outcome: 'success' })])
     expect(settledRows(items)).toEqual([row(`Blocked by hook: ${QA_POLICY}`)])
+  })
+})
+
+describe('a Stop hook that sent Claude back', () => {
+  it('keeps the reply before the hook row once the turn settles', async () => {
+    const frames = await captured<Captured>('claude', 'stop-hook-sent-back')
+    const { items } = await blockedChat(CLAUDE_CHAT, (rig) => {
+      const lane = createClaudeJournalTranslator({ sink: rig.eventSink, fallbackIdPrefix: '1' })
+      for (const { frame } of frames) {
+        lane.handle({ type: 'message', sessionId: 's', message: frame })
+      }
+    })
+    expect(visibleRows(items).map((message) => [message.role, message.blocks[0]])).toEqual([
+      ['user', GO[0]],
+      ['assistant', { type: 'text', text: 'Grass is green.' }],
+      [
+        'system',
+        expect.objectContaining({
+          tone: 'warning',
+          text: 'Stop hook feedback: Verify your statement with evidence before finishing.'
+        })
+      ],
+      ['assistant', { type: 'text', text: 'I checked: grass is green.' }]
+    ])
   })
 })

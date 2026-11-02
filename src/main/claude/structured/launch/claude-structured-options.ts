@@ -145,15 +145,6 @@ export async function setClaudeStructuredOption(
     if (typeof fastMode !== 'boolean') {
       throw new AgentSessionOptionRejectedError('claude fast mode must be encoded as true or false')
     }
-    if (
-      fastMode &&
-      session.fastModeDisabledReason &&
-      !['preference', 'sdk_opt_in_required'].includes(session.fastModeDisabledReason)
-    ) {
-      throw new AgentSessionOptionRejectedError(
-        `claude Fast mode is unavailable (${session.fastModeDisabledReason})`
-      )
-    }
   }
   const mutationSequence = beginClaudeInputWrite(session, input.key, input.value)
   // Read with the fence bump, so a write that lands after an earlier one's bookkeeping compares against it.
@@ -162,10 +153,6 @@ export async function setClaudeStructuredOption(
     await apply()
     if (mutationSequence === session.optionMutationSequence) {
       session.appliedInputOptions.set(input.key, input.value)
-      if (input.key === 'model' && session.fastModeDisabledMutation !== mutationSequence) {
-        delete session.fastModeDisabledReason
-        delete session.fastModeDisabledMutation
-      }
     }
     // Notify the translator even if a newer write superseded this applied control.
     if (input.key === 'model' && input.value !== held) {
@@ -225,9 +212,6 @@ async function confirmClaudeOption(
       : input.value
   if (input.key === 'fastMode' && typeof adopted === 'boolean') {
     session.reportedOptions.fastMode = adopted
-    if (!adopted) {
-      delete session.fastModeReportedMutation
-    }
   } else if (typeof adopted === 'string' && adopted !== decoded) {
     session.reportedOptions.effort = adopted
   }

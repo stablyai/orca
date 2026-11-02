@@ -6,7 +6,7 @@ import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import { acquiredAgentSessionAccount } from '../../shared/agent-session-acquired-account'
+import { acquiredAgentSessionAccount } from '../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
@@ -21,7 +21,7 @@ import {
 } from '../../shared/ai-vault-search-transport'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
   terminalResumeBlocked,

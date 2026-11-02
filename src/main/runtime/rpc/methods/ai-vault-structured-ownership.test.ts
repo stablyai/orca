@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'

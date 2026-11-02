@@ -5,7 +5,7 @@ import {
   type AgentSessionContextUsage,
   type AgentSessionContextWindow
 } from '../../shared/agent-session/agent-session-context-usage'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   claudeContextResetKind,

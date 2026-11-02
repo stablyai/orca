@@ -1,8 +1,10 @@
+import type * as DrawerModule from '../components/bottom-drawer/BottomDrawer'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import { BottomDrawer, PickerModal, Pressable } from './mobile-tasks-dependencies'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { PickerModal, Pressable } from './mobile-tasks-dependencies'
 import { renderMobileTasksItemActions } from './mobile-tasks-item-actions'
 import { renderMobileTasksWorkspaceCreateTargetPicker } from './mobile-tasks-create-drawers'
 import { renderMobileTasksProjectDetailDrawer } from './mobile-tasks-project-detail-drawer'
@@ -145,4 +147,11 @@ describe('Tasks create source handoffs', () => {
       handoff.drawerProps.onAfterClose
     )
   })
+})
+
+vi.mock('../components/bottom-drawer/BottomDrawer', async () => {
+  const { BottomDrawer } = await vi.importMock<Pick<typeof DrawerModule, 'BottomDrawer'>>(
+    './mobile-tasks-dependencies'
+  )
+  return { BottomDrawer }
 })

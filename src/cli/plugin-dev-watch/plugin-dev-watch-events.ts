@@ -1,6 +1,7 @@
 import type { PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
 import { formatPluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
 import type { PluginDevWatchCheckResult } from './plugin-dev-watch-check'
+import { formatPluginEditorCheck } from '../plugin-authoring/plugin-editor-check'
 import { PLUGIN_DEV_WATCH_SHOOTABLE, type PluginDevWatchShot } from './plugin-dev-watch-shot'
 
 /** `missing`: the host lists no plugin for the folder (for example, its id changed). */
@@ -19,7 +20,17 @@ export type PluginDevWatchEvent =
       error?: string
       typeFiles: string[]
     }
-  | { type: 'log'; pluginKey: string; ts: number; level: string; line: string }
+  | {
+      type: 'log'
+      pluginKey: string
+      ts: number
+      level: string
+      line: string
+      /** A panel line that arrived this many times together (absent: once). */
+      count?: number
+      /** `count` more copies of a panel line printed earlier in this reload. */
+      repeat?: true
+    }
   | {
       type: 'reloaded'
       pluginKey: string
@@ -87,8 +98,14 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
         ...event.typeFiles.map((file) => `Refreshed ${file}`),
         'Watching for changes and logs; Ctrl-C to stop.'
       ].join('\n')
-    case 'log':
-      return `${clockTime(event.ts)} ${event.level.padEnd(5)} ${event.line}`
+    case 'log': {
+      const times = event.repeat
+        ? ` (×${event.count ?? 1} more)`
+        : event.count && event.count > 1
+          ? ` ×${event.count}`
+          : ''
+      return `${clockTime(event.ts)} ${event.level.padEnd(5)} ${event.line}${times}`
+    }
     case 'reloaded': {
       const changes = event.changes === 1 ? '1 file changed' : `${event.changes} files changed`
       return `↻ reloaded ${event.pluginKey} (${changes}): ${withError(event.status, event.error)}`
@@ -104,11 +121,17 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
           ? [`  in Orca: ${pluginStatusPhrase(event.pluginStatus, event.pluginError)}`]
           : []),
         ...event.invalid.map((error) => `  invalid: ${error}`),
-        ...event.panels.flatMap(formatPluginPanelCheck).map((line) => `  ${line}`)
+        ...event.panels.flatMap(formatPluginPanelCheck).map((line) => `  ${line}`),
+        ...event.editors.flatMap(formatPluginEditorCheck).map((line) => `  ${line}`)
       ].join('\n')
     case 'shot':
       return [
         `shot ${event.path} (${event.width}x${event.height})${event.settled ? '' : ', not finished drawing'}`,
+        ...(event.pendingRequests
+          ? [
+              `  note: ${event.pendingRequests} host call(s) were still unanswered; the panel may show its loading state`
+            ]
+          : []),
         ...event.errors.map((error) => `  error: ${error}`)
       ].join('\n')
     case 'shot_skipped':

@@ -13,7 +13,7 @@ import { setWindowMaterialSuppressed } from '../window/window-material-suppressi
 import { isTrustedUIRenderer } from './ui'
 import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
 import { quitProcess } from '../startup/process-quit-request'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'

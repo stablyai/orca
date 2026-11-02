@@ -5,7 +5,7 @@ import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
 } from '../../../../shared/native-chat/input/native-chat-slash-commands'
-import { nativeChatSessionSkills } from '../../../../shared/native-chat-skill-visibility'
+import { nativeChatSessionSkills } from '../../../../shared/native-chat/input/native-chat-skill-visibility'
 import { structuredSessionSlashCommands } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'

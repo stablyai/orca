@@ -466,6 +466,38 @@ describe('Claude chat catch-up', () => {
     expect(c.warn).not.toHaveBeenCalled()
   })
 
+  it('keeps an outside Stop hook row inside the turn it sent back', async () => {
+    const c = await chat()
+    await c.live()
+    await c.write([
+      ...chatTurn,
+      prompt('p2', 'a1', 'ask 2', 3),
+      reply('a2', 'p2', 'msg_b', { type: 'text', text: 'answer 2' }, 4),
+      {
+        ...prompt('h2', 'a2', 'Stop hook feedback:\n[/hook.sh]: Cite evidence.\n', 5),
+        isMeta: true
+      },
+      reply('a3', 'h2', 'msg_c', { type: 'text', text: 'evidence' }, 6),
+      ...bookkeeping
+    ])
+    await c.open('a1')
+    expect(c.rows()).toEqual([
+      'user:ask 1',
+      'assistant:answer 1',
+      '(continued-outside)',
+      'user:ask 2',
+      'assistant:answer 2',
+      '(hook-sent-back)',
+      'assistant:evidence'
+    ])
+    const scopes = c.journal
+      .snapshot()
+      .items.filter((item) => item.body.kind !== 'turn')
+      .slice(-3)
+      .map((item) => JSON.stringify(item.turnScope))
+    expect(new Set(scopes).size).toBe(1)
+  })
+
   it('imports a later outside batch from the retained leaf without reusing its old divider', async () => {
     const c = await chat()
     await c.live()

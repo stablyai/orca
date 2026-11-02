@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { buildMobileNativeChatTransientData } from '../../mobile-native-chat-render-data'
+import { buildMobileNativeChatTransientData } from '../mobile-native-chat-render-data'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import {
   resetMobileNativeChatDraftStoreForTests,

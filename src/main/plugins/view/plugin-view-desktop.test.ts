@@ -26,6 +26,8 @@ const KEY = 'acme.todos'
 const CAPTURED = {
   isEmpty: () => false,
   getSize: () => ({ width: 300, height: 600 }),
+  // A drawn panel: more than a background and a border.
+  toBitmap: () => Buffer.from([1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0]),
   toPNG: () => Buffer.from('png')
 } as unknown as NativeImage
 
@@ -111,7 +113,8 @@ describe('plugins.open on the desktop', () => {
       kind: 'open-editor',
       pluginKey: KEY,
       editorId: 'notes',
-      filePath: '/w/a.notes'
+      filePath: '/w/a.notes',
+      fallbackFolder: '/w'
     })
   })
 
@@ -170,10 +173,11 @@ describe('plugins.shot on the desktop', () => {
           guestRevision: 'sha256-012345678',
           width: 300,
           colorScheme: 'light',
+          captureId: expect.any(String),
           timeoutMs: 15_000
         }
       },
-      { kind: 'end-capture' }
+      { kind: 'end-capture', captureId: expect.any(String) }
     ])
   })
 
@@ -185,7 +189,8 @@ describe('plugins.shot on the desktop', () => {
       'stopped responding'
     )
     expect(relay.requestPluginViewFromRenderer.mock.calls.at(-1)?.[1]).toEqual({
-      kind: 'end-capture'
+      kind: 'end-capture',
+      captureId: expect.any(String)
     })
   })
 
@@ -232,5 +237,41 @@ describe('plugins.shot on the desktop', () => {
     await expect(createPluginViewDesktop(deps()).shot({ pluginKey: KEY })).rejects.toThrow(
       'the right sidebar is closed'
     )
+  })
+
+  it('passes --act through and returns its results; refuses on screen and for html', async () => {
+    const acts = [{ press: { text: 'Add' } }]
+    relay.requestPluginViewFromRenderer.mockImplementation(
+      answer({ ...DRAWN, panel: { ...DRAWN.panel!, actions: [{ ok: true }] } })
+    )
+    const shot = await createPluginViewDesktop(deps()).shot({ pluginKey: KEY, acts })
+    expect(shot).toMatchObject({ actions: [{ ok: true }], restored: false })
+    const [, body, timeoutMs] = relay.requestPluginViewFromRenderer.mock.calls[0] ?? []
+    expect(body).toMatchObject({ capture: { acts } })
+    expect(timeoutMs).toBe(27_500)
+
+    relay.requestPluginViewFromRenderer.mockClear()
+    await expect(
+      createPluginViewDesktop(deps({ windowShown: () => true })).shot({ pluginKey: KEY, acts })
+    ).rejects.toMatchObject({
+      message:
+        "shot --act needs Orca's window hidden or minimized, so it never clicks under the user",
+      data: { reason: 'window_shown' }
+    })
+    expect(relay.requestPluginViewFromRenderer).not.toHaveBeenCalled()
+  })
+
+  it('reports unanswered host calls and whether --act was put back once the capture ended', async () => {
+    relay.requestPluginViewFromRenderer.mockImplementation(async (...args) =>
+      args[1]?.kind === 'open-panel'
+        ? { ...DRAWN, panel: { ...DRAWN.panel!, pendingRequests: 1, actions: [{ ok: true }] } }
+        : { requestId: 'r', ok: true, restored: true }
+    )
+    const view = createPluginViewDesktop(deps())
+    await expect(
+      view.shot({ pluginKey: KEY, acts: [{ toggle: { label: 'Hide done' } }] })
+    ).resolves.toMatchObject({ pendingRequests: 1, restored: true })
+    // Without acts there is nothing to put back, so no `restored`.
+    expect(await view.shot({ pluginKey: KEY })).not.toHaveProperty('restored')
   })
 })

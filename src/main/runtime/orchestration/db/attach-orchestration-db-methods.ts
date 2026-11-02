@@ -1,3 +1,4 @@
+import { attachCrewMutationNotifications } from '../crew/crew-mutation-notifications'
 import { attachAttemptObservationStore } from './attempt-observation-store'
 import { attachCoordinatorRunStore } from './coordinator-runs/coordinator-run-store'
 import { attachDecisionGateStore } from './decision-gates/decision-gate-store'
@@ -136,4 +137,5 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachDecisionGateStore(ctor)
   attachCoordinatorRunStore(ctor)
   attachOrchestrationReset(ctor)
+  attachCrewMutationNotifications(ctor)
 }
