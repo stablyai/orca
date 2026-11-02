@@ -44,10 +44,11 @@ function makeWorkingSleepStore(overrides: Partial<SleepingAgentSessionRecord> = 
     })
   )
   const baseSettings = fixture.runtimeStore.getSettings
-  // Resume must preserve permissions rather than inherit wider launch defaults.
+  // Older captures inherit defaults; recorded launch configs keep their original recipe.
   fixture.runtimeStore.getSettings = () => ({
     ...baseSettings(),
-    agentDefaultArgs: { claude: '--dangerously-skip-permissions' }
+    agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
+    agentDefaultEnv: { claude: { CLAUDE_PROFILE: 'configured' } }
   })
   return fixture
 }
@@ -114,7 +115,7 @@ function spawnedCommand(spawn: ReturnType<typeof vi.fn>, call = 0): string {
 }
 
 describe('opening a workspace-slept running agent on a host with no window', () => {
-  it('resumes its conversation with only the recorded launch flags', async () => {
+  it('resumes its conversation with configured args and env when no launch config is recorded', async () => {
     const { runtimeStore } = makeWorkingSleepStore()
     const { opened, spawn } = openPane(runtimeStore, 'blocked')
 
@@ -123,17 +124,27 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     const command = spawnedCommand(spawn)
     expect(command).toContain('--resume')
     expect(command).toContain('provider-session-1')
-    expect(command).not.toContain('--dangerously-skip-permissions')
+    expect(command).toContain('--dangerously-skip-permissions')
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ env: expect.objectContaining({ CLAUDE_PROFILE: 'configured' }) })
+    )
   })
 
-  it('keeps the recorded permission flags of the launch it resumes', async () => {
+  it('keeps the recorded args and env of the launch it resumes unchanged', async () => {
     const { runtimeStore } = makeWorkingSleepStore({
-      launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
+      launchConfig: {
+        agentArgs: '--permission-mode plan',
+        agentEnv: { CLAUDE_PROFILE: 'recorded' }
+      }
     })
     const { opened, spawn } = openPane(runtimeStore, 'blocked')
 
     await opened
     expect(spawnedCommand(spawn)).toMatch(/--permission-mode'? '?plan/)
+    expect(spawnedCommand(spawn)).not.toContain('--dangerously-skip-permissions')
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ env: expect.objectContaining({ CLAUDE_PROFILE: 'recorded' }) })
+    )
   })
 
   it('still refuses a session another pane also records', async () => {
@@ -367,7 +378,7 @@ describe('opening a workspace-slept running agent on a host with no window', () 
       await expect(runtime.resumeSleptPane(pane, false)).resolves.toBe(true)
       for (let call = 0; call < 4; call += 1) {
         expect(spawnedCommand(spawn, call)).toContain('provider-session-1')
-        expect(spawnedCommand(spawn, call)).not.toContain('--dangerously-skip-permissions')
+        expect(spawnedCommand(spawn, call)).toContain('--dangerously-skip-permissions')
       }
       expect(spawn).toHaveBeenLastCalledWith(
         expect.objectContaining({ spawnIntent: 'user-resume' })

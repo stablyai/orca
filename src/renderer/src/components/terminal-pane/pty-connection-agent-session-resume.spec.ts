@@ -586,14 +586,15 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          // Neither stale recipe applies, and settings defaults never stand in for a recorded one.
-          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'"
+          // Neither stale recipe applies; current defaults fill the missing recipe.
+          command:
+            "codex '-c' 'disable_paste_burst=true' '--model' 'current' 'resume' 'codex-session-1'"
         })
       )
       expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
         paneKey,
         expect.objectContaining({
-          agentArgs: ''
+          agentArgs: '--model current'
         }),
         expect.objectContaining({
           agentType: 'codex',

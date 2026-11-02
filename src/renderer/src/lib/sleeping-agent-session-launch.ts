@@ -64,7 +64,12 @@ export function launchSleepingAgentSession(
     agent: record.agent,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    ...resolveResumeLaunchRecipe(launchConfig),
+    ...resolveResumeLaunchRecipe(launchConfig, {
+      agent: record.agent,
+      settings: state.settings,
+      platform: resumeTarget.platform,
+      shell: resumeTarget.shell
+    }),
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
@@ -102,7 +107,7 @@ export function launchSleepingAgentSession(
           : {})
       },
       launchAgent: record.agent,
-      ...(launchConfig ? { agentArgsOverride: startupPlan.launchConfig.agentArgs } : {}),
+      agentArgsOverride: startupPlan.launchConfig.agentArgs,
       ...(startupPlan.startupCommandDelivery
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),

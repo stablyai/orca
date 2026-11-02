@@ -117,8 +117,7 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
 
     expect(spawn).toHaveBeenCalledTimes(2)
     expect(spawnCommand(spawn, 1).includes(SESSION_ID)).toBe(resumes)
-    // Hand-typed launches have no saved bypass recipe; defaults must not widen their permissions.
-    expect(spawnCommand(spawn, 1)).not.toContain('--dangerously-skip-permissions')
+    expect(spawnCommand(spawn, 1).includes('--dangerously-skip-permissions')).toBe(resumes)
   })
 
   it('resumes an Orca-launched session with the recipe its launch recorded', async () => {

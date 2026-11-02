@@ -19,10 +19,7 @@ import {
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import {
-  resolveTuiAgentLaunchRawArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { resolveAgentLaunchCommand } from '../../../shared/agent-launch/startup/tui-agent-launch-command'
@@ -54,8 +51,6 @@ export function resolveAgentAccountRestartResumeStartup(
   agent: AccountRestartAgent,
   args: AccountRestartPane
 ): AgentAccountRestartStartup | null {
-  // Why: a hand-started Claude must not come back with configured defaults such as a permission bypass.
-  const unrecordedLaunchUsesDefaults = agent !== 'claude'
   const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const entry = state.agentStatusByPaneKey[paneKey]
@@ -87,27 +82,12 @@ export function resolveAgentAccountRestartResumeStartup(
     agent,
     providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchRawArgs(
-              agent,
-              state.settings,
-              undefined,
-              resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
-            )
-          : null,
-    agentEnv:
-      launchConfig !== undefined
-        ? launchConfig.agentEnv
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchEnv(agent, state.settings, resumeTarget.platform)
-          : null,
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    ...(launchConfig?.ompResumeFilePath
-      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-      : {}),
+    ...resolveResumeLaunchRecipe(launchConfig, {
+      agent,
+      settings: state.settings,
+      platform: resumeTarget.platform,
+      shell: resumeTarget.shell
+    }),
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
