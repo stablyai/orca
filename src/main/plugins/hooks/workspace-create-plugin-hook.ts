@@ -2,6 +2,7 @@ import { PLUGIN_HOOK_SPECS } from '../../../shared/plugins/events/plugin-hook-pa
 import { shortPluginBranchName } from '../../../shared/plugins/events/plugin-events'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { notifyPluginHook, pluginHookWanted, runPluginHook } from './plugin-hook-dispatch'
 
 type WorkspaceCreateRequest = { name: string; branchNameOverride?: string; baseBranch?: string }
@@ -53,4 +54,35 @@ export function notifyWorkspaceCreatedPluginHook(event: {
     path: event.path,
     branch: event.folder ? '' : shortPluginBranchName(event.branch)
   })
+}
+
+/**
+ * Folder workspaces in a project group (`folderWorkspace.create`, agent launches into a new
+ * folder, the window's create): one before/create/after boundary around the store write.
+ */
+export async function createFolderWorkspaceWithPluginHooks<
+  Input extends { projectGroupId: string; name?: string },
+  Workspace extends { id: string; folderPath: string }
+>(input: Input, create: (input: Input) => Workspace): Promise<Workspace> {
+  let request = input
+  const requestedName = input.name?.trim()
+  if (pluginHookWanted('workspace.create.before')) {
+    const decided = await runPluginHook(
+      'workspace.create.before',
+      PLUGIN_HOOK_SPECS['workspace.create.before'].payload,
+      { kind: 'folder', projectId: input.projectGroupId, name: requestedName || 'workspace' }
+    )
+    // Why compare: an unnamed request keeps Orca's default name unless a plugin chose one.
+    if (requestedName || decided.name !== 'workspace') {
+      request = { ...input, name: decided.name }
+    }
+  }
+  const workspace = create(request)
+  notifyWorkspaceCreatedPluginHook({
+    worktreeId: folderWorkspaceKey(workspace.id),
+    path: workspace.folderPath,
+    branch: '',
+    folder: true
+  })
+  return workspace
 }

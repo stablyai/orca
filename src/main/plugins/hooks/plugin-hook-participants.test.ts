@@ -96,4 +96,27 @@ describe('pluginHookParticipants', () => {
       )
     ])
   })
+
+  it('discards a decision made by a plugin disabled while it ran', async () => {
+    let enabled = true
+    const logs: string[] = []
+    const runHook = vi.fn(async () => {
+      enabled = false
+      return { decision: 'result', result: { deny: 'late' } }
+    })
+    const runner = createPluginHookRunner({
+      plugins: () => [plugin('acme.slow')],
+      isRuntimeApproved: () => enabled,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runner calls only runHook.
+      ensureWorker: async () => ({ runHook }) as unknown as PluginWorkerHandle,
+      logWarning: (pluginKey) => (line) => void logs.push(`${pluginKey}: ${line}`),
+      isEnabled: () => true
+    })
+    const event = { terminalId: 't', text: 'ls', enter: false, inputKind: 'driving' }
+    await expect(runner.run('terminal.send', event)).resolves.toEqual({
+      kind: 'continue',
+      payload: event
+    })
+    expect(logs[0]).toMatch(/disabled or changed while its hook ran/)
+  })
 })

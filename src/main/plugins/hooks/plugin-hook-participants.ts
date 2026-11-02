@@ -40,6 +40,30 @@ export function pluginHookParticipants(
   return [...installed, ...listed.filter((plugin) => plugin.isDev)]
 }
 
+/** What makes a plugin the one the person approved: a change means a new revision. */
+function pluginHookRevision(plugin: ValidDiscoveredPlugin): string {
+  return [
+    plugin.consentFingerprint,
+    plugin.contentHash ?? '',
+    plugin.devRevision ?? '',
+    plugin.rootDir
+  ].join('\n')
+}
+
+function isSamePluginStillEnabled(
+  plugin: ValidDiscoveredPlugin,
+  context: Pick<PluginHookHostContext, 'plugins' | 'isRuntimeApproved' | 'isEnabled'>
+): boolean {
+  const current = context.plugins().find((candidate) => candidate.pluginKey === plugin.pluginKey)
+  return (
+    context.isEnabled() &&
+    current !== undefined &&
+    !isInvalidDiscoveredPlugin(current) &&
+    pluginHookRevision(current) === pluginHookRevision(plugin) &&
+    context.isRuntimeApproved(current)
+  )
+}
+
 export function createPluginHookRunner(context: PluginHookHostContext): PluginHookRunner {
   return {
     wants: (event) => context.isEnabled() && pluginHookParticipants(event, context).length > 0,
@@ -64,10 +88,16 @@ export function createPluginHookRunner(context: PluginHookHostContext): PluginHo
         startTimeoutMs: PLUGIN_WORKER_READY_TIMEOUT_MS,
         invoke: async (pluginKey, current, timeoutMs) => {
           const worker = workers.get(pluginKey)
-          if (!worker) {
+          const plugin = participants.get(pluginKey)
+          if (!worker || !plugin) {
             throw new Error('the worker is not running')
           }
-          return worker.runHook(event, current, timeoutMs)
+          const decision = await worker.runHook(event, current, timeoutMs)
+          // Why: a plugin disabled, removed or updated while it decided no longer speaks for Orca.
+          if (!isSamePluginStillEnabled(plugin, context)) {
+            throw new Error('the plugin was disabled or changed while its hook ran')
+          }
+          return decision
         },
         log: (pluginKey, line) => context.logWarning(pluginKey)(line),
         now: () => performance.now()
@@ -99,12 +129,7 @@ export function createPluginHookWarmer(
       }
     }
     for (const plugin of hooked) {
-      const revision = [
-        plugin.consentFingerprint,
-        plugin.contentHash ?? '',
-        plugin.devRevision ?? '',
-        plugin.rootDir
-      ].join('\n')
+      const revision = pluginHookRevision(plugin)
       if (warmed.get(plugin.pluginKey) === revision) {
         continue
       }

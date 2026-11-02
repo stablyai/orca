@@ -21,7 +21,6 @@ import {
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { terminalSendPluginHook } from './terminal-send-plugin-hook'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(
@@ -128,20 +127,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     return probe
   }
 
-  async sendTerminal(
-    handle: string,
-    action: {
-      text?: string
-      enter?: boolean
-      interrupt?: boolean
-    },
-    options: RuntimeTerminalWriteOptions
-  ): Promise<RuntimeTerminalSend> {
-    const hooked = terminalSendPluginHook(handle, action, options.inputKind)
-    return this.sendTerminalAfterPluginHooks(handle, hooked ? await hooked : action, options)
-  }
-
-  private async sendTerminalAfterPluginHooks(
+  /** sendTerminal once plugin hooks decided (terminal-plugin-hooked-input.ts). */
+  protected async sendTerminalAfterPluginHooks(
     handle: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     options: RuntimeTerminalWriteOptions
