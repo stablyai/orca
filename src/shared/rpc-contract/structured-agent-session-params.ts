@@ -39,6 +39,8 @@ export {
   SessionId
 } from './structured-agent-session-identifiers'
 
+export { ResumeSource } from './structured-agent-session-resume-params'
+
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
 
