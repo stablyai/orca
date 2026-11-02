@@ -1,33 +1,36 @@
 import { useRef, useState } from 'react'
-import type {
-  GhosttyImportPreview,
-  GhosttyImportSource,
-  GlobalSettings
-} from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useMountedRef } from '../../hooks/useMountedRef'
-import { ghosttyImportSettingsUpdate } from '../../../../shared/ghostty-import-preview'
+import {
+  terminalConfigImportSettingsUpdate,
+  type TerminalConfigImportFormat,
+  type TerminalConfigImportPreview,
+  type TerminalConfigImportSource
+} from '../../../../shared/terminal-config-import-preview'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
-export type UseGhosttyImportReturn = {
+export type UseTerminalConfigImportReturn = {
+  format: TerminalConfigImportFormat
   open: boolean
-  preview: GhosttyImportPreview | null
+  preview: TerminalConfigImportPreview | null
   loading: boolean
   choosingFile: boolean
   applied: boolean
   applyError: string | null
-  handleClick: () => Promise<void>
+  handleClick: (format: TerminalConfigImportFormat) => Promise<void>
   handleChooseFile: () => Promise<void>
   handleApply: () => Promise<void>
   handleOpenChange: (open: boolean) => void
 }
 
-export function useGhosttyImport(
+export function useTerminalConfigImport(
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>,
   // Accept unloaded settings so the parent retains stable hook order; defer applying until settings exist.
   settings: GlobalSettings | null
-): UseGhosttyImportReturn {
+): UseTerminalConfigImportReturn {
+  const [format, setFormat] = useState<TerminalConfigImportFormat>('ghostty')
   const [open, setOpen] = useState(false)
-  const [preview, setPreview] = useState<GhosttyImportPreview | null>(null)
+  const [preview, setPreview] = useState<TerminalConfigImportPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [choosingFile, setChoosingFile] = useState(false)
   const [applied, setApplied] = useState(false)
@@ -36,7 +39,10 @@ export function useGhosttyImport(
   // Results from a superseded request (closed modal, newer pick) must not overwrite current state.
   const requestIdRef = useRef(0)
 
-  async function loadPreview(source: GhosttyImportSource): Promise<void> {
+  async function loadPreview(
+    previewFormat: TerminalConfigImportFormat,
+    source: TerminalConfigImportSource
+  ): Promise<void> {
     const requestId = ++requestIdRef.current
     const isCurrent = (): boolean => mountedRef.current && requestId === requestIdRef.current
     // The picker phase keeps the current preview visible instead of flashing a loading state behind it.
@@ -44,7 +50,10 @@ export function useGhosttyImport(
       setLoading(true)
     }
     try {
-      const result = await window.api.settings.previewGhosttyImport(source)
+      const result =
+        previewFormat === 'kitty'
+          ? await window.api.settings.previewKittyImport(source)
+          : await window.api.settings.previewGhosttyImport(source)
       // A dismissed picker keeps the preview that was already showing.
       if (isCurrent() && !result.canceled) {
         setPreview(result)
@@ -63,15 +72,17 @@ export function useGhosttyImport(
     }
   }
 
-  async function handleClick(): Promise<void> {
+  async function handleClick(nextFormat: TerminalConfigImportFormat): Promise<void> {
+    setFormat(nextFormat)
+    setPreview(null)
     setOpen(true)
-    await loadPreview({ kind: 'auto' })
+    await loadPreview(nextFormat, { kind: 'auto' })
   }
 
   async function handleChooseFile(): Promise<void> {
     setChoosingFile(true)
     try {
-      await loadPreview({ kind: 'chooseFile' })
+      await loadPreview(format, { kind: 'chooseFile' })
     } finally {
       if (mountedRef.current) {
         setChoosingFile(false)
@@ -90,7 +101,7 @@ export function useGhosttyImport(
       return
     }
     const requestId = requestIdRef.current
-    const merged = ghosttyImportSettingsUpdate(settings, preview, getSystemPrefersDark())
+    const merged = terminalConfigImportSettingsUpdate(settings, preview, getSystemPrefersDark())
     setApplyError(null)
     try {
       // Await persistence before marking applied so rejected IPC cannot report success.
@@ -118,6 +129,7 @@ export function useGhosttyImport(
   }
 
   return {
+    format,
     open,
     preview,
     loading,

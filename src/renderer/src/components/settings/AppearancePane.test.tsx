@@ -163,7 +163,7 @@ async function renderAppearancePane(
             terminalFontSuggestions={[]}
             onRequestFontSuggestions={options.onRequestFontSuggestions}
             systemPrefersDark={false}
-            ghostty={createGhosttyStub() as never}
+            terminalConfigImport={createGhosttyStub() as never}
             warpThemes={createWarpThemesStub() as never}
           />
         </TooltipProvider>
@@ -192,7 +192,7 @@ async function rerenderAppearancePane(
             fontSuggestions={[]}
             terminalFontSuggestions={[]}
             systemPrefersDark={false}
-            ghostty={createGhosttyStub() as never}
+            terminalConfigImport={createGhosttyStub() as never}
             warpThemes={createWarpThemesStub() as never}
           />
         </TooltipProvider>

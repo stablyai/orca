@@ -118,8 +118,8 @@ vi.mock('./TerminalWindowSection', () => ({
   }
 }))
 
-vi.mock('./GhosttyImportModal', () => ({
-  GhosttyImportModal: function GhosttyImportModal() {
+vi.mock('./TerminalConfigImportModal', () => ({
+  TerminalConfigImportModal: function TerminalConfigImportModal() {
     return null
   }
 }))
@@ -143,7 +143,8 @@ vi.mock('@/lib/terminal-theme', () => ({
   resolvePaneStyleOptions: () => ({ inactivePaneOpacity: 0.8, dividerThicknessPx: 1 })
 }))
 
-const ghosttyMock = {
+const configImportMock = {
+  format: 'ghostty' as const,
   open: true,
   preview: {
     found: true,
@@ -277,13 +278,13 @@ function findTerminalThemeCatalogSection(node: unknown): ReactElementLike | null
   return null
 }
 
-function findGhosttyImportModal(node: unknown): ReactElementLike | null {
+function findTerminalConfigImportModal(node: unknown): ReactElementLike | null {
   if (node == null) {
     return null
   }
   if (Array.isArray(node)) {
     for (const child of node) {
-      const found = findGhosttyImportModal(child)
+      const found = findTerminalConfigImportModal(child)
       if (found) {
         return found
       }
@@ -292,11 +293,11 @@ function findGhosttyImportModal(node: unknown): ReactElementLike | null {
   }
   const el = node as ReactElementLike
   const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
-  if (typeName === 'GhosttyImportModal') {
+  if (typeName === 'TerminalConfigImportModal') {
     return el
   }
   if (el.props?.children) {
-    return findGhosttyImportModal(el.props.children)
+    return findTerminalConfigImportModal(el.props.children)
   }
   return null
 }
@@ -349,7 +350,7 @@ function findComponentByTypeName(node: unknown, targetTypeName: string): ReactEl
   return null
 }
 
-describe('TerminalAppearanceSection ghostty import wiring', () => {
+describe('TerminalAppearanceSection terminal config import wiring', () => {
   beforeEach(() => {
     mockStateValues.length = 0
     mockSettingsSearchQuery = ''
@@ -365,7 +366,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -374,7 +375,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
     expect(importButton).toBeDefined()
 
     importButton?.onClick?.()
-    expect(ghosttyMock.handleClick).toHaveBeenCalled()
+    expect(configImportMock.handleClick).toHaveBeenCalled()
   })
 
   it('passes shared theme import controls into the theme catalog on desktop', () => {
@@ -383,7 +384,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -402,7 +403,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -415,7 +416,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -428,7 +429,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -441,7 +442,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -456,7 +457,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -471,7 +472,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -487,7 +488,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -502,7 +503,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
@@ -521,14 +522,14 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
     expect(findTerminalThemeCatalogSection(element)?.props.showThemeImport).toBe(false)
     expect(findWarpThemeImportModal(element)).toBeNull()
     expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(false)
-    expect(findGhosttyImportModal(element)).toBeNull()
+    expect(findTerminalConfigImportModal(element)).toBeNull()
   })
 
   it.each([false, true])(
@@ -542,7 +543,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
         updateSettings: () => {},
         systemPrefersDark: true,
         terminalFontSuggestions: [],
-        ghostty: ghosttyMock,
+        terminalConfigImport: configImportMock,
         warpThemes: warpThemesMock,
         forceVisiblePrimary
       })
@@ -550,31 +551,31 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(
         false
       )
-      expect(findGhosttyImportModal(element)).toBeNull()
+      expect(findTerminalConfigImportModal(element)).toBeNull()
       if (!forceVisiblePrimary) {
         expect(findComponentByTypeName(element, 'SettingsSubsectionHeader')).toBeNull()
       }
     }
   )
 
-  it('passes hook state to GhosttyImportModal', () => {
+  it('passes hook state to TerminalConfigImportModal', () => {
     const element = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
-    const modal = findGhosttyImportModal(element)
+    const modal = findTerminalConfigImportModal(element)
     expect(modal).not.toBeNull()
-    expect(modal?.props.open).toBe(ghosttyMock.open)
-    expect(modal?.props.preview).toEqual(ghosttyMock.preview)
-    expect(modal?.props.loading).toBe(ghosttyMock.loading)
-    expect(modal?.props.applied).toBe(ghosttyMock.applied)
-    expect(modal?.props.onApply).toBe(ghosttyMock.handleApply)
-    expect(modal?.props.onOpenChange).toBe(ghosttyMock.handleOpenChange)
+    expect(modal?.props.open).toBe(configImportMock.open)
+    expect(modal?.props.preview).toEqual(configImportMock.preview)
+    expect(modal?.props.loading).toBe(configImportMock.loading)
+    expect(modal?.props.applied).toBe(configImportMock.applied)
+    expect(modal?.props.onApply).toBe(configImportMock.handleApply)
+    expect(modal?.props.onOpenChange).toBe(configImportMock.handleOpenChange)
   })
 
   it('passes hook state to WarpThemeImportModal', () => {
@@ -583,7 +584,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
-      ghostty: ghosttyMock,
+      terminalConfigImport: configImportMock,
       warpThemes: warpThemesMock
     })
 
