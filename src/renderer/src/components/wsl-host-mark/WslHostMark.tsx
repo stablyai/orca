@@ -13,7 +13,8 @@ import {
 /** The distro a WSL host runs in; null for any other host, including an unknown runtime id. */
 export function selectWslHostDistro(
   state: {
-    runtimeEnvironments: readonly {
+    /** Optional: some list builders run before the environments load. */
+    runtimeEnvironments?: readonly {
       id: string
       orcadDeployment?: OrcadDeploymentLink | null
     }[]
@@ -24,7 +25,7 @@ export function selectWslHostDistro(
   if (host?.kind !== 'runtime') {
     return null
   }
-  const environment = state.runtimeEnvironments.find(
+  const environment = (state.runtimeEnvironments ?? []).find(
     (candidate) => candidate.id === host.environmentId
   )
   return environment && isWslHostRuntimeEnvironment(environment)

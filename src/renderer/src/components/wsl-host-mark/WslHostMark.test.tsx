@@ -36,6 +36,10 @@ describe('selectWslHostDistro', () => {
     expect(selectWslHostDistro(s, 'ssh:box')).toBeNull()
     expect(selectWslHostDistro(s, null)).toBeNull()
   })
+
+  it('reads no distro before the environments load', () => {
+    expect(selectWslHostDistro({}, 'runtime:env-wsl')).toBeNull()
+  })
 })
 
 describe('WslHostMark', () => {
