@@ -88,10 +88,24 @@ export class JournalInputCardIndex {
   head(): QueuedMessageRow | undefined {
     return this.index?.allPlaces().head
   }
-  /** Candidates behind `card` in queue order. */
-  after(card: QueuedMessageRow): readonly QueuedMessageRow[] {
-    this.ordered ??= [...this.candidates.values()].sort((a, b) => a.position - b.position)
-    return this.ordered.filter((candidate) => candidate.position > card.position)
+  /** Candidates behind `card` in queue order, one at a time: a walk stops at the first it needs. */
+  *after(card: QueuedMessageRow): Generator<QueuedMessageRow> {
+    const ordered = (this.ordered ??= [...this.candidates.values()].sort(
+      (a, b) => a.position - b.position
+    ))
+    let low = 0
+    let high = ordered.length
+    while (low < high) {
+      const middle = (low + high) >> 1
+      if (ordered[middle]!.position <= card.position) {
+        low = middle + 1
+      } else {
+        high = middle
+      }
+    }
+    for (let next = low; next < ordered.length; next += 1) {
+      yield ordered[next]!
+    }
   }
   paused(card: QueuedMessageRow): boolean {
     return (

@@ -70,20 +70,18 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 export function nextStructuredQueuedMessage(
   input: StructuredQueueGateInput & { journal: AgentSessionJournal }
 ): QueuedMessageRow | null {
-  if (structuredInputExecutionWorking(input.journal, input.work)) {
+  // Every gate before the queue is asked: choosing a card can read mail authority, and a session
+  // that is working, blocked or waiting on a prompt can send nothing anyway.
+  if (
+    structuredInputExecutionWorking(input.journal, input.work) ||
+    !input.record ||
+    structuredAgentSessionSendBlock(input.record) ||
+    input.work.hasActionablePrompt()
+  ) {
     return null
   }
   const selected = selectStructuredAgentSessionInput(input.journal)
-  const next = selected.kind === 'card' ? selected.card : null
-  // Check cheap working state before the prompt scan on every streamed frame.
-  if (next === null) {
-    return null
-  }
-  return !input.record ||
-    structuredAgentSessionSendBlock(input.record) ||
-    input.work.hasActionablePrompt()
-    ? null
-    : next
+  return selected.kind === 'card' ? selected.card : null
 }
 
 /** Queue behind work/actionable backlog; held or returned cards cannot trap a fresh send that lifts their pause. */

@@ -8,6 +8,9 @@ import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
+import { journalInputOrder } from './journal-input-order'
+import { nextStructuredQueuedMessage } from '../agent-session-wire/structured-agent-session-queued-messages'
+import type { QueuedMessageRow } from './queued-message-table'
 
 const personal = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
@@ -114,6 +117,58 @@ describe("the queue's one rule for the next card", () => {
     await expect(handOver(journal, 'C')).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
     await handOver(journal, 'A')
   })
+
+  it('asks mail authority only once nothing else stops a send', async () => {
+    const journal = await queue(new Set())
+    const authority = vi.fn((_card: QueuedMessageRow) => true)
+    journal.queuedMessages.mailUnavailable = authority
+    await journal.queuedMessages.insert({ messageId: 'A', body: mail('run:r', 'm1') })
+    const work = (prompt: boolean) =>
+      ({
+        activeTurnId: () => null,
+        owesSend: () => false,
+        hasActionablePrompt: () => prompt
+      }) as never
+    const record = {} as never
+    for (let publication = 0; publication < 10; publication += 1) {
+      expect(nextStructuredQueuedMessage({ journal, record: null, work: work(false) })).toBeNull()
+      expect(nextStructuredQueuedMessage({ journal, record, work: work(true) })).toBeNull()
+    }
+    expect(authority).not.toHaveBeenCalled()
+    expect(nextStructuredQueuedMessage({ journal, record, work: work(false) })).toBeNull()
+    expect(authority).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([40, 400])(
+    'stops at the first card it can send, however many of %i wait behind it',
+    async (behind) => {
+      const journal = await queue(new Set(['A']))
+      await journal.queuedMessages.insert({ messageId: 'A', body: mail('run:r', 'm1') })
+      await journal.queuedMessages.insert({ messageId: 'C', body: personal('mine') })
+      for (let card = 0; card < behind; card += 1) {
+        await journal.queuedMessages.insert({ messageId: `later-${card}`, body: personal('later') })
+      }
+      expect(next(journal)).toBe('C')
+      // Reads of the queue's live order: a walk reads up to its stop, a filtered copy reads all.
+      const cards = journalInputOrder(journal.queuedMessages.inputState()).cards as unknown as {
+        ordered: QueuedMessageRow[]
+      }
+      let reads = 0
+      cards.ordered = new Proxy(cards.ordered, {
+        get(target, key, receiver) {
+          if (typeof key === 'string' && /^\d+$/.test(key)) {
+            reads += 1
+          }
+          return Reflect.get(target, key, receiver)
+        }
+      })
+      for (let selection = 0; selection < 10; selection += 1) {
+        expect(next(journal)).toBe('C')
+      }
+      // A binary search to the mail card, then one step: nothing proportional to the cards behind.
+      expect(reads).toBeLessThanOrEqual(10 * 12)
+    }
+  )
 
   it.each([40, 400])(
     'walks only live cards, however many of %i old cards the epoch keeps',
