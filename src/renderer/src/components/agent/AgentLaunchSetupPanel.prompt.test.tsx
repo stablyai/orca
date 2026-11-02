@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { compilePickerTerminalLaunch } from './agent-launch-picker-menu-test-fixture'
 import {
   agentPickerLaunchInputs,
