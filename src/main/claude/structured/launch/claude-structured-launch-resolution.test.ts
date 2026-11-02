@@ -213,6 +213,14 @@ describe('claude structured launch resolution', () => {
     expect(launch.env).toMatchObject({ [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1' })
   })
 
+  it('keeps a configured Artifact tools opt-out over the default', async () => {
+    const launch = await resolverFor(record(), () => ({ CLAUDE_CODE_ARTIFACT: '0' }))({
+      identity: IDENTITY
+    })
+
+    expect(launch.env).toMatchObject({ CLAUDE_CODE_ARTIFACT: '0' })
+  })
+
   it('launches when only the bookkeeping leaf moved, and refuses a changed session', async () => {
     const resolve = resolverFor(RESUMABLE)
 
