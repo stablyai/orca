@@ -133,6 +133,42 @@ describe('mergeExtraAgentArgs', () => {
     ['omp', '--model a/b', '--model c/d', ['--model', 'c/d']],
     [
       'pi',
+      '--provider host --model old --thinking low',
+      '--model=other/model',
+      ['--thinking', 'low', '--model', 'other/model']
+    ],
+    [
+      'pi',
+      '--provider host --model old',
+      '--model bare-model',
+      ['--provider', 'host', '--model', 'bare-model']
+    ],
+    [
+      'pi',
+      '--provider host --model old',
+      '--model HOST/gateway/model',
+      ['--provider', 'host', '--model', 'HOST/gateway/model']
+    ],
+    [
+      'pi',
+      '--provider other --provider host --model old',
+      '--model other/model',
+      ['--provider', 'other', '--model', 'other/model']
+    ],
+    [
+      'pi',
+      '--provider host --model old',
+      '--thinking high',
+      ['--provider', 'host', '--model', 'old', '--thinking', 'high']
+    ],
+    [
+      'pi',
+      '--system-prompt --provider --provider host --model old -- --provider literal',
+      '--model other/model',
+      ['--system-prompt', '--provider', '--model', 'other/model', '--', '--provider', 'literal']
+    ],
+    [
+      'pi',
       '--model old/model --thinking low',
       '--model=new/model --thinking=max',
       ['--model', 'new/model', '--thinking', 'max']
@@ -293,7 +329,7 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('round trip on %s', (shel
   it('builds a Pi startup command with separate model and thinking arguments', () => {
     const args = mergeExtraAgentArgs({
       agent: 'pi',
-      defaultArgs: '',
+      defaultArgs: '--provider host --model old',
       extraAgentArgs: '--model=provider/model --thinking=max',
       shell
     })

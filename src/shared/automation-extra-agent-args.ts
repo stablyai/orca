@@ -1,6 +1,7 @@
 import {
   agentArgTerminatorIndex,
-  removeAgentArgOption
+  removeAgentArgOption,
+  removePiProviderForModel
 } from './agent-session/options/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { findOptionOccurrence } from './command-option-occurrence'
@@ -240,15 +241,19 @@ export function parseExtraAgentArgs(args: {
   }
 }
 
+/** Remove overridden defaults, including a Pi provider that conflicts with a qualified model. */
 function removeDefaultsFor(
   agent: TuiAgent,
-  kinds: ReadonlySet<ExtraAgentArgKind>,
+  extras: Extract<ParsedExtraAgentArgs, { ok: true }>,
   tokens: readonly string[]
 ): string[] {
+  const { kinds } = extras
   if (agent === 'pi') {
     let result = [...tokens]
     if (kinds.has('model')) {
       result = removeAgentArgOption(agent, result, ['--model'])
+      const model = findOptionOccurrence(extras.tokens, ['--model'], false)?.value
+      result = removePiProviderForModel(result, model)
     }
     if (kinds.has('effort')) {
       result = removeAgentArgOption(agent, result, ['--thinking'])
@@ -309,7 +314,7 @@ export function mergeParsedExtraAgentArgs(args: {
   if (!defaults.ok) {
     return { ok: false, error: `Default agent arguments are invalid: ${defaults.error}` }
   }
-  const kept = removeDefaultsFor(args.agent, extras.kinds, defaults.tokens)
+  const kept = removeDefaultsFor(args.agent, extras, defaults.tokens)
   const terminator = agentArgTerminatorIndex(args.agent, kept)
   const merged = [...kept.slice(0, terminator), ...extras.tokens, ...kept.slice(terminator)]
   const agentArgs = merged.map((token) => quoteStartupArg(token, args.shell)).join(' ')

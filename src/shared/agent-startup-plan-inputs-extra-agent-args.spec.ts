@@ -33,7 +33,7 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
   it('uses Pi extras instead of host model and thinking defaults', () => {
     const inputs = resolveAgentStartupPlanInputs({
       agent: 'pi',
-      settings: { agentDefaultArgs: { pi: '--model old/model --thinking low' } },
+      settings: { agentDefaultArgs: { pi: '--provider old --model old/model --thinking low' } },
       platform: 'linux',
       isRemote: false,
       shell: undefined,
@@ -43,6 +43,7 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
     expect(command).toContain("'--model' 'new/model'")
     expect(command).toContain("'--thinking' 'max'")
     expect(command).not.toContain('old/model')
+    expect(command).not.toContain("'--provider'")
     expect(command).not.toContain("'low'")
   })
 

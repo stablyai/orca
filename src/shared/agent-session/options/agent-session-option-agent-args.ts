@@ -124,6 +124,25 @@ export function removeAgentArgOption(
   return kept
 }
 
+/** Pi provider-qualified models override a different default provider. */
+export function removePiProviderForModel(
+  tokens: readonly string[],
+  model: string | undefined
+): string[] {
+  const provider = /^([^/]+)\/(.+)$/
+    .exec(model?.trim() ?? '')?.[1]
+    .trim()
+    .toLowerCase()
+  return provider
+    ? removeAgentArgOption(
+        'pi',
+        tokens,
+        ['--provider'],
+        (value) => value?.trim().toLowerCase() !== provider
+      )
+    : [...tokens]
+}
+
 /** Shared required-operand facts for terminal parsing, including CLI-sharing teams. */
 export function agentRequiredValueOptions(agent: string): readonly string[] {
   const value: unknown = Object.getOwnPropertyDescriptor(
