@@ -235,9 +235,10 @@ describe('useMobileStructuredAgentSession', () => {
       sourceIdentity,
       enabled: true,
       connected,
+      hostSupport: null,
       agent,
       onSendError
-    } as never)
+    })
     return null
   }
 

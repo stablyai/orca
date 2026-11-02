@@ -6,7 +6,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { ConnectionState, RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -50,8 +50,8 @@ const pairedContext = vi.hoisted(
     > | null
   } => ({ value: null })
 )
-vi.mock('../transport/client-context', async (original) => ({
-  ...(await original<typeof import('../transport/client-context')>()),
+// The native context module loads react-native, so only its hook is replaced.
+vi.mock('../transport/client-context', () => ({
   useRpcClientContext: () => {
     if (!pairedContext.value) {
       throw new Error('No paired-host fixture')
@@ -241,6 +241,7 @@ describe('mobile structured queued messages', () => {
       ])
       const desktopEvents = new Map<string, (event: unknown) => void>()
       let refuseDesktopRead = false
+      let holdDesktopRead: Promise<void> | null = null
       const desktops = new Map<string, RpcClient>()
       for (const id of ['a', 'b']) {
         desktops.set(id, {
@@ -250,6 +251,9 @@ describe('mobile structured queued messages', () => {
               return client.sendRequest(method, params, options)
             }
             if (method === 'settings.get') {
+              if (holdDesktopRead) {
+                await holdDesktopRead
+              }
               return refuseDesktopRead
                 ? {
                     id: 'old',
@@ -297,6 +301,7 @@ describe('mobile structured queued messages', () => {
         const workspace = useWorkspaceClient(hostId)
         hook = useMobileNativeChatSessionLane({
           client: workspace.client,
+          pairedHostClient: workspace.pairedHostClient,
           hostId,
           connState: workspace.state,
           structured: true,
@@ -315,7 +320,13 @@ describe('mobile structured queued messages', () => {
         }).structuredSession
         return null
       }
-      function Route({ hostId }: { hostId: string }) {
+      function Route({
+        hostId,
+        serverState = 'connected'
+      }: {
+        hostId: string
+        serverState?: ConnectionState
+      }) {
         const desktop = useHostClient(hostId)
         return createElement(
           WorkspaceServerContext.Provider,
@@ -324,7 +335,7 @@ describe('mobile structured queued messages', () => {
               client: desktop.client
                 ? scopeRpcClientToExecutionHost(desktop.client, 'runtime:server')
                 : null,
-              state: desktop.client ? desktop.state : 'connecting',
+              state: desktop.client ? serverState : 'connecting',
               desktopCapabilities: []
             }
           },
@@ -396,10 +407,38 @@ describe('mobile structured queued messages', () => {
       await act(async () => preferenceListener?.({ type: 'ready', snapshot: {} }))
       expect(hook!.sendFollowUp?.action).toBe('queue')
 
+      desktopValues.set('a', false)
       await act(async () =>
         desktopEvents.get('a')?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
       )
       expect(hook!.sendFollowUp?.action).toBe('steer')
+
+      // A server relay outage leaves the desktop stream open, so its toggle is current at recovery.
+      await act(async () =>
+        renderer!.update(createElement(Route, { hostId: 'a', serverState: 'disconnected' }))
+      )
+      expect(desktopEvents.has('a')).toBe(true)
+      desktopValues.set('a', true)
+      await act(async () =>
+        desktopEvents.get('a')?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: true })
+      )
+      // Held desktop reads mean recovery can't repair a toggle the phone missed.
+      let releaseDesktopRead = () => {}
+      holdDesktopRead = new Promise<void>((resolve) => {
+        releaseDesktopRead = () => resolve()
+      })
+      const outageListener = listener
+      await act(async () => renderer!.update(createElement(Route, { hostId: 'a' })))
+      await vi.waitFor(() => expect(listener).not.toBe(outageListener))
+      await act(async () => listener?.(working))
+      await act(async () => {
+        await hook!.sendWithOutcome('follow desktop toggled during the outage')
+      })
+      expect(requestOf('agentSession.send', 2).params.delivery).toBe('queue-if-active')
+      holdDesktopRead = null
+      await act(async () => releaseDesktopRead())
+      expect(hook!.sendFollowUp?.action).toBe('queue')
+
       await act(async () => renderer!.update(createElement(Route, { hostId: 'b' })))
       await act(async () => listener?.(working))
       expect(hook!.sendFollowUp?.action).toBe('queue')

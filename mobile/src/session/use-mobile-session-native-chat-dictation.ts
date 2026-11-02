@@ -26,7 +26,7 @@ import { useMobileNativeChatReadability } from './native-chat/transcript/use-mob
 import { useMobileNativeChatInputLease } from './native-chat/use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './native-chat/use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
-import { isMobileNativeChatAgentConfirmed } from './native-chat/mobile-native-chat-eligibility'
+import { mobileNativeChatOverlayInputLockReason } from './native-chat/mobile-native-chat-eligibility'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
@@ -39,6 +39,7 @@ export function useMobileSessionNativeChatDictation(
     hostId,
     worktreeId,
     client,
+    pairedHostClient,
     connState,
     agentSessionHostSupport,
     setInput,
@@ -81,6 +82,7 @@ export function useMobileSessionNativeChatDictation(
   })
   const nativeChatController = useMobileNativeChatController({
     client,
+    pairedHostClient,
     hostId,
     worktreeId,
     activeSessionTab,
@@ -98,14 +100,11 @@ export function useMobileSessionNativeChatDictation(
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
   nativeChatSendError.keepWhile(nativeChatController.nativeChatCommandRefusalCauses)
-  const nativeChatOverlayInputLockReason =
-    activeSessionTab?.type === 'agent-session'
-      ? connState === 'connected'
-        ? null
-        : 'disconnected'
-      : // Why: a chat only this phone remembers may sit on a bare shell; never type into it.
-        (nativeChatInputLockReason ??
-        (isMobileNativeChatAgentConfirmed(activeSessionTab) ? null : 'waiting'))
+  const nativeChatOverlayInputLockReason = mobileNativeChatOverlayInputLockReason(
+    activeSessionTab,
+    connState,
+    nativeChatInputLockReason
+  )
   const routeKey = nativeChatScopeKey ?? `${hostId}\0${worktreeId}`
   const getSendCompletionGeneration = useMobileSendCompletionGeneration({
     onBlur: resetLiveInputFocus,

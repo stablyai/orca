@@ -72,9 +72,10 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
       connected: true,
+      hostSupport: null,
       agent: 'codex',
       onSendError
-    } as never)
+    })
     return null
   }
 

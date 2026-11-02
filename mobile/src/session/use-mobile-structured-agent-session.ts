@@ -69,7 +69,7 @@ export function useMobileStructuredAgentSession(
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
-  const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired)
+  const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const hostStopsConversation = hostSupport?.conversationStop ?? null

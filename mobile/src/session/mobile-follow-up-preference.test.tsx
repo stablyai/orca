@@ -27,7 +27,8 @@ function connection() {
     sendRequest,
     subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, callback, options) => {
       callbacks.push(callback)
-      routedCallbacks.push({ host: options?.envelope?.executionHost, callback })
+      const host = options?.envelope?.executionHost
+      routedCallbacks.push({ host: typeof host === 'string' ? host : undefined, callback })
       return stops
     }),
     onStateChange: (callback) => {
@@ -95,7 +96,7 @@ it.each([1, 10])(
     const renders = new Map<string, number>()
     const values = new Map<string, boolean>()
     function Chat({ id, client, paired }: { id: string; client: RpcClient; paired: RpcClient }) {
-      values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, paired))
+      values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, paired, true))
       renders.set(id, (renders.get(id) ?? 0) + 1)
       return null
     }
@@ -168,7 +169,7 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
   const renders = new Map<string, number>()
   const values = new Map<string, boolean>()
   function Chat({ id, client }: { id: string; client: RpcClient }) {
-    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, client))
+    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, client, true))
     renders.set(id, (renders.get(id) ?? 0) + 1)
     return null
   }
@@ -300,7 +301,7 @@ it('keeps known OFF across real direct/relay migrations and failed reads, while 
   const logical = createStableLogicalRpcClient(direct.client, 'lan')
   const values = new Map<string, boolean>()
   function Chat({ id, client }: { id: string; client: RpcClient | null }) {
-    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, client))
+    values.set(id, useMobileNativeChatQueueFollowUps(client, true, id, client, true))
     return null
   }
   let mounted!: ReactTestRenderer

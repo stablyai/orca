@@ -9,31 +9,29 @@ export function useMobileNativeChatQueueFollowUps(
   client: RpcClient | null,
   connected: boolean,
   sessionId: string | null,
-  pairedHostClient: RpcClient | null
+  pairedHostClient: RpcClient | null,
+  active: boolean
 ): boolean {
   const preference = client ? mobileNativeChatFollowUpPreference(client) : null
   const pairedPreference = pairedHostClient
     ? mobileNativeChatFollowUpPreference(pairedHostClient)
     : null
+  // The paired host's stream outlives an execution-server outage; the projection follows its own connection.
+  const subscribePaired = useCallback(
+    (listener: () => void) =>
+      pairedPreference && active && sessionId ? pairedPreference.subscribe(listener) : () => {},
+    [pairedPreference, active, sessionId]
+  )
   const subscribe = useCallback(
-    (listener: () => void) => {
-      const stops =
-        connected && sessionId
-          ? [...new Set([pairedPreference, preference])].flatMap((source) =>
-              source ? [source.subscribe(listener)] : []
-            )
-          : []
-      return () => {
-        for (const stop of stops) {
-          stop()
-        }
-      }
-    },
-    [pairedPreference, preference, connected, sessionId]
+    (listener: () => void) =>
+      preference && connected && sessionId ? preference.subscribe(listener) : () => {},
+    [preference, connected, sessionId]
   )
   const getSnapshot = useCallback(
     () => pairedPreference?.getReportedSnapshot() ?? preference?.getSnapshot() ?? defaultSnapshot(),
     [pairedPreference, preference]
   )
+  // Both stores read the combined value, so only a change to what Send uses re-renders.
+  useSyncExternalStore(subscribePaired, getSnapshot, defaultSnapshot)
   return useSyncExternalStore(subscribe, getSnapshot, defaultSnapshot)
 }
