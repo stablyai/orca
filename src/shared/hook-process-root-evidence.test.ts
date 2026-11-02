@@ -309,6 +309,10 @@ describe('a hook process behind tmux in its pane', () => {
     expect(await read(io(procs), 4043, hint)).toBe('unattached')
   })
 
+  it('refuses a session the pane does not show but another terminal does', async () => {
+    expect(await read(io(detached, { bridges: ['elsewhere'] }), 4043, tmux)).toBe('competing')
+  })
+
   it('refuses a hint from an editor terminal process that runs under no tmux server', async () => {
     const foreign = table({ ttys004: 101, ttys009: 5001 }, [
       ROOT,

@@ -52,8 +52,9 @@ export type HookRootEvidenceReader = (
   request: HookRootEvidenceRequest
 ) => Promise<HookRootEvidence | undefined>
 
-/** The inner pane an outer pane's foreground tmux client shows. */
-export type TmuxPaneBridge = { selected: string; innerPid?: number }
+/** The inner pane an outer pane's foreground tmux client shows, or `elsewhere`: no client in this
+ *  pane, and every client showing the hinted pane runs outside it. */
+export type TmuxPaneBridge = { selected: string; innerPid?: number } | 'elsewhere'
 
 export type HookPaneProcessIo = {
   /** Null when the binding is missing (unknown); 'legacy' when its provider cannot name roots. */
@@ -304,13 +305,14 @@ async function readAgainstRoot(
     return verdict === 'tmux' ? 'unattached' : 'unknown'
   }
   const bridge = await io.readTmux(tmux.socket, rootPid, tmux.pane)
-  if (bridge && bridge.selected !== tmux.pane) {
+  // Shown in another terminal is verified foreign; no answer at all stays status-only.
+  if (bridge === 'elsewhere' || (bridge && bridge.selected !== tmux.pane)) {
     return 'competing'
   }
   const inner = bridge?.innerPid
   const innerVerdict = inner ? await classifyAgainst(io, inner, request) : 'unknown'
   const recheck = inner ? await io.readTmux(tmux.socket, rootPid, tmux.pane) : undefined
-  if (recheck?.selected !== tmux.pane || recheck.innerPid !== inner) {
+  if (recheck === 'elsewhere' || recheck?.selected !== tmux.pane || recheck.innerPid !== inner) {
     return 'unattached'
   }
   return innerVerdict === 'root' || innerVerdict === 'nested' || innerVerdict === 'competing'

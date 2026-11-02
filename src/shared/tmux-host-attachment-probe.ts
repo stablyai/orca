@@ -8,6 +8,7 @@ import {
   type ProcessTableRow
 } from './process-table-snapshot'
 import {
+  isTmuxPaneShownElsewhere,
   parseTmuxAttachedClients,
   resolveTmuxClientAttachment,
   type TmuxAttachedClient
@@ -142,10 +143,16 @@ export async function readTmuxPaneBridge(
   gate: ProcessReadGate = ungated
 ): Promise<TmuxPaneBridge | null> {
   const attachments = await probeTmuxHostAttachments(socket, [rootPid], gate)
-  const client =
-    attachments && resolveTmuxClientAttachment(rootPid, attachments.clients, attachments.rows)
-  if (!client || client.pane !== pane) {
-    return client ? { selected: client.pane } : null
+  if (!attachments) {
+    return null
+  }
+  const { clients, rows } = attachments
+  const client = resolveTmuxClientAttachment(rootPid, clients, rows)
+  if (!client) {
+    return isTmuxPaneShownElsewhere(rootPid, pane, clients, rows) ? 'elsewhere' : null
+  }
+  if (client.pane !== pane) {
+    return { selected: client.pane }
   }
   const result = await gate(() =>
     runProcess({
