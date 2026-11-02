@@ -46,6 +46,17 @@ export function launchConfigRegistryEntriesEqual(
   )
 }
 
+// Why: `orca claude-teams` records its own launch agent, but the Claude it wraps reports hooks as `claude`.
+function launchAgentMatchesStatus(
+  launchAgent: AgentType,
+  statusAgent: AgentType | undefined
+): boolean {
+  return (
+    launchAgent === statusAgent ||
+    (launchAgent === 'claude-agent-teams' && statusAgent === 'claude')
+  )
+}
+
 export function registryEntryMatchesStatus(args: {
   entry: AgentLaunchConfigRegistryEntry | undefined
   paneKey: string
@@ -62,7 +73,10 @@ export function registryEntryMatchesStatus(args: {
     return false
   }
   const identity = entry.identity
-  if (identity.agentType !== undefined && identity.agentType !== args.agentType) {
+  if (
+    identity.agentType !== undefined &&
+    !launchAgentMatchesStatus(identity.agentType, args.agentType)
+  ) {
     return false
   }
   if (identity.tabId !== undefined && identity.tabId !== args.tabId) {

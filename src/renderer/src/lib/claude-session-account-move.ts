@@ -46,19 +46,22 @@ export type ClaudeSessionMoveCandidate = {
 }
 
 // Match npm Claude by its fresh command line: generic node/python may now run user programs.
-function isClaudeProcess(processName: string | null): boolean {
-  return recognizeAgentProcess(processName)?.agent === 'claude'
+// Why teams: a packaged `orca claude-teams` leads the foreground as `Orca`, a name any `orca` command shares.
+function isClaudeProcess(processName: string | null, launchedAsAgentTeams: boolean): boolean {
+  const agent = recognizeAgentProcess(processName)?.agent
+  return agent === 'claude' || (launchedAsAgentTeams && agent === 'claude-agent-teams')
 }
 
 /** Confirm foreground identity: cached names flap to shells and native macOS binaries report version-folder names. */
 async function isClaudeInForeground(
   ptyId: string,
-  inspection: RuntimeTerminalProcessInspection
+  inspection: RuntimeTerminalProcessInspection,
+  launchedAsAgentTeams: boolean
 ): Promise<boolean | 'unchecked'> {
   if (isClientOnlyUnverifiableInspection(inspection)) {
     return false
   }
-  if (isClaudeProcess(inspection.foregroundProcess)) {
+  if (isClaudeProcess(inspection.foregroundProcess, launchedAsAgentTeams)) {
     return true
   }
   const fresh = await confirmRuntimeTerminalForegroundProcess(ptyId)
@@ -66,7 +69,7 @@ async function isClaudeInForeground(
   if (fresh === null && isAgentForegroundWrapperProcess(inspection.foregroundProcess ?? '')) {
     return 'unchecked'
   }
-  return isClaudeProcess(fresh)
+  return isClaudeProcess(fresh, launchedAsAgentTeams)
 }
 
 /** Whether the pane's Claude is mid-turn; a restart during a permission prompt or question drops it. */
@@ -238,7 +241,8 @@ async function isClaudeRunning(
     return resolvePaneAgentSessionId(state, makePaneKey(pane.tabId, pane.leafId)) !== null
   }
   return inspectRuntimeTerminalProcess(pane.ptyId).then(
-    (inspection) => isClaudeInForeground(pane.ptyId, inspection),
+    (inspection) =>
+      isClaudeInForeground(pane.ptyId, inspection, pane.tab.launchAgent === 'claude-agent-teams'),
     () => false
   )
 }
