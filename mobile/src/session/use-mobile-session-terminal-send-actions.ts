@@ -97,7 +97,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     }
   )
 
-  async function handleSend() {
+  async function handleSend({ keepFocus = false } = {}) {
     // Offline Return must preserve composed text instead of firing a doomed write.
     if (!client || !activeHandle || sendingRef.current || !canSend) {
       return
@@ -136,7 +136,10 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       const draftUnchanged =
         accepted && bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
-      dismissKeyboardAfterAgentSend(sendOrigin, accepted && draftUnchanged)
+      // A hardware Return send keeps the field focused; there is no soft keyboard to clear.
+      if (!keepFocus) {
+        dismissKeyboardAfterAgentSend(sendOrigin, accepted && draftUnchanged)
+      }
     } catch {
       restoreRejectedDraft()
     } finally {

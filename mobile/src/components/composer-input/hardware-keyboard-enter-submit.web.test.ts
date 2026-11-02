@@ -7,8 +7,9 @@ import type { TextInputProps } from 'react-native'
 import { useHardwareKeyboardEnterSubmit } from './hardware-keyboard-enter-submit.web'
 
 vi.mock('../../platform/host-os', () => ({ hostOs: () => 'ios' }))
+const keyboard = vi.hoisted(() => ({ height: 0 }))
 vi.mock('../../platform/keyboard-occlusion', () => ({
-  useSoftKeyboard: () => ({ height: 0, visible: false })
+  currentSoftKeyboardHeight: () => keyboard.height
 }))
 
 // Require RN Web because it ships no type declarations; its own Enter handling decides whether the newline survives.
@@ -53,6 +54,7 @@ function pressEnter(field: HTMLTextAreaElement, init: KeyboardEventInit = {}): K
 }
 
 afterEach(async () => {
+  keyboard.height = 0
   for (const unmount of roots.splice(0)) {
     await unmount()
   }
@@ -69,6 +71,14 @@ describe('hardware Return in the page composer', () => {
   it('leaves Shift+Enter to insert its line break', async () => {
     const onSubmit = vi.fn()
     const event = pressEnter(await mountComposer(onSubmit), { shiftKey: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('keeps the newline when the on-screen keyboard is already open', async () => {
+    keyboard.height = 336
+    const onSubmit = vi.fn()
+    const event = pressEnter(await mountComposer(onSubmit))
     expect(onSubmit).not.toHaveBeenCalled()
     expect(event.defaultPrevented).toBe(false)
   })

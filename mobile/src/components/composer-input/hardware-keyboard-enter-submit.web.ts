@@ -1,5 +1,5 @@
 import type { NativeSyntheticEvent, TextInputKeyPressEventData, TextInputProps } from 'react-native'
-import { useSoftKeyboard } from '../../platform/keyboard-occlusion'
+import { currentSoftKeyboardHeight } from '../../platform/keyboard-occlusion'
 import { hostOs } from '../../platform/host-os'
 import { showsSoftKeyboard } from '../../platform/soft-keyboard-shown'
 
@@ -21,13 +21,16 @@ function holdsModifierOrComposes(nativeEvent: TextInputKeyPressEventData): boole
 export function useHardwareKeyboardEnterSubmit(
   onSubmit: (() => void) | undefined
 ): Pick<TextInputProps, 'onKeyPress'> {
-  const keyboard = useSoftKeyboard()
-  if (!onSubmit || hostOs() !== 'ios' || showsSoftKeyboard(keyboard)) {
+  if (!onSubmit || hostOs() !== 'ios') {
     return {}
   }
   return {
     onKeyPress: (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
       if (event.nativeEvent.key !== 'Enter' || holdsModifierOrComposes(event.nativeEvent)) {
+        return
+      }
+      // Measured per press: a composer mounted under an open keyboard has no keyboard event yet.
+      if (showsSoftKeyboard({ height: currentSoftKeyboardHeight(), visible: true })) {
         return
       }
       event.preventDefault()

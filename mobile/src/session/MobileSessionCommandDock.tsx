@@ -80,7 +80,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const draft = bufferedTerminalDraftState.input
   const canSendDraft = canSend && draft.trim().length > 0
   const enterSubmit = useHardwareKeyboardEnterSubmit(
-    canSendDraft ? () => void handleSend() : undefined
+    canSendDraft ? () => void handleSend({ keepFocus: true }) : undefined
   )
   if (!sessionCommandDockShown(controller)) {
     return null
