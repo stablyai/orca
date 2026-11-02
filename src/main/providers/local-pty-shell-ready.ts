@@ -1,11 +1,10 @@
+import { getFishAgentShellFunctions } from '../../shared/agent-shell-functions'
 import { basename, win32 as pathWin32 } from 'node:path'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
-import { getFishClaudeShellFunction } from '../../shared/claude-shell-function'
 import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { getFishShellReadyInitCommand } from '../shell-templates'
@@ -135,7 +134,7 @@ export function getShellLaunchConfig(
           SHELL_READY_MARKER_ESCAPED,
           features.includes('ready'),
           startupCommand !== undefined
-        )}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}`
+        )}\n${getFishAgentShellFunctions()}`
       ],
       env:
         startupCommand !== undefined ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand } : {},

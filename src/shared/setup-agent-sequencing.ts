@@ -1,7 +1,6 @@
+import { getPosixAgentShellFunctions } from './agent-shell-functions'
 import { quotePosixShellUnlessPlainNoAt } from './shell-argument-quoting'
 import { encodePowerShellCommand } from './powershell-command-encoding'
-import { getPosixCodexShellLaunchPreflight } from './codex-shell-function'
-import { getPosixClaudeShellFunction } from './claude-shell-function'
 import {
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
@@ -131,7 +130,7 @@ function buildPosixStartupScript(
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
     // Announce success so “Waiting for setup...” does not linger. Install launch functions only after setup
     // may have supplied codex; fresh bash -lc does not read Orca’s wrapper.
-    `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
+    `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixAgentShellFunctions()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
     'echo "Setup failed; skipping agent startup." >&2;',
     'exit "${status:-1}";',
     'fi;',

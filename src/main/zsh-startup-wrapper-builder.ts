@@ -1,10 +1,9 @@
+import { getPosixAgentShellFunctions } from '../shared/agent-shell-functions'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../shared/managed-data-account-shell'
 /** Restore ZDOTDIR before user startup; define functions first so .zshenv emulation cannot change their parsing. */
 import { getPosixOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from './wsl-managed-cli-path-restore'
-import { getPosixCodexShellLaunchPreflight } from '../shared/codex-shell-function'
-import { getPosixClaudeShellFunction } from '../shared/claude-shell-function'
 import {
   ZSH_DEFERRED_LINE_INIT_BLOCK,
   ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK,
@@ -147,10 +146,7 @@ ${joinBlocks([
   indentBlock(ORCA_CLI_POSIX_PATH_RESTORE, '  ').replace(/\n$/, ''),
   featureGuard('overlay', getOverlayRestoreBlocks(spec)),
   // A system-default Codex home has no overlay key, but still needs the launch preflight.
-  indentBlock(getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction(), '  ').replace(
-    /\n$/,
-    ''
-  ),
+  indentBlock(getPosixAgentShellFunctions(), '  ').replace(/\n$/, ''),
   `  if [[ -n "\${_orca_histfile:-}" ]]; then
     HISTFILE="$_orca_histfile"
   fi`,

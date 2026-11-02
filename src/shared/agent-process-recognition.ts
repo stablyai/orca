@@ -11,6 +11,7 @@ import {
   PYTHON_PROCESS_RE,
   tokenizeCommandLine
 } from './agent-command-line-entrypoint'
+import { withoutSavedRestoreProof } from './saved-restore-dispatch'
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 
 export type RecognizedAgentProcess = { agent: TerminalAgent; processName: string }
@@ -215,7 +216,8 @@ export function recognizeAgentProcessFromCommandLine(
     return recognizedAgentForProcess('omp')
   }
   const keep = options?.includeHeadlessOneShot === true
-  const tokens = tokenizeCommandLine(commandLine)
+  // A saved restore's generated line carries a one-shot proof before the agent word.
+  const tokens = tokenizeCommandLine(withoutSavedRestoreProof(commandLine))
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizedAgentForProcess(firstNormalized)
   // Qoder's public dispatcher routes these commands to the IDE rather than the agent CLI.

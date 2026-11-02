@@ -1,3 +1,4 @@
+import { getFishAgentShellFunctions } from '../../shared/agent-shell-functions'
 import { tmpdir } from 'node:os'
 import { basename, join, win32 as pathWin32 } from 'node:path'
 import { statSync } from 'node:fs'
@@ -6,8 +7,6 @@ import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
-import { getFishClaudeShellFunction } from '../../shared/claude-shell-function'
 import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { getFishShellReadyInitCommand } from '../shell-templates'
 import {
@@ -179,7 +178,7 @@ export function getShellLaunchConfig(
       args: [
         '-l',
         '-C',
-        `${getFishShellReadyInitCommand(SHELL_READY_MARKER, features.includes('ready'))}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}`
+        `${getFishShellReadyInitCommand(SHELL_READY_MARKER, features.includes('ready'))}\n${getFishAgentShellFunctions()}`
       ],
       env: {},
       supportsReadyMarker: features.includes('ready')

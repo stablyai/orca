@@ -1,27 +1,36 @@
+import {
+  fishSavedRestoreCheck,
+  fishSavedRestoreProofLines,
+  getPosixSavedRestoreFunctions,
+  posixSavedRestoreProofLines,
+  powerShellSavedRestoreCheck
+} from './saved-restore-dispatch'
+
 /** Re-read account selection on every launch in Orca-routed panes with a real claude binary. Missing/empty pointer restores the user’s config; another pane override wins. Create account homes without a login silently and preserve Anthropic auth. Refuse nonabsolute pointers rather than run under the wrong account. */
 export function getPosixClaudeShellFunction(): string {
-  return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
+  return `${getPosixSavedRestoreFunctions()}__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
 if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]]; then
   function claude {
     local __orca_claude_home __orca_claude_pointer="\${ORCA_CLAUDE_PROFILE_POINTER:-}"
+    ${posixSavedRestoreProofLines('__orca_claude_proof')}
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="\${HOME:-}/\${__orca_claude_pointer#??}" ;; esac
     __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
     if [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "\${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ] &&
       { [ -z "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ] || [ "\${CLAUDE_CONFIG_DIR%/}" != "\${ORCA_CLAUDE_USER_CONFIG_DIR%/}" ]; }; then
-      command claude "$@"; return
+      __orca_saved_restore_exec claude "$__orca_claude_proof" "$@"; return
     fi
     # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
     if [ -z "$__orca_claude_home" ] && [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ -n "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then
-      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
+      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; __orca_saved_restore_exec claude "$__orca_claude_proof" "$@" ); return
     fi
     if [ -z "$__orca_claude_home" ]; then
-      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
+      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; __orca_saved_restore_exec claude "$__orca_claude_proof" "$@" ); return
     fi
     case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
     # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
     [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
-    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; __orca_saved_restore_exec claude "$__orca_claude_proof" "$@" )
   }
 fi
 unset __orca_claude_binary
@@ -34,28 +43,27 @@ export function getFishClaudeShellFunction(): string {
 set -l __orca_claude_type (type -t claude 2>/dev/null)
 if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
   function claude
+    ${fishSavedRestoreProofLines()}
     # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
     set -l pointer (string replace -r '^~/' "$HOME/" -- "$ORCA_CLAUDE_PROFILE_POINTER")
     set -l profile (cat "$pointer" 2>/dev/null)
     set -l own (string trim -r -c / -- "$ORCA_CLAUDE_USER_CONFIG_DIR")
     set -l current (string trim -r -c / -- "$CLAUDE_CONFIG_DIR")
+    # Why one call site: the restore check must run in exactly the env the chosen branch gives claude.
+    set -l envargs
     if test -n "$CLAUDE_CONFIG_DIR"; and test "$CLAUDE_CONFIG_DIR" != "$ORCA_CLAUDE_INJECTED_CONFIG_DIR"; and begin; test -z "$own"; or test "$current" != "$own"; end
-      command claude $argv
-      return $status
-    end
-    if test -z "$profile"; and test -n "$CLAUDE_CONFIG_DIR"; and test -n "$ORCA_CLAUDE_USER_CONFIG_DIR"
-      env -u ORCA_CLAUDE_INJECTED_CONFIG_DIR CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR" claude $argv
-      return $status
-    end
-    if test -z "$profile"
-      env -u CLAUDE_CONFIG_DIR -u ORCA_CLAUDE_INJECTED_CONFIG_DIR claude $argv
-      return $status
-    end
-    if not string match -qr '^(/|[A-Za-z]:)' -- "$profile"
+    else if test -z "$profile"; and test -n "$CLAUDE_CONFIG_DIR"; and test -n "$ORCA_CLAUDE_USER_CONFIG_DIR"
+      set envargs -u ORCA_CLAUDE_INJECTED_CONFIG_DIR CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"
+    else if test -z "$profile"
+      set envargs -u CLAUDE_CONFIG_DIR -u ORCA_CLAUDE_INJECTED_CONFIG_DIR
+    else if not string match -qr '^(/|[A-Za-z]:)' -- "$profile"
       return 1
+    else
+      test -d "$profile"; or mkdir -p -m 700 -- "$profile" 2>/dev/null
+      set envargs CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile"
     end
-    test -d "$profile"; or mkdir -p -m 700 -- "$profile" 2>/dev/null
-    env CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
+    ${fishSavedRestoreCheck('claude', 'env $envargs ')}
+    env $envargs claude $argv
   end
 end
 set -e __orca_claude_type
@@ -92,6 +100,7 @@ function Global:claude {
             $env:CLAUDE_CONFIG_DIR = $orcaClaudeHome
             $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR = $orcaClaudeHome
         }
+        ${powerShellSavedRestoreCheck("'claude'")}
         $binary = Get-Command claude -CommandType Application,ExternalScript -ErrorAction Stop | Select-Object -First 1
         $claudeArgs = @(__OrcaEscapeNativeArgs $binary.Source $args)
         if ($MyInvocation.ExpectingInput) { $input | & $binary.Source @claudeArgs } else { & $binary.Source @claudeArgs }

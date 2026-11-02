@@ -1,4 +1,12 @@
 import {
+  fishSavedRestoreCheck,
+  fishSavedRestoreProofLines,
+  getPosixSavedRestoreFunctions,
+  posixSavedRestoreFreshArgs,
+  posixSavedRestoreProofLines,
+  powerShellSavedRestoreCheck
+} from './saved-restore-dispatch'
+import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV
 } from './remote-viewer-clipboard-env'
@@ -24,7 +32,7 @@ const identitySetArg = (key: string, value: string): string =>
   `shell_environment_policy.set.${key}='${value}'`
 
 export function getPosixCodexShellLaunchPreflight(): string {
-  return `# Why: a typed alias expands inside the shell, after pane launch prep.
+  return `${getPosixSavedRestoreFunctions()}# Why: a typed alias expands inside the shell, after pane launch prep.
 # Why unalias inside the substitution: an alias named codex makes command -v
 # report the alias text, and the subshell leaves the user's own alias intact.
 # Why || : twice — zsh alone aborts inside the substitution, but every shell's
@@ -36,12 +44,15 @@ if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
+    ${posixSavedRestoreProofLines('__orca_codex_proof')}
     if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
       local -x SSH_CONNECTION='${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
     fi
     if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
+    # Why here: a fresh tail still gets the pane identity and --no-daemon handling below.
+    ${posixSavedRestoreFreshArgs('codex', '__orca_codex_proof')}
     for __orca_codex_arg in "$@"; do
       case "$__orca_codex_arg" in
         --no-daemon) __orca_codex_isolate=0 ;;
@@ -69,9 +80,11 @@ export function getFishCodexShellLaunchPreflight(): string {
 set -l __orca_codex_type (type -t codex 2>/dev/null)
 if test "$__orca_codex_type" = file
   function codex
+    ${fishSavedRestoreProofLines()}
     if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
       command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     end
+    ${fishSavedRestoreCheck('codex')}
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_SHARED_SERVER_ARG_PATTERN}' $argv
 ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not string match -q -- "*'*" "$${key}"; and set argv -c "${identitySetArg(key, `$${key}`)}" $argv`).join('\n')}
     end
@@ -109,6 +122,7 @@ if ($orcaCodexCommand -and
             } catch {
             }
         }
+        ${powerShellSavedRestoreCheck("'codex'")}
         if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}')) {
             try {
                 if ((& $orcaCodexExecutable.Source --help 2>$null) -match '--no-daemon') {
