@@ -226,6 +226,8 @@ describe('ACP compaction settlement', () => {
         failure: expect.objectContaining({ kind: 'notSignedIn' })
       })
     ])
+    // A sign-in failure is the agent's, so cards waiting behind the compaction stay held.
+    expect(rig.rig.journal.inputOrder.newestTurn.failure()).toBeGreaterThan(0)
   })
 
   it('fails a compaction the agent ended with any other stop reason', async () => {
@@ -236,6 +238,8 @@ describe('ACP compaction settlement', () => {
     expect(inside).toEqual([
       expect.objectContaining({ failure: expect.objectContaining({ kind: 'compactionFailed' }) })
     ])
+    // Its own verdict neither holds nor releases the cards waiting behind it.
+    expect(rig.rig.journal.inputOrder.newestTurn.failure()).toBe(0)
   })
 
   it('ends a stopped compaction as cancelled, with no result row', async () => {

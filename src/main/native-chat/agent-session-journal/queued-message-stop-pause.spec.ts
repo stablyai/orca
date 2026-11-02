@@ -7,6 +7,7 @@ import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { parseJournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 
 export function registerQueuedMessageStopPauseTests(
   fixture: ReturnType<typeof createFixture>
@@ -25,12 +26,26 @@ export function registerQueuedMessageStopPauseTests(
           outcome: 'failure'
         } as const
         await journal.appendItem(identity, body, { fence: 0, turnScope: { kind: 'thread' } })
+        // Two /compact turns refused on their own terms after it: see-through, never a release.
+        const refused = ['c1', 'c2'].map((id) => {
+          const command = structuredAgentSessionCommandTurn(id)
+          return { identity: command.identity, body: { ...body, turnId: command.turnId } }
+        })
+        for (const command of refused) {
+          await journal.appendItem(command.identity, command.body, {
+            fence: 0,
+            turnScope: { kind: 'thread' }
+          })
+        }
         await fixture.queueDraft(journal, 'carried')
         if (resumed) {
           await journal.appendQueueResume(0)
         }
         expect(fixture.reason(journal)).toBe(resumed ? null : 'failed')
-        await journal.replaceEpochItems('handle_forked', 0, [{ identity, body, ownerFence: 0 }])
+        await journal.replaceEpochItems('handle_forked', 0, [
+          { identity, body, ownerFence: 0 },
+          ...refused.map((command) => ({ ...command, ownerFence: 0 }))
+        ])
         expect(fixture.reason(journal)).toBe(resumed ? null : 'failed')
         expect(journal.queuedMessages.nextInputCard()?.messageId ?? null).toBe(
           resumed ? 'carried' : null
