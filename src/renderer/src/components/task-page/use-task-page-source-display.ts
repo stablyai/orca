@@ -111,11 +111,8 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     const url = buildGitHubRepoUrl(slug)
     return url && slug ? { url, label: `${slug.owner}/${slug.repo}` } : null
   }, [activeGithubTaskKind, githubActiveSources, githubMode, perRepoSourceState, selectedRepos])
-  const nextModel = model as typeof model & {
-    taskSourceContextSummary: typeof taskSourceContextSummary
-    selectedGitHubRepoExternalLink: typeof selectedGitHubRepoExternalLink
-  }
-  nextModel.taskSourceContextSummary = taskSourceContextSummary
-  nextModel.selectedGitHubRepoExternalLink = selectedGitHubRepoExternalLink
-  return nextModel
+  return Object.assign(model, {
+    taskSourceContextSummary,
+    selectedGitHubRepoExternalLink
+  })
 }

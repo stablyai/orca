@@ -10,6 +10,7 @@ import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../../../shared/github/wor
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { getGitHubTaskKind } from '../../../../shared/task-github-search'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import { parseTaskQuery } from '../../../../shared/task-query'
@@ -39,6 +40,12 @@ const readerWork = vi.hoisted(() => ({
   keyCompositions: 0,
   rowVisits: 0
 }))
+function isArrayMember<T>(
+  rows: T[],
+  key: string | symbol
+): key is Extract<keyof T[], string | symbol> {
+  return key in rows
+}
 vi.mock('./task-page-cache-selectors', async (importOriginal) => {
   const actual = await importOriginal<typeof CacheSelectors>()
   return {
@@ -53,7 +60,7 @@ vi.mock('./task-page-cache-selectors', async (importOriginal) => {
             return target[Number(key)]
           }
           // Array members (length, map, entries, the iterator) pass through untouched.
-          return target[key as keyof typeof target]
+          return isArrayMember(target, key) ? target[key] : undefined
         }
       })
     },
@@ -128,33 +135,34 @@ function useMountedSourceDisplay() {
   const detail = useTaskPageGitHubDetail(list)
   const reconciled = useTaskPageGitHubCacheReconciliation(detail)
   // Stage 21 derives the kind the same way before handing off to the source display.
-  return useTaskPageSourceDisplay(
-    Object.assign(reconciled, {
-      activeGithubTaskKind: getGitHubTaskKind(
-        reconciled.activeTaskPreset,
-        reconciled.appliedTaskSearch
-      )
-    })
-  )
+  const withKind = Object.assign(reconciled, {
+    activeGithubTaskKind: getGitHubTaskKind(
+      reconciled.activeTaskPreset,
+      reconciled.appliedTaskSearch
+    )
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every field the source display reads comes from stages 1-8 or the kind above; stages 9-20 add none of them.
+  const sourceDisplayInput = withKind as unknown as typeof withKind &
+    Parameters<typeof useTaskPageSourceDisplay>[0]
+  return useTaskPageSourceDisplay(sourceDisplayInput)
 }
 let view: ReturnType<typeof useMountedSourceDisplay>
 function Harness() {
   view = useMountedSourceDisplay()
+  const filtersFields = {
+    ...view,
+    setIssueSourcePreference,
+    appliedTaskQuery: parseTaskQuery(view.appliedTaskSearch),
+    loadedGitHubAuthorLogins: [],
+    primaryGithubFilterSlug: null,
+    githubTasksBusy: false,
+    newIssueTargetRepo: null
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mounted stage-8 model plus these stubs cover every field Filters reads; later-stage handlers are never fired here.
+  const filtersModel = filtersFields as unknown as TaskPageComposerActionsModel
   return (
     <TooltipProvider>
-      <TaskPageGitHubFilters
-        model={
-          {
-            ...view,
-            setIssueSourcePreference,
-            appliedTaskQuery: parseTaskQuery(view.appliedTaskSearch),
-            loadedGitHubAuthorLogins: [],
-            primaryGithubFilterSlug: null,
-            githubTasksBusy: false,
-            newIssueTargetRepo: null
-          } as unknown as TaskPageComposerActionsModel
-        }
-      />
+      <TaskPageGitHubFilters model={filtersModel} />
     </TooltipProvider>
   )
 }
@@ -335,27 +343,30 @@ describe('Tasks source display', () => {
       githubMode?: 'items' | 'project'
       selectedLinearWorkspace?: { id: string; organizationName: string }
       selectedJiraSite?: { id: string; displayName: string }
-    }) =>
-      renderHook(() =>
-        useTaskPageSourceDisplay({
-          githubMode: 'items',
-          sourceOptions: getSourceOptions(),
-          selectedRepos: [repo],
-          perRepoSourceState: [],
-          githubSourceDisplayState: [],
-          taskSourceRepoContexts:
-            args.taskSource === 'gitlab' ? [getTaskPageRepoSourceContext(repo, 'gitlab')] : [],
-          taskSourceHostAvailability: [],
-          accountBackedTaskSourceHostId: 'local',
-          accountBackedTaskSourceHostAvailability: [],
-          hostRegistryById: new Map(),
-          hostLabelById: new Map(),
-          selectedLinearWorkspace: null,
-          selectedJiraSite: null,
-          activeGithubTaskKind: 'issues',
-          ...args
-        } as unknown as Parameters<typeof useTaskPageSourceDisplay>[0])
-      ).result.current.taskSourceContextSummary
+    }) => {
+      const fields = {
+        githubMode: 'items',
+        sourceOptions: getSourceOptions(),
+        selectedRepos: [repo],
+        perRepoSourceState: [],
+        githubSourceDisplayState: [],
+        taskSourceRepoContexts:
+          args.taskSource === 'gitlab' ? [getTaskPageRepoSourceContext(repo, 'gitlab')] : [],
+        taskSourceHostAvailability: [],
+        accountBackedTaskSourceHostId: 'local',
+        accountBackedTaskSourceHostAvailability: [],
+        hostRegistryById: new Map(),
+        hostLabelById: new Map(),
+        selectedLinearWorkspace: null,
+        selectedJiraSite: null,
+        activeGithubTaskKind: 'issues',
+        ...args
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the source display reads only these model fields; the rest of the stage-20 model is unused by it.
+      const model = fields as unknown as Parameters<typeof useTaskPageSourceDisplay>[0]
+      return renderHook(() => useTaskPageSourceDisplay(model)).result.current
+        .taskSourceContextSummary
+    }
 
     expect(summary({ taskSource: 'github', githubMode: 'project' }).label).toMatch(
       /^GitHub · .+ · Current account$/
@@ -421,6 +432,18 @@ describe('Tasks source display scaling', () => {
       view.githubPerRepoPageLimit,
       ''
     ).map((row, index) => `${row.cacheKey}filler-${index}`)
+    const otherHostItem: GitHubWorkItem = {
+      id: 'issue-1',
+      type: 'issue',
+      number: 1,
+      title: 'x',
+      state: 'open',
+      url: 'https://github.com/o/other/issues/1',
+      labels: [],
+      updatedAt: '2026-01-01T00:00:00Z',
+      author: null,
+      repoId: 'other'
+    }
     useAppStore.setState((s) => ({
       workItemsCache: {
         ...s.workItemsCache,
@@ -428,7 +451,7 @@ describe('Tasks source display scaling', () => {
           fillerKeys.map((key) => [
             key,
             {
-              data: [{ id: 'issue-1', repoId: 'other', title: 'x' }],
+              data: [otherHostItem],
               fetchedAt: 1,
               sources: sources(fork)
             }
@@ -518,7 +541,15 @@ describe('Tasks source display scaling', () => {
       }
     }
     const [small, large, smallCache] = sizes.map(({ work }) => work)
-    for (const update of Object.keys(small) as (keyof typeof small)[]) {
+    const updates: (keyof typeof small)[] = [
+      'otherHostPatch',
+      'nonCacheWrite',
+      'currentFetch',
+      'siblingFetch',
+      'preferenceEviction'
+    ]
+    expect(updates).toEqual(Object.keys(small))
+    for (const update of updates) {
       // Selector calls grow with neither rows nor cache size.
       expect(large[update].invocations).toBe(small[update].invocations)
       // Same rows, a tenth of the cache: identical work.

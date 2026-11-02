@@ -10,7 +10,7 @@ const fork = { owner: 'long-fork-owner-organization', repo: 'long-repository-nam
 
 function ForkSourceBar(): React.JSX.Element {
   const sourceOptions = getSourceOptions()
-  const model = {
+  const fields = {
     visibleSourceOptions: sourceOptions,
     taskSource: 'github',
     taskSourceAvailabilityNoticeByProvider: {},
@@ -32,7 +32,9 @@ function ForkSourceBar(): React.JSX.Element {
     }),
     linearConnected: false,
     jiraConnected: false
-  } as unknown as TaskPageComposerActionsModel
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SourceBar's render reads only these fields with Linear and Jira disconnected; the rest are event handlers this static fixture never fires.
+  const model = fields as unknown as TaskPageComposerActionsModel
   return (
     <TooltipProvider>
       <div className="bg-background p-2">

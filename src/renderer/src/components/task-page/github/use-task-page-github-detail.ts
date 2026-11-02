@@ -238,43 +238,25 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
     },
     [openTaskPage, repos]
   )
-  const nextModel = model as typeof model & {
-    githubTaskDrawerWorkItem: typeof githubTaskDrawerWorkItem
-    setGithubTaskDrawerWorkItem: typeof setGithubTaskDrawerWorkItem
-    dialogInitialTab: typeof dialogInitialTab
-    setDialogInitialTab: typeof setDialogInitialTab
-    dialogWorkItemKey: typeof dialogWorkItemKey
-    appliedWorkItemsCacheQuery: typeof appliedWorkItemsCacheQuery
-    selectedWorkItemsCacheEntries: typeof selectedWorkItemsCacheEntries
-    sourceDisplayWorkItemsCacheEntries: typeof sourceDisplayWorkItemsCacheEntries
-    cachedDialogWorkItem: typeof cachedDialogWorkItem
-    dialogWorkItem: typeof dialogWorkItem
-    dialogRepoPath: typeof dialogRepoPath
-    dialogSourceContext: typeof dialogSourceContext
-    gitlabDialogRepo: typeof gitlabDialogRepo
-    gitlabDialogSourceContext: typeof gitlabDialogSourceContext
-    setDialogWorkItem: typeof setDialogWorkItem
-    openGitHubDetailPage: typeof openGitHubDetailPage
-    openGitLabDetailPage: typeof openGitLabDetailPage
-  }
-  nextModel.githubTaskDrawerWorkItem = githubTaskDrawerWorkItem
-  nextModel.setGithubTaskDrawerWorkItem = setGithubTaskDrawerWorkItem
-  nextModel.dialogInitialTab = dialogInitialTab
-  nextModel.setDialogInitialTab = setDialogInitialTab
-  nextModel.dialogWorkItemKey = dialogWorkItemKey
-  nextModel.appliedWorkItemsCacheQuery = appliedWorkItemsCacheQuery
-  nextModel.selectedWorkItemsCacheEntries = selectedWorkItemsCacheEntries
-  nextModel.sourceDisplayWorkItemsCacheEntries = sourceDisplayWorkItemsCacheEntries
-  nextModel.cachedDialogWorkItem = cachedDialogWorkItem
-  nextModel.dialogWorkItem = dialogWorkItem
-  nextModel.dialogRepoPath = dialogRepoPath
-  nextModel.dialogSourceContext = dialogSourceContext
-  nextModel.gitlabDialogRepo = gitlabDialogRepo
-  nextModel.gitlabDialogSourceContext = gitlabDialogSourceContext
-  nextModel.setDialogWorkItem = setDialogWorkItem
-  nextModel.openGitHubDetailPage = openGitHubDetailPage
-  nextModel.openGitLabDetailPage = openGitLabDetailPage
-  return nextModel
+  return Object.assign(model, {
+    githubTaskDrawerWorkItem,
+    setGithubTaskDrawerWorkItem,
+    dialogInitialTab,
+    setDialogInitialTab,
+    dialogWorkItemKey,
+    appliedWorkItemsCacheQuery,
+    selectedWorkItemsCacheEntries,
+    sourceDisplayWorkItemsCacheEntries,
+    cachedDialogWorkItem,
+    dialogWorkItem,
+    dialogRepoPath,
+    dialogSourceContext,
+    gitlabDialogRepo,
+    gitlabDialogSourceContext,
+    setDialogWorkItem,
+    openGitHubDetailPage,
+    openGitLabDetailPage
+  })
 }
 export type TaskPageGitHubDetailModel = ReturnType<
   typeof useTaskPageGitHubDetail<TaskPageGitHubListStateModel>

@@ -135,29 +135,18 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     setTasksRefreshing(true)
     setTaskRefreshNonce((current) => current + 1)
   }, [setTasksRefreshing, setTaskRefreshNonce])
-  const nextModel = model as typeof model & {
-    patchTaskPageWorkItemRows: typeof patchTaskPageWorkItemRows
-    handleDialogReviewRequestsChange: typeof handleDialogReviewRequestsChange
-    perRepoSourceState: typeof perRepoSourceState
-    githubSourceDisplayState: typeof githubSourceDisplayState
-    unresolvedSourceRepos: typeof unresolvedSourceRepos
-    fellBackToastedRef: typeof fellBackToastedRef
-    retryingSourceKeys: typeof retryingSourceKeys
-    setRetryingSourceKeys: typeof setRetryingSourceKeys
-    handleRetryIssuesFetch: typeof handleRetryIssuesFetch
-    handleRefreshGithubTasks: typeof handleRefreshGithubTasks
-  }
-  nextModel.patchTaskPageWorkItemRows = patchTaskPageWorkItemRows
-  nextModel.handleDialogReviewRequestsChange = handleDialogReviewRequestsChange
-  nextModel.perRepoSourceState = perRepoSourceState
-  nextModel.githubSourceDisplayState = githubSourceDisplayState
-  nextModel.unresolvedSourceRepos = unresolvedSourceRepos
-  nextModel.fellBackToastedRef = fellBackToastedRef
-  nextModel.retryingSourceKeys = retryingSourceKeys
-  nextModel.setRetryingSourceKeys = setRetryingSourceKeys
-  nextModel.handleRetryIssuesFetch = handleRetryIssuesFetch
-  nextModel.handleRefreshGithubTasks = handleRefreshGithubTasks
-  return nextModel
+  return Object.assign(model, {
+    patchTaskPageWorkItemRows,
+    handleDialogReviewRequestsChange,
+    perRepoSourceState,
+    githubSourceDisplayState,
+    unresolvedSourceRepos,
+    fellBackToastedRef,
+    retryingSourceKeys,
+    setRetryingSourceKeys,
+    handleRetryIssuesFetch,
+    handleRefreshGithubTasks
+  })
 }
 export type TaskPageGitHubCacheReconciliationModel = ReturnType<
   typeof useTaskPageGitHubCacheReconciliation
