@@ -49,9 +49,7 @@ export function couldBecomeAgentStatusFrame(text: string): boolean {
     return true
   }
   return (
-    text.startsWith(OSC_AGENT_STATUS_PREFIX) &&
-    !text.includes('\x07') &&
-    !text.slice(0, -1).includes('\x1b\\')
+    text.startsWith(OSC_AGENT_STATUS_PREFIX) && !text.includes('\x07') && !text.includes('\x1b\\')
   )
 }
 
