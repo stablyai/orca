@@ -47,8 +47,10 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use
   `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
-  in any state: a working worker reads it now; a finished or closed one gets it
-  as a follow-up Task and reports with `worker_done`. The receipt says which.
+  in any state: a working worker reads it now, inside its running turn (a new
+  Task given to a busy chat waits for the turn to end instead); a finished or
+  closed one gets it as a follow-up Task and reports with `worker_done`. The
+  receipt says which.
   Except on a paired server: a finished worker there refuses `send`, so start
   new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).
