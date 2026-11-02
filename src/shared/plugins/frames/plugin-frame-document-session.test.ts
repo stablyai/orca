@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mountShell } from './plugin-frame-shell-mount.test-fixture'
+import {
+  mountShell,
+  type FrameDocumentSessionOptions,
+  type FrameHostMessage
+} from './plugin-frame-shell-mount.test-fixture'
 
 type Content = { kind: 'text'; text: string } | { kind: 'bytes'; bytes: ArrayBuffer }
 
@@ -64,7 +68,7 @@ const sentBytes = (message: Record<string, unknown> | undefined): number[] => {
   return content.kind === 'bytes' ? [...new Uint8Array(content.bytes)] : []
 }
 
-async function open(options?: object, first: object = doc(1, 'a')) {
+async function open(options?: FrameDocumentSessionOptions, first: FrameHostMessage = doc(1, 'a')) {
   const shell = mountShell('editor')
   fromHostAll(shell.fromHost, [hello, first])
   const session = await shell.orca.document!.session(options)
