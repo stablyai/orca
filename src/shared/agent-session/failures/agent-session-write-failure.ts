@@ -42,7 +42,11 @@ export function agentSessionWriteKindForMethod(
   fingerprintMethod: string,
   fields: Record<string, unknown>
 ): AgentSessionWriteKind {
-  if (fingerprintMethod === 'agentSession.send') {
+  // A queued card's Send is a message send too; its refusal says the message was not sent.
+  if (
+    fingerprintMethod === 'agentSession.send' ||
+    fingerprintMethod === 'agentSession.queuedMessageSend'
+  ) {
     return 'send'
   }
   if (fingerprintMethod === 'agentSession.cancel') {

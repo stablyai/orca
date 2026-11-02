@@ -149,7 +149,9 @@ const REASON_WORDS = {
   },
   execution_owner_reconciling: {
     hostReconciling: causeWords('hostReconciling', 'wait', 'waitMoment'),
-    recordUnreadable: causeWords('recordUnreadable', 'hostFinding')
+    recordUnreadable: causeWords('recordUnreadable', 'hostFinding'),
+    // 'wait', not 'retry': a card's Send stays the same control, so its step is always said.
+    mailOwnerUnconfirmed: causeWords('mailOwnerUnconfirmed', 'wait', 'tryAgain')
   },
   agent_session_checkpoint_stale: {
     fenceStale: codeWords('retry'),

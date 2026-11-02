@@ -147,11 +147,12 @@ export function sendQueuedStructuredAgentMessage(
           if (error.owed === 'unavailable') {
             return {
               ok: false,
-              // Not only after a restart: any unreadable fact it depends on, so no step is promised.
+              // Not only after a restart, so never the restart's words: refused before admission, so
+              // the same Send can be pressed again once the mailbox answers.
               refusal: refuse(
                 'execution_owner_reconciling',
-                { reason: 'recordUnreadable' },
-                "Orca can't read what decides whether this message still applies."
+                { reason: 'mailOwnerUnconfirmed' },
+                "Orca can't confirm this queued mail is still owed to this chat."
               )
             }
           }

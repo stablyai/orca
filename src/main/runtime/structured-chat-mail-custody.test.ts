@@ -10,6 +10,7 @@ import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixtur
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import type { AgentMessageSource } from '../../shared/agent-session/agent-session-message-source'
 import { agentSessionRefusalNotice } from '../../shared/agent-session/failures/agent-session-refusal-notice'
+import { agentSessionWriteKindForMethod } from '../../shared/agent-session/failures/agent-session-write-failure'
 import { nextStructuredQueuedMessage } from '../native-chat/agent-session-wire/structured-agent-session-queued-messages'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
@@ -286,9 +287,13 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     if (sent.ok) {
       throw new Error('an undecidable Send went through')
     }
-    const notice = agentSessionRefusalNotice(sent.refusal, 'send', { agentName: 'Codex' })
-    expect(notice).toContain("Orca couldn't read this chat's saved state.")
-    expect(notice).not.toContain('restart')
+    // Worded as the card's Send is, desktop and phone alike, with its step even beside a Retry.
+    const write = agentSessionWriteKindForMethod('agentSession.queuedMessageSend', fields)
+    for (const retryControl of [false, true]) {
+      expect(agentSessionRefusalNotice(sent.refusal, write, { retryControl })).toBe(
+        "Orca couldn't confirm this message is still meant for this chat. Your message was not sent. Try again."
+      )
+    }
     expect(chat.turns).toHaveLength(1)
     // Readable again: the lane's next look wakes the queue, with no action from the person.
     unreadable.mockRestore()
