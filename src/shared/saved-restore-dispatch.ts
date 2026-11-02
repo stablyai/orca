@@ -1,15 +1,19 @@
 // A synthesized saved restore of an env-owned agent store asks Orca, from inside the agent's own
-// shell function, whether its conversation still exists in the store this invocation will read.
-// Only Orca's generated startup line carries the single-use proof; a typed command never does.
+// shell invocation, whether its conversation still exists in the store that invocation reads.
+// Authority is a private one-shot function the root shell installs at startup, outside any
+// recalled command text; the generated line only calls it if it still exists.
+import { quoteStartupArg, tokenizeStartupCommand } from './tui-agent-startup-shell'
 
-/** Command-scoped on POSIX/fish lines; Orca's function reads and unsets it before anything runs. */
-export const SAVED_RESTORE_PROOF_ENV = 'ORCA_SAVED_RESTORE_PROOF'
-/** The pane's bundled CLI; inert without a proof. */
+/** The pane's bundled CLI; inert without the private entry. */
 export const SAVED_RESTORE_CHECK_ENV = 'ORCA_SAVED_RESTORE_CHECK'
 /** Main's prebuilt fresh argument tail: portable-quoted for POSIX/fish, a JSON array for PowerShell. */
 export const SAVED_RESTORE_FRESH_ARGS_ENV = 'ORCA_SAVED_RESTORE_FRESH_ARGS'
 /** The check's whole budget in milliseconds, counted from the CLI's own start. */
 export const SAVED_RESTORE_BUDGET_ENV = 'ORCA_SAVED_RESTORE_BUDGET_MS'
+/** The root shell's installer inputs: the entry name and the restore script path (no extension).
+ *  Orca's wrapper reads and removes both before user startup files run. */
+export const SAVED_RESTORE_ENTRY_ENV = 'ORCA_SAVED_RESTORE_ENTRY'
+export const SAVED_RESTORE_SCRIPT_ENV = 'ORCA_SAVED_RESTORE_SCRIPT'
 export const SAVED_RESTORE_FRESH_EXIT_CODE = 75
 /** The store selectors the check reports from the invocation's own env. */
 export const SAVED_RESTORE_ROOT_KEYS = [
@@ -21,105 +25,84 @@ export const SAVED_RESTORE_ROOT_KEYS = [
   'OPENCODE_DB'
 ] as const
 export const SAVED_RESTORE_CHECK_COMMAND = ['agent', 'saved-restore-check'] as const
-const POWERSHELL_PROOF_VARIABLE = 'OrcaSavedRestoreProof'
-const PROOF_PATTERN = '[0-9a-f]{32}'
 
-/** The generated line with its one-shot proof scoped to this command alone. */
-export function withSavedRestoreProof(
+// Main appends this to the original command; the PTY host that knows the receiving shell turns
+// it into that shell's dispatch, or drops it. Only Orca's arm writes it.
+const ANNOTATION = /^([^\n]*) # __orca_saved_restore:([0-9a-f]{16}):([0-9a-f]{32})$/
+
+export function annotateSavedRestore(command: string, entry: string, token: string): string {
+  return `${command} # __orca_saved_restore:${entry}:${token}`
+}
+
+function readAnnotation(command: string) {
+  const match = ANNOTATION.exec(command)
+  return match ? { original: match[1], entry: match[2], token: match[3] } : null
+}
+
+/** The command an annotated line runs, for readers that recognize agents by command. */
+export function withoutSavedRestoreAnnotation(command: string): string {
+  return readAnnotation(command)?.original ?? command
+}
+
+function shellName(shellPath: string | undefined): string {
+  return (shellPath?.split(/[\\/]/).pop() ?? '')
+    .replace(/^-/, '')
+    .replace(/\.exe$/i, '')
+    .toLowerCase()
+}
+
+/** The receiving shell's line: the private entry if this root shell still has it, else the
+ *  original command. Shells without an Orca installer always get the original. */
+export function renderSavedRestoreStartupCommand(
   command: string,
-  proof: string,
-  shell: 'posix' | 'powershell'
+  shellPath: string | undefined
 ): string {
-  return shell === 'posix'
-    ? `${SAVED_RESTORE_PROOF_ENV}=${proof} ${command}`
-    : `$global:${POWERSHELL_PROOF_VARIABLE}='${proof}'; try { ${command} } finally { Remove-Variable -Scope Global ${POWERSHELL_PROOF_VARIABLE} -ErrorAction SilentlyContinue }`
+  const annotated = readAnnotation(command)
+  if (!annotated) {
+    return command
+  }
+  const { original, entry, token } = annotated
+  const shell = shellName(shellPath)
+  const powershell = shell === 'powershell' || shell === 'pwsh'
+  const callable = powershell && original.startsWith('& ') ? original.slice(2) : original
+  const words = tokenizeStartupCommand(callable, powershell ? 'powershell' : 'posix')
+  if (!words.ok || words.tokens.length === 0) {
+    return original
+  }
+  const quote = (value: string) => quoteStartupArg(value, powershell ? 'powershell' : 'posix')
+  const call = `__orca_sr_${entry} ${quote(token)} ${quote(original)} ${words.tokens.map(quote).join(' ')}`
+  if (shell === 'bash' || shell === 'zsh') {
+    return `if typeset -f __orca_sr_${entry} >/dev/null 2>&1; then ${call}; else ${original}; fi`
+  }
+  if (shell === 'fish') {
+    return `if functions -q __orca_sr_${entry}; ${call}; else; ${original}; end`
+  }
+  return powershell
+    ? `if (Test-Path function:__orca_sr_${entry}) { ${call} } else { ${original} }`
+    : original
 }
 
-const POSIX_PROOF_PREFIX = new RegExp(`^${SAVED_RESTORE_PROOF_ENV}=${PROOF_PATTERN} `)
-const POWERSHELL_PROOF_WRAPPER = new RegExp(
-  `^\\$global:${POWERSHELL_PROOF_VARIABLE}='${PROOF_PATTERN}'; try \\{ ([\\s\\S]*) \\} finally \\{ Remove-Variable -Scope Global ${POWERSHELL_PROOF_VARIABLE} -ErrorAction SilentlyContinue \\}$`
-)
+/** bash/zsh, before user startup files: take the installer inputs into unexported shell state. */
+export const POSIX_SAVED_RESTORE_CAPTURE = `__orca_sr_entry="\${${SAVED_RESTORE_ENTRY_ENV}:-}" __orca_sr_script="\${${SAVED_RESTORE_SCRIPT_ENV}:-}"
+builtin unset ${SAVED_RESTORE_ENTRY_ENV} ${SAVED_RESTORE_SCRIPT_ENV}`
 
-/** The agent command a proof-carrying line runs, for readers that recognize agents by command. */
-export function withoutSavedRestoreProof(command: string): string {
-  return command.replace(POSIX_PROOF_PREFIX, '').replace(POWERSHELL_PROOF_WRAPPER, '$1')
-}
+/** bash/zsh, after Orca's agent functions: an armed restore loads its script, which installs the
+ *  entry once. Nothing runs for any other start. */
+export const POSIX_SAVED_RESTORE_INSTALL = `if [ -n "\${__orca_sr_entry:-}" ] && [ -r "\${__orca_sr_script:-}.sh" ]; then
+  . "\${__orca_sr_script}.sh"
+fi
+builtin unset __orca_sr_entry __orca_sr_script`
 
-const POSIX_CHECK = `"$${SAVED_RESTORE_CHECK_ENV}" ${SAVED_RESTORE_CHECK_COMMAND.join(' ')}`
+/** fish -C initialization (root shell argv only), after Orca's agent functions. */
+export const FISH_SAVED_RESTORE_INSTALL = `if set -q ${SAVED_RESTORE_ENTRY_ENV}
+  set -g __orca_sr_entry $${SAVED_RESTORE_ENTRY_ENV}
+  set -l __orca_sr_script $${SAVED_RESTORE_SCRIPT_ENV}
+  set -e ${SAVED_RESTORE_ENTRY_ENV}
+  set -e ${SAVED_RESTORE_SCRIPT_ENV}
+  test -r "$__orca_sr_script.fish"; and source "$__orca_sr_script.fish"
+  set -e __orca_sr_entry
+end`
 
-/** bash/zsh: shared by Orca's agent functions; each agent's text defines them, so any one works alone. The check runs in the env the agent is about to get;
- *  exit ${SAVED_RESTORE_FRESH_EXIT_CODE} alone means start fresh. Any other outcome runs the original arguments. */
-export function getPosixSavedRestoreFunctions(): string {
-  return `__orca_saved_restore_check() {
-  [ -n "\${2:-}" ] && [ -n "\${${SAVED_RESTORE_FRESH_ARGS_ENV}+x}" ] && [ -x "\${${SAVED_RESTORE_CHECK_ENV}:-}" ] || return 1
-  local __orca_restore_agent="$1" __orca_restore_proof="$2"
-  shift 2
-  printf '%s\\0' "$@" | ${POSIX_CHECK} --agent "$__orca_restore_agent" --token "$__orca_restore_proof" >/dev/null 2>&1
-  [ $? -eq ${SAVED_RESTORE_FRESH_EXIT_CODE} ]
-}
-__orca_saved_restore_dispatched() {
-  ( ${POSIX_CHECK} --phase dispatched --token "$1" </dev/null >/dev/null 2>&1 & )
-}
-__orca_saved_restore_exec() {
-  local __orca_restore_agent="$1" __orca_restore_proof="$2"
-  shift 2
-  ${posixSavedRestoreFreshArgs('"$__orca_restore_agent"', '__orca_restore_proof')}
-  command "$__orca_restore_agent" "$@"
-}
-`
-}
-
-/** bash/zsh: replaces the function's arguments with main's fresh tail only on a fresh answer. */
-export function posixSavedRestoreFreshArgs(agent: string, proofVariable: string): string {
-  return `if __orca_saved_restore_check ${agent} "$${proofVariable}" "$@"; then
-    eval "set -- $${SAVED_RESTORE_FRESH_ARGS_ENV}"
-    __orca_saved_restore_dispatched "$${proofVariable}"
-  fi`
-}
-
-/** bash/zsh: the first lines of an Orca agent function; the proof never reaches the agent. */
-export function posixSavedRestoreProofLines(variable: string): string {
-  return `local ${variable}="\${${SAVED_RESTORE_PROOF_ENV}:-}"
-    unset ${SAVED_RESTORE_PROOF_ENV}`
-}
-
-/** fish: the proof read at the top of a function. */
-export function fishSavedRestoreProofLines(): string {
-  return `set -l __orca_restore_proof "$${SAVED_RESTORE_PROOF_ENV}"
-    set -e ${SAVED_RESTORE_PROOF_ENV}`
-}
-
-/** fish: the check, run under `envPrefix` (an `env ...` prefix) when the agent gets a changed env. */
-export function fishSavedRestoreCheck(agent: string, envPrefix = ''): string {
-  return `if test -n "$__orca_restore_proof"; and test -x "$${SAVED_RESTORE_CHECK_ENV}"; and set -q ${SAVED_RESTORE_FRESH_ARGS_ENV}
-      printf '%s\\0' $argv | ${envPrefix || 'command '}"$${SAVED_RESTORE_CHECK_ENV}" ${SAVED_RESTORE_CHECK_COMMAND.join(' ')} --agent ${agent} --token "$__orca_restore_proof" >/dev/null 2>/dev/null
-      if test $status -eq ${SAVED_RESTORE_FRESH_EXIT_CODE}
-        eval set argv $${SAVED_RESTORE_FRESH_ARGS_ENV}
-        command sh -c '"$0" ${SAVED_RESTORE_CHECK_COMMAND.join(' ')} --phase dispatched --token "$1" </dev/null >/dev/null 2>&1 &' "$${SAVED_RESTORE_CHECK_ENV}" "$__orca_restore_proof"
-      end
-    end`
-}
-
-/** PowerShell: consumes the proof and returns @{ args = <fresh args> } only when Orca's check says
- *  start fresh. Kept compact: the whole bootstrap shares one encoded command line. */
-export function getPowerShellSavedRestoreFunctions(): string {
-  return `function Global:__OrcaSavedRestoreFresh($n, $a) {
-    $p = $global:${POWERSHELL_PROOF_VARIABLE}; Remove-Variable -Scope Global ${POWERSHELL_PROOF_VARIABLE} -ea 0
-    $c = $env:${SAVED_RESTORE_CHECK_ENV}
-    if (-not $p -or -not $c -or $null -eq $env:${SAVED_RESTORE_FRESH_ARGS_ENV}) { return }
-    try {
-        (@($a | % { "$_" + [char]0 }) -join '') | & $c ${SAVED_RESTORE_CHECK_COMMAND.join(' ')} --agent $n --token $p *> $null
-        if ($LASTEXITCODE -ne ${SAVED_RESTORE_FRESH_EXIT_CODE}) { return }
-        $f = @{ args = @($env:${SAVED_RESTORE_FRESH_ARGS_ENV} | ConvertFrom-Json) }
-        $s = New-Object Diagnostics.ProcessStartInfo $c, "${SAVED_RESTORE_CHECK_COMMAND.join(' ')} --phase dispatched --token $p"
-        $s.UseShellExecute = $false; $s.CreateNoWindow = $true; $null = [Diagnostics.Process]::Start($s)
-        $f
-    } catch {}
-}`
-}
-
-/** PowerShell: an agent function's check, where its arguments and env are final. `agent` is a
- *  PowerShell expression naming the agent. */
-export function powerShellSavedRestoreCheck(agent: string): string {
-  return `if ($global:${POWERSHELL_PROOF_VARIABLE}) { $orcaFresh = __OrcaSavedRestoreFresh ${agent} $args; if ($orcaFresh) { $args = $orcaFresh.args } }`
-}
+/** PowerShell bootstrap, after Orca's agent wrappers under the FullLanguage guard. Kept to one
+ *  short line: every PowerShell start carries it in its encoded command. */
+export const POWERSHELL_SAVED_RESTORE_INSTALL = `if ($env:${SAVED_RESTORE_ENTRY_ENV}) { $orcaSrEntry = $env:${SAVED_RESTORE_ENTRY_ENV}; $orcaSrScript = "$env:${SAVED_RESTORE_SCRIPT_ENV}.ps1"; Remove-Item Env:${SAVED_RESTORE_ENTRY_ENV}, Env:${SAVED_RESTORE_SCRIPT_ENV} -ea 0; try { . ([scriptblock]::Create([IO.File]::ReadAllText($orcaSrScript))) } catch {}; Remove-Variable orcaSrEntry, orcaSrScript -ea 0 }`

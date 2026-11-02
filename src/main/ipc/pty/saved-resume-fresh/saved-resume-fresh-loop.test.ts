@@ -45,6 +45,9 @@ vi.mock('../../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ isPackaged: () => true, getPath: () => '/user-data' }),
   hasAppEnvironment: () => true
 }))
+vi.mock('./saved-restore-script-files', () => ({
+  ensureSavedRestoreScripts: () => '/scripts/restore'
+}))
 vi.mock('../runtime/spawn-preflight', () => ({ prepareRuntimePtySpawn: vi.fn(async () => null) }))
 // Host env routing settled on this Codex home; everything after it is the real spawn and commit.
 vi.mock('../runtime/spawn-options', () => ({
@@ -127,7 +130,13 @@ function savedRestore(id: string) {
       cols: 80,
       rows: 24,
       command,
-      env: { HOME: home, SHELL: '/bin/zsh', CODEX_HOME: codexHome, ORCA_CODEX_HOME: codexHome },
+      env: {
+        HOME: home,
+        SHELL: '/bin/zsh',
+        CODEX_HOME: codexHome,
+        ORCA_CODEX_HOME: codexHome,
+        ORCA_PANE_KEY: PANE
+      },
       envToDelete: []
     },
     cwd: home,
@@ -160,6 +169,12 @@ function savedRestore(id: string) {
     forgetRefusedSavedResume: vi.fn(async () => {}),
     publishTerminalSavedRestoreFresh: vi.fn()
   }
+  /** What the check reports from its own env: the installed entry and this pane, no launch token. */
+  const caller = () => ({
+    entry: state.spawnOptions.env?.ORCA_SAVED_RESTORE_ENTRY ?? '',
+    paneKey: PANE,
+    launchToken: null
+  })
   return {
     state,
     runtime,
@@ -186,6 +201,7 @@ function savedRestore(id: string) {
     /** Codex's function at its call-through, in the pane's own env. */
     check: (args = ['resume', id]) =>
       decideSavedRestore({
+        ...caller(),
         token: state.savedRestoreProof ?? '',
         agent: 'codex',
         args,
@@ -196,6 +212,7 @@ function savedRestore(id: string) {
     dispatched: () =>
       completeSavedRestoreFresh(
         state.savedRestoreProof ?? '',
+        caller(),
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only these members.
         runtime as never
       )
@@ -211,7 +228,7 @@ async function hook(event: string, id: string): Promise<void> {
   expect(response.status).toBe(204)
 }
 
-const ARMED = /^ORCA_SAVED_RESTORE_PROOF=[0-9a-f]{32} codex 'resume' '/
+const ARMED = /^codex 'resume' '[^']+' # __orca_saved_restore:[0-9a-f]{16}:[0-9a-f]{32}$/
 
 describe('a saved pane whose conversation its agent no longer has', () => {
   it('resumes once, starts fresh on the next restart, then follows the new conversation', async () => {
@@ -361,9 +378,13 @@ describe('a saved pane whose conversation its agent no longer has', () => {
       await restore()
       const armed = spawn.mock.calls[1]?.[0]
       expect(armed?.command).toMatch(ARMED)
-      const token = armed?.command?.match(/PROOF=([0-9a-f]{32})/)?.[1] ?? ''
+      const [, entry = '', token = ''] =
+        armed?.command?.match(/:([0-9a-f]{16}):([0-9a-f]{32})$/) ?? []
       await expect(
         decideSavedRestore({
+          entry,
+          paneKey: PANE,
+          launchToken: null,
           token,
           agent: 'codex',
           args: ['resume', OLD],

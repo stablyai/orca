@@ -1,12 +1,4 @@
 import {
-  fishSavedRestoreCheck,
-  fishSavedRestoreProofLines,
-  getPosixSavedRestoreFunctions,
-  posixSavedRestoreFreshArgs,
-  posixSavedRestoreProofLines,
-  powerShellSavedRestoreCheck
-} from './saved-restore-dispatch'
-import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV
 } from './remote-viewer-clipboard-env'
@@ -31,28 +23,20 @@ export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
 const identitySetArg = (key: string, value: string): string =>
   `shell_environment_policy.set.${key}='${value}'`
 
-export function getPosixCodexShellLaunchPreflight(): string {
-  return `${getPosixSavedRestoreFunctions()}# Why: a typed alias expands inside the shell, after pane launch prep.
-# Why unalias inside the substitution: an alias named codex makes command -v
-# report the alias text, and the subshell leaves the user's own alias intact.
-# Why || : twice — zsh alone aborts inside the substitution, but every shell's
-# assignment adopts its exit status, so an absent codex trips set -e in bash too.
-__orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
-  # Why the function reserved word: it suppresses alias expansion of the name,
-  # which otherwise rewrites this header at parse time and aborts the whole file.
-  function codex {
+/** The variant hooks let a saved restore reuse this exact body: same order, plus its check. */
+export type AgentFunctionVariant = { name: string; prologue: string; check: string }
+const PUBLIC_CODEX: AgentFunctionVariant = { name: 'codex', prologue: '', check: '' }
+
+export function posixCodexFunction(v: AgentFunctionVariant): string {
+  return `  function ${v.name} {
     # Why local: zsh's warn_create_global warns for each global a function creates.
-    local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
-    ${posixSavedRestoreProofLines('__orca_codex_proof')}
+    local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"${v.prologue}
     if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
       local -x SSH_CONNECTION='${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
     fi
     if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
-    fi
-    # Why here: a fresh tail still gets the pane identity and --no-daemon handling below.
-    ${posixSavedRestoreFreshArgs('codex', '__orca_codex_proof')}
+    fi${v.check}
     for __orca_codex_arg in "$@"; do
       case "$__orca_codex_arg" in
         --no-daemon) __orca_codex_isolate=0 ;;
@@ -67,24 +51,30 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\
       case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
     fi
     command codex "$@"
-  }
+  }`
+}
+
+export function getPosixCodexShellLaunchPreflight(): string {
+  return `# Why: a typed alias expands inside the shell, after pane launch prep.
+# Why unalias inside the substitution: an alias named codex makes command -v
+# report the alias text, and the subshell leaves the user's own alias intact.
+# Why || : twice — zsh alone aborts inside the substitution, but every shell's
+# assignment adopts its exit status, so an absent codex trips set -e in bash too.
+__orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
+if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+  # Why the function reserved word: it suppresses alias expansion of the name,
+  # which otherwise rewrites this header at parse time and aborts the whole file.
+${posixCodexFunction(PUBLIC_CODEX)}
 fi
 unset __orca_codex_binary
 `
 }
 
-export function getFishCodexShellLaunchPreflight(): string {
-  return `# Why captured: an unquoted (type -t codex) expands to zero words when codex is
-# absent, leaving "test = file" — fish then errors instead of failing closed.
-# Quoting in place is not the fix; fish never substitutes inside double quotes.
-set -l __orca_codex_type (type -t codex 2>/dev/null)
-if test "$__orca_codex_type" = file
-  function codex
-    ${fishSavedRestoreProofLines()}
+export function fishCodexFunction(v: AgentFunctionVariant): string {
+  return `  function ${v.name}${v.prologue}
     if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
       command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
-    end
-    ${fishSavedRestoreCheck('codex')}
+    end${v.check}
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_SHARED_SERVER_ARG_PATTERN}' $argv
 ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not string match -q -- "*'*" "$${key}"; and set argv -c "${identitySetArg(key, `$${key}`)}" $argv`).join('\n')}
     end
@@ -97,17 +87,22 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
     else
       command codex $argv
     end
-  end
+  end`
+}
+
+export function getFishCodexShellLaunchPreflight(): string {
+  return `# Why captured: an unquoted (type -t codex) expands to zero words when codex is
+# absent, leaving "test = file" — fish then errors instead of failing closed.
+# Quoting in place is not the fix; fish never substitutes inside double quotes.
+set -l __orca_codex_type (type -t codex 2>/dev/null)
+if test "$__orca_codex_type" = file
+${fishCodexFunction(PUBLIC_CODEX)}
 end
 set -e __orca_codex_type`
 }
 
-// Keep the identity loop compact to share PowerShell’s command-line budget with startup commands.
-export function getPowerShellCodexShellLaunchPreflight(): string {
-  return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($orcaCodexCommand -and
-    $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
-    function Global:codex {
+export function powerShellCodexFunction(v: AgentFunctionVariant): string {
+  return `    function Global:${v.name} {${v.prologue}
         $orcaCodexExecutable = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $orcaCodexExecutable) {
             Write-Error "codex executable not found"
@@ -121,8 +116,7 @@ if ($orcaCodexCommand -and
                 & $env:ORCA_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null
             } catch {
             }
-        }
-        ${powerShellSavedRestoreCheck("'codex'")}
+        }${v.check}
         if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}')) {
             try {
                 if ((& $orcaCodexExecutable.Source --help 2>$null) -match '--no-daemon') {
@@ -149,7 +143,15 @@ if ($orcaCodexCommand -and
             if ($orcaCodexRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }
         }
         $global:LASTEXITCODE = $LASTEXITCODE
-    }
+    }`
+}
+
+// Keep the identity loop compact to share PowerShell’s command-line budget with startup commands.
+export function getPowerShellCodexShellLaunchPreflight(): string {
+  return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($orcaCodexCommand -and
+    $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
+${powerShellCodexFunction(PUBLIC_CODEX)}
 }
 Remove-Variable orcaCodexCommand -ErrorAction SilentlyContinue`
 }

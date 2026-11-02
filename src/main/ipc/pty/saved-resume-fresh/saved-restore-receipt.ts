@@ -28,8 +28,15 @@ export type SavedRestoreLaunch = {
   launchToken: string | undefined
 }
 
+/** Who may present a receipt: the root shell's one-shot entry, in this pane and launch. */
+type Caller = { entry: string; paneKey: string | null; launchToken: string | null }
+
 type Receipt = {
+  entry: string
   paneKey: string
+  /** The spawn env's pane key and renderer launch token, which the check reports from its own env. */
+  paneEnvKey: string
+  launchEnvToken: string | null
   agent: TuiAgent
   providerSession: AgentProviderSessionMetadata
   resumeArgs: string[]
@@ -135,7 +142,7 @@ function beforeDeadline<T>(promise: Promise<T>, deadline: number, fallback: T): 
   ])
 }
 
-export type SavedRestoreCheck = {
+export type SavedRestoreCheck = Caller & {
   token: string
   agent: string
   args: string[]
@@ -162,8 +169,17 @@ export async function decideSavedRestore(check: SavedRestoreCheck): Promise<'fre
   }
 }
 
+function isCaller(receipt: Receipt, caller: Caller): boolean {
+  return (
+    caller.entry === receipt.entry &&
+    caller.paneKey === receipt.paneEnvKey &&
+    caller.launchToken === receipt.launchEnvToken
+  )
+}
+
 async function decide(receipt: Receipt, check: SavedRestoreCheck): Promise<'fresh' | 'resume'> {
   if (
+    !isCaller(receipt, check) ||
     receipt.agent !== check.agent ||
     receipt.resumeArgs.length !== check.args.length ||
     receipt.resumeArgs.some((arg, index) => arg !== check.args[index])
@@ -218,10 +234,14 @@ async function decide(receipt: Receipt, check: SavedRestoreCheck): Promise<'fres
 
 /** The generated line committed to its fresh arguments: forget the replaced conversation in this
  *  pane, then tell the pane's viewers once. A lost answer never gets here, so it changes nothing. */
-export function completeSavedRestoreFresh(token: string, runtime: OrcaRuntimeService): void {
+export function completeSavedRestoreFresh(
+  token: string,
+  caller: Caller,
+  runtime: OrcaRuntimeService
+): void {
   const dispatch = dispatches.get(token)
   dispatches.delete(token)
-  if (!dispatch) {
+  if (!dispatch || !isCaller(dispatch.receipt, caller)) {
     return
   }
   const { receipt, launch, seed, dispatchId } = dispatch

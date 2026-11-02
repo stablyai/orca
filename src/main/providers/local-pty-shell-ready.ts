@@ -1,10 +1,15 @@
-import { getFishAgentShellFunctions } from '../../shared/agent-shell-functions'
+import {
+  FISH_SAVED_RESTORE_INSTALL,
+  renderSavedRestoreStartupCommand
+} from '../../shared/saved-restore-dispatch'
 import { basename, win32 as pathWin32 } from 'node:path'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
+import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getFishClaudeShellFunction } from '../../shared/claude-shell-function'
 import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import { getFishShellReadyInitCommand } from '../shell-templates'
@@ -82,7 +87,12 @@ export function getShellLaunchConfig(
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
         [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(wrapperFeatures),
         ...(startupCommand !== undefined
-          ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand }
+          ? {
+              [POSIX_SHELL_STARTUP_COMMAND_ENV]: renderSavedRestoreStartupCommand(
+                startupCommand,
+                shellPath
+              )
+            }
           : {})
       },
       supportsReadyMarker: features.includes('ready')
@@ -103,7 +113,12 @@ export function getShellLaunchConfig(
       env: {
         [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(wrapperFeatures),
         ...(startupCommand !== undefined
-          ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand }
+          ? {
+              [POSIX_SHELL_STARTUP_COMMAND_ENV]: renderSavedRestoreStartupCommand(
+                startupCommand,
+                shellPath
+              )
+            }
           : {})
       },
       supportsReadyMarker: features.includes('ready')
@@ -134,10 +149,17 @@ export function getShellLaunchConfig(
           SHELL_READY_MARKER_ESCAPED,
           features.includes('ready'),
           startupCommand !== undefined
-        )}\n${getFishAgentShellFunctions()}`
+        )}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}\n${FISH_SAVED_RESTORE_INSTALL}`
       ],
       env:
-        startupCommand !== undefined ? { [POSIX_SHELL_STARTUP_COMMAND_ENV]: startupCommand } : {},
+        startupCommand !== undefined
+          ? {
+              [POSIX_SHELL_STARTUP_COMMAND_ENV]: renderSavedRestoreStartupCommand(
+                startupCommand,
+                shellPath
+              )
+            }
+          : {},
       supportsReadyMarker: features.includes('ready')
     }
   }

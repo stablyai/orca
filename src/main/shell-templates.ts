@@ -1,3 +1,4 @@
+import { POSIX_SAVED_RESTORE_CAPTURE } from '../shared/saved-restore-dispatch'
 import { SHELL_STARTUP_FEATURE_ENV } from './shell-startup-features'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './pty/posix-shell-startup-command'
 
@@ -15,10 +16,12 @@ builtin unset ${SHELL_STARTUP_FEATURE_ENV}
 # Consume now: user config can drop the deferred hook, leaving exported history state to leak into children.
 builtin typeset -g _orca_histfile="\${ORCA_HISTFILE:-}"
 builtin unset ORCA_HISTFILE
+${POSIX_SAVED_RESTORE_CAPTURE}
 __orca_has_feature() { (( \${_orca_shell_features[(Ie)$1]} )) }`
 
 export const BASH_FEATURE_CHANNEL_BLOCK = `_orca_shell_features=",\${${SHELL_STARTUP_FEATURE_ENV}:-},"
 builtin unset ${SHELL_STARTUP_FEATURE_ENV}
+${POSIX_SAVED_RESTORE_CAPTURE}
 __orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }`
 
 export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `__orca_has_feature identity && printf "\\033]777;orca-shell-start:%s\\007" "$$"`

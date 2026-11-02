@@ -36,13 +36,17 @@ afterEach(() => {
   process.exitCode = undefined
 })
 
-const check = () => main(['agent', 'saved-restore-check', '--agent', 'claude', '--token', TOKEN])
+const ENTRY = '0123456789abcdef'
+const check = () =>
+  main(['agent', 'saved-restore-check', '--agent', 'claude', '--entry', ENTRY, '--token', TOKEN])
 
 it("asks the local runtime with the invocation's own arguments and roots, and exits 75 for fresh", async () => {
   vi.stubEnv('ORCA_SAVED_RESTORE_BUDGET_MS', '4000')
   vi.stubEnv('CLAUDE_CONFIG_DIR', '/profiles/b')
   // A paired environment selected in the pane never redirects this check.
   vi.stubEnv('ORCA_ENVIRONMENT', 'remote-box')
+  vi.stubEnv('ORCA_PANE_KEY', 'tab-1:leaf')
+  vi.stubEnv('ORCA_AGENT_LAUNCH_TOKEN', 'launch-1')
   pipeArgs(['--resume', 'X', "a b'c"])
   client.call.mockResolvedValue({ result: { fresh: true } })
   await check()
@@ -52,6 +56,10 @@ it("asks the local runtime with the invocation's own arguments and roots, and ex
     expect.objectContaining({
       phase: 'check',
       token: TOKEN,
+      // The pane and launch come from this process's own env.
+      entry: ENTRY,
+      paneKey: 'tab-1:leaf',
+      launchToken: 'launch-1',
       agent: 'claude',
       args: ['--resume', 'X', "a b'c"],
       roots: expect.objectContaining({ CLAUDE_CONFIG_DIR: '/profiles/b' })
@@ -81,10 +89,20 @@ it('retries until the runtime listens, and resumes on its refusal or once the bu
 
 it('reports a fresh dispatch without reading arguments or waiting on an answer', async () => {
   client.call.mockRejectedValue(new Error('gone'))
-  await main(['agent', 'saved-restore-check', '--phase', 'dispatched', '--token', TOKEN])
+  vi.stubEnv('ORCA_PANE_KEY', 'tab-1:leaf')
+  await main([
+    'agent',
+    'saved-restore-check',
+    '--phase',
+    'dispatched',
+    '--entry',
+    ENTRY,
+    '--token',
+    TOKEN
+  ])
   expect(client.call).toHaveBeenCalledWith(
     'agentHooks.savedRestore',
-    { phase: 'dispatched', token: TOKEN },
+    { phase: 'dispatched', token: TOKEN, entry: ENTRY, paneKey: 'tab-1:leaf', launchToken: null },
     { timeoutMs: 5_000 }
   )
   expect(process.exitCode).toBeUndefined()

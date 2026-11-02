@@ -8,8 +8,10 @@ import {
 import {
   SAVED_RESTORE_BUDGET_ENV,
   SAVED_RESTORE_CHECK_ENV,
+  SAVED_RESTORE_ENTRY_ENV,
   SAVED_RESTORE_FRESH_ARGS_ENV,
-  withSavedRestoreProof
+  SAVED_RESTORE_SCRIPT_ENV,
+  annotateSavedRestore
 } from '../../../../shared/saved-restore-dispatch'
 import {
   quoteStartupArg,
@@ -26,6 +28,7 @@ import {
   type SavedResumeLaunchFacts
 } from './saved-resume-fresh-launch'
 import { mintSavedRestoreReceipt } from './saved-restore-receipt'
+import { ensureSavedRestoreScripts } from './saved-restore-script-files'
 
 // Agents whose store is chosen by env inside the pane: their own shell function checks it there.
 const IN_PANE_AGENTS = new Set(['codex', 'claude', 'opencode', 'opencode2'])
@@ -73,7 +76,7 @@ function orcaCliLauncher(): string | null {
 
 /** A synthesized saved restore of an agent whose store the pane's env selects keeps its resume
  *  command; the agent's own function asks main, from inside the invocation, whether to run the
- *  prebuilt fresh arguments instead. Only this generated line carries the one-shot proof. */
+ *  prebuilt fresh arguments instead. Only the root shell's one-shot entry can make that ask. */
 export async function armSavedRestoreCheck(
   ctx: PtySpawnOperationState,
   paneKey: string | null,
@@ -95,6 +98,9 @@ export async function armSavedRestoreCheck(
     !isResumableTuiAgent(agent) ||
     !providerSession ||
     !resume ||
+    resume.includes('\n') ||
+    // The check proves its pane from its own env, so the pane must have one to prove.
+    !env.ORCA_PANE_KEY ||
     args.connectionId ||
     ctx.expectedWslDistro !== null ||
     isWslTerminalSpawn(launch.shellOverride, ctx.cwd) ||
@@ -116,19 +122,27 @@ export async function armSavedRestoreCheck(
   const resumeWords = splitAgentCommand(resume, fresh.shell)
   const freshWords = splitAgentCommand(fresh.command, fresh.shell)
   const launcher = orcaCliLauncher()
+  const script = launcher ? ensureSavedRestoreScripts() : null
   if (
+    !script ||
     !launcher ||
     !resumeWords ||
     !freshWords ||
     resumeWords.agent !== agent ||
     freshWords.agent !== agent ||
+    // Why: the restore body runs the agent word itself, so it can't carry leading assignments.
+    resumeWords.lead.some((word) => word !== '&') ||
     resumeWords.lead.join('\0') !== freshWords.lead.join('\0')
   ) {
     return
   }
-  const proof = randomBytes(16).toString('hex')
-  mintSavedRestoreReceipt(proof, {
+  const entry = randomBytes(8).toString('hex')
+  const token = randomBytes(16).toString('hex')
+  mintSavedRestoreReceipt(token, {
+    entry,
     paneKey,
+    paneEnvKey: env.ORCA_PANE_KEY,
+    launchEnvToken: env.ORCA_AGENT_LAUNCH_TOKEN ?? null,
     agent,
     providerSession,
     resumeArgs: resumeWords.args,
@@ -136,16 +150,15 @@ export async function armSavedRestoreCheck(
     admission,
     settings: ctx.deps.getSettings?.()
   })
-  ctx.savedRestoreProof = proof
+  ctx.savedRestoreProof = token
   ctx.spawnOptions.env = {
     ...env,
     [SAVED_RESTORE_CHECK_ENV]: launcher,
     [SAVED_RESTORE_FRESH_ARGS_ENV]: freshArgsValue(freshWords.args, fresh.shell),
-    [SAVED_RESTORE_BUDGET_ENV]: String(SAVED_RESTORE_CHECK_BUDGET_MS)
+    [SAVED_RESTORE_BUDGET_ENV]: String(SAVED_RESTORE_CHECK_BUDGET_MS),
+    [SAVED_RESTORE_ENTRY_ENV]: entry,
+    [SAVED_RESTORE_SCRIPT_ENV]: script
   }
-  ctx.spawnOptions.command = withSavedRestoreProof(
-    resume,
-    proof,
-    fresh.shell === 'powershell' ? 'powershell' : 'posix'
-  )
+  // The PTY host renders this into the receiving shell's dispatch, or drops it.
+  ctx.spawnOptions.command = annotateSavedRestore(resume, entry, token)
 }

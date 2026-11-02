@@ -1,3 +1,4 @@
+import { renderSavedRestoreStartupCommand } from '../../shared/saved-restore-dispatch'
 import { createGitBashConsoleCapacityDetector } from '../../shared/git-bash-console-capacity'
 import { withInitialOutputDiagnostic } from '../../shared/terminal-start-failure'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
@@ -185,7 +186,8 @@ export function activateLocalPtySession(args: {
 
   const startupCommandDeliveredByWrapper =
     spawn.command !== undefined &&
-    plan.shellReadyLaunch?.env[POSIX_SHELL_STARTUP_COMMAND_ENV] === spawn.command
+    plan.shellReadyLaunch?.env[POSIX_SHELL_STARTUP_COMMAND_ENV] ===
+      renderSavedRestoreStartupCommand(spawn.command, plan.shellPath)
   if (
     !exitedBeforeSpawnReply &&
     spawn.command &&

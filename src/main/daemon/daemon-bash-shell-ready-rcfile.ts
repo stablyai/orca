@@ -1,7 +1,9 @@
-import { getPosixAgentShellFunctions } from '../../shared/agent-shell-functions'
+import { POSIX_SAVED_RESTORE_INSTALL } from '../../shared/saved-restore-dispatch'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-account-shell'
+import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
 
@@ -46,7 +48,8 @@ ${MANAGED_DATA_ACCOUNT_POSIX_RESTORE}
 ${getPosixOmpShellWrapper()}
 # Preserve the managed CODEX_HOME after user profiles.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
-${getPosixAgentShellFunctions()}
+${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
+${POSIX_SAVED_RESTORE_INSTALL}
 # OSC 133 C/D clears stale agent status when a CLI exits without a stop hook.
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {

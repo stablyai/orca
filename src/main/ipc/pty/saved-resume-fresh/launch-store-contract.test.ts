@@ -12,12 +12,19 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getPosixAgentShellFunctions } from '../../../../shared/agent-shell-functions'
+import { getPosixClaudeShellFunction } from '../../../../shared/claude-shell-function'
+import { getPosixCodexShellLaunchPreflight } from '../../../../shared/codex-shell-function'
+import { getPosixSavedRestoreScript } from '../../../../shared/saved-restore-scripts'
 import {
   SAVED_RESTORE_CHECK_ENV,
   SAVED_RESTORE_FRESH_ARGS_ENV,
+  SAVED_RESTORE_ENTRY_ENV,
   SAVED_RESTORE_ROOT_KEYS,
-  withSavedRestoreProof
+  SAVED_RESTORE_SCRIPT_ENV,
+  annotateSavedRestore,
+  POSIX_SAVED_RESTORE_CAPTURE,
+  POSIX_SAVED_RESTORE_INSTALL,
+  renderSavedRestoreStartupCommand
 } from '../../../../shared/saved-restore-dispatch'
 import { encodeClaudeProjectPath } from '../../../ai-vault/claude-project-dir-encoding'
 import { stripInheritedOrcaCodexHomeOverride } from '../host-env/codex-home'
@@ -38,7 +45,23 @@ import type { SavedRestoreRoots } from './store-query'
 // read found there, or unknown (resume) where no check ran; never missing.
 const BASH = '/bin/bash'
 const ID = '21f5e73a-4a3a-42ac-bd73-bc8d88256d65'
-const PROOF = '0123456789abcdef0123456789abcdef'
+const ENTRY = '0123456789abcdef'
+const TOKEN = '0123456789abcdef0123456789abcdef'
+
+/** The root bash shell's order: capture, the user's profile, Orca's functions and installer, then
+ *  the generated line for `command`. */
+function rootShell(root: string, command: string, profile = ''): string[] {
+  writeFileSync(join(root, 'restore.sh'), getPosixSavedRestoreScript())
+  return [
+    `${SAVED_RESTORE_ENTRY_ENV}=${ENTRY}`,
+    `${SAVED_RESTORE_SCRIPT_ENV}=${join(root, 'restore')}`,
+    BASH,
+    '--norc',
+    '--noprofile',
+    '-c',
+    `${POSIX_SAVED_RESTORE_CAPTURE}\n${profile}\n${getPosixCodexShellLaunchPreflight()}${getPosixClaudeShellFunction()}${POSIX_SAVED_RESTORE_INSTALL}\n${renderSavedRestoreStartupCommand(annotateSavedRestore(command, ENTRY, TOKEN), BASH)}`
+  ]
+}
 const roots: string[] = []
 afterEach(() => {
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
@@ -94,11 +117,7 @@ function claudeFixture() {
         `${SAVED_RESTORE_CHECK_ENV}=${gate.path}`,
         `${SAVED_RESTORE_FRESH_ARGS_ENV}=`,
         ...env,
-        BASH,
-        '--norc',
-        '--noprofile',
-        '-c',
-        `[ -f "$HOME/.bash_profile" ] && . "$HOME/.bash_profile"\n${getPosixAgentShellFunctions()}\n${withSavedRestoreProof(command, PROOF, 'posix')}`
+        ...rootShell(root, command, '[ -f "$HOME/.bash_profile" ] && . "$HOME/.bash_profile"')
       ],
       { encoding: 'utf8', cwd }
     )
@@ -199,11 +218,7 @@ describe('the Codex store a non-daemon restore checks against the one its child 
         `${SAVED_RESTORE_CHECK_ENV}=${gate.path}`,
         `${SAVED_RESTORE_FRESH_ARGS_ENV}=`,
         ...Object.entries(childEnv).map(([key, value]) => `${key}=${value}`),
-        BASH,
-        '--norc',
-        '--noprofile',
-        '-c',
-        `${getPosixAgentShellFunctions()}\n${withSavedRestoreProof(`codex 'resume' '${CODEX_ID}'`, PROOF, 'posix')}`
+        ...rootShell(root, `codex 'resume' '${CODEX_ID}'`)
       ],
       { encoding: 'utf8', cwd: root }
     )

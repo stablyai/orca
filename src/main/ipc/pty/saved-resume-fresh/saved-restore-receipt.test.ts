@@ -30,11 +30,16 @@ const SEED = { paneKey: 'tab-1:leaf', receivedAt: 10, stateStartedAt: 10 }
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the receipt compares only ptyId and generation.
 const OWNER = { ptyId: 'pty-1', generation: 'g3' } as AgentSessionOwnerBinding
 let next = 0
+type Caller = { entry: string; paneKey: string | null; launchToken: string | null }
+const CALLER: Caller = { entry: '0123456789abcdef', paneKey: 'tab-1:leaf', launchToken: 'launch-1' }
 
 function armed({ owner }: { owner?: AgentSessionOwnerBinding } = { owner: OWNER }) {
   const token = (next += 1).toString(16).padStart(32, '0')
   mintSavedRestoreReceipt(token, {
+    entry: CALLER.entry,
     paneKey: 'tab-1:leaf',
+    paneEnvKey: 'tab-1:leaf',
+    launchEnvToken: CALLER.launchToken,
     agent: 'claude',
     providerSession: { key: 'session_id', id: 'X' },
     resumeArgs: ['--resume', 'X'],
@@ -52,8 +57,9 @@ function armed({ owner }: { owner?: AgentSessionOwnerBinding } = { owner: OWNER 
       owner,
       launchToken: 'launch-1'
     })
-  const check = (args = ['--resume', 'X'], remainingMs = 4_000) =>
+  const check = (args = ['--resume', 'X'], remainingMs = 4_000, caller: Caller = CALLER) =>
     decideSavedRestore({
+      ...caller,
       token,
       agent: 'claude',
       args,
@@ -67,7 +73,8 @@ function armed({ owner }: { owner?: AgentSessionOwnerBinding } = { owner: OWNER 
     publishTerminalSavedRestoreFresh: vi.fn()
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: completion reads only these members.
-  const dispatched = () => completeSavedRestoreFresh(token, runtime as never)
+  const dispatched = (caller: Caller = CALLER) =>
+    completeSavedRestoreFresh(token, caller, runtime as never)
   return { launch, check, dispatched, runtime }
 }
 
@@ -131,6 +138,31 @@ describe("main's one decision for a generated restore line", () => {
     restore = armed()
     await expect(restore.check(undefined, 400)).resolves.toBe('resume')
     expect(seam.probe).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['another pane replaying this line', { paneKey: 'tab-2:leaf' }],
+    ['another launch in this pane', { launchToken: 'launch-2' }],
+    ['a launch the renderer never named', { launchToken: null }],
+    ['another root shell', { entry: 'fedcba9876543210' }]
+  ])('resumes, and forgets nothing, for %s', async (_label, foreign) => {
+    const restore = armed()
+    restore.launch()
+    await expect(restore.check(undefined, undefined, { ...CALLER, ...foreign })).resolves.toBe(
+      'resume'
+    )
+    expect(seam.probe).not.toHaveBeenCalled()
+    expect(seam.release).not.toHaveBeenCalled()
+  })
+
+  it('accepts the dispatch report only from the shell it answered', async () => {
+    const restore = armed()
+    restore.launch()
+    await expect(restore.check()).resolves.toBe('fresh')
+    restore.dispatched({ ...CALLER, paneKey: 'tab-2:leaf' })
+    restore.dispatched()
+    expect(seam.forget).not.toHaveBeenCalled()
+    expect(restore.runtime.publishTerminalSavedRestoreFresh).not.toHaveBeenCalled()
   })
 
   it('keeps the conversation for an explicit open that adopted the owner while the check ran', async () => {

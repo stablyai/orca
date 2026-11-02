@@ -41,7 +41,7 @@ export const AGENT_HOOK_METHODS = [
         throw new Error('Saved restore checks are only available to the local Orca CLI.')
       }
       if (params.phase === 'dispatched') {
-        completeSavedRestoreFresh(params.token, runtime)
+        completeSavedRestoreFresh(params.token, params, runtime)
         return { fresh: false }
       }
       return { fresh: (await decideSavedRestore(params)) === 'fresh' }

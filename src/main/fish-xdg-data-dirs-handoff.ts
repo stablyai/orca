@@ -1,5 +1,6 @@
 /** Use vendor_conf.d to restore XDG_DATA_DIRS and defer agent hooks until after user config. */
-import { getFishAgentShellFunctions } from '../shared/agent-shell-functions'
+import { getFishCodexShellLaunchPreflight } from '../shared/codex-shell-function'
+import { getFishClaudeShellFunction } from '../shared/claude-shell-function'
 import { MANAGED_DATA_ACCOUNT_FISH_RESTORE } from '../shared/managed-data-account-shell'
 import type { ShellWrapperFile } from './shell-wrapper-file-writer'
 
@@ -64,7 +65,7 @@ function __orca_fish_xdg_handoff
     function __orca_define_codex --on-event fish_prompt
         functions -e __orca_define_codex
 ${MANAGED_DATA_ACCOUNT_FISH_RESTORE}
-${getFishAgentShellFunctions()}
+${getFishCodexShellLaunchPreflight()}${getFishClaudeShellFunction()}
     end
 end
 __orca_fish_xdg_handoff

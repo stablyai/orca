@@ -33,7 +33,8 @@ export const AGENT_HOOK_COMMAND_SPECS: CommandSpec[] = [
     path: ['agent', 'saved-restore-check'],
     summary:
       "Used by Orca's agent functions: check a restored pane's conversation before it starts",
-    usage: 'orca agent saved-restore-check --token <token> [--agent <agent>] [--phase dispatched]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'token', 'agent', 'phase']
+    usage:
+      'orca agent saved-restore-check --entry <entry> --token <token> [--agent <agent>] [--phase dispatched]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'entry', 'token', 'agent', 'phase']
   }
 ]

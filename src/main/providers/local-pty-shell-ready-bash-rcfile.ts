@@ -1,10 +1,12 @@
+import { POSIX_SAVED_RESTORE_INSTALL } from '../../shared/saved-restore-dispatch'
 /** Bash has one --rcfile wrapper, so login startup, OSC hooks and readiness share this file. */
-import { getPosixAgentShellFunctions } from '../../shared/agent-shell-functions'
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../shared/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../shared/managed-data-account-shell'
 import { WSL_MANAGED_CLI_PATH_RESTORE } from '../wsl-managed-cli-path-restore'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
+import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
 import { getBashStartupCommandPromptBlock } from '../pty/posix-shell-startup-command'
 import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
@@ -47,7 +49,8 @@ ${MANAGED_DATA_ACCOUNT_POSIX_RESTORE}
 ${getPosixOmpShellWrapper()}
 # Profile scripts must not replace Orca's runtime CODEX_HOME.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
-${getPosixAgentShellFunctions()}
+${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
+${POSIX_SAVED_RESTORE_INSTALL}
 ${BASH_WSL_CWD_REPORT_BLOCK}
 # OSC 133 C/D clears agent status after interrupted CLIs exit without sending Stop/SessionEnd hooks.
 __orca_initializing_wrapper=1

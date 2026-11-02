@@ -1,3 +1,4 @@
+import { renderSavedRestoreStartupCommand } from '../../shared/saved-restore-dispatch'
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
@@ -137,6 +138,8 @@ export function resolveWindowsShellLaunchArgs(
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = normalizeWindowsTerminalCwd(cwd)
+  // A saved restore's line becomes this shell's dispatch, or its original command.
+  startupCommand = startupCommand && renderSavedRestoreStartupCommand(startupCommand, shellPath)
 
   if (shellBasename === 'cmd.exe') {
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)

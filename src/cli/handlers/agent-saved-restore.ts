@@ -34,14 +34,21 @@ export const AGENT_SAVED_RESTORE_HANDLERS: Record<string, CommandHandler> = {
   'agent saved-restore-check': async ({ client, flags }) => {
     const startedAt = Date.now() - process.uptime() * 1000
     const token = flags.get('token')
-    if (typeof token !== 'string') {
+    const entry = flags.get('entry')
+    if (typeof token !== 'string' || typeof entry !== 'string') {
       return
+    }
+    // The pane and launch come from this process's own env, never from the recalled line.
+    const caller = {
+      entry,
+      paneKey: process.env.ORCA_PANE_KEY ?? null,
+      launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN ?? null
     }
     if (flags.get('phase') === 'dispatched') {
       await client
         .call(
           'agentHooks.savedRestore',
-          { phase: 'dispatched', token },
+          { phase: 'dispatched', token, ...caller },
           { timeoutMs: DISPATCHED_TIMEOUT_MS }
         )
         .catch(() => {})
@@ -68,6 +75,7 @@ export const AGENT_SAVED_RESTORE_HANDLERS: Record<string, CommandHandler> = {
           {
             phase: 'check',
             token,
+            ...caller,
             agent,
             args,
             roots,

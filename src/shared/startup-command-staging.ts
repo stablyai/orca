@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hasControlByte, TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from './startup-line-prompt-carry'
 import { quoteStartupArg } from './tui-agent-startup-shell'
+import { renderSavedRestoreStartupCommand } from './saved-restore-dispatch'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 
@@ -84,6 +85,8 @@ export function stageStartupCommand(args: {
   directory?: string
 }): StartupCommandStaging {
   const platform = args.platform ?? process.platform
+  // A saved restore's line becomes the receiving shell's dispatch, or its original command.
+  args = { ...args, command: renderSavedRestoreStartupCommand(args.command, args.shellPath) }
   if (!shouldStageStartupCommand({ ...args, platform })) {
     return { command: args.command, delivery: 'typed' }
   }

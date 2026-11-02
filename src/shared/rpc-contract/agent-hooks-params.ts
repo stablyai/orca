@@ -15,6 +15,12 @@ export const PrepareCodexForWslPaneParams = z
 
 const savedRestoreToken = z.string().regex(/^[0-9a-f]{32}$/)
 const savedRestorePath = z.string().max(4_096)
+// The caller: its root shell's one-shot entry, and the pane and launch its own env names.
+const savedRestoreCaller = {
+  entry: z.string().regex(/^[0-9a-f]{16}$/),
+  paneKey: z.string().max(512).nullable(),
+  launchToken: z.string().max(128).nullable()
+}
 
 /** An Orca agent function's in-pane restore check, then its report that it ran the fresh answer. */
 export const SavedRestoreCheckParams = z.discriminatedUnion('phase', [
@@ -22,6 +28,7 @@ export const SavedRestoreCheckParams = z.discriminatedUnion('phase', [
     .object({
       phase: z.literal('check'),
       token: savedRestoreToken,
+      ...savedRestoreCaller,
       agent: z.string().max(64),
       args: z.array(z.string().max(32_768)).max(512),
       roots: z
@@ -39,5 +46,7 @@ export const SavedRestoreCheckParams = z.discriminatedUnion('phase', [
       remainingMs: z.number().int().min(0).max(60_000)
     })
     .strict(),
-  z.object({ phase: z.literal('dispatched'), token: savedRestoreToken }).strict()
+  z
+    .object({ phase: z.literal('dispatched'), token: savedRestoreToken, ...savedRestoreCaller })
+    .strict()
 ])

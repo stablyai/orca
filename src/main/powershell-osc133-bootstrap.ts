@@ -1,3 +1,4 @@
+import { POWERSHELL_SAVED_RESTORE_INSTALL } from '../shared/saved-restore-dispatch'
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../shared/managed-data-account-shell'
 import { getPowerShellAgentWrappers } from '../shared/powershell-agent-wrappers'
@@ -28,6 +29,7 @@ if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
 
 ${getPowerShellOmpShellWrapper()}
 ${getPowerShellAgentWrappers()}
+${POWERSHELL_SAVED_RESTORE_INSTALL}
 
     $Global:__OrcaOsc133State = @{
         OriginalPrompt = $function:prompt
