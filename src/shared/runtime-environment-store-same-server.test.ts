@@ -171,12 +171,25 @@ describe('pairing a server that is already saved', () => {
       now: 100
     })
 
-    expect(() =>
+    let refusal: unknown
+    try {
       addOrUpdateEnvironmentFromPairingCode(userDataPath, {
         name: 'Managed box by hand',
         pairingCode: pairingCode('ws://192.0.2.10:6768', 'second-token')
       })
-    ).toThrow('This server is already paired as "Managed box".')
+    } catch (error) {
+      refusal = error
+    }
+    // The English message keeps its wording; the code lets clients translate it.
+    expect(refusal).toMatchObject({
+      message: expect.stringMatching(
+        /^This server is already paired as "Managed box"\. Orca runs this server on an SSH host for you;/
+      ),
+      pairingFailure: {
+        errorCode: 'alreadyPairedManagedDeployment',
+        errorParams: { name: 'Managed box' }
+      }
+    })
     expect(listEnvironments(userDataPath)).toEqual([managed])
   })
 

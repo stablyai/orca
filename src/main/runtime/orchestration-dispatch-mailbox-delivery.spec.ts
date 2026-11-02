@@ -27,7 +27,7 @@ describe('Dispatch mailbox Delivery', () => {
     }
   })
 
-  it('wakes once, replays after restart, and leaves concurrent guidance for the next ack', async () => {
+  it('wakes once and hands newer guidance after restart to the next check without an ack', async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(tmpdir(), 'orca-dispatch-delivery-'))
     temporaryDirectories.push(directory)
@@ -68,7 +68,8 @@ describe('Dispatch mailbox Delivery', () => {
     const issued = await checkBoundMailbox(first.runtime)
     expect(issued).toMatchObject({ dispatchId: dispatch.id, count: 1, replayed: false })
     expect(issued.messages).toEqual([expect.objectContaining({ id: firstMessage.id })])
-    expect(firstDb.getWorkerAttentionFacts(dispatch.id, Date.now()).pendingGuidance).toBe(true)
+    expect(firstDb.getMessageById(firstMessage.id)?.read).toBe(1)
+    expect(firstDb.getWorkerAttentionFacts(dispatch.id, Date.now()).pendingGuidance).toBe(false)
     firstDb.insertMessage({
       from: run.coordinator_handle!,
       to: address,
@@ -81,28 +82,20 @@ describe('Dispatch mailbox Delivery', () => {
     const restarted = createRuntime(restartedDb)
     await driveToLiveIdle(restarted.runtime)
     await vi.advanceTimersByTimeAsync(2_500)
-    // The held batch defers the concurrent mail's nudge, and that nudge names the batch to ack.
-    expect(
-      restarted.write.mock.calls.filter(([, payload]) =>
-        String(payload).includes(`--ack ${issued.deliveryId}`)
-      )
-    ).toHaveLength(1)
     expect(pointerCount(restarted.write)).toBe(1)
+    expect(
+      restarted.write.mock.calls.filter(([, payload]) => String(payload).includes('--ack'))
+    ).toHaveLength(0)
 
-    const replayed = await checkBoundMailbox(restarted.runtime)
-    expect(replayed).toMatchObject({
-      dispatchId: dispatch.id,
-      deliveryId: issued.deliveryId,
-      count: 1,
-      replayed: true
-    })
-    const next = await checkBoundMailbox(restarted.runtime, { ack: replayed.deliveryId! })
+    const next = await checkBoundMailbox(restarted.runtime)
+    expect(next).toMatchObject({ dispatchId: dispatch.id, count: 1, replayed: false })
     expect(next.messages).toEqual([expect.objectContaining({ subject: 'Concurrent follow-up' })])
-    expect(restartedDb.getMessageById(firstMessage.id)?.read).toBe(1)
-    expect(restartedDb.getWorkerAttentionFacts(dispatch.id, Date.now()).pendingGuidance).toBe(true)
-
-    await checkBoundMailbox(restarted.runtime, { ack: next.deliveryId! })
     expect(restartedDb.getWorkerAttentionFacts(dispatch.id, Date.now()).pendingGuidance).toBe(false)
+    // An older CLI's explicit ack of an already handled batch stays a harmless no-op.
+    expect(await checkBoundMailbox(restarted.runtime, { ack: issued.deliveryId! })).toMatchObject({
+      acknowledged: issued.deliveryId,
+      count: 0
+    })
     restartedDb.close()
   })
 
@@ -159,10 +152,6 @@ describe('Dispatch mailbox Delivery', () => {
       )
       const delivery = await checkBoundMailbox(restarted.runtime)
       expect(delivery.messages).toEqual([expect.objectContaining({ id: message.id })])
-      expect(restartedDb.getWorkerAttentionFacts(dispatch.id, Date.now()).pendingGuidance).toBe(
-        true
-      )
-      await checkBoundMailbox(restarted.runtime, { ack: delivery.deliveryId! })
       expect(restartedDb.getWorkerAttentionFacts(dispatch.id, Date.now()).pendingGuidance).toBe(
         false
       )

@@ -4,6 +4,7 @@ import { callRuntimeRpc } from './runtime-rpc-client'
 import { ipcOrRuntimeTargetForHostId } from './runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from './runtime-repo-search-bounds'
+import { REFUSED_WSL_READ_REPOLL_MS, watchRefusedWslRead } from './wsl-refused-read-watch'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
 /** The repo's own host: a server's runtime, or this app (with `hostId`) for local and SSH repos. */
@@ -37,10 +38,10 @@ export async function getRuntimeRepoBaseRefDefault(
   )
 }
 
-/**
- * Loads the repo's default base ref and, when a stopped WSL distro refused it (E9), loads it again
- * once main reports that distro running. Returns a cancel.
- */
+/** How often a refused default is re-asked from a host whose running signal cannot reach us. */
+export const REFUSED_BASE_REF_REPOLL_MS = REFUSED_WSL_READ_REPOLL_MS
+
+/** Loads the repo's default base ref, re-asking once a stopped WSL distro that refused it runs. */
 export function watchRuntimeRepoBaseRefDefault(
   hostId: ExecutionHostId,
   repoId: string,
@@ -49,39 +50,12 @@ export function watchRuntimeRepoBaseRefDefault(
     onError: (error: unknown) => void
   }
 ): () => void {
-  let cancelled = false
-  let stopRetry: (() => void) | null = null
-  const load = (): void => {
-    getRuntimeRepoBaseRefDefault(hostId, repoId).then(
-      (result) => {
-        if (cancelled) {
-          return
-        }
-        handlers.onResult(result)
-        const refused = result.refusedWslDistro?.toLowerCase()
-        const onDistroRunning = window.api.preflight?.onWslDistroRunning
-        if (refused && typeof onDistroRunning === 'function') {
-          stopRetry = onDistroRunning((distro) => {
-            if (distro.toLowerCase() === refused) {
-              stopRetry?.()
-              stopRetry = null
-              load()
-            }
-          })
-        }
-      },
-      (error: unknown) => {
-        if (!cancelled) {
-          handlers.onError(error)
-        }
-      }
-    )
-  }
-  load()
-  return () => {
-    cancelled = true
-    stopRetry?.()
-  }
+  return watchRefusedWslRead({
+    hostId,
+    read: () => getRuntimeRepoBaseRefDefault(hostId, repoId),
+    refusedDistro: (result) => result.refusedWslDistro,
+    ...handlers
+  })
 }
 
 export async function searchRuntimeRepoBaseRefs(

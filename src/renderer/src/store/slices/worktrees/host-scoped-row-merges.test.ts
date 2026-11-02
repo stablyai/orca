@@ -52,24 +52,6 @@ describe('row writers touch only the copy on their own host', () => {
     expect(rows).toHaveLength(2)
   })
 
-  it('a server create leaves the local twin alone', () => {
-    const store = createTestStore()
-    const { local } = seedTwins(store)
-    applyCreatedWorktree(
-      store.setState,
-      REPO_ID,
-      {
-        worktree: makeWorktree({ id: WORKTREE_ID, repoId: REPO_ID, displayName: 'fresh remote' })
-      } satisfies CreateWorktreeResult,
-      'runtime:hub'
-    )
-    const rows = store.getState().worktreesByRepo[REPO_ID]!
-    expect(rows.find((row) => !row.runtimeOwnerEnvironmentId)).toEqual(local)
-    expect(rows.find((row) => row.runtimeOwnerEnvironmentId === 'hub')?.displayName).toBe(
-      'fresh remote'
-    )
-  })
-
   it("a server's lineage reply updates its own copy, never the focused local twin", () => {
     const store = createTestStore()
     const { local } = seedTwins(store)

@@ -215,9 +215,14 @@ async function scanWslHomeDirs(): Promise<{ homes: string[]; confirmed: boolean 
   return readRunningWslHomeDirsUnlessStopped()
 }
 
+/** WSL homes for work that reads inside them: a stopped distro's home is absent, not refused. */
+export async function getAiVaultWslScanHomeDirs(): Promise<string[]> {
+  return (await scanWslHomeDirs()).homes
+}
+
 /**
- * WSL roots for checking a path a user act names (delete, subagents, transcript lookup). Checking
- * reads nothing, so a failed probe must not narrow them: it keeps the last-known-good list.
+ * WSL roots for checking a path a user act names (delete, subagent listing): a containment check
+ * reads nothing, so a failed probe must not narrow them and keeps the last-known-good list.
  */
 export async function getAiVaultWslHomeDirs(): Promise<string[]> {
   if (

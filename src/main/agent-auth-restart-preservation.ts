@@ -1,5 +1,5 @@
 import type { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 
 const AUTH_PRESERVATION_TIMEOUT_MS = 2_000
 

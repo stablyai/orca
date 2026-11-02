@@ -1,7 +1,7 @@
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import { isRemoteHeadRef } from '../../shared/hosted-review-refs'
 import { isSafeReviewHeadFetchRemote } from '../../shared/review-head-tracking-ref'
-import { probeExactRefs, type ExactRefProbeExecOptions } from '../git/exact-ref-probe'
+import { probeExactRefsViaForEachRef, type ExactRefProbeExecOptions } from '../git/exact-ref-probe'
 
 export type PullRequestGitExec = (
   args: string[],
@@ -88,7 +88,7 @@ async function listExactRemoteBaseRefs(
   ])
   const refs = [...exactRefNames].filter((ref) => isSafeGitRefName(`refs/remotes/${ref}`))
   const qualifiedRefs = refs.map((ref) => `refs/remotes/${ref}`)
-  const result = await probeExactRefs(execGit, qualifiedRefs, options)
+  const result = await probeExactRefsViaForEachRef(execGit, qualifiedRefs, options)
   const present = new Set(result.presentRefs)
   return {
     refs: refs.filter((ref) => present.has(`refs/remotes/${ref}`)),

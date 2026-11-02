@@ -179,8 +179,14 @@ describe('the model catalog contract on every registration', () => {
           ...context().deps,
           stateDirectory: '/state',
           resolveLaunchArgs: () => [],
-          resolveClaudeCommand: (options) => resolveCliCommand(installed('claude'), options),
-          resolveCodexCommand: (options) => resolveCliCommand(installed('codex'), options),
+          resolveClaudeCommand: (options) => ({
+            command: resolveCliCommand(installed('claude'), options),
+            prefixArgs: []
+          }),
+          resolveCodexCommand: (options) => ({
+            command: resolveCliCommand(installed('codex'), options),
+            prefixArgs: []
+          }),
           resolveClaudeAuthPolicy: () => ({ account: 'system' as const }),
           resolveAgentCommandSettings: () => settings
         },

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   pluginFieldDoc,
@@ -21,17 +22,13 @@ export const pluginNewFileContributionSchema = z
         ['drawing']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(64)
-      .meta(
-        pluginFieldDoc(
-          'Menu item shown in the tab bar + menu and the command palette.',
-          PLUGIN_MANIFEST_V2_SINCE,
-          ['New Excalidraw drawing']
-        )
-      ),
+    title: safePluginDisplayText(z.string().min(1).max(64)).meta(
+      pluginFieldDoc(
+        'Menu item shown in the tab bar + menu and the command palette.',
+        PLUGIN_MANIFEST_V2_SINCE,
+        ['New Excalidraw drawing']
+      )
+    ),
     extension: pluginFileExtensionSchema.meta(
       pluginFieldDoc(
         'Suffix, with the dot, of the untitled file it creates. The file opens in whatever editor takes that suffix, such as a custom editor from this plugin.',

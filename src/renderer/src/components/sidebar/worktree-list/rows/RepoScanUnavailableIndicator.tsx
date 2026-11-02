@@ -12,6 +12,7 @@ import {
   stopRepoHeaderKeyboardToggle
 } from './header-event-guards'
 import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { RepoWslDistroStoppedIndicator } from './RepoWslDistroStoppedIndicator'
 
 /** Retain failed-scan rows with a warning and explicit retry instead of waiting for an incidental refresh. */
 export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JSX.Element | null {
@@ -19,6 +20,9 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const [pending, setPending] = React.useState(false)
   const failure = resolveRepoScanFailure(repo, detected)
+  if (detected && !detected.authoritative && detected.wslDistroStopped) {
+    return <RepoWslDistroStoppedIndicator repo={repo} notRunning={detected.wslDistroStopped} />
+  }
   // Why: machine-wide failures are explained once by the sidebar banner, not on every repo.
   if (!failure || isLocalToolchainFailure(failure)) {
     return null

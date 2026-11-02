@@ -1,7 +1,7 @@
 import type {
   AgentSessionQueuedMessageMoveAnchor,
   AgentSessionQueuedMessageMoveResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { JournalQueueCardChange } from './journal-queue-events'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 

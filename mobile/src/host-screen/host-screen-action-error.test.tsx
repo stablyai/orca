@@ -20,8 +20,16 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
-vi.mock('./host-screen-header', () => ({ HostScreenHeader: 'HostScreenHeader' }))
+vi.mock('./host-screen-header', () => ({
+  HostScreenHeader: 'HostScreenHeader',
+  HostConnectionStatus: 'HostConnectionStatus'
+}))
 vi.mock('./host-workspace-list', () => ({ HostWorkspaceList: 'HostWorkspaceList' }))
+vi.mock('./host-bottom-bar', () => ({ HostBottomBar: 'HostBottomBar' }))
+vi.mock('../components/nav-bar/PageTitle', () => ({
+  PageTitle: 'PageTitle',
+  useCollapsingTitle: () => ({})
+}))
 vi.mock('./host-screen-overlays', () => ({ HostScreenOverlays: 'HostScreenOverlays' }))
 vi.mock('../transport/host-removal-lifecycle', () => ({
   removeHostAndCloseClient: () => Promise.reject(doubles.removalRejection)
@@ -40,8 +48,12 @@ function byName(tree: ReactTestRenderer, name: string): ReactTestInstance[] {
 }
 
 function controllerWith(fields: { error: string; actionError: string }) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `HostScreenView` reads `state.error` and then hands the controller to three mocked children, so these two fields are the whole reachable surface.
-  return { state: fields } as unknown as Parameters<typeof HostScreenView>[0]['controller']
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `HostScreenView` reads `state.error`, `hostDisplay` and the list ref, then hands the controller to four mocked children, so these fields are the whole reachable surface.
+  return {
+    state: fields,
+    hostDisplay: { title: 'Host' },
+    activeWorktreeScroll: { sectionListRef: { current: null } }
+  } as unknown as Parameters<typeof HostScreenView>[0]['controller']
 }
 
 function render(fields: { error: string; actionError: string }): ReactTestRenderer {
@@ -100,6 +112,7 @@ describe('a removal that failed', () => {
     expect(byName(tree, 'SafeAreaView')).toHaveLength(1)
     expect(byName(tree, 'HostScreenHeader')).toHaveLength(1)
     expect(byName(tree, 'HostWorkspaceList')).toHaveLength(1)
+    expect(byName(tree, 'HostBottomBar')).toHaveLength(1)
     expect(byName(tree, 'HostScreenOverlays')).toHaveLength(1)
     expect(byName(tree, 'Text')).toEqual([])
   })

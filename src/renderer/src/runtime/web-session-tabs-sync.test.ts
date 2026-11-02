@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   clearWebSessionCloseIntent,
@@ -21,12 +21,14 @@ import {
 } from './web-session-tabs-sync/snapshot-api'
 import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
 import { shouldApplyWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
-import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './web-session-tabs-sync/tracking'
-import { nextReceivedSessionTabsFrame } from './web-session-tabs-sync/state'
+import {
+  type WebSessionTabsSyncState,
+  nextReceivedSessionTabsFrame
+} from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,

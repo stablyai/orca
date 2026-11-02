@@ -8,6 +8,7 @@ import type {
 } from '../../worktree-sidebar-drop-preview'
 
 export type WorktreeRowDragState = {
+  /** Host identity of the dragged card; preview offsets are keyed the same way. */
   draggingWorktreeId: string | null
   sourceGroupKey: string | null
   dropIndex: number | null
@@ -37,10 +38,13 @@ export type WorktreePointerDrag = {
   currentX: number
   currentY: number
   worktreeId: string
+  /** Host identity of the pressed card. */
+  worktreeKey: string
   draggedIds: readonly string[]
   draggedCopies: DraggedWorktreeCopies
   reorderDraggedIds: readonly string[]
-  reorderUnitDraggedIds: readonly string[]
+  reorderDraggedKeys: readonly string[]
+  reorderUnitDraggedKeys: readonly string[]
   sourceGroupKey: string
   rects: readonly WorktreeSidebarDragRect[]
   active: boolean

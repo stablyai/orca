@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { makeTerminalTab } from '@/components/worktree-jump-palette-test-fixtures'
+import { makeTerminalTab } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { NOW, WORKTREE_ID, makeCandidate, makeState } from './workspace-cleanup-slice-test-harness'
 
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))

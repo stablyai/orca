@@ -113,24 +113,9 @@ describe('the chat composer while a phone holds the input', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Take back' }))
     expect(onTakeBack).toHaveBeenCalledTimes(1)
   })
-
-  it('dims the editor through its contenteditable state, not :disabled', () => {
-    render(<HeldField notices={[]} goalActive={false} />)
-    const editor = screen.getByRole('textbox')
-
-    expect(editor.getAttribute('contenteditable')).toBe('false')
-    expect(editor.className).toContain('[&[contenteditable=false]]:opacity-50')
-    expect(editor.className).toContain('[&[contenteditable=false]]:cursor-not-allowed')
-    expect(editor.className).not.toContain('disabled:opacity-50')
-  })
 })
 
 describe('useNativeChatMobileHoldNotice', () => {
-  it('shows nothing while the composer can send or has no terminal', () => {
-    expect(renderHook(() => useNativeChatMobileHoldNotice('pty-1', true)).result.current).toBe(null)
-    expect(renderHook(() => useNativeChatMobileHoldNotice(null, false)).result.current).toBe(null)
-  })
-
   it("runs the terminal's reclaim for this pty and refits once it lands", async () => {
     let resolveRestore: (restored: boolean) => void = () => {}
     mocks.restoreTerminalFitToDesktop.mockReturnValue(

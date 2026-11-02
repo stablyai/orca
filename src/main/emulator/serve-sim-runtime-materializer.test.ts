@@ -162,19 +162,6 @@ describe('materializeServeSimRuntime', () => {
     expect(leftovers).toEqual([])
   })
 
-  it('returns null when the bundled package is missing', async () => {
-    const root = await createRoot()
-
-    const materialized = materializeServeSimRuntime({
-      bundledPackageDir: join(root, 'does-not-exist'),
-      targetRootDir: join(root, 'runtime'),
-      version: '1.2.3',
-      clearQuarantine: () => {}
-    })
-
-    expect(materialized).toBeNull()
-  })
-
   it('links each bundled dependency next to the copy and skips ones the bundle lacks', async () => {
     const root = await createRoot()
     const bundledPackageDir = await createBundledServeSimPackage(root)

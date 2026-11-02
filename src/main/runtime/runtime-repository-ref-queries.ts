@@ -1,4 +1,4 @@
-import type { Repo } from '../../shared/repo-types'
+import type { BaseRefDefaultResult, Repo } from '../../shared/repo-types'
 import type { RuntimeRepoSearchRefs } from '../../shared/runtime-types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
@@ -44,9 +44,7 @@ export class RuntimeRepositoryRefQueries {
     }
   }
 
-  async getDefault(
-    repoSelector: string
-  ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
+  async getDefault(repoSelector: string): Promise<BaseRefDefaultResult> {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo)) {
       return { defaultBaseRef: null, remoteCount: 0 }
@@ -55,8 +53,10 @@ export class RuntimeRepositoryRefQueries {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
     // A client's Settings pane must not start this host's stopped distro over `\\wsl.localhost` (E9).
-    if (await blockedWslDistroForPath(repo.path)) {
-      return { defaultBaseRef: null, remoteCount: 0 }
+    const blocked = await blockedWslDistroForPath(repo.path)
+    if (blocked) {
+      // Optional, so older clients read plain unknown; newer ones re-ask while it is set.
+      return { defaultBaseRef: null, remoteCount: 0, refusedWslDistro: blocked.distro }
     }
     const [defaultBaseRef, remoteCount] = await Promise.all([
       getBaseRefDefault(repo.path),

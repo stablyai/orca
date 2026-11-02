@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
-import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
-import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
-import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/structured-agent-session-option-state'
-import type { StructuredAgentSessionOptionState } from '../../../src/shared/structured-agent-session-options'
+import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
+import type { StructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   isHostModelListingWaitInFlight,

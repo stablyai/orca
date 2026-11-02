@@ -1,6 +1,6 @@
 // Centralize placement bookkeeping so client-created pages retain targetGroupId.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import {
@@ -30,6 +30,10 @@ vi.mock('electron', () => ({
 vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForTabRegistration: waitForTabRegistrationMock,
   waitForWorktreeTabRegistration: vi.fn()
+}))
+
+vi.mock('../browser/browser-main-window-readiness', () => ({
+  whenBrowserMainWindowReady: async () => null
 }))
 
 vi.mock('../browser/browser-session-registry', () => ({
@@ -237,6 +241,23 @@ describe('publishCreatedBrowserSessionTab', () => {
     })
 
     expect(setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('announces a tab no one picked without moving the agent to it', () => {
+    const { host, setActiveTab, notifyHeadlessBrowserSessionTabsChanged } = createPublicationHost([
+      ['page-1', 101]
+    ])
+
+    publishCreatedBrowserSessionTab(host, {
+      placementKind: 'offscreen',
+      browserPageId: 'page-1',
+      worktreeId: 'wt-1',
+      focus: resolveBrowserTabCreateFocus({ activate: false }),
+      opensPageLink: true
+    })
+
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(notifyHeadlessBrowserSessionTabsChanged).toHaveBeenCalledWith('wt-1')
   })
 
   it('skips the worktree-scoped announcement for an unscoped create', () => {

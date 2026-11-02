@@ -18,6 +18,8 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
+// These launches are the user's own, so the E9 exec gate lets their prep run.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({ blockedWslDistroForExec: async () => null }))
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
@@ -51,7 +53,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const wslSystemHomePath = join(wslHome, '.codex')
     mkdirSync(wslSystemHomePath, { recursive: true })
@@ -101,7 +104,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const store = createStore(
       createSettings({
@@ -158,7 +162,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const store = createStore(
       createSettings({
@@ -198,7 +203,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'debian-wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => null,
-      getWslHome: (distro: string) => (distro === 'Debian' ? wslHome : null)
+      getWslHome: (distro: string) => (distro === 'Debian' ? wslHome : null),
+      getWslHomeAsync: async (distro: string) => (distro === 'Debian' ? wslHome : null)
     }))
     vi.doMock('../../shared/wsl-paths', async (importOriginal) => {
       const actual = await importOriginal<typeof WslPaths>()
@@ -273,7 +279,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'ubuntu-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      getWslHomeAsync: async () => wslHome
     }))
     const managedHomePath = join(wslHome, '.local', 'share', 'orca', 'codex-accounts', 'a', 'home')
     const retiredBridgeRuns = vi.fn()
@@ -345,7 +352,8 @@ describe('CodexRuntimeHomeService', () => {
       const wslHome = `\\\\wsl.localhost\\Ubuntu${guestHome.replaceAll('/', '\\')}`
       vi.doMock('../wsl', () => ({
         getDefaultWslDistro: () => 'Ubuntu',
-        getWslHome: () => wslHome
+        getWslHome: () => wslHome,
+        getWslHomeAsync: async () => wslHome
       }))
       const ownerAuth = createCodexAuthJson(
         'owner@example.com',

@@ -11,27 +11,37 @@ import { languageDisplayName } from '../presentation/plugin-contributions'
 // between switching and switching back. Falls back to following the system language.
 let uiLanguageBeforeSwitch: UiLanguage | null = null
 
-function applyUiLanguage(uiLanguage: UiLanguage): void {
-  useAppStore
+function applyUiLanguage(uiLanguage: UiLanguage): Promise<boolean> {
+  return useAppStore
     .getState()
     .updateSettings({ uiLanguage })
-    .catch((cause: unknown) => {
-      toast.error(
-        translate(
-          'auto.components.settings.PluginContributionActionLanguage.failed',
-          'Could not switch language'
-        ),
-        { description: cause instanceof Error ? cause.message : String(cause) }
-      )
-    })
+    .then(
+      () => true,
+      (cause: unknown) => {
+        toast.error(
+          translate(
+            'auto.components.settings.PluginContributionActionLanguage.failed',
+            'Could not switch language'
+          ),
+          { description: cause instanceof Error ? cause.message : String(cause) }
+        )
+        return false
+      }
+    )
 }
 
 /** Switches the UI to a plugin's language pack, remembering the language to switch back to. */
-export function switchToPluginLanguage(pack: PluginLanguagePackRegistration): void {
+export function switchToPluginLanguage(pack: PluginLanguagePackRegistration): Promise<boolean> {
   const current = useAppStore.getState().settings?.uiLanguage ?? UI_LANGUAGE_SYSTEM
   // Why keep the first one: hopping between plugin packs must not lose the original.
   uiLanguageBeforeSwitch ??= current
-  applyUiLanguage(pack.id)
+  return applyUiLanguage(pack.id)
+}
+
+export function switchBackFromPluginLanguage(): void {
+  const previous = uiLanguageBeforeSwitch ?? UI_LANGUAGE_SYSTEM
+  uiLanguageBeforeSwitch = null
+  void applyUiLanguage(previous)
 }
 
 /** Switches the UI to a plugin's language pack, with a way back; never applied unasked. */
@@ -55,11 +65,7 @@ export function PluginContributionActionLanguage({
           'Switch back from {{value0}}',
           { value0: name }
         )}
-        onClick={() => {
-          const previous = uiLanguageBeforeSwitch ?? UI_LANGUAGE_SYSTEM
-          uiLanguageBeforeSwitch = null
-          applyUiLanguage(previous)
-        }}
+        onClick={switchBackFromPluginLanguage}
       >
         {translate(
           'auto.components.settings.PluginContributionActionLanguage.switchBack',
@@ -77,7 +83,7 @@ export function PluginContributionActionLanguage({
         'Switch language to {{value0}}',
         { value0: name }
       )}
-      onClick={() => switchToPluginLanguage(pack)}
+      onClick={() => void switchToPluginLanguage(pack)}
     >
       {translate(
         'auto.components.settings.PluginContributionActionLanguage.switch',

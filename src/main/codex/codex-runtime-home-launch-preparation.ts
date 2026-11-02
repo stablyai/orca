@@ -44,6 +44,8 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
       isAgentStatusHooksEnabledForAgent(deps.getSettings(), 'codex')
     const hooksEnabled = isHooksEnabled()
     try {
+      // Not a user act here: a passive restore or remount reaches this too (#35813), so a
+      // stopped distro skips the install; the hook relay installs once the distro runs.
       const status = await codexHookService.prepareRuntimeHomeForLaunch(
         runtimeHomePath,
         hookTarget,

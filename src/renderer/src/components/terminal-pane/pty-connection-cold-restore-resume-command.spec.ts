@@ -151,7 +151,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         expect(transport.connect).toHaveBeenNthCalledWith(
           2,
           expect.objectContaining({
-            command: "codex 'resume' 'codex-session-1'",
+            command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
             env: expect.objectContaining({
               ORCA_PANE_KEY: paneKey,
               ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))

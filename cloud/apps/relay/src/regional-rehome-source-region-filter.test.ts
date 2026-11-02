@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { rehomeSourceRegionAllowed } from './idle-regional-rehome-selection.js'
 import { openIdleRehomeTestDatabase } from './idle-regional-rehome-test-database.js'
 import { REGIONAL_REHOME_POLL_SUMMARY_INTERVAL_MS } from './regional-rehome-poll-telemetry.js'

@@ -21,6 +21,7 @@ type EmulatorVideoApi = {
   stopVideoStream?: (args: { streamId: string }) => Promise<void>
   onVideoStreamMeta?: (cb: (msg: VideoMetaMessage) => void) => () => void
   onVideoStreamFrame?: (cb: (msg: VideoFrameMessage) => void) => () => void
+  onFrameStreamError?: (cb: (msg: { streamId: string; message: string }) => void) => () => void
 }
 
 // Use Annex-B without avcC; prepend the SPS/PPS packet to the first keyframe.
@@ -39,25 +40,24 @@ export function useEmulatorVideoStream(
   onSize?: (size: StreamSize) => void
 ): { canvasRef: React.RefObject<HTMLCanvasElement | null>; error: string | null } {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [error, setError] = useState<string | null>(null)
+  // Key errors to their stream so a dead stream's error never reaches its replacement's first render.
+  const streamIdentity = `${deviceId}:${streamKey}:${enabled}`
+  const [failure, setFailure] = useState<{ identity: string; message: string } | null>(null)
   const onSizeRef = useRef(onSize)
   onSizeRef.current = onSize
 
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- cleanup() clears the first-frame timeout.
   useEffect(() => {
     const api = (window as { api?: { emulator?: EmulatorVideoApi } }).api?.emulator
-    if (!enabled || !deviceId) {
-      setError(null)
+    const identity = `${deviceId}:${streamKey}:${enabled}`
+    const setError = (message: string): void => setFailure({ identity, message })
+    if (!enabled || !deviceId || !api?.startVideoStream) {
       return
     }
-    if (!api?.startVideoStream) {
-      return
-    }
-    setError(null)
     const DecoderCtor = (globalThis as { VideoDecoder?: typeof VideoDecoder }).VideoDecoder
     const ChunkCtor = (globalThis as { EncodedVideoChunk?: typeof EncodedVideoChunk })
       .EncodedVideoChunk
     if (!DecoderCtor || !ChunkCtor) {
-      setError('This build does not support WebCodecs H.264 decoding.')
       return
     }
 
@@ -65,10 +65,19 @@ export function useEmulatorVideoStream(
     let configured = false
     let timestamp = 0
     let configBytes: Uint8Array | null = null
+    let reportedSize: StreamSize | null = null
+    const reportSize = (width: number, height: number): void => {
+      if (reportedSize?.width === width && reportedSize.height === height) {
+        return
+      }
+      reportedSize = { width, height }
+      onSizeRef.current?.(reportedSize)
+    }
     const currentStreamId = newVideoStreamId()
     let streamId: string | null = currentStreamId
     let unsubMeta: (() => void) | undefined
     let unsubFrame: (() => void) | undefined
+    let unsubEnd: (() => void) | undefined
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d') ?? null
     if (canvas) {
@@ -84,6 +93,7 @@ export function useEmulatorVideoStream(
             canvas.width = frame.displayWidth
             canvas.height = frame.displayHeight
           }
+          reportSize(frame.displayWidth, frame.displayHeight)
           ctx.drawImage(frame, 0, 0)
         }
         frame.close()
@@ -117,8 +127,10 @@ export function useEmulatorVideoStream(
       clearFirstFrameTimeout()
       unsubMeta?.()
       unsubFrame?.()
+      unsubEnd?.()
       unsubMeta = undefined
       unsubFrame = undefined
+      unsubEnd = undefined
       stopStream()
       if (decoder.state !== 'closed') {
         decoder.close()
@@ -135,7 +147,13 @@ export function useEmulatorVideoStream(
 
     unsubMeta = api.onVideoStreamMeta?.((msg) => {
       if (!disposed && msg.streamId === streamId && msg.deviceId === deviceId) {
-        onSizeRef.current?.({ width: msg.meta.width, height: msg.meta.height })
+        reportSize(msg.meta.width, msg.meta.height)
+      }
+    })
+
+    unsubEnd = api.onFrameStreamError?.((msg) => {
+      if (msg.streamId === streamId) {
+        fatal(msg.message)
       }
     })
 
@@ -206,5 +224,15 @@ export function useEmulatorVideoStream(
     }
   }, [deviceId, streamKey, enabled])
 
-  return { canvasRef, error }
+  if (enabled && deviceId && !hasWebCodecs()) {
+    return {
+      canvasRef,
+      error: 'This build does not support WebCodecs H.264 decoding.'
+    }
+  }
+  return { canvasRef, error: failure?.identity === streamIdentity ? failure.message : null }
+}
+
+function hasWebCodecs(): boolean {
+  return 'VideoDecoder' in globalThis && 'EncodedVideoChunk' in globalThis
 }

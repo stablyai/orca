@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { ipcMain, type WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   resolveDesktopAuthorizedPath,
   resolveUserNamedRegularFile

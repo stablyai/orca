@@ -22,7 +22,7 @@ import {
   nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
-} from '../../../../../src/shared/native-chat-agent-support'
+} from '../../../../../src/shared/native-chat/native-chat-agent-support'
 import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat-paste-bytes'
 
 export type MobileNativeChatAnswerSend = {

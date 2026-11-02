@@ -16,6 +16,12 @@ export type WslDistroHolderChild = EventEmitter & { readonly pid?: number; unref
 
 export type WslDistroHolderAdoption = { distro: string; state: WslDistroHolderState }
 
+/**
+ * Uninstall only: nothing will ever release a holder left now, so its marker and distro on the
+ * command line prove it ours without a start time, and an unreadable table is read once more.
+ */
+export type WslDistroHolderReleaseOptions = { forUninstall?: boolean }
+
 export type WslDistroHolderDependencies = {
   userDataPath: string
   /** Test seam; production spawns `wsl.exe` detached through process-host. */
@@ -51,9 +57,9 @@ export type WslDistroHolder = {
   ): Promise<WslDistroHolderEnsureResult>
   /** Startup: keep holders a previous Orca left running, drop records that are provably stale. */
   adoptHolders(): Promise<WslDistroHolderAdoption[]>
-  /** Explicit stop only; the distro then idles out on WSL's own schedule. */
+  /** Explicit stop only; the distro then stops on WSL's schedule once nothing else runs in it. */
   release(distro: string): Promise<WslDistroHolderState>
   /** Every recorded holder (uninstall, hosts turned off); kills only verified holders. */
-  releaseAll(): Promise<WslDistroHolderAdoption[]>
+  releaseAll(options?: WslDistroHolderReleaseOptions): Promise<WslDistroHolderAdoption[]>
   holderState(distro: string): Promise<WslDistroHolderState>
 }

@@ -1,7 +1,8 @@
 import { listCachedRemoteNames, shouldProbeGitRemote } from '../git/remote-name-listing'
 import type { IssueSourcePreference } from '../../shared/repo-types'
+import { readLocalGitConfigSignature } from '../github/local-git-config-signature'
 import {
-  getProjectRefForRemote,
+  getProjectRefForRemoteWithSignature,
   type LocalGitExecOptions,
   type ProjectRef
 } from './gitlab-project-ref-resolution'
@@ -12,7 +13,24 @@ export async function getIssueProjectRef(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  const originPromise = getProjectRefForRemote(
+  return getIssueProjectRefWithSignature(
+    readLocalGitConfigSignature({ repoPath, connectionId, ...localGitOptions }),
+    repoPath,
+    knownHosts,
+    connectionId,
+    localGitOptions
+  )
+}
+
+async function getIssueProjectRefWithSignature(
+  initialSignature: Promise<string | undefined>,
+  repoPath: string,
+  knownHosts?: readonly string[],
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<ProjectRef | null> {
+  const originPromise = getProjectRefForRemoteWithSignature(
+    initialSignature,
     repoPath,
     'origin',
     knownHosts,
@@ -20,7 +38,8 @@ export async function getIssueProjectRef(
     localGitOptions
   )
   if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
-    const upstream = await getProjectRefForRemote(
+    const upstream = await getProjectRefForRemoteWithSignature(
+      initialSignature,
       repoPath,
       'upstream',
       knownHosts,
@@ -33,12 +52,19 @@ export async function getIssueProjectRef(
   }
   return (
     (await originPromise) ??
-    getProjectRefForOtherRemote(repoPath, knownHosts, connectionId, localGitOptions)
+    getProjectRefForOtherRemote(
+      initialSignature,
+      repoPath,
+      knownHosts,
+      connectionId,
+      localGitOptions
+    )
   )
 }
 
 // Match glab project inference even when remotes use nonstandard names.
 async function getProjectRefForOtherRemote(
+  initialSignature: Promise<string | undefined>,
   repoPath: string,
   knownHosts?: readonly string[],
   connectionId?: string | null,
@@ -49,7 +75,8 @@ async function getProjectRefForOtherRemote(
   // glab prioritizes a remote named gitlab.
   otherRemotes.sort((a, b) => Number(b === 'gitlab') - Number(a === 'gitlab'))
   for (const remoteName of otherRemotes) {
-    const projectRef = await getProjectRefForRemote(
+    const projectRef = await getProjectRefForRemoteWithSignature(
+      initialSignature,
       repoPath,
       remoteName,
       knownHosts,
@@ -76,8 +103,14 @@ export async function resolveIssueSource(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedIssueSource> {
+  const initialSignature = readLocalGitConfigSignature({
+    repoPath,
+    connectionId,
+    ...localGitOptions
+  })
   if (preference === 'upstream') {
-    const upstream = await getProjectRefForRemote(
+    const upstream = await getProjectRefForRemoteWithSignature(
+      initialSignature,
       repoPath,
       'upstream',
       knownHosts,
@@ -87,7 +120,8 @@ export async function resolveIssueSource(
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
-    const origin = await getProjectRefForRemote(
+    const origin = await getProjectRefForRemoteWithSignature(
+      initialSignature,
       repoPath,
       'origin',
       knownHosts,
@@ -98,7 +132,8 @@ export async function resolveIssueSource(
   }
   if (preference === 'origin') {
     return {
-      source: await getProjectRefForRemote(
+      source: await getProjectRefForRemoteWithSignature(
+        initialSignature,
         repoPath,
         'origin',
         knownHosts,
@@ -109,7 +144,13 @@ export async function resolveIssueSource(
     }
   }
   return {
-    source: await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions),
+    source: await getIssueProjectRefWithSignature(
+      initialSignature,
+      repoPath,
+      knownHosts,
+      connectionId,
+      localGitOptions
+    ),
     fellBack: false
   }
 }

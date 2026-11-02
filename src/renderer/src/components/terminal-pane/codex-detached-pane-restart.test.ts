@@ -146,7 +146,7 @@ describe('codex detached pane restart executor', () => {
         cols: 80,
         rows: 24,
         cwd: '/Users/dev/code/orca',
-        command: 'codex',
+        command: "codex '-c' 'disable_paste_burst=true'",
         startupCommandDelivery: 'shell-ready',
         launchAgent: 'codex',
         worktreeId: 'wt1',
@@ -568,7 +568,7 @@ describe('codex detached pane restart executor', () => {
 
     expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([])
     expect(useAppStore.getState().pendingStartupByTabId['tab-1']).toMatchObject({
-      command: 'codex',
+      command: "codex '-c' 'disable_paste_burst=true'",
       launchAgent: 'codex'
     })
     expect(useAppStore.getState().suppressedPtyExitIds[OLD_PTY]).toBeUndefined()

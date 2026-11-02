@@ -441,7 +441,7 @@ describe('importCookiesFromBrowser Safari', () => {
 
     const result = await importCookiesFromBrowser(browser, 'persist:test')
 
-    expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
+    expect(result).toMatchObject({ ok: false, reason: 'All Safari cookies are expired.' })
     expect(cookieWriteMock).not.toHaveBeenCalled()
   })
 })

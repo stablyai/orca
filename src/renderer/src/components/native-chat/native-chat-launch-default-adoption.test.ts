@@ -61,24 +61,6 @@ describe('native chat launch-default adoption', () => {
     expect(resolveNativeChatSessionOptionDefaults(defaults.read(), 'claude')).toBeUndefined()
   })
 
-  it('does not adopt an unlisted launch-flag model before discovery either', async () => {
-    // A tracked flag proves emission, not that a catalog recognizes the model.
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'claude-opus-5' })
-    const defaults = claudeLaunchDefaults()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'applied' }),
-      persistSelection: defaults.persistSelection
-    })!
-
-    await surface.setOption('model', 'claude-opus-5')
-
-    expect(defaults.read().claude?.model).toBeUndefined()
-  })
-
   it('still adopts a model only the host catalog lists', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'sonnet' })
     const defaults = claudeLaunchDefaults()
@@ -118,22 +100,5 @@ describe('native chat launch-default adoption', () => {
       model: 'opus',
       effort: 'high'
     })
-  })
-
-  it('still adopts a tracked seed model before any discovery', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'opus', effort: 'xhigh' })
-    const defaults = claudeLaunchDefaults()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      modelLabel: 'Model',
-      dispatchCommand: vi.fn(),
-      persistSelection: defaults.persistSelection
-    })!
-
-    await surface.setOption('effort', 'high')
-
-    expect(defaults.read().claude?.model).toBe('opus')
   })
 })

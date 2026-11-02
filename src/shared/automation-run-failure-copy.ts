@@ -32,7 +32,9 @@ export const AUTOMATION_RUN_FAILURE_COPY = {
     'The agent is waiting for someone to review new or changed hooks ("Hooks need review"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.',
   agentNeverStarted: 'Automation agent never started after the prompt was submitted.',
   agentNoCompletion: 'Automation agent did not report completion.',
-  watchTimedOut: 'Orca stopped watching this run after 6h without a completion signal.'
+  watchTimedOut: 'Orca stopped watching this run after 6h without a completion signal.',
+  wslDistroStopped:
+    'The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.'
 } as const
 
 export type AutomationRunFailureCode = keyof typeof AUTOMATION_RUN_FAILURE_COPY
@@ -46,20 +48,24 @@ export type AutomationRunFailureCodeFields = {
 export type AutomationRunFailure = { error: string } & AutomationRunFailureCodeFields
 
 export function automationRunFailure(
-  errorCode: Exclude<AutomationRunFailureCode, 'projectSetupNotReady'>
+  errorCode: Exclude<AutomationRunFailureCode, 'projectSetupNotReady' | 'wslDistroStopped'>
 ): AutomationRunFailure
 export function automationRunFailure(
   errorCode: 'projectSetupNotReady',
   params: { setupState: string }
 ): AutomationRunFailure
 export function automationRunFailure(
+  errorCode: 'wslDistroStopped',
+  params: { distro: string }
+): AutomationRunFailure
+export function automationRunFailure(
   errorCode: AutomationRunFailureCode,
-  params?: { setupState: string }
+  params?: Record<string, string>
 ): AutomationRunFailure {
   const template: string = AUTOMATION_RUN_FAILURE_COPY[errorCode]
   return params
     ? {
-        error: template.replace('{{setupState}}', () => params.setupState),
+        error: template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => params[key] ?? match),
         errorCode,
         errorParams: params
       }

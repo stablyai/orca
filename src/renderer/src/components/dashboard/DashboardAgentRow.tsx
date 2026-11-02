@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import { useClaudeAgentRowView } from './use-claude-agent-row-view'
 import {
   AgentStateDot,
@@ -66,6 +66,7 @@ function stateDotTooltipLabel(
 }
 
 type Props = {
+  showModel?: boolean
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
@@ -84,6 +85,8 @@ type Props = {
   // Why: inline-card orchestration rows can fold their child agents.
   childAgentCount?: number
   childAgentsExpanded?: boolean
+  // Shown beside the collapsed count so hidden child work stays visible.
+  collapsedChildAgentsState?: AgentDotState
   onToggleChildAgents?: () => void
   // Why: chevron indentation replaces fixed-offset lineage connector art.
   hideLineageConnectors?: boolean
@@ -95,6 +98,7 @@ type Props = {
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
+  showModel = true,
   onDismiss,
   onActivate,
   now,
@@ -105,6 +109,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   isFocusedPane = false,
   childAgentCount,
   childAgentsExpanded = false,
+  collapsedChildAgentsState,
   onToggleChildAgents,
   hideLineageConnectors = false,
   sendTargetStatus,
@@ -244,6 +249,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
+      aria-description={
+        opensClaudeParentConversation(agent)
+          ? translate(
+              'auto.lib.claudeAgentRowView.openParentConversation',
+              'Open parent conversation'
+            )
+          : undefined
+      }
       data-agent-send-target={sendTargetStatus}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
@@ -316,7 +329,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
-        {model && (
+        {showModel && model && (
           <span
             className={cn(
               'max-w-24',
@@ -324,7 +337,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
                 ? 'min-w-0'
                 : 'shrink-0',
-              'truncate font-mono text-[10px] text-muted-foreground/70'
+              'truncate font-mono text-3xs text-muted-foreground/70'
             )}
             title={model}
           >
@@ -333,11 +346,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )}
         {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
         {hasChildDisclosure && !childAgentsExpanded && (
-          <span
-            className="shrink-0 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums"
-            aria-hidden
-          >
-            +{childAgentCount}
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums">
+            {collapsedChildAgentsState && (
+              <AgentStateDot state={collapsedChildAgentsState} size="sm" tooltipSide="right" />
+            )}
+            <span aria-hidden>+{childAgentCount}</span>
           </span>
         )}
         <DashboardAgentRowTrailingControls
