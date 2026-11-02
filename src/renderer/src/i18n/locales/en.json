@@ -19551,6 +19551,7 @@
     "openDefault": "Open in Default App"
   },
   "remoteFloatingTerminal": {
+    "local": "Local",
     "host": "Remote host",
     "loading": "Loading remote sessions…",
     "reconnect": "Reconnect",

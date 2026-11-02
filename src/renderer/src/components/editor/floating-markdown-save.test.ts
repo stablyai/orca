@@ -50,6 +50,17 @@ describe('floating markdown save queue', () => {
     queue.dispose()
   })
 
+  it('keeps the draft without writing when the host document has closed', async () => {
+    mocks.read.mockResolvedValueOnce(null)
+    const queue = createEditorSaveQueue(useAppStore)
+    await expect(queue.queueSave(file, 'edited')).rejects.toThrow('no longer open on its host')
+    expect(mocks.save).not.toHaveBeenCalled()
+    expect(mocks.write).not.toHaveBeenCalled()
+    expect(useAppStore.getState().editorDrafts[file.id]).toBe('edited')
+    expect(useAppStore.getState().openFiles[0].isDirty).toBe(true)
+    queue.dispose()
+  })
+
   it('keeps the draft when another device changed the document', async () => {
     mocks.read.mockResolvedValue({ document: { content: 'changed elsewhere' }, save: mocks.save })
     const queue = createEditorSaveQueue(useAppStore)

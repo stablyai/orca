@@ -150,6 +150,11 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             if (provenance) {
               assertEditorFileOperationCurrent(store.getState(), liveFile.worktreeId, provenance)
             }
+            if (!floatingDocument) {
+              throw new Error(
+                'The remote document is no longer open on its host. Reopen it before saving.'
+              )
+            }
           }
           if (floatingDocument) {
             if (

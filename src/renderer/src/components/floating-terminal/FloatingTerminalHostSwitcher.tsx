@@ -23,7 +23,8 @@ export function FloatingTerminalHostSwitcher(): React.JSX.Element | null {
   }
   const selectedHost = environments.find((host) => host.id === environmentId)
   const unavailableHost = translate('remoteFloatingTerminal.unavailableHost', 'Unavailable host')
-  const hostName = environmentId ? (selectedHost?.name ?? unavailableHost) : 'Local'
+  const localLabel = translate('remoteFloatingTerminal.local', 'Local')
+  const hostName = environmentId ? (selectedHost?.name ?? unavailableHost) : localLabel
   const hostLabel = translate('remoteFloatingTerminal.host', 'Host')
   const HostIcon = environmentId ? Server : Monitor
   return (
@@ -50,7 +51,7 @@ export function FloatingTerminalHostSwitcher(): React.JSX.Element | null {
           value={environmentId ?? 'local'}
           onValueChange={(value) => selectHost(value === 'local' ? null : value)}
         >
-          <DropdownMenuRadioItem value="local">Local</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="local">{localLabel}</DropdownMenuRadioItem>
           {environmentId && !selectedHost ? (
             <DropdownMenuRadioItem value={environmentId} disabled>
               {unavailableHost}
