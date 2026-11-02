@@ -11,7 +11,7 @@ import {
 } from '../terminal-pane/terminal-drop-target'
 import { insertTerminalCrewMention } from '../terminal-pane/terminal-crew-mention'
 import { useTerminalCrewIdentity } from './use-terminal-crew-identity'
-import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
+import { LazyOrchestrationCrewPanel } from './LazyOrchestrationCrewPanel'
 import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
 
 type CrewPaneController = Pick<
@@ -51,7 +51,7 @@ function TerminalCrewPortal({
   }
   const hostKey = target.kind === 'local' ? 'local' : target.environmentId
   return createPortal(
-    <OrchestrationCrewPanel
+    <LazyOrchestrationCrewPanel
       target={target}
       party={party}
       isVisible={

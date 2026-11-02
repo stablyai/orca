@@ -15,6 +15,7 @@ import {
   type AgentMessageSenderView
 } from '../../../../shared/agent-session/agent-message-presentation'
 
+const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
 export type SenderLocation = {
   host: string
   worktreeId: string
@@ -114,8 +115,63 @@ export function useAgentMessageSenderSource(
   locate: LocateSender,
   savedAgent?: AgentMessageSenderView['agentType']
 ): AgentMessageSenderView {
-  const lookups = useMemo(() => [{ locate, savedAgent }], [locate, savedAgent])
-  return useAgentMessageSenderSources(lookups)[0]
+  const selected = useMemo(() => {
+    let previous = EMPTY_VIEW
+    return (state: AppState) => {
+      const location = locate(state)
+      const next = agentMessageSenderView(
+        location ? readSource(state, location).read(state, location.paneKey) : undefined,
+        location?.agentType ?? savedAgent
+      )
+      if (!equalView(previous, next)) {
+        previous = next
+      }
+      return previous
+    }
+  }, [locate, savedAgent])
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      let lease: { key: string; source: Source } | undefined
+      const release = () => {
+        if (lease && --lease.source.leases === 0) {
+          subscribedSources.delete(lease.key)
+          lease.source.dispose()
+        }
+        lease = undefined
+      }
+      const update = () => {
+        const state = useAppStore.getState()
+        const location = locate(state)
+        const key = location ? sourceKey(location) : undefined
+        if (lease?.key !== key) {
+          release()
+          if (location && key) {
+            const source = readSource(state, location)
+            transientSources.get(state)?.delete(key)
+            source.leases++
+            subscribedSources.set(key, source)
+            lease = { key, source }
+          }
+        }
+        return selected(state)
+      }
+      let value = update()
+      const unsubscribe = useAppStore.subscribe(() => {
+        const next = update()
+        if (next !== value) {
+          value = next
+          notify()
+        }
+      })
+      return () => {
+        unsubscribe()
+        release()
+      }
+    },
+    [locate, selected]
+  )
+  const getSnapshot = useCallback(() => selected(useAppStore.getState()), [selected])
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
 function releaseSource(key: string, source: Source): void {
