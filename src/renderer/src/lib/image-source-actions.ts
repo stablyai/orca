@@ -1,6 +1,6 @@
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
-import { buildImageDataUri } from '../../../shared/file-preview/image-data-uri'
+import { decodeBase64Bytes } from './base64-bytes'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -43,11 +43,12 @@ export function readImageFileSource(
     if (!image.isBinary && mimeType === 'image/svg+xml') {
       return new Blob([image.content], { type: mimeType })
     }
-    const src = image.isBinary && buildImageDataUri(image.mimeType ?? mimeType, image.content)
-    if (!src) {
+    const type = image.mimeType ?? mimeType
+    const base64 = image.isBinary ? image.content.replace(/\s/g, '') : ''
+    if (!base64 || !type.startsWith('image/')) {
       throw new Error('Image unavailable')
     }
-    return readImageBlob(src)
+    return new Blob([decodeBase64Bytes(base64)], { type })
   }
 }
 
