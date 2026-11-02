@@ -1,4 +1,5 @@
-import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
+import type { AgentType } from '../../../shared/agent-status-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import { OrchestrationError } from './orchestration-error'

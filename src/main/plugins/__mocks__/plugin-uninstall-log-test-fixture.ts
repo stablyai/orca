@@ -6,7 +6,8 @@ import type * as ChildProcess from 'node:child_process'
 import { PluginContentVerifier } from '../plugin-content-integrity'
 import { PluginService } from '../plugin-service'
 import { registerPluginHandlers } from '../../ipc/plugins'
-import { installPluginFromLocalPath, installBundledPlugin } from '../installation/plugin-install'
+import { installPluginFromLocalPath } from '../installation/plugin-install'
+import { serializePluginMutation } from '../installation/plugin-mutation-queue'
 import { installStagedPluginTree } from '../installation/plugin-install-staging'
 import { getUserPluginsDir } from '../plugin-discovery'
 import { PluginWorkerController } from '../workers/plugin-worker-controller'
@@ -93,7 +94,7 @@ export async function createUninstallFixture() {
   })
   services.push(service)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The exercised removal IPC uses only these settings reads, writes and registration methods.
-  registerPluginHandlers(store as never, service, null)
+  registerPluginHandlers(store as never, service)
   await service.initialize()
 
   async function install(
@@ -231,7 +232,10 @@ export function holdNextUninstallRefresh(service: PluginService) {
   return { entered, release, restore: () => refresh.mockRestore() }
 }
 
-/** Publishes new bundled worker bytes and approves them, as the user would after review. */
+/**
+ * Turns a catalog install into a bundled one and approves it, as the user would after review.
+ * Why not installBundledPlugin: it refuses to replace a catalog install, and these races need one.
+ */
 export async function publishBundledUninstallSuccessor(
   root: string,
   id: string,
@@ -243,12 +247,18 @@ export async function publishBundledUninstallSuccessor(
     join(sourcePath, 'worker.js'),
     'export default function () { /* bundled revision */ }'
   )
-  const result = await installBundledPlugin({
-    pluginsDir: getUserPluginsDir(root),
-    sourcePath,
-    hostVersion: '1.4.0',
-    expectedPluginKey: key
-  })
+  const pluginsDir = getUserPluginsDir(root)
+  const result = await serializePluginMutation(pluginsDir, () =>
+    installStagedPluginTree({
+      pluginsDir,
+      stagingDir: sourcePath,
+      hostVersion: '1.4.0',
+      source: { kind: 'bundled', bundleId: key },
+      resolvedCommit: null,
+      identity: { pluginKey: key },
+      repairCorruptedVersion: true
+    })
+  )
   if (!result.ok) {
     throw new Error(result.error)
   }

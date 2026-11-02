@@ -3,10 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
 import { useAppStore } from '@/store'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useVisibleWorkspaceKanbanWorktreeIds } from './use-visible-workspace-kanban-worktree-ids'
 
 const initialState = useAppStore.getInitialState()

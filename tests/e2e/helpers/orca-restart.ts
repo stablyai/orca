@@ -44,7 +44,7 @@ type RestartSession = {
 
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ms)
+    const timeout = setTimeout<[]>(resolve, ms)
     timeout.unref?.()
   })
 }

@@ -21,6 +21,7 @@ export function FeatureTipActions({
   onPrimaryAction,
   onSkip,
   showSkip = true,
+  swapButtons = false,
   fullWidth = false,
   primaryButtonRef,
   label,
@@ -31,6 +32,7 @@ export function FeatureTipActions({
   onPrimaryAction: () => void
   onSkip: () => void
   showSkip?: boolean
+  swapButtons?: boolean
   /** Fills the footer row, or what a sibling button leaves of it. */
   fullWidth?: boolean
   primaryButtonRef?: Ref<HTMLButtonElement>
@@ -39,17 +41,26 @@ export function FeatureTipActions({
   /** Overrides the secondary button's default "Maybe Later". */
   secondaryLabel?: string
 }): JSX.Element {
+  const skipButton = showSkip ? (
+    <Button
+      ref={swapButtons ? primaryButtonRef : undefined}
+      variant={swapButtons ? 'default' : 'ghost'}
+      className={fullWidth && swapButtons ? 'w-full flex-1' : undefined}
+      onClick={onSkip}
+      disabled={primaryBusy}
+    >
+      {secondaryLabel ??
+        translate('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
+    </Button>
+  ) : null
+
   return (
     <>
-      {showSkip ? (
-        <Button variant="ghost" onClick={onSkip} disabled={primaryBusy}>
-          {secondaryLabel ??
-            translate('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
-        </Button>
-      ) : null}
+      {swapButtons ? null : skipButton}
       <Button
-        ref={primaryButtonRef}
-        className={fullWidth ? 'w-full flex-1' : undefined}
+        ref={swapButtons ? undefined : primaryButtonRef}
+        variant={swapButtons ? 'ghost' : 'default'}
+        className={fullWidth && !swapButtons ? 'w-full flex-1' : undefined}
         onClick={onPrimaryAction}
         disabled={primaryBusy}
       >
@@ -62,6 +73,7 @@ export function FeatureTipActions({
           (label ?? getLocalizedFeatureTipCopy(currentTip).ctaLabel)
         )}
       </Button>
+      {swapButtons ? skipButton : null}
     </>
   )
 }

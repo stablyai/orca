@@ -11,7 +11,7 @@ import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-ac
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { toast } from 'sonner'
 import { buildResolvePullRequestConflictsPrompt } from '../SourceControl'
-import { buildPRCommentsResolutionPrompt } from '../../pr-comments-resolution-prompt'
+import { buildPRCommentsResolutionPrompt } from '../../../../../shared/github/pr-comments-resolution-prompt'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import type { PRCommentGroup } from '../../../../../shared/pr-comment-groups'
 import { translate } from '@/i18n/i18n'
@@ -179,12 +179,20 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
       )
       return
     }
+    let ownerHostId: string
+    try {
+      ownerHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+      return
+    }
     // Why: pr.prRepo can be missing while comments are still visible; fall back to the PR URL.
     const githubTargetFromPr =
       activeReview.provider === 'github' && prNumber && pr?.prRepo
         ? {
             repoPath: repo.path,
             repoId: repo.id,
+            ownerHostId,
             prNumber,
             prRepo: pr.prRepo
           }
@@ -200,6 +208,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
       return {
         repoPath: repo.path,
         repoId: repo.id,
+        ownerHostId,
         prNumber: link.number,
         prRepo: {
           owner: link.slug.owner,
@@ -214,7 +223,12 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     const githubResolveTarget =
       githubTarget ??
       (activeReview.provider === 'github' && prNumber
-        ? { repoPath: repo.path, repoId: repo.id, prNumber }
+        ? {
+            repoPath: repo.path,
+            repoId: repo.id,
+            prNumber,
+            ownerHostId
+          }
         : undefined)
     // Why: the ack resolves against this MR after delivery, so pin the iid now — the panel
     // may already be showing a different review by then.
@@ -224,7 +238,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
             repoPath: repo.path,
             repoId: repo.id,
             iid: activeReview.number,
-            ownerHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+            ownerHostId
           }
         : undefined
     const commentResolution = {

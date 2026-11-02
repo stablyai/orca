@@ -1,5 +1,5 @@
-import { pendingStructuredSessionPrompts } from '../../../src/shared/structured-agent-session-message-projection'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import { pendingStructuredSessionPrompts } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type {
   StructuredApprovalItem,
   StructuredQuestionItem

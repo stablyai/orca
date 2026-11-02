@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../shared/structured-agent-session-host-capability'
 import {
   structuredAgentSessionFollowUpsQueue,
   structuredAgentSessionQueueEnabled

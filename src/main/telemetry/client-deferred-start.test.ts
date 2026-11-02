@@ -1,6 +1,7 @@
+import * as crypto from 'node:crypto'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as PostHogTransport from './posthog-transport'
 import {
   BASE_COMMON,
@@ -17,6 +18,10 @@ const { createPostHogClient } = vi.hoisted(() => {
   Object.assign(globalThis, { ORCA_BUILD_IDENTITY: 'stable', ORCA_POSTHOG_WRITE_KEY: 'test-key' })
   return { createPostHogClient: vi.fn() }
 })
+vi.mock('node:crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof crypto>()),
+  randomInt: vi.fn(() => 0)
+}))
 vi.mock('./posthog-transport', async (importOriginal) => ({
   ...(await importOriginal<typeof PostHogTransport>()),
   createPostHogClient
@@ -67,6 +72,126 @@ describe('deferred PostHog client start', () => {
     createPostHogClient.mockReset()
     scheduleClientStart.mockReset()
     restoreConsentEnv(envStash)
+  })
+
+  it.each([
+    { saved: 'normal', expected: 'normal' },
+    { saved: 'swapped', expected: 'swapped' },
+    { saved: 'invalid', expected: undefined },
+    { saved: null, expected: undefined },
+    { saved: 42, expected: undefined },
+    { saved: {}, expected: undefined },
+    { saved: undefined, expected: undefined }
+  ])('keeps telemetry working with persisted button emphasis $saved', ({ saved, expected }) => {
+    Object.assign(settings.telemetry!, {
+      chatUiLaunchTipCohort: 'treatment',
+      chatUiLaunchTipButtonEmphasis: saved
+    })
+    scheduleClientStart.mockClear()
+
+    initTelemetry(store, scheduleClientStart)
+
+    expect(track('app_opened', {})).toBe(true)
+    scheduleClientStart.mock.calls[0][0]()
+    expect(sdk.capture).toHaveBeenCalledWith(expect.objectContaining({ event: 'app_opened' }))
+    expect(sdk.capture.mock.calls[0][0].properties.chat_ui_launch_tip_button_emphasis_v1).toBe(
+      expected
+    )
+  })
+
+  it.each([
+    { draw: 7, cohort: 'treatment-center', eligible: true },
+    { draw: 7, cohort: 'treatment-center', eligible: false },
+    { draw: 8, cohort: 'treatment', eligible: true },
+    { draw: 8, cohort: 'treatment', eligible: false },
+    { draw: 9, cohort: 'treatment-live-switch', eligible: true },
+    { draw: 9, cohort: 'treatment-live-switch', eligible: false }
+  ] as const)(
+    'captures $cohort with local eligibility $eligible through real initialization',
+    ({ draw, cohort, eligible }) => {
+      vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue(
+        eligible ? 'chat-ui-on' : 'chat-ui-off'
+      )
+      settings.agentDefaultSurface = eligible ? 'terminal' : 'chat'
+      vi.mocked(crypto.randomInt)
+        .mockImplementationOnce(() => draw)
+        .mockImplementationOnce(() => 1)
+      scheduleClientStart.mockClear()
+      initTelemetry(store, scheduleClientStart)
+      expect(settings.telemetry?.chatUiLaunchTipTargeting).toEqual({
+        mode: 'not-switched',
+        eligible
+      })
+      expect(track('app_opened', {})).toBe(true)
+      expect(
+        track('chat_ui_feature_tip_exposure', {
+          variant: 'chat_ui_off',
+          launch_tip_cohort: cohort,
+          targeting: 'not-switched',
+          shown: eligible
+        })
+      ).toBe(true)
+      if (eligible) {
+        expect(
+          track('chat_ui_feature_tip_action', { variant: 'chat_ui_off', action: 'use_chat_ui' })
+        ).toBe(true)
+      }
+      scheduleClientStart.mock.calls[0][0]()
+      expect(sdk.capture).toHaveBeenCalledWith(
+        expect.objectContaining({
+          properties: expect.objectContaining({
+            chat_ui_launch_tip_v1: cohort,
+            chat_ui_launch_tip_targeting_v1: 'not-switched'
+          })
+        })
+      )
+      const properties = sdk.capture.mock.calls[0][0].properties
+      expect(properties).not.toHaveProperty('eligible')
+      expect(properties).not.toHaveProperty('nativeChatProviders')
+    }
+  )
+
+  it('queues live-switching exposure and open events with the assigned cohort and identity', () => {
+    vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue('chat-ui-off')
+    vi.mocked(crypto.randomInt)
+      .mockImplementationOnce(() => 9)
+      .mockImplementationOnce(() => 1)
+    scheduleClientStart.mockClear()
+    initTelemetry(store, scheduleClientStart)
+
+    for (const action of ['live_switching_shown', 'open_live_switching'] as const) {
+      expect(track('chat_ui_feature_tip_action', { variant: 'chat_ui_off', action })).toBe(true)
+    }
+    expect(sdk.capture).not.toHaveBeenCalled()
+    scheduleClientStart.mock.calls[0][0]()
+    expect(
+      sdk.capture.mock.calls.map(([message]) => ({
+        event: message.event,
+        distinctId: message.distinctId,
+        variant: message.properties.variant,
+        action: message.properties.action,
+        cohort: message.properties.chat_ui_launch_tip_v1,
+        targeting: message.properties.chat_ui_launch_tip_targeting_v1
+      }))
+    ).toEqual(
+      ['live_switching_shown', 'open_live_switching'].map((action) => ({
+        event: 'chat_ui_feature_tip_action',
+        distinctId: BASE_COMMON.install_id,
+        variant: 'chat_ui_off',
+        action,
+        cohort: 'treatment-live-switch',
+        targeting: 'not-switched'
+      }))
+    )
+
+    settings.telemetry!.optedIn = false
+    expect(
+      track('chat_ui_feature_tip_action', {
+        variant: 'chat_ui_off',
+        action: 'live_switching_shown'
+      })
+    ).toBe(false)
+    expect(sdk.capture).toHaveBeenCalledTimes(2)
   })
 
   it('holds startup events, then replays them in order with their original timestamps', () => {

@@ -6,7 +6,7 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
-import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session-wire'
+import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { QueuedMessageActionParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import { QueuedMessageMoveParams } from '../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 

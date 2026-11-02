@@ -21,7 +21,6 @@
     "panel": {
       "all": "全部",
       "emptyScope": "此範圍內沒有過往的代理程式工作階段。",
-      "loadFailed": "無法載入",
       "missingResumeId": "此工作階段缺少恢復識別碼。",
       "noSearchResults": "沒有符合搜尋條件的工作階段。",
       "noSessions": "沒有代理程式工作階段",
@@ -522,6 +521,10 @@
       "disconnected": "附加失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法附加",
       "permissionDenied": "照片存取權限遭拒"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "已交接給代理程式",
+      "startedAgent": "已啟動代理程式"
     }
   },
   "common": {
@@ -654,17 +657,14 @@
       "loadingDiff": "正在載入差異…",
       "loadingReview": "正在載入審查…",
       "noReviewableChanges": "沒有可審查的變更",
-      "retryLabel": "重新載入審查內容",
       "reviewUnavailable": "無法使用審查功能",
       "selectFile": "請選取要審查的檔案。",
-      "tooLargeMessage": "此差異過大，無法在手機上預覽。",
-      "tryDifferentFilter": "請嘗試其他審查篩選條件。"
+      "tooLargeMessage": "此差異過大，無法在手機上預覽。"
     },
     "diffReviewDrawers": {
       "addNote": "新增備註",
       "cancelNote": "取消編輯備註",
       "clearSentNotes": "清除已傳送的備註",
-      "completeTitle": "審查完成",
       "copyNotes": "複製備註",
       "deleteNote": "刪除備註",
       "discard": "放棄",
@@ -672,13 +672,8 @@
       "discardTitle": "放棄檔案變更",
       "editNote": "編輯備註",
       "fileNote": "檔案備註",
-      "fileSummary_one": "已審查 {{fileCount}} 個檔案，{{count}} 則備註",
-      "fileSummary_other": "已審查 {{fileCount}} 個檔案，{{count}} 則備註",
-      "filesSummary_one": "已審查 {{fileCount}} 個檔案，{{count}} 則備註",
-      "filesSummary_other": "已審查 {{fileCount}} 個檔案，{{count}} 則備註",
       "lineNumber": "第 {{lineNumber}} 行",
       "loadingSessions": "正在載入代理程式工作階段…",
-      "markUnreviewed": "標記為未審查",
       "newAgentSession": "新增代理程式工作階段",
       "openInSession": "在工作階段中開啟",
       "reviewNote": "審查備註",
@@ -686,11 +681,6 @@
       "sendNotes": "傳送備註",
       "sendNotesLabel": "將備註傳送給代理程式",
       "sendUnsentNotes": "傳送未傳送的備註",
-      "stageReviewed": "暫存已審查檔案",
-      "stageReviewedFiles": "暫存已審查的檔案",
-      "stageReviewedLabel": "暫存已審查的檔案",
-      "stageableFiles_one": "{{count}} 個已審查但未暫存的檔案可供暫存",
-      "stageableFiles_other": "{{count}} 個已審查但未暫存的檔案可供暫存",
       "statusUnreadable": "無法讀取此主機的狀態。正在重試…",
       "terminal": "終端機",
       "terminalLabel": "{{title}} ({{id}})",
@@ -699,57 +689,17 @@
       "updateRequired": "請更新電腦上的 Orca"
     },
     "diffReviewFileSummary": {
-      "branch": "分支",
-      "branchFrom": "分支，原路徑：{{oldPath}}",
       "changed": "已變更",
       "editFileNote": "編輯檔案備註",
-      "hunk": "差異區塊",
-      "nextHunk": "下一個差異區塊",
-      "notes_one": "{{count}} 則備註",
-      "notes_other": "{{count}} 則備註",
-      "previousHunk": "上一個差異區塊",
-      "reviewed": "已審查",
-      "staged": "已暫存",
-      "stagedFrom": "已暫存，原路徑：{{oldPath}}",
-      "stale": "已過時",
-      "staleCount": "{{count}} 則已過時",
-      "unstaged": "未暫存",
-      "unstagedFrom": "未暫存，原路徑：{{oldPath}}"
+      "stale": "已過時"
     },
     "diffReviewFooter": {
-      "addFileNote": "新增檔案備註",
-      "discard": "放棄",
-      "discardFile": "放棄檔案變更",
-      "markFileReviewed": "將檔案標記為已審查",
-      "markReviewed": "標記為已審查",
       "nextFile": "下一個檔案",
-      "note": "備註",
-      "previousFile": "上一個檔案",
-      "reviewed": "已審查",
-      "stage": "暫存",
-      "stageFile": "暫存檔案",
-      "unstage": "取消暫存",
-      "unstageFile": "取消暫存檔案"
+      "previousFile": "上一個檔案"
     },
     "diffReviewHeader": {
-      "filterAll": "全部",
-      "filterBranch": "分支",
-      "filterNotes": "備註",
-      "filterStaged": "已暫存",
-      "filterUnreviewed": "未審查",
-      "filterUnstaged": "未暫存",
-      "openPullRequestSidebar": "開啟 PR 側邊欄",
       "openReviewActions": "開啟審查操作選單",
-      "reviewedProgress": "已審查 {{reviewedCount}}/{{queueLength}}",
-      "showAllFiles": "顯示所有審查檔案",
-      "showBranchFiles": "顯示分支的審查檔案",
-      "showNotesFiles": "顯示有備註的檔案",
-      "showStagedFiles": "顯示已暫存的檔案",
-      "showUnreviewedFiles": "顯示未審查的檔案",
-      "showUnstagedFiles": "顯示未暫存的檔案",
-      "title": "變更",
-      "unsentNotes_one": "{{count}} 則未傳送的備註",
-      "unsentNotes_other": "{{count}} 則未傳送的備註"
+      "title": "變更"
     },
     "diffReviewLine": {
       "addNoteOnLine": "在第 {{number}} 行新增備註",
@@ -848,10 +798,8 @@
       "selectRunTarget": "選擇執行目標"
     },
     "prSidebar": {
-      "loadFailed": "發生錯誤。",
       "loading": "正在載入 PR…",
-      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。",
-      "retryLoading": "重新嘗試載入 PR"
+      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主機清單",
@@ -1000,6 +948,16 @@
       "title": "發生錯誤",
       "tryAgain": "再試一次",
       "home": "首頁"
+    },
+    "svgPreview": {
+      "drawFailed": "無法繪製此 SVG",
+      "label": "{{title}} 圖形",
+      "previewDrawing": "預覽圖形",
+      "viewSource": "檢視 SVG 原始碼"
+    },
+    "mermaidDiagram": {
+      "expand": "展開圖表",
+      "label": "Mermaid 圖表"
     }
   },
   "connection": {
@@ -1529,40 +1487,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "需要操作",
-      "cancelled": "已取消",
-      "checkDetails": "{{name}} 檢查詳細資訊",
-      "failed": "失敗",
       "failing": "{{count}} 項失敗",
-      "failingChecks_one": "{{count}} 項檢查失敗",
-      "failingChecks_other": "{{count}} 項檢查失敗",
-      "fix": "修復",
-      "fixFailing": "使用 AI 修復失敗的檢查",
-      "inProgress": "進行中",
-      "inspectOrFix": "檢視詳細資訊或啟動 AI 修復。",
-      "loadDetailsFailed": "無法載入檢查詳細資訊",
-      "neutral": "中性",
-      "neutralCount": "{{count}} 項中性",
       "noChecks": "無檢查",
       "openOnWeb": "在網頁上開啟 {{name}}",
       "passed": "{{count}} 項通過",
-      "pending": "待處理",
-      "pendingCount": "{{count}} 項待處理",
-      "queued": "已加入佇列",
-      "rerunFailing": "重新執行失敗的檢查",
-      "skipped": "已略過",
-      "successful": "成功",
-      "timedOut": "已逾時",
-      "title": "檢查項目",
-      "unavailable": "無法取得檢查結果"
+      "title": "檢查項目"
     },
     "commentCard": {
       "daysAgo_one": "{{count}} 天前",
       "daysAgo_other": "{{count}} 天前",
-      "deleteComment": "刪除留言",
       "deleteConfirmMessage": "這會永久刪除 GitHub 上的留言。",
       "deleteConfirmTitle": "刪除留言？",
-      "editComment": "編輯留言",
       "editPlaceholder": "編輯留言…",
       "hoursAgo_one": "{{count}} 小時前",
       "hoursAgo_other": "{{count}} 小時前",
@@ -1571,53 +1506,20 @@
       "minutesAgo_other": "{{count}} 分鐘前",
       "monthsAgo_one": "{{count}} 個月前",
       "monthsAgo_other": "{{count}} 個月前",
-      "openOnGitHub": "在 GitHub 上開啟留言",
       "reply": "回覆",
-      "replyPlaceholder": "撰寫回覆…",
-      "replyToComment": "回覆留言",
       "resolve": "解決",
-      "resolveThread": "將討論串標示為已解決",
-      "resolved": "已解決",
       "unresolve": "標示為未解決",
-      "unresolveThread": "將討論串標示為未解決",
       "yearsAgo_one": "{{count}} 年前",
       "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "新增留言…",
-      "all": "全部",
-      "bots": "機器人",
       "comment": "留言",
-      "commentsLoadFailed": "無法載入留言。請點選「重新整理」再試一次。",
       "description": "描述",
       "descriptionLoadFailed": "無法載入描述。請點選「重新整理」再試一次。",
-      "humans": "人類",
-      "noBotComments": "沒有機器人留言。",
       "noComments": "還沒有留言。",
       "noDescription": "沒有提供描述。",
-      "noHumanComments": "沒有人類留言。",
-      "resolvedCommentCount": "{{author}} 的已解決留言（{{count}}）",
-      "resolvedCommentSingle": "{{author}} 的已解決留言",
-      "resolvedThreadCount": "{{author}} 的已解決討論串（{{count}}）",
-      "resolvedThreadSingle": "{{author}} 的已解決討論串",
       "showMore": "再顯示 {{count}} 則",
-      "showMoreOf": "再顯示 {{count}} 則（剩餘 {{remaining}} 則）",
       "title": "留言"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "落後 {{count}} 個提交（基底提交：{{baseCommit}}）",
-      "commitsBehind_other": "落後 {{count}} 個提交（基底提交：{{baseCommit}}）",
-      "copyCommands": "複製命令",
-      "copyFailed": "無法複製文字",
-      "copyRefreshCommands": "複製重新判斷是否可合併的命令",
-      "detailsUnavailable": "無法取得衝突檔案的詳細資訊",
-      "filesHeading": "衝突的檔案",
-      "localMergeClean": "GitHub 回報有衝突，但本機 Git 未重現這些衝突。請重新整理 PR 或推送分支，以重新判斷是否可合併。",
-      "mustResolve": "此分支有必須解決的衝突",
-      "refreshing": "正在重新整理衝突詳細資訊…",
-      "resolveWithAi": "使用 AI 解決衝突",
-      "runFromWorktree": "從此工作樹執行",
-      "title": "衝突"
     },
     "linkPrForm": {
       "linkButton": "連結 PR",
@@ -1630,27 +1532,14 @@
       "details": "詳情"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "切換自動合併",
-      "autoMergeLabel": "就緒時自動合併",
-      "autoMergeOff": "關閉",
-      "autoMergeOn": "開啟",
-      "closeAccessibilityLabel": "關閉 PR",
       "closeConfirmMessage": "將關閉 #{{number}}，不會進行合併。",
       "closeConfirmTitle": "要關閉 PR 嗎？",
-      "markReadyAccessibilityLabel": "將 PR 標示為可供審查",
       "markReadyButton": "標示為可供審查",
-      "mergeAccessibilityLabel": "合併 PR",
-      "mergeButton": "合併",
-      "mergeConfirmTitle": "要合併 PR 嗎？",
-      "recheckAccessibilityLabel": "重新檢查合併狀態",
-      "recheckButton": "重新檢查",
       "reopenAccessibilityLabel": "重新開啟 PR",
       "reopenButton": "重新開啟",
       "reopenConfirmMessage": "將重新開啟 #{{number}}。",
       "reopenConfirmTitle": "要重新開啟 PR 嗎？",
-      "unlinkAccessibilityLabel": "取消連結 PR",
-      "unlinkButton": "取消連結",
-      "unlinkFailed": "無法取消連結 PR。"
+      "unlinkButton": "取消連結"
     },
     "prActionsState": {
       "behindHint": "合併前更新分支",
@@ -1743,25 +1632,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} 未連結至開啟中的 PR。",
-      "branchRequired": "建立 PR 前，請先檢出分支。",
-      "createFailed": "建立 PR 失敗。",
-      "createPr": "建立 PR",
-      "createPullRequest": "建立 PR",
       "currentBranchNotLinked": "目前分支未連結至開啟中的 PR。",
-      "linkExistingPr": "連結現有 PR",
       "linkExistingPullRequest": "連結現有 PR",
       "linkedPrUnavailable": "無法取得已連結的 PR #{{number}}",
-      "noOpenPullRequest": "沒有開啟中的 PR",
-      "refreshOrCreate": "請重新整理以再次檢查，或為此分支建立新的 PR。",
-      "refreshPullRequest": "重新整理 PR",
-      "title": "PR"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "取消編輯標題",
-      "editTitle": "編輯 PR 標題",
-      "openInBrowser": "在瀏覽器中開啟 PR #{{number}}",
-      "openOnWeb": "在網頁上開啟 PR #{{number}}",
-      "saveTitle": "儲存標題"
+      "refreshOrCreate": "請重新整理以再次檢查，或為此分支建立新的 PR。"
     },
     "prViewPanel": {
       "branchUnavailable": "無法取得目前分支。",
@@ -1769,20 +1643,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "載入人員失敗",
-      "noMatches": "找不到符合的人員",
-      "removeReviewer": "移除 {{login}}",
-      "requestReviewer": "要求 {{login}} 審查",
-      "searchPeople": "搜尋人員",
-      "title": "審查人"
+      "noMatches": "找不到符合的人員"
     },
     "reviewersSection": {
-      "addOrRemove": "新增或移除審查人",
       "approved": "已核准",
       "changesRequested": "要求變更",
       "commented": "已留言",
       "dismissed": "已撤銷",
-      "loadFailed": "無法載入審查人。請點選「重新整理」再試一次。",
-      "loading": "正在載入審查人…",
       "noReviewers": "尚未要求任何人審查",
       "pending": "待處理",
       "removeReviewer": "移除 {{login}}",
@@ -2402,9 +2269,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "原始碼控制操作失敗",
-      "reviewedFilesStaged_one": "已暫存 {{count}} 個已審查的檔案",
-      "reviewedFilesStaged_other": "已暫存 {{count}} 個已審查的檔案",
-      "stageResults": "已暫存 {{staged}} 個，{{failed}} 個失敗",
       "waitingForDesktop": "正在等待電腦…"
     },
     "useDiffReviewInteractions": {
@@ -2465,8 +2329,7 @@
       "actionFailed": "留言操作失敗"
     },
     "usePrTitleAction": {
-      "disconnected": "尚未連線至電腦。",
-      "updateFailed": "更新標題失敗。"
+      "disconnected": "尚未連線至電腦。"
     },
     "useQuickCommands": {
       "loadFailed": "載入快速命令失敗",
@@ -2788,7 +2651,6 @@
       "checkingReviewStatus": "正在檢查審查狀態。",
       "checkoutBeforePublish": "請先檢出分支再發布提交。",
       "commitStagedChanges": "提交已暫存的變更。",
-      "commits": "提交",
       "committing": "正在提交。",
       "createPr": "建立 PR",
       "enterCommitMessage": "請輸入提交訊息以進行提交。",
@@ -2816,33 +2678,15 @@
       "resolveFailed": "無法判定分支基準"
     },
     "branchCard": {
-      "branchCount": "已提交 {{count}} 項",
-      "changedCount": "已變更 {{count}} 項",
-      "cherryPickState": "挑選",
-      "mergeState": "合併",
-      "rebaseState": "變基",
-      "stagedCount": "已暫存 {{count}} 項",
       "completingMerge": "正在完成…",
       "completeMerge": "完成合併"
     },
     "branchCompare": {
-      "commits_one": "{{count}} 筆提交",
-      "commits_other": "{{count}} 筆提交",
-      "files_one": "{{count}} 個檔案",
-      "files_other": "{{count}} 個檔案",
-      "sectionTitle": "已在分支上提交",
-      "summary": "{{files}} - 與 {{baseRef}} 比較",
-      "summaryWithCommits": "{{files}} - {{commits}} - 與 {{baseRef}} 比較"
+      "sectionTitle": "已在分支上提交"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "無法判定用於比較的基礎分支。",
       "loadFailed": "無法載入已提交的變更"
-    },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "關閉已提交的差異預覽",
-      "committedOnBranch": "已在分支上提交",
-      "loadFailed": "無法載入差異",
-      "truncated": "行動版預覽的差異內容已截斷。"
     },
     "commitDropdown": {
       "checkOutBranchToPush": "推送提交前請先檢出分支",
@@ -2897,12 +2741,8 @@
       "emptyMessage": "工作樹沒有變更。",
       "emptyTitle": "沒有本機變更",
       "generateMessage": "使用 AI 產生提交訊息",
-      "noStagedFiles": "沒有已暫存的檔案",
-      "openActions": "開啟原始碼控制操作",
       "reconnecting": "正在重新連線至電腦…",
-      "regenerateHint": "清除訊息以重新產生。",
-      "stageAll": "暫存全部",
-      "unstageAll": "全部取消暫存"
+      "regenerateHint": "清除訊息以重新產生。"
     },
     "createPrAction": {
       "checkingStatus": "正在檢查審查狀態…",
@@ -2931,20 +2771,15 @@
       "titleUnpublishedForcePushCount_one": "使用租約強制推送此分支的 {{count}} 筆提交，並視需要設定上游分支。",
       "titleUnpublishedForcePushCount_other": "使用租約強制推送此分支的 {{count}} 筆提交，並視需要設定上游分支。"
     },
-    "fileList": {
-      "committedSection": "已在分支上提交"
-    },
     "fileRows": {
       "addedByThem": "對方已新增",
       "addedByUs": "我方已新增",
       "bothAdded": "雙方皆已新增",
       "bothDeleted": "雙方皆已刪除",
       "bothModified": "雙方皆已修改",
-      "committedSection": "已在分支上提交",
       "committedUnavailable": "無法取得已提交的變更。",
       "deletedByThem": "對方已刪除",
       "deletedByUs": "我方已刪除",
-      "discardFile": "放棄 {{path}} 的變更",
       "loadingCommitted": "正在載入已提交的變更…",
       "openChangedFile": "開啟已變更的檔案 {{path}}",
       "openCommittedChange": "開啟 {{path}} 的已提交變更",
@@ -2977,9 +2812,7 @@
       "waitingForDesktop": "正在等待電腦…"
     },
     "gitStatus": {
-      "changes": "變更",
-      "conflicts": "衝突",
-      "stagedChanges": "已暫存的變更"
+      "conflicts": "衝突"
     },
     "header": {
       "backToSession": "返回工作階段",
@@ -3038,9 +2871,7 @@
       "pushBeforeCreateFailed": "推送失敗。請解決推送錯誤後再試一次。"
     },
     "hubTab": {
-      "changes": "變更",
-      "commits": "提交",
-      "pullRequest": "PR"
+      "changes": "變更"
     },
     "loaders": {
       "connectingToDesktop": "正在連線至電腦…",
@@ -3049,7 +2880,6 @@
       "waitingForDesktop": "等待電腦…"
     },
     "modals": {
-      "actionsTitle": "原始碼控制",
       "currentBranch": "目前分支",
       "discardButton": "放棄",
       "discardConfirmMessage": "要放棄「{{path}}」的變更嗎？此操作無法復原。",
@@ -3059,23 +2889,8 @@
       "prCreatedTitle": "已建立 PR",
       "switchBranchTitle": "切換分支"
     },
-    "openers": {
-      "openDiffFailed": "無法開啟差異",
-      "tabNotReady": "檔案已開啟，但分頁尚未就緒。請再試一次。",
-      "waitingForDesktop": "等待電腦…"
-    },
     "panel": {
-      "loadFailedTitle": "無法載入",
       "unavailableTitle": "無法使用原始碼控制"
-    },
-    "prChip": {
-      "createPr": "建立 PR",
-      "loading": "正在載入 PR…",
-      "loadingLabel": "正在載入 PR",
-      "openLabel": "PR #{{number}}，{{state}}，{{checks}}。開啟 PR。",
-      "openWithComments_one": "PR #{{number}}，{{state}}，{{checks}}，有 {{count}} 則未解決的留言。開啟 PR。",
-      "openWithComments_other": "PR #{{number}}，{{state}}，{{checks}}，有 {{count}} 則未解決的留言。開啟 PR。",
-      "unavailableLabel": "無法取得 PR：{{message}}"
     },
     "prCreate": {
       "authRequired": "請在建立 {{reviewLabel}} 之前完成身分驗證。",
@@ -3106,7 +2921,6 @@
       "publishBranch": "發布分支",
       "pull": "拉取",
       "push": "推送",
-      "stageAll": "暫存全部",
       "sync": "同步"
     },
     "remoteDropdown": {
@@ -3165,7 +2979,6 @@
       "noBranch": "無分支"
     },
     "state": {
-      "noUpstream": "無上游分支",
       "syncStatus": "領先 {{ahead}} 個提交，落後 {{behind}} 個提交"
     },
     "textGenerationFailure": {
@@ -3254,9 +3067,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "無法產生提交訊息"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "建立 PR 前，請先檢出分支。"
     },
     "useMobileGitRequests": {
       "actionFailed": "原始碼控制操作失敗",
@@ -3893,8 +3703,7 @@
       "noFilterMatches": "沒有符合篩選條件的工作區",
       "noMatches": "找不到相符的工作區",
       "reopen": "重新開啟以更新",
-      "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。",
-      "retrying": "worktree.ps 執行失敗（{{error}}），正在自動重試"
+      "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。"
     },
     "workspaceListSections": {
       "all": "全部",

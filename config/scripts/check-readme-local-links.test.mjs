@@ -126,6 +126,48 @@ describe('README local link check', () => {
     ])
   })
 
+  it('preserves commas inside srcset URLs', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source SrcSet=" ,,\t docs/Hero,wide.png 1x,, \n docs/Hero,tall.png,, ">',
+      'docs/Hero,wide.png': 'png',
+      'docs/Hero,tall.png': 'png'
+    })
+
+    expect(findBrokenReadmeLinks(root)).toEqual([])
+  })
+
+  it('rejects a missing srcset URL even when its comma-separated fragments are tracked', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="docs/Missing,wide.png 1x">',
+      'docs/Missing': 'fragment',
+      'wide.png': 'fragment'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual([
+      'docs/Missing,wide.png'
+    ])
+  })
+
+  it('ignores a srcset data URL while checking the following local candidate', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="data:image/png;base64,AAAA 1x, docs/missing.png 2x">'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual(['docs/missing.png'])
+  })
+
+  it('does not treat commas inside srcset descriptors as new candidates', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md': '<source srcset="resources/build/icon.png future(1,2), docs/missing.png 2x">'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual(['docs/missing.png'])
+  })
+
   it('checks tracked media outside the detector sparse checkout', () => {
     const root = makeFixture(validReadmes)
     const workflow = parse(readFileSync(path.join(projectDir, '.github/workflows/pr.yml'), 'utf8'))

@@ -1,15 +1,28 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import '@testing-library/jest-dom/vitest'
+import { useEffect, useLayoutEffect, useState } from 'react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
+import { i18n } from '@/i18n/i18n'
+import esCatalog from '@/i18n/locales/es.json'
 import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
 import type { AntigravityAccountState } from '../../../../shared/antigravity-account-types'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
 } from '../../../../shared/managed-account-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { AccountsPane } from './AccountsPane'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { useSettingsHostNavigation } from './use-settings-host-navigation'
+import { resolveSettingsHostScope } from './settings-host-scope'
+import type { SettingsNavigationTarget } from '@/lib/settings-navigation-types'
+import { ProviderAccountChatButton } from '../status-bar/ProviderAccountChatButton'
+import { ClaudeSwitcherMenu } from '../status-bar/ClaudeSwitcherMenu'
+import { TooltipProvider } from '../ui/tooltip'
 import type { SettingsHostScope } from './settings-host-scope'
 
 // Why: focus deliberately points at another server; the pane must follow hostScope only.
@@ -22,7 +35,12 @@ const scopeFor = (environmentId: string | null): SettingsHostScope => ({
   available: true
 })
 const renderPane = (scope: SettingsHostScope): React.JSX.Element => (
-  <AccountsPane settings={focusedElsewhere} updateSettings={vi.fn()} hostScope={scope} />
+  <AccountsPane
+    settings={focusedElsewhere}
+    updateSettings={vi.fn()}
+    updateSettingsOrThrow={vi.fn()}
+    hostScope={scope}
+  />
 )
 
 const fake = vi.hoisted(() => {
@@ -30,6 +48,8 @@ const fake = vi.hoisted(() => {
     query: string
     pendingSelect: ((roster: unknown) => void) | null
     write: ReturnType<typeof vi.fn>
+    add: ReturnType<typeof vi.fn>
+    navigate: (target: SettingsNavigationTarget) => void
     rosters: Map<string, unknown>
     watchedTargets: unknown[]
     selects: unknown[][]
@@ -37,36 +57,36 @@ const fake = vi.hoisted(() => {
     query: 'claude',
     pendingSelect: null,
     write: vi.fn(),
+    add: vi.fn(),
+    navigate: () => {},
     rosters: new Map(),
     watchedTargets: [],
     selects: []
   }
   return state
 })
-vi.mock('@/i18n/i18n', () => ({
-  getIntlLocale: () => 'en',
-  i18n: { language: 'en' },
-  translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
-    Object.entries(values ?? {}).reduce(
-      (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),
-      fallback
-    )
-}))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       settingsSearchQuery: fake.query,
+      settings: focusedElsewhere,
+      openSettingsTarget: (target: SettingsNavigationTarget) => fake.navigate(target),
+      openSettingsPage: fake.write,
       rateLimits: {
         codex: null,
         codexTarget: { runtime: 'host', wslDistro: null },
         minimax: null,
         cursor: { updatedAt: 0 },
-        grok: { updatedAt: 0 }
+        grok: { updatedAt: 0 },
+        inactiveClaudeAccounts: [],
+        claudeTarget: { runtime: 'host', wslDistro: null }
       },
       runtimeEnvironments: [],
       runtimeStatusByEnvironmentId: new Map(),
       recordFeatureInteraction: fake.write,
-      fetchSettings: fake.write
+      fetchSettings: fake.write,
+      fetchInactiveClaudeAccountUsage: fake.write
     })
 }))
 vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
@@ -97,6 +117,9 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => {
       })
       return { close: vi.fn() }
     },
+    fetchProviderAccountsSnapshot: async (target: RuntimeClientTarget) => ({
+      claude: fake.rosters.get(target.kind === 'environment' ? target.environmentId : 'local')
+    }),
     selectClaudeProviderAccount: (...args: unknown[]) => {
       fake.selects.push(args)
       return new Promise((resolve) => {
@@ -126,8 +149,24 @@ function claudeRoster(id: string, email: string, active: boolean): ClaudeRateLim
   }
 }
 
-beforeEach(() => {
+vi.mock('@/lib/claude-account-switch-sessions', () => ({
+  handleRunningClaudeSessionsAfterSwitch: vi.fn(async () => 'no-running-sessions')
+}))
+vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+  useActiveAccountOwner: () => ({ target: { kind: 'local' }, wslHostDistro: null })
+}))
+vi.mock('@/lib/windows-terminal-capabilities', () => ({
+  getWindowsTerminalCapabilityOwnerKey: () => 'local',
+  useWindowsTerminalCapabilities: () => ({ wslDistros: ['Ubuntu'] })
+}))
+
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
+  vi.mocked(toast.error).mockClear()
   fake.query = 'claude'
+  fake.write.mockClear()
+  fake.add.mockReset()
+  fake.add.mockImplementation(async () => fake.rosters.get('local'))
   fake.pendingSelect = null
   fake.watchedTargets = []
   fake.selects = []
@@ -136,6 +175,7 @@ beforeEach(() => {
   fake.rosters.set('server-b', claudeRoster('acct-b', 'beta@server-b.test', false))
   Object.assign(window, {
     api: {
+      claudeAccounts: { add: fake.add },
       minimaxCredentials: {
         getStatus: vi.fn(async () => ({ cookieConfigured: false, apiKeyConfigured: false }))
       },
@@ -147,6 +187,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   Reflect.deleteProperty(window, 'api')
 })
 
@@ -170,6 +211,7 @@ it('shows Windows account guidance for the page owner rather than the focused se
     <AccountsPane
       settings={focusedElsewhere}
       updateSettings={vi.fn()}
+      updateSettingsOrThrow={vi.fn()}
       hostScope={scopeFor('server-a')}
       accountOwnerPlatform="win32"
     />
@@ -235,6 +277,7 @@ it("shows a WSL host's distro accounts from this desktop and selects for that di
     <AccountsPane
       settings={focusedElsewhere}
       updateSettings={vi.fn()}
+      updateSettingsOrThrow={vi.fn()}
       hostScope={scopeFor(null)}
       wslHostDistro="Ubuntu"
       wslSupportedPlatform
@@ -249,3 +292,209 @@ it("shows a WSL host's distro accounts from this desktop and selects for that di
     [{ kind: 'local' }, { accountId: 'acct-w', runtime: 'wsl', wslDistro: 'Ubuntu' }]
   ])
 })
+
+it.each(['add', 'manage'] as const)(
+  '%s navigation keeps native Windows accounts through consumption until explicit navigation releases them',
+  async (entry) => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Windows')
+    const roster = claudeRoster('native', 'native@windows.test', true)
+    roster.accounts.push(
+      { ...roster.accounts[0], id: 'native2', email: 'second@windows.test' },
+      {
+        ...roster.accounts[0],
+        id: 'wsl',
+        email: 'wsl@ubuntu.test',
+        managedAuthRuntime: 'wsl',
+        wslDistro: 'Ubuntu'
+      }
+    )
+    fake.rosters.set('local', roster)
+    const settingsStore = createTestStore()
+    settingsStore.setState({
+      settings: {
+        ...focusedElsewhere,
+        localAccountRuntime: 'wsl',
+        localAccountWslDistro: 'Ubuntu'
+      }
+    })
+    const writeSettings = vi.fn(async (updates: Partial<GlobalSettings>) => ({
+      ...settingsStore.getState().settings,
+      ...updates
+    }))
+    Object.assign(window.api, { settings: { set: writeSettings } })
+    function Visit({
+      target,
+      clear
+    }: {
+      target: SettingsNavigationTarget | null
+      clear: () => void
+    }) {
+      const navigation = useSettingsHostNavigation(target)
+      const { consumeSettingsNavigation } = navigation
+      const settings = settingsStore((state) => state.settings) ?? focusedElsewhere
+      const scope = resolveSettingsHostScope({
+        choice: navigation.settingsHostChoice,
+        defaultEnvironmentId: 'focused-server',
+        savedEnvironmentIds: ['focused-server'],
+        catalogHydrated: true
+      })
+      useEffect(() => {
+        if (target) {
+          consumeSettingsNavigation(target)
+          clear()
+        }
+      }, [target, clear, consumeSettingsNavigation])
+      useLayoutEffect(() => {
+        // The first possible action precedes consumption effects, even with another default host.
+        document.querySelector<HTMLButtonElement>('#accounts-claude button')?.click()
+      }, [])
+      return (
+        <>
+          <button onClick={() => navigation.setSettingsHostChoice({ kind: 'local' })}>
+            Choose local host
+          </button>
+          <button
+            onClick={() => navigation.consumeSettingsNavigation({ pane: 'accounts', repoId: null })}
+          >
+            Ordinary accounts
+          </button>
+          <AccountsPane
+            settings={settings}
+            updateSettings={settingsStore.getState().updateSettings}
+            updateSettingsOrThrow={settingsStore.getState().updateSettingsOrThrow}
+            hostScope={scope}
+            nativeAccounts={navigation.nativeAccounts}
+            onAccountLocationChange={navigation.releaseNativeAccounts}
+            wslSupportedPlatform
+            wslAvailable
+            wslDistros={['Ubuntu']}
+          />
+        </>
+      )
+    }
+    function Flow() {
+      const [target, setTarget] = useState<SettingsNavigationTarget | null>(null)
+      const [opened, setOpened] = useState(false)
+      fake.navigate = (next) => {
+        setTarget(next)
+        setOpened(true)
+      }
+      return (
+        <TooltipProvider>
+          {opened ? (
+            <>
+              <button onClick={() => setOpened(false)}>Close Settings</button>
+              <Visit target={target} clear={() => setTarget(null)} />
+            </>
+          ) : entry === 'add' ? (
+            <ProviderAccountChatButton
+              provider="claude"
+              target={{ kind: 'local' }}
+              add
+              disabled={false}
+            />
+          ) : (
+            <ClaudeSwitcherMenu
+              claude={null}
+              compact
+              iconOnly={false}
+              chatAction={{ target: { kind: 'local' }, canSwitch: async () => true }}
+            />
+          )}
+        </TooltipProvider>
+      )
+    }
+    const view = render(<Flow />)
+    const enter = async () => {
+      const trigger = await screen.findByRole('button', {
+        name: entry === 'add' ? 'Add Account…' : 'Switch Account'
+      })
+      await waitFor(() => expect(trigger).toBeEnabled())
+      if (entry === 'add') {
+        fireEvent.click(trigger)
+      } else {
+        fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' })
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Manage Accounts…' }))
+      }
+    }
+    const add = async () => {
+      const section = document.getElementById('accounts-claude')
+      if (!section) {
+        throw new Error('Missing Claude section')
+      }
+      const button = within(section).getByRole('button', { name: 'Add Account' })
+      await waitFor(() => expect(button).toBeEnabled())
+      fireEvent.click(button)
+      await act(async () => {})
+    }
+    await enter()
+    await waitFor(() => expect(fake.add).toHaveBeenCalled())
+    expect(fake.add.mock.calls[0]).toEqual([
+      { runtime: 'host', wslDistro: undefined, copyLink: false }
+    ])
+    expect(fake.watchedTargets).not.toContainEqual({
+      kind: 'environment',
+      environmentId: 'focused-server'
+    })
+    expect(screen.getByText('native@windows.test')).toBeTruthy()
+    expect(screen.queryByText('wsl@ubuntu.test')).toBeNull()
+    expect(writeSettings).not.toHaveBeenCalled()
+    await add()
+    expect(fake.add.mock.lastCall?.[0].runtime).toBe('host')
+    // The actual picker remains available; only an explicit selection writes the preference.
+    fake.query = 'Account Location'
+    view.rerender(<Flow />)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    i18n.addResourceBundle('es', 'translation', esCatalog)
+    await i18n.changeLanguage(entry === 'manage' ? 'es' : 'en')
+    writeSettings.mockRejectedValueOnce(new Error('settings write failed'))
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: 'Windows' })))
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+      entry === 'manage'
+        ? 'No se pudo guardar la ubicación de las cuentas. Inténtalo de nuevo.'
+        : 'Account location could not be saved. Try again.'
+    )
+    expect(console.error).not.toHaveBeenCalled()
+    await i18n.changeLanguage('en')
+    expect(settingsStore.getState().settings?.localAccountRuntime).toBe('wsl')
+    expect(screen.getByRole('radio', { name: 'Windows' })).toHaveAttribute('aria-checked', 'true')
+    fake.query = 'claude'
+    view.rerender(<Flow />)
+    expect(screen.getByText('native@windows.test')).toBeTruthy()
+    expect(screen.queryByText('wsl@ubuntu.test')).toBeNull()
+    fake.query = 'Account Location'
+    view.rerender(<Flow />)
+    writeSettings.mockClear()
+    const write = Promise.withResolvers<GlobalSettings>()
+    writeSettings.mockReturnValueOnce(write.promise)
+    fireEvent.click(screen.getByRole('radio', { name: 'Windows' }))
+    expect(screen.getByRole('radio', { name: 'Windows' })).toHaveAttribute('aria-checked', 'true')
+    expect(writeSettings).toHaveBeenCalledExactlyOnceWith({ localAccountRuntime: 'host' })
+    await act(async () =>
+      write.resolve({
+        ...focusedElsewhere,
+        localAccountRuntime: 'host',
+        localAccountWslDistro: 'Ubuntu'
+      })
+    )
+    await act(async () => fireEvent.click(screen.getByRole('radio', { name: 'WSL' })))
+    expect(writeSettings.mock.lastCall).toEqual([{ localAccountRuntime: 'wsl' }])
+    fake.query = 'claude'
+    view.rerender(<Flow />)
+    await add()
+    expect(fake.add.mock.lastCall?.[0]).toMatchObject({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(screen.getByText('wsl@ubuntu.test')).toBeTruthy()
+    fireEvent.click(screen.getByText('Close Settings'))
+    await enter()
+    await add()
+    expect(fake.add.mock.lastCall?.[0].runtime).toBe('host')
+    fireEvent.click(screen.getByText('Choose local host'))
+    await add()
+    expect(fake.add.mock.lastCall?.[0].runtime).toBe('wsl')
+    fireEvent.click(screen.getByText('Close Settings'))
+    await enter()
+    fireEvent.click(screen.getByText('Ordinary accounts'))
+    await add()
+    expect(fake.add.mock.lastCall?.[0].runtime).toBe('wsl')
+  }
+)

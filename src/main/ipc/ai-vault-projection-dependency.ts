@@ -1,5 +1,5 @@
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { AgentSessionAssociationObservation } from '../../shared/agent-session-status-snapshot-fold'
+import { AgentSessionAssociationObservation } from '../../shared/agent-session/view/agent-session-status-snapshot-fold'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environments/runtime-environment-transport-generation'
 
 type Authority = { identity: string; revision: number; references: number }

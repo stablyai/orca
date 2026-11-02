@@ -1,6 +1,7 @@
+import type * as PtySpawnValidationTypes from '../providers/working-directory-validation'
 import { describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
-import type * as LocalPtyUtils from '../providers/local-pty-utils'
+import type * as LocalPtyUtils from '../providers/local-pty/local-pty-executable-spawn'
 
 const {
   spawnMock,
@@ -44,11 +45,18 @@ vi.mock('../providers/windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+vi.mock('../providers/local-pty/local-pty-executable-spawn', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
-    resolveUnixShellPath: resolveUnixShellPathMock,
+    resolveUnixShellPath: resolveUnixShellPathMock
+  }
+})
+
+vi.mock('../providers/working-directory-validation', async (importOriginal) => {
+  const actual = await importOriginal<typeof PtySpawnValidationTypes>()
+  return {
+    ...actual,
     validateWorkingDirectory: validateWorkingDirectoryMock,
     validateWorkingDirectoryAsync: validateWorkingDirectoryMock
   }
@@ -130,10 +138,15 @@ describe('createPtySubprocess', () => {
       ORCA_WSL_CLI_DIR: process.env.ORCA_WSL_CLI_DIR,
       ORCA_ORCAD_MANAGED_ACTIVATION_ROOT: process.env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT,
       ORCA_REMOTE_VIEWER_CLIPBOARD: process.env.ORCA_REMOTE_VIEWER_CLIPBOARD,
-      ORCA_ORCAD_IDLE_TIMEOUT_MS: process.env.ORCA_ORCAD_IDLE_TIMEOUT_MS
+      ORCA_ORCAD_IDLE_TIMEOUT_MS: process.env.ORCA_ORCAD_IDLE_TIMEOUT_MS,
+      ORCA_WSL_ORCAD_HOST: process.env.ORCA_WSL_ORCAD_HOST,
+      ORCA_WSL_DISTRO_GUID: process.env.ORCA_WSL_DISTRO_GUID
     }
     process.env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT = '/home/u/.orca-remote/.activation'
     process.env.ORCA_ORCAD_IDLE_TIMEOUT_MS = '300000'
+    // A WSL host's own marker and distro id; a user's `orcad` in its shell is not that host.
+    process.env.ORCA_WSL_ORCAD_HOST = '1'
+    process.env.ORCA_WSL_DISTRO_GUID = '{0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f}'
     process.env.ORCA_REMOTE_VIEWER_CLIPBOARD = '1'
     process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.ORCA_TAB_ID = 'parent-tab'
@@ -160,6 +173,8 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT).toBeUndefined()
     expect(env.ORCA_REMOTE_VIEWER_CLIPBOARD).toBeUndefined()
     expect(env.ORCA_ORCAD_IDLE_TIMEOUT_MS).toBeUndefined()
+    expect(env.ORCA_WSL_ORCAD_HOST).toBeUndefined()
+    expect(env.ORCA_WSL_DISTRO_GUID).toBeUndefined()
   })
 
   it('preserves explicit child Orca pane identity over parent env', async () => {

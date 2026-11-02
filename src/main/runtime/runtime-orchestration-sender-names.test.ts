@@ -2,11 +2,11 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import { OrchestrationDb } from './orchestration/db'
@@ -14,8 +14,9 @@ import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixtur
 import { reconcileLifecycleMessage } from './orchestration/lifecycle-reconciliation'
 import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-names'
 import { structuredMailSource } from './orchestration/structured-mail-source'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { MessageRow } from './orchestration/types'
+import { parseStartOptions } from './rpc/methods/orchestration/worker/worker-earlier-work'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
@@ -31,7 +32,7 @@ type Session = NonNullable<
   >
 >
 type SenderNamingDeps = ConstructorParameters<typeof RuntimeOrchestrationSenderNames>[0]
-type HookRow = ReturnType<SenderNamingDeps['getAgentStatusSnapshotForPane']>[number]
+type HookRow = NonNullable<ReturnType<SenderNamingDeps['getAgentStatusSnapshotForPane']>>[number]
 
 let db: OrchestrationDb
 let session: Session
@@ -40,14 +41,18 @@ let generatedTitles: boolean
 let hookRows: HookRow[]
 let pty: NonNullable<ReturnType<SenderNamingDeps['getPtyAgents']>>
 let trackedTitle: string | null
+let conversationReads: number
+let terminalReads: number
 
 function names() {
   return new RuntimeOrchestrationSenderNames({
     getDb: () => db,
-    getHandleRecord: (handle) =>
-      handle === 'term_worker' || handle === 'term_plain'
+    getHandleRecord: (handle) => {
+      terminalReads++
+      return handle === 'term_worker' || handle === 'term_plain'
         ? { worktreeId: WORKTREE, tabId: `tab_${handle}`, ptyId: `pty_${handle}` }
-        : undefined,
+        : undefined
+    },
     getPtyAgents: () => pty,
     getTerminalPaneKey: (handle) => `tab_${handle}:leaf`,
     getWorkspaceSession: (worktreeId) => (worktreeId === WORKTREE ? session : undefined),
@@ -110,7 +115,7 @@ function announcedName(batch: MessageRow[]): string | null {
       mailboxHandle: 'run:r',
       dispatchId: null,
       batch,
-      senderName: (party, reported) => sources.nameOf(party, reported)
+      senderSnapshot: (party, reported) => sources.snapshotOf(party, reported)
     }).senders[0]?.name ?? null
   )
 }
@@ -147,12 +152,15 @@ beforeEach(() => {
   hookRows = []
   pty = { launchAgent: 'codex', connectionId: null, launchToken: 'launch-current' }
   trackedTitle = null
+  conversationReads = 0
+  terminalReads = 0
   const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: CHAT }))
   records = new Map([[CHAT, { ...base, location: { ...base.location, workspaceId: WORKTREE } }]])
   hostRef.current = {
     deps: {
       store: {
         getConversation: (id: string) => {
+          conversationReads++
           const record = records.get(id)
           return record ? agentSessionConversationView(record) : null
         },
@@ -260,6 +268,80 @@ describe("a sender's name, from what Orca shows for it", () => {
   it("names a chat with no tab by its agent's chat label", () => {
     expect(names().nameOf(chatParty)).toBe('Claude Chat')
   })
+
+  it('snapshots the agent a sender runs, so its card keeps an icon once the agent is gone', () => {
+    expect(names().snapshotOf(chatParty).agent).toBe('claude')
+    expect(names().snapshotOf(terminalParty('term_plain')).agent).toBe('codex')
+    expect(terminalReads).toBe(1)
+    // The hook's current owner wins over the launch, as it does for the name.
+    hookRows = [hookRow()]
+    terminalReads = 0
+    expect(names().snapshotOf(terminalParty('term_plain')).agent).toBe('claude')
+    expect(terminalReads).toBe(1)
+    const federated = { address: 'dispatch:d1', terminalHandle: null, orcaSessionId: null }
+    expect(names().snapshotOf(federated).agent).toBeNull()
+  })
+
+  it.each([10, 100])(
+    'resolves one coherent observation per snapshot across %i clear records',
+    (count) => {
+      const ids = Array.from({ length: count }, (_, index) =>
+        index === 0 ? CHAT : testOrcaSessionId(`sender-lineage-${index}`)
+      )
+      const clear = (replacementSessionId: string) => ({
+        command: 'clear' as const,
+        state: 'completed' as const,
+        operationId: `clear-${replacementSessionId}`,
+        callerKey: 'sender-lineage-test',
+        phase: 'committed' as const,
+        replacementSessionId
+      })
+      records = new Map(
+        ids.map((id, index) => {
+          const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: id }))
+          return [
+            id,
+            {
+              ...record,
+              conversationName: index === count - 1 ? 'Worker' : 'Superseded',
+              ...(index < count - 1 ? { conversationCommand: clear(ids[index + 1]) } : {})
+            }
+          ]
+        })
+      )
+      const source = names()
+      expect(source.nameOf(chatParty)).toBe('Worker')
+      expect(conversationReads).toBe(count)
+      conversationReads = 0
+      expect(source.snapshotOf(chatParty)).toEqual({ name: 'Worker', agent: 'claude' })
+      expect.soft(conversationReads).toBe(count)
+
+      const successorId = testOrcaSessionId('sender-lineage-fresh')
+      const successor = agentSessionRecordFixture(
+        agentSessionLeaseFixture({ sessionId: successorId })
+      )
+      const leaf = records.get(ids[count - 1])!
+      records.set(leaf.sessionId, { ...leaf, conversationCommand: clear(successorId) })
+      records.set(successorId, {
+        ...successor,
+        conversationName: 'Fresh worker',
+        provider: 'future-agent'
+      })
+      conversationReads = 0
+      expect(source.snapshotOf(chatParty)).toEqual({ name: 'Fresh worker', agent: 'future-agent' })
+      expect.soft(conversationReads).toBe(count + 1)
+
+      records.delete(successorId)
+      conversationReads = 0
+      expect(source.snapshotOf(chatParty)).toEqual({ name: null, agent: null })
+      expect.soft(conversationReads).toBe(count + 1)
+      expect(terminalReads).toBe(0)
+      hostRef.current = null
+      conversationReads = 0
+      expect(source.snapshotOf(chatParty)).toEqual({ name: null, agent: null })
+      expect(conversationReads).toBe(0)
+    }
+  )
 
   it("names a terminal agent as its sidebar row does: the tab's own name, else its agent", () => {
     expect(names().nameOf(terminalParty('term_plain'))).toBe('Codex')
@@ -395,11 +477,167 @@ describe("a sender's name, from what Orca shows for it", () => {
     ).toBe('Login fix')
   })
 
-  it('builds the one sender a message records: its party and the name it has now', () => {
+  it('builds the one sender a message records: its party, name and agent now', () => {
     session.unifiedTabs = { [WORKTREE]: [chatTab(null, 'Fix the login flow')] }
     expect(names().sender(`orca_session_id:${CHAT}`)).toEqual({
       party: { address: `orca_session_id:${CHAT}`, terminalHandle: null, orcaSessionId: CHAT },
-      name: 'Fix the login flow'
+      name: 'Fix the login flow',
+      agent: 'claude'
     })
   })
+})
+
+it.each([
+  { observation: { requested: { agent: 'codex' }, effective: null }, expected: 'codex' },
+  { observation: { requested: { agent: 'codex' }, effective: null }, expected: 'claude' },
+  {
+    observation: {
+      requested: { agent: 'codex' },
+      effective: { agent: 'future-agent', model: 'effective-model', effort: 'low' }
+    },
+    expected: 'future-agent'
+  },
+  {
+    observation: { requested: { agent: 'codex', model: [] }, effective: { agent: 42 } },
+    expected: 'codex'
+  },
+  { observation: { requested: null, effective: { agent: 'x'.repeat(41) } }, expected: undefined }
+])(
+  'retains safe display launch knowledge independently of follow-up choice: $expected',
+  ({ observation, expected }) => {
+    const run = db.createRun({
+      objective: 'launch',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: null
+    })
+    const original = {
+      agent: expected === 'claude' ? 'claude' : 'cx-personal',
+      terminal: null,
+      unrelated: { kept: true },
+      launch: {
+        requested: {
+          agent: expected === 'claude' ? 'claude' : null,
+          model: 'home-model',
+          effort: 'high',
+          extra: 'kept'
+        },
+        effective: null,
+        extra: 'kept'
+      }
+    }
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 10,
+      taskRunId: run.id,
+      taskSpec: 'Inspect parser',
+      startOptions: original
+    })
+    const id = started.dispatch.id
+    const followUp = parseStartOptions(JSON.stringify(original))
+    db.retainWorkerLaunchObservation(id, observation)
+    const saved = () => db.getWorkerDispatch(id)!.start_options
+    const retained = JSON.parse(saved())
+    expect(retained).toMatchObject({
+      ...original,
+      launch: {
+        ...original.launch,
+        requested: {
+          ...original.launch.requested,
+          agent: original.launch.requested.agent ?? (expected ? 'codex' : null)
+        },
+        effective:
+          expected === 'future-agent'
+            ? { agent: expected, model: 'effective-model', effort: 'low' }
+            : null
+      }
+    })
+    expect(parseStartOptions(saved())).toEqual(followUp)
+    const party = { address: `dispatch:${id}`, terminalHandle: null, orcaSessionId: null }
+    expect(names().snapshotOf(party)).toEqual({ name: 'Inspect parser', agent: expected ?? null })
+    if (expected !== 'future-agent') {
+      return
+    }
+    const known = JSON.parse(saved())
+    for (const later of [
+      undefined,
+      null,
+      {},
+      { requested: { agent: null }, effective: null },
+      { effective: { agent: null, model: null, effort: null } },
+      { effective: { agent: [] } }
+    ]) {
+      db.retainWorkerLaunchObservation(id, later)
+      expect(JSON.parse(saved())).toEqual(known)
+    }
+  }
+)
+
+it('shares exact dispatch provenance and nullable terminal observation across name and kind', () => {
+  const { runId, taskId, dispatchId } = finishedWorker('Inspect parser', 'term_gone')
+  db.db
+    .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+    .run(JSON.stringify({ agent: 'codex' }), dispatchId)
+  const active = vi.spyOn(db, 'getActiveDispatchForTerminal')
+  const exact = vi.spyOn(db, 'getDispatchContextById')
+  const worker = vi.spyOn(db, 'getWorkerDispatch')
+  const task = vi.spyOn(db, 'getTask')
+  const source = names()
+  const check = (reported?: string) => {
+    vi.clearAllMocks()
+    terminalReads = 0
+    const result = source.snapshotOf(terminalParty('term_gone'), reported)
+    expect(terminalReads).toBe(1)
+    expect(active).toHaveBeenCalledTimes(1)
+    expect(exact).toHaveBeenCalledTimes(reported ? 1 : 0)
+    expect(worker).toHaveBeenCalledTimes(result.agent ? 1 : 0)
+    expect(task).toHaveBeenCalledTimes(result.name ? 1 : 0)
+    return result
+  }
+  expect(check()).toEqual({ name: 'Inspect parser', agent: 'codex' })
+  const report = db.insertMessage({
+    from: 'term_gone',
+    senderPaneKey: 'tab_term_gone:leaf',
+    to: `run:${runId}`,
+    subject: 'done',
+    type: 'worker_done',
+    runId,
+    payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
+  })
+  expect(reconcileLifecycleMessage(db, report).action).toBe('completed')
+  expect(check()).toEqual({ name: null, agent: null })
+  expect(check(dispatchId)).toEqual({ name: 'Inspect parser', agent: 'codex' })
+  const other = finishedWorker('Foreign task', 'term_foreign')
+  expect(check(other.dispatchId)).toEqual({ name: null, agent: null })
+})
+
+it('preserves old, malformed and absent launch observations without inventing an agent', () => {
+  const { dispatchId } = finishedWorker('Inspect parser', 'term_older')
+  const party = { address: `dispatch:${dispatchId}`, terminalHandle: null, orcaSessionId: null }
+  for (const launch of [
+    undefined,
+    null,
+    {},
+    [],
+    { requested: null, effective: {} },
+    { requested: { agent: 42 }, effective: { agent: 'x'.repeat(41) } }
+  ]) {
+    for (const agent of ['codex', 'cx-personal']) {
+      const json = JSON.stringify({ agent, launch, unrelated: { keep: true } })
+      db.db
+        .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+        .run(json, dispatchId)
+      db.retainWorkerLaunchObservation(dispatchId, undefined)
+      expect(db.getWorkerDispatch(dispatchId)!.start_options).toBe(json)
+      expect(names().snapshotOf(party)).toEqual({
+        name: 'Inspect parser',
+        agent: agent === 'codex' ? 'codex' : null
+      })
+    }
+  }
+  db.db
+    .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+    .run('invalid-json', dispatchId)
+  db.retainWorkerLaunchObservation(dispatchId, { requested: { agent: 'codex' } })
+  expect(db.getWorkerDispatch(dispatchId)!.start_options).toBe('invalid-json')
+  expect(names().snapshotOf(party)).toEqual({ name: 'Inspect parser', agent: null })
 })

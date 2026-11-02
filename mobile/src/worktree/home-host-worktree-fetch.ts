@@ -9,11 +9,26 @@ import {
 import { selectHomeAttentionWorktrees } from './home-jump-back-in'
 import { pickResumeWorktree } from './resume-worktree'
 import { isWorktreeActive } from './workspace-list-sections'
-import { worktreeCatalogRead } from './worktree-catalog-operations'
-import { WORKTREE_PS_FULL_LIMIT } from './worktree-catalog-snapshot-client'
+import { WorktreeCatalogSnapshotClient } from './worktree-catalog-snapshot-client'
 
 // Cutover may stay connected, so retry reads without waiting for the connect gate; cap migration-loop retries.
 const CUTOVER_RETRY_LIMIT = 2
+
+const homeCatalogs = new WeakMap<RpcClient, Map<string, WorktreeCatalogSnapshotClient>>()
+
+function readHomeCatalog(client: RpcClient, hostId: string): Promise<unknown[] | null> {
+  let byHost = homeCatalogs.get(client)
+  if (!byHost) {
+    byHost = new Map()
+    homeCatalogs.set(client, byHost)
+  }
+  let snapshots = byHost.get(hostId)
+  if (!snapshots) {
+    snapshots = new WorktreeCatalogSnapshotClient()
+    byHost.set(hostId, snapshots)
+  }
+  return snapshots.read(client, hostId)
+}
 
 export type HostWorktreeInfoSetter = (
   updater: (prev: Record<string, HostWorktreeInfo>) => Record<string, HostWorktreeInfo>
@@ -34,19 +49,17 @@ export function fetchHomeHostWorktreeInfo(
   }
 
   const attempt = (cutoverRetriesLeft: number): Promise<void> =>
-    worktreeCatalogRead
-      .requestSingleFlight(client, hostId, { limit: WORKTREE_PS_FULL_LIMIT })
-      .then((reply) => {
+    readHomeCatalog(client, hostId)
+      .then((rows) => {
         if (disposed()) {
           return
         }
-        const catalog = worktreeCatalogRead.interpret(reply)
-        if (!catalog.accepted) {
+        if (!rows) {
           markUnavailable()
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktrees` is a salvaged member, so the `?? []` is what makes it an array; the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and the resume pick, both through their own guards, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
-        const worktrees = (catalog.value.worktrees ?? []) as HomeWorktreeSummary[]
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and the resume pick, both through their own guards, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
+        const worktrees = rows as HomeWorktreeSummary[]
         setCachedWorktrees(hostId, worktrees, { proven: true })
         // Count what the list shows: archived rows are hidden, and active is the sleeping filter's rule.
         const listed = worktrees.filter((w) => w.isArchived !== true)

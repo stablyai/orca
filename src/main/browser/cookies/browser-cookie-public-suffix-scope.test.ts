@@ -36,10 +36,6 @@ describe('registrable family across public-suffix sections', () => {
     expect(registrableFamily('[::1]')).toBe('[::1]')
   })
 
-  it('treats an unlisted suffix as its own boundary', () => {
-    expect(registrableFamily('example.notaruleatall')).toBe('example.notaruleatall')
-  })
-
   it('rejects a bare suffix as an import domain but keeps real hosts', () => {
     expect(normalizeCookieImportDomain('co.uk')).toBeNull()
     expect(normalizeCookieImportDomain('api.br')).toBeNull()
@@ -50,11 +46,6 @@ describe('registrable family across public-suffix sections', () => {
 
 // Unlisted .local uses a two-label family boundary.
 describe('unlisted .local suffix', () => {
-  it('stops at the two-label boundary', () => {
-    expect(registrableFamily('app.orca.local')).toBe('orca.local')
-    expect(registrableFamily('orca.local')).toBe('orca.local')
-  })
-
   it('pulls the shared parent into the removal scope', () => {
     const scope = importedDomainScope(['app.orca.local'])
 

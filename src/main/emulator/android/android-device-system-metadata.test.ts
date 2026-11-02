@@ -35,7 +35,7 @@ it('reads the API of a stopped AVD from its configured custom data directory', a
         isAvailable: true
       },
       runner,
-      { sdkRoot: '/sdk', adb: '/sdk/adb', emulator: '/sdk/emulator', avdmanager: '/sdk/avdmanager' }
+      { sdkRoot: '/sdk', adb: '/sdk/adb', emulator: '/sdk/emulator' }
     )
   ).toEqual({ apiLevel: '36' })
   expect(runner).not.toHaveBeenCalled()

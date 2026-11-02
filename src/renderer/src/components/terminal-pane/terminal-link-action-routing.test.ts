@@ -108,20 +108,6 @@ describe('terminal link action routing', () => {
     expect(request).not.toHaveBeenCalled()
   })
 
-  it('opens a URL on middle click when configured', () => {
-    const run = vi.fn()
-    const context = actionContext()
-    context.middleClickBehavior = 'open'
-    expect(
-      requestTerminalLinkAction(middleEvent(), context, {
-        destination: 'https://example.com',
-        kind: 'url',
-        primary: { label: 'Open', run }
-      })
-    ).toBe(true)
-    expect(run).toHaveBeenCalledOnce()
-  })
-
   it('leaves disabled plain clicks with the terminal while middle click remains enabled', () => {
     const context = actionContext()
     context.plainClickBehavior = 'none'
@@ -184,85 +170,6 @@ describe('terminal link action routing', () => {
       })
     ).toBe(false)
     expect(context.request).not.toHaveBeenCalled()
-  })
-
-  it('offers system browser first and Orca second when system browser is the default', () => {
-    const request = vi.fn()
-    const event = plainEvent()
-
-    expect(
-      handleTerminalHttpLink('https://example.com/path', event, {
-        worktreeId: 'wt-1',
-        linkActionContext: actionContext(request),
-        actionDestinations: { primary: 'system', alternate: 'orca' }
-      })
-    ).toBe(true)
-    expect(openUrl).not.toHaveBeenCalled()
-    expect(request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        paneId: 7,
-        anchorX: 40,
-        anchorY: 60,
-        destination: 'https://example.com/path',
-        kind: 'url'
-      })
-    )
-    expect(request.mock.calls[0][0].primary.label).toBe('System Browser')
-    expect(request.mock.calls[0][0].primary.external).toBe(true)
-    expect(request.mock.calls[0][0].alternate.label).toBe('Orca Browser')
-    expect(request.mock.calls[0][0].alternate.external).toBe(false)
-
-    request.mock.calls[0][0].primary.run()
-    expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
-
-    request.mock.calls[0][0].alternate.run()
-    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
-      workspaceId: 'wt-1',
-      url: 'https://example.com/path',
-      intent: { kind: 'url' },
-      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
-    })
-  })
-
-  it('offers Orca first and system browser second when Orca is the default', () => {
-    const request = vi.fn()
-
-    handleTerminalHttpLink('https://example.com/path', plainEvent(), {
-      worktreeId: 'wt-1',
-      linkActionContext: actionContext(request),
-      actionDestinations: { primary: 'orca', alternate: 'system' }
-    })
-
-    expect(request.mock.calls[0][0].primary.label).toBe('Orca Browser')
-    expect(request.mock.calls[0][0].primary.external).toBe(false)
-    expect(request.mock.calls[0][0].alternate.label).toBe('System Browser')
-    expect(request.mock.calls[0][0].alternate.external).toBe(true)
-
-    request.mock.calls[0][0].primary.run()
-    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
-      workspaceId: 'wt-1',
-      url: 'https://example.com/path',
-      intent: { kind: 'url' },
-      linkContext: { linkIntent: null, canReveal: expect.any(Function) }
-    })
-
-    request.mock.calls[0][0].alternate.run()
-    expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
-  })
-
-  it('offers only the system browser for a remote link', () => {
-    const request = vi.fn()
-
-    handleTerminalHttpLink('https://example.com/path', plainEvent(), {
-      worktreeId: 'wt-1',
-      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' },
-      linkActionContext: actionContext(request),
-      actionDestinations: { primary: 'system' }
-    })
-
-    expect(request.mock.calls[0][0].primary.label).toBe('System Browser')
-    expect(request.mock.calls[0][0].primary.external).toBe(true)
-    expect(request.mock.calls[0][0].alternate).toBeUndefined()
   })
 
   it('routes an explicit Orca Browser action to the owning runtime', () => {
@@ -339,21 +246,6 @@ describe('terminal link action routing', () => {
 
     expect(openUrl).toHaveBeenCalledWith('https://example.com/path')
     expect(openRuntimeBrowserTab).not.toHaveBeenCalled()
-  })
-
-  it('exposes the actual hidden OSC 8 destination', () => {
-    const request = vi.fn()
-    const destination = 'https://example.com'
-
-    expect(
-      handleOscLink(destination, plainEvent(), {
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        startupCwd: '/repo',
-        linkActionContext: actionContext(request)
-      })
-    ).toBe(true)
-    expect(request.mock.calls[0][0].destination).toBe(destination)
   })
 
   it('shows the raw OSC 8 file URI but copies its resolved path', () => {

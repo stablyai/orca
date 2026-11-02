@@ -12,8 +12,7 @@ import { parseAdbDevices } from './adb-devices'
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
   adb: '/sdk/adb',
-  emulator: '/sdk/emulator',
-  avdmanager: '/sdk/avdmanager'
+  emulator: '/sdk/emulator'
 }
 
 const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code: 0 })
@@ -86,6 +85,18 @@ describe('listAndroidDevices', () => {
       osVersion: '16',
       apiLevel: '36'
     })
+  })
+
+  it('lists USB devices without running the emulator binary on adb-only hosts', async () => {
+    const binaries: string[] = []
+    const fake = runner((binary, a) => {
+      binaries.push(binary)
+      return a === 'devices -l' ? 'List of devices attached\n721a6f41\tdevice model:M2007J17C' : ''
+    })
+    const adbOnly: AndroidSdkPaths = { sdkRoot: null, adb: '/usr/bin/adb', emulator: null }
+    const devices = await listAndroidDevices(fake, adbOnly)
+    expect(devices).toEqual([expect.objectContaining({ id: '721a6f41', detail: 'device' })])
+    expect(binaries.every((binary) => binary === '/usr/bin/adb')).toBe(true)
   })
 })
 

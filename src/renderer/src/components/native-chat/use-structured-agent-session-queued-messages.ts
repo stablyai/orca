@@ -7,15 +7,15 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mapSettledWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
-  AgentSessionQueuePause,
-  AgentSessionSendResult
-} from '../../../../shared/agent-session-wire'
+  AgentSessionQueuePause
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   useStructuredAgentSessionQueuedEdit,
   type QueuedEditTransport,
@@ -196,17 +196,18 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     promptOpen: hasPendingPrompt
   })
 
+  const editingMessageId = editing.editor?.messageId
   const steerHead = useCallback((): boolean => {
     if (!enabled) {
       return false
     }
-    const head = headSteerableQueuedMessageCard(cardsRef.current)
-    if (!head || inFlightRef.current.has(head.messageId)) {
+    const head = headSteerableQueuedMessageCard(reordered.cards)
+    if (!head || editingMessageId === head.messageId || inFlightRef.current.has(head.messageId)) {
       return false
     }
     void steer(head.messageId)
     return true
-  }, [enabled, steer])
+  }, [editingMessageId, enabled, reordered.cards, steer])
 
   const resume = useCallback(
     (): Promise<boolean> =>

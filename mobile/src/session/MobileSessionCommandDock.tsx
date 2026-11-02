@@ -1,9 +1,10 @@
-import { View, TextInput } from 'react-native'
+import { View } from 'react-native'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { hostOs } from '../platform/host-os'
 import { ComposerSendButton } from '../components/composer-input/ComposerSendButton'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
+import { TextField } from '../components/composer-input/TextField'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
@@ -26,7 +27,6 @@ import {
   resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
 import { terminalDockStyles as dockStyles } from './terminal-dock-styles'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -119,59 +119,54 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           accessibilityElementsHidden={!liveInputEnabled}
           importantForAccessibility={liveInputEnabled ? 'auto' : 'no-hide-descendants'}
         >
-          <View style={[inputStyles.field, dockStyles.liveField]}>
-            <TextInput
-              ref={bindLiveInputField}
-              style={[
-                inputStyles.fieldText,
-                inputStyles.mono,
-                !canSend && styles.liveInputCaptureDisabled
-              ]}
-              value={liveInputCapture}
-              onChange={(event) => {
-                if (
-                  !dockKeys.interceptTypedCharacter(
-                    liveInputCapture,
-                    event.nativeEvent.text,
-                    liveInputRef
-                  )
-                ) {
-                  handleLiveInputChange(event)
-                }
-              }}
-              onKeyPress={handleLiveInputKeyPress}
-              onSubmitEditing={submitLiveInput}
-              placeholder={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
-              placeholderTextColor={colors.textMuted}
-              selectionColor={colors.accentBlue}
-              accessibilityLabel={t('session.commandDock.liveInputLabel', 'Live terminal input')}
-              accessibilityHint={t(
-                'session.commandDock.liveInputHint',
-                'Typed text is sent directly to the active terminal'
-              )}
-              showSoftInputOnFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              smartInsertDelete={false}
-              // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
-              autoComplete="off"
-              keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
-              returnKeyType="default"
-              blurOnSubmit={false}
-              editable={canSend}
-              importantForAutofill="no"
-              tabIndex={liveInputEnabled ? 0 : -1}
-            />
-            {liveInputEnabled ? (
-              <MobileTerminalLiveInputStatus
-                dictation={dictation}
-                dictationMode={dictationMode}
-                heard={liveDictationText}
-                isAttaching={isAttaching}
-              />
-            ) : null}
-          </View>
+          <TextField
+            inputRef={bindLiveInputField}
+            monospace
+            style={dockStyles.liveField}
+            trailing={
+              liveInputEnabled ? (
+                <MobileTerminalLiveInputStatus
+                  dictation={dictation}
+                  dictationMode={dictationMode}
+                  heard={liveDictationText}
+                  isAttaching={isAttaching}
+                />
+              ) : undefined
+            }
+            value={liveInputCapture}
+            onChange={(event) => {
+              if (
+                !dockKeys.interceptTypedCharacter(
+                  liveInputCapture,
+                  event.nativeEvent.text,
+                  liveInputRef
+                )
+              ) {
+                handleLiveInputChange(event)
+              }
+            }}
+            onKeyPress={handleLiveInputKeyPress}
+            onSubmitEditing={submitLiveInput}
+            placeholder={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
+            accessibilityLabel={t('session.commandDock.liveInputLabel', 'Live terminal input')}
+            accessibilityHint={t(
+              'session.commandDock.liveInputHint',
+              'Typed text is sent directly to the active terminal'
+            )}
+            showSoftInputOnFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            smartInsertDelete={false}
+            // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
+            autoComplete="off"
+            keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
+            returnKeyType="default"
+            blurOnSubmit={false}
+            editable={canSend}
+            importantForAutofill="no"
+            tabIndex={liveInputEnabled ? 0 : -1}
+          />
           <MobileTerminalInputActions
             {...attachProps}
             {...dictationProps}
@@ -190,7 +185,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
             key={hostOs() === 'android' ? `message-ac-${autocompleteEnabled}` : 'message'}
             inputRef={commandInputRef}
-            docked
             monospace={!runsAgent}
             style={dockStyles.composer}
             value={draft}

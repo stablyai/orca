@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
@@ -134,6 +135,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
               return (
                 <div key={row.key} className="min-w-0">
                   <div
+                    ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
                     className={cn(
                       'group/check-row flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
                       expanded && 'bg-accent/25'
@@ -150,7 +152,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                       className={cn(
                         'size-3.5 shrink-0',
                         color,
-                        conclusion === 'pending' && 'animate-spin'
+                        conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
                       )}
                     />
                     <span className="flex-1 truncate text-[12px] text-foreground">

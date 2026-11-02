@@ -5,7 +5,7 @@ import type {
   AgentJournalBoundedPayload,
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   boundToolInput,
   JOURNAL_RUNNING_PREVIEW_LIMITS,

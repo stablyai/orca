@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import type { AgentSessionConversationOutline } from '../../../../shared/agent-session/agent-session-conversation-outline'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
-import { agentSessionContextFloorSequence } from '../../../../shared/agent-session-context-clear'
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import { agentSessionContextFloorSequence } from '../../../../shared/agent-session/agent-session-context-clear'
+import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'

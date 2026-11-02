@@ -21,7 +21,6 @@
     "panel": {
       "all": "Todos",
       "emptyScope": "Nenhuma sessão anterior de agente neste escopo.",
-      "loadFailed": "Não foi possível carregar",
       "missingResumeId": "Esta sessão não tem um ID de retomada.",
       "noSearchResults": "Nenhuma sessão corresponde à sua busca.",
       "noSessions": "Nenhuma sessão de agente",
@@ -561,6 +560,10 @@
       "disconnected": "Falha ao anexar (desconectado)",
       "imageTooLarge": "Imagem grande demais para anexar",
       "permissionDenied": "Permissão de acesso às fotos negada"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Entregue a um agente",
+      "startedAgent": "Agente iniciado"
     }
   },
   "common": {
@@ -694,17 +697,14 @@
       "loadingDiff": "Carregando diff…",
       "loadingReview": "Carregando revisão…",
       "noReviewableChanges": "Nenhuma alteração para revisar",
-      "retryLabel": "Tentar carregar a revisão novamente",
       "reviewUnavailable": "Revisão indisponível",
       "selectFile": "Selecione um arquivo para revisar.",
-      "tooLargeMessage": "Este diff é grande demais para a prévia no celular.",
-      "tryDifferentFilter": "Tente outro filtro de revisão."
+      "tooLargeMessage": "Este diff é grande demais para a prévia no celular."
     },
     "diffReviewDrawers": {
       "addNote": "Adicionar nota",
       "cancelNote": "Cancelar nota",
       "clearSentNotes": "Limpar notas enviadas",
-      "completeTitle": "Revisão concluída",
       "copyNotes": "Copiar notas",
       "deleteNote": "Excluir nota",
       "discard": "Descartar",
@@ -712,15 +712,8 @@
       "discardTitle": "Descartar arquivo",
       "editNote": "Editar nota",
       "fileNote": "Nota do arquivo",
-      "fileSummary_many": "{{fileCount}} arquivo revisado, {{count}} notas",
-      "fileSummary_one": "{{fileCount}} arquivo revisado, {{count}} nota",
-      "fileSummary_other": "{{fileCount}} arquivo revisado, {{count}} notas",
-      "filesSummary_many": "{{fileCount}} arquivos revisados, {{count}} notas",
-      "filesSummary_one": "{{fileCount}} arquivos revisados, {{count}} nota",
-      "filesSummary_other": "{{fileCount}} arquivos revisados, {{count}} notas",
       "lineNumber": "Linha {{lineNumber}}",
       "loadingSessions": "Carregando sessões de agentes…",
-      "markUnreviewed": "Marcar como não revisado",
       "newAgentSession": "Nova sessão de agente",
       "openInSession": "Abrir na sessão",
       "reviewNote": "Nota de revisão",
@@ -728,12 +721,6 @@
       "sendNotes": "Enviar notas",
       "sendNotesLabel": "Enviar notas ao agente",
       "sendUnsentNotes": "Enviar notas não enviadas",
-      "stageReviewed": "Adicionar revisados ao stage",
-      "stageReviewedFiles": "Adicionar arquivos revisados ao stage",
-      "stageReviewedLabel": "Adicionar arquivos revisados ao stage",
-      "stageableFiles_many": "{{count}} arquivos revisados e não preparados podem ser adicionados ao stage",
-      "stageableFiles_one": "{{count}} arquivo revisado e não preparado pode ser adicionado ao stage",
-      "stageableFiles_other": "{{count}} arquivos revisados e não preparados podem ser adicionados ao stage",
       "statusUnreadable": "Não foi possível ler o status deste host. Tentando novamente…",
       "terminal": "Terminal",
       "terminalLabel": "{{title}} ({{id}})",
@@ -743,59 +730,17 @@
       "updateRequired": "Atualize o Orca no seu computador"
     },
     "diffReviewFileSummary": {
-      "branch": "Branch",
-      "branchFrom": "Branch, origem: {{oldPath}}",
       "changed": "Alterado",
       "editFileNote": "Editar nota do arquivo",
-      "hunk": "Trecho",
-      "nextHunk": "Próximo trecho",
-      "notes_many": "{{count}} notas",
-      "notes_one": "{{count}} nota",
-      "notes_other": "{{count}} notas",
-      "previousHunk": "Trecho anterior",
-      "reviewed": "Revisado",
-      "staged": "Preparado",
-      "stagedFrom": "Preparado, origem: {{oldPath}}",
-      "stale": "Desatualizada",
-      "staleCount": "Desatualizadas: {{count}}",
-      "unstaged": "Não preparado",
-      "unstagedFrom": "Não preparado, origem: {{oldPath}}"
+      "stale": "Desatualizada"
     },
     "diffReviewFooter": {
-      "addFileNote": "Adicionar nota ao arquivo",
-      "discard": "Descartar",
-      "discardFile": "Descartar arquivo",
-      "markFileReviewed": "Marcar arquivo como revisado",
-      "markReviewed": "Marcar como revisado",
       "nextFile": "Próximo arquivo",
-      "note": "Nota",
-      "previousFile": "Arquivo anterior",
-      "reviewed": "Revisado",
-      "stage": "Adicionar ao stage",
-      "stageFile": "Adicionar arquivo ao stage",
-      "unstage": "Remover do stage",
-      "unstageFile": "Remover arquivo do stage"
+      "previousFile": "Arquivo anterior"
     },
     "diffReviewHeader": {
-      "filterAll": "Todos",
-      "filterBranch": "Branch",
-      "filterNotes": "Notas",
-      "filterStaged": "Preparados",
-      "filterUnreviewed": "Não revisados",
-      "filterUnstaged": "Não preparados",
-      "openPullRequestSidebar": "Abrir barra lateral do pull request",
       "openReviewActions": "Abrir ações de revisão",
-      "reviewedProgress": "Revisados: {{reviewedCount}}/{{queueLength}}",
-      "showAllFiles": "Mostrar todos os arquivos da revisão",
-      "showBranchFiles": "Mostrar arquivos da branch nesta revisão",
-      "showNotesFiles": "Mostrar arquivos com notas nesta revisão",
-      "showStagedFiles": "Mostrar arquivos preparados nesta revisão",
-      "showUnreviewedFiles": "Mostrar arquivos ainda não revisados nesta revisão",
-      "showUnstagedFiles": "Mostrar arquivos não preparados nesta revisão",
-      "title": "Alterações",
-      "unsentNotes_many": "{{count}} notas não enviadas",
-      "unsentNotes_one": "{{count}} nota não enviada",
-      "unsentNotes_other": "{{count}} notas não enviadas"
+      "title": "Alterações"
     },
     "diffReviewLine": {
       "addNoteOnLine": "Adicionar nota na linha {{number}}",
@@ -894,10 +839,8 @@
       "selectRunTarget": "Selecione um destino de execução"
     },
     "prSidebar": {
-      "loadFailed": "Algo deu errado.",
       "loading": "Carregando pull request…",
-      "notPermitted": "Não permitido — sua conta do GitHub não está conectada.",
-      "retryLoading": "Tentar carregar o pull request novamente"
+      "notPermitted": "Não permitido — sua conta do GitHub não está conectada."
     },
     "protocolBlockScreen": {
       "backToHosts": "Voltar para hosts",
@@ -1047,6 +990,16 @@
       "title": "Algo deu errado",
       "tryAgain": "Tentar novamente",
       "home": "Início"
+    },
+    "svgPreview": {
+      "drawFailed": "Não foi possível desenhar este SVG",
+      "label": "Desenho {{title}}",
+      "previewDrawing": "Pré-visualizar desenho",
+      "viewSource": "Ver código-fonte SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Expandir diagrama",
+      "label": "Diagrama Mermaid"
     }
   },
   "connection": {
@@ -1576,42 +1529,18 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "Ação necessária",
-      "cancelled": "Cancelado",
-      "checkDetails": "Detalhes da verificação {{name}}",
-      "failed": "Com Falha",
       "failing": "Com falha: {{count}}",
-      "failingChecks_many": "{{count}} verificações com falha",
-      "failingChecks_one": "{{count}} verificação com falha",
-      "failingChecks_other": "{{count}} verificações com falha",
-      "fix": "Corrigir",
-      "fixFailing": "Corrigir com IA as verificações com falha",
-      "inProgress": "Em andamento",
-      "inspectOrFix": "Inspecione os detalhes ou inicie uma correção por IA.",
-      "loadDetailsFailed": "Falha ao carregar os detalhes da verificação",
-      "neutral": "Neutro",
-      "neutralCount": "Neutras: {{count}}",
       "noChecks": "Nenhuma verificação",
       "openOnWeb": "Abrir {{name}} na web",
       "passed": "Com sucesso: {{count}}",
-      "pending": "Pendente",
-      "pendingCount": "Pendentes: {{count}}",
-      "queued": "Na fila",
-      "rerunFailing": "Executar novamente as verificações com falha",
-      "skipped": "Ignorada",
-      "successful": "Com sucesso",
-      "timedOut": "Tempo esgotado",
-      "title": "Verificações",
-      "unavailable": "Verificações indisponíveis"
+      "title": "Verificações"
     },
     "commentCard": {
       "daysAgo_many": "há {{count}} d",
       "daysAgo_one": "há {{count}} d",
       "daysAgo_other": "há {{count}} d",
-      "deleteComment": "Excluir comentário",
       "deleteConfirmMessage": "Isso exclui permanentemente o comentário no GitHub.",
       "deleteConfirmTitle": "Excluir comentário?",
-      "editComment": "Editar comentário",
       "editPlaceholder": "Edite o comentário…",
       "hoursAgo_many": "há {{count}} h",
       "hoursAgo_one": "há {{count}} h",
@@ -1623,55 +1552,21 @@
       "monthsAgo_many": "há {{count}} meses",
       "monthsAgo_one": "há {{count}} mês",
       "monthsAgo_other": "há {{count}} meses",
-      "openOnGitHub": "Abrir comentário no GitHub",
       "reply": "Responder",
-      "replyPlaceholder": "Escreva uma resposta…",
-      "replyToComment": "Responder ao comentário",
       "resolve": "Resolver",
-      "resolveThread": "Resolver thread",
-      "resolved": "resolvido",
       "unresolve": "Reabrir",
-      "unresolveThread": "Reabrir thread",
       "yearsAgo_many": "há {{count}} anos",
       "yearsAgo_one": "há {{count}} ano",
       "yearsAgo_other": "há {{count}} anos"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "Adicione um comentário…",
-      "all": "Todos",
-      "bots": "Bots",
       "comment": "Comentar",
-      "commentsLoadFailed": "Não foi possível carregar os comentários. Toque em Atualizar para tentar novamente.",
       "description": "Descrição",
       "descriptionLoadFailed": "Não foi possível carregar a descrição. Toque em Atualizar para tentar novamente.",
-      "humans": "Humanos",
-      "noBotComments": "Nenhum comentário de bot.",
       "noComments": "Ainda não há comentários.",
       "noDescription": "Nenhuma descrição fornecida.",
-      "noHumanComments": "Nenhum comentário humano.",
-      "resolvedCommentCount": "Comentário de {{author}} resolvido ({{count}})",
-      "resolvedCommentSingle": "Comentário de {{author}} resolvido",
-      "resolvedThreadCount": "Thread de {{author}} resolvida ({{count}})",
-      "resolvedThreadSingle": "Thread de {{author}} resolvida",
       "showMore": "Mostrar mais {{count}}",
-      "showMoreOf": "Mostrar mais {{count}} de {{remaining}}",
       "title": "Comentários"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_many": "{{count}} commits atrás (commit base: {{baseCommit}})",
-      "commitsBehind_one": "{{count}} commit atrás (commit base: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits atrás (commit base: {{baseCommit}})",
-      "copyCommands": "Copiar comandos",
-      "copyFailed": "Falha ao copiar o texto",
-      "copyRefreshCommands": "Copiar comandos de atualização de possibilidade de merge",
-      "detailsUnavailable": "Os detalhes dos arquivos em conflito não estão disponíveis",
-      "filesHeading": "Arquivos em conflito",
-      "localMergeClean": "O GitHub informa conflitos, mas o Git local não os reproduziu. Atualize o PR ou faça push da branch para recalcular a possibilidade de merge.",
-      "mustResolve": "Esta branch tem conflitos que precisam ser resolvidos",
-      "refreshing": "Atualizando os detalhes do conflito…",
-      "resolveWithAi": "Resolver conflitos com IA",
-      "runFromWorktree": "Executar a partir desta worktree",
-      "title": "Conflitos"
     },
     "linkPrForm": {
       "linkButton": "Vincular pull request",
@@ -1684,27 +1579,14 @@
       "details": "Detalhes"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "Alternar merge automático",
-      "autoMergeLabel": "Merge automático quando pronto",
-      "autoMergeOff": "Desativado",
-      "autoMergeOn": "Ativado",
-      "closeAccessibilityLabel": "Fechar pull request",
       "closeConfirmMessage": "#{{number}} será fechado sem fazer merge.",
       "closeConfirmTitle": "Fechar pull request?",
-      "markReadyAccessibilityLabel": "Marcar pull request como pronto para revisão",
       "markReadyButton": "Pronto para revisão",
-      "mergeAccessibilityLabel": "Fazer merge do pull request",
-      "mergeButton": "Merge",
-      "mergeConfirmTitle": "Fazer merge do pull request?",
-      "recheckAccessibilityLabel": "Verificar novamente o status do merge",
-      "recheckButton": "Verificar novamente",
       "reopenAccessibilityLabel": "Reabrir pull request",
       "reopenButton": "Reabrir",
       "reopenConfirmMessage": "#{{number}} será reaberto.",
       "reopenConfirmTitle": "Reabrir pull request?",
-      "unlinkAccessibilityLabel": "Desvincular pull request",
-      "unlinkButton": "Desvincular",
-      "unlinkFailed": "Falha ao desvincular o pull request."
+      "unlinkButton": "Desvincular"
     },
     "prActionsState": {
       "behindHint": "Atualize a branch antes de fazer o merge",
@@ -1803,25 +1685,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} não está vinculada a um PR aberto.",
-      "branchRequired": "Faça checkout de uma branch antes de criar um pull request.",
-      "createFailed": "Falha ao criar o pull request.",
-      "createPr": "Criar PR",
-      "createPullRequest": "Criar pull request",
       "currentBranchNotLinked": "A branch atual não está vinculada a um PR aberto.",
-      "linkExistingPr": "Vincular um PR existente",
       "linkExistingPullRequest": "Vincular um pull request existente",
       "linkedPrUnavailable": "PR vinculado #{{number}} indisponível",
-      "noOpenPullRequest": "Nenhum pull request aberto",
-      "refreshOrCreate": "Atualize para verificar novamente ou crie um novo PR para esta branch.",
-      "refreshPullRequest": "Atualizar pull request",
-      "title": "Pull request"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "Cancelar edição do título",
-      "editTitle": "Editar título do pull request",
-      "openInBrowser": "Abrir pull request #{{number}} no navegador",
-      "openOnWeb": "Abrir pull request #{{number}} na web",
-      "saveTitle": "Salvar título"
+      "refreshOrCreate": "Atualize para verificar novamente ou crie um novo PR para esta branch."
     },
     "prViewPanel": {
       "branchUnavailable": "Branch atual indisponível.",
@@ -1829,20 +1696,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Falha ao carregar pessoas",
-      "noMatches": "Nenhuma pessoa encontrada",
-      "removeReviewer": "Remover {{login}}",
-      "requestReviewer": "Solicitar revisão de {{login}}",
-      "searchPeople": "Buscar pessoas",
-      "title": "Revisores"
+      "noMatches": "Nenhuma pessoa encontrada"
     },
     "reviewersSection": {
-      "addOrRemove": "Adicionar ou remover revisores",
       "approved": "Aprovado",
       "changesRequested": "Alterações solicitadas",
       "commented": "Comentou",
       "dismissed": "Revisão descartada",
-      "loadFailed": "Não foi possível carregar os revisores. Toque em Atualizar para tentar novamente.",
-      "loading": "Carregando revisores…",
       "noReviewers": "Nenhum revisor solicitado",
       "pending": "Pendente",
       "removeReviewer": "Remover {{login}}",
@@ -2480,10 +2340,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "Falha na ação de controle de versão",
-      "reviewedFilesStaged_many": "{{count}} arquivos revisados adicionados ao stage",
-      "reviewedFilesStaged_one": "{{count}} arquivo revisado adicionado ao stage",
-      "reviewedFilesStaged_other": "{{count}} arquivos revisados adicionados ao stage",
-      "stageResults": "No stage: {{staged}}, com falha: {{failed}}",
       "waitingForDesktop": "Aguardando o desktop…"
     },
     "useDiffReviewInteractions": {
@@ -2544,8 +2400,7 @@
       "actionFailed": "Falha ao executar a ação no comentário"
     },
     "usePrTitleAction": {
-      "disconnected": "Sem conexão com o desktop.",
-      "updateFailed": "Falha ao atualizar o título."
+      "disconnected": "Sem conexão com o desktop."
     },
     "useQuickCommands": {
       "loadFailed": "Falha ao carregar os comandos rápidos",
@@ -2871,7 +2726,6 @@
       "checkingReviewStatus": "Verificando status da revisão.",
       "checkoutBeforePublish": "Faça checkout de uma branch antes de publicar commits.",
       "commitStagedChanges": "Faça commit das alterações staged.",
-      "commits": "Commits",
       "committing": "Commit em andamento.",
       "createPr": "Criar PR",
       "enterCommitMessage": "Digite uma mensagem de commit para fazer commit.",
@@ -2901,35 +2755,15 @@
       "resolveFailed": "Não foi possível determinar a branch base"
     },
     "branchCard": {
-      "branchCount": "{{count}} na branch",
-      "changedCount": "Alterações: {{count}}",
-      "cherryPickState": "cherry-pick",
-      "mergeState": "merge",
-      "rebaseState": "rebase",
-      "stagedCount": "No stage: {{count}}",
       "completingMerge": "Concluindo…",
       "completeMerge": "Concluir mesclagem"
     },
     "branchCompare": {
-      "commits_many": "{{count}} commits",
-      "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commits",
-      "files_many": "{{count}} arquivos",
-      "files_one": "{{count}} arquivo",
-      "files_other": "{{count}} arquivos",
-      "sectionTitle": "Commitado na Branch",
-      "summary": "{{files}} - em relação a {{baseRef}}",
-      "summaryWithCommits": "{{files}} - {{commits}} - em relação a {{baseRef}}"
+      "sectionTitle": "Commitado na Branch"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "Não foi possível determinar a branch base para comparação.",
       "loadFailed": "Não foi possível carregar as alterações commitadas"
-    },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Fechar prévia do diff commitado",
-      "committedOnBranch": "Commitado na branch",
-      "loadFailed": "Não foi possível carregar o diff",
-      "truncated": "Diff truncado para prévia no celular."
     },
     "commitDropdown": {
       "checkOutBranchToPush": "Faça checkout de uma branch antes de fazer push de commits",
@@ -2984,12 +2818,8 @@
       "emptyMessage": "A árvore de trabalho está limpa.",
       "emptyTitle": "Nenhuma alteração local",
       "generateMessage": "Gerar mensagem de commit com IA",
-      "noStagedFiles": "Nenhum arquivo no stage",
-      "openActions": "Abrir ações de controle de versão",
       "reconnecting": "Reconectando ao desktop…",
-      "regenerateHint": "Limpe a mensagem para gerar novamente.",
-      "stageAll": "Colocar Tudo em Stage",
-      "unstageAll": "Remover Tudo do Stage"
+      "regenerateHint": "Limpe a mensagem para gerar novamente."
     },
     "createPrAction": {
       "checkingStatus": "Verificando status de review…",
@@ -3025,20 +2855,15 @@
       "titleUnpublishedForcePushCount_one": "Faça force push com lease de {{count}} commit da branch e defina um upstream se necessário.",
       "titleUnpublishedForcePushCount_other": "Faça force push com lease de {{count}} commits da branch e defina um upstream se necessário."
     },
-    "fileList": {
-      "committedSection": "Commitado na Branch"
-    },
     "fileRows": {
       "addedByThem": "Adicionado por eles",
       "addedByUs": "Adicionado por nós",
       "bothAdded": "Adicionado por ambos",
       "bothDeleted": "Excluído por ambos",
       "bothModified": "Modificado por ambos",
-      "committedSection": "Commitado na Branch",
       "committedUnavailable": "Alterações commitadas indisponíveis.",
       "deletedByThem": "Excluído por eles",
       "deletedByUs": "Excluído por nós",
-      "discardFile": "Descartar {{path}}",
       "loadingCommitted": "Carregando alterações commitadas…",
       "openChangedFile": "Abrir arquivo alterado {{path}}",
       "openCommittedChange": "Abrir alteração commitada em {{path}}",
@@ -3076,9 +2901,7 @@
       "waitingForDesktop": "Aguardando o desktop…"
     },
     "gitStatus": {
-      "changes": "Alterações",
-      "conflicts": "Conflitos",
-      "stagedChanges": "Alterações no Stage"
+      "conflicts": "Conflitos"
     },
     "header": {
       "backToSession": "Voltar à sessão",
@@ -3137,9 +2960,7 @@
       "pushBeforeCreateFailed": "O push falhou. Resolva o erro de push e tente novamente."
     },
     "hubTab": {
-      "changes": "Alterações",
-      "commits": "Commits",
-      "pullRequest": "Pull Request"
+      "changes": "Alterações"
     },
     "loaders": {
       "connectingToDesktop": "Conectando ao desktop…",
@@ -3148,7 +2969,6 @@
       "waitingForDesktop": "Aguardando o desktop…"
     },
     "modals": {
-      "actionsTitle": "Controle de Código-Fonte",
       "currentBranch": "atual",
       "discardButton": "Descartar",
       "discardConfirmMessage": "Descartar alterações em \"{{path}}\"? Esta ação não pode ser desfeita.",
@@ -3158,24 +2978,8 @@
       "prCreatedTitle": "Pull Request Criado",
       "switchBranchTitle": "Trocar Branch"
     },
-    "openers": {
-      "openDiffFailed": "Não foi possível abrir o diff",
-      "tabNotReady": "O arquivo foi aberto, mas a aba ainda não está pronta. Tente novamente.",
-      "waitingForDesktop": "Aguardando o desktop…"
-    },
     "panel": {
-      "loadFailedTitle": "Não foi possível carregar",
       "unavailableTitle": "Controle de Código-Fonte Indisponível"
-    },
-    "prChip": {
-      "createPr": "Criar pull request",
-      "loading": "Carregando pull request…",
-      "loadingLabel": "Carregando pull request",
-      "openLabel": "Pull request #{{number}}, {{state}}, {{checks}}. Abrir pull request.",
-      "openWithComments_many": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} comentários não resolvidos. Abrir pull request.",
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} comentário não resolvido. Abrir pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} comentários não resolvidos. Abrir pull request.",
-      "unavailableLabel": "Pull request indisponível: {{message}}"
     },
     "prCreate": {
       "authRequired": "Autentique-se antes de criar um {{reviewLabel}}.",
@@ -3206,7 +3010,6 @@
       "publishBranch": "Publicar Branch",
       "pull": "Pull",
       "push": "Push",
-      "stageAll": "Colocar Tudo em Stage",
       "sync": "Sincronizar"
     },
     "remoteDropdown": {
@@ -3265,7 +3068,6 @@
       "noBranch": "Sem branch"
     },
     "state": {
-      "noUpstream": "Sem upstream",
       "syncStatus": "{{ahead}} à frente, {{behind}} atrás"
     },
     "textGenerationFailure": {
@@ -3354,9 +3156,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Falha ao gerar a mensagem de commit"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "Faça checkout de uma branch antes de criar um pull request."
     },
     "useMobileGitRequests": {
       "actionFailed": "Falha na ação de controle de versão",
@@ -4005,8 +3804,7 @@
       "noFilterMatches": "Nenhum espaço de trabalho corresponde aos filtros",
       "noMatches": "Nenhum espaço de trabalho encontrado",
       "reopen": "Reabrir para atualizar",
-      "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece.",
-      "retrying": "worktree.ps falhou ({{error}}) — tentando novamente automaticamente"
+      "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece."
     },
     "workspaceListSections": {
       "all": "Todos",

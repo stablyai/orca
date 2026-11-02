@@ -1,14 +1,14 @@
 // Last-surface close may release this host's provider root on observed exit, even with unverifiable descendants.
 // This proves root exit, not tree death; advance the fence to reject the stopped owner's late effects.
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   MAX_AGENT_SESSION_DEATH_DETAIL_CHARS,
   type AgentSessionRecord
-} from '../../../../shared/agent-session-record'
-import { nextAgentSessionFence } from '../../../../shared/agent-session-next-fence'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/agent-session-next-fence'
 import { assertFence, withLease } from './agent-session-lease-transitions'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 
 export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'transitionHandoff'>
 

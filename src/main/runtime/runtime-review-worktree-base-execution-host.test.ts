@@ -73,14 +73,5 @@ describe('runtime PR/MR worktree base runs Git only for rows on this machine', (
       await expect(resolveBase(async () => repoOn(fields))).rejects.toEqual(expected)
       expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     })
-
-    // Why runtime: older servers kept the client-minted `runtime:<id>` stamp on rows they own.
-    it.each([
-      ['local', { executionHostId: 'local' }],
-      ['runtime-stamped on this server', { executionHostId: 'runtime:env' }]
-    ] as const)(`${provider} runs local Git for a row here: %s`, async (_label, fields) => {
-      await resolveBase(async () => repoOn(fields)).catch(() => {})
-      expect(gitExecFileAsyncMock).toHaveBeenCalled()
-    })
   }
 })

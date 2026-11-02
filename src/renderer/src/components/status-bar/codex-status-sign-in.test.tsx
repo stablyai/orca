@@ -20,6 +20,7 @@ const reauthenticate = vi.fn(async (_args: unknown) => codexSnapshot(null))
 
 let storeSettings: GlobalSettings
 let accountOwner: RuntimeClientTarget
+let inactiveError: string
 
 function codexAccount(id: string, updatedAt: number): CodexManagedAccountSummary {
   return {
@@ -152,7 +153,11 @@ vi.mock('../../store', () => {
     fetchInactiveCodexAccountUsage,
     rateLimits: {
       inactiveCodexAccounts: [
-        { accountId: 'account-2', isFetching: false, rateLimits: unavailableUsage }
+        {
+          accountId: 'account-2',
+          isFetching: false,
+          rateLimits: { ...unavailableUsage, error: inactiveError }
+        }
       ],
       codexTarget: { runtime: 'host', wslDistro: null }
     }
@@ -179,10 +184,7 @@ const liveUsage: ProviderRateLimits = {
   weekly: { usedPercent: 11, windowMinutes: 10_080, resetsAt: null, resetDescription: null }
 }
 
-async function renderSwitcherAndOpenAccounts(
-  summaryLabel: string,
-  codex = codexProvider
-): Promise<void> {
+async function renderSwitcherAndOpenAccounts(codex = codexProvider): Promise<void> {
   const { CodexSwitcherMenu } = await import('./StatusBar')
   render(
     React.createElement(CodexSwitcherMenu, {
@@ -191,7 +193,6 @@ async function renderSwitcherAndOpenAccounts(
       iconOnly: false
     })
   )
-  fireEvent.click(screen.getByText(summaryLabel))
   await waitFor(() => expect(screen.getByRole('button', { name: /Sign in/ })).toBeTruthy())
 }
 
@@ -200,6 +201,7 @@ describe('status bar Codex sign-in action', () => {
     vi.clearAllMocks()
     storeSettings = settingsWithActive(null)
     accountOwner = { kind: 'local' }
+    inactiveError = 'Not signed in'
     Object.defineProperty(window, 'api', {
       configurable: true,
       writable: true,
@@ -215,10 +217,7 @@ describe('status bar Codex sign-in action', () => {
     'shows live usage in the active account row, including system default: %s',
     async (activeAccountId) => {
       storeSettings = settingsWithActive(activeAccountId)
-      await renderSwitcherAndOpenAccounts(
-        activeAccountId ? 'account-1@example.com' : 'System default',
-        liveUsage
-      )
+      await renderSwitcherAndOpenAccounts(liveUsage)
 
       const activeRow = screen.getByRole('menuitem', { name: /Active/ })
       expect(within(activeRow).getByText('11% used wk')).toBeTruthy()
@@ -231,7 +230,6 @@ describe('status bar Codex sign-in action', () => {
     render(
       React.createElement(CodexSwitcherMenu, { codex: liveUsage, compact: false, iconOnly: false })
     )
-    fireEvent.click(screen.getByText('System default'))
 
     const activeRow = await screen.findByRole('menuitem', { name: /Active/ })
     expect(within(activeRow).queryByText('11% used wk')).toBeNull()
@@ -253,7 +251,7 @@ describe('status bar Codex sign-in action', () => {
         activeAccountIdsByRuntime: { host: 'account-2', wsl: {} }
       })
 
-      await renderSwitcherAndOpenAccounts('System default')
+      await renderSwitcherAndOpenAccounts()
       const detail = workspaceLabel ? `${workspaceLabel} · ` : ''
       expect(screen.getByText(`same@example.com (${detail}account-1)`)).toBeTruthy()
       fireEvent.click(screen.getByText(`same@example.com (${detail}account-2)`))
@@ -279,7 +277,7 @@ describe('status bar Codex sign-in action', () => {
   it('activates the signed-in account and runs the same restart workflow a switch runs', async () => {
     reauthenticate.mockResolvedValue(codexSnapshot('account-2'))
 
-    await renderSwitcherAndOpenAccounts('System default')
+    await renderSwitcherAndOpenAccounts()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1))
@@ -302,7 +300,7 @@ describe('status bar Codex sign-in action', () => {
     storeSettings = settingsWithActive('account-1')
     reauthenticate.mockResolvedValue(codexSnapshot('account-1'))
 
-    await renderSwitcherAndOpenAccounts('account-1@example.com')
+    await renderSwitcherAndOpenAccounts()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1))
@@ -314,11 +312,29 @@ describe('status bar Codex sign-in action', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 
+  it('preserves Sign in for the producer refresh-token reuse error', async () => {
+    inactiveError =
+      'Your access token could not be refreshed because your refresh token was already used. Please log out and sign in again.'
+    reauthenticate.mockResolvedValue(codexSnapshot(null))
+    const { selectCodexProviderAccount } =
+      await import('@/runtime/runtime-provider-accounts-client')
+
+    await renderSwitcherAndOpenAccounts()
+    fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1))
+    expect(reauthenticate).toHaveBeenCalledExactlyOnceWith({
+      accountId: 'account-2',
+      activateIfSelectionWasEmpty: true
+    })
+    expect(selectCodexProviderAccount).not.toHaveBeenCalled()
+  })
+
   it('reports a failed sign-in instead of leaving the click silent', async () => {
     reauthenticate.mockRejectedValue(new Error('Codex login exited with code 1.'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await renderSwitcherAndOpenAccounts('System default')
+    await renderSwitcherAndOpenAccounts()
     fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
 
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))

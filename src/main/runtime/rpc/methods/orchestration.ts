@@ -1,4 +1,5 @@
 import { requiringOrcadFeature } from '../orcad-feature-readiness'
+import { ORCHESTRATION_CREW_METHODS } from './orchestration/crew-methods'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration/runs/runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration/worker/worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration/federation/federation-methods'
@@ -14,6 +15,7 @@ import { ORCHESTRATION_CALLER_METHODS } from './orchestration/caller-show'
 
 // Every orchestration method reads the authority restored at startup.
 export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
+  ...ORCHESTRATION_CREW_METHODS,
   ...ORCHESTRATION_RUN_METHODS,
   ...ORCHESTRATION_WORKER_METHODS,
   ...ORCHESTRATION_FEDERATION_METHODS,

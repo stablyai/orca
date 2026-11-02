@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
-import { projectRuntimePermission } from '../../../src/shared/structured-agent-session-permission-option'
+import { projectRuntimePermission } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
 import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
-import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/shared/structured-agent-session-options-read-owner'
 import type { RpcClient } from '../transport/rpc-client'
-import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
-import { createStructuredAgentSessionOptionState } from '../../../src/shared/structured-agent-session-options'
+import { createStructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
 
 export function useMobileStructuredOptionState(args: {
   client: RpcClient | null

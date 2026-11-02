@@ -33,6 +33,8 @@
 
 /* Gate hover hiding behind can-hover so touch controls remain visible. */
 @custom-variant can-hover (@media (hover: hover));
+/* Set by use-reduce-visual-effects for the setting or OS reduced transparency. */
+@custom-variant reduce-effects (&:where(:root[data-reduce-effects] *));
 
 .theme-transition-disabled *,
 .theme-transition-disabled *::before,
@@ -55,6 +57,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-chat-canvas: var(--chat-canvas);
+  --color-chat-pane: var(--chat-pane);
   --color-chat-foreground: var(--chat-foreground);
   --color-chat-foreground-strong: var(--chat-foreground-strong);
   --color-chat-foreground-faint: var(--chat-foreground-faint);
@@ -147,8 +150,16 @@
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
-  --color-tab-group-split-divider: var(--tab-group-split-divider);
-  --color-tab-group-split-divider-strong: var(--tab-group-split-divider-strong);
+  --color-tab-active: var(--tab-active);
+  --color-tab-inactive: var(--tab-inactive);
+  /* Public tokens a theme may omit; resolved per element so unthemed tabs paint exactly as before. */
+  --color-tab-bar: var(--tab-bar, var(--card));
+  --color-tab-active-foreground: var(--tab-active-foreground, var(--foreground));
+  --color-tab-active-indicator: var(
+    --tab-active-indicator,
+    var(--tab-active-foreground, var(--foreground))
+  );
+  --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -192,7 +203,7 @@
   --orca-security-secondary: #f5f5f5;
   --orca-security-secondary-foreground: #171717;
   --orca-security-muted: #f5f5f5;
-  --orca-security-muted-foreground: #737373;
+  --orca-security-muted-foreground: #696969;
   --orca-security-accent: #f5f5f5;
   --orca-security-accent-foreground: #171717;
   --orca-security-border: #e5e5e5;
@@ -230,7 +241,7 @@
   --secondary: #f5f5f5;
   --secondary-foreground: #171717;
   --muted: #f5f5f5;
-  --muted-foreground: #737373;
+  --muted-foreground: #696969;
   --accent: #f5f5f5;
   --accent-foreground: #171717;
   --border: #e5e5e5;
@@ -293,25 +304,29 @@
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
   /* Split dividers must clear 3:1 against --card even before hover; --border is too faint. */
-  --tab-group-split-divider: #868690;
-  --tab-group-split-divider-strong: #71717a;
+  --split-divider: #868690;
+  --split-divider-hover: #71717a;
+  /* `--tab-bar` is set only by themes; keep in sync with PLUGIN_APP_THEME_CSS_FALLBACKS. */
+  /* White --card can't be lifted, so light mode recesses inactive tabs to keep the active one lighter. */
+  --tab-active: var(--tab-bar, var(--card));
+  --tab-inactive: color-mix(in srgb, var(--foreground) 4%, var(--tab-bar, var(--card)));
 }
 
 .dark {
   --orca-security-background: #0a0a0a;
-  --orca-security-foreground: #e5e5e5;
+  --orca-security-foreground: #f0f0f0;
   --orca-security-card: #171717;
-  --orca-security-card-foreground: #e5e5e5;
+  --orca-security-card-foreground: #f0f0f0;
   --orca-security-popover: #171717;
-  --orca-security-popover-foreground: #e5e5e5;
+  --orca-security-popover-foreground: #f0f0f0;
   --orca-security-primary: #e5e5e5;
   --orca-security-primary-foreground: #171717;
   --orca-security-secondary: #262626;
-  --orca-security-secondary-foreground: #e5e5e5;
+  --orca-security-secondary-foreground: #f0f0f0;
   --orca-security-muted: #262626;
-  --orca-security-muted-foreground: #a1a1a1;
+  --orca-security-muted-foreground: #acacac;
   --orca-security-accent: #404040;
-  --orca-security-accent-foreground: #e5e5e5;
+  --orca-security-accent-foreground: #f0f0f0;
   --orca-security-border: rgb(255 255 255 / 0.07);
   --orca-security-input: rgb(255 255 255 / 0.15);
   --orca-security-ring: #737373;
@@ -319,7 +334,7 @@
   --orca-security-dialog-surface: rgba(23, 23, 23, 0.96);
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
-  --foreground: #e5e5e5;
+  --foreground: #f0f0f0;
   --chat-canvas-mix: 5%;
   --chat-foreground-mix: 78%;
   --chat-strong-mix: 90%;
@@ -336,19 +351,19 @@
   --chat-composer-border-mix: 9%;
   --chat-content-max-width: 46rem;
   --card: #171717;
-  --card-foreground: #e5e5e5;
+  --card-foreground: #f0f0f0;
   --popover: #171717;
-  --popover-foreground: #e5e5e5;
+  --popover-foreground: #f0f0f0;
   --floating-surface: rgba(0, 0, 0, 0.72);
   --dialog-surface: rgba(23, 23, 23, 0.96);
   --primary: #e5e5e5;
   --primary-foreground: #171717;
   --secondary: #262626;
-  --secondary-foreground: #e5e5e5;
+  --secondary-foreground: #f0f0f0;
   --muted: #262626;
-  --muted-foreground: #a1a1a1;
+  --muted-foreground: #acacac;
   --accent: #404040;
-  --accent-foreground: #e5e5e5;
+  --accent-foreground: #f0f0f0;
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
@@ -366,19 +381,19 @@
   --chart-5: var(--color-blue-800);
   /* Mirror light mode’s lifted worktree sidebar above the dark canvas. */
   --worktree-sidebar: #2a2a2a;
-  --worktree-sidebar-foreground: #e5e5e5;
+  --worktree-sidebar-foreground: #f0f0f0;
   --worktree-sidebar-accent: #353535;
-  --worktree-sidebar-accent-foreground: #e5e5e5;
+  --worktree-sidebar-accent-foreground: #f0f0f0;
   /* Match --border / --sidebar-border (7%) so the left sidebar's divider lines
      aren't brighter than the rest of the UI in dark mode (#5906). */
   --worktree-sidebar-border: rgb(255 255 255 / 0.07);
   --worktree-sidebar-ring: #737373;
   --sidebar: #171717;
-  --sidebar-foreground: #e5e5e5;
+  --sidebar-foreground: #f0f0f0;
   --sidebar-primary: #1447e6;
-  --sidebar-primary-foreground: #e5e5e5;
+  --sidebar-primary-foreground: #f0f0f0;
   --sidebar-accent: #262626;
-  --sidebar-accent-foreground: #e5e5e5;
+  --sidebar-accent-foreground: #f0f0f0;
   --sidebar-border: rgb(255 255 255 / 0.07);
   --sidebar-ring: #525252;
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
@@ -407,16 +422,20 @@
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
-  --tab-group-split-divider: #71717a;
-  --tab-group-split-divider-strong: #a1a1aa;
+  --split-divider: #71717a;
+  --split-divider-hover: #a1a1aa;
+  --tab-active: color-mix(in srgb, var(--foreground) 6%, var(--tab-bar, var(--card)));
+  --tab-inactive: var(--tab-bar, var(--card));
 }
 
 /* Status and diff colors follow the chat scheme without copying the app palette. */
 :root,
 .native-chat-appearance[data-native-chat-scheme='light'] {
+  /* Native scrollbars and form controls follow the scheme instead of Chromium's light default. */
+  color-scheme: light;
   --destructive: #e40014;
-  --destructive-foreground: #fcf3f3;
-  --status-success: #15803d;
+  --destructive-foreground: #fff;
+  --status-success: #147638;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   /* Needs-attention states use yellow, separate from errors and working states. */
@@ -438,16 +457,22 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
+  --diff-added: var(--git-decoration-added);
+  --diff-removed: var(--git-decoration-deleted);
+  --diff-added-background: color-mix(in srgb, var(--diff-added) 13%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 26%, transparent);
+  --diff-added-emphasis: color-mix(in srgb, var(--diff-added) 15%, transparent);
+  --diff-removed-background: color-mix(in srgb, var(--diff-removed) 11%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 22%, transparent);
+  --diff-removed-emphasis: color-mix(in srgb, var(--diff-removed) 15%, transparent);
 }
 
 .dark,
 .native-chat-appearance[data-native-chat-scheme='dark'] {
+  color-scheme: dark;
   --destructive: #ff6568;
-  --destructive-foreground: #df2225;
+  /* Dark --destructive is a light red, so its label needs dark ink to clear AA. */
+  --destructive-foreground: #450a0a;
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
@@ -467,10 +492,14 @@
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
   --git-decoration-ignored: #6e6e6e;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
+  --diff-added: var(--git-decoration-added);
+  --diff-removed: var(--git-decoration-deleted);
+  --diff-added-background: color-mix(in srgb, var(--diff-added) 16%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 30%, transparent);
+  --diff-added-emphasis: color-mix(in srgb, var(--diff-added) 20%, transparent);
+  --diff-removed-background: color-mix(in srgb, var(--diff-removed) 18%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 32%, transparent);
+  --diff-removed-emphasis: color-mix(in srgb, var(--diff-removed) 20%, transparent);
 }
 
 .plugin-security-chrome {
@@ -511,8 +540,14 @@
   z-index: var(--toaster-z-index, 47) !important;
 }
 
-/* Keep errors above modal backdrops. Overlay attributes come from body-overlay-attributes.ts: body:has() made every DOM mutation restyle the whole app. */
-body[data-modal-overlay-open] {
+/* Behind a modal's backdrop (z-50) toasts read as dimmed and inert; toaster-modal-layer.ts raises
+   them above it on a press or a new toast. Overlay attributes come from body-overlay-attributes.ts:
+   body:has() made every DOM mutation restyle the whole app. */
+body[data-modal-overlay-open] [data-sonner-toaster] {
+  --toaster-z-index: 49;
+}
+
+body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   --toaster-z-index: 60;
 }
 
@@ -606,6 +641,8 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-canvas-mix),
     var(--chat-source-background)
   );
+  /* Full-bleed strips; clear where the chat root alone paints over a theme image (native-chat-appearance.css). */
+  --chat-pane: var(--chat-canvas);
   --chat-foreground: color-mix(
     in srgb,
     var(--chat-source-foreground) var(--chat-foreground-mix),
@@ -621,10 +658,9 @@ body[data-modal-overlay-open]
     var(--chat-source-muted-foreground) var(--chat-faint-mix),
     var(--chat-canvas)
   );
-  --chat-user-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-user-mix),
-    var(--chat-canvas)
+  --chat-user-surface: var(
+    --chat-user-message,
+    color-mix(in srgb, var(--chat-source-foreground) var(--chat-user-mix), var(--chat-canvas))
   );
   --chat-user-border: color-mix(
     in srgb,
@@ -663,16 +699,8 @@ body[data-modal-overlay-open]
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
   /* What the reader has not seen yet: the transcript's "New" marker, in the note hue. */
   --chat-unread: color-mix(in srgb, var(--callout-note) 70%, var(--chat-source-foreground));
-  --chat-diff-added: color-mix(
-    in srgb,
-    var(--git-decoration-added) 70%,
-    var(--chat-source-foreground)
-  );
-  --chat-diff-removed: color-mix(
-    in srgb,
-    var(--git-decoration-deleted) 70%,
-    var(--chat-source-foreground)
-  );
+  --chat-diff-added: color-mix(in srgb, var(--diff-added) 70%, var(--chat-source-foreground));
+  --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 70%, var(--chat-source-foreground));
 }
 
 @layer base {
@@ -700,6 +728,11 @@ body[data-modal-overlay-open]
     letter-spacing: 0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* macOS opt-in: native smoothing draws heavier code glyphs than the app-wide grayscale. */
+  :root[data-code-font-smoothing] :is(.xterm, .monaco-editor, .editor-typography-surface) {
+    -webkit-font-smoothing: auto;
   }
 
   ul {
@@ -770,7 +803,6 @@ body[data-modal-overlay-open]
 /* Radix owns the available-height variable on PopoverContent. Make that same
    node scrollable so Chromium scrollbar hit-testing stays inside the layer. */
 .popover-scroll-content {
-  color-scheme: dark;
   max-height: min(15rem, var(--radix-popover-content-available-height, 15rem));
   overflow-x: hidden;
   overflow-y: auto;
@@ -894,14 +926,54 @@ body[data-modal-overlay-open]
   overflow: hidden;
 }
 
+/* An app theme's image (lib/theme-background.ts): one static layer, veiled toward --background by its opacity. */
+:root[data-theme-background] body {
+  --orca-theme-background-veil: color-mix(
+    in srgb,
+    var(--background) calc(100% - var(--orca-theme-background-opacity) * 100%),
+    transparent
+  );
+  background-image:
+    linear-gradient(var(--orca-theme-background-veil) 0 0), var(--orca-theme-background-image);
+  background-size: auto, var(--orca-theme-background-size);
+  background-repeat: no-repeat, var(--orca-theme-background-repeat);
+  background-position: center, var(--orca-theme-background-position);
+}
+
+/* The window material (window-material-options.ts) is the backdrop; an opaque body would cover it.
+   A theme image keeps its opaque base so its letterbox and veil never expose the desktop. */
+:root[data-window-material]:not([data-theme-background]) body {
+  background-color: transparent;
+}
+
+/* Only terminal bodies are translucent; other tabs, empty groups and split gutters keep the old base. */
+:root:is([data-window-material], [data-theme-background])
+  [data-tab-group-body-id]:not([data-translucent-tab-body]),
+:root:is([data-window-material], [data-theme-background]) .tab-group-split-resize-handle {
+  background-color: var(--background);
+}
+
+/* The modal blur samples transparent pixels past the window edge; keep it over an opaque base. */
+:root[data-window-material] body:is([data-modal-overlay-open], [data-onboarding-overlay-open]) {
+  background-color: var(--background);
+}
+
+/* The seam's translucent border blended over the backdrop; keep that base so no slit shows. */
+:root:is([data-window-material], [data-theme-background]) .workspace-sidebar-seam {
+  background: linear-gradient(var(--background), var(--background)) left / 1px 100% no-repeat
+    border-box;
+}
+
 /* Blur source regions independently so status-bar animation cannot re-filter the workspace. */
-body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
+:root:not([data-reduce-effects])
+  body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
   .app-layout
   > :not(.window-controls) {
   filter: blur(2px);
 }
 
-body
+:root:not([data-reduce-effects])
+  body
   > :is(
     [data-slot='dialog-content'],
     [data-slot='command-dialog-content'],
@@ -909,6 +981,18 @@ body
     [data-onboarding-overlay]
   ):has(~ [data-slot='dialog-overlay'], ~ [data-slot='sheet-overlay']) {
   filter: blur(2px);
+}
+
+/* Reduce visual effects (#20936): no blur passes over the workspace, and solid floating surfaces. */
+:root[data-reduce-effects] {
+  --floating-surface: var(--popover);
+  --dialog-surface: var(--background);
+}
+
+:root[data-reduce-effects] *,
+:root[data-reduce-effects] *::before,
+:root[data-reduce-effects] *::after {
+  backdrop-filter: none !important;
 }
 
 /* Why: native windows have a stable content box and need no wake-time viewport reflow. */
@@ -940,7 +1024,7 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   border-radius: 1px;
-  background: var(--tab-group-split-divider);
+  background: var(--split-divider);
   transition: background 100ms ease;
 }
 
@@ -962,7 +1046,7 @@ html.native-shell .app-layout {
 
 .tab-group-split-resize-handle:hover::after,
 .tab-group-split-resize-handle.is-dragging::after {
-  background: var(--tab-group-split-divider-strong);
+  background: var(--split-divider-hover);
 }
 
 /* Electron drag hit-testing ignores z-index; every overlapping Radix portal needs explicit no-drag. */
@@ -986,7 +1070,8 @@ html.native-shell .app-layout {
   display: flex;
   flex-direction: row;
   align-items: center;
-  background: var(--bg-titlebar, var(--card));
+  /* Tabs can sit in the title bar, so it paints the tab strip color. */
+  background: var(--bg-titlebar, var(--tab-bar, var(--card)));
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   user-select: none;
@@ -1410,18 +1495,26 @@ html.native-shell .app-layout {
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
+  border-color: var(
+    --worktree-sidebar-active-border,
+    color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent)
+  );
+  background: var(
+    --worktree-sidebar-active,
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent)
+  );
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(
-    in srgb,
-    var(--worktree-sidebar-foreground) 18%,
-    var(--worktree-sidebar-border)
+  border-color: var(
+    --worktree-sidebar-active-border,
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 18%, var(--worktree-sidebar-border))
   );
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
+  background: var(
+    --worktree-sidebar-active,
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent)
+  );
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
@@ -1724,6 +1817,16 @@ html.native-shell .app-layout {
 
 .agent-working-spinner {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+}
+
+/* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
+[data-animation-offscreen],
+[data-animation-offscreen] * {
+  animation-play-state: paused;
+}
+
+.agent-working-spinner[data-animation-offscreen] {
+  animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2392,6 +2495,41 @@ html.native-shell .app-layout {
   height: 100% !important;
 }
 
+/* Why: a separate editor theme recolors code Orca paints itself; app chrome keeps the app theme. */
+:root[data-code-editor-theme] .code-editor-colors {
+  --editor-surface: var(--code-editor-background);
+  --foreground: var(--code-editor-foreground);
+  --muted-foreground: var(--code-editor-muted-foreground);
+  --border: var(--code-editor-border);
+  background-color: var(--editor-surface);
+  color: var(--foreground);
+}
+
+:root[data-code-editor-theme='light'] .code-editor-colors {
+  color-scheme: light;
+}
+
+:root[data-code-editor-theme='dark'] .code-editor-colors {
+  color-scheme: dark;
+}
+
+/* Why background only: Orca widgets inside Monaco (diff notes) keep the app's text colors. */
+:root[data-code-editor-theme] .code-editor-backdrop {
+  background-color: var(--code-editor-background);
+}
+
+/* Why: Orca's line tints sit on the editor's background, which app tokens may not contrast. */
+:root[data-code-editor-theme]
+  .monaco-editor
+  :is(
+    .orca-diff-comment-range-highlight,
+    .orca-diff-comment-range-margin,
+    .orca-conflict-base-line
+  ) {
+  --ring: var(--code-editor-muted-foreground);
+  --muted-foreground: var(--code-editor-muted-foreground);
+}
+
 /* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
 .ipynb-code-surface .monaco-editor,
 .ipynb-code-surface .monaco-editor-background,
@@ -2411,7 +2549,7 @@ html.native-shell .app-layout {
 }
 
 .monaco-editor .monaco-markdown-doc-link {
-  color: #58a6ff !important;
+  color: var(--text-link, #58a6ff) !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;
@@ -2543,6 +2681,39 @@ html.native-shell .app-layout {
 .animate-waveform {
   animation: waveform 1.4s ease-in-out infinite;
   transform-origin: center;
+}
+
+.tab-entry-omnibox > input:focus:placeholder-shown:not(:read-only) {
+  caret-color: transparent;
+}
+
+.tab-entry-omnibox:has(> input:focus:placeholder-shown:not(:read-only))::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(var(--spacing) * 3);
+  top: 50%;
+  width: 2px;
+  height: 1em;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, currentColor 85%, transparent);
+  pointer-events: none;
+  animation: tab-entry-caret 850ms step-end infinite;
+}
+
+@keyframes tab-entry-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-entry-omnibox::after {
+    animation: none !important;
+  }
 }
 
 /* CLI feature tip — terminal cursor inside the agent-control command. */

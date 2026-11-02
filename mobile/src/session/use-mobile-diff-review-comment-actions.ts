@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import { triggerError, triggerSuccess } from '../platform/haptics'
@@ -17,10 +17,7 @@ import {
   completeMobileDiffReviewState,
   markMobileDiffReviewFileReviewed
 } from './mobile-diff-review-state'
-import type {
-  MobileDiffReviewQueueFilter,
-  MobileDiffReviewQueueItem
-} from './mobile-diff-review-queue'
+import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ComposerState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import {
   nextReviewIndexAfterMarkReviewed,
@@ -36,12 +33,15 @@ type CommentActionsInput = {
   currentItem: MobileDiffReviewQueueItem | null
   queue: MobileDiffReviewQueueItem[]
   filteredQueue: MobileDiffReviewQueueItem[]
-  filter: MobileDiffReviewQueueFilter
   currentIndex: number
   composer: ComposerState | null
   composerBody: string
   setScreenState: Dispatch<SetStateAction<ReviewScreenState>>
-  setCurrentIndex: Dispatch<SetStateAction<number>>
+  selectIndex: (index: number) => void
+  /** The reader's navigation count; a save that outlasts a newer pick leaves that pick alone. */
+  navigationRef: { readonly current: number }
+  /** GitHub's viewed mark for a PR file, or null when the file's viewed state lives on the phone. */
+  remoteViewed: (item: MobileDiffReviewQueueItem, viewed: boolean) => Promise<boolean> | null
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
   sheets: Pick<ReviewSheetIntents, 'openSheet' | 'openSheetWhenIdle' | 'closeSheet'>
@@ -56,12 +56,13 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     currentItem,
     queue,
     filteredQueue,
-    filter,
     currentIndex,
     composer,
     composerBody,
     setScreenState,
-    setCurrentIndex,
+    selectIndex,
+    navigationRef,
+    remoteViewed,
     setComposerBody,
     setActionError,
     sheets
@@ -106,9 +107,12 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     [setScreenState]
   )
 
+  // Each save sends the whole notes and viewed state, so only the newest one may roll the screen back.
+  const saveSeqRef = useRef(0)
   const saveCommentsAndReviewState = useCallback(
     async (comments: DiffComment[], reviewState: MobileDiffReviewState) => {
       const previous = screenState
+      const seq = ++saveSeqRef.current
       updateReadyState((state) => ({ ...state, comments, reviewState }))
       try {
         const saved = await persistMetadata(
@@ -126,7 +130,8 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
         }
         triggerSuccess()
       } catch (err) {
-        if (previous.kind === 'ready') {
+        // A newer save already carries this one's change; rolling back would erase that newer state.
+        if (previous.kind === 'ready' && seq === saveSeqRef.current) {
           setScreenState(previous)
         }
         triggerError()
@@ -163,7 +168,12 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
   }, [closeSheet, setComposerBody])
 
   const saveComposer = useCallback(async () => {
-    if (!composer || !currentItem || screenState.kind !== 'ready') {
+    if (
+      !composer ||
+      !currentItem ||
+      screenState.kind !== 'ready' ||
+      currentItem.scope === 'commit'
+    ) {
       return
     }
     const now = Date.now()
@@ -212,28 +222,56 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     closeComposer()
   }, [closeComposer, composer, saveCommentsAndReviewState, screenState])
 
+  // Resolves whether the file is now viewed: on GitHub for a PR file, otherwise in the phone's review state.
+  const setItemViewed = useCallback(
+    async (item: MobileDiffReviewQueueItem, viewed: boolean): Promise<boolean> => {
+      const remote = remoteViewed(item, viewed)
+      if (remote) {
+        return remote
+      }
+      const descriptor = reviewDescriptorFromItem(item)
+      if (!descriptor || screenState.kind !== 'ready') {
+        return false
+      }
+      const now = Date.now()
+      let nextReviewState = viewed
+        ? markMobileDiffReviewFileReviewed(screenState.reviewState, descriptor, now)
+        : {
+            ...clearMobileDiffReviewFileReviewed(screenState.reviewState, item.key, now),
+            completedAt: undefined
+          }
+      if (
+        viewed &&
+        queue.every((candidate) => candidate.key === item.key || candidate.isReviewed)
+      ) {
+        nextReviewState = completeMobileDiffReviewState(nextReviewState, now)
+      }
+      try {
+        await saveCommentsAndReviewState(screenState.comments, nextReviewState)
+        return true
+      } catch {
+        // The failed save already rolled back and showed its error.
+        return false
+      }
+    },
+    [queue, remoteViewed, saveCommentsAndReviewState, screenState]
+  )
+
   const markReviewed = useCallback(async () => {
-    if (!currentItem || screenState.kind !== 'ready') {
+    if (!currentItem) {
       return
     }
-    const now = Date.now()
-    let nextReviewState = markMobileDiffReviewFileReviewed(
-      screenState.reviewState,
-      reviewDescriptorFromItem(currentItem),
-      now
-    )
-    if (queue.every((item) => item.key === currentItem.key || item.isReviewed)) {
-      nextReviewState = completeMobileDiffReviewState(nextReviewState, now)
+    const navigation = navigationRef.current
+    if (!(await setItemViewed(currentItem, true)) || navigation !== navigationRef.current) {
+      return
     }
-    await saveCommentsAndReviewState(screenState.comments, nextReviewState)
     const nextIndex = nextReviewIndexAfterMarkReviewed({
       currentIndex,
       currentItemKey: currentItem.key,
-      filter,
       filteredQueue
     })
     if (nextIndex !== null) {
-      setCurrentIndex(nextIndex)
+      selectIndex(nextIndex)
     } else {
       // Why: the save can outlast a sheet the user opened meanwhile; never stack on or close it.
       openSheetWhenIdle({ kind: 'completion' })
@@ -241,39 +279,28 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
   }, [
     currentIndex,
     currentItem,
-    filter,
     filteredQueue,
+    navigationRef,
     openSheetWhenIdle,
-    queue,
-    saveCommentsAndReviewState,
-    screenState,
-    setCurrentIndex
+    selectIndex,
+    setItemViewed
   ])
 
-  const markUnreviewed = useCallback(async () => {
-    if (!currentItem || screenState.kind !== 'ready') {
-      return
-    }
-    const now = Date.now()
-    const nextReviewState = clearMobileDiffReviewFileReviewed(
-      screenState.reviewState,
-      currentItem.key,
-      now
-    )
-    await saveCommentsAndReviewState(screenState.comments, {
-      ...nextReviewState,
-      completedAt: undefined
-    })
-  }, [currentItem, saveCommentsAndReviewState, screenState])
+  const toggleItemViewed = useCallback(
+    async (item: MobileDiffReviewQueueItem) => {
+      await setItemViewed(item, !item.isReviewed)
+    },
+    [setItemViewed]
+  )
 
   return {
     closeComposer,
     deleteComment,
     markReviewed,
-    markUnreviewed,
     openComposer,
     openEditComposer,
     saveCommentsAndReviewState,
-    saveComposer
+    saveComposer,
+    toggleItemViewed
   }
 }

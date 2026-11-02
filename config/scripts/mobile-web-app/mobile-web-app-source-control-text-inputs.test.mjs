@@ -18,6 +18,7 @@ const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.
 
 const HUB = 'app/h/[hostId]/source-control/[worktreeId].tsx'
 const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
+const FILE_PREVIEW = 'app/h/[hostId]/files/preview/[worktreeId].tsx'
 // The pages' inputs take their size from the chat composer's shared styles.
 const COMPOSER_INPUT_STYLES = 'src/components/composer-input/composer-input-styles.ts'
 
@@ -170,6 +171,34 @@ describe('the size a text input declares, as the census reads it', () => {
     try {
       const closure = { local: ['src/ui/Inline.tsx'] }
       expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/Inline.tsx:1'])
+      expect(unresolvedTextInputStyles(root, closure)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a style-forwarding input at its call sites, not as a hole in its own module', () => {
+    const root = plant({
+      'src/ui/FieldTextInput.tsx': [
+        "import { styles } from './field-styles'",
+        'export function FieldTextInput({ style }) {',
+        '  return <TextInput style={[styles.input, style]} />',
+        '}'
+      ].join('\n'),
+      'src/ui/Form.tsx': 'export const Form = () => <FieldTextInput style={{ fontSize: 14 }} />',
+      'src/ui/field-styles.ts': [SEAM_IMPORT, 'export const styles = { input: {} }'].join('\n'),
+      ...SEAM_SOURCE
+    })
+    try {
+      const closure = {
+        local: [
+          'src/ui/FieldTextInput.tsx',
+          'src/ui/Form.tsx',
+          'src/ui/field-styles.ts',
+          ...Object.keys(SEAM_SOURCE)
+        ]
+      }
+      expect(textInputFontSizeOffenders(root, closure)).toEqual(['src/ui/Form.tsx:1'])
       expect(unresolvedTextInputStyles(root, closure)).toEqual([])
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -424,14 +453,17 @@ describe('a style module with a platform sibling', () => {
 })
 
 describeClosure(
-  'the text inputs the source-control and review pages reach',
+  'the text inputs the source-control, review and file preview pages reach',
   () => {
-    it.each([HUB, REVIEW])('takes every input size through the seam: %s', async (route) => {
-      const closure = await mobileWebAppRouteClosure(route)
-      expect(textInputFontSizeOffenders(mobileDir, closure)).toEqual([])
-    })
+    it.each([HUB, REVIEW, FILE_PREVIEW])(
+      'takes every input size through the seam: %s',
+      async (route) => {
+        const closure = await mobileWebAppRouteClosure(route)
+        expect(textInputFontSizeOffenders(mobileDir, closure)).toEqual([])
+      }
+    )
 
-    it.each([HUB, REVIEW])(
+    it.each([HUB, REVIEW, FILE_PREVIEW])(
       'reads every input it found, so the list above is complete: %s',
       async (route) => {
         const closure = await mobileWebAppRouteClosure(route)

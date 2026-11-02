@@ -1,13 +1,13 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
   type AgentJournalTurnItem,
   type AgentJournalTurnLifecycle,
-  type AgentJournalTurnLifecycleState,
-  type AgentJournalTurnOutcome
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
+  type AgentJournalTurnLifecycleState
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { CODEX_USER_MESSAGE_ORDINAL } from './codex-turn-ordinals'
 import { resolveAgentJournalTurnRowWrite } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type {

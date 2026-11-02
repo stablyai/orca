@@ -6,6 +6,7 @@ import type {
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
+import { ReaderPauseHolds } from '../jsonl-rpc/reader-pause-holds'
 import {
   JsonlRpcAgentConnection,
   type JsonlRpcAgentConnectionOptions
@@ -17,7 +18,7 @@ import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
 import { PiRpcOptionObservations, type PiRpcOptionWrite } from './rpc-options'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { PiRpcSessionStartup } from './rpc-session-startup'
 import { PiHistoryCapture, type PiHistoryCaptureDeps } from './rpc-history-capture'
 
@@ -75,6 +76,8 @@ export class PiRpcSession {
   private failedCause?: Error
   private exitDelivery: Promise<void> = Promise.resolve()
   private releaseAfterExit?: () => void
+  private readonly reading = new ReaderPauseHolds<'lane' | 'journal'>(() => this.connection)
+  private unbindReadingControl?: () => void
 
   constructor(
     readonly input: StructuredAgentSessionAcquireInput,
@@ -95,8 +98,7 @@ export class PiRpcSession {
       agent: 'pi',
       generation,
       namespace: input.identity.sessionId,
-      pauseReading: () => this.connection?.pauseReading(),
-      resumeReading: () => this.connection?.resumeReading(),
+      ...this.reading.control('lane'),
       onFailed: (reason) => this.fail(new Error(reason)),
       onInputAccepted: (clientMessageId) =>
         this.settle(clientMessageId, {
@@ -181,6 +183,12 @@ export class PiRpcSession {
 
   async open(signal: AbortSignal): Promise<StructuredAgentSessionProviderOpenResult> {
     const result = await this.startup.run(this.resolvedLaunch, signal)
+    // Startup replies stay readable; journal pressure paces only later output.
+    if (!this.publishedExit) {
+      this.unbindReadingControl = this.input.events?.bindReadingControl?.(
+        this.reading.control('journal')
+      )
+    }
     this.openedLink = result.link ?? null
     this.history.start(this.startup.historyAnchor)
     this.startup.reportAfterOpen(this.generation, result.reportedOptions)
@@ -277,7 +285,11 @@ export class PiRpcSession {
         }, 2_000)
         timer.unref()
       })
-    ]).finally(() => clearTimeout(timer))
+    ]).finally(() => {
+      clearTimeout(timer)
+      // Final transfer must not treat an already received backlog as startup work.
+      this.unbindReadingControl?.()
+    })
     this.deps.onLifecycle({
       type: 'ended',
       ...(this.connection.lastCloseResult?.killDelivered && this.connection.rootVerdict !== 'exited'

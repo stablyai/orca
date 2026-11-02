@@ -12,9 +12,9 @@ import {
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
   resolvePortOpenInOrcaBrowser
-} from '@/lib/workspace-port-actions'
-import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
-import { addressForPort } from '@/lib/workspace-port-urls'
+} from '@/lib/workspace-ports/workspace-port-actions'
+import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
+import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import {
   WorktreeCardDetailSection,

@@ -14,6 +14,7 @@ export const LINT_STEPS = [
   'verify:localization-extraction',
   'audit:anti-slop',
   'audit:code-quality:type-aware',
+  'check:code-quality:changed',
   'check:test-file-runners',
   'verify:localization-catalogs',
   'verify:localization-coverage',
@@ -46,6 +47,7 @@ export const LINT_STEPS = [
   'verify:skill-bundle-manifest',
   'check:reliability-gates',
   'verify:bundled-skill-guides',
+  'verify:plugin-authoring-skill-references',
   'check:readme-local-links',
   'check:id-only-store-write-ratchet',
   'verify:acp-protocol'

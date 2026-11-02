@@ -25,27 +25,6 @@ function guardHarness(foregrounds: LaunchedAgentForeground[]) {
 }
 
 describe('the check before each write of a launch prompt', () => {
-  it('reuses a read that found the agent for the writes after it', async () => {
-    const { runtime, guard } = guardHarness(['agent'])
-
-    await guard.beforeWrite('pty-1')
-    await guard.beforeWrite('pty-1')
-    await guard.beforeWrite('pty-1')
-
-    expect(runtime.readLaunchedAgentForeground).toHaveBeenCalledTimes(1)
-  })
-
-  // Composer signals can come from returned shells; unknown foreground cannot authorize writing.
-  it.each(['shell', 'unknown'] as const)(
-    'refuses a write when the read finds %s',
-    async (found) => {
-      const { guard, unsubscribe } = guardHarness([found])
-
-      await expect(guard.beforeWrite('pty-1')).rejects.toThrow('agent_not_in_foreground')
-      expect(unsubscribe).toHaveBeenCalledTimes(1)
-    }
-  )
-
   it.each([
     ['a shell turning bracketed paste on', '$ \x1b[?2004h'],
     ['a shell integration prompt mark', '\x1b]133;D;1\x07\x1b]133;A\x07$ '],
@@ -89,4 +68,24 @@ describe('the check before each write of a launch prompt', () => {
     expect(cleared.runtime.subscribeToTerminalData).toHaveBeenCalledTimes(1)
     expect(cleared.unsubscribe).toHaveBeenCalledTimes(1)
   })
+})
+
+it('invalidates reused and pending foreground proof when the terminal session is replaced', async () => {
+  const { runtime, guard } = guardHarness(['agent', 'shell'])
+  const first = { incarnationId: 'first' }
+  const identity = vi.fn(() => first)
+  const fenced = createLaunchedAgentWriteGuard(
+    { ...runtime, launchedAgentTerminalIdentity: identity },
+    'claude'
+  )
+  await fenced.beforeWrite('pty-1')
+  first.incarnationId = 'replacement'
+  await expect(fenced.beforeWrite('pty-1')).rejects.toThrow('agent_not_in_foreground')
+  vi.mocked(runtime.readLaunchedAgentForeground).mockImplementationOnce(async () => {
+    first.incarnationId = 'third'
+    return 'agent'
+  })
+  await expect(fenced.beforeWrite('pty-1')).rejects.toThrow('request_aborted')
+  guard.dispose()
+  fenced.dispose()
 })

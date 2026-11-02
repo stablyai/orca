@@ -2,19 +2,19 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import {
   readAgentSessionUnavailable,
   type AgentSessionUnavailable
-} from '../../../../shared/agent-session-availability'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import {
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
-import type { StructuredAgentSessionOptionRecord } from '../../../../shared/structured-agent-session-option-state'
+import type { StructuredAgentSessionOptionRecord } from '../../../../shared/agent-session/options/structured-agent-session-option-state'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait

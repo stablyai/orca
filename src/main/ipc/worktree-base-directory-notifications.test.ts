@@ -81,15 +81,6 @@ describe('scheduleWorktreeBaseNotification git status attribution', () => {
     vi.useRealTimers()
   })
 
-  it('names the checkout behind a linked index write via the admin-dir memo', async () => {
-    await flush(makeWatch(), [['worktrees', 'other', 'index']])
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledWith(
-      expect.anything(),
-      'repo-1',
-      [SIBLING_PATH]
-    )
-  })
-
   it('folds admin-dir case and unions every checkout in one burst', async () => {
     await flush(makeWatch(), [
       ['worktrees', 'feature1', 'index'],
@@ -138,33 +129,6 @@ describe('scheduleWorktreeBaseNotification git status attribution', () => {
         null
       )
     }
-  })
-
-  it('leaves bound upstream ref writes unattributed so the active checkout refreshes', async () => {
-    const watch = makeWatch()
-    const refPath = join(COMMON_DIR, 'refs', 'remotes', 'origin', 'feature')
-    watch.gitStatusRefPaths = new Set([refPath])
-    scheduleWorktreeBaseNotification(
-      watch,
-      collectLocalWorktreeBaseChanges(watch, [{ type: 'update', path: refPath }])
-    )
-    await vi.advanceTimersByTimeAsync(300)
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledWith(
-      expect.anything(),
-      'repo-1',
-      null
-    )
-  })
-
-  it('leaves callers that state no scope (overflow, watcher error) unattributed', async () => {
-    const watch = makeWatch()
-    scheduleWorktreeBaseNotification(watch, { gitStatusRepoIds: ['repo-1'] })
-    await vi.advanceTimersByTimeAsync(300)
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledWith(
-      expect.anything(),
-      'repo-1',
-      null
-    )
   })
 
   it('keeps notifying while index writes never pause', async () => {

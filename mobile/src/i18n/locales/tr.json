@@ -21,7 +21,6 @@
     "panel": {
       "all": "Tümü",
       "emptyScope": "Bu kapsamda geçmiş ajan oturumu yok.",
-      "loadFailed": "Yüklenemedi",
       "missingResumeId": "Bu oturumun devam ettirme kimliği eksik.",
       "noSearchResults": "Aramanızla eşleşen oturum yok.",
       "noSessions": "Ajan oturumu yok",
@@ -526,6 +525,10 @@
       "disconnected": "Eklenemedi (bağlantı yok)",
       "imageTooLarge": "Görsel eklenemeyecek kadar büyük",
       "permissionDenied": "Fotoğraf erişim izni reddedildi"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Ajana devredildi",
+      "startedAgent": "Ajan başlatıldı"
     }
   },
   "common": {
@@ -658,17 +661,14 @@
       "loadingDiff": "Diff yükleniyor…",
       "loadingReview": "İnceleme yükleniyor…",
       "noReviewableChanges": "İncelenebilir Değişiklik Yok",
-      "retryLabel": "İncelemeyi yeniden yükle",
       "reviewUnavailable": "İnceleme Kullanılamıyor",
       "selectFile": "İncelemek için bir dosya seçin.",
-      "tooLargeMessage": "Bu diff, mobil önizleme için çok büyük.",
-      "tryDifferentFilter": "Farklı bir inceleme filtresi deneyin."
+      "tooLargeMessage": "Bu diff, mobil önizleme için çok büyük."
     },
     "diffReviewDrawers": {
       "addNote": "Not Ekle",
       "cancelNote": "Notu iptal et",
       "clearSentNotes": "Gönderilen Notları Temizle",
-      "completeTitle": "İnceleme Tamamlandı",
       "copyNotes": "Notları Kopyala",
       "deleteNote": "Notu sil",
       "discard": "At",
@@ -676,13 +676,8 @@
       "discardTitle": "Dosya Değişikliklerini At",
       "editNote": "Notu Düzenle",
       "fileNote": "Dosya notu",
-      "fileSummary_one": "{{fileCount}} dosya incelendi, {{count}} not",
-      "fileSummary_other": "{{fileCount}} dosya incelendi, {{count}} not",
-      "filesSummary_one": "{{fileCount}} dosya incelendi, {{count}} not",
-      "filesSummary_other": "{{fileCount}} dosya incelendi, {{count}} not",
       "lineNumber": "Satır {{lineNumber}}",
       "loadingSessions": "Ajan oturumları yükleniyor…",
-      "markUnreviewed": "İncelenmedi Olarak İşaretle",
       "newAgentSession": "Yeni Ajan Oturumu",
       "openInSession": "Oturumda Aç",
       "reviewNote": "İnceleme notu",
@@ -690,11 +685,6 @@
       "sendNotes": "Notları Gönder",
       "sendNotesLabel": "Notları ajana gönder",
       "sendUnsentNotes": "Gönderilmemiş Notları Gönder",
-      "stageReviewed": "İncelenenleri Stage Et",
-      "stageReviewedFiles": "İncelenen Dosyaları Stage Et",
-      "stageReviewedLabel": "İncelenen dosyaları stage et",
-      "stageableFiles_one": "İncelenen ve henüz stage edilmemiş {{count}} dosya stage edilebilir",
-      "stageableFiles_other": "İncelenen ve henüz stage edilmemiş {{count}} dosya stage edilebilir",
       "statusUnreadable": "Bu sunucunun durumu okunamadı. Yeniden deneniyor…",
       "terminal": "Terminal",
       "terminalLabel": "{{title}} ({{id}})",
@@ -703,57 +693,17 @@
       "updateRequired": "Bilgisayarınızdaki Orca'yı güncelleyin"
     },
     "diffReviewFileSummary": {
-      "branch": "Branch",
-      "branchFrom": "Branch · önceki yol: {{oldPath}}",
       "changed": "Değişti",
       "editFileNote": "Dosya notunu düzenle",
-      "hunk": "Blok",
-      "nextHunk": "Sonraki değişiklik bloğu",
-      "notes_one": "{{count}} not",
-      "notes_other": "{{count}} not",
-      "previousHunk": "Önceki değişiklik bloğu",
-      "reviewed": "İncelendi",
-      "staged": "Hazırlanmış",
-      "stagedFrom": "Hazırlanmış · önceki yol: {{oldPath}}",
-      "stale": "Güncel Değil",
-      "staleCount": "{{count}} güncel olmayan not",
-      "unstaged": "Hazırlanmamış",
-      "unstagedFrom": "Hazırlanmamış · önceki yol: {{oldPath}}"
+      "stale": "Güncel Değil"
     },
     "diffReviewFooter": {
-      "addFileNote": "Dosya notu ekle",
-      "discard": "At",
-      "discardFile": "Dosya değişikliklerini at",
-      "markFileReviewed": "Dosyayı incelendi olarak işaretle",
-      "markReviewed": "İncelendi Olarak İşaretle",
       "nextFile": "Sonraki dosya",
-      "note": "Not",
-      "previousFile": "Önceki dosya",
-      "reviewed": "İncelendi",
-      "stage": "Stage Et",
-      "stageFile": "Dosyayı stage et",
-      "unstage": "Stage'den Çıkar",
-      "unstageFile": "Dosyayı stage'den çıkar"
+      "previousFile": "Önceki dosya"
     },
     "diffReviewHeader": {
-      "filterAll": "Tümü",
-      "filterBranch": "Branch",
-      "filterNotes": "Notlar",
-      "filterStaged": "Hazırlanmış",
-      "filterUnreviewed": "İncelenmedi",
-      "filterUnstaged": "Hazırlanmamış",
-      "openPullRequestSidebar": "Pull request kenar çubuğunu aç",
       "openReviewActions": "İnceleme işlemlerini aç",
-      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} incelendi",
-      "showAllFiles": "İncelemedeki tüm dosyaları göster",
-      "showBranchFiles": "Branch'teki dosyaları göster",
-      "showNotesFiles": "Not içeren dosyaları göster",
-      "showStagedFiles": "Hazırlanmış dosyaları göster",
-      "showUnreviewedFiles": "İncelenmemiş dosyaları göster",
-      "showUnstagedFiles": "Hazırlanmamış dosyaları göster",
-      "title": "Değişiklikler",
-      "unsentNotes_one": "{{count}} gönderilmemiş not",
-      "unsentNotes_other": "{{count}} gönderilmemiş not"
+      "title": "Değişiklikler"
     },
     "diffReviewLine": {
       "addNoteOnLine": "{{number}}. satıra not ekle",
@@ -852,10 +802,8 @@
       "selectRunTarget": "Çalıştırma yerini seçin"
     },
     "prSidebar": {
-      "loadFailed": "Bir sorun oluştu.",
       "loading": "Pull request yükleniyor…",
-      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil.",
-      "retryLoading": "Pull request'i yüklemeyi yeniden dene"
+      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil."
     },
     "protocolBlockScreen": {
       "backToHosts": "Sunucular bölümüne dön",
@@ -1004,6 +952,16 @@
       "title": "Bir sorun oluştu",
       "tryAgain": "Tekrar dene",
       "home": "Ana sayfa"
+    },
+    "svgPreview": {
+      "drawFailed": "Bu SVG çizilemiyor",
+      "label": "{{title}} çizimi",
+      "previewDrawing": "Çizimi önizle",
+      "viewSource": "SVG kaynağını görüntüle"
+    },
+    "mermaidDiagram": {
+      "expand": "Diyagramı genişlet",
+      "label": "Mermaid diyagramı"
     }
   },
   "connection": {
@@ -1533,40 +1491,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "Eylem gerekli",
-      "cancelled": "İptal edildi",
-      "checkDetails": "{{name}} kontrolünün ayrıntıları",
-      "failed": "Başarısız",
       "failing": "{{count}} başarısız",
-      "failingChecks_one": "{{count}} başarısız kontrol",
-      "failingChecks_other": "{{count}} başarısız kontrol",
-      "fix": "Düzelt",
-      "fixFailing": "Başarısız kontrolleri AI ile düzelt",
-      "inProgress": "Devam ediyor",
-      "inspectOrFix": "Ayrıntıları inceleyin veya AI ile düzeltme başlatın.",
-      "loadDetailsFailed": "Kontrol ayrıntıları yüklenemedi",
-      "neutral": "Nötr",
-      "neutralCount": "{{count}} nötr",
       "noChecks": "Kontrol yok",
       "openOnWeb": "{{name}} kontrolünü web'de aç",
       "passed": "{{count}} başarılı",
-      "pending": "Beklemede",
-      "pendingCount": "{{count}} beklemede",
-      "queued": "Kuyrukta",
-      "rerunFailing": "Başarısız kontrolleri yeniden çalıştır",
-      "skipped": "Atlandı",
-      "successful": "Başarılı",
-      "timedOut": "Zaman aşımına uğradı",
-      "title": "Kontroller",
-      "unavailable": "Kontroller kullanılamıyor"
+      "title": "Kontroller"
     },
     "commentCard": {
       "daysAgo_one": "{{count}} gün önce",
       "daysAgo_other": "{{count}} gün önce",
-      "deleteComment": "Yorumu sil",
       "deleteConfirmMessage": "Bu işlem GitHub'daki yorumu kalıcı olarak siler.",
       "deleteConfirmTitle": "Yorum silinsin mi?",
-      "editComment": "Yorumu düzenle",
       "editPlaceholder": "Yorumu düzenleyin…",
       "hoursAgo_one": "{{count}} saat önce",
       "hoursAgo_other": "{{count}} saat önce",
@@ -1575,53 +1510,20 @@
       "minutesAgo_other": "{{count}} dk önce",
       "monthsAgo_one": "{{count}} ay önce",
       "monthsAgo_other": "{{count}} ay önce",
-      "openOnGitHub": "Yorumu GitHub'da aç",
       "reply": "Yanıtla",
-      "replyPlaceholder": "Bir yanıt yazın…",
-      "replyToComment": "Yoruma yanıt ver",
       "resolve": "Çöz",
-      "resolveThread": "Yorum dizisini çöz",
-      "resolved": "çözüldü",
       "unresolve": "Çözümü geri al",
-      "unresolveThread": "Yorum dizisinin çözümünü geri al",
       "yearsAgo_one": "{{count}} yıl önce",
       "yearsAgo_other": "{{count}} yıl önce"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "Yorum ekleyin…",
-      "all": "Tümü",
-      "bots": "Botlar",
       "comment": "Yorum yap",
-      "commentsLoadFailed": "Yorumlar yüklenemedi. Yeniden denemek için yenile düğmesine dokunun.",
       "description": "Açıklama",
       "descriptionLoadFailed": "Açıklama yüklenemedi. Yeniden denemek için yenile düğmesine dokunun.",
-      "humans": "İnsanlar",
-      "noBotComments": "Bot yorumu yok.",
       "noComments": "Henüz yorum yok.",
       "noDescription": "Açıklama girilmemiş.",
-      "noHumanComments": "İnsan yorumu yok.",
-      "resolvedCommentCount": "Çözülmüş yorum · {{author}} ({{count}})",
-      "resolvedCommentSingle": "Çözülmüş yorum · {{author}}",
-      "resolvedThreadCount": "Çözülmüş yorum dizisi · {{author}} ({{count}})",
-      "resolvedThreadSingle": "Çözülmüş yorum dizisi · {{author}}",
       "showMore": "{{count}} tane daha göster",
-      "showMoreOf": "Kalan {{remaining}} yorumdan {{count}} tane daha göster",
       "title": "Yorumlar"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} commit geride (temel commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commit geride (temel commit: {{baseCommit}})",
-      "copyCommands": "Komutları kopyala",
-      "copyFailed": "Metin kopyalanamadı",
-      "copyRefreshCommands": "Merge edilebilirlik yenileme komutlarını kopyala",
-      "detailsUnavailable": "Conflict'li dosyaların ayrıntıları kullanılamıyor",
-      "filesHeading": "Conflict'li dosyalar",
-      "localMergeClean": "GitHub conflict bildiriyor ama yerel Git bunları yeniden oluşturamadı. Merge edilebilirliği yeniden hesaplamak için PR görünümünü yenileyin veya branch'i push edin.",
-      "mustResolve": "Bu branch'in çözülmesi gereken conflict'leri var",
-      "refreshing": "Conflict ayrıntıları yenileniyor…",
-      "resolveWithAi": "Conflict'leri AI ile çöz",
-      "runFromWorktree": "Bu worktree'den çalıştır",
-      "title": "Conflict'ler"
     },
     "linkPrForm": {
       "linkButton": "Pull request'i bağla",
@@ -1634,27 +1536,14 @@
       "details": "Ayrıntılar"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "Otomatik merge işlemini aç/kapat",
-      "autoMergeLabel": "Hazır olduğunda otomatik merge et",
-      "autoMergeOff": "Kapalı",
-      "autoMergeOn": "Açık",
-      "closeAccessibilityLabel": "Pull request'i kapat",
       "closeConfirmMessage": "#{{number}} merge edilmeden kapatılacak.",
       "closeConfirmTitle": "Pull request kapatılsın mı?",
-      "markReadyAccessibilityLabel": "Pull request'i incelemeye hazır olarak işaretle",
       "markReadyButton": "İncelemeye hazır",
-      "mergeAccessibilityLabel": "Pull request'i merge et",
-      "mergeButton": "Merge et",
-      "mergeConfirmTitle": "Pull request merge edilsin mi?",
-      "recheckAccessibilityLabel": "Merge durumunu yeniden kontrol et",
-      "recheckButton": "Yeniden kontrol et",
       "reopenAccessibilityLabel": "Pull request'i yeniden aç",
       "reopenButton": "Yeniden aç",
       "reopenConfirmMessage": "#{{number}} yeniden açılacak.",
       "reopenConfirmTitle": "Pull request yeniden açılsın mı?",
-      "unlinkAccessibilityLabel": "Pull request bağlantısını kaldır",
-      "unlinkButton": "Bağlantıyı kaldır",
-      "unlinkFailed": "Pull request bağlantısı kaldırılamadı."
+      "unlinkButton": "Bağlantıyı kaldır"
     },
     "prActionsState": {
       "behindHint": "Merge etmeden önce branch'i güncelleyin",
@@ -1747,25 +1636,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} branch'i açık bir PR'a bağlı değil.",
-      "branchRequired": "Bir pull request oluşturmadan önce bir branch'i checkout edin.",
-      "createFailed": "Pull request oluşturulamadı.",
-      "createPr": "PR Oluştur",
-      "createPullRequest": "Pull request oluştur",
       "currentBranchNotLinked": "Geçerli branch açık bir PR'a bağlı değil.",
-      "linkExistingPr": "Mevcut bir PR'ı bağla",
       "linkExistingPullRequest": "Mevcut bir pull request'i bağla",
       "linkedPrUnavailable": "Bağlı PR #{{number}} kullanılamıyor",
-      "noOpenPullRequest": "Açık pull request yok",
-      "refreshOrCreate": "Tekrar kontrol etmek için yenileyin veya bu branch için yeni bir PR oluşturun.",
-      "refreshPullRequest": "Pull request'i yenile",
-      "title": "Pull request"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "Başlığı düzenlemeyi iptal et",
-      "editTitle": "Pull request başlığını düzenle",
-      "openInBrowser": "#{{number}} numaralı pull request'i tarayıcıda aç",
-      "openOnWeb": "#{{number}} numaralı pull request'i web'de aç",
-      "saveTitle": "Başlığı kaydet"
+      "refreshOrCreate": "Tekrar kontrol etmek için yenileyin veya bu branch için yeni bir PR oluşturun."
     },
     "prViewPanel": {
       "branchUnavailable": "Geçerli branch kullanılamıyor.",
@@ -1773,20 +1647,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Kişiler yüklenemedi",
-      "noMatches": "Eşleşen kişi yok",
-      "removeReviewer": "{{login}} adlı kişiyi kaldır",
-      "requestReviewer": "{{login}} adlı kişiden inceleme iste",
-      "searchPeople": "Kişi ara",
-      "title": "İnceleyenler"
+      "noMatches": "Eşleşen kişi yok"
     },
     "reviewersSection": {
-      "addOrRemove": "İnceleyen ekle veya kaldır",
       "approved": "Onaylandı",
       "changesRequested": "Değişiklik istendi",
       "commented": "Yorum yapıldı",
       "dismissed": "Geçersiz kılındı",
-      "loadFailed": "İnceleyenler yüklenemedi. Yeniden denemek için yenile düğmesine dokunun.",
-      "loading": "İnceleyenler yükleniyor…",
       "noReviewers": "İnceleme istenmedi",
       "pending": "Beklemede",
       "removeReviewer": "{{login}} kullanıcısını kaldır",
@@ -2406,9 +2273,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "Kaynak kontrolü işlemi gerçekleştirilemedi",
-      "reviewedFilesStaged_one": "İncelenen {{count}} dosya stage'e eklendi",
-      "reviewedFilesStaged_other": "İncelenen {{count}} dosya stage'e eklendi",
-      "stageResults": "{{staged}} stage'e eklendi, {{failed}} eklenemedi",
       "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "useDiffReviewInteractions": {
@@ -2469,8 +2333,7 @@
       "actionFailed": "Yorum işlemi gerçekleştirilemedi"
     },
     "usePrTitleAction": {
-      "disconnected": "Masaüstü bağlantısı yok.",
-      "updateFailed": "Başlık güncellenemedi."
+      "disconnected": "Masaüstü bağlantısı yok."
     },
     "useQuickCommands": {
       "loadFailed": "Hızlı komutlar yüklenemedi",
@@ -2792,7 +2655,6 @@
       "checkingReviewStatus": "İnceleme durumu kontrol ediliyor.",
       "checkoutBeforePublish": "Commit'leri yayınlamadan önce bir branch'i checkout edin.",
       "commitStagedChanges": "Stage edilmiş değişiklikleri commit'leyin.",
-      "commits": "Commit'ler",
       "committing": "Commit işlemi sürüyor.",
       "createPr": "PR Oluştur",
       "enterCommitMessage": "Commit'lemek için bir commit mesajı girin.",
@@ -2820,33 +2682,15 @@
       "resolveFailed": "Temel branch belirlenemedi"
     },
     "branchCard": {
-      "branchCount": "branch'te {{count}}",
-      "changedCount": "{{count}} değişiklik",
-      "cherryPickState": "cherry-pick",
-      "mergeState": "merge",
-      "rebaseState": "rebase",
-      "stagedCount": "{{count}} stage edildi",
       "completingMerge": "Tamamlanıyor…",
       "completeMerge": "Birleştirmeyi tamamla"
     },
     "branchCompare": {
-      "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commit",
-      "files_one": "{{count}} dosya",
-      "files_other": "{{count}} dosya",
-      "sectionTitle": "Branch'e Commit Edildi",
-      "summary": "{{files}} - {{baseRef}} ile karşılaştırma",
-      "summaryWithCommits": "{{files}} - {{commits}} - {{baseRef}} ile karşılaştırma"
+      "sectionTitle": "Branch'e Commit Edildi"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "Karşılaştırma için temel branch belirlenemedi.",
       "loadFailed": "Commit'lenen değişiklikler yüklenemedi"
-    },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Commit'lenmiş diff önizlemesini kapat",
-      "committedOnBranch": "Branch'e commit'lendi",
-      "loadFailed": "Diff Yüklenemedi",
-      "truncated": "Diff, mobil önizleme için kısaltıldı."
     },
     "commitDropdown": {
       "checkOutBranchToPush": "Commit'leri push etmeden önce bir branch'i checkout edin",
@@ -2901,12 +2745,8 @@
       "emptyMessage": "Çalışma ağacı temiz.",
       "emptyTitle": "Yerel değişiklik yok",
       "generateMessage": "Commit mesajını AI ile oluştur",
-      "noStagedFiles": "Stage edilmiş dosya yok",
-      "openActions": "Kaynak kontrolü eylemlerini aç",
       "reconnecting": "Masaüstüne yeniden bağlanılıyor…",
-      "regenerateHint": "Yeniden oluşturmak için mesajı temizleyin.",
-      "stageAll": "Tümünü Stage Et",
-      "unstageAll": "Tümünü Stage'den Çıkar"
+      "regenerateHint": "Yeniden oluşturmak için mesajı temizleyin."
     },
     "createPrAction": {
       "checkingStatus": "İnceleme durumu kontrol ediliyor…",
@@ -2935,20 +2775,15 @@
       "titleUnpublishedForcePushCount_one": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
       "titleUnpublishedForcePushCount_other": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın."
     },
-    "fileList": {
-      "committedSection": "Branch'e Commit'lendi"
-    },
     "fileRows": {
       "addedByThem": "Karşı tarafça eklendi",
       "addedByUs": "Tarafımızdan eklendi",
       "bothAdded": "İki tarafta da eklendi",
       "bothDeleted": "İki tarafta da silindi",
       "bothModified": "İki tarafta da değiştirildi",
-      "committedSection": "Branch'e Commit'lendi",
       "committedUnavailable": "Commit'lenen değişiklikler kullanılamıyor.",
       "deletedByThem": "Karşı tarafça silindi",
       "deletedByUs": "Tarafımızdan silindi",
-      "discardFile": "{{path}} değişikliklerini at",
       "loadingCommitted": "Commit'lenen değişiklikler yükleniyor…",
       "openChangedFile": "Değiştirilen {{path}} dosyasını aç",
       "openCommittedChange": "{{path}} için commit'lenen değişikliği aç",
@@ -2981,9 +2816,7 @@
       "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "gitStatus": {
-      "changes": "Değişiklikler",
-      "conflicts": "Conflict'ler",
-      "stagedChanges": "Stage Edilen Değişiklikler"
+      "conflicts": "Conflict'ler"
     },
     "header": {
       "backToSession": "Oturuma dön",
@@ -3042,9 +2875,7 @@
       "pushBeforeCreateFailed": "Push işlemi yapılamadı. Push hatasını giderip tekrar deneyin."
     },
     "hubTab": {
-      "changes": "Değişiklikler",
-      "commits": "Commit'ler",
-      "pullRequest": "Pull Request"
+      "changes": "Değişiklikler"
     },
     "loaders": {
       "connectingToDesktop": "Masaüstüne bağlanılıyor…",
@@ -3053,7 +2884,6 @@
       "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "modals": {
-      "actionsTitle": "Kaynak Kontrolü",
       "currentBranch": "geçerli",
       "discardButton": "At",
       "discardConfirmMessage": "“{{path}}” dosyasındaki değişiklikler atılsın mı? Bu işlem geri alınamaz.",
@@ -3063,23 +2893,8 @@
       "prCreatedTitle": "Pull Request Oluşturuldu",
       "switchBranchTitle": "Branch Değiştir"
     },
-    "openers": {
-      "openDiffFailed": "Diff açılamadı",
-      "tabNotReady": "Dosya açıldı ancak sekmesi henüz hazır değil. Yeniden deneyin.",
-      "waitingForDesktop": "Masaüstü bekleniyor…"
-    },
     "panel": {
-      "loadFailedTitle": "Yüklenemedi",
       "unavailableTitle": "Kaynak Kontrolü Kullanılamıyor"
-    },
-    "prChip": {
-      "createPr": "Pull request oluştur",
-      "loading": "Pull request yükleniyor…",
-      "loadingLabel": "Pull request yükleniyor",
-      "openLabel": "#{{number}} numaralı pull request, {{state}}, {{checks}}. Pull request'i aç.",
-      "openWithComments_one": "#{{number}} numaralı pull request, {{state}}, {{checks}}, {{count}} çözülmemiş yorum. Pull request'i aç.",
-      "openWithComments_other": "#{{number}} numaralı pull request, {{state}}, {{checks}}, {{count}} çözülmemiş yorum. Pull request'i aç.",
-      "unavailableLabel": "Pull request kullanılamıyor: {{message}}"
     },
     "prCreate": {
       "authRequired": "Bir {{reviewLabel}} oluşturmadan önce kimliğinizi doğrulayın.",
@@ -3110,7 +2925,6 @@
       "publishBranch": "Branch'i Yayınla",
       "pull": "Pull",
       "push": "Push",
-      "stageAll": "Tümünü Stage Et",
       "sync": "Senkronize Et"
     },
     "remoteDropdown": {
@@ -3169,7 +2983,6 @@
       "noBranch": "Branch yok"
     },
     "state": {
-      "noUpstream": "Upstream yok",
       "syncStatus": "{{ahead}} ileride, {{behind}} geride"
     },
     "textGenerationFailure": {
@@ -3258,9 +3071,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Commit mesajı oluşturulamadı"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "Pull request oluşturmadan önce bir branch'i checkout edin."
     },
     "useMobileGitRequests": {
       "actionFailed": "Kaynak kontrolü işlemi gerçekleştirilemedi",
@@ -3897,8 +3707,7 @@
       "noFilterMatches": "Filtrelerle eşleşen çalışma alanı yok",
       "noMatches": "Eşleşen çalışma alanı yok",
       "reopen": "Güncellemek için yeniden açın",
-      "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor.",
-      "retrying": "worktree.ps tamamlanamadı ({{error}}) — otomatik olarak yeniden deneniyor"
+      "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor."
     },
     "workspaceListSections": {
       "all": "Tümü",

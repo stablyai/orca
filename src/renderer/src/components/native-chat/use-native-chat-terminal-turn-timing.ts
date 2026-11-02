@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../store'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import {
   nativeChatHookLatestTurnWorkedSeconds,
   nativeChatHookTurnStartedAt,

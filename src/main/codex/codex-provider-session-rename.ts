@@ -1,10 +1,13 @@
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { runCodexAppServerSession, type CodexAppServerRpc } from './codex-app-server-session'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import {
+  runCodexAppServerSession,
+  type CodexAppServerRpc
+} from './app-server/codex-app-server-session'
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from '../runtime/agent-session/records/agent-session-record-launch-directory'
 import { resolveHiddenProbeCwd } from '../rate-limits/hidden-probe-cwd'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
 import { agentDrivesSession } from '../native-chat/agent-session-wire/structured-agent-session-provider-support'

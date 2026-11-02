@@ -1,3 +1,4 @@
+import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
 
 export function groupEmulatorDevices(devices: SimulatorDeviceRow[], selected: string | null) {
@@ -22,9 +23,9 @@ export function groupEmulatorDevices(devices: SimulatorDeviceRow[], selected: st
 }
 
 export function emulatorDeviceDescription(device: SimulatorDeviceRow): string {
-  const ios = device.runtime?.match(/SimRuntime\.(iOS|tvOS|watchOS|visionOS)-([\d-]+)/)
-  if (ios) {
-    return `${ios[1]} ${ios[2].replaceAll('-', '.')}`
+  const runtimeLabel = simulatorRuntimeLabel(device.runtime)
+  if (runtimeLabel) {
+    return runtimeLabel
   }
   if (
     device.backend === 'android' ||

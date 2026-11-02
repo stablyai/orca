@@ -21,7 +21,6 @@
     "panel": {
       "all": "全て",
       "emptyScope": "この範囲には過去の Agent セッションがありません。",
-      "loadFailed": "読み込めません",
       "missingResumeId": "このセッションには再開用の ID がありません。",
       "noSearchResults": "検索に一致するセッションはありません。",
       "noSessions": "Agent セッションはありません",
@@ -522,6 +521,10 @@
       "disconnected": "添付に失敗しました（接続切断）。",
       "imageTooLarge": "画像が大きすぎて添付できません。",
       "permissionDenied": "写真へのアクセスが拒否されました。"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Agentに引き継ぎました",
+      "startedAgent": "Agentを開始しました"
     }
   },
   "common": {
@@ -654,17 +657,14 @@
       "loadingDiff": "差分を読み込み中…",
       "loadingReview": "レビューを読み込み中…",
       "noReviewableChanges": "レビュー可能な変更がありません",
-      "retryLabel": "レビューの読み込みを再試行",
       "reviewUnavailable": "レビューを利用できません",
       "selectFile": "レビューするファイルを選択してください。",
-      "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。",
-      "tryDifferentFilter": "別のレビューフィルターを試してください。"
+      "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。"
     },
     "diffReviewDrawers": {
       "addNote": "メモを追加",
       "cancelNote": "メモの入力をキャンセル",
       "clearSentNotes": "送信済みのメモをクリア",
-      "completeTitle": "レビュー完了",
       "copyNotes": "メモをコピー",
       "deleteNote": "メモの削除",
       "discard": "破棄",
@@ -672,13 +672,8 @@
       "discardTitle": "ファイルの変更を破棄",
       "editNote": "メモを編集",
       "fileNote": "ファイルのメモ",
-      "fileSummary_one": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
-      "fileSummary_other": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
-      "filesSummary_one": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
-      "filesSummary_other": "レビュー済みファイル {{fileCount}} 件、メモ {{count}} 件",
       "lineNumber": "{{lineNumber}} 行目",
       "loadingSessions": "Agent セッションを読み込み中…",
-      "markUnreviewed": "未レビューにする",
       "newAgentSession": "新規 Agent セッション",
       "openInSession": "セッションで開く",
       "reviewNote": "レビューメモ",
@@ -686,11 +681,6 @@
       "sendNotes": "メモを送信",
       "sendNotesLabel": "Agent にメモを送信",
       "sendUnsentNotes": "未送信のメモを送信",
-      "stageReviewed": "レビュー済みをステージ",
-      "stageReviewedFiles": "レビュー済みファイルをステージ",
-      "stageReviewedLabel": "レビュー済みファイルをステージ",
-      "stageableFiles_one": "レビュー済みの未ステージファイル {{count}} 件をステージできます。",
-      "stageableFiles_other": "レビュー済みの未ステージファイル {{count}} 件をステージできます。",
       "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
       "terminal": "ターミナル",
       "terminalLabel": "{{title}} ({{id}})",
@@ -699,57 +689,17 @@
       "updateRequired": "コンピュータの Orca を更新してください。"
     },
     "diffReviewFileSummary": {
-      "branch": "ブランチ",
-      "branchFrom": "ブランチ（変更元: {{oldPath}}）",
       "changed": "変更あり",
       "editFileNote": "ファイルのメモを編集",
-      "hunk": "ハンク",
-      "nextHunk": "次のハンク",
-      "notes_one": "メモ {{count}} 件",
-      "notes_other": "メモ {{count}} 件",
-      "previousHunk": "前のハンク",
-      "reviewed": "レビュー済み",
-      "staged": "ステージ済み",
-      "stagedFrom": "ステージ済み（変更元: {{oldPath}}）",
-      "stale": "古いメモ",
-      "staleCount": "古いメモ {{count}} 件",
-      "unstaged": "未ステージ",
-      "unstagedFrom": "未ステージ（変更元: {{oldPath}}）"
+      "stale": "古いメモ"
     },
     "diffReviewFooter": {
-      "addFileNote": "ファイルにメモを追加",
-      "discard": "破棄",
-      "discardFile": "ファイルの変更を破棄",
-      "markFileReviewed": "ファイルをレビュー済みにする",
-      "markReviewed": "レビュー済みにする",
       "nextFile": "次のファイル",
-      "note": "メモ",
-      "previousFile": "前のファイル",
-      "reviewed": "レビュー済み",
-      "stage": "ステージ",
-      "stageFile": "ファイルをステージ",
-      "unstage": "アンステージ",
-      "unstageFile": "ファイルをアンステージ"
+      "previousFile": "前のファイル"
     },
     "diffReviewHeader": {
-      "filterAll": "全て",
-      "filterBranch": "ブランチ",
-      "filterNotes": "メモ",
-      "filterStaged": "ステージ済み",
-      "filterUnreviewed": "未レビュー",
-      "filterUnstaged": "未ステージ",
-      "openPullRequestSidebar": "PR サイドバーを開く",
       "openReviewActions": "レビュー操作を開く",
-      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} レビュー済み",
-      "showAllFiles": "レビュー対象の全ファイルを表示",
-      "showBranchFiles": "ブランチのレビュー対象ファイルを表示",
-      "showNotesFiles": "メモのあるレビュー対象ファイルを表示",
-      "showStagedFiles": "ステージ済みのレビュー対象ファイルを表示",
-      "showUnreviewedFiles": "未レビューのファイルを表示",
-      "showUnstagedFiles": "未ステージのレビュー対象ファイルを表示",
-      "title": "変更点",
-      "unsentNotes_one": "未送信のメモ {{count}} 件",
-      "unsentNotes_other": "未送信のメモ {{count}} 件"
+      "title": "変更点"
     },
     "diffReviewLine": {
       "addNoteOnLine": "{{number}} 行目にメモを追加",
@@ -848,10 +798,8 @@
       "selectRunTarget": "実行先を選択"
     },
     "prSidebar": {
-      "loadFailed": "問題が発生しました。",
       "loading": "PR を読み込み中…",
-      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。",
-      "retryLoading": "PR の読み込みを再試行"
+      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。"
     },
     "protocolBlockScreen": {
       "backToHosts": "ホストに戻る",
@@ -1000,6 +948,16 @@
       "title": "問題が発生しました",
       "tryAgain": "再試行",
       "home": "ホーム"
+    },
+    "svgPreview": {
+      "drawFailed": "この SVG を描画できません",
+      "label": "{{title}} の図",
+      "previewDrawing": "図をプレビュー",
+      "viewSource": "SVG ソースを表示"
+    },
+    "mermaidDiagram": {
+      "expand": "図を拡大",
+      "label": "Mermaid 図"
     }
   },
   "connection": {
@@ -1529,40 +1487,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "操作が必要です",
-      "cancelled": "キャンセル済み",
-      "checkDetails": "{{name}} のチェックの詳細",
-      "failed": "失敗",
       "failing": "失敗 {{count}} 件",
-      "failingChecks_one": "失敗したチェック {{count}} 件",
-      "failingChecks_other": "失敗したチェック {{count}} 件",
-      "fix": "修正",
-      "fixFailing": "失敗したチェックを AI で修正",
-      "inProgress": "進行中",
-      "inspectOrFix": "詳細を確認するか、AI に修正を依頼してください。",
-      "loadDetailsFailed": "チェックの詳細を読み込めませんでした。",
-      "neutral": "中立",
-      "neutralCount": "中立 {{count}} 件",
       "noChecks": "チェックなし",
       "openOnWeb": "{{name}} をウェブで開く",
       "passed": "成功 {{count}} 件",
-      "pending": "保留中",
-      "pendingCount": "保留中 {{count}} 件",
-      "queued": "キュー待ち",
-      "rerunFailing": "失敗したチェックを再実行",
-      "skipped": "スキップ済み",
-      "successful": "成功",
-      "timedOut": "タイムアウト",
-      "title": "チェック",
-      "unavailable": "チェックは利用できません"
+      "title": "チェック"
     },
     "commentCard": {
       "daysAgo_one": "{{count}} 日前",
       "daysAgo_other": "{{count}} 日前",
-      "deleteComment": "コメントを削除",
       "deleteConfirmMessage": "GitHub 上のコメントを完全に削除します。",
       "deleteConfirmTitle": "コメントを削除しますか?",
-      "editComment": "コメントを編集",
       "editPlaceholder": "コメントを編集…",
       "hoursAgo_one": "{{count}} 時間前",
       "hoursAgo_other": "{{count}} 時間前",
@@ -1571,53 +1506,20 @@
       "minutesAgo_other": "{{count}} 分前",
       "monthsAgo_one": "{{count}} か月前",
       "monthsAgo_other": "{{count}} か月前",
-      "openOnGitHub": "GitHub でコメントを開く",
       "reply": "返事",
-      "replyPlaceholder": "返信を入力…",
-      "replyToComment": "コメントに返信",
       "resolve": "解決",
-      "resolveThread": "スレッドを解決",
-      "resolved": "解決済み",
       "unresolve": "未解決に戻す",
-      "unresolveThread": "スレッドを未解決に戻す",
       "yearsAgo_one": "{{count}} 年前",
       "yearsAgo_other": "{{count}} 年前"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "コメントを追加…",
-      "all": "全て",
-      "bots": "ボット",
       "comment": "コメント",
-      "commentsLoadFailed": "コメントを読み込めませんでした。「更新」をタップして再試行してください。",
       "description": "説明",
       "descriptionLoadFailed": "説明を読み込めませんでした。「更新」をタップして再試行してください。",
-      "humans": "人間",
-      "noBotComments": "ボットのコメントはありません。",
       "noComments": "コメントはまだありません。",
       "noDescription": "説明はありません。",
-      "noHumanComments": "ユーザーによるコメントはありません。",
-      "resolvedCommentCount": "{{author}} の解決済みコメント（{{count}} 件）",
-      "resolvedCommentSingle": "{{author}} の解決済みコメント",
-      "resolvedThreadCount": "{{author}} の解決済みスレッド（{{count}} 件）",
-      "resolvedThreadSingle": "{{author}} の解決済みスレッド",
       "showMore": "さらに {{count}} 件を表示",
-      "showMoreOf": "残り {{remaining}} 件のうち {{count}} 件を表示",
       "title": "コメント"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} コミット遅れ（ベースコミット: {{baseCommit}}）",
-      "commitsBehind_other": "{{count}} コミット遅れ（ベースコミット: {{baseCommit}}）",
-      "copyCommands": "コマンドをコピー",
-      "copyFailed": "テキストのコピーに失敗しました",
-      "copyRefreshCommands": "マージ可否を再取得するコマンドをコピー",
-      "detailsUnavailable": "競合ファイルの詳細は利用できません",
-      "filesHeading": "競合するファイル",
-      "localMergeClean": "GitHub では競合が報告されていますが、ローカルの Git では再現されませんでした。PR を更新するか、ブランチをプッシュしてマージ可否を再計算してください。",
-      "mustResolve": "このブランチには解決する必要のある競合があります",
-      "refreshing": "競合の詳細を更新しています…",
-      "resolveWithAi": "AI で競合を解決",
-      "runFromWorktree": "このワークツリーから実行",
-      "title": "競合"
     },
     "linkPrForm": {
       "linkButton": "PR をリンク",
@@ -1630,27 +1532,14 @@
       "details": "詳細"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "自動マージを切り替え",
-      "autoMergeLabel": "準備が整ったら自動マージ",
-      "autoMergeOff": "オフ",
-      "autoMergeOn": "オン",
-      "closeAccessibilityLabel": "PR を閉じる",
       "closeConfirmMessage": "#{{number}} をマージせずに閉じます。",
       "closeConfirmTitle": "PR を閉じますか？",
-      "markReadyAccessibilityLabel": "PR をレビュー可能にする",
       "markReadyButton": "レビュー可能にする",
-      "mergeAccessibilityLabel": "PR をマージ",
-      "mergeButton": "マージ",
-      "mergeConfirmTitle": "PR をマージしますか？",
-      "recheckAccessibilityLabel": "マージ状態を再確認",
-      "recheckButton": "再確認",
       "reopenAccessibilityLabel": "PR を再オープン",
       "reopenButton": "再オープン",
       "reopenConfirmMessage": "#{{number}} を再オープンします。",
       "reopenConfirmTitle": "PR を再オープンしますか？",
-      "unlinkAccessibilityLabel": "PR のリンクを解除",
-      "unlinkButton": "リンクを解除",
-      "unlinkFailed": "PR のリンク解除に失敗しました。"
+      "unlinkButton": "リンクを解除"
     },
     "prActionsState": {
       "behindHint": "マージする前にブランチを更新する",
@@ -1743,25 +1632,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} はオープンな PR にリンクされていません。",
-      "branchRequired": "PR を作成する前にブランチをチェックアウトしてください。",
-      "createFailed": "PR の作成に失敗しました。",
-      "createPr": "PR を作成",
-      "createPullRequest": "PR を作成",
       "currentBranchNotLinked": "現在のブランチはオープンな PR にリンクされていません。",
-      "linkExistingPr": "既存の PR をリンク",
       "linkExistingPullRequest": "既存の PR をリンク",
       "linkedPrUnavailable": "リンク済みの PR #{{number}} は利用できません",
-      "noOpenPullRequest": "オープンな PR はありません",
-      "refreshOrCreate": "更新して再確認するか、このブランチの新しい PR を作成してください。",
-      "refreshPullRequest": "PR を更新",
-      "title": "PR"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "タイトルの編集をキャンセル",
-      "editTitle": "PR のタイトルを編集",
-      "openInBrowser": "PR #{{number}} をブラウザで開く",
-      "openOnWeb": "PR #{{number}} をウェブで開く",
-      "saveTitle": "タイトルを保存"
+      "refreshOrCreate": "更新して再確認するか、このブランチの新しい PR を作成してください。"
     },
     "prViewPanel": {
       "branchUnavailable": "現在のブランチを取得できません。",
@@ -1769,20 +1643,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "ユーザーの読み込みに失敗しました",
-      "noMatches": "一致するユーザーはいません",
-      "removeReviewer": "{{login}} をレビュアーから削除",
-      "requestReviewer": "{{login}} にレビューを依頼",
-      "searchPeople": "ユーザーを検索",
-      "title": "レビュアー"
+      "noMatches": "一致するユーザーはいません"
     },
     "reviewersSection": {
-      "addOrRemove": "レビュアーを追加・削除",
       "approved": "承認された",
       "changesRequested": "変更要求",
       "commented": "コメント済み",
       "dismissed": "却下済み",
-      "loadFailed": "レビュアーを読み込めませんでした。「更新」をタップして再試行してください。",
-      "loading": "レビュアーを読み込み中…",
       "noReviewers": "レビューの依頼はありません",
       "pending": "保留中",
       "removeReviewer": "{{login}} を削除",
@@ -2402,9 +2269,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "ソース管理の操作に失敗しました。",
-      "reviewedFilesStaged_one": "レビュー済みファイル {{count}} 件をステージしました。",
-      "reviewedFilesStaged_other": "レビュー済みファイル {{count}} 件をステージしました。",
-      "stageResults": "{{staged}} 件はステージ済み、{{failed}} 件は失敗",
       "waitingForDesktop": "デスクトップへの接続待ち…"
     },
     "useDiffReviewInteractions": {
@@ -2465,8 +2329,7 @@
       "actionFailed": "コメントの操作に失敗しました。"
     },
     "usePrTitleAction": {
-      "disconnected": "デスクトップに接続されていません。",
-      "updateFailed": "タイトルの更新に失敗しました。"
+      "disconnected": "デスクトップに接続されていません。"
     },
     "useQuickCommands": {
       "loadFailed": "クイックコマンドの読み込みに失敗しました。",
@@ -2788,7 +2651,6 @@
       "checkingReviewStatus": "レビュー状態を確認中です。",
       "checkoutBeforePublish": "コミットを公開する前にブランチをチェックアウトしてください。",
       "commitStagedChanges": "ステージ済みの変更をコミットします。",
-      "commits": "コミット",
       "committing": "コミット中です。",
       "createPr": "PR を作成",
       "enterCommitMessage": "コミットするには、コミットメッセージを入力してください。",
@@ -2816,33 +2678,15 @@
       "resolveFailed": "ベースブランチを特定できませんでした。"
     },
     "branchCard": {
-      "branchCount": "ブランチ内 {{count}} 件",
-      "changedCount": "変更 {{count}} 件",
-      "cherryPickState": "チェリーピック",
-      "mergeState": "マージ",
-      "rebaseState": "リベース",
-      "stagedCount": "ステージ済み {{count}} 件",
       "completingMerge": "完了しています…",
       "completeMerge": "マージを完了"
     },
     "branchCompare": {
-      "commits_one": "{{count}} 件のコミット",
-      "commits_other": "{{count}} 件のコミット",
-      "files_one": "{{count}} 個のファイル",
-      "files_other": "{{count}} 個のファイル",
-      "sectionTitle": "ブランチのコミット済み変更",
-      "summary": "{{files}} - {{baseRef}} との比較",
-      "summaryWithCommits": "{{files}} - {{commits}} - {{baseRef}} との比較"
+      "sectionTitle": "ブランチのコミット済み変更"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "比較用のベースブランチを特定できませんでした。",
       "loadFailed": "コミット済みの変更を読み込めませんでした。"
-    },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "コミット済みの差分プレビューを閉じる",
-      "committedOnBranch": "ブランチでコミット済み",
-      "loadFailed": "差分を読み込めません",
-      "truncated": "モバイルでのプレビュー用に差分を一部省略しています。"
     },
     "commitDropdown": {
       "checkOutBranchToPush": "コミットをプッシュする前にブランチをチェックアウトしてください",
@@ -2897,12 +2741,8 @@
       "emptyMessage": "ワークツリーに変更はありません。",
       "emptyTitle": "ローカルの変更なし",
       "generateMessage": "AIでコミットメッセージを生成",
-      "noStagedFiles": "ステージ済みのファイルなし",
-      "openActions": "ソース管理の操作を開く",
       "reconnecting": "デスクトップに再接続中…",
-      "regenerateHint": "再生成するには、メッセージをクリアしてください。",
-      "stageAll": "ステージオール",
-      "unstageAll": "すべてステージ解除"
+      "regenerateHint": "再生成するには、メッセージをクリアしてください。"
     },
     "createPrAction": {
       "checkingStatus": "レビュー状態を確認中…",
@@ -2931,20 +2771,15 @@
       "titleUnpublishedForcePushCount_one": "{{count}} 件のブランチコミットを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。",
       "titleUnpublishedForcePushCount_other": "{{count}} 件のブランチコミットを lease 付きで強制プッシュし、必要に応じてアップストリームを設定します。"
     },
-    "fileList": {
-      "committedSection": "ブランチのコミット済み変更"
-    },
     "fileRows": {
       "addedByThem": "相手側で追加",
       "addedByUs": "こちら側で追加",
       "bothAdded": "双方で追加",
       "bothDeleted": "双方で削除",
       "bothModified": "双方で変更",
-      "committedSection": "ブランチのコミット済み変更",
       "committedUnavailable": "コミット済みの変更を表示できません。",
       "deletedByThem": "相手側で削除",
       "deletedByUs": "こちら側で削除",
-      "discardFile": "{{path}} の変更を破棄",
       "loadingCommitted": "コミット済みの変更を読み込み中…",
       "openChangedFile": "変更されたファイル {{path}} を開く",
       "openCommittedChange": "{{path}} のコミット済みの変更を開く",
@@ -2977,9 +2812,7 @@
       "waitingForDesktop": "デスクトップからの応答を待機中…"
     },
     "gitStatus": {
-      "changes": "変更点",
-      "conflicts": "競合",
-      "stagedChanges": "ステージ済みの変更"
+      "conflicts": "競合"
     },
     "header": {
       "backToSession": "セッションに戻る",
@@ -3038,9 +2871,7 @@
       "pushBeforeCreateFailed": "プッシュに失敗しました。プッシュのエラーを解決してから、もう一度お試しください。"
     },
     "hubTab": {
-      "changes": "変更点",
-      "commits": "コミット",
-      "pullRequest": "PR"
+      "changes": "変更点"
     },
     "loaders": {
       "connectingToDesktop": "デスクトップに接続中…",
@@ -3049,7 +2880,6 @@
       "waitingForDesktop": "デスクトップへの接続を待機中…"
     },
     "modals": {
-      "actionsTitle": "ソース管理",
       "currentBranch": "現在",
       "discardButton": "破棄",
       "discardConfirmMessage": "「{{path}}」への変更を破棄しますか？この操作は取り消せません。",
@@ -3059,23 +2889,8 @@
       "prCreatedTitle": "PR を作成しました",
       "switchBranchTitle": "ブランチを切り替え"
     },
-    "openers": {
-      "openDiffFailed": "差分を開けませんでした。",
-      "tabNotReady": "ファイルは開きましたが、タブの準備がまだできていません。再試行してください。",
-      "waitingForDesktop": "デスクトップへの接続を待機中…"
-    },
     "panel": {
-      "loadFailedTitle": "読み込めません",
       "unavailableTitle": "ソース管理を利用できません"
-    },
-    "prChip": {
-      "createPr": "PR を作成",
-      "loading": "PR を読み込み中…",
-      "loadingLabel": "PR を読み込み中",
-      "openLabel": "PR #{{number}}、{{state}}、{{checks}}。PR を開く。",
-      "openWithComments_one": "PR #{{number}}、{{state}}、{{checks}}、未解決のコメント {{count}} 件。PR を開く。",
-      "openWithComments_other": "PR #{{number}}、{{state}}、{{checks}}、未解決のコメント {{count}} 件。PR を開く。",
-      "unavailableLabel": "PR を表示できません：{{message}}"
     },
     "prCreate": {
       "authRequired": "{{reviewLabel}} を作成する前に認証してください。",
@@ -3106,7 +2921,6 @@
       "publishBranch": "ブランチを公開",
       "pull": "プル",
       "push": "プッシュ",
-      "stageAll": "ステージオール",
       "sync": "同期"
     },
     "remoteDropdown": {
@@ -3165,7 +2979,6 @@
       "noBranch": "ブランチなし"
     },
     "state": {
-      "noUpstream": "アップストリームなし",
       "syncStatus": "{{ahead}} コミット先行、{{behind}} コミット遅れ"
     },
     "textGenerationFailure": {
@@ -3254,9 +3067,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "コミットメッセージの生成に失敗しました。"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "PR を作成する前にブランチをチェックアウトしてください。"
     },
     "useMobileGitRequests": {
       "actionFailed": "ソース管理の操作に失敗しました。",
@@ -3893,8 +3703,7 @@
       "noFilterMatches": "フィルターに一致するワークスペースがありません",
       "noMatches": "一致するワークスペースがありません",
       "reopen": "開き直して更新",
-      "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。",
-      "retrying": "worktree.ps に失敗しました（{{error}}）。自動で再試行中です。"
+      "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。"
     },
     "workspaceListSections": {
       "all": "全て",

@@ -278,6 +278,40 @@ it('migrates a shipped split chat/terminal profile using terminal choices while 
   })
 })
 
+describe('pre-#10561 shared terminal color overrides', () => {
+  const overrides = { background: '#101010' }
+  const legacy = { terminalColorOverridesSplit: undefined, terminalColorOverrides: overrides }
+
+  it.each([
+    { theme: 'system', terminalUseSeparateLightTheme: true },
+    { theme: 'light', terminalUseSeparateLightTheme: true },
+    { theme: 'system', terminalUseSeparateLightTheme: undefined }
+  ])('keep painting both modes when the light slot could show them (%o)', (appearance) => {
+    const normalized = normalizeLegacyProfile({ ...legacy, ...appearance })
+    expect(normalized.terminalColorOverrides).toEqual(overrides)
+    expect(normalized.terminalColorOverridesLight).toEqual(overrides)
+    expect(normalized.terminalColorOverridesSplit).toBe(true)
+  })
+
+  it.each([
+    { theme: 'dark', terminalUseSeparateLightTheme: true },
+    { theme: 'light', terminalUseSeparateLightTheme: false }
+  ])('stay on the dark slot otherwise (%o)', (appearance) => {
+    const normalized = normalizeLegacyProfile({ ...legacy, ...appearance })
+    expect(normalized.terminalColorOverrides).toEqual(overrides)
+    expect(normalized.terminalColorOverridesLight).toBeUndefined()
+  })
+
+  it('never re-split once migrated, so a cleared light slot stays clear', () => {
+    const normalized = normalizeLegacyProfile({
+      terminalColorOverrides: overrides,
+      theme: 'light',
+      terminalUseSeparateLightTheme: true
+    })
+    expect(normalized.terminalColorOverridesLight).toBeUndefined()
+  })
+})
+
 describe('terminal default shell', () => {
   it('trims a hand-edited value and treats whitespace-only as unset', () => {
     expect(

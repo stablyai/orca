@@ -12,7 +12,7 @@ import {
   listWorkItems
 } from '../github/client'
 import { getPRFileContents, getWorkItemDetails } from '../github/work-item-details'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
 import {
   assertRegisteredGitHubRepo,

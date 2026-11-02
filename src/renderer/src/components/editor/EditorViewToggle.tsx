@@ -79,6 +79,10 @@ export const NOTEBOOK_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewM
   }
 }
 
+export const SVG_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
+  rich: DEFAULT_VIEW_MODE_METADATA.preview
+}
+
 /** With custom editors, plain-file editing is the file's Source. */
 export const CUSTOM_EDITOR_SOURCE_METADATA: Partial<Record<'edit', ViewModeMetadata>> = {
   edit: DEFAULT_VIEW_MODE_METADATA.source

@@ -11,6 +11,7 @@ import {
 } from '../flags'
 import { getEmulatorCommandTarget } from '../selectors'
 import { RuntimeClientError } from '../runtime-client'
+import { EMULATOR_ATTACH_RPC_TIMEOUT_MS } from '../../shared/emulator-attach-timeouts'
 
 type EmulatorAttachResult = {
   info?: {
@@ -132,7 +133,7 @@ export const EMULATOR_HANDLERS: Record<string, CommandHandler> = {
     const res = await client.call(
       'emulator.attach',
       { device, worktree: target.worktree, focus },
-      { timeoutMs: 180_000 }
+      { timeoutMs: EMULATOR_ATTACH_RPC_TIMEOUT_MS }
     )
     printResult(res, json, (r: unknown) => {
       const result = r as EmulatorAttachResult

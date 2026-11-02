@@ -118,13 +118,13 @@ overrides:
   katex@>=0.11.0 <0.18.2: 0.18.10
 
 patchedDependencies:
-  '@xterm/addon-image@0.10.0-beta.301': config/patches/@xterm__addon-image@0.10.0-beta.301.patch
+  '@xterm/addon-image@0.10.0-beta.331': config/patches/@xterm__addon-image@0.10.0-beta.331.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
-  '@xterm/addon-ligatures@0.11.0-beta.301': config/patches/@xterm__addon-ligatures@0.11.0-beta.301.patch
-  '@xterm/addon-webgl@0.20.0-beta.300': config/patches/@xterm__addon-webgl@0.20.0-beta.300.patch
-  '@xterm/addon-search@0.17.0-beta.301': config/patches/@xterm__addon-search@0.17.0-beta.301.patch
-  '@xterm/addon-serialize@0.15.0-beta.301': config/patches/@xterm__addon-serialize@0.15.0-beta.301.patch
-  '@xterm/xterm@6.1.0-beta.304': config/patches/@xterm__xterm@6.1.0-beta.304.patch
+  '@xterm/addon-ligatures@0.11.0-beta.330': config/patches/@xterm__addon-ligatures@0.11.0-beta.330.patch
+  '@xterm/addon-webgl@0.20.0-beta.329': config/patches/@xterm__addon-webgl@0.20.0-beta.329.patch
+  '@xterm/addon-search@0.17.0-beta.330': config/patches/@xterm__addon-search@0.17.0-beta.330.patch
+  '@xterm/addon-serialize@0.15.0-beta.330': config/patches/@xterm__addon-serialize@0.15.0-beta.330.patch
+  '@xterm/xterm@6.1.0-beta.336': config/patches/@xterm__xterm@6.1.0-beta.336.patch
   lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch
   '@vscode/windows-process-tree@0.8.0': config/patches/@vscode__windows-process-tree@0.8.0.patch
   i18next-cli@1.74.2: config/patches/i18next-cli@1.74.2.patch
@@ -136,3 +136,4 @@ patchedDependencies:
   '@tiptap/markdown@3.31.3': config/patches/@tiptap__markdown@3.31.3.patch
   vitest@5.0.5: config/patches/vitest@5.0.5.patch
   pdfjs-dist@6.3.289: config/patches/pdfjs-dist@6.3.289.patch
+  prosemirror-view@1.42.3: config/patches/prosemirror-view@1.42.3.patch

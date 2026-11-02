@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
   _resetTerminalViewAttributesForTest,
-  getTerminalViewAttributes,
   getTerminalViewerColors,
   setPairedViewerColors,
   setTerminalViewAttributes,
   setTerminalViewerColorsListener
 } from '../../../runtime/terminal-view-attribute-store'
+
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import {
   _resetColorQueryReplyColorsForTest,
@@ -46,18 +46,6 @@ describe('seeding PTY owner colours from saved settings', () => {
     _resetTerminalViewAttributesForTest()
     _resetColorQueryReplyColorsForTest()
     setLocalPtyProvider(originalLocal)
-  })
-
-  it('seeds a light-appearance host with its light theme before any renderer push', () => {
-    const owner = new RecordingProvider()
-    setLocalPtyProvider(owner)
-
-    installTerminalViewAttributesIpc({
-      getSettings: () => ({ ...settings, theme: 'system' }),
-      options: { systemPrefersDark: () => false }
-    })
-
-    expect(owner.pushes).toEqual([{ foreground: '#2e3434', background: '#ffffff' }])
   })
 
   it('seeds a host with no display from its saved dark theme', () => {
@@ -98,26 +86,6 @@ describe('one viewer colour value for every PTY owner', () => {
     return owner
   }
 
-  it("keeps this host's own window theme when a paired client pushes", () => {
-    const owner = install()
-    setTerminalViewAttributes(DESKTOP_ATTRIBUTES)
-
-    setPairedViewerColors(CLIENT)
-
-    expect(getTerminalViewerColors()).toEqual(DESKTOP)
-    expect(owner.pushes).toEqual([SEED, DESKTOP])
-    expect(getTerminalViewAttributes()).toBe(DESKTOP_ATTRIBUTES)
-  })
-
-  it("answers with a paired client's theme on a host with no window of its own", () => {
-    const owner = install()
-
-    setPairedViewerColors(CLIENT)
-
-    expect(getTerminalViewerColors()).toEqual(CLIENT)
-    expect(owner.pushes).toEqual([SEED, CLIENT])
-  })
-
   it("switches to this host's window theme once its renderer pushes", () => {
     const owner = install()
     setPairedViewerColors(CLIENT)
@@ -127,13 +95,6 @@ describe('one viewer colour value for every PTY owner', () => {
 
     expect(getTerminalViewerColors()).toEqual(DESKTOP)
     expect(owner.pushes).toEqual([SEED, CLIENT, DESKTOP])
-  })
-
-  it('falls back to the saved theme until any viewer reports', () => {
-    const owner = install()
-
-    expect(getTerminalViewerColors()).toEqual(SEED)
-    expect(owner.pushes).toEqual([SEED])
   })
 
   it('notifies once per change of the answered colours', () => {

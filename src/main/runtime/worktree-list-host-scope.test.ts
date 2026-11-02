@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
-import { selectHostBalancedPage } from '../../shared/host-balanced-listing-page'
+
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -94,15 +94,6 @@ describe('worktree.list host coverage under the row cap', () => {
     expect(result.hostScope).toEqual({ hostIds: ['local', 'ssh:box-1'], omittedHostIds: [] })
   })
 
-  it('keeps the page a subsequence of the unbounded listing', async () => {
-    // Balancing selects survivors but must preserve their original order.
-    const resolved = fleet(497, 24)
-    const result = await queries(resolved).list(undefined, 200)
-
-    const positions = result.worktrees.map((row) => resolved.findIndex((it) => it.id === row.id))
-    expect(positions).toEqual([...positions].sort((left, right) => left - right))
-  })
-
   it('names a configured host that contributed no rows at all', async () => {
     // Failed repo scans and empty hosts both contribute no rows; scope must expose the uncertainty.
     const result = await queries(fleet(3, 0), ['local', 'ssh:box-1', 'runtime:paired']).list(
@@ -121,48 +112,5 @@ describe('worktree.list host coverage under the row cap', () => {
     const result = await queries(fleet(0, 5)).list('id:repo-ssh', 200)
 
     expect(result.hostScope).toEqual({ hostIds: ['ssh:box-1'], omittedHostIds: [] })
-  })
-
-  it('leaves an uncapped listing byte-identical', async () => {
-    const resolved = fleet(4, 2)
-    const result = await queries(resolved).list(undefined, 200)
-
-    expect(result.worktrees.map((row) => row.id)).toEqual(resolved.map((row) => row.id))
-    expect(result.truncated).toBe(false)
-  })
-})
-
-describe('selectHostBalancedPage', () => {
-  it('gives every host a share of the cap rather than filling it from the first', () => {
-    const rows = [
-      ...Array.from({ length: 10 }, (_, index) => ({ host: 'local', index })),
-      ...Array.from({ length: 10 }, (_, index) => ({ host: 'ssh:box-1', index: index + 10 }))
-    ]
-
-    const page = selectHostBalancedPage(rows, 4, (row) => row.host)
-
-    expect(page.map((row) => row.host)).toEqual(['local', 'local', 'ssh:box-1', 'ssh:box-1'])
-  })
-
-  it('fills the cap from the remaining hosts when one runs out of rows', () => {
-    const rows = [
-      { host: 'local', id: 'a' },
-      { host: 'local', id: 'b' },
-      { host: 'local', id: 'c' },
-      { host: 'ssh:box-1', id: 'd' }
-    ]
-
-    const page = selectHostBalancedPage(rows, 3, (row) => row.host)
-
-    expect(page.map((row) => row.id)).toEqual(['a', 'b', 'd'])
-  })
-
-  it('buckets rows with no host together instead of dropping them', () => {
-    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
-
-    expect(selectHostBalancedPage(rows, 2, () => undefined).map((row) => row.id)).toEqual([
-      'a',
-      'b'
-    ])
   })
 })

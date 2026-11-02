@@ -1,11 +1,11 @@
-import type { DiffReviewScope } from '../../../src/shared/diff-comment-types'
 import type { MobileGitStagingArea } from '../source-control/mobile-git-status'
 import {
   createMobileDiffReviewFileKey,
-  type MobileDiffReviewQueueItem
+  type MobileDiffReviewQueueItem,
+  type MobileDiffReviewSection
 } from './mobile-diff-review-queue'
 
-export type MobileDiffReviewTargetArea = MobileGitStagingArea | 'branch'
+export type MobileDiffReviewTargetArea = MobileGitStagingArea | 'branch' | 'commit'
 
 export type MobileDiffReviewInitialTarget = {
   filePath: string
@@ -16,11 +16,13 @@ const VALID_TARGET_AREAS = new Set<MobileDiffReviewTargetArea>([
   'unstaged',
   'untracked',
   'staged',
-  'branch'
+  'branch',
+  'commit'
 ])
 
-function scopeForTargetArea(area: MobileDiffReviewTargetArea): DiffReviewScope {
-  return area === 'staged' || area === 'branch' ? area : 'unstaged'
+/** The Changes section a tapped file belongs to, which is the queue the screen walks. */
+export function scopeForTargetArea(area: MobileDiffReviewTargetArea): MobileDiffReviewSection {
+  return area === 'staged' || area === 'branch' || area === 'commit' ? area : 'unstaged'
 }
 
 export function normalizeReviewAreaParam(value: string): MobileDiffReviewTargetArea | null {
