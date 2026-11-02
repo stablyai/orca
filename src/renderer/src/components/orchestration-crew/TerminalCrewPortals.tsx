@@ -5,6 +5,7 @@ import type { TerminalPaneController } from '../terminal-pane/use-terminal-pane-
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useTerminalCrewIdentity } from './use-terminal-crew-identity'
 import { OrchestrationCrewPanel } from './OrchestrationCrewPanel'
+import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
 
 type CrewPortalController = Pick<
   TerminalPaneController,
@@ -55,6 +56,11 @@ function TerminalCrewPortal({
   )
 }
 export function TerminalCrewPortals({ controller }: { controller: CrewPortalController }) {
+  // Gate before any pane mounts: an off panel resolves no identities and opens no subscriptions.
+  const enabled = useOrchestrationPanelEnabled()
+  if (!enabled) {
+    return null
+  }
   return (
     <>
       {controller.managedPanes.map((pane) =>

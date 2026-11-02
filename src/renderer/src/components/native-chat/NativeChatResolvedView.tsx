@@ -1,6 +1,5 @@
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
-import { useTerminalCrewIdentity } from '../orchestration-crew/use-terminal-crew-identity'
-import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
+import { TerminalChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
@@ -78,8 +77,6 @@ export function NativeChatResolvedView({
   // Route reads/subscriptions through the pane’s runtime owner; null retains local routing.
   const selectOwner = useMemo(() => createNativeChatRuntimeSelector(terminalTabId), [terminalTabId])
   const runtimeEnvironmentId = useAppStore(selectOwner)
-  const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(terminalTabId)
-  const crew = useTerminalCrewIdentity(paneKey, targetPtyId, ownerWorktreeId)
   const keybindings = useAppStore((s) => s.keybindings)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(terminalTabId)
   const session = useNativeChatRetainedSession({
@@ -340,12 +337,14 @@ export function NativeChatResolvedView({
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className={cn(
         NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
-        'relative flex h-full min-h-0 w-full flex-col focus:outline-none'
+        'flex h-full min-h-0 w-full flex-col focus:outline-none'
       )}
       style={appearanceStyle}
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
-      <NativeChatCrewFrame crew={{ ...crew, isVisible }}>
+      <NativeChatCrewFrame
+        panel={<TerminalChatCrewPanel {...{ terminalTabId, paneKey, targetPtyId, isVisible }} />}
+      >
         {find.isOpen ? <NativeChatFindBar find={find} isVisible={isVisible} /> : null}
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />

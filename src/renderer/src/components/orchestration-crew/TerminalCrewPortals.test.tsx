@@ -5,6 +5,7 @@ import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   initialStore,
   resetSenderStore
@@ -99,6 +100,7 @@ function mount() {
 }
 beforeEach(() => {
   resetSenderStore()
+  useAppStore.setState({ settings: { experimentalOrchestrationPanel: true } as GlobalSettings })
 })
 afterEach(() => {
   cleanup()
