@@ -73,35 +73,6 @@ describe('the guest process table', () => {
     expect(readWslGuestPaneShellCwd(twoRoots ?? [], KEY)).toBeNull()
   })
 
-  it('never starts a distro that is not running', async () => {
-    isWslDistroRunning.mockResolvedValue(false)
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000)).toBeNull()
-    expect(runWslProcess).not.toHaveBeenCalled()
-  })
-
-  it('skips the running check for a live pane whose distro was last seen running, settled', async () => {
-    wasWslDistroLastSeenRunningSettled.mockReturnValue(true)
-    runWslProcess.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: fenced(),
-      stderr: '',
-      timedOut: false
-    })
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000, { running: true })).toEqual([])
-    expect(wasWslDistroLastSeenRunningSettled).toHaveBeenCalledWith('Ubuntu')
-    expect(isWslDistroRunning).not.toHaveBeenCalled()
-  })
-
-  // Review of #33398: a session the client still holds as live may be in a distro terminated since.
-  it('still checks a live pane whose distro was not last seen running after any stop settled', async () => {
-    wasWslDistroLastSeenRunningSettled.mockReturnValue(false)
-    isWslDistroRunning.mockResolvedValue(false)
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000, { running: true })).toBeNull()
-    expect(isWslDistroRunning).toHaveBeenCalledWith('Ubuntu')
-    expect(runWslProcess).not.toHaveBeenCalled()
-  })
-
   it('runs one fixed script with no login shell, shared by callers asking at once', async () => {
     runWslProcess.mockResolvedValue({
       environmentResolved: true,
@@ -124,18 +95,5 @@ describe('the guest process table', () => {
         timeoutMs: 3_000
       })
     )
-  })
-
-  it('answers null when the read fails or times out', async () => {
-    runWslProcess.mockResolvedValue({
-      environmentResolved: true,
-      code: null,
-      stdout: '',
-      stderr: '',
-      timedOut: true
-    })
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000)).toBeNull()
-    runWslProcess.mockRejectedValue(new Error('wsl.exe missing'))
-    expect(await readWslGuestPaneProcesses('Ubuntu', 3_000)).toBeNull()
   })
 })

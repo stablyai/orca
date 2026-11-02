@@ -8,20 +8,62 @@ import {
   type PluginHostImages
 } from '../../shared/plugins/images/plugin-image-url'
 import { pluginInstalledHostImages } from './plugin-manifest-images'
+import { markCommandReplacementOwners } from './plugin-command-replacement-owners'
 import type { PluginService } from './plugin-service'
 import { listPluginVmRecipeCommands } from '../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
-  pluginSourceLabel
+  pluginSourceLabel,
+  splitQualifiedPluginKey
 } from '../../shared/plugins/catalog/plugin-marketplace'
 import { pluginCatalogTypes } from '../../shared/plugins/catalog/plugin-catalog-types'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { PluginHostListEntry, PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
-import { customEditorContentKind } from '../../shared/plugins/contributions/plugin-custom-editor-contribution'
+import {
+  customEditorContentKind,
+  customEditorFrame
+} from '../../shared/plugins/contributions/plugin-custom-editor-contribution'
 import { pluginExecutionProfile } from '../../shared/plugins/contributions/plugin-execution-profile'
 
 const PLUGIN_LIST_PROJECTION_CONCURRENCY = 4
+
+type PluginLockEntry = PluginLockfile['plugins'][string]
+
+function lockEntrySource(
+  lockEntry: PluginLockEntry | undefined
+): Pick<PluginHostListEntry, 'source'> {
+  if (!lockEntry) {
+    return {}
+  }
+  return {
+    source: {
+      kind: lockEntry.source.kind,
+      reference:
+        lockEntry.source.kind === 'local-path'
+          ? lockEntry.source.path
+          : lockEntry.source.kind === 'git'
+            ? lockEntry.source.url
+            : lockEntry.source.kind === 'marketplace'
+              ? pluginSourceLabel(lockEntry.source.plugin)
+              : `bundled:${lockEntry.source.bundleId}`,
+      resolvedCommit: lockEntry.resolvedCommit,
+      contentHash: lockEntry.contentHash,
+      ...(lockEntry.source.kind === 'marketplace'
+        ? {
+            marketplace: {
+              reference: lockEntry.source.marketplace.url,
+              ref: lockEntry.source.marketplace.ref,
+              resolvedCommit: lockEntry.source.marketplace.resolvedCommit
+            }
+          }
+        : {})
+    }
+  }
+}
+
+const devChangeCountOf = (plugin: DiscoveredPlugin) =>
+  plugin.devChangeCount === undefined ? {} : { devChangeCount: plugin.devChangeCount }
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
 
@@ -34,23 +76,27 @@ export async function buildPluginList(
     pluginConsents: service.options.getPluginConsents(),
     disabledPlugins: service.options.getDisabledPlugins()
   }
-  return mapWithConcurrency(
+  const entries = await mapWithConcurrency(
     discovered,
     PLUGIN_LIST_PROJECTION_CONCURRENCY,
     async (plugin, index): Promise<PluginHostListEntry> => {
       if (isInvalidDiscoveredPlugin(plugin)) {
         // Invalid dev paths may expose private absolute paths; use opaque identities for clients.
         const fallbackKey = plugin.pluginKey ?? `invalid-development-plugin-${index + 1}`
+        // Why the lock entry: it says which catalog installed it, so the list can offer an update.
+        const lockEntry =
+          !plugin.isDev && plugin.pluginKey ? lock.plugins[plugin.pluginKey] : undefined
         return {
           pluginKey: fallbackKey,
           consentFingerprint: null,
           name: fallbackKey,
-          version: '0.0.0',
+          version: lockEntry?.version ?? '0.0.0',
           publisher: '',
           status: 'invalid' as const,
           needsReconsent: false,
           error: plugin.error,
           isDev: plugin.isDev,
+          ...devChangeCountOf(plugin),
           official: false,
           bundled: false,
           capabilities: [],
@@ -60,7 +106,8 @@ export async function buildPluginList(
           commands: [],
           hasWorker: false,
           vmRecipes: [],
-          restarts: 0
+          restarts: 0,
+          ...lockEntrySource(lockEntry)
         }
       }
       const activation = service.activationState(plugin)
@@ -104,7 +151,7 @@ export async function buildPluginList(
         consentFingerprint: plugin.consentFingerprint,
         name: plugin.manifest.name,
         version: plugin.manifest.version,
-        publisher: plugin.manifest.publisher,
+        publisher: splitQualifiedPluginKey(plugin.pluginKey)?.publisher ?? '',
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
         execution: pluginExecutionProfile(plugin.manifest),
         types: pluginCatalogTypes(plugin.manifest),
@@ -120,6 +167,7 @@ export async function buildPluginList(
           ? { error: activationError ?? 'plugin worker crashed repeatedly' }
           : {}),
         isDev: plugin.isDev,
+        ...devChangeCountOf(plugin),
         official,
         bundled,
         capabilities: plugin.manifest.capabilities.map((capability) => ({
@@ -139,6 +187,7 @@ export async function buildPluginList(
           filenames: editor.filenames,
           priority: editor.priority ?? 'default',
           contentKind: customEditorContentKind(editor),
+          frame: customEditorFrame(editor),
           ...contributionIcon(`editor-${index}`, editor.icon)
         })),
         newFiles: plugin.manifest.contributes.newFiles.map((newFile, index) => ({
@@ -152,8 +201,10 @@ export async function buildPluginList(
           title: command.title,
           context: command.context,
           handler: command.handler,
-          keybindings: command.keybindings
+          keybindings: command.keybindings,
+          ...(command.replaces ? { replaces: command.replaces } : {})
         })),
+        statusBarItems: plugin.manifest.contributes.statusBarItems,
         hasWorker: Boolean(plugin.manifest.main),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
@@ -170,33 +221,11 @@ export async function buildPluginList(
               }
             }
           : {}),
-        ...(lockEntry
-          ? {
-              source: {
-                kind: lockEntry.source.kind,
-                reference:
-                  lockEntry.source.kind === 'local-path'
-                    ? lockEntry.source.path
-                    : lockEntry.source.kind === 'git'
-                      ? lockEntry.source.url
-                      : lockEntry.source.kind === 'marketplace'
-                        ? pluginSourceLabel(lockEntry.source.plugin)
-                        : `bundled:${lockEntry.source.bundleId}`,
-                resolvedCommit: lockEntry.resolvedCommit,
-                contentHash: lockEntry.contentHash,
-                ...(lockEntry.source.kind === 'marketplace'
-                  ? {
-                      marketplace: {
-                        reference: lockEntry.source.marketplace.url,
-                        ref: lockEntry.source.marketplace.ref,
-                        resolvedCommit: lockEntry.source.marketplace.resolvedCommit
-                      }
-                    }
-                  : {})
-              }
-            }
-          : {})
+        ...lockEntrySource(lockEntry)
       }
     }
+  )
+  return markCommandReplacementOwners(entries, lock, (pluginKey, line) =>
+    service.captureLog(pluginKey)('warn', line)
   )
 }

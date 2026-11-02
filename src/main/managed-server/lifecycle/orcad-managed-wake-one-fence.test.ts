@@ -162,4 +162,80 @@ describe('wakeExpectedOrcadUnderOneFence', () => {
     expect(await wakeStoppedManagedOrcad(slot)).toMatchObject({ outcome: 'started' })
     expect(host.fence).toBe(false)
   })
+
+  it("forgets an interrupted token once a serving wake finds its fence gone or another owner's", async () => {
+    const dropOneFenceWake = async () => {
+      host = stoppedHost()
+      const lost = Object.assign(new Error('connection lost'), { sshChannelCloseConfirmed: false })
+      vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+        if (command.includes('nohup')) {
+          throw lost
+        }
+        return host.exec(command)
+      })
+      await expect(wakeExpectedOrcadUnderOneFence(slot, OLD)).rejects.toBe(lost)
+      vi.mocked(execCommand).mockImplementation(async (_conn, command) => host.exec(command))
+      // Another client's recovery started the slot meanwhile.
+      host.alive.add(OLD)
+    }
+    for (const [fence, owner] of [
+      [false, null],
+      [true, 'another-run']
+    ] as const) {
+      await dropOneFenceWake()
+      host.fence = fence
+      host.wakeOwner = owner
+      expect(await wakeStoppedManagedOrcad(slot)).toEqual({ outcome: 'serving' })
+      host.fence = false
+      expect(await wakeExpectedOrcadUnderOneFence(slot, OLD)).toEqual({ outcome: 'serving' })
+    }
+    // Still its own fence, but a journal names work under it: the token and the fence both stay.
+    await dropOneFenceWake()
+    host.journal = '{}'
+    expect(await wakeStoppedManagedOrcad(slot)).toEqual({ outcome: 'serving' })
+    expect(host.fence).toBe(true)
+    expect(await wakeExpectedOrcadUnderOneFence(slot, OLD)).toEqual({ outcome: 'fenced' })
+  })
+
+  it('releases its own journal-free wake fence once the dropped launch is proven serving', async () => {
+    host = stoppedHost()
+    const lost = Object.assign(new Error('connection lost'), { sshChannelCloseConfirmed: false })
+    vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+      if (command.includes('nohup')) {
+        // The launch reached the host and started the slot; only the reply was lost.
+        host.exec(command)
+        host.alive.add(OLD)
+        throw lost
+      }
+      return host.exec(command)
+    })
+    await expect(wakeStoppedManagedOrcad(slot)).rejects.toBe(lost)
+    vi.mocked(execCommand).mockImplementation(async (_conn, command) => host.exec(command))
+    expect(host.fence).toBe(true)
+
+    expect(await wakeStoppedManagedOrcad(slot)).toEqual({ outcome: 'serving' })
+    // Released through the owner-guarded command, so deploys no longer see a busy fence.
+    expect(host.fence).toBe(false)
+    expect(host.commands.some((command) => command.includes('echo RELEASED'))).toBe(true)
+    expect(await wakeExpectedOrcadUnderOneFence(slot, OLD)).toEqual({ outcome: 'serving' })
+  })
+
+  it('never releases a fence another run holds, even with the slot serving', async () => {
+    host = stoppedHost()
+    const lost = Object.assign(new Error('connection lost'), { sshChannelCloseConfirmed: false })
+    vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+      if (command.includes('nohup')) {
+        throw lost
+      }
+      return host.exec(command)
+    })
+    await expect(wakeStoppedManagedOrcad(slot)).rejects.toBe(lost)
+    vi.mocked(execCommand).mockImplementation(async (_conn, command) => host.exec(command))
+    host.alive.add(OLD)
+    host.wakeOwner = 'another-run'
+
+    expect(await wakeStoppedManagedOrcad(slot)).toEqual({ outcome: 'serving' })
+    expect(host.fence).toBe(true)
+    expect(host.wakeOwner).toBe('another-run')
+  })
 })

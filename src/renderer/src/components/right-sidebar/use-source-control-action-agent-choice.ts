@@ -3,13 +3,11 @@ import {
   workspaceKindForWorktreeId
 } from '@/lib/agent-launch-route-input'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import { pickSourceControlLaunchAgent } from '../../../../shared/source-control-launch-agent-selection'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
@@ -40,12 +38,11 @@ export function useSourceControlActionAgentChoice(args: {
   worktreeId?: string | null
   repoId?: string | null
   repo: Pick<Repo, 'id' | 'kind' | 'connectionId' | 'executionHostId'> | null
-  recipe: SourceControlActionRecipe
+  recipe: SelectedSourceControlActionRecipe
   /** This open's deliberate pick; absent replays the saved recipe. */
   livePick: AgentLaunchSurface | undefined
-  settings: GlobalSettings | null
 }) {
-  const { recipe, settings } = args
+  const { recipe } = args
   const worktreeDetectionTarget = useAgentDetectionTargetForWorktree(args.worktreeId ?? null)
   const rows = useMemo(
     () =>
@@ -107,7 +104,6 @@ export function useSourceControlActionAgentChoice(args: {
   return {
     observation,
     canSaveSurface:
-      isNativeChatEnabled(settings) &&
       route.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true,
     detectedAgents,
     detecting,

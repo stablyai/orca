@@ -3,6 +3,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerWslMoveWiring } from '../wsl-move-driver-wiring'
 import { registerWslDriveProjectHandlers } from '../wsl-drive-project-handlers'
+import { installProjectRuntimeGitRouter } from '../../project-runtime-git-router'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence/loading-store/store'
@@ -15,9 +16,7 @@ import { registerUsageProviderHandlers } from '../usage-provider-handlers'
 import { registerGitHubHandlers } from '../github'
 import { registerGitLabHandlers } from '../gitlab'
 import { registerHostedReviewHandlers } from '../hosted-review'
-import { registerClickUpHandlers } from '../clickup'
-import { registerLinearHandlers } from '../linear/register-handlers'
-import { registerJiraHandlers } from '../jira/register-handlers'
+import { registerTaskTrackerHandlers } from './register-task-tracker-handlers'
 import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
 import { registerBitbucketHandlers } from '../bitbucket'
 import { registerFeedbackHandlers } from '../feedback'
@@ -53,6 +52,7 @@ import { registerSkillsHandlers } from '../skills'
 import { registerSkillDeleteIpcHandlers } from '../skill-delete/handlers'
 import { registerWorkspaceSpaceHandlers } from '../workspace-space'
 import { registerWorkspacePortHandlers } from '../workspace-ports'
+import { registerLinkPreviewHandlers } from '../link-preview'
 import { registerLocalhostWorktreeLabelHandlers } from '../localhost-worktree-labels'
 import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
@@ -63,6 +63,8 @@ import { registerPluginHandlers } from '../plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
+import { registerEmulatorScrcpyTouchHandler } from '../emulator-scrcpy-touch'
+import { registerEmulatorScrcpyKeyboardHandler } from '../emulator-scrcpy-keyboard'
 import { registerSpeechHandlers } from '../speech'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../orca-profiles'
@@ -106,7 +108,7 @@ import {
 } from '../../ai-vault/runtime-session-scanner'
 import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
 import { configureRuntimeAiVaultSessionDelete } from '../ai-vault-delete'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/structured-agent-session-host-refusal'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
@@ -199,9 +201,7 @@ export function registerCoreHandlers(
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)
   registerHostedReviewHandlers(store, stats)
-  registerLinearHandlers()
-  registerClickUpHandlers()
-  registerJiraHandlers()
+  registerTaskTrackerHandlers()
   registerJiraIssueSummaryGenerationHandlers(store, commitMessageAgentEnv)
   registerBitbucketHandlers()
   registerFeedbackHandlers()
@@ -234,7 +234,7 @@ export function registerCoreHandlers(
     })
   }
   if (pluginService) {
-    registerPluginHandlers(store, pluginService, runtime, marketplaceServices)
+    registerPluginHandlers(store, pluginService, marketplaceServices)
   }
   registerTelemetryHandlers(store)
   registerOrcaProfileHandlers(store, {
@@ -250,8 +250,11 @@ export function registerCoreHandlers(
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers()
+  registerEmulatorScrcpyTouchHandler()
+  registerEmulatorScrcpyKeyboardHandler()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
+  registerLinkPreviewHandlers()
   registerLocalhostWorktreeLabelHandlers(store)
   registerFilesystemHandlers(store, commitMessageAgentEnv)
   registerFilesystemWatcherHandlers()
@@ -264,6 +267,7 @@ export function registerCoreHandlers(
   })
   registerWslMoveWiring(store, runtime)
   registerWslDriveProjectHandlers(store, runtime)
+  installProjectRuntimeGitRouter(store)
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>

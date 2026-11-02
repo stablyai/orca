@@ -46,9 +46,14 @@ import {
   setupGuideClosedSchema,
   setupGuideOpenedSchema,
   setupGuideStepCompletedSchema,
-  terminalPaneSplitSchema
+  terminalPaneSplitSchema,
+  toastActionOverModalSchema
 } from './telemetry-feature-education-event-schemas'
 import {
+  chatUiFeatureTipActionSchema,
+  chatUiFeatureTipExposureSchema,
+  agentDefaultSurfaceChangedSchema,
+  chatUiFeatureTipShownSchema,
   cmdJPaletteFeatureTipAcknowledgedSchema,
   cmdJPaletteFeatureTipShownSchema,
   featureWallClosedSchema,
@@ -103,6 +108,7 @@ import {
   setupScriptPromptShownSchema,
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
+import { pluginInstalledSchema } from './telemetry-plugin-event-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
 import { wslUsageSnapshotSchema } from './telemetry-wsl-usage-event-schemas'
 import {
@@ -180,6 +186,10 @@ export const eventSchemas = {
   orca_cli_feature_tip_setup_result: orcaCliFeatureTipSetupResultSchema,
   cmd_j_palette_feature_tip_shown: cmdJPaletteFeatureTipShownSchema,
   cmd_j_palette_feature_tip_acknowledged: cmdJPaletteFeatureTipAcknowledgedSchema,
+  chat_ui_feature_tip_shown: chatUiFeatureTipShownSchema,
+  chat_ui_feature_tip_action: chatUiFeatureTipActionSchema,
+  chat_ui_feature_tip_exposure: chatUiFeatureTipExposureSchema,
+  agent_default_surface_changed: agentDefaultSurfaceChangedSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,
@@ -219,6 +229,7 @@ export const eventSchemas = {
   setup_guide_closed: setupGuideClosedSchema,
   setup_guide_step_completed: setupGuideStepCompletedSchema,
   terminal_pane_split: terminalPaneSplitSchema,
+  toast_action_over_modal: toastActionOverModalSchema,
 
   editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
@@ -234,5 +245,7 @@ export const eventSchemas = {
   wsl_move_orchestrator: wslMoveOrchestratorSchema,
   wsl_move_undo: wslMoveUndoSchema,
 
-  wsl_usage_snapshot: wslUsageSnapshotSchema
+  wsl_usage_snapshot: wslUsageSnapshotSchema,
+
+  plugin_installed: pluginInstalledSchema
 } as const

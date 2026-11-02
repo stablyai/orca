@@ -121,6 +121,7 @@ export type WorkItemSourceSearchProps = Pick<
   gitlabEnabled?: boolean
   typedTextEnabled?: boolean
   clickUpEnabled?: boolean
+  defaultLinearWorkspaceId?: string
 }
 export type NormalizedWorkItemSourceSearchProps = WorkItemSourceSearchProps & {
   disabled: boolean

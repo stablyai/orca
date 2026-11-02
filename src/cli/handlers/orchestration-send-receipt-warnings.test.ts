@@ -6,20 +6,24 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+import { orchestrationTestContext } from './orchestration-handler-test-context'
 
 async function formatSend(result: unknown): Promise<string> {
   callMock.mockReset().mockResolvedValueOnce({ result })
   vi.mocked(printResult).mockClear()
-  await ORCHESTRATION_HANDLERS['orchestration send']({
-    flags: new Map([
-      ['from', 'term_sender'],
-      ['to', 'term_recipient'],
-      ['subject', 'ping']
-    ]),
-    client: { call: callMock },
-    cwd: '/workspace',
-    json: false
-  } as never)
+  await ORCHESTRATION_HANDLERS['orchestration send'](
+    orchestrationTestContext(
+      callMock,
+      new Map<string, string | boolean>([
+        ['full', true],
+        ['from', 'term_sender'],
+        ['to', 'term_recipient'],
+        ['subject', 'ping']
+      ]),
+      false,
+      '/workspace'
+    )
+  )
   expect(printResult).toHaveBeenCalledOnce()
   const printCall = vi.mocked(printResult).mock.calls[0]
   if (!printCall) {

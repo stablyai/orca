@@ -1,3 +1,7 @@
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -24,6 +28,7 @@ vi.mock('@/store', () => {
     searchClickUpTasks: vi.fn(async () => []),
     linearStatus: { connected: false },
     linearStatusChecked: false,
+    linearStatusContextKey: '',
     listLinearIssues: vi.fn(),
     preflightStatus: null,
     preflightStatusChecked: false,
@@ -56,6 +61,7 @@ vi.mock('@/i18n/i18n', async (importOriginal) => ({
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   PopoverAnchor: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
 
@@ -94,9 +100,12 @@ beforeEach(() => {
   useAppStore.setState({
     linearStatus: { connected: false, viewer: null },
     linearStatusChecked: false,
-    fetchLinearIssue: vi.fn(async () => null),
-    listLinearIssues: vi.fn(async () => ({ items: [] })),
-    searchLinearIssues: vi.fn(async () => [])
+    linearStatusContextKey: getProviderRuntimeContextKey(null),
+    fetchLinearIssue: vi.fn(() => linearIssueReadFixture<LinearIssue | null>(async () => null)),
+    listLinearIssues: vi.fn(() =>
+      linearIssueReadFixture<LinearCollectionResult<LinearIssue>>(async () => ({ items: [] }))
+    ),
+    searchLinearIssues: vi.fn(() => linearIssueReadFixture<LinearIssue[]>(async () => []))
   })
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -299,7 +308,9 @@ describe('SmartWorkspaceNameField Linear URL loading', () => {
         ]
       },
       linearStatusChecked: true,
-      fetchLinearIssue: vi.fn(() => new Promise<null>(() => {}))
+      fetchLinearIssue: vi.fn(() =>
+        linearIssueReadFixture<LinearIssue | null>(() => new Promise<null>(() => {}))
+      )
     })
 
     await act(async () => {

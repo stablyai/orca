@@ -97,6 +97,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     typeof ResizeObserver === 'undefined'
       ? null
       : new ResizeObserver(() => {
+          session.foregroundGridDriftProbeSettled = false
           const paneSize = session.readPaneSize()
           if (
             paneSize &&

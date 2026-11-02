@@ -1,5 +1,5 @@
 /** Share child labels/details across sidebar and chat. Prefer host children views; retain subagents/task-roster builders until no supported publisher/paired host requires each legacy shape. Delete each legacy builder when its last publisher is gone. */
-import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from './agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkKind } from './agent-status-child-work'
 import { resolveAgentChildWorkFreshness } from './agent-status-child-work-freshness'
 import {

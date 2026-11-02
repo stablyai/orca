@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS,
   useNativeChatPendingDelivery

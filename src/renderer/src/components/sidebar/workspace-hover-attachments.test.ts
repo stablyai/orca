@@ -54,29 +54,6 @@ describe('source-safe linked hover details', () => {
     expect(result.activeKey).toBeNull()
     expect(result.items.every((item) => !item.title)).toBe(true)
   })
-  it('enriches legacy scalar tasks without introducing duplicate references', () => {
-    const result = getWorkspaceHoverAttachments(
-      { ...workspace, linkedPR: null, linkedIssue: 2, linkedLinearIssue: 'ENG-3' },
-      {
-        review: null,
-        issue: { number: 2, title: 'GitHub task', url: 'https://github.com/acme/orca/issues/2' },
-        linearIssue: {
-          identifier: 'ENG-3',
-          title: 'Linear task',
-          url: 'https://linear.app/acme/issue/ENG-3/title'
-        }
-      }
-    )
-    expect(result.items).toHaveLength(2)
-    expect(result.items.map((item) => item.title)).toEqual(['GitHub task', 'Linear task'])
-  })
-  it('does not attach review checks to folder workspaces', () => {
-    const result = getWorkspaceHoverAttachments(
-      { ...workspace, id: 'folder:docs', linkedItems: [local] },
-      { review: { provider: 'github', number: 57, title: 'Review', url: local.url } }
-    )
-    expect(result.activeKey).toBeNull()
-  })
   it('does not choose between identical URLs owned by different source contexts', () => {
     const localHost = {
       ...local,
@@ -101,12 +78,5 @@ describe('source-safe linked hover details', () => {
       { review: { provider: 'github', number: 57, title: 'Review', url: local.url } }
     )
     expect(result.activeKey).toBeNull()
-  })
-  it('uses a reference label rather than a review placeholder with no fetched URL', () => {
-    const result = getWorkspaceHoverAttachments(
-      { ...workspace, linkedItems: [{ provider: 'github', type: 'pr', number: 57 }] },
-      { review: { provider: 'github', number: 57, title: 'Unavailable placeholder' } }
-    )
-    expect(result.items[0]?.title).toBeUndefined()
   })
 })

@@ -1,7 +1,7 @@
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { agentSessionSignInFor } from '../../../../shared/agent-session-sign-in'
+import { agentSessionSignInFor } from '../../../../shared/agent-session/lifecycle/agent-session-sign-in'
 
 export function nativeChatAntigravitySignInContent(
   failureKind: string | undefined,

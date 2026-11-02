@@ -25,7 +25,11 @@ vi.mock('../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () =>
 vi.mock('./wsl-host-automation-wake-wiring', () => ({
   createWslHostAutomationWake: () => undefined
 }))
-vi.mock('../wsl/wsl-host-gate', () => ({ wslHostsGateOpen: () => undefined }))
+vi.mock('../wsl/wsl-host-gate', async (importOriginal) => ({
+  // The rest stay real, so a gate export added later never breaks this suite's handler wiring.
+  ...(await importOriginal<typeof WslHostGate>()),
+  wslHostsGateOpen: () => undefined
+}))
 vi.mock('../wsl/wsl-host-service-instance', () => ({
   getWslHostService: environment.getService,
   setWslHostService: () => undefined
@@ -60,6 +64,7 @@ vi.mock('../wsl/wsl-host-connection-record', () => ({
 }))
 import { WslHostService } from '../wsl/wsl-host-service'
 import { registerWslHostHandlers } from './wsl-host-handlers'
+import type * as WslHostGate from '../wsl/wsl-host-gate'
 
 class Sender extends EventEmitter {
   constructor(readonly id: number) {

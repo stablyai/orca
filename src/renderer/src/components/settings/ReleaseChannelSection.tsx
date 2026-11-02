@@ -8,6 +8,9 @@ import { ReleaseBuildPicker } from './ReleaseBuildPicker'
 import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
 import { Badge } from '../ui/badge'
 import { translate } from '@/i18n/i18n'
+import { updaterMessageText } from '@/lib/updater-message-copy'
+import { errorMessage } from '../../../../shared/error-message'
+import type { UpdaterCodedMessage } from '../../../../shared/updater-failure-copy'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   DEV_CHANNEL_PLATFORM_LABEL,
@@ -57,7 +60,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [builds, setBuilds] = useState<ReleaseBuild[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<UpdaterCodedMessage | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
@@ -102,14 +105,14 @@ export function ReleaseChannelSection(): React.JSX.Element {
           setSelectedTag(result.builds[0]?.tag ?? null)
         } else {
           setBuilds(null)
-          setLoadError(result.message)
+          setLoadError(result)
         }
       } catch (error) {
         if (isStale()) {
           return
         }
         setBuilds(null)
-        setLoadError(String((error as Error)?.message ?? error))
+        setLoadError({ message: errorMessage(error) })
       } finally {
         // Only the newest request may clear loading; old completions must not flash No builds.
         if (!isStale()) {
@@ -312,7 +315,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
         </p>
 
         {loadError ? (
-          <p className="text-xs text-destructive">{loadError}</p>
+          <p className="text-xs text-destructive">{updaterMessageText(loadError)}</p>
         ) : needsManualInstall && selectedBuild ? (
           <p className="text-xs text-muted-foreground">
             {translate(

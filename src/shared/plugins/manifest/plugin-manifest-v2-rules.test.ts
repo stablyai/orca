@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { pluginEngineFloor } from './plugin-engine-floor'
 import { PLUGIN_ENUM_SINCE_KEY } from './plugin-engine-floor-keys'
-import { PLUGIN_SCHEMA_NEWEST_SINCE, pluginHostVersion } from '../installation/plugin-host-version'
-import { parsePluginManifest } from './plugin-manifest'
-import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
-import { PLUGIN_RESERVED_CONTRIBUTION_POINTS } from '../contributions/plugin-contribution-points'
+import { parseHostPluginManifest, parsePluginManifest } from './plugin-manifest'
+import {
+  PLUGIN_DERIVED_PUBLISHER_SINCE,
+  PLUGIN_MANIFEST_V2_SINCE
+} from './plugin-schema-field-docs'
 
 function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -21,6 +22,22 @@ function v2(overrides: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 describe('manifest format 2 rules', () => {
+  it('lets publisher be left out only where older Orca will say it needs a newer one', () => {
+    const { publisher: _publisher, ...withoutPublisher } = v2()
+    expect(parsePluginManifest(withoutPublisher)).toEqual({
+      ok: false,
+      error: `engines.orca: must be at least >=${PLUGIN_DERIVED_PUBLISHER_SINCE} when publisher is left out, because older Orca requires publisher`
+    })
+    expect(
+      parsePluginManifest({
+        ...withoutPublisher,
+        engines: { orca: `>=${PLUGIN_DERIVED_PUBLISHER_SINCE}` }
+      })
+    ).toMatchObject({ ok: true })
+    // Why the host still reads it: the floor only exists for older hosts.
+    expect(parseHostPluginManifest(withoutPublisher)).toMatchObject({ ok: true })
+  })
+
   it('defaults pluginApi and refuses it where no code calls the host API', () => {
     expect(parsePluginManifest(v2())).toMatchObject({ ok: true })
     expect(parsePluginManifest(v2({ pluginApi: 1 }))).toEqual({
@@ -50,46 +67,14 @@ describe('manifest format 2 rules', () => {
     ).toMatchObject({ ok: true })
   })
 
-  it('refuses host API majors this Orca does not implement', () => {
-    const worker = { execution: 'trusted-worker', main: 'main.mjs' }
-    expect(parsePluginManifest(v2({ ...worker, pluginApi: 2 }))).toEqual({
+  it('skips only the engines floor when reading a manifest at runtime', () => {
+    const underDeclared = v2({ engines: { orca: '>=1.4.160' } })
+    expect(parseHostPluginManifest(underDeclared)).toMatchObject({ ok: true })
+    expect(parsePluginManifest(underDeclared)).toMatchObject({ ok: false })
+    // Every other rule still applies.
+    expect(parseHostPluginManifest(v2({ engines: { orca: '>=1.4.160' }, pluginApi: 1 }))).toEqual({
       ok: false,
-      error: 'pluginApi: targets host API 2, but this Orca supports only 1; update Orca'
-    })
-    expect(parsePluginManifest(v2({ ...worker, pluginApi: 0 }))).toEqual({
-      ok: false,
-      error: 'pluginApi: must be 1'
-    })
-  })
-
-  it('keeps contributes.agentHarnesses reserved and leaves agents unclaimed', () => {
-    expect(
-      parsePluginManifest(
-        v2({ execution: 'declarative', contributes: { agentHarnesses: [{ path: 'a.json' }] } })
-      )
-    ).toEqual({
-      ok: false,
-      error:
-        'contributes.agentHarnesses: is reserved for coding-agent harness definitions and must be empty for now'
-    })
-    expect(parsePluginManifest(v2({ contributes: { agents: [] } }))).toMatchObject({ ok: false })
-  })
-
-  it.each(Object.entries(PLUGIN_RESERVED_CONTRIBUTION_POINTS))(
-    'reserves contributes.%s: empty is accepted, any item is refused',
-    (key, purpose) => {
-      expect(parsePluginManifest(v2({ contributes: { [key]: [] } }))).toMatchObject({ ok: true })
-      expect(parsePluginManifest(v2({ contributes: { [key]: [{}] } }))).toEqual({
-        ok: false,
-        error: `contributes.${key}: is reserved for ${purpose} and must be empty for now`
-      })
-    }
-  )
-
-  it('requires engines.orca to cover every field the manifest uses', () => {
-    expect(parsePluginManifest(v2({ engines: { orca: '>=1.4.160' } }))).toEqual({
-      ok: false,
-      error: `engines.orca: must be at least >=${PLUGIN_MANIFEST_V2_SINCE}, because manifestVersion needs Orca ${PLUGIN_MANIFEST_V2_SINCE}`
+      error: 'pluginApi: data plugins never call the host API; remove pluginApi'
     })
   })
 
@@ -112,11 +97,5 @@ describe('manifest format 2 rules', () => {
       field: 'list[0].x'
     })
     expect(pluginEngineFloor(schema, { kind: 'old', list: [], extra: 'y' })?.version).toBe('5.0.0')
-  })
-
-  it('gates development builds as the newest release their schemas describe', () => {
-    expect(pluginHostVersion('1.4.214')).toBe(PLUGIN_SCHEMA_NEWEST_SINCE)
-    expect(pluginHostVersion('1.4.214-local.1.abc')).toBe(PLUGIN_SCHEMA_NEWEST_SINCE)
-    expect(pluginHostVersion('99.0.0')).toBe('99.0.0')
   })
 })

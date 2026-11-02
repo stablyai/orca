@@ -20,14 +20,14 @@ export type WorkspaceBoardClickUpStatusSyncDependencies = {
 
 type WorkspaceBoardClickUpStatusSyncArgs = {
   targetStatus: WorkspaceStatusDefinition
-  worktreesById: ReadonlyMap<
+  worktreesByKey: ReadonlyMap<
     string,
     Pick<Worktree, 'linkedClickUpTaskId' | 'linkedClickUpWorkspaceId'>
   >
   settings?: RuntimeClickUpSettings
-  getSettingsForWorktree?: (worktreeId: string) => RuntimeClickUpSettings | null
-  getClickUpSettingsForWorktree?: (worktreeId: string) => RuntimeClickUpSettings | null
-  getLatestWorkspaceStatus: (worktreeId: string) => WorkspaceStatus | null | undefined
+  getSettingsForWorktree?: (worktreeKey: string) => RuntimeClickUpSettings | null
+  getClickUpSettingsForWorktree?: (worktreeKey: string) => RuntimeClickUpSettings | null
+  getLatestWorkspaceStatus: (worktreeKey: string) => WorkspaceStatus | null | undefined
 }
 
 export const DEFAULT_WORKSPACE_BOARD_CLICKUP_STATUS_SYNC_DEPS: WorkspaceBoardClickUpStatusSyncDependencies =
@@ -51,19 +51,19 @@ function taskIdentifier(task: ClickUpTask): string {
 
 export async function syncClickUpWorktreeStatus(
   args: WorkspaceBoardClickUpStatusSyncArgs,
-  worktreeId: string,
+  worktreeKey: string,
   deps: WorkspaceBoardClickUpStatusSyncDependencies
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
   const result = emptyResult()
-  const worktree = args.worktreesById.get(worktreeId)
+  const worktree = args.worktreesByKey.get(worktreeKey)
   if (!worktree?.linkedClickUpTaskId) {
     result.skipped += 1
     return result
   }
   const settings = args.getClickUpSettingsForWorktree
-    ? args.getClickUpSettingsForWorktree(worktreeId)
+    ? args.getClickUpSettingsForWorktree(worktreeKey)
     : args.getSettingsForWorktree
-      ? args.getSettingsForWorktree(worktreeId)
+      ? args.getSettingsForWorktree(worktreeKey)
       : (args.settings ?? undefined)
   if (settings === null) {
     result.skipped += 1
@@ -89,7 +89,7 @@ export async function syncClickUpWorktreeStatus(
     }
     if (
       normalizedStatusName(task.status.name) === normalizedStatusName(args.targetStatus.label) ||
-      args.getLatestWorkspaceStatus(worktreeId) !== args.targetStatus.id
+      args.getLatestWorkspaceStatus(worktreeKey) !== args.targetStatus.id
     ) {
       result.skipped += 1
       return result
@@ -108,7 +108,7 @@ export async function syncClickUpWorktreeStatus(
       })
       return result
     }
-    if (args.getLatestWorkspaceStatus(worktreeId) !== args.targetStatus.id) {
+    if (args.getLatestWorkspaceStatus(worktreeKey) !== args.targetStatus.id) {
       result.skipped += 1
       return result
     }

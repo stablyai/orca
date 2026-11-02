@@ -134,6 +134,25 @@ describe('buildWslUsageSnapshot', () => {
     }
   )
 
+  it.each(['keep', 'bring-back'] as const)(
+    'reports what a block asks for moved projects (%s) as an optional field',
+    (wslHostsMovedProjects) => {
+      const props = buildWslUsageSnapshot({
+        ...baseInput,
+        wslHostsPolicy: 'block',
+        wslHostsMovedProjects
+      })
+      expect(props.wsl_hosts_moved_projects).toBe(wslHostsMovedProjects)
+      expect(validate('wsl_usage_snapshot', props).ok).toBe(true)
+    }
+  )
+
+  it('omits moved projects when nothing blocks', () => {
+    expect(
+      buildWslUsageSnapshot({ ...baseInput, wslHostsPolicy: 'allow', wslHostsMovedProjects: null })
+    ).not.toHaveProperty('wsl_hosts_moved_projects')
+  })
+
   it('omits the remote policy when the internal gate left it unread', () => {
     expect(buildWslUsageSnapshot({ ...baseInput, wslHostsPolicy: null })).not.toHaveProperty(
       'wsl_hosts_policy'

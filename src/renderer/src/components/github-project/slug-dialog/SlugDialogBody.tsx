@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
+import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
 import type { ProjectWorkItemDetailsBySlugResult } from '../../../../../shared/github/project-result-types'
@@ -15,6 +16,7 @@ import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
 import { translate } from '@/i18n/i18n'
 import { projectViewErrorMessage } from '../project-view-error-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function SlugDialogBody({
   projectOrigin,
@@ -27,11 +29,13 @@ export function SlugDialogBody({
 }): React.JSX.Element {
   const { owner, repo, host, number, type, cacheKey } = projectOrigin
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
-  const projectViewCache = useAppStore((s) => s.projectViewCache)
+  const table = useGitHubTaskProjectTable(
+    useAppStore((s) => s.projectViewCache[cacheKey]?.data ?? null),
+    sourceTarget
+  )
 
   // Read Project rows reactively so optimistic table edits also update the open dialog.
   const row = useMemo(() => {
-    const table = projectViewCache[cacheKey]?.data
     if (!table) {
       return null
     }
@@ -42,7 +46,7 @@ export function SlugDialogBody({
           r.content.repository?.toLowerCase() === `${owner}/${repo}`.toLowerCase()
       ) ?? null
     )
-  }, [projectViewCache, cacheKey, owner, repo, number])
+  }, [table, owner, repo, number])
 
   const [details, setDetails] = useState<GitHubWorkItemDetails | null>(null)
   const [loading, setLoading] = useState(false)
@@ -64,7 +68,15 @@ export function SlugDialogBody({
             { owner, repo, host, number, type },
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, host, number, type })
+        : window.api.gh.projectWorkItemDetailsBySlug({
+            owner,
+            repo,
+            host,
+            number,
+            type,
+            // Opening an item is a click (E9).
+            wakeWslDistro: true
+          })
     request
       .then((res) => {
         if (rid !== requestIdRef.current) {
@@ -191,7 +203,7 @@ export function SlugDialogBody({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => void window.api.shell.openUrl(url)}
+                onClick={(event) => openAppHttpLink(url, { event })}
                 aria-label={translate(
                   'auto.components.github.project.slug.dialog.SlugDialogBody.69caf40ae8',
                   'Open in GitHub'

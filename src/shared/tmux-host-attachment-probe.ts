@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { readAgentProcess } from './agent-process-presence-probe'
 import { runProcess } from '@orca/process-host'
+import { runPsInProcess } from './libproc-process-table'
 import {
   PS_ARGS,
   parseStrictProcessTableRows,
@@ -22,13 +23,11 @@ async function readSelectedRows(pids: readonly number[]): Promise<ProcessTableRo
     const rows = await Promise.all(pids.map((pid) => readSelectedRows([pid])))
     return rows.flat()
   }
-  const result = await runProcess({
-    program: '/bin/ps',
-    args: ['-p', pids.join(','), '-o', PS_ARGS[1]],
-    env: { ...process.env, LC_ALL: 'C', LANG: 'C', TZ: 'UTC0' },
-    timeoutMs: 1000,
-    maxOutputBytes: 65536
-  })
+  const args = ['-p', pids.join(','), '-o', PS_ARGS[1]]
+  const env = { ...process.env, LC_ALL: 'C', LANG: 'C', TZ: 'UTC0' }
+  const result =
+    (await runPsInProcess(args, { env, timeoutMs: 1000, maxOutputBytes: 65536 })) ??
+    (await runProcess({ program: '/bin/ps', args, env, timeoutMs: 1000, maxOutputBytes: 65536 }))
   if (result.timedOut || result.code !== 0 || result.stdout.length >= 65536) {
     throw new Error('tmux_process_capture_unverifiable')
   }

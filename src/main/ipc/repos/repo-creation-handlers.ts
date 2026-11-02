@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -170,10 +170,13 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         // The failing Git step controls attribution and commit-only identity hints.
         let step: 'init' | 'commit' = 'init'
         try {
-          await gitExecFileAsync(['init'], { cwd: targetPath })
+          // Host Git on purpose: the new repo has no project yet, even inside one.
+          await gitExecFileAsync(['init'], { cwd: targetPath, hostGit: true })
           step = 'commit'
           await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
-            cwd: targetPath
+            cwd: targetPath,
+            // Host Git on purpose: the new repo has no project yet, even inside one.
+            hostGit: true
           })
         } catch (err) {
           // Rollback may remove only what this request created; preserve preexisting folders.

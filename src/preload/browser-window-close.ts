@@ -2,6 +2,7 @@ import {
   installBrowserWindowCloseGuard,
   PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL
 } from './browser-window-close-installation'
+import { installBrowserWindowPrompt } from './browser-window-prompt-installation'
 import type { ContextBridge, IpcRenderer } from 'electron'
 
 // Raw require keeps the sandboxed preload standalone in the CJS build.
@@ -18,3 +19,5 @@ if (process.isMainFrame) {
     args: [() => ipcRenderer.sendToHost(PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL)]
   })
 }
+// Every frame this preload runs in also got Electron's throwing prompt.
+contextBridge.executeInMainWorld({ func: installBrowserWindowPrompt, args: [] })

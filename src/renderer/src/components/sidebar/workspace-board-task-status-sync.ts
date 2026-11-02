@@ -1,3 +1,5 @@
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-publication'
 import { linearGetIssue, linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { linearTeamStates } from '@/runtime/runtime-linear-project-client'
 import type { LinearMutationResult, RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
@@ -38,10 +40,11 @@ type WorkspaceBoardTaskStatusSyncDependencies = WorkspaceBoardClickUpStatusSyncD
   updateIssue: typeof linearUpdateIssue
 }
 
+/** Cards are keyed by host identity: same-id copies on two hosts each sync their own linked issue. */
 export type SyncWorkspaceBoardTaskStatusesArgs = {
-  worktreeIds: readonly string[]
+  worktreeKeys: readonly string[]
   targetStatus: WorkspaceStatusDefinition
-  worktreesById: ReadonlyMap<
+  worktreesByKey: ReadonlyMap<
     string,
     Pick<
       Worktree,
@@ -53,10 +56,9 @@ export type SyncWorkspaceBoardTaskStatusesArgs = {
   >
   // Why: Linear and ClickUp are both row-less sources, so one routing shape serves both.
   settings?: RuntimeLinearSettings
-  /** `null` refuses the worktree: its owner is ambiguous, so no host's Linear settings apply. */
-  getSettingsForWorktree?: (worktreeId: string) => RuntimeLinearSettings | null
-  getClickUpSettingsForWorktree?: (worktreeId: string) => RuntimeClickUpSettings | null
-  getLatestWorkspaceStatus: (worktreeId: string) => WorkspaceStatus | null | undefined
+  getSettingsForWorktree?: (worktreeKey: string) => RuntimeLinearSettings | null
+  getClickUpSettingsForWorktree?: (worktreeKey: string) => RuntimeClickUpSettings | null
+  getLatestWorkspaceStatus: (worktreeKey: string) => WorkspaceStatus | null | undefined
   deps?: Partial<WorkspaceBoardTaskStatusSyncDependencies>
 }
 
@@ -135,23 +137,23 @@ function mergeResult(
 }
 
 async function enqueueWorktreeSync(
-  worktreeId: string,
+  worktreeKey: string,
   task: () => Promise<WorkspaceBoardTaskStatusSyncResult>
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
-  const previous = worktreeSyncQueues.get(worktreeId) ?? Promise.resolve()
+  const previous = worktreeSyncQueues.get(worktreeKey) ?? Promise.resolve()
   const next = previous.catch(() => undefined).then(task)
   const cleanup = next.finally(() => {
-    if (worktreeSyncQueues.get(worktreeId) === cleanup) {
-      worktreeSyncQueues.delete(worktreeId)
+    if (worktreeSyncQueues.get(worktreeKey) === cleanup) {
+      worktreeSyncQueues.delete(worktreeKey)
     }
   })
-  worktreeSyncQueues.set(worktreeId, cleanup)
+  worktreeSyncQueues.set(worktreeKey, cleanup)
   return next
 }
 
 async function syncLinearWorktreeStatus(
   args: SyncWorkspaceBoardTaskStatusesArgs,
-  worktreeId: string,
+  worktreeKey: string,
   deps: WorkspaceBoardTaskStatusSyncDependencies
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
   const result: WorkspaceBoardTaskStatusSyncResult = {
@@ -160,18 +162,19 @@ async function syncLinearWorktreeStatus(
     failed: 0,
     messages: []
   }
-  const worktree = args.worktreesById.get(worktreeId)
+  const worktree = args.worktreesByKey.get(worktreeKey)
   if (!worktree?.linkedLinearIssue) {
     return skipped(result)
   }
 
   // Legacy callers without source settings route to this computer.
   const settings = args.getSettingsForWorktree
-    ? args.getSettingsForWorktree(worktreeId)
+    ? args.getSettingsForWorktree(worktreeKey)
     : (args.settings ?? { kind: 'local' })
   if (!settings) {
     return skipped(result, { kind: 'owner-ambiguous', issueIdentifier: worktree.linkedLinearIssue })
   }
+  const scope = getLinearSourceScope(settings)
   const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? undefined
 
   try {
@@ -205,7 +208,7 @@ async function syncLinearWorktreeStatus(
     }
 
     // Board moves are local-first; a slow provider read must not let an older move overwrite a newer one.
-    if (args.getLatestWorkspaceStatus(worktreeId) !== args.targetStatus.id) {
+    if (args.getLatestWorkspaceStatus(worktreeKey) !== args.targetStatus.id) {
       return skipped(result)
     }
 
@@ -222,6 +225,7 @@ async function syncLinearWorktreeStatus(
         detail: updateResult.error
       })
     }
+    confirmLinearIssueWrite({ scope, id: issue.id })
     result.updated += 1
     return result
   } catch (error) {
@@ -235,10 +239,10 @@ async function syncLinearWorktreeStatus(
 
 async function syncWorktreeTaskStatuses(
   args: SyncWorkspaceBoardTaskStatusesArgs,
-  worktreeId: string,
+  worktreeKey: string,
   deps: WorkspaceBoardTaskStatusSyncDependencies
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
-  const worktree = args.worktreesById.get(worktreeId)
+  const worktree = args.worktreesByKey.get(worktreeKey)
   if (!worktree?.linkedLinearIssue && !worktree?.linkedClickUpTaskId) {
     return { updated: 0, skipped: 1, failed: 0, messages: [] }
   }
@@ -249,8 +253,8 @@ async function syncWorktreeTaskStatuses(
     messages: []
   }
   const results = await Promise.all([
-    ...(worktree.linkedLinearIssue ? [syncLinearWorktreeStatus(args, worktreeId, deps)] : []),
-    ...(worktree.linkedClickUpTaskId ? [syncClickUpWorktreeStatus(args, worktreeId, deps)] : [])
+    ...(worktree.linkedLinearIssue ? [syncLinearWorktreeStatus(args, worktreeKey, deps)] : []),
+    ...(worktree.linkedClickUpTaskId ? [syncClickUpWorktreeStatus(args, worktreeKey, deps)] : [])
   ])
   for (const result of results) {
     mergeResult(aggregate, result)
@@ -269,11 +273,11 @@ export async function syncWorkspaceBoardTaskStatuses(
     messages: []
   }
 
-  const uniqueIds = new Set(args.worktreeIds)
+  const uniqueKeys = new Set(args.worktreeKeys)
   await Promise.all(
-    [...uniqueIds].map(async (worktreeId) => {
-      const item = await enqueueWorktreeSync(worktreeId, () =>
-        syncWorktreeTaskStatuses(args, worktreeId, deps)
+    [...uniqueKeys].map(async (worktreeKey) => {
+      const item = await enqueueWorktreeSync(worktreeKey, () =>
+        syncWorktreeTaskStatuses(args, worktreeKey, deps)
       )
       mergeResult(aggregate, item)
     })

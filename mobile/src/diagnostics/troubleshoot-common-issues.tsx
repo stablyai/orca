@@ -1,5 +1,6 @@
 import { WifiOff, Shield, Monitor, Clock, Globe, Bell, type LucideIcon } from 'lucide-react-native'
 import type { Translate } from '../i18n/mobile-i18n'
+import { endpointPort } from '../transport/host-endpoint'
 
 export type TroubleshootSection = {
   id: string
@@ -8,7 +9,33 @@ export type TroubleshootSection = {
   steps: string[]
 }
 
-export function troubleshootCommonIssues(t: Translate): TroubleshootSection[] {
+export function troubleshootCommonIssues(
+  t: Translate,
+  endpoints: readonly string[] = []
+): TroubleshootSection[] {
+  const ports = new Set(
+    endpoints.map((endpoint) => {
+      const port = endpointPort(endpoint)
+      if (port) {
+        return port
+      }
+      try {
+        const url = new URL(endpoint)
+        if (url.protocol === 'wss:') {
+          return '443'
+        }
+        if (url.protocol === 'ws:') {
+          return '80'
+        }
+      } catch {
+        // Unreadable legacy endpoints keep the default firewall advice.
+      }
+      return '6768'
+    })
+  )
+  if (ports.size === 0) {
+    ports.add('6768')
+  }
   return [
     {
       id: 'notifications',
@@ -45,10 +72,16 @@ export function troubleshootCommonIssues(t: Translate): TroubleshootSection[] {
         )
       ]
     },
-    {
-      id: 'firewall',
+    ...Array.from(ports, (port) => ({
+      id: `firewall-${port}`,
       icon: Shield,
-      title: t('diagnostics.troubleshootCommonIssues.firewallTitle', 'Firewall Blocking Port 6768'),
+      title: t(
+        'diagnostics.troubleshootCommonIssues.firewallTitle',
+        'Firewall Blocking Port {{port}}',
+        {
+          port
+        }
+      ),
       steps: [
         t(
           'diagnostics.troubleshootCommonIssues.macosFirewall',
@@ -58,13 +91,15 @@ export function troubleshootCommonIssues(t: Translate): TroubleshootSection[] {
           'diagnostics.troubleshootCommonIssues.windowsFirewall',
           'Windows: Defender Firewall → Allow app — enable Orca for Private networks.'
         ),
-        'Linux: sudo ufw allow 6768',
+        t('diagnostics.troubleshootCommonIssues.linuxFirewall', 'Linux: sudo ufw allow {{port}}', {
+          port
+        }),
         t(
           'diagnostics.troubleshootCommonIssues.restrictedNetwork',
           'Corporate/school networks may block P2P — try a personal hotspot.'
         )
       ]
-    },
+    })),
     {
       id: 'desktop',
       icon: Monitor,

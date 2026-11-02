@@ -1,6 +1,21 @@
 /** End messages with : <code> so owner conflicts survive Electron IPC wrapping and old runtime_error flattening. hasRuntimeRpcErrorCode reads the token; strip it before display. */
 
 import { hasRuntimeRpcErrorCode } from './runtime-rpc-error-code'
+import { AUTOMATION_ORPHAN_ISSUES, type AutomationCapturedHostIssue } from './automation-list-scope'
+
+// Keep diagnoses distinct and stable: skip coalescing keys on exact error text.
+export const AUTOMATION_CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, string> = {
+  [AUTOMATION_ORPHAN_ISSUES.hostReselection]:
+    'Edit the automation and reselect its host before running it.',
+  [AUTOMATION_ORPHAN_ISSUES.malformed]:
+    'The automation host identity is incomplete. Edit the automation and reselect its host before running it.',
+  [AUTOMATION_ORPHAN_ISSUES.targetMissing]:
+    'The automation host is no longer registered, so this automation has nowhere to run.',
+  [AUTOMATION_ORPHAN_ISSUES.targetReplaced]:
+    'The automation host was removed and re-registered, so this automation must be re-adopted before it can run.',
+  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]:
+    'The automation workspace spans more than one host, so Orca cannot tell which one to run it on.'
+}
 
 export const AUTOMATION_OWNER_CONFLICT_CODES = {
   /** The stored selector or its SSH generation differs from the captured one. */
@@ -34,8 +49,8 @@ export function automationOwnerConflictMessage(code: AutomationOwnerConflictCode
 export class AutomationOwnerConflictError extends Error {
   readonly code: AutomationOwnerConflictCode
 
-  constructor(code: AutomationOwnerConflictCode) {
-    super(`${CONFLICT_MESSAGES[code]}: ${code}`)
+  constructor(code: AutomationOwnerConflictCode, message = CONFLICT_MESSAGES[code]) {
+    super(`${message}: ${code}`)
     this.name = 'AutomationOwnerConflictError'
     this.code = code
   }

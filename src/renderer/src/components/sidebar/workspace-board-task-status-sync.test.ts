@@ -102,9 +102,9 @@ function setup(overrides: Partial<Worktree> = {}) {
     updateIssue,
     run: () =>
       syncWorkspaceBoardTaskStatuses({
-        worktreeIds: [item.id],
+        worktreeKeys: [item.id],
         targetStatus: target,
-        worktreesById: new Map([[item.id, item]]),
+        worktreesByKey: new Map([[item.id, item]]),
         settings: { kind: 'environment', environmentId: 'runtime-1' },
         getLatestWorkspaceStatus: () => target.id,
         deps: { getIssue, teamStates, updateIssue }
@@ -153,9 +153,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
 
     await expect(
       syncWorkspaceBoardTaskStatuses({
-        worktreeIds: [item.id],
+        worktreeKeys: [item.id],
         targetStatus: targetStatus(),
-        worktreesById: new Map([[item.id, item]]),
+        worktreesByKey: new Map([[item.id, item]]),
         settings: { kind: 'environment', environmentId: 'runtime-1' },
         getLatestWorkspaceStatus: () => 'in-review',
         deps: { getClickUpTask, listClickUpLists, updateClickUpTask }
@@ -191,9 +191,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       .mockResolvedValue({ ok: true })
 
     await syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [item.id],
+      worktreeKeys: [item.id],
       targetStatus: targetStatus(),
-      worktreesById: new Map([[item.id, item]]),
+      worktreesByKey: new Map([[item.id, item]]),
       getLatestWorkspaceStatus: () => 'in-review',
       deps: { getClickUpTask, listClickUpLists, updateClickUpTask }
     })
@@ -223,9 +223,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
 
     await expect(
       syncWorkspaceBoardTaskStatuses({
-        worktreeIds: [item.id],
+        worktreeKeys: [item.id],
         targetStatus: targetStatus(),
-        worktreesById: new Map([[item.id, item]]),
+        worktreesByKey: new Map([[item.id, item]]),
         getLatestWorkspaceStatus: () => 'in-review',
         deps: { getClickUpTask, listClickUpLists, updateClickUpTask }
       })
@@ -251,9 +251,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     getIssue.mockResolvedValueOnce(issue({ workspaceId: 'issue-workspace' }))
 
     await syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [item.id],
+      worktreeKeys: [item.id],
       targetStatus: target,
-      worktreesById: new Map([[item.id, item]]),
+      worktreesByKey: new Map([[item.id, item]]),
       settings: { kind: 'local' },
       getLatestWorkspaceStatus: () => target.id,
       deps: { getIssue, teamStates, updateIssue }
@@ -285,9 +285,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     }))
 
     await syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [first.id, second.id],
+      worktreeKeys: [first.id, second.id],
       targetStatus: target,
-      worktreesById: new Map([
+      worktreesByKey: new Map([
         [first.id, first],
         [second.id, second]
       ]),
@@ -332,9 +332,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     const getSettingsForWorktree = vi.fn(() => ({ kind: 'local' as const }))
 
     await syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [item.id],
+      worktreeKeys: [item.id],
       targetStatus: target,
-      worktreesById: new Map([[item.id, item]]),
+      worktreesByKey: new Map([[item.id, item]]),
       settings: { kind: 'environment', environmentId: 'focused-runtime' },
       getSettingsForWorktree,
       getLatestWorkspaceStatus: () => target.id,
@@ -356,9 +356,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     const { item, target, getIssue, teamStates, updateIssue } = setup()
 
     const result = await syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [item.id],
+      worktreeKeys: [item.id],
       targetStatus: target,
-      worktreesById: new Map([[item.id, item]]),
+      worktreesByKey: new Map([[item.id, item]]),
       getSettingsForWorktree: () => null,
       getLatestWorkspaceStatus: () => target.id,
       deps: { getIssue, teamStates, updateIssue }
@@ -379,9 +379,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     const { item, target, getIssue, teamStates, updateIssue } = setup({ linkedLinearIssue: null })
 
     const result = await syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [item.id],
+      worktreeKeys: [item.id],
       targetStatus: target,
-      worktreesById: new Map([[item.id, item]]),
+      worktreesByKey: new Map([[item.id, item]]),
       settings: { kind: 'local' },
       getLatestWorkspaceStatus: () => target.id,
       deps: { getIssue, teamStates, updateIssue }
@@ -435,9 +435,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     const { item, target, getIssue, teamStates, updateIssue } = setup()
 
     const result = await syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [item.id],
+      worktreeKeys: [item.id],
       targetStatus: target,
-      worktreesById: new Map([[item.id, item]]),
+      worktreesByKey: new Map([[item.id, item]]),
       settings: { kind: 'local' },
       getLatestWorkspaceStatus: () => 'done',
       deps: { getIssue, teamStates, updateIssue }
@@ -461,9 +461,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       .mockResolvedValueOnce({ ok: true })
 
     const firstSync = syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [item.id],
+      worktreeKeys: [item.id],
       targetStatus: targetStatus(),
-      worktreesById: new Map([[item.id, item]]),
+      worktreesByKey: new Map([[item.id, item]]),
       settings: { kind: 'local' },
       getLatestWorkspaceStatus: () => 'in-review',
       deps: { getIssue, teamStates, updateIssue }
@@ -472,9 +472,9 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     expect(updateIssue).toHaveBeenCalledTimes(1)
 
     const secondSync = syncWorkspaceBoardTaskStatuses({
-      worktreeIds: [item.id],
+      worktreeKeys: [item.id],
       targetStatus: targetStatus({ id: 'done', label: 'Done' }),
-      worktreesById: new Map([[item.id, item]]),
+      worktreesByKey: new Map([[item.id, item]]),
       settings: { kind: 'local' },
       getLatestWorkspaceStatus: () => 'done',
       deps: { getIssue, teamStates, updateIssue }
@@ -530,14 +530,14 @@ describe('getWorkspaceBoardTaskStatusSyncRequest', () => {
   it('builds a sync request for enabled status moves', () => {
     const request = getWorkspaceBoardTaskStatusSyncRequest({
       enabled: true,
-      worktreeIds: ['repo::/a'],
+      worktreeKeys: ['repo::/a'],
       status: 'in-review',
-      worktreesById: new Map([['repo::/a', worktree({ workspaceStatus: 'todo' })]]),
+      worktreesByKey: new Map([['repo::/a', worktree({ workspaceStatus: 'todo' })]]),
       workspaceStatuses
     })
 
     expect(request).toEqual({
-      worktreeIds: ['repo::/a'],
+      worktreeKeys: ['repo::/a'],
       targetStatus: { id: 'in-review', label: 'In review' }
     })
   })
@@ -546,9 +546,9 @@ describe('getWorkspaceBoardTaskStatusSyncRequest', () => {
     expect(
       getWorkspaceBoardTaskStatusSyncRequest({
         enabled: false,
-        worktreeIds: ['repo::/a'],
+        worktreeKeys: ['repo::/a'],
         status: 'in-review',
-        worktreesById: new Map([['repo::/a', worktree({ workspaceStatus: 'todo' })]]),
+        worktreesByKey: new Map([['repo::/a', worktree({ workspaceStatus: 'todo' })]]),
         workspaceStatuses
       })
     ).toBeNull()
@@ -558,9 +558,9 @@ describe('getWorkspaceBoardTaskStatusSyncRequest', () => {
     expect(
       getWorkspaceBoardTaskStatusSyncRequest({
         enabled: true,
-        worktreeIds: ['repo::/a', 'repo::/a'],
+        worktreeKeys: ['repo::/a', 'repo::/a'],
         status: 'in-review',
-        worktreesById: new Map([['repo::/a', worktree({ workspaceStatus: 'in-review' })]]),
+        worktreesByKey: new Map([['repo::/a', worktree({ workspaceStatus: 'in-review' })]]),
         workspaceStatuses
       })
     ).toBeNull()
@@ -570,9 +570,9 @@ describe('getWorkspaceBoardTaskStatusSyncRequest', () => {
     expect(
       getWorkspaceBoardTaskStatusSyncRequest({
         enabled: true,
-        worktreeIds: ['repo::/a'],
+        worktreeKeys: ['repo::/a'],
         status: 'unknown-status',
-        worktreesById: new Map([['repo::/a', worktree({ workspaceStatus: 'todo' })]]),
+        worktreesByKey: new Map([['repo::/a', worktree({ workspaceStatus: 'todo' })]]),
         workspaceStatuses
       })
     ).toBeNull()

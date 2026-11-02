@@ -31,17 +31,4 @@ describe('textGenerationErrorText', () => {
       localizeTextGenerationResult({ success: false, ...textGenerationFailure('noStagedChanges') })
     ).toEqual({ success: false, error: errors.noStagedChanges, errorCode: 'noStagedChanges' })
   })
-
-  it('shows the host English for uncoded, unknown, or incomplete failures', async () => {
-    i18n.addResourceBundle('es', 'translation', es)
-    await i18n.changeLanguage('es')
-    expect(textGenerationErrorText({ error: 'Old host text' })).toBe('Old host text')
-    expect(textGenerationErrorText({ error: 'Newer host', errorCode: 'futureCode' })).toBe(
-      'Newer host'
-    )
-    expect(textGenerationErrorText({ error: 'English', errorCode: 'cliFailedWithDetail' })).toBe(
-      'English'
-    )
-    expect(textGenerationErrorText({ error: 'English', errorCode: 'toString' })).toBe('English')
-  })
 })

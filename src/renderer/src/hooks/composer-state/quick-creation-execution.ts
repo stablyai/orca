@@ -7,8 +7,7 @@ import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { ComposerCreateHandoff } from '@/lib/composer-create-handoff'
 import { translate } from '@/i18n/i18n'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
-import { buildQuickComposerStartup } from './quick-startup-plan'
+import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
@@ -91,25 +90,27 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         trimmedNote
       } = prepared
 
-      const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
-
-      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
-
       const {
         startupPlan,
         backendStartup,
-        telemetry: quickTelemetry
-      } = buildQuickComposerStartup({
-        agent,
+        telemetry: quickTelemetry,
         prompt: quickPrompt,
-        draftPrompt: quickDraftPrompt,
+        draftPrompt: quickDraftPrompt
+      } = await prepareQuickComposerStartup({
+        agent,
+        linkedWorkItem: submitLinkedWorkItem,
+        note: trimmedNote,
         settings,
         launchHost: selectedRepoAgentLaunchFact,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote,
-        telemetrySource
+        telemetrySource,
+        repoId,
+        executionHostId: selectedRepoExecutionHostId
       })
+      if (isSubmissionCancelled()) {
+        return
+      }
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),

@@ -9,6 +9,7 @@ import { wslMoveJournalDirectory } from '../persistence/moving-wsl-projects/wsl-
 import {
   resetWslHostsGateForTests,
   wslHostsAppliedPolicyState,
+  wslHostsBringBackMovedProjects,
   wslHostsGateOpen,
   wslHostsGateState,
   wslHostsPolicyBlocked
@@ -68,10 +69,10 @@ describe('WSL hosts gate startup promotion', () => {
   })
 
   describe('with the internal gate open and a cached remote policy', () => {
-    const cachePolicy = (wslHosts: 'allow' | 'block') =>
+    const cachePolicy = (wslHosts: 'allow' | 'block', movedProjects?: 'keep' | 'bring-back') =>
       writeFileSync(
         join(userDataPath, wslHostsPolicyCacheFileName('stable')),
-        JSON.stringify({ version: 1, revision: 1, wslHosts })
+        JSON.stringify({ version: 1, revision: 1, wslHosts, movedProjects })
       )
     const seedSavedHost = () =>
       writeWslHostDeployment(userDataPath, 'wsl:ubuntu', {
@@ -130,6 +131,23 @@ describe('WSL hosts gate startup promotion', () => {
 
       expect(wslHostsGateState()).toBe('serve-only')
       expect(wslHostsGateOpen()).toBe(false)
+    })
+
+    it('reads a block that asks for moved projects back', () => {
+      cachePolicy('block', 'bring-back')
+      seedSavedHost()
+      configureWslHostsGateFromDisk(userDataPath, STABLE)
+
+      expect(wslHostsGateState()).toBe('serve-only')
+      expect(wslHostsBringBackMovedProjects()).toBe(true)
+    })
+
+    it('ignores bring-back on an allow', () => {
+      cachePolicy('allow', 'bring-back')
+      configureWslHostsGateFromDisk(userDataPath, STABLE)
+
+      expect(wslHostsGateState()).toBe('open')
+      expect(wslHostsBringBackMovedProjects()).toBe(false)
     })
 
     it('ignores a block cached for another channel', () => {

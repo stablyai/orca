@@ -35,6 +35,7 @@ import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type * as SidebarFeedbackDialogModule from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 // Keep feedback off the boot graph; menu warming and selection share the same lazy module entry.
 const loadSidebarFeedbackDialog = (): Promise<typeof SidebarFeedbackDialogModule> =>
@@ -55,10 +56,6 @@ const NO_UPDATE_CHECK_MODIFIERS = {
   ctrlKey: false,
   metaKey: false,
   shiftKey: false
-}
-
-function openExternalUrl(url: string): void {
-  void window.api.shell.openUrl(url)
 }
 
 function DiscordIcon(): React.JSX.Element {
@@ -87,7 +84,7 @@ function ExternalMenuItem({
   icon: React.ReactNode
 }): React.JSX.Element {
   return (
-    <DropdownMenuItem onSelect={() => openExternalUrl(url)}>
+    <DropdownMenuItem onSelect={() => openAppHttpLink(url)}>
       {icon}
       {label}
       <ExternalLink className="ml-auto size-3 text-muted-foreground" />
@@ -313,12 +310,12 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               url={GITHUB_URL}
               icon={<Github className="size-3.5" />}
             />
-            <DropdownMenuItem onSelect={() => openExternalUrl(DISCORD_URL)}>
+            <DropdownMenuItem onSelect={() => openAppHttpLink(DISCORD_URL)}>
               <DiscordIcon />
               {translate('auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b', 'Discord')}
               <ExternalLink className="ml-auto size-3 text-muted-foreground" />
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => openExternalUrl(X_URL)}>
+            <DropdownMenuItem onSelect={() => openAppHttpLink(X_URL)}>
               <XIcon />
               {translate('auto.components.sidebar.SidebarSettingsHelpMenu.c4f8e1b72a', 'X')}
               <ExternalLink className="ml-auto size-3 text-muted-foreground" />

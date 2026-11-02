@@ -155,6 +155,8 @@ export type BrowserPageAnnotation = {
   priority: BrowserAnnotationPriority
   createdAt: string
   payload: BrowserAnnotationPayload
+  /** Pasted images, saved on the worktree's host like a terminal image paste. */
+  imagePaths?: string[]
 }
 
 // Payload budgets are enforced in guest and main.
@@ -178,6 +180,10 @@ export const GRAB_BUDGET = {
   /** Hard byte budget for screenshot PNG data URL before we omit the screenshot. */
   screenshotMaxBytes: 2 * 1024 * 1024
 } as const
+
+export function isBrowserAnnotationPageFull(annotationCount: number): boolean {
+  return annotationCount >= GRAB_BUDGET.annotationsMaxPerPage
+}
 
 /** Only these attribute names are included in the payload by default. */
 export const GRAB_SAFE_ATTRIBUTE_NAMES = new Set([

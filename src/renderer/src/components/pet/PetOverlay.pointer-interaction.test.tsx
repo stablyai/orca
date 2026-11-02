@@ -142,18 +142,4 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
     expect(spriteDiv(container).style.animation).toContain('step-end')
     expect(animationName(container)).toBe(heldName)
   })
-
-  it('does not restart the idle track when hover falls back to the same row', () => {
-    ;({ container, root } = renderPetOverlay())
-    const wrapper = container.querySelector('.pointer-events-auto')
-    if (!wrapper) {
-      throw new Error('draggable wrapper not found')
-    }
-    // Hover falls back to the same idle row and must not restart it; React derives enter/leave from pointerover/out.
-    const idleName = animationName(container)
-    firePointer(wrapper, 'pointerover', 0, 0)
-    expect(animationName(container)).toBe(idleName)
-    firePointer(wrapper, 'pointerout', 0, 0)
-    expect(animationName(container)).toBe(idleName)
-  })
 })

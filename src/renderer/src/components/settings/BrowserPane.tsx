@@ -39,6 +39,7 @@ import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './browser-session-host-selection'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 export { getBrowserPaneCombinedSearchEntries }
 
@@ -78,10 +79,8 @@ export function BrowserPane({
   const setBrowserSessionHostId = useAppStore((s) => s.setBrowserSessionHostId)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
-  const defaultBrowserSessionProfileId = useAppStore((s) => s.defaultBrowserSessionProfileId)
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
-  const selectedProfileId = defaultBrowserSessionProfileId ?? 'default'
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
   const persistedHomePageDraft = browserDefaultUrl ?? ''
   const [homePageDraftState, setHomePageDraftState] = useState(() =>
@@ -175,10 +174,7 @@ export function BrowserPane({
     settingsFocusedHostId
   )
   const activeBrowserSessionProfileId =
-    useAppStore((s) => s.defaultBrowserSessionProfileIdByHostId[selectedBrowserSessionHostId]) ??
-    ((browserSessionHostIdOverride ?? settingsFocusedHostId) === selectedBrowserSessionHostId
-      ? defaultBrowserSessionProfileId
-      : null) ??
+    useAppStore((s) => getDefaultBrowserProfileForHost(s, selectedBrowserSessionHostId)) ??
     'default'
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
@@ -348,10 +344,10 @@ export function BrowserPane({
       {settings.experimentalBrowserExtensions === true &&
       selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
         <BrowserExtensionsSection
-          profileId={selectedProfileId}
+          profileId={activeBrowserSessionProfileId}
           profileLabel={
-            browserSessionProfiles.find((profile) => profile.id === selectedProfileId)?.label ??
-            selectedProfileId
+            browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)
+              ?.label ?? activeBrowserSessionProfileId
           }
         />
       ) : null}

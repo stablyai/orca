@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 
 const identity = { userId: 'restart-test-user', relayHostId: 'abcdefghijklmnop' }

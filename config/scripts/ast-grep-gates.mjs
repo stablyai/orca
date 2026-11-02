@@ -1,5 +1,6 @@
 // One ast-grep scan for both gates: the lint gate (warning and up) and the flaky-test ratchet (`test-*` rules).
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
@@ -54,7 +55,12 @@ export function main(root = process.cwd(), argv = []) {
   const format = argv
     .find((argument) => argument.startsWith('--format='))
     ?.slice('--format='.length)
-  const matches = scanAstGrep(root)
+  // A scoped PR scan reads its NUL-delimited changed paths; an empty scope has nothing to match.
+  const pathsFrom = argv
+    .find((argument) => argument.startsWith('--paths-from='))
+    ?.slice('--paths-from='.length)
+  const paths = pathsFrom ? readFileSync(pathsFrom, 'utf8').split('\0').filter(Boolean) : undefined
+  const matches = paths?.length === 0 ? [] : scanAstGrep(root, { paths })
   const files = lintFindingFiles(matches)
   const lint = files.length > 0 ? reportLintFindings(root, files, format) : 0
   const flaky = checkFlakyTestPatterns(root, undefined, matches)

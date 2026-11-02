@@ -2,6 +2,8 @@
 export const AI_VAULT_SCAN_ISSUE_COPY = {
   issuesOmitted: 'Additional scan issues were omitted.',
   sessionMetadataUnreadable: 'Session metadata could not be read this scan.',
+  transcriptTooLarge:
+    'A {{label}} conversation is too large to load in Session History. Try resuming it in {{label}} directly.',
   openCodeScannerUnavailable:
     'OpenCode history was skipped because its background scanner could not start; the app remains responsive.',
   openCodeScanIncomplete: 'OpenCode history scan did not complete: {{detail}}',
@@ -25,6 +27,7 @@ export const AI_VAULT_SCAN_ISSUE_COPY = {
     "WSL transcript files are unavailable because WSL distro '{{distro}}' is not running. Open a terminal in it to start it.",
   wslDistroUnverifiable:
     "WSL transcript files are unavailable because WSL didn't answer whether '{{distro}}' is running. Try again shortly.",
+  wslSessionsFromLastScan: 'WSL could not be checked; its sessions are from the last scan.',
   scopePathsTruncated: 'Only the first {{limit}} project paths were scanned.',
   invalidResultsSkipped: 'Skipped {{count}} invalid Agent Session History result entries.',
   scanTimedOutOnSshHost:

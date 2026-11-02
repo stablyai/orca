@@ -12,6 +12,7 @@ import {
   type DiagnosticsStatus
 } from '../observability'
 import { translateMain } from '../i18n/main-i18n'
+import { diagnosticsBundleFailure } from '../../shared/diagnostics-bundle-failure-copy'
 import type { CollectedBundle } from '../observability/bundle'
 import type { UploadBundleResult } from '../observability/diagnostic-bundle-upload'
 import {
@@ -95,10 +96,10 @@ function getPendingBundleForUpload(bundleSubmissionId: unknown): {
   prunePendingBundles()
   const pending = pendingBundles.get(bundleSubmissionId)
   if (!pending) {
-    throw new Error('review file has expired; create a new one before sending')
+    throw diagnosticsBundleFailure('expiredBeforeSending')
   }
   if (!pending.previewOpened) {
-    throw new Error('open the review file before sending')
+    throw diagnosticsBundleFailure('previewNotOpened')
   }
   // Preview files are editable; upload only main's retained redacted bytes.
   return { bundle: pending.bundle, payload: pending.bundle.payload }
@@ -114,7 +115,7 @@ function getPendingPreviewFilePath(bundleSubmissionId: unknown): string {
   prunePendingBundles()
   const pending = pendingBundles.get(bundleSubmissionId)
   if (!pending) {
-    throw new Error('review file has expired; create a new one before opening')
+    throw diagnosticsBundleFailure('expiredBeforeOpening')
   }
   return pending.previewFilePath
 }
@@ -211,7 +212,7 @@ export function registerDiagnosticsHandlers(): void {
       // Enforce consent in main; hiding renderer controls is insufficient.
       const status = getDiagnosticsStatus()
       if (!status.bundleEnabled) {
-        throw new Error('creating review files is disabled')
+        throw diagnosticsBundleFailure('creatingDisabled')
       }
       // Validate untyped IPC input before applying the default lookback.
       const lookbackMinutes =
@@ -238,7 +239,7 @@ export function registerDiagnosticsHandlers(): void {
       const pendingForConfirmation = getPendingBundleForUpload(bundleSubmissionId)
       // Recheck consent in case it changed after collection.
       if (!getDiagnosticsStatus().bundleEnabled) {
-        throw new Error('sending diagnostics is disabled')
+        throw diagnosticsBundleFailure('sendingDisabled')
       }
       const confirmed = await confirmBundleUpload(pendingForConfirmation.bundle)
       if (!confirmed) {
@@ -247,11 +248,11 @@ export function registerDiagnosticsHandlers(): void {
       // Revalidate after the dialog: payloads can be discarded or consent revoked while it is open.
       const { bundle, payload } = getPendingBundleForUpload(bundleSubmissionId)
       if (!getDiagnosticsStatus().bundleEnabled) {
-        throw new Error('sending diagnostics is disabled')
+        throw diagnosticsBundleFailure('sendingDisabled')
       }
       const tokenEndpoint = resolveDiagnosticTokenEndpoint()
       if (!tokenEndpoint) {
-        throw new Error('sending diagnostics is not configured for this build')
+        throw diagnosticsBundleFailure('sendingNotConfigured')
       }
       const result = await uploadDiagnosticBundle({
         tokenEndpoint,
@@ -270,7 +271,7 @@ export function registerDiagnosticsHandlers(): void {
     const previewFilePath = getPendingPreviewFilePath(bundleSubmissionId)
     const errorMessage = await shell.openPath(previewFilePath)
     if (errorMessage) {
-      throw new Error('could not open review file')
+      throw diagnosticsBundleFailure('previewOpenFailed')
     }
     const pending = pendingBundles.get(bundleSubmissionId as string)
     if (pending) {
@@ -288,7 +289,7 @@ export function registerDiagnosticsHandlers(): void {
     }
     const tokenEndpoint = resolveDiagnosticTokenEndpoint()
     if (!tokenEndpoint) {
-      throw new Error('diagnostic upload endpoint is not configured for this build')
+      throw diagnosticsBundleFailure('deleteNotConfigured')
     }
     await deleteDiagnosticBundle({ tokenEndpoint, ticketId })
   })

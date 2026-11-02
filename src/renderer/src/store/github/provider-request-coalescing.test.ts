@@ -259,7 +259,7 @@ describe('GitHub provider request upgrade coalescing', () => {
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
   })
 
-  it('keeps a superseded check reply from rewinding the cached run state', async () => {
+  it('keeps a superseded check reply from rewinding the cached or shown run state', async () => {
     const store = createTestStore()
     const plain = Promise.withResolvers<PRCheckDetail[]>()
     const noCacheOnly = Promise.withResolvers<PRCheckDetail[]>()
@@ -289,7 +289,7 @@ describe('GitHub provider request upgrade coalescing', () => {
     forcedOnly.resolve(newer)
     await expect(forcedFetch).resolves.toEqual(newer)
     noCacheOnly.resolve(older)
-    await expect(noCacheFetch).resolves.toEqual(older)
+    await expect(noCacheFetch).resolves.toEqual(newer)
 
     expect(Object.values(store.getState().checksCache).map((entry) => entry.data)).toEqual([newer])
   })

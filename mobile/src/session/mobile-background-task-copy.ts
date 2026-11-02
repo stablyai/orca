@@ -8,6 +8,7 @@ export const sayMobileBackgroundTask: BackgroundTaskSay = (id, values) => {
   const count = values?.count
   const countValues = count === undefined ? undefined : { count }
   const phraseValues = values?.value0 === undefined ? undefined : { value0: values.value0 }
+  const stateValues = { ...phraseValues, count }
   const copy = {
     monitoring: () => translate('session.backgroundTask.monitoring', 'Monitoring background tasks'),
     stop: () => translate('session.backgroundTask.stop', 'Stop'),
@@ -67,34 +68,84 @@ export const sayMobileBackgroundTask: BackgroundTaskSay = (id, values) => {
           ),
     stateWorking: () => translate('session.backgroundTask.stateWorking', 'working'),
     stateWorkingCount: () =>
-      translate('session.backgroundTask.stateWorkingCount', '{{value0}} working', phraseValues),
+      count === 1
+        ? translate(
+            'session.backgroundTask.stateWorkingCount_one',
+            '{{value0}} working',
+            stateValues
+          )
+        : translate(
+            'session.backgroundTask.stateWorkingCount_other',
+            '{{value0}} working',
+            stateValues
+          ),
     stateMonitoring: () => translate('session.backgroundTask.stateMonitoring', 'monitoring'),
     stateMonitoringCount: () =>
-      translate(
-        'session.backgroundTask.stateMonitoringCount',
-        '{{value0}} monitoring',
-        phraseValues
-      ),
+      count === 1
+        ? translate(
+            'session.backgroundTask.stateMonitoringCount_one',
+            '{{value0}} monitoring',
+            stateValues
+          )
+        : translate(
+            'session.backgroundTask.stateMonitoringCount_other',
+            '{{value0}} monitoring',
+            stateValues
+          ),
     stateWaiting: () => translate('session.backgroundTask.stateWaiting', 'waiting'),
     stateWaitingCount: () =>
-      translate('session.backgroundTask.stateWaitingCount', '{{value0}} waiting', phraseValues),
+      count === 1
+        ? translate(
+            'session.backgroundTask.stateWaitingCount_one',
+            '{{value0}} waiting',
+            stateValues
+          )
+        : translate(
+            'session.backgroundTask.stateWaitingCount_other',
+            '{{value0}} waiting',
+            stateValues
+          ),
     stateBlocked: () => translate('session.backgroundTask.stateBlocked', 'blocked'),
     stateBlockedCount: () =>
-      translate('session.backgroundTask.stateBlockedCount', '{{value0}} blocked', phraseValues),
+      count === 1
+        ? translate(
+            'session.backgroundTask.stateBlockedCount_one',
+            '{{value0}} blocked',
+            stateValues
+          )
+        : translate(
+            'session.backgroundTask.stateBlockedCount_other',
+            '{{value0}} blocked',
+            stateValues
+          ),
     stateDone: () => translate('session.backgroundTask.stateDone', 'done'),
     stateDoneCount: () =>
-      translate('session.backgroundTask.stateDoneCount', '{{value0}} done', phraseValues),
+      count === 1
+        ? translate('session.backgroundTask.stateDoneCount_one', '{{value0}} done', stateValues)
+        : translate('session.backgroundTask.stateDoneCount_other', '{{value0}} done', stateValues),
     stateIdle: () => translate('session.backgroundTask.stateIdle', 'stopped'),
     stateIdleCount: () =>
-      translate('session.backgroundTask.stateIdleCount', '{{value0}} stopped', phraseValues),
+      count === 1
+        ? translate('session.backgroundTask.stateIdleCount_one', '{{value0}} stopped', stateValues)
+        : translate(
+            'session.backgroundTask.stateIdleCount_other',
+            '{{value0}} stopped',
+            stateValues
+          ),
     stateUnverifiable: () =>
       translate('session.backgroundTask.stateUnverifiable', 'status unavailable'),
     stateUnverifiableCount: () =>
-      translate(
-        'session.backgroundTask.stateUnverifiableCount',
-        '{{value0}} with status unavailable',
-        phraseValues
-      ),
+      count === 1
+        ? translate(
+            'session.backgroundTask.stateUnverifiableCount_one',
+            '{{value0}} with status unavailable',
+            stateValues
+          )
+        : translate(
+            'session.backgroundTask.stateUnverifiableCount_other',
+            '{{value0}} with status unavailable',
+            stateValues
+          ),
     reasonWaiting: () => translate('session.backgroundTask.reasonWaiting', 'needs approval'),
     reasonBlocked: () => translate('session.backgroundTask.reasonBlocked', 'failed'),
     groupAgents: () => translate('session.backgroundTask.groupAgents', 'Agents'),

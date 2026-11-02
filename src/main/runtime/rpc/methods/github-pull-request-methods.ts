@@ -24,7 +24,8 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.fallbackPRNumber,
         params.acceptMergedFallbackPR,
         params.currentHeadOid,
-        params.reason
+        params.reason,
+        params.userRefresh
       )
   }),
   defineMethod({
@@ -33,7 +34,8 @@ export const GITHUB_PULL_REQUEST_METHODS = [
     params: PullRequestChecks,
     handler: async (params, { runtime }) =>
       runtime.getRepoPRChecks(params.repo, params.prNumber, params.headSha, params.prRepo ?? null, {
-        noCache: params.noCache
+        noCache: params.noCache,
+        ...(params.userRefresh === true ? { userRefresh: true } : {})
       })
   }),
   defineMethod({

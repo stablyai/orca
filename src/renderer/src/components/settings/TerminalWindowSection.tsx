@@ -1,46 +1,37 @@
-import { useRef, useState } from 'react'
-import { RotateCw } from 'lucide-react'
+import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import {
+  TERMINAL_COLOR_OVERRIDES_SETTING,
+  terminalColorOverridesForSlot,
+  type TerminalThemeSlot
+} from '../../../../shared/terminal-color-overrides'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { ColorField, NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
-import { useMountedRef } from '@/hooks/useMountedRef'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import { WindowMaterialSetting } from './WindowMaterialSetting'
 import { translate } from '@/i18n/i18n'
+
+import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  /** Theme slot the Color Overrides editor writes, following the theme catalog's Dark/Light target. */
+  colorOverrideSlot: TerminalThemeSlot
 }
-
-import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
 
 export function TerminalWindowSection({
   settings,
-  updateSettings
+  updateSettings,
+  colorOverrideSlot
 }: TerminalWindowSectionProps): React.JSX.Element {
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
-  // Blur is a startup window option on macOS/Windows; compare against mount state to request restart only after changes.
-  const blurAtMountRef = useRef<boolean>(settings.windowBackgroundBlur ?? false)
-  const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
-  const [relaunchingBlur, setRelaunchingBlur] = useState(false)
-  const mountedRef = useMountedRef()
-
-  const handleRelaunch = async (): Promise<void> => {
-    if (relaunchingBlur) {
-      return
-    }
-    setRelaunchingBlur(true)
-    try {
-      await window.api.app.relaunch()
-    } catch {
-      if (mountedRef.current) {
-        setRelaunchingBlur(false)
-      }
-    }
-  }
+  const colorOverridesSetting = TERMINAL_COLOR_OVERRIDES_SETTING[colorOverrideSlot]
+  const colorOverrides = terminalColorOverridesForSlot(settings, colorOverrideSlot)
 
   return (
     <section className="space-y-4">
@@ -89,80 +80,19 @@ export function TerminalWindowSection({
           />
         </SearchableSetting>
 
-        <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalWindowSection.2b82242f43',
-            'Window Blur'
-          )}
-          description={translate(
-            'auto.components.settings.TerminalWindowSection.97950bb087',
-            'Apply background blur to the terminal window. Requires restart.'
-          )}
-          keywords={['window', 'blur', 'background', 'transparency', 'vibrancy']}
-          className="space-y-3 py-2"
-        >
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label>
-                {translate(
-                  'auto.components.settings.TerminalWindowSection.2b82242f43',
-                  'Window Blur'
-                )}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.TerminalWindowSection.97950bb087',
-                  'Apply background blur to the terminal window. Requires restart.'
-                )}
-              </p>
-            </div>
-            <Switch
-              aria-label={translate(
-                'auto.components.settings.TerminalWindowSection.2b82242f43',
-                'Window Blur'
-              )}
-              checked={settings.windowBackgroundBlur ?? false}
-              onCheckedChange={(checked) => updateSettings({ windowBackgroundBlur: checked })}
-            />
-          </div>
-
-          {blurPendingRestart ? (
-            <div className="flex items-center justify-between gap-3 rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2.5">
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-                  {translate(
-                    'auto.components.settings.TerminalWindowSection.c65bb9ce63',
-                    'Restart required'
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.TerminalWindowSection.53ce336e15',
-                    'Restart Orca to apply the window blur change.'
-                  )}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="default"
-                className="shrink-0 gap-1.5"
-                disabled={relaunchingBlur}
-                onClick={() => void handleRelaunch()}
-              >
-                <RotateCw className={`size-3 ${relaunchingBlur ? 'animate-spin' : ''}`} />
-                {relaunchingBlur
-                  ? translate(
-                      'auto.components.settings.TerminalWindowSection.907131d741',
-                      'Restarting…'
-                    )
-                  : translate(
-                      'auto.components.settings.TerminalWindowSection.8abdab9f7c',
-                      'Restart now'
-                    )}
-              </Button>
-            </div>
-          ) : null}
-        </SearchableSetting>
+        {isWebClientLocation() ? null : (
+          <SearchableSetting
+            title={translate('settings.windowMaterial.title', 'Window Material')}
+            description={translate(
+              'settings.windowMaterial.description',
+              'What shows behind translucent terminals. Requires restart.'
+            )}
+            keywords={['window', 'blur', 'background', 'transparency', 'vibrancy', 'acrylic']}
+            className="space-y-3 py-2"
+          >
+            <WindowMaterialSetting settings={settings} updateSettings={updateSettings} />
+          </SearchableSetting>
+        )}
 
         <SearchableSetting
           title={translate(
@@ -283,6 +213,17 @@ export function TerminalWindowSection({
               }`}
             >
               <div className="min-h-0 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  {colorOverrideSlot === 'light'
+                    ? translate(
+                        'auto.components.settings.TerminalWindowSection.color_overrides_light_description',
+                        'Override individual colors of the light terminal theme.'
+                      )
+                    : translate(
+                        'auto.components.settings.TerminalWindowSection.color_overrides_dark_description',
+                        'Override individual colors of the dark terminal theme.'
+                      )}
+                </p>
                 {COLOR_OVERRIDE_GROUPS.map((group) => (
                   <div key={group.label} className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground">{group.label}</p>
@@ -292,12 +233,12 @@ export function TerminalWindowSection({
                           key={item.key}
                           label={item.label}
                           description={item.description}
-                          value={settings.terminalColorOverrides?.[item.key] ?? ''}
+                          value={colorOverrides?.[item.key] ?? ''}
                           fallback=""
                           onChange={(value) =>
                             updateSettings({
-                              terminalColorOverrides: {
-                                ...settings.terminalColorOverrides,
+                              [colorOverridesSetting]: {
+                                ...colorOverrides,
                                 [item.key]: value || undefined
                               }
                             })
@@ -310,12 +251,17 @@ export function TerminalWindowSection({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => updateSettings({ terminalColorOverrides: undefined })}
+                  onClick={() => updateSettings({ [colorOverridesSetting]: undefined })}
                 >
-                  {translate(
-                    'auto.components.settings.TerminalWindowSection.03c855d15f',
-                    'Reset all color overrides'
-                  )}
+                  {colorOverrideSlot === 'light'
+                    ? translate(
+                        'auto.components.settings.TerminalWindowSection.reset_light_color_overrides',
+                        'Reset light color overrides'
+                      )
+                    : translate(
+                        'auto.components.settings.TerminalWindowSection.reset_dark_color_overrides',
+                        'Reset dark color overrides'
+                      )}
                 </Button>
               </div>
             </div>

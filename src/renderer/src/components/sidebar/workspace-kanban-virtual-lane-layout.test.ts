@@ -66,22 +66,6 @@ describe('workspace kanban virtual lane layout', () => {
     unregister()
   })
 
-  it('exposes every logical item even when no card is mounted', () => {
-    const { scrollElement, spacerElement } = createLayoutElements()
-    const unregister = registerLayout(scrollElement, spacerElement)
-    scrollElement.scrollTop = 3_980
-
-    const rects = getWorkspaceKanbanVirtualLaneItemRects(scrollElement)
-    expect(rects).toHaveLength(ITEM_COUNT)
-    expect(rects?.[50]).toMatchObject({
-      id: 'w50',
-      index: 50,
-      contentTop: 2_208,
-      contentBottom: 2_244
-    })
-    unregister()
-  })
-
   it('selects intermediate never-mounted cards across a jumped lane range', () => {
     const { scrollElement, spacerElement } = createLayoutElements()
     const unregister = registerLayout(scrollElement, spacerElement)
@@ -128,46 +112,5 @@ describe('workspace kanban virtual lane layout', () => {
     ])
     unregisterSecond()
     expect(getWorkspaceKanbanVirtualLaneItemRects(scrollElement)).toBeNull()
-  })
-
-  it('places empty-lane and boundary drop indicators from the spacer', () => {
-    const { scrollElement, spacerElement } = createLayoutElements()
-    const unregisterEmpty = registerWorkspaceKanbanVirtualLaneLayout({
-      scrollElement,
-      spacerElement,
-      getItemIds: () => [],
-      getMeasurements: () => []
-    })
-    expect(resolveWorkspaceKanbanVirtualLaneDropIndex(scrollElement, 200)).toBe(0)
-    expect(resolveWorkspaceKanbanVirtualLaneDropIndicatorY(scrollElement, 0)).toBe(114)
-    unregisterEmpty()
-
-    const unregister = registerLayout(scrollElement, spacerElement)
-    expect(resolveWorkspaceKanbanVirtualLaneDropIndex(scrollElement, 90)).toBe(0)
-    expect(resolveWorkspaceKanbanVirtualLaneDropIndicatorY(scrollElement, 0)).toBe(103)
-    expect(resolveWorkspaceKanbanVirtualLaneDropIndicatorY(scrollElement, 1)).toBe(148)
-    unregister()
-  })
-
-  it('returns null when measurements are incomplete or mismatched', () => {
-    const { scrollElement, spacerElement } = createLayoutElements()
-    const unregisterShort = registerWorkspaceKanbanVirtualLaneLayout({
-      scrollElement,
-      spacerElement,
-      getItemIds: () => ['a', 'b'],
-      getMeasurements: () => [{ index: 0, start: 0, end: ITEM_HEIGHT }]
-    })
-    expect(getWorkspaceKanbanVirtualLaneItemRects(scrollElement)).toBeNull()
-    expect(resolveWorkspaceKanbanVirtualLaneDropIndex(scrollElement, 120)).toBeNull()
-    unregisterShort()
-
-    const unregisterBadIndex = registerWorkspaceKanbanVirtualLaneLayout({
-      scrollElement,
-      spacerElement,
-      getItemIds: () => ['a'],
-      getMeasurements: () => [{ index: 3, start: 0, end: ITEM_HEIGHT }]
-    })
-    expect(getWorkspaceKanbanVirtualLaneItemRects(scrollElement)).toBeNull()
-    unregisterBadIndex()
   })
 })

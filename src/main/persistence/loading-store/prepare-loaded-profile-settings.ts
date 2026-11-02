@@ -165,6 +165,7 @@ export function prepareLoadedProfileSettings(
   const migratedAgentPermission = migrateAgentPermissionChoice(
     {
       ...migratedAgentYoloDefaults,
+      agentLaunchChoices: parsed.settings?.agentLaunchChoices,
       agentPermissionDefault: parsed.settings?.agentPermissionDefault,
       agentPermissionOverrides: parsed.settings?.agentPermissionOverrides
     },
@@ -173,6 +174,9 @@ export function prepareLoadedProfileSettings(
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
     !hasTypedAgentPermission(parsed.settings) ||
+    parsed.settings?.agentLaunchChoices === undefined ||
+    JSON.stringify(parsed.settings.agentLaunchChoices) !==
+      JSON.stringify(migratedAgentPermission.agentLaunchChoices) ||
     parsed.settings?.agentDefaultArgs?.devin !==
       migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||

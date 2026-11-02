@@ -4,7 +4,11 @@ import { toEditorModelUri } from './editor-model-uri'
 import { getEditorModelOwnerKey } from './editor-model-owner'
 import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { detectLanguage } from '@/lib/language-detect'
-import { getDefaultMarkdownViewMode, getMarkdownViewModes } from './markdown-preview-controls'
+import {
+  getDefaultMarkdownViewMode,
+  getEditorViewLanguage,
+  getMarkdownViewModes
+} from './markdown-preview-controls'
 import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
 import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
@@ -40,7 +44,10 @@ export function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   if (file.readOnly === true) {
     return true
   }
-  const target = { language: detectLanguage(file.filePath), mode: file.mode }
+  const target = {
+    language: getEditorViewLanguage(file.filePath, detectLanguage(file.filePath)),
+    mode: file.mode
+  }
   const views = getMarkdownViewModes(target)
   const stored = state.markdownViewMode?.[file.id]
   const view =

@@ -27,7 +27,7 @@ export function externalChromiumSnapshotResult(
   page: ExternalChromiumPageRecord,
   data: {
     refs?: Record<string, { name?: string; role?: string }>
-    snapshot?: string
+    snapshot?: string | Record<string, unknown>
   },
   tab: Record<string, unknown>
 ): Record<string, unknown> {

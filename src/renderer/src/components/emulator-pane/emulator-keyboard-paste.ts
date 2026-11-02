@@ -178,6 +178,26 @@ export async function pasteTextIntoEmulatorKeyboard({
   return { byteLength: validation.byteLength, chunkCount, status: 'sent' }
 }
 
+// Android has no HID socket: main injects the whole text over the scrcpy control socket.
+export async function pasteTextIntoAndroidEmulator({
+  maxBytes,
+  sendText,
+  text
+}: {
+  maxBytes?: number
+  sendText: (text: string) => Promise<boolean>
+  text: string
+}): Promise<EmulatorKeyboardPasteResult> {
+  const validation = validateEmulatorKeyboardPasteText(text, maxBytes)
+  if (validation.status === 'rejected') {
+    return validation
+  }
+  if (!(await sendText(text.replaceAll('\r', '')))) {
+    return { byteLength: validation.byteLength, reason: 'target-unavailable', status: 'rejected' }
+  }
+  return { byteLength: validation.byteLength, chunkCount: 1, status: 'sent' }
+}
+
 function getPositiveIntegerLimit(value: number | undefined, fallback: number): number {
   return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value ?? fallback) : fallback
 }

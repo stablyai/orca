@@ -8,5 +8,10 @@ export const nativeChatDictationCopy = {
     ),
   insertFailed: () =>
     translate('session.useNativeChatDictation.insertFailed', "Couldn't insert dictation"),
-  inserted: () => translate('session.useNativeChatDictation.inserted', 'Dictation inserted')
+  inserted: () => translate('session.useNativeChatDictation.inserted', 'Dictation inserted'),
+  stoppedAfterSilence: () =>
+    translate(
+      'session.useNativeChatDictation.stoppedAfterSilence',
+      'Stopped after a minute of silence'
+    )
 }

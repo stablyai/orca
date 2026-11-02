@@ -24,10 +24,9 @@ import {
 import {
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
-  resolveCurrentWorktreeSelection,
+  resolveWorktreeCreateCwdContext,
   resolveCurrentWorktreeSelector
 } from '../selectors'
-import type { HostScopedWorktreeSelection } from '../caller-host-worktree-selection'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
@@ -36,7 +35,8 @@ import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdic
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
-  getCreateRepoTarget
+  getCreateRepoTarget,
+  type CliRepoTarget
 } from '../worktree-project-target'
 import {
   assertWorktreeParentFlagsCompatible,
@@ -44,8 +44,7 @@ import {
   getWorkspaceKeyParentSelector,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
-import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-import { getOptionalClickUpTaskLinkFlag } from './worktree-clickup-task-link'
+import { getOptionalTaskLinkFlags } from './worktree-task-link-flags'
 import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
@@ -77,14 +76,11 @@ function getOptionalSetupDecision(
   if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
     throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
   }
-  if (flags.get('run-hooks') === true) {
-    if (setup !== undefined && setup !== 'run') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Choose either --run-hooks or --setup run, not contradictory setup flags.'
-      )
-    }
-    return setup
+  if (flags.get('run-hooks') === true && setup !== undefined && setup !== 'run') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Choose either --run-hooks or --setup run, not contradictory setup flags.'
+    )
   }
   return setup
 }
@@ -123,7 +119,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree current': async ({ client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-      worktree: await resolveCurrentWorktreeSelector(cwd, client)
+      worktree: await resolveCurrentWorktreeSelector(cwd, client, 'current')
     })
     printResult(result, json, formatWorktreeShow)
   },
@@ -134,11 +130,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     assertWorkspaceTargetFlagsCompatible(flags)
     const branchNameOverride = getPresentStringFlag(flags, 'branch')
     const reviewLinks = getReviewTargetLinkFlags(flags)
-    const callerTerminalHandle =
-      typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
-      process.env.ORCA_TERMINAL_HANDLE.length > 0
-        ? process.env.ORCA_TERMINAL_HANDLE
-        : undefined
+    const callerTerminalHandle = process.env.ORCA_TERMINAL_HANDLE || undefined
     const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
@@ -149,28 +141,36 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       : undefined
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
-    const envParentWorkspace =
-      !noParent && !explicitParentWorkspace && !explicitParentWorktree
-        ? getEnvParentWorkspace()
-        : undefined
-    let cwdParentWorktree: HostScopedWorktreeSelection | undefined
+    const inferParent = !explicitParentWorktree && !explicitParentWorkspace && !noParent
+    const envParentWorkspace = inferParent ? getEnvParentWorkspace() : undefined
+    let cwdContext: Awaited<ReturnType<typeof resolveWorktreeCreateCwdContext>> = {}
     const needsCwdRepoInference = !flags.has('repo') && !hasWorkspaceProjectTarget(flags)
-    if (
-      (!explicitParentWorktree && !explicitParentWorkspace && !noParent) ||
-      needsCwdRepoInference
-    ) {
+    if (inferParent || needsCwdRepoInference) {
       try {
         // Cwd preserves parent/repo inference when agent shells lose ORCA_TERMINAL_HANDLE.
-        cwdParentWorktree = await resolveCurrentWorktreeSelection(cwd, client)
-      } catch {
-        cwdParentWorktree = undefined
+        cwdContext = await resolveWorktreeCreateCwdContext(
+          cwd,
+          client,
+          needsCwdRepoInference,
+          inferParent
+        )
+      } catch (error) {
+        if (
+          needsCwdRepoInference &&
+          error instanceof RuntimeClientError &&
+          error.code === 'selector_ambiguous'
+        ) {
+          throw error
+        }
+        cwdContext = {}
       }
     }
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
-    const clickUpTaskLink = getOptionalClickUpTaskLinkFlag(flags)
+    const taskLinks = getOptionalTaskLinkFlags(flags)
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
-    const repoTarget = await getCreateRepoTarget(flags, cwdParentWorktree, client)
+    const repoTarget: CliRepoTarget = cwdContext.repoId
+      ? { repo: `id:${cwdContext.repoId}` }
+      : await getCreateRepoTarget(flags, undefined, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, repoTarget)
     const linkedItems = referenceInputs
       ? await resolveReferenceInputs(context, referenceInputs)
@@ -187,8 +187,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       branchNameOverride,
       ...reviewLinks,
-      ...linearIssueLink,
-      ...clickUpTaskLink,
+      ...taskLinks,
       ...(linkedItems ? { linkedItems } : {}),
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
@@ -199,7 +198,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
       ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdParentWorktree ? { cwdParentWorktree: cwdParentWorktree.selector } : {}),
+      ...(cwdContext.parentWorktree
+        ? { cwdParentWorktree: cwdContext.parentWorktree.selector }
+        : {}),
+      // Older hosts ignore the observation and keep this first-row cwd parent.
+      ...(cwdContext.parentAmbiguous ? { cwdParentAmbiguous: cwdContext.parentAmbiguous } : {}),
       noParent,
       callerTerminalHandle,
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
@@ -230,18 +233,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     }
     const isUnread = getOptionalWorktreeUnreadFlag(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
-      allowNull: true
-    })
-    const clickUpTaskLink = getOptionalClickUpTaskLinkFlag(flags, { allowNull: true })
+    const taskLinks = getOptionalTaskLinkFlags(flags, { allowNull: true })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
     const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
       ...reviewLinks,
-      ...linearIssueLink,
-      ...clickUpTaskLink,
+      ...taskLinks,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       isUnread,
@@ -290,15 +289,20 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       worktree,
       hostId,
       force: flags.get('force') === true,
+      deleteBranch: flags.get('delete-branch') === true,
       runHooks: flags.get('run-hooks') === true,
+      // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) =>
+      // Hosts that predate waiting answer on acceptance.
       value.removing
         ? 'removed: false\nOrca is still deleting the checkout in the background.'
-        : `removed: ${value.removed}`
+        : value.removed === true
+          ? 'removed: true'
+          : 'Removal is not confirmed.'
     )
   }
 }

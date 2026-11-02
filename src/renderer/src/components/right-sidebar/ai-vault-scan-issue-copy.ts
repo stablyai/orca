@@ -22,6 +22,10 @@ const COPY: Record<AiVaultScanIssueCode, (values: Values) => string | null> = {
   issuesOmitted: () => translate('aiVault.scanIssues.issuesOmitted', EN.issuesOmitted),
   sessionMetadataUnreadable: () =>
     translate('aiVault.scanIssues.sessionMetadataUnreadable', EN.sessionMetadataUnreadable),
+  transcriptTooLarge: ({ label }) =>
+    label === null
+      ? null
+      : translate('aiVault.scanIssues.transcriptTooLarge', EN.transcriptTooLarge, { label }),
   openCodeScannerUnavailable: () =>
     translate('aiVault.scanIssues.openCodeScannerUnavailable', EN.openCodeScannerUnavailable),
   openCodeScanIncomplete: ({ detail }) =>
@@ -87,6 +91,8 @@ const COPY: Record<AiVaultScanIssueCode, (values: Values) => string | null> = {
       : translate('aiVault.scanIssues.wslDistroUnverifiable', EN.wslDistroUnverifiable, {
           distro
         }),
+  wslSessionsFromLastScan: () =>
+    translate('aiVault.scanIssues.wslSessionsFromLastScan', EN.wslSessionsFromLastScan),
   scopePathsTruncated: ({ limit }) =>
     limit === null
       ? null

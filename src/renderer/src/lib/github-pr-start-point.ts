@@ -25,7 +25,9 @@ export async function resolveGitHubPrStartPointForRepo({
   if (!target) {
     throw new Error('The project host is unresolved. Refresh the project and retry.')
   }
+  // Creating or launching from a PR is a user act: it may start the repo's stopped WSL distro.
   const prFields = {
+    wakeWslDistro: true,
     prNumber,
     ...(headRefName ? { headRefName } : {}),
     ...(baseRefName ? { baseRefName } : {}),

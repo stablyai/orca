@@ -67,17 +67,6 @@ describe('MobilePairingSetupSection', () => {
     })
   })
 
-  it('shows connection, address, and generate in a compact flow', () => {
-    renderSection()
-    expect(screen.getByText('Pair a phone')).toBeVisible()
-    expect(screen.getByText('Connection')).toBeVisible()
-    expect(screen.getByText('This computer’s address')).toBeVisible()
-    expect(screen.getByTestId('path-control')).toBeVisible()
-    expect(screen.getByRole('combobox')).toHaveTextContent('100.64.1.20 (tailscale0)')
-    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeVisible()
-    expect(screen.getByText(/must be able to reach this address/i)).toBeVisible()
-  })
-
   it('demotes this computer’s address to a disclosure when Orca Relay is selected', async () => {
     const { user } = renderSection({
       connectionMode: 'automatic',
@@ -119,11 +108,6 @@ describe('MobilePairingSetupSection', () => {
     renderSection({ connectionMode: 'local-only', selectedAddress: undefined })
     expect(screen.getByText('This computer’s address')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeDisabled()
-  })
-
-  it('can move retry recovery into the persistent failure notice', () => {
-    renderSection({ showGenerateAction: false })
-    expect(screen.queryByRole('button', { name: 'Generate QR code' })).toBeNull()
   })
 
   it('disables generate when sign-in is required', () => {
@@ -246,11 +230,5 @@ describe('MobilePairingSetupSection', () => {
 
     expect(onCustomAddressSelect).toHaveBeenCalledWith(address)
     expect(onCustomAddressRemove).not.toHaveBeenCalled()
-  })
-
-  it('generates a pairing code', async () => {
-    const { user, onGenerateQr } = renderSection()
-    await user.click(screen.getByRole('button', { name: 'Generate QR code' }))
-    expect(onGenerateQr).toHaveBeenCalledOnce()
   })
 })

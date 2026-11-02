@@ -5,6 +5,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { admitWslTranscriptPath } from '../native-chat/wsl-transcript-running-admission'
+import { noteWslDistroMayHaveStopped } from '../wsl/wsl-unc-access-gate'
 import { createOpenCodeSqliteProcessClient } from './session-scanner-opencode-sqlite-process-client'
 import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
@@ -73,7 +74,9 @@ export async function openCodeWslClient(
       async beforeSpawn(spawnSignal) {
         // A `--exec` of a stopped distro boots it; every respawn asks again.
         await waitForPromiseWithSignal(admitWslTranscriptPath(dbPath), spawnSignal)
-      }
+      },
+      // The reader dying may mean its distro stopped: a respawn must not trust an older running read.
+      onUnexpectedExit: () => noteWslDistroMayHaveStopped(distro)
     })
     clients.set(key, client)
   }

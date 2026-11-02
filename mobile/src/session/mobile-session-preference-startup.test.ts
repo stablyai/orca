@@ -1,5 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { createElement } from 'react'
+import { createElement, useEffect } from 'react'
+import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import pageAsyncStorage, {
+  publishPageStorage,
+  refreshPageTerminalShortcuts
+} from '../mobile-web-shell/bridge/page-async-storage'
+import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_ACCESSORY_KEYS } from '../terminal/terminal-accessory-keys'
@@ -8,11 +14,21 @@ import { useMobileSessionLifecycle } from './use-mobile-session-lifecycle'
 import { useMobileSessionPreferenceFocus } from './use-mobile-session-preference-focus'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 
+const pageBridge = vi.hoisted((): { client: BridgeRpcClient | null } => ({ client: null }))
+vi.mock('../transport/client-context.web', () => ({
+  usePageBridgeClientIfPresent: () => pageBridge.client
+}))
+vi.mock('../platform/shell-storage', async () => import('../platform/shell-storage.web'))
+
 const focusEffects = vi.hoisted(() => ({
   callbacks: new Map<() => void | (() => void), void | (() => void)>(),
   appStateListeners: new Set<(state: string) => void>()
 }))
 
+const shellGeometry = vi.hoisted(() => ({ sideRail: false }))
+vi.mock('../layout/use-shell-side-rail', () => ({
+  useDirectionPadAvailable: () => shellGeometry.sideRail
+}))
 vi.mock('react-native', () => ({
   AppState: {
     currentState: 'active',
@@ -75,6 +91,7 @@ function sessionScope() {
     setTerminalLinkOpenMode: vi.fn(),
     setCustomKeys: vi.fn(),
     setVisibleBuiltInIds: vi.fn(),
+    setDirectionPadEnabled: vi.fn(),
     setHostEndpoint: vi.fn(),
     connStateRef: { current: 'connecting' },
     terminalRefs: { current: new Map() },
@@ -88,6 +105,8 @@ function sessionScope() {
 
 let renderer: ReactTestRenderer | null = null
 beforeEach(() => {
+  pageBridge.client = null
+  shellGeometry.sideRail = false
   focusEffects.callbacks.clear()
   focusEffects.appStateListeners.clear()
   vi.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null)
@@ -342,6 +361,158 @@ describe('saved session settings before the first render', () => {
       TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
     )
   })
+})
+
+it('reloads custom visibility and order plus D-pad state when returning from Manage Shortcuts', async () => {
+  const scope = sessionScope()
+  let storedKeys = [{ id: 'one', label: 'One', bytes: '1', enter: false, visible: true }]
+  let padEnabled = true
+  vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+    key === 'orca:custom-accessory-keys'
+      ? JSON.stringify(storedKeys)
+      : JSON.stringify({
+          version: 2,
+          orderedBuiltInIds: TERMINAL_ACCESSORY_KEYS.map((key) => key.id),
+          visibleBuiltInIds: ['tab'],
+          directionPadEnabled: padEnabled
+        })
+  )
+  function Harness() {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lifecycle reads only the supplied session members.
+    useMobileSessionLifecycle(scope as never)
+    return null
+  }
+  await act(async () => {
+    renderer = create(createElement(Harness))
+  })
+  expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(true)
+  storedKeys = [{ ...storedKeys[0]!, visible: false }]
+  padEnabled = false
+  await act(async () => {
+    for (const [effect, cleanup] of focusEffects.callbacks) {
+      cleanup?.()
+      focusEffects.callbacks.set(effect, effect())
+    }
+  })
+  expect(scope.setCustomKeys).toHaveBeenLastCalledWith(storedKeys)
+  expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(false)
+})
+
+it('finishes custom-key hydration when side-rail geometry arrives during the read', async () => {
+  const customRead = deferred<string | null>()
+  vi.mocked(AsyncStorage.getItem).mockImplementation((key) =>
+    key === 'orca:custom-accessory-keys' ? customRead.promise : Promise.resolve(null)
+  )
+  const scope = sessionScope()
+  let ready = false
+  function Harness() {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lifecycle reads only the supplied session members.
+    ready = useMobileSessionLifecycle(scope as never).accessoryPreferencesReady
+    return null
+  }
+  await act(async () => {
+    renderer = create(createElement(Harness))
+  })
+  shellGeometry.sideRail = true
+  await act(async () => renderer!.update(createElement(Harness)))
+  await act(async () => customRead.resolve('[]'))
+  expect(ready).toBe(true)
+  expect(scope.setCustomKeys).toHaveBeenLastCalledWith([])
+  expect(scope.setVisibleBuiltInIds.mock.calls.at(-1)![0]).not.toContain('arrowUp')
+})
+
+it('refreshes a mounted terminal from native shortcut settings without router focus, remount or draft writes', async () => {
+  const layoutKey = 'orca:terminal-accessory-layout'
+  const customKey = 'orca:custom-accessory-keys'
+  const draftKey = 'orca:terminalDrafts:host-a:wt-1'
+  const layout = (ids: string[], pad: boolean) =>
+    JSON.stringify({
+      version: 2,
+      orderedBuiltInIds: TERMINAL_ACCESSORY_KEYS.map((key) => key.id),
+      visibleBuiltInIds: ids,
+      directionPadEnabled: pad
+    })
+  const initial = layout(['escape', 'tab'], true)
+  const storage: Record<string, string> = {
+    [layoutKey]: initial,
+    [customKey]: '[]',
+    [draftKey]: 'old draft'
+  }
+  const pair = createFakeBridgePortPair({ route: { pathname: '/h/host-a/session/wt-1' }, storage })
+  await pair.flush()
+  pageBridge.client = pair.client
+  publishPageStorage(
+    storage,
+    (key, value) => pair.client.notifyStorageWrite(key, value),
+    'host-a',
+    '/h/host-a/session/wt-1'
+  )
+  pair.client.onStorageUpdate(() => {
+    const session = pair.client.getShellSession()!
+    refreshPageTerminalShortcuts(session.storage, session.storageOversize)
+  })
+  vi.mocked(AsyncStorage.getItem).mockImplementation(pageAsyncStorage.getItem)
+  const scope = sessionScope()
+  let mounts = 0
+  function Harness() {
+    useEffect(() => {
+      mounts += 1
+    }, [])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lifecycle reads only the supplied session members.
+    useMobileSessionLifecycle(scope as never)
+    return null
+  }
+  await act(async () => {
+    renderer = create(createElement(Harness))
+  })
+  expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(true)
+  await pageAsyncStorage.setItem(draftKey, 'unsent page draft')
+  await pair.flush()
+  const writes = pair.storageWrites.length
+  storage[layoutKey] = layout(['enter', 'arrowUp'], false)
+  storage[customKey] = JSON.stringify([{ id: 'two', label: 'Two', bytes: '2', enter: false }])
+  await act(async () => {
+    pair.host.publishStorage()
+    await pair.flush()
+  })
+  expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(false)
+  expect(scope.setVisibleBuiltInIds).toHaveBeenLastCalledWith(['enter', 'arrowUp'])
+  expect(scope.setCustomKeys).toHaveBeenLastCalledWith([
+    { id: 'two', label: 'Two', bytes: '2', enter: false }
+  ])
+  expect(await pageAsyncStorage.getItem(draftKey)).toBe('unsent page draft')
+  expect(pair.storageWrites).toHaveLength(writes)
+  expect(mounts).toBe(1)
+  expect(pair.client.getShellSession()?.sessionId).toBe('session-a')
+
+  // A local edit can differ from the last native snapshot even when native resets to that snapshot.
+  await pageAsyncStorage.setItem(layoutKey, initial)
+  await pair.flush()
+  await act(async () => {
+    pair.host.publishKeyboardInset(222)
+    await pair.flush()
+  })
+  expect(await pageAsyncStorage.getItem(layoutKey)).toBe(initial)
+  await act(async () => {
+    pair.host.publishStorage()
+    await pair.flush()
+  })
+  expect(await pageAsyncStorage.getItem(layoutKey)).toBe(storage[layoutKey])
+  expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(false)
+
+  delete storage[layoutKey]
+  delete storage[customKey]
+  const afterLocalWrite = pair.storageWrites.length
+  await act(async () => {
+    pair.host.publishStorage()
+    await pair.flush()
+  })
+  expect(await pageAsyncStorage.getItem(layoutKey)).toBeNull()
+  expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(true)
+  expect(scope.setCustomKeys).toHaveBeenLastCalledWith([])
+  expect(pair.storageWrites).toHaveLength(afterLocalWrite)
+  pair.client.close()
+  pair.host.dispose()
 })
 
 describe('session custom shortcuts after saved settings change', () => {

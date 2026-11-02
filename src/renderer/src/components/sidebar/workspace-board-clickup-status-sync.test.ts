@@ -31,7 +31,7 @@ function setup(names: string[]) {
     syncClickUpWorktreeStatus(
       {
         targetStatus: { id: 'done', label: 'Done' },
-        worktreesById: new Map([
+        worktreesByKey: new Map([
           ['wt', { linkedClickUpTaskId: 'abc', linkedClickUpWorkspaceId: 'team-1' }]
         ]),
         settings: { kind: 'local' },
@@ -82,7 +82,7 @@ describe('ClickUp board status sync', () => {
     await syncClickUpWorktreeStatus(
       {
         targetStatus: { id: 'done', label: 'Done' },
-        worktreesById: new Map([
+        worktreesByKey: new Map([
           ['wt', { linkedClickUpTaskId: 'abc', linkedClickUpWorkspaceId: 'team-1' }]
         ]),
         getLatestWorkspaceStatus: () => 'done'
@@ -102,7 +102,7 @@ describe('ClickUp board status sync', () => {
     const result = await syncClickUpWorktreeStatus(
       {
         targetStatus: { id: 'done', label: 'Done' },
-        worktreesById: new Map([
+        worktreesByKey: new Map([
           ['wt', { linkedClickUpTaskId: 'abc', linkedClickUpWorkspaceId: 'team-1' }]
         ]),
         getSettingsForWorktree: () => null,

@@ -2,7 +2,7 @@
 import './terminal-hydration-store-test-bootstrap'
 import { describe, expect, it, vi } from 'vitest'
 import { getOrphanTerminalIds } from './terminal-orphan-helpers'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
