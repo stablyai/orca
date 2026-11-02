@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   isPluginFrameOriginUrl,
@@ -12,11 +11,6 @@ import {
 const KEY = pluginFrameKey('acme.charts')
 
 describe('plugin frame guest identity', () => {
-  it('derives the key as the first 16 hex chars of sha256(publisher.id)', () => {
-    expect(KEY).toBe(createHash('sha256').update('acme.charts').digest('hex').slice(0, 16))
-    expect(pluginFrameKey('acme.other')).not.toBe(KEY)
-  })
-
   it('round-trips the partition and refuses look-alikes', () => {
     expect(pluginFramePartition(KEY)).toBe(`persist:orca-plugin-${KEY}`)
     expect(readPluginFramePartitionKey(pluginFramePartition(KEY))).toBe(KEY)

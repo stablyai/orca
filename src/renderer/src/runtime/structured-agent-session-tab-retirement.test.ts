@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -27,13 +27,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', () => ({
-  hasStructuredAgentSessionLaunchCancellationTombstone: mocks.hasTombstone,
+  hasStructuredAgentSessionLaunchCancellationTombstone: mocks.hasTombstone
+}))
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-cancel', () => ({
   markStructuredAgentSessionLaunchCancelled: mocks.markCancelled
 }))
 vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: mocks.remember
 }))
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: mocks.discardOutbox
 }))
 vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({

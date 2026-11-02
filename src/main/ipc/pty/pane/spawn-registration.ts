@@ -1,7 +1,7 @@
 import { classifyTerminalCreationFailure } from '../../../../shared/terminal-start-failure'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import {

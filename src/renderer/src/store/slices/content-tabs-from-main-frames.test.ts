@@ -37,7 +37,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 createStoreCascadesMockApi()
 
 import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
-import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-launch-surface'
+import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 

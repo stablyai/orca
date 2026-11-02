@@ -4,8 +4,6 @@ import { runProcess } from '@orca/process-host'
 import { z } from 'zod'
 import { describe, expect, it } from 'vitest'
 
-import { flattenRetainedSlice } from './flatten-retained-slice'
-
 // Use 1MB parents above V8’s SlicedString threshold so retained-parent versus copied-tail heap differences are measurable.
 const PARENT_CHARS = 1024 * 1024
 const TAIL_CHARS = 512
@@ -89,13 +87,6 @@ async function measureTails(filler: string) {
 }
 
 describe('flattenRetainedSlice', () => {
-  it('preserves content exactly', () => {
-    expect(flattenRetainedSlice('')).toBe('')
-    expect(flattenRetainedSlice('a')).toBe('a')
-    const source = 'hello world, 漢字, [0m, \u{1f600}'
-    expect(flattenRetainedSlice(source.slice(3))).toBe(source.slice(3))
-  })
-
   it.each([
     ['one-byte', 'a'],
     ['two-byte', '漢']

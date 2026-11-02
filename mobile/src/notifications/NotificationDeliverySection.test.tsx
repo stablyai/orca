@@ -32,6 +32,7 @@ it('shows only phone-specific controls while desktop owns category eligibility',
   const switches = () => findAllByHostType(renderer.root, 'Switch')
   expect(switches().map((node) => node.props.accessibilityLabel)).toEqual([
     'Only when away from desktop',
+    'Only when an agent needs me',
     'Notification sound',
     'Suppress while focused'
   ])

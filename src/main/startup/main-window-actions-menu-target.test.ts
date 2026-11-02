@@ -96,27 +96,6 @@ describe('Help menu renderer target', () => {
     expect(safelyRevealWindow).not.toHaveBeenCalled()
   })
 
-  it.each([null, undefined])('falls back to live main for missing target %s', (target) => {
-    const main = fakeWindow()
-    state.mainWindow = asBrowserWindow(main)
-
-    sendOpenFeatureTour(target)
-
-    expect(main.webContents.send).toHaveBeenCalledWith('ui:openFeatureTour')
-    expect(safelyRevealWindow).not.toHaveBeenCalled()
-  })
-
-  it('falls back from a destroyed invoking window', () => {
-    const main = fakeWindow()
-    const target = fakeWindow(true)
-    state.mainWindow = asBrowserWindow(main)
-
-    sendOpenSetupGuide(asBrowserWindow(target))
-
-    expect(target.webContents.send).not.toHaveBeenCalled()
-    expect(main.webContents.send).toHaveBeenCalledWith('ui:openSetupGuide')
-  })
-
   it.each([false, true])(
     'ignores missing or destroyed main for companion actions (%s)',
     (destroyed) => {

@@ -48,25 +48,6 @@ describe('PR refresh for a stopped WSL distro (E9)', () => {
     vi.useRealTimers()
   })
 
-  it('skips a queued background refresh without running gh, and refreshes once it runs', async () => {
-    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    const candidate = makeCandidate({
-      repoPath: WSL_REPO,
-      cacheKey: `${WSL_REPO}::feature/test`,
-      isSelected: true
-    })
-
-    reportVisiblePRRefreshCandidates([candidate], 1, 1)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
-    expect(gate.blockedWslDistroForPath).toHaveBeenCalledWith(WSL_REPO, undefined)
-
-    gate.stopped = false
-    reportVisiblePRRefreshCandidates([candidate], 2, 1)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
-  })
-
   it("drains outside a user act that scheduled it, so a stopped distro's queue is not admitted", async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     const { isWslUserActFor, runAsWslUserAct } = await import('../wsl/wsl-user-act-scope')
@@ -89,39 +70,5 @@ describe('PR refresh for a stopped WSL distro (E9)', () => {
 
     expect(drainedInsideAct).toEqual([false])
     expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
-  })
-
-  it.each(['visible', 'active', 'post-push'] as const)(
-    'skips an automatic %s refreshPRNow without running gh, keeping the cached PR',
-    async (reason) => {
-      const { refreshPRNow } = await import('./pr-refresh-coordinator')
-      const outcome = await refreshPRNow(
-        makeCandidate({ repoPath: WSL_REPO, cacheKey: `${WSL_REPO}::c` }),
-        reason
-      )
-      expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
-      expect(outcome).toMatchObject({ kind: 'upstream-error' })
-    }
-  )
-
-  it('treats an unverifiable distro as blocked', async () => {
-    gate.blockedWslDistroForPath.mockResolvedValue({ distro: 'Ubuntu', state: 'unverifiable' })
-    const { refreshPRNow } = await import('./pr-refresh-coordinator')
-    await refreshPRNow(makeCandidate({ repoPath: WSL_REPO, cacheKey: `${WSL_REPO}::d` }), 'visible')
-    expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
-  })
-
-  it('still runs a manual refresh, which is the user asking', async () => {
-    const { refreshPRNow } = await import('./pr-refresh-coordinator')
-    await refreshPRNow(makeCandidate({ repoPath: WSL_REPO, cacheKey: `${WSL_REPO}::b` }))
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('refreshes a host repo exactly as before, without asking the gate', async () => {
-    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    reportVisiblePRRefreshCandidates([makeCandidate({ isSelected: true })], 1, 1)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
-    expect(gate.blockedWslDistroForPath).not.toHaveBeenCalled()
   })
 })

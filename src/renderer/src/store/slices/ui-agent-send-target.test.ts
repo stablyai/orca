@@ -45,7 +45,7 @@ vi.mock('@/runtime/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-message', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-message', () => ({
   relaunchFailedStructuredAgentSessionWithMessage:
     mocks.relaunchFailedStructuredAgentSessionWithMessage
 }))

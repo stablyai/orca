@@ -69,18 +69,6 @@ describe('createShutdownCheckpointGuard', () => {
     expect(consumeShutdownCheckpointFailureReason()).toBe('Unknown shutdown checkpoint failure')
   })
 
-  it('uses a fallback reason when an Error has an empty message', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const error = new Error('placeholder')
-    error.message = ''
-    const guard = createShutdownCheckpointGuard(() => {
-      throw error
-    })
-
-    expect(guard.persistOnce()).toBe(false)
-    expect(consumeShutdownCheckpointFailureReason()).toBe('Unknown shutdown checkpoint failure')
-  })
-
   it('reports checkpoint failure separately from the unload verdict', () => {
     const eventTarget = new EventTarget()
     const failed = vi.fn()

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeGitGenerationClient from '@/runtime/runtime-git-generation-client'
 import type { RuntimeGeneratePullRequestFieldsResult } from '@/runtime/runtime-git-client-context'
 import { useAppStore } from '@/store'
-import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../../shared/source-control-ai-settings'
 
 const runtime = vi.hoisted(() => ({

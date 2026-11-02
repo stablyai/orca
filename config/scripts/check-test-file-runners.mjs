@@ -96,10 +96,11 @@ const NON_UNIT_TEST_RUNNERS = [
     ]
   },
   {
-    name: 'plugin example tests (orca plugin test)',
+    // `orca plugin test` runs every example's own tests in Node; the unit test drives it.
+    name: 'example plugin tests (orca plugin test)',
     include: ['examples/plugins/*/src/**/*.test.ts', 'examples/plugins/*/src/**/*.test.tsx'],
     sources: ['src/cli/plugin-authoring/plugin-test-runner.test.ts'],
-    mirrors: ["resolve('examples/plugins/hello-tsx')"]
+    mirrors: ['readdirSync(EXAMPLES)']
   },
   {
     name: 'docs site',

@@ -1,4 +1,4 @@
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 

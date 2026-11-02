@@ -41,13 +41,14 @@ afterEach(async () => {
 it('binds the runtime and exactly one settings→refresh listener without any window', async () => {
   fixture.userData = await mkdtemp(join(tmpdir(), 'orca-main-plugins-'))
   const settingsListeners: ((updates: Record<string, unknown>) => void)[] = []
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin startup reads settings and subscribes to changes only.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin startup reads settings and subscribes to settings changes and session writes only.
   state.store = {
     getSettings: () => ({ pluginSystemEnabled: false }),
     onSettingsChanged: (listener: (updates: Record<string, unknown>) => void) => {
       settingsListeners.push(listener)
       return () => {}
-    }
+    },
+    onWorkspaceSessionWritten: () => () => {}
   } as never
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin startup reads only keybinding overrides.
   state.keybindings = { getOverrides: () => ({}) } as never
@@ -60,7 +61,10 @@ it('binds the runtime and exactly one settings→refresh listener without any wi
   await state.pluginService?.whenReady()
   refresh.mockClear()
 
-  expect(setRuntimeDelegate).toHaveBeenCalledWith(runtime)
+  // The runtime, plus the hook server's agent rows for agents.list.
+  expect(setRuntimeDelegate).toHaveBeenCalledWith(
+    expect.objectContaining({ listAgentStatuses: expect.any(Function) })
+  )
   for (const listener of settingsListeners) {
     listener({ devPluginPaths: [] })
   }

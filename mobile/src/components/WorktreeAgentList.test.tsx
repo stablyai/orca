@@ -151,6 +151,50 @@ describe('WorktreeAgentList', () => {
     expect(onAgentPress).toHaveBeenCalledWith('agent-1')
   })
 
+  it('opens each top-level agent by its own pane', async () => {
+    // #34235: two Claude tabs in one workspace must not both open the workspace's active tab.
+    const onAgentPress = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [agent('tab-a:leaf'), agent('tab-b:leaf')],
+          now: 2_000,
+          unvisited: false,
+          fullList: true,
+          onAgentPress
+        })
+      )
+    })
+    const rows = renderer!.root.findAll((node) => node.props.agent !== undefined)
+    for (const row of rows) {
+      await act(async () =>
+        findByHostType(row, 'Pressable').props.onPress({ stopPropagation: vi.fn() })
+      )
+    }
+    expect(onAgentPress.mock.calls).toEqual([['tab-a:leaf'], ['tab-b:leaf']])
+  })
+
+  it("keeps the workspace's long-press menu on agent rows", async () => {
+    // A row that claims the touch must hand a hold to the card's menu, not open the tab on release.
+    const onAgentPress = vi.fn()
+    const onAgentLongPress = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeAgentList, {
+          agents: [agent('tab-a:leaf')],
+          now: 2_000,
+          unvisited: false,
+          onAgentPress,
+          onAgentLongPress
+        })
+      )
+    })
+    const row = renderer!.root.find((node) => node.props.agent !== undefined)
+    await act(async () => findByHostType(row, 'Pressable').props.onLongPress())
+    expect(onAgentLongPress).toHaveBeenCalledOnce()
+    expect(onAgentPress).not.toHaveBeenCalled()
+  })
+
   it('keeps a single agent visible without a redundant disclosure control', async () => {
     await act(async () => {
       renderer = create(

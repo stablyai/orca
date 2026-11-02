@@ -15,7 +15,14 @@ import {
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import { writeStdoutLine } from '../stdout-line'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import { CLI_BOOLEAN_FLAGS } from '../../shared/cli-argument-boundary'
 import { checkPluginDevFolder } from '../plugin-dev-watch/plugin-dev-watch-check'
+import { pluginDevWatchConfirmFor } from '../plugin-dev-watch/plugin-dev-watch-approval'
+import {
+  pluginDevWatchShotPanel,
+  type PluginDevWatchShotHost
+} from '../plugin-dev-watch/plugin-dev-watch-shot'
+import { defaultPluginShotPath, resolveLocalShotPath, takePluginShotIfShown } from './plugin-view'
 import {
   callPlugins,
   refreshDevTypes,
@@ -28,10 +35,32 @@ import {
 /** The host did not answer: Orca quit, or the network to a remote server dropped. */
 export class PluginHostUnreachableError extends Error {}
 
+// Why: `dev reload` rejects watch-only flags; the old `--approve` is replaced by the new one.
+const WATCH_ONLY_FLAGS = new Set(['check', 'shot', 'shot-panel', 'approve'])
+
 /** `orca … plugin dev watch <dir>` → `… plugin dev reload <dir>`, so approving keeps this session. */
 export function devReloadArgs(rawArgs: readonly string[]): string[] {
   const watch = rawArgs.findIndex((arg, index) => arg === 'watch' && rawArgs[index - 1] === 'dev')
-  return rawArgs.map((arg, index) => (index === watch ? 'reload' : arg))
+  const kept: string[] = []
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index]
+    const name = arg.startsWith('--') ? arg.slice(2).split('=')[0] : null
+    if (name === null || !WATCH_ONLY_FLAGS.has(name)) {
+      kept.push(index === watch ? 'reload' : arg)
+      continue
+    }
+    // Same value rule as parseArgs: a non-boolean flag takes the next token unless it is a flag.
+    const next = rawArgs[index + 1]
+    if (
+      !arg.includes('=') &&
+      !CLI_BOOLEAN_FLAGS.has(name) &&
+      next !== undefined &&
+      !next.startsWith('--')
+    ) {
+      index += 1
+    }
+  }
+  return kept
 }
 
 function approvalOf(error: unknown): PluginDevWatchApproval | null {
@@ -59,6 +88,40 @@ async function pollHost<T>(ctx: HandlerContext, method: string, params?: unknown
   }
 }
 
+function bindShotHost(
+  ctx: HandlerContext,
+  shotDir: string,
+  shotPanel: string | boolean | undefined
+): PluginDevWatchShotHost {
+  return {
+    panelOf: (entry) =>
+      pluginDevWatchShotPanel(entry, typeof shotPanel === 'string' ? shotPanel : undefined),
+    open: async (pluginKey, panelId) => {
+      await callPlugins(ctx, 'plugins.open', { pluginKey, panelId })
+    },
+    take: async (pluginKey, panelId) => {
+      const shot = await takePluginShotIfShown(ctx, {
+        pluginKey,
+        panelId,
+        outFor: (id) => defaultPluginShotPath(shotDir, pluginKey, id)
+      })
+      if ('notShown' in shot) {
+        return { notShown: shot.notShown }
+      }
+      const { path: file, width, height, settled, errors, pendingRequests } = shot
+      return {
+        panelId,
+        path: file,
+        width,
+        height,
+        settled,
+        errors,
+        ...(pendingRequests === undefined ? {} : { pendingRequests })
+      }
+    }
+  }
+}
+
 export function bindPluginDevWatchHost(ctx: HandlerContext, path: string): PluginDevWatchHost {
   const approve = ctx.flags.get('approve')
   const check = ctx.flags.get('check') === true
@@ -69,13 +132,21 @@ export function bindPluginDevWatchHost(ctx: HandlerContext, path: string): Plugi
       '--check renders the plugin on this machine, so it needs a local folder; drop --environment or --check.'
     )
   }
+  const shotFlag = ctx.flags.get('shot')
+  const shotDir = typeof shotFlag === 'string' ? resolveLocalShotPath(ctx, shotFlag) : null
+  const shotPanel = ctx.flags.get('shot-panel')
+  if (shotPanel !== undefined && shotDir === null) {
+    throw new RuntimeClientError('invalid_argument', '--shot-panel needs --shot <out-dir>.')
+  }
   return {
     ...(check ? { check: () => checkPluginDevFolder(path) } : {}),
+    ...(shotDir ? { shot: bindShotHost(ctx, shotDir, shotPanel) } : {}),
     refreshTypes: () => refreshDevTypes(ctx, path),
-    devLoad: () =>
+    devLoad: (approvalFingerprint) =>
       callPlugins<DevLoadResult>(ctx, 'plugins.devLoad', {
         path,
-        approvalFingerprint: typeof approve === 'string' ? approve : undefined
+        approvalFingerprint:
+          approvalFingerprint ?? (typeof approve === 'string' ? approve : undefined)
       }),
     list: () => pollHost<PluginHostListEntry[]>(ctx, 'plugins.list'),
     logs: (pluginKey, after) =>
@@ -109,7 +180,8 @@ export const PLUGIN_DEV_WATCH_HANDLERS: Record<string, CommandHandler> = {
       wait: waitUnlessAborted,
       onInterrupt: onPluginDevWatchInterrupt,
       exitNow: (code) => process.exit(code),
-      isConnectionLost: (error) => error instanceof PluginHostUnreachableError
+      isConnectionLost: (error) => error instanceof PluginHostUnreachableError,
+      confirm: pluginDevWatchConfirmFor(ctx.json)
     })
   }
 }

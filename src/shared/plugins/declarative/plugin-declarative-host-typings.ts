@@ -1,4 +1,7 @@
-import { renderPluginHostMethodMembers } from '../authoring/plugin-host-typings'
+import {
+  renderPluginEventPayloadMembers,
+  renderPluginHostMethodMembers
+} from '../authoring/plugin-host-typings'
 
 /** Markers around the generated region of resources/plugins/declarative/orca.d.ts. */
 export const ORCA_HOST_TYPINGS_BEGIN = '  // <generated: host methods, from plugin-host-api.ts>'
@@ -10,6 +13,10 @@ export function renderOrcaHostTypings(): string {
     ORCA_HOST_TYPINGS_BEGIN,
     '  export type HostMethods = {',
     `${renderPluginHostMethodMembers('    ', { surface: 'panel', compact: true }).trimEnd()}`,
+    '  }',
+    '  /** Workspace and agent events `on(event)` delivers, with the read capability of their domain. */',
+    '  export type PluginEvents = {',
+    `${renderPluginEventPayloadMembers('    ').trimEnd()}`,
     '  }',
     ORCA_HOST_TYPINGS_END
   ].join('\n')

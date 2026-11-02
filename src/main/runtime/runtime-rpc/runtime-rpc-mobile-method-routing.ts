@@ -102,6 +102,7 @@ export const EXECUTION_HOST_METHODS = [
   'github.listAssignableUsers',
   'github.listLabels',
   'github.listWorkItems',
+  'github.markPRDraft',
   'github.markPRReadyForReview',
   'github.mergePR',
   'github.prCheckDetails',

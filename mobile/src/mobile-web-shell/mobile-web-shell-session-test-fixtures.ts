@@ -5,7 +5,7 @@ import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
 } from './mobile-web-shell-session'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   CachedGeneration,
   MobileWebShellGates,

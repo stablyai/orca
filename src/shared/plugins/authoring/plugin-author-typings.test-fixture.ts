@@ -6,9 +6,14 @@ const RESOURCES = path.resolve(__dirname, '../../../../resources/plugins')
 /** The files `orca plugin types` copies, as checked in. */
 export const AUTHOR_TYPINGS_FILES = [
   path.join(RESOURCES, 'declarative', 'orca.d.ts'),
+  path.join(RESOURCES, 'declarative', 'orca-components.d.ts'),
+  path.join(RESOURCES, 'declarative', 'orca-components-layout.d.ts'),
+  path.join(RESOURCES, 'declarative', 'orca-components-data.d.ts'),
   path.join(RESOURCES, 'types', 'orca-host.d.ts'),
   path.join(RESOURCES, 'types', 'orca-frame.d.ts'),
-  path.join(RESOURCES, 'types', 'orca-worker.d.ts')
+  path.join(RESOURCES, 'types', 'orca-worker.d.ts'),
+  path.join(RESOURCES, 'types', 'orca-services.d.ts'),
+  path.join(RESOURCES, 'types', 'orca-testing.d.ts')
 ]
 
 // Mirrors the tsconfig `orca plugin types` writes (plugin-type-files.ts).
@@ -37,6 +42,10 @@ export function authorTypingsProgram(sources: Record<string, string> = {}): ts.P
   const getSourceFile = host.getSourceFile.bind(host)
   host.readFile = (file) => virtual.get(file) ?? readFile(file)
   host.fileExists = (file) => virtual.has(file) || ts.sys.fileExists(file)
+  // Virtual folders exist too, so relative imports between the samples resolve.
+  host.directoryExists = (dir) =>
+    [...virtual.keys()].some((file) => file.startsWith(dir + path.sep)) ||
+    ts.sys.directoryExists(dir)
   host.getSourceFile = (file, language, ...rest) => {
     const text = virtual.get(file)
     return text === undefined

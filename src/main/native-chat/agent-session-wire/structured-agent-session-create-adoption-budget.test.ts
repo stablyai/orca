@@ -24,7 +24,7 @@ import { adoptedDirectoryProbes } from '../agent-session-journal/adopted-directo
 import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
 import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
 import { structuredAgentsDeclaringNothing } from './structured-agent-session-adapter-router-test-support'
-import { resolveAgentSessionLaunchDirectory } from '../../runtime/agent-session-launch-directory'
+import { resolveAgentSessionLaunchDirectory } from '../../runtime/agent-session/agent-session-launch-directory'
 import { createClaudeStructuredLaunchResolver } from '../../runtime/structured-agent-launch-composition.test-support'
 
 import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'

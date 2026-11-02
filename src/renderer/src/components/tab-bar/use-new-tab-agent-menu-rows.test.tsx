@@ -94,7 +94,7 @@ vi.mock('@/components/settings/agent-launch-settings-transport', async (importOr
   return { ...actual, readHostAgentLaunchSettings: vi.fn().mockResolvedValue(null) }
 })
 vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: mocks.subscribe }))
-vi.mock('@/lib/structured-agent-session-host-admission', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.support
 }))
 // Like the real hook: a closed menu acquires nothing, and the stored inventory stays.

@@ -11,7 +11,7 @@ import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
 } from '../../src/main/runtime/runtime-mobile-notification-controller'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import {
   createHarness,
   flush,
@@ -85,6 +85,7 @@ function attentionPath(directory: string) {
     readNotificationSettings: () => ({
       enabled: true,
       agentTaskComplete: true,
+      agentNeedsInput: true,
       terminalBell: true,
       suppressWhenFocused: false,
       customSoundId: 'system',
@@ -111,6 +112,7 @@ function attentionPath(directory: string) {
       ]
     ]),
     readStatusState: () => projectStructuredAgentSessionStatusState(items),
+    readChildWork: () => undefined,
     now: () => 42
   })
   feed.subscribe({

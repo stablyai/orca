@@ -5,7 +5,7 @@ import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
-import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
@@ -22,6 +22,7 @@ import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
+import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
 
 export function MobileSessionActiveContent({
   controller
@@ -159,6 +160,9 @@ export function MobileSessionActiveContent({
           onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
           onCopyPath={() => void copyMarkdownPath(activeMarkdownTab)}
           onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
+          loadImageSource={(path) =>
+            loadMarkdownPreviewImage(client, worktreeId, activeMarkdownTab.relativePath, path)
+          }
           keyboardLift={keyboardLift}
         />
         {toastMessage && (

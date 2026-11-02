@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { track } from '@/lib/telemetry'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
@@ -35,6 +34,7 @@ type ShowNestedRepoReview = (args: {
 
 export function useAddRepoServerPathFlow({
   addRepoPath,
+  addNonGitFolder,
   activeRuntimeEnvironmentId,
   closeModal,
   fetchWorktrees,
@@ -52,6 +52,7 @@ export function useAddRepoServerPathFlow({
     kind?: 'git' | 'folder',
     options?: AddRepoPathOptions
   ) => Promise<Repo | null>
+  addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>
   activeRuntimeEnvironmentId: string | null
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
@@ -184,10 +185,14 @@ export function useAddRepoServerPathFlow({
         setAddProjectBusyLabel(
           kind === 'git' ? addRepoBusyLabels.openingProject() : addRepoBusyLabels.openingFolder()
         )
-        const repo = await addRepoPath(path, kind, {
+        const options = {
           runtimeEnvironmentId: activeRuntimeEnvironmentId,
           onWindowsDriveRefusal
-        })
+        }
+        const repo =
+          kind === 'folder'
+            ? await addNonGitFolder(path, options)
+            : await addRepoPath(path, kind, options)
         if (gen !== serverAddGenRef.current) {
           return
         }
@@ -200,8 +205,6 @@ export function useAddRepoServerPathFlow({
           }
           await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
         } else if (repo) {
-          // Folder projects open their synthetic root through the add flow instead of Git checkout completion.
-          await markOnboardingProjectAdded('addedFolder')
           closeModal()
         }
       } finally {
@@ -215,6 +218,7 @@ export function useAddRepoServerPathFlow({
     },
     [
       addRepoPath,
+      addNonGitFolder,
       activeRuntimeEnvironmentId,
       closeModal,
       fetchWorktrees,

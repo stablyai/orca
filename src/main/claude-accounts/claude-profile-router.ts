@@ -1,7 +1,7 @@
 import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -14,6 +14,7 @@ import {
 } from '../../shared/claude-profile-routing'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveClaudeCommand } from '../codex-cli/command'
@@ -88,14 +89,12 @@ export class ClaudeProfileRouter {
         })
   }
 
-  private get userHome(): string {
+  get userHome(): string {
     return this.args.userHome ?? homedir()
   }
 
-  private selectedProfile(): ClaudeProfileDescriptor | null {
-    const id = getSelectedClaudeAccountIdForTarget(this.args.getSettings(), {
-      runtime: 'host'
-    })
+  selectedProfile(): ClaudeProfileDescriptor | null {
+    const id = getSelectedClaudeAccountIdForTarget(this.args.getSettings(), { runtime: 'host' })
     return id ? this.describe(id) : null
   }
 
@@ -117,13 +116,17 @@ export class ClaudeProfileRouter {
     if (this.accountLogin(accountId)) {
       return false
     }
-    const saved = findClaudeAccount(this.args.getSettings(), accountId)
+    const saved = this.savedAccount(accountId)
     // An endpoint account's name is not an email, so it never matches a login.
     if (!saved || saved.authMethod === 'api-endpoint') {
       return false
     }
     const systemDefault = this.systemDefaultLogin()
     return Boolean(systemDefault && isSameClaudeLogin(saved, systemDefault))
+  }
+
+  savedAccount(accountId: string): ClaudeManagedAccount | undefined {
+    return findClaudeAccount(this.args.getSettings(), accountId)
   }
 
   systemDefaultHome(): string {
@@ -191,17 +194,6 @@ export class ClaudeProfileRouter {
       this.args.refreshWaitMs
     )
     return this.preparation()
-  }
-
-  /** Prepare an observed receiving route without mutating selection or adopting a System-default alias. */
-  async prepareReceivingAccount(accountId: string): Promise<string> {
-    const profile = this.describe(accountId)
-    await prepareClaudeProfileForLaunch(
-      profile,
-      (value) => this.setUp(value),
-      this.args.refreshWaitMs
-    )
-    return profile.home
   }
 
   accountHome(accountId: string): string {

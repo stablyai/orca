@@ -20,7 +20,7 @@ import {
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages
-} from '../../mobile-native-chat-render-data'
+} from '../mobile-native-chat-render-data'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 const NOW = 100_000

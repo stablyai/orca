@@ -26,8 +26,9 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError,
-  StructuredAgentSessionOwnerUnresolvedError
-} from '@/lib/structured-agent-session-launch-errors'
+  StructuredAgentSessionOwnerUnresolvedError,
+  type StructuredAgentSessionCreateGate
+} from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export {
   StructuredAgentSessionCreateRefusalError,
@@ -48,6 +49,7 @@ export type StructuredAgentSessionLaunchIntent = {
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void
   beforeCreate?: () => boolean
+  createAfter?: Promise<StructuredAgentSessionCreateGate>
   surfaceAddress?: StructuredLaunchSurfaceAddress
   /** The saved selection create seeds, read when the intent is built. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
@@ -229,4 +231,4 @@ export function abandonStructuredAgentSessionLaunchIntent(
 export {
   launchStructuredAgentSession,
   type StructuredLaunchHostSeedListener
-} from './structured-agent-session-launch-create-call'
+} from './agent-session/launch/structured-agent-session-launch-create-call'

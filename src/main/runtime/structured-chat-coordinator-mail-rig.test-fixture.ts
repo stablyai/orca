@@ -25,7 +25,7 @@ import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-tes
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
   attachParams,

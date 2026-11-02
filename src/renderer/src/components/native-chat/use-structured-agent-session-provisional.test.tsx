@@ -60,11 +60,11 @@ vi.mock('./use-structured-agent-session-sends', () => ({
   }
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-create-support', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-support', () => ({
   useStructuredLaunchCreateSupport: () => false
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   takeBackLegacyStructuredLaunchPrompts: mocks.takeBackLaunchText
 }))
 

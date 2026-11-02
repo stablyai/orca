@@ -7,7 +7,7 @@ import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-sessio
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
@@ -22,7 +22,7 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type {
   AgentSessionHistoryPage,

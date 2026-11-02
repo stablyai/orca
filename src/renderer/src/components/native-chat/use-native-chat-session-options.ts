@@ -8,8 +8,8 @@ import { sayNativeChatSessionOptionTranslated } from './native-chat-session-opti
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
-} from '../../../../shared/native-chat-pty-session-options'
-import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
+} from '../../../../shared/native-chat/input/native-chat-pty-session-options'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat/input/native-chat-session-option-dispatch'
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,

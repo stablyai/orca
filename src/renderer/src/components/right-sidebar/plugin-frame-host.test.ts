@@ -98,13 +98,16 @@ describe('createPluginFrameMessageHandler', () => {
       payload: {
         protocol: 1,
         surface: 'editor',
-        // An iframe is offered no 1.1 methods, so it reports 1.0.
-        api: { major: 1, minor: 0 },
+        // An iframe is offered no user-gesture methods, but 1.2 gave every frame storage.
+        api: { major: 1, minor: 2 },
         theme: { colorScheme: 'dark', tokens: '--orca-background:#000' }
       }
     })
     expect(hello.payload.methods).toContain('notifications.show')
-    expect(hello.payload.methods).not.toContain('storage.get')
+    expect(hello.payload.methods).toContain('storage.get')
+    expect(hello.payload.methods).toContain('plugin.request')
+    expect(hello.payload.methods).not.toContain('terminal.sendText')
+    expect(hello.payload.methods).not.toContain('files.saveAs')
     expect(onReady).toHaveBeenCalledOnce()
   })
 

@@ -22,6 +22,14 @@ function inlineSourceMap(map: SourceMap, relativePath: string, source: string): 
  * a syntax error.
  */
 export function transformPluginSource(relativePath: string, source: string): string {
+  return transformPluginSourceWithMappings(relativePath, source).code
+}
+
+/** The same, plus the map's VLQ `mappings` for frames that locate errors without DevTools. */
+export function transformPluginSourceWithMappings(
+  relativePath: string,
+  source: string
+): { code: string; mappings: string } {
   const result = transform(source, {
     transforms: TRANSFORMS_BY_EXTENSION[posix.extname(relativePath).toLowerCase()] ?? [],
     jsxRuntime: 'automatic',
@@ -32,5 +40,8 @@ export function transformPluginSource(relativePath: string, source: string): str
     filePath: relativePath,
     sourceMapOptions: { compiledFilename: posix.basename(relativePath) }
   })
-  return result.code + inlineSourceMap(result.sourceMap, relativePath, source)
+  return {
+    code: result.code + inlineSourceMap(result.sourceMap, relativePath, source),
+    mappings: result.sourceMap?.mappings ?? ''
+  }
 }

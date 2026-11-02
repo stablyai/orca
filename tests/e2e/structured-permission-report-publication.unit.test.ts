@@ -24,7 +24,7 @@ import {
   claudeFrame,
   USER_MESSAGE,
   PROVIDER_SESSION_ID
-} from '../../src/main/claude/claude-structured-session-test-support'
+} from '../../src/main/claude/structured/claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/structured/claude-structured-session-state'
 import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/structured-claude-runtime-adapter'
 import {
@@ -558,6 +558,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       ).toMatchObject({ ok: true })
       expect(applied).toBe(true)
     })
+    expect(descriptions()[0]).toBe('Ask for approval')
     const saved = structuredClone(store.getRecord(sessionId))
     const readCurrentOptions = adapter.readOptions!.bind(adapter, { sessionId, fence })
     expect((await readCurrentOptions()).current.reportedPermissionMode).toBe('auto')
@@ -580,7 +581,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       turn: { id: 'applied-ask' }
     })
     expect(host.readStatusSummary(sessionId)?.runtimePermission).toEqual({ fence, mode: 'auto' })
-    expect(descriptions()).toEqual(['Approve for me', 'Approve for me'])
+    expect(descriptions()).toEqual(['Ask for approval', 'Approve for me'])
     await act(async () => {
       answer.resolve({ turn: { id: 'applied-ask' } })
       expect(await finished).toMatchObject({ value: { state: 'admitted' } })
