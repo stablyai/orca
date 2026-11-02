@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
@@ -24,6 +24,14 @@ import {
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
+import { findInErrorChain } from '../provider-process/provider-error-chain'
+import { providerExitObserved } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { retryableStructuredAgentSessionStart } from '../native-chat/agent-session-wire/structured-agent-session-start-retry'
+import {
+  adapterAtPublishFor,
+  fakeClaude,
+  identityFor
+} from './structured/claude-structured-session-test-support'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
@@ -501,6 +509,78 @@ describe('Claude stream-json connection', () => {
       expect(closed).toBe(connection.exitVerdict.tree === 'exited')
     }
   })
+
+  it('lets a final initialize answer after a physical exit own the start despite fault-first callbacks', async () => {
+    const go = join(mkdtempSync(join(tmpdir(), 'claude-sdk-exit-answer-')), 'go')
+    scratchDirs.push(dirname(go))
+    const scenario = scriptScenario([
+      { awaitFile: { path: go, timeoutMs: 15_000 } },
+      { delayMs: 20 },
+      { exit: 1 }
+    ])
+    // Real SDK and child; only initialize's answer is held so it can arrive after the exit.
+    const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk')
+    const answer = Promise.withResolvers<unknown>()
+    const queryImpl = ((args: Parameters<typeof query>[0]) =>
+      Object.assign(sdkQuery(args), { initializationResult: () => answer.promise })) as typeof query
+    const reports: string[] = []
+    const exited = Promise.withResolvers<void>()
+    const claude = fakeClaude()
+    const adapter = adapterAtPublishFor({
+      ...claude,
+      openConnection: (_launch, handlers = {}) =>
+        open(
+          launchFor(scenario),
+          {
+            ...handlers,
+            onFault: (error) => {
+              reports.push(providerExitObserved(error) ? 'exit-fault' : 'fault')
+              handlers.onFault?.(error)
+            },
+            onExit: (error, exit) => {
+              reports.push('exit')
+              handlers.onExit?.(error, exit)
+              exited.resolve()
+            }
+          },
+          queryImpl
+        )
+    })
+    try {
+      const acquired = await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 's' })
+      let settled = false
+      const opened = adapter
+        .open({
+          sessionId: 'session-1',
+          fence: 7,
+          acquisitionGeneration: acquired.acquisitionGeneration,
+          signal: new AbortController().signal
+        })
+        .then(
+          () => null,
+          (error: unknown) => error
+        )
+        .finally(() => {
+          settled = true
+        })
+      writeFileSync(go, '')
+      await exited.promise
+      await new Promise((resolve) => setTimeout(resolve, 30))
+
+      expect(reports).toEqual(['exit-fault', 'exit'])
+      expect(settled).toBe(false)
+      answer.reject(
+        Object.assign(new Error('initialize failed'), { errorClass: 'control_request_failed' })
+      )
+      const failure = await opened
+      expect(
+        findInErrorChain(failure, (inner) => (inner as { errorClass?: string }).errorClass)
+      ).toBe('control_request_failed')
+      expect(retryableStructuredAgentSessionStart(failure)).toBe(false)
+    } finally {
+      await adapter.closeAll()
+    }
+  }, 20_000)
 
   it.runIf(process.platform !== 'win32')(
     'proves a natural SDK exit and cleans up its descendant before recovery',

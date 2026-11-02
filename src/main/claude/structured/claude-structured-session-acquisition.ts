@@ -34,7 +34,7 @@ import {
   createClaudeSessionJournalTranslator
 } from './journal/claude-structured-session-journal-control'
 import { isRootClaudeFrame } from '../claude-turn-opening'
-import { createClaudeStartupOutcome } from './claude-structured-startup-outcome'
+import { createClaudeStartupOutcome, endsClaudeStartup } from './claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../claude-stream-json-exit-error'
 
 export async function acquireClaudeSession({
@@ -64,7 +64,7 @@ export async function acquireClaudeSession({
   const startup = createClaudeStartupOutcome()
   const childFailed = (error: Error, ended?: Promise<unknown>): void => {
     childEnded ??= error
-    void (ended ? ended.then(startup.fail) : startup.fail(error))
+    void (ended ? ended.then(startup.fail) : endsClaudeStartup(error) && startup.fail(error))
     initProof.reject(error)
   }
   const translator = createClaudeSessionJournalTranslator(
