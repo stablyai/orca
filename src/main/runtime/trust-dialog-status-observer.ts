@@ -2,19 +2,40 @@ import type {
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
 } from '../../shared/agent-status-types'
-import { buildNativeChatFolderTrustPrompt } from '../../shared/native-chat-approval-envelope'
+import {
+  buildNativeChatFolderTrustPrompt,
+  buildNativeChatStartupMenuPrompt,
+  type NativeChatStartupMenuChoice
+} from '../../shared/native-chat-approval-envelope'
+import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import { findTerminalWaitBlockedSignal } from './agent-state-rules/blocked-text-layer'
 import type { LaunchedAgentForeground } from './launched-agent-foreground'
 
-// Cell-diff painters (Claude's Ink) replace spaces with cursor moves, so match one word, not the phrase.
-const TRUST_KEYWORD_RE = /trust/i
-const TRUST_KEYWORD_CARRY_CHARS = 'trust'.length - 1
+// Cell-diff painters (Claude's Ink) replace spaces with cursor moves, so match one key-row word, not the phrase.
+const TRUST_KEYWORD_RE = /trust|confirm|continue|skip/i
+const TRUST_KEYWORD_CARRY_CHARS = 'continue'.length - 1
 const TRUST_DIALOG_PAINT_BYTES = 4096
-// A live dialog ends on its key footer with the trust choice just above; quoted dialog text in a reply does not.
+// A live dialog ends on its key footer; quoted dialog text in a reply does not.
 const TRUST_DIALOG_FOOTER_RE =
-  /^(?:enter to confirm \u00b7 esc to cancel|enter continue \u00b7 esc quit)$/
+  /^(?:enter to confirm \u00b7 esc to cancel|enter(?:\/esc)? (?:continue|confirm) \u00b7 (?:esc (?:quit|skip)|ctrl\+c quit))$/
+const TRUST_REASONS: ReadonlySet<RuntimeTerminalWaitBlockedReason> = new Set([
+  'agent-trust-workspace',
+  'codex-trust-workspace'
+])
+// Only dialogs that precede a first prompt; mid-session approvals have their own cards.
+const STARTUP_MENU_REASONS: ReadonlySet<RuntimeTerminalWaitBlockedReason> = new Set([
+  'agent-update-prompt',
+  'agent-cwd-prompt',
+  'agent-hooks-review-prompt',
+  'codex-model-migration-prompt',
+  'agent-startup-menu-prompt'
+])
+// Claude's Ink select: two-space margin, then the cursor or a space, then the label.
+const INK_CHOICE_ROW_RE = /^ {2}([\u276f ]) (\S.*?)\s*$/
+const INK_CHOICES_MAX = 9
+const DIALOG_RULE_RE = /^\u2500+$/
 const TRUST_DIALOG_CHOICE_RE =
   /^(?:[\u276f\u203a]\s*)?(?:\d+\.\s*)?(?:yes, i trust this folder|trust and continue)$/
 const TRUST_DIALOG_CHOICE_ROWS = 6
@@ -31,8 +52,8 @@ type PaneScan = {
   resolvingAgent?: boolean
   /** The waiting row we published, identified by its receipt stamp like hook-silence rechecks. */
   owned?: { agent: 'claude' | 'codex'; receivedAt: number }
-  /** Keys our card sends; republished when the terminal moves the cursor. */
-  trustKeys?: string | null
+  /** The card we published; republished when the terminal moves the cursor. */
+  prompt?: string
   misses: number
   outputSinceRead?: boolean
   readTimer?: ReturnType<typeof setTimeout>
@@ -56,16 +77,81 @@ function visibleLines(emulator: HeadlessEmulator): string[] {
     .filter(Boolean)
 }
 
-function isTrustDialogOnScreen(emulator: HeadlessEmulator): boolean {
+/** The startup dialog owning the screen, or null when the screen is anything else. */
+function startupDialogReason(emulator: HeadlessEmulator): RuntimeTerminalWaitBlockedReason | null {
   const lines = visibleLines(emulator)
-  if (
-    !TRUST_DIALOG_FOOTER_RE.test(lines.at(-1) ?? '') ||
-    !lines.slice(-TRUST_DIALOG_CHOICE_ROWS, -1).some((line) => TRUST_DIALOG_CHOICE_RE.test(line))
-  ) {
-    return false
+  if (!TRUST_DIALOG_FOOTER_RE.test(lines.at(-1) ?? '')) {
+    return null
   }
   const reason = findTerminalWaitBlockedSignal(lines.join('\n'))?.reason
-  return reason === 'agent-trust-workspace' || reason === 'codex-trust-workspace'
+  if (reason && TRUST_REASONS.has(reason)) {
+    const choices = lines.slice(-TRUST_DIALOG_CHOICE_ROWS, -1)
+    return choices.some((line) => TRUST_DIALOG_CHOICE_RE.test(line)) ? reason : null
+  }
+  return reason && STARTUP_MENU_REASONS.has(reason) ? reason : null
+}
+
+/** The rows of the Ink select just above the key footer, aimed from the highlighted row; [] when they do not read as one. */
+function inkMenuChoices(rows: string[]): NativeChatStartupMenuChoice[] {
+  let end = rows.length - 1
+  while (end >= 0 && !rows[end].trim()) {
+    end -= 1
+  }
+  // Skip the footer and the blank rows above it.
+  end -= 1
+  while (end >= 0 && !rows[end].trim()) {
+    end -= 1
+  }
+  let start = end
+  while (start > 0 && rows[start - 1].trim()) {
+    start -= 1
+  }
+  const matches = rows.slice(start, end + 1).map((row) => INK_CHOICE_ROW_RE.exec(row))
+  const cursor = matches.findIndex((match) => match?.[1] === '\u276f')
+  if (
+    matches.length < 2 ||
+    matches.length > INK_CHOICES_MAX ||
+    cursor === -1 ||
+    matches.some((match, index) => !match || (match[1] === '\u276f') !== (index === cursor))
+  ) {
+    return []
+  }
+  return matches.map((match, index) => {
+    const arrow = index > cursor ? '\x1b[B' : '\x1b[A'
+    return { label: match![2], send: `${arrow.repeat(Math.abs(index - cursor))}\r` }
+  })
+}
+
+/** The heading under Claude's dialog rule, shown on the card so its choices read in context. */
+function inkMenuHeading(rows: string[]): string | undefined {
+  const rule = rows.findLastIndex((row) => DIALOG_RULE_RE.test(row.trim()))
+  return rule === -1 ? undefined : rows[rule + 1]?.trim() || undefined
+}
+
+/** The card for the dialog on screen and whether its answers are aimed; null when no dialog owns the screen. */
+function startupDialogPrompt(
+  emulator: HeadlessEmulator,
+  agent: TuiAgent
+): { prompt: string; aimed: boolean } | null {
+  const reason = startupDialogReason(emulator)
+  if (!reason) {
+    return null
+  }
+  if (TRUST_REASONS.has(reason)) {
+    const keys = trustChoiceKeys(emulator)
+    return { prompt: buildNativeChatFolderTrustPrompt(keys), aimed: keys !== null }
+  }
+  // Only Claude's menu keys are verified (2.1.316); other agents' menus get a card without answers.
+  if (agent !== 'claude' || reason !== 'agent-startup-menu-prompt') {
+    return { prompt: buildNativeChatStartupMenuPrompt({ choices: [] }), aimed: true }
+  }
+  const rows = emulator.getVisibleLines()
+  const choices = inkMenuChoices(rows)
+  const description = inkMenuHeading(rows)
+  return {
+    prompt: buildNativeChatStartupMenuPrompt({ ...(description ? { description } : {}), choices }),
+    aimed: choices.length > 0
+  }
 }
 
 /** Arrow keys from the highlighted choice to the trust choice, then Return; null when the layout is not the known two-choice one. */
@@ -81,7 +167,7 @@ function trustChoiceKeys(emulator: HeadlessEmulator): string | null {
   return `${arrow.repeat(Math.abs(trust - cursor))}\r`
 }
 
-/** Projects a Claude/Codex folder-trust dialog into the pane's status row; hooks only start after trust. */
+/** Projects a Claude/Codex startup dialog (folder trust, MCP servers, updates…) into the pane's status row; hooks only start after it. */
 export class TrustDialogStatusObserver {
   private readonly panes = new Map<string, PaneScan>()
 
@@ -114,7 +200,7 @@ export class TrustDialogStatusObserver {
     if (pane.pendingBytes <= 0 || pane.resolvingAgent || emulator.isSynchronizedOutput) {
       return
     }
-    if (!isTrustDialogOnScreen(emulator)) {
+    if (!startupDialogReason(emulator)) {
       pane.pendingBytes -= chunk.length
       return
     }
@@ -129,7 +215,7 @@ export class TrustDialogStatusObserver {
     const resolved = () => {
       pane.resolvingAgent = false
       const current = this.deps.getEmulator(ptyId)
-      if (this.panes.get(ptyId) === pane && current && isTrustDialogOnScreen(current)) {
+      if (this.panes.get(ptyId) === pane && current && startupDialogReason(current)) {
         this.publishWaiting(ptyId, pane, this.deps.getPaneAgent(ptyId), current)
       }
     }
@@ -155,14 +241,17 @@ export class TrustDialogStatusObserver {
     if (before?.observation?.origin === 'hook' && !before.providerSessionOnly) {
       return
     }
-    // Chat views answer this card; without it a sent message's Return picks the highlighted "No, exit".
-    const keys = trustChoiceKeys(emulator)
-    pane.trustKeys = keys
+    // Chat views answer or lock on this card; without it a sent message's Return picks the highlighted choice.
+    const card = startupDialogPrompt(emulator, agent)
+    if (!card) {
+      return
+    }
+    pane.prompt = card.prompt
     this.deps.publish(ptyId, {
       state: 'waiting',
       agentType: agent,
       prompt: '',
-      interactivePrompt: buildNativeChatFolderTrustPrompt(keys)
+      interactivePrompt: card.prompt
     })
     const row = this.deps.readStatus(ptyId)
     if (row?.state === 'waiting' && row.agentType === agent) {
@@ -207,7 +296,8 @@ export class TrustDialogStatusObserver {
     if (emulator.isSynchronizedOutput) {
       return true
     }
-    if (!isTrustDialogOnScreen(emulator)) {
+    const card = startupDialogPrompt(emulator, owned.agent)
+    if (!card) {
       pane.misses += 1
       if (pane.misses < TRUST_DIALOG_CLEAR_AFTER_MISSES) {
         return true
@@ -216,8 +306,8 @@ export class TrustDialogStatusObserver {
       return false
     }
     pane.misses = 0
-    const keys = trustChoiceKeys(emulator)
-    if (keys && keys !== pane.trustKeys) {
+    // A mid-repaint read cannot aim, so only an aimed card replaces the one up.
+    if (card.aimed && card.prompt !== pane.prompt) {
       this.publishWaiting(ptyId, pane, owned.agent, emulator)
       owned = pane.owned ?? owned
     }

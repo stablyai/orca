@@ -26,6 +26,8 @@ export type NativeChatApprovalCardProps = {
   /** A choice is being delivered: the options wait for its answer. */
   isSubmitting?: boolean
   shouldFocus?: boolean
+  /** Shown when the card has no options: only the terminal can answer it. */
+  onOpenTerminal?: () => void
   /** A plan body renders as markdown; these make its file paths clickable. */
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
@@ -39,6 +41,7 @@ export function NativeChatApprovalCard({
   onCollapse,
   isSubmitting = false,
   shouldFocus = false,
+  onOpenTerminal,
   onLinkClick,
   allowFileUriLinks = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
@@ -183,6 +186,15 @@ export function NativeChatApprovalCard({
                   {opt.label}
                 </button>
               ))}
+              {approval.options.length === 0 && onOpenTerminal ? (
+                <button
+                  type="button"
+                  onClick={onOpenTerminal}
+                  className="rounded-md bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {translate('components.native-chat.question.openTerminal', 'Answer in terminal')}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

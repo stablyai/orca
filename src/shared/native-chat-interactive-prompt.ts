@@ -1,7 +1,9 @@
 import {
   parseNativeChatApprovalEnvelope,
-  parseNativeChatFolderTrustEnvelope
+  parseNativeChatFolderTrustEnvelope,
+  parseNativeChatStartupMenuEnvelope
 } from './native-chat-approval-envelope'
+import { formatAgentTypeLabel } from './agent-type-label'
 import type {
   AgentJournalApprovalItem,
   AgentJournalApprovalSubject
@@ -51,7 +53,8 @@ export const NATIVE_CHAT_APPROVAL_COPY = {
   folderTrustTitle: 'Trust this folder?',
   folderTrustHint: 'The agent asks before it can read, edit and run files in this folder.',
   trustFolder: 'Trust folder',
-  exit: 'Exit'
+  exit: 'Exit',
+  startupMenuTitle: '{{value0}} is waiting for a choice in the terminal'
 } as const
 
 export type NativeChatApprovalSay = (
@@ -90,6 +93,15 @@ export function parseApprovalFromStatus(
           : []),
         { label: say('exit'), send: folderTrust.exitSend }
       ]
+    }
+  }
+  const startupMenu = parseNativeChatStartupMenuEnvelope(interactivePrompt)
+  if (startupMenu) {
+    // Labels are the menu's own rows; with none the card only locks Send and opens the terminal.
+    return {
+      title: say('startupMenuTitle', { value0: formatAgentTypeLabel(agent) }),
+      ...(startupMenu.description ? { description: startupMenu.description } : {}),
+      options: startupMenu.choices
     }
   }
   const envelope = parseNativeChatApprovalEnvelope(interactivePrompt, agent)

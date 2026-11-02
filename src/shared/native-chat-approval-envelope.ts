@@ -10,7 +10,7 @@ export type NativeChatApprovalEnvelope = {
 }
 
 const ESCAPE = String.fromCharCode(27)
-const TRUST_KEYS_RE = new RegExp(`^(?:${ESCAPE}\\[[AB])*\r$`)
+const MENU_KEYS_RE = new RegExp(`^(?:${ESCAPE}\\[[AB])*\r$`)
 
 function readEnvelopeField(
   interactivePrompt: string | undefined | null,
@@ -72,8 +72,46 @@ export function parseNativeChatFolderTrustEnvelope(
   }
   const trustSend = trust.trustSend
   // Only arrow keys then Return; anything else is not a trust-choice keystroke.
-  if (typeof trustSend !== 'string' || !TRUST_KEYS_RE.test(trustSend)) {
+  if (typeof trustSend !== 'string' || !MENU_KEYS_RE.test(trustSend)) {
     return null
   }
   return { trustSend, exitSend: ESCAPE }
+}
+
+export type NativeChatStartupMenuChoice = { label: string; send: string }
+
+const STARTUP_MENU_TEXT_MAX = 300
+const STARTUP_MENU_CHOICES_MAX = 9
+
+function isStartupMenuText(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= STARTUP_MENU_TEXT_MAX
+}
+
+/** A startup menu read off the screen; no choices means only the terminal can answer it. */
+export function buildNativeChatStartupMenuPrompt(menu: {
+  description?: string
+  choices: NativeChatStartupMenuChoice[]
+}): string {
+  return JSON.stringify({ startupMenu: menu })
+}
+
+export function parseNativeChatStartupMenuEnvelope(
+  interactivePrompt: string | undefined | null
+): { description?: string; choices: NativeChatStartupMenuChoice[] } | null {
+  const menu = readEnvelopeField(interactivePrompt, 'startupMenu')
+  if (!menu || !('choices' in menu) || !Array.isArray(menu.choices)) {
+    return null
+  }
+  const choices: NativeChatStartupMenuChoice[] = []
+  for (const choice of menu.choices.slice(0, STARTUP_MENU_CHOICES_MAX)) {
+    const label: unknown = choice?.label
+    const send: unknown = choice?.send
+    // Only arrow keys then Return; anything else is not a menu-choice keystroke.
+    if (!isStartupMenuText(label) || typeof send !== 'string' || !MENU_KEYS_RE.test(send)) {
+      return null
+    }
+    choices.push({ label, send })
+  }
+  const description = 'description' in menu ? menu.description : undefined
+  return { ...(isStartupMenuText(description) ? { description } : {}), choices }
 }

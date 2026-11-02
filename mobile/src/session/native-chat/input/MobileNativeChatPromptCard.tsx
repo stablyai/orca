@@ -111,6 +111,7 @@ export function MobileNativeChatPromptCard({
         onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
         onCancel={onCancelPrompt}
         onCollapse={onCollapsePrompt}
+        onAnswerInTerminal={onAnswerInTerminal}
       />
     ) : question?.questions ? (
       <MobileNativeChatStructuredAsk

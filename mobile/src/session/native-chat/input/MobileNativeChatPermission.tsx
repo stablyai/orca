@@ -18,15 +18,19 @@ function MobileNativeChatPermissionImpl({
   permission,
   onRespond,
   onCancel,
-  onCollapse
+  onCollapse,
+  onAnswerInTerminal
 }: {
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
+  /** Shown when the card has no options: only the terminal can answer it. */
+  onAnswerInTerminal?: () => void
   onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
@@ -85,6 +89,22 @@ function MobileNativeChatPermissionImpl({
             </Pressable>
           )
         })}
+        {permission.options.length === 0 && onAnswerInTerminal ? (
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.option,
+              styles.optionPrimary,
+              pressed && styles.optionPressed
+            ]}
+            hitSlop={6}
+            onPress={onAnswerInTerminal}
+          >
+            <Text style={[styles.optionText, styles.optionTextPrimary]}>
+              {t('chat.promptCard.answerInTerminal', 'Answer in terminal')}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   )

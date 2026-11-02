@@ -19969,6 +19969,9 @@
           "trust": "Trust folder",
           "exit": "Exit"
         },
+        "startupMenu": {
+          "title": "{{value0}} is waiting for a choice in the terminal"
+        },
         "plan": {
           "file": "Plan file",
           "reviewTitle": "Review proposed plan",
