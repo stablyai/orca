@@ -120,7 +120,8 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
     return settingsForActiveVisibilityOwner(local)
   }
   try {
-    const result = await chatSettings.call<SettingsResult>(requestedEnvironment, 'settings.get')
+    // A reply after the host changed still merges; publish keeps consent to the pairing that answered.
+    const result = await callRuntimeResult<SettingsResult>('settings.get', undefined, 15_000)
     const runtimeSettings: Partial<GlobalSettings> = {}
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
@@ -226,11 +227,15 @@ export async function syncRuntimeBackedSettings(
     Object.assign(runtimeUpdates, await chatSettings.updates(updates, requestedEnvironment))
     if (Object.keys(runtimeUpdates).length > 0) {
       try {
-        const result = await chatSettings.call<SettingsResult>(
-          requestedEnvironment,
-          'settings.update',
-          runtimeUpdates
-        )
+        // Consent is written only to the host it was chosen for; other settings keep the common path.
+        const result =
+          typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean'
+            ? await chatSettings.call<SettingsResult>(
+                requestedEnvironment,
+                'settings.update',
+                runtimeUpdates
+              )
+            : await callRuntimeResult<SettingsResult>('settings.update', runtimeUpdates, 15_000)
         chatSettings.publish(requestedEnvironment, result.settings)
         const runtimeSettings = stripRetiredWebChatSettings(result.settings)
         delete runtimeSettings.nativeChatAutoContinueAfterUsageLimit
