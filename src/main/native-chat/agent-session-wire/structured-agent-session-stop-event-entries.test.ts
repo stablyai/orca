@@ -1,5 +1,4 @@
 import { afterEach, expect, it } from 'vitest'
-import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
 import {
   openTestJournalHostDatabase,
   readTestJournalOutcomes
@@ -28,8 +27,12 @@ function journal() {
   }
   return value
 }
-function stopEvents(): JournalStopEvent[] {
-  const events = new Map<number, JournalStopEvent>()
+type StoredStopEvent = NonNullable<
+  ReturnType<typeof outcomeFormat1StoredScalars.shape.queuePauseMarks.parse>['latestStop']
+>['event']
+
+function stopEvents(): StoredStopEvent[] {
+  const events = new Map<number, StoredStopEvent>()
   for (const row of readTestJournalOutcomes(openTestJournalHostDatabase(rig.root).db, SESSION)) {
     if (row.field === '$' && row.key === JSON.stringify('queuePauseMarks') && !row.deleted) {
       const { latestStop } = outcomeFormat1StoredScalars.shape.queuePauseMarks.parse(

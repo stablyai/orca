@@ -166,7 +166,7 @@ export function reconcileHistoryItem(
     if (previous.final && !fillsKnown(oldResults, nextResults)) {
       return null
     }
-    const merged = { ...old, ...item, id: old.id }
+    const merged: CodexThreadItem = { ...old, ...item, id: old.id }
     if (old.type === 'collabAgentToolCall') {
       merged.receiverThreadIds = [
         ...new Set([

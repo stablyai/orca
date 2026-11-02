@@ -282,9 +282,7 @@ export function registerRetainedOutcomeContract() {
             warn: (...args) => {
               warnings.push(args)
             },
-            info: () => {},
-            error: () => {},
-            debug: () => {}
+            error: () => {}
           }
         },
         record,
@@ -352,9 +350,7 @@ export function registerRetainedOutcomeContract() {
               warn: (...args) => {
                 warnings.push(args)
               },
-              info: () => {},
-              error: () => {},
-              debug: () => {}
+              error: () => {}
             }
           },
           record,
@@ -423,9 +419,7 @@ export function registerRetainedOutcomeContract() {
               warn: (...args) => {
                 warnings.push(args)
               },
-              info: () => {},
-              error: () => {},
-              debug: () => {}
+              error: () => {}
             }
           },
           record,

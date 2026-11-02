@@ -294,7 +294,7 @@ it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, ado
       // Count canonical normalization reads, not the draft’s changed-key metadata.
       expect(work()).toEqual([corrections, 1, 1])
       reset()
-      const hotWork = []
+      const hotWork: { visits: number; reads: number; recordWrites: number }[] = []
       for (let publication = 0; publication < 10; publication++) {
         const before = journal.cursor()
         const from = events.length
