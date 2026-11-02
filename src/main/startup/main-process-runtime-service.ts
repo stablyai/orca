@@ -28,6 +28,7 @@ import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environm
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
@@ -117,10 +118,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
           params,
           timeoutMs
         ),
+      ownsVm: (workspaceId) =>
+        findWorkspaceEphemeralVmRuntime(app.getPath('userData'), workspaceId) !== undefined,
       suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
-      resumeVm: async (workspaceId) => {
-        await resumeEphemeralVmWorkspace(store, workspaceId)
-      }
+      resumeVm: (workspaceId) => resumeEphemeralVmWorkspace(store, workspaceId)
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,

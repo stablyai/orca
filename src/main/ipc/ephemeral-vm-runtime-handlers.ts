@@ -15,7 +15,6 @@ import {
 } from '../../shared/ephemeral-vm-recipe-lifecycle-payload'
 import { removeRuntimeOwnedSshTarget } from '../ephemeral-vm/runtime-ssh'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
-import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
 import {
   ephemeralVmFailure,
   ephemeralVmFailureFromError
@@ -37,7 +36,6 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
   ipcMain.removeHandler('ephemeralVm:cleanup')
   ipcMain.removeHandler('ephemeralVm:stopCleanup')
-  ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
   ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
 
   ipcMain.handle('ephemeralVm:listRuntimes', (): EphemeralVmRuntimeRecord[] => {
@@ -148,13 +146,6 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         cleanupLastError: ephemeralVmFailure('cleanupInterrupted')
       })
     }
-  )
-
-  ipcMain.handle(
-    'ephemeralVm:resumeWorkspace',
-    (_event, args: { workspaceId: string }): Promise<EphemeralVmRuntimeRecord | null> =>
-      // The wake itself lives on the host (workspace-resume.ts) so activations without a window resume too.
-      resumeEphemeralVmWorkspace(store, args.workspaceId)
   )
 
   ipcMain.handle(

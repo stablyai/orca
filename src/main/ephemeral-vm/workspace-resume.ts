@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
-  listEphemeralVmRuntimes,
+  findWorkspaceEphemeralVmRuntime,
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
@@ -15,19 +15,14 @@ import { connectRuntimeOwnedSshTarget } from './runtime-ssh'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 
-/** Wakes one workspace's suspended recipe VM on this host, with the window path's integrity checks. */
+/** Wakes a workspace's suspended recipe VM on this host; callers go through WorkspaceSleepCoordinator.wakeVm. */
 export async function resumeEphemeralVmWorkspace(
   store: Store,
   workspaceId: string
 ): Promise<EphemeralVmRuntimeRecord | null> {
   const userDataPath = app.getPath('userData')
-  const runtime = listEphemeralVmRuntimes(userDataPath).find(
-    (entry) =>
-      entry.workspaceId === workspaceId &&
-      entry.status !== 'cleaned' &&
-      entry.status !== 'cleanup_pending'
-  )
-  if (!runtime?.repoId) {
+  const runtime = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
+  if (!runtime) {
     return null
   }
   if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {

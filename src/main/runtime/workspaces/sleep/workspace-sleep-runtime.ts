@@ -1,4 +1,5 @@
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -42,8 +43,6 @@ export type WorkspaceSleepRuntime = {
   ensureStructuredAgentSessionHost: () => Promise<void>
   notifyWorkspaceSleep: (notice: WorkspaceSleepNotice) => void
   wakeRecordsForWorktree: (worktreeId: string) => SleepingAgentSessionRecord[]
-  /** The host-side wake of a suspended recipe VM behind this workspace; a no-op without one. */
-  resumeWorkspaceVm: (worktreeId: string) => Promise<void>
   resumeSleptWorkspaceAgents: (worktreeId: string) => Promise<void>
   ensureRestoredPaneStarted: (
     pane: RestoredPane,
@@ -84,6 +83,8 @@ function needsWindowToast(outcome: WorkspaceSleepOutcome): boolean {
 export class WorkspaceSleepCoordinator {
   /** Reopening during sleep prevents subsequent VM suspension. */
   private readonly reopenings = new Map<string, number>()
+  private readonly vmWakes = new Map<string, Promise<EphemeralVmRuntimeRecord | null>>()
+  private readonly vmOperations = new Map<string, Promise<void>>()
 
   constructor(private readonly runtime: WorkspaceSleepRuntime) {}
 
@@ -137,14 +138,50 @@ export class WorkspaceSleepCoordinator {
     })
   }
 
-  /** Activation's VM wake, queued like any wake: a sleep still running sees the reopen and keeps
-   *  the VM up, and a wake behind an already-finished suspend finds the VM and resumes it. */
-  wakeVm(worktreeId: string): Promise<void> {
+  /** The one path that resumes a workspace's recipe VM. A wake already waiting or running is
+   *  joined, so the recipe's resume never runs twice for one reopening. */
+  async wakeVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
+    const platform = this.runtime.workspaceSleepPlatform
+    if (!platform?.ownsVm(worktreeId)) {
+      return null
+    }
     this.noteReopened(worktreeId)
-    return queueTerminalWorkspaceCommand(this.runtime, `id:${worktreeId}`, {
+    const pending = this.vmWakes.get(worktreeId)
+    if (pending) {
+      return pending
+    }
+    const wake = queueTerminalWorkspaceCommand(this.runtime, `id:${worktreeId}`, {
       kind: 'wake',
-      run: () => this.runtime.resumeWorkspaceVm(worktreeId)
+      run: () => this.afterVmOperations(worktreeId, () => platform.resumeVm(worktreeId))
+    }).finally(() => {
+      if (this.vmWakes.get(worktreeId) === wake) {
+        this.vmWakes.delete(worktreeId)
+      }
     })
+    this.vmWakes.set(worktreeId, wake)
+    return wake
+  }
+
+  private suspendVm(platform: WorkspaceSleepPlatform, worktreeId: string): Promise<void> {
+    // Earlier wakes are answered by the VM this suspends; a later one must resume after it.
+    this.vmWakes.delete(worktreeId)
+    return this.afterVmOperations(worktreeId, () => platform.suspendVm(worktreeId))
+  }
+
+  /** One VM operation at a time per workspace: lifecycle queueing alone is off in shipped builds. */
+  private afterVmOperations<T>(worktreeId: string, operation: () => Promise<T>): Promise<T> {
+    const run = (this.vmOperations.get(worktreeId) ?? Promise.resolve()).then(operation)
+    const settled = run.then(
+      () => {},
+      () => {}
+    )
+    this.vmOperations.set(worktreeId, settled)
+    void settled.then(() => {
+      if (this.vmOperations.get(worktreeId) === settled) {
+        this.vmOperations.delete(worktreeId)
+      }
+    })
+    return run
   }
 
   /** A slept pane was opened: main resumes it, queued like any wake, and the opener attaches. */
@@ -173,7 +210,7 @@ export class WorkspaceSleepCoordinator {
         }
         return host.sleepWorkspace(worktreeId, markAsleep)
       },
-      suspendVm: platform ? (worktreeId) => platform.suspendVm(worktreeId) : null,
+      suspendVm: platform ? (worktreeId) => this.suspendVm(platform, worktreeId) : null,
       ownRecords: (worktreeId) => runtime.wakeRecordsForWorktree(worktreeId),
       watchReopen: (worktreeId) => {
         const at = this.reopenings.get(worktreeId) ?? 0

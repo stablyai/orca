@@ -9,6 +9,7 @@ import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
@@ -62,17 +63,9 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
       .catch((error: unknown) => console.warn('[runtime] sleeping agent wake failed', error))
   }
 
-  /** The host wakes one of its suspended recipe VMs; a workspace without one costs a store read. */
-  async resumeWorkspaceVm(worktreeId: string): Promise<void> {
-    await this.workspaceSleepPlatform?.resumeVm(worktreeId)
-  }
-
-  /** Any activation of the workspace: a suspended recipe VM resumes host-side, so headless serve,
-   *  paired clients and the CLI wake it without the window's resume IPC. Never rejects. */
-  protected queueWorkspaceVmWake(worktreeId: string): Promise<void> {
-    return this.workspaceSleep
-      .wakeVm(worktreeId)
-      .catch((error: unknown) => console.warn('[runtime] workspace VM wake failed', error))
+  /** Opening a workspace wakes its recipe VM, if this host holds one; resolves with the VM's record. */
+  wakeWorkspaceVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
+    return this.workspaceSleep.wakeVm(worktreeId)
   }
 
   /** The window opened a slept pane; main resumes it and the window attaches. */
