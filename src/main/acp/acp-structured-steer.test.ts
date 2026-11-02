@@ -52,6 +52,61 @@ function answersCancels(agent: AcpScriptedAgent): void {
   })
 }
 
+describe('permission changes with already admitted ACP input', () => {
+  it.each(['drained', 'deadline'] as const)(
+    'preserves the earlier steer when the transition is %s',
+    async (outcome) => {
+      const fixture = await openAttachedHostRig({ stopGraceMs: outcome === 'deadline' ? 30 : 500 })
+      const { host, rig } = fixture
+      const original = rig.child()
+      const a = await send(host, 'A running')
+      const promptA = await rig.frame('session/prompt')
+      original.agent.notify('session/update', replyChunk(promptIdOf(promptA), 'working A'))
+      await rig.settle()
+      await host.flushStreamedEvents(SESSION)
+      const b = await send(host, 'B already admitted')
+      await waitFor(() => expect(framesOf(original, 'session/cancel')).toHaveLength(1))
+      const fields = { key: 'permissionMode', value: 'full-access' }
+      expect(
+        await host.setOption(CALLER, {
+          envelope: envelope('agentSession.setOption', fields),
+          ...fields
+        })
+      ).toMatchObject({ ok: true })
+      const c = await send(host, 'C new policy')
+      const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      if (outcome === 'deadline') {
+        await waitFor(() => expect(journal.submission(c)?.dispatchState).toBe('rejected'))
+        expect(journal.submission(c)?.rejection).toMatchObject({
+          kind: 'restartFailed',
+          neverReachedAgent: true
+        })
+        expect(journal.submission(b)?.dispatchState).toBe('pending')
+        expect(original.exited).toBe(false)
+      }
+      original.agent.reply(promptA, { stopReason: 'cancelled' })
+      const promptB = await rig.frame('session/prompt', 1)
+      expect(promptIdOf(promptB)).toBe(`prompt:${b}`)
+      original.agent.notify('session/update', replyChunk(promptIdOf(promptB), 'answered B'))
+      original.agent.reply(promptB, { stopReason: 'end_turn' })
+      await waitFor(() => expect(journal.submission(b)?.dispatchState).toBe('accepted'))
+      expect(journal.submission(a)?.dispatchState).toBe('accepted')
+      expect(framesOf(original, 'session/prompt')).toHaveLength(2)
+      if (outcome === 'drained') {
+        await waitFor(() => expect(original.exited).toBe(true))
+        const promptC = await rig.frame('session/prompt')
+        expect(promptIdOf(promptC)).toBe(`prompt:${c}`)
+        rig.child().agent.notify('session/update', replyChunk(promptIdOf(promptC), 'answered C'))
+        rig.child().agent.reply(promptC, { stopReason: 'end_turn' })
+        await waitFor(() => expect(journal.submission(c)?.dispatchState).toBe('accepted'))
+      } else {
+        expect(journal.submission(c)?.dispatchState).toBe('rejected')
+      }
+      await host.close(SESSION, 'user-close')
+    }
+  )
+})
+
 describe('a send while a Grok prompt runs', () => {
   it('cancels the running prompt, then sends as the next one', async () => {
     const rig = await openAcpAdapterRig()

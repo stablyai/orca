@@ -2644,6 +2644,9 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各智能体自己的设置"
     }
   },
   "sourceControl": {

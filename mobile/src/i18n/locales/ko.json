@@ -2644,6 +2644,9 @@
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
+    },
+    "agents": {
+      "permissionOwnAll": "에이전트 자체 설정"
     }
   },
   "sourceControl": {

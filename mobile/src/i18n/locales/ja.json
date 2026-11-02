@@ -2644,6 +2644,9 @@
       "title": "音声",
       "toggleMode": "トグル",
       "updateFailed": "更新できませんでした"
+    },
+    "agents": {
+      "permissionOwnAll": "Agent 独自の設定"
     }
   },
   "sourceControl": {

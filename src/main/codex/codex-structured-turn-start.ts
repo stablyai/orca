@@ -1,3 +1,5 @@
+import { steerCodexTurn } from './codex-structured-turn-steer'
+import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
 import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput
@@ -33,30 +35,6 @@ import {
   codexTurnEndRejection
 } from './codex-structured-turn-end-settlement'
 
-function checkDispatchAuthority(
-  host: CodexTurnHost,
-  id: string,
-  signal?: AbortSignal,
-  isCurrent?: () => boolean
-): void {
-  if (isCurrent?.() === false) {
-    host.dispatchEchoes.disarm(id)
-    throw new StructuredAgentSessionInputNotAdmitted({
-      state: 'rejected',
-      ...codexDispatchRejection(
-        agentSessionFailureFact('providerExited', { neverReachedAgent: true })
-      )
-    })
-  }
-  if (signal?.aborted) {
-    host.dispatchEchoes.disarm(id)
-    throw new StructuredAgentSessionInputNotAdmitted({
-      state: 'rejected',
-      ...codexDispatchRejection(agentSessionFailureFact('cancelled'))
-    })
-  }
-}
-
 export type CodexTurnHost = {
   account?: AgentSessionAccountKind
   skillReport?: Pick<CodexSkillReport, 'hasSkillPath'>
@@ -73,40 +51,6 @@ export type CodexTurnHost = {
   /** Running turns whose interrupt Codex already answered: aborted, so never steered. */
   abortedTurnIds?: ReadonlySet<string>
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
-}
-
-/** Explicit steering avoids pre-0.148 turn/start replies naming nonexistent turns; overrides wait for a start. */
-async function steerCodexTurn(
-  host: CodexTurnHost,
-  expectedTurnId: string,
-  input: {
-    clientMessageId: string
-    body: AgentJournalMessageItem
-    timeoutMs?: number
-    signal?: AbortSignal
-    isCurrent?: () => boolean
-    onReply?: () => void
-  }
-): Promise<{ turnId: string; via: 'steer' } | null> {
-  try {
-    checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
-    const answer = await host.connection.request(
-      'turn/steer',
-      {
-        threadId: host.threadId,
-        expectedTurnId,
-        clientUserMessageId: input.clientMessageId,
-        input: turnInputFor(host, input.body)
-      },
-      { timeoutMs: input.timeoutMs, onReply: input.onReply }
-    )
-    return { turnId: readCodexTurnId(answer) ?? expectedTurnId, via: 'steer' }
-  } catch (error) {
-    if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
-      return null
-    }
-    throw error
-  }
 }
 
 /** false means correlation capacity refused the send before writing; null turnId means an unnamed answer. */
@@ -155,7 +99,8 @@ export async function startCodexTurn(
   let discardSettingsAttempt: (() => void) | undefined
   const enqueue = (
     permission: Parameters<Parameters<typeof admitCodexTurnPermission>[2]>[0],
-    body = input.body
+    body = input.body,
+    mode = host.permissions?.acquiredMode
   ) => {
     checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
     previousApplied = host.appliedTurnOptions
@@ -174,6 +119,10 @@ export async function startCodexTurn(
     host.appliedTurnOptions = known
     discardSettingsAttempt = host.appliedSettings?.attempt(requested)
     enqueued = true
+    const previousMode = host.permissions?.appliedMode
+    if (host.permissions && mode) {
+      host.permissions.appliedMode = mode
+    }
     return {
       kind: 'sent' as const,
       response: host.connection
@@ -198,6 +147,15 @@ export async function startCodexTurn(
             }
           }
         )
+        .catch((error: unknown) => {
+          if (
+            host.permissions &&
+            (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error))
+          ) {
+            host.permissions.appliedMode = previousMode
+          }
+          throw error
+        })
         .then((answer) => {
           const applied = reportedCodexPermissionMode({
             ...permission,

@@ -2644,6 +2644,9 @@
       "title": "語音",
       "toggleMode": "切換",
       "updateFailed": "無法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各代理程式自身的設定"
     }
   },
   "sourceControl": {

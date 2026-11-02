@@ -2719,6 +2719,9 @@
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
+    },
+    "agents": {
+      "permissionOwnAll": "Paramètres propres aux agents"
     }
   },
   "sourceControl": {

@@ -2719,6 +2719,9 @@
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "Não foi possível atualizar"
+    },
+    "agents": {
+      "permissionOwnAll": "Configurações próprias dos agentes"
     }
   },
   "sourceControl": {

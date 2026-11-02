@@ -92,6 +92,11 @@ export class AcpStructuredTurns {
     return this.withdrawSteers()
   }
 
+  /** Earlier admitted steers retain their native queue and settlement while the host holds new input. */
+  interruptForPermissionTransition(): void {
+    this.cancelForSteer()
+  }
+
   whenIdle(): Promise<void> {
     if (!this.active) {
       return Promise.resolve()

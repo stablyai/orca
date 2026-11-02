@@ -1,3 +1,4 @@
+import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import * as autoSandbox from '../../codex/codex-structured-auto-sandbox'
@@ -545,3 +546,72 @@ it('keeps earlier B before historically forced proven-unrun A through close and 
     await adapter.closeAll()
   }
 })
+
+it('settles a changed running policy before compiling Auto, while unchanged input still steers', async () => {
+  const { codex, turns, permissionSend, began, pick, starts } = codexInputFinalizationFixture()
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  const running = await permissionSend('running')
+  await began(running)
+  const same = await permissionSend('same policy')
+  await vi.waitFor(() =>
+    expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/steer')).toBe(true)
+  )
+  turns.echo(same)
+  await pick('auto')
+  const changed = await permissionSend('new policy')
+  await vi.waitFor(() => expect(starts()).toHaveLength(2))
+  expect(codex.connections[0]?.calls.filter((r) => r.method === 'turn/steer')).toHaveLength(1)
+  expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/interrupt')).toBe(true)
+  expect(codex.connections).toHaveLength(2)
+  expect(starts()[1]?.params).toMatchObject({
+    clientUserMessageId: changed,
+    sandboxPolicy: { type: 'workspaceWrite' }
+  })
+  expect(starts().filter((r) => r.params?.clientUserMessageId === changed)).toHaveLength(1)
+  await began(changed)
+})
+
+it('retains the process but starts a new turn for an explicit running permission change', async () => {
+  const { host, codex, permissionSend, began, pick, starts, row } = codexInputFinalizationFixture()
+  await began(await permissionSend('running full access'))
+  const child = host.collaboratorsForTests().sessions.get(SESSION)!.child
+  await pick('ask')
+  const changed = await permissionSend('ask on the next turn')
+  await vi.waitFor(() => expect(starts()).toHaveLength(2))
+  expect(codex.connections).toHaveLength(1)
+  expect(host.collaboratorsForTests().sessions.get(SESSION)!.child).toBe(child)
+  expect(codex.connections[0]?.calls.filter((r) => r.method === 'turn/steer')).toHaveLength(0)
+  expect(starts()[1]?.params).toMatchObject({
+    clientUserMessageId: changed,
+    approvalPolicy: 'on-request',
+    sandboxPolicy: { type: 'readOnly' }
+  })
+  await began(changed)
+  expect((await row(changed))?.dispatchState).toBe('accepted')
+})
+
+it.each(['refused', 'grace'] as const)(
+  'keeps new input unwritten when interruption is %s',
+  async (failure) => {
+    const { adapter, codex, permissionSend, began, pick, starts, row } =
+      codexInputFinalizationFixture()
+    await began(await permissionSend('running'))
+    if (failure === 'refused') {
+      codex.routes['turn/interrupt'] = () => {
+        throw new CodexAppServerRequestError('turn/interrupt', -32600, 'refused')
+      }
+    } else {
+      codex.routes['turn/interrupt'] = () => ({})
+      vi.spyOn(adapter, 'awaitStoppedRequestEnd').mockResolvedValue()
+    }
+    await pick('ask')
+    const id = await permissionSend('must not inherit old grant')
+    await vi.waitFor(async () => expect((await row(id))?.dispatchState).toBe('rejected'))
+    expect((await row(id))?.rejection).toMatchObject({
+      kind: 'restartFailed',
+      neverReachedAgent: true
+    })
+    expect(starts()).toHaveLength(1)
+    expect(codex.connections[0]?.calls.some((r) => r.method === 'turn/steer')).toBe(false)
+  }
+)

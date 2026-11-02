@@ -188,6 +188,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string,
     mode: AgentChatPermissionChoice
   ): boolean | undefined
+  /** Settle native work without withdrawing previously admitted input; false proves no permission transition. */
+  settlePermissionTransition?(input: {
+    sessionId: string
+    fence: number
+    mode: AgentChatPermissionChoice
+    signal?: AbortSignal
+  }): Promise<boolean>
   dispatch(input: {
     sessionId: string
     clientMessageId: string

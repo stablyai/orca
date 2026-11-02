@@ -1,3 +1,6 @@
+import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AcpStructuredSession } from './acp-structured-session'
 
 type AcpStoppableSession = Pick<AcpStructuredSession, 'connection' | 'lane' | 'prompts' | 'turns'>
@@ -53,4 +56,42 @@ export async function windDownAcpTurn(
     interruptAcpTurn(session)
   }
   await awaitAcpTurnEnd(session, turns.stoppedAt ?? Date.now(), graceMs)
+}
+
+export async function settleAcpPermissionTransition(
+  session: AcpStructuredSession,
+  input: Parameters<NonNullable<StructuredAgentSessionAdapter['settlePermissionTransition']>>[0],
+  graceMs: number
+): Promise<boolean> {
+  input.signal?.throwIfAborted()
+  if (session.fence !== input.fence || session.closeRequested) {
+    return false
+  }
+  session.turns.interruptForPermissionTransition()
+  await waitForPromiseWithSignal(awaitAcpTurnEnd(session, Date.now(), graceMs), input.signal)
+  return (
+    !session.ended &&
+    !session.closeRequested &&
+    !session.turns.running &&
+    session.lane.openTurnId === null
+  )
+}
+
+export function requestEndWait(
+  sessionFor: (id: string) => AcpStructuredChild | undefined,
+  graceMs: () => number
+): NonNullable<StructuredAgentSessionAdapter['awaitStoppedRequestEnd']> {
+  return async (id, at) => {
+    const session = sessionFor(id)
+    if (isAcpReadySession(session)) {
+      await awaitAcpTurnEnd(session, at, graceMs())
+    }
+  }
+}
+
+export function acpPermissionTransition(
+  sessionFor: (id: string) => AcpStructuredSession,
+  graceMs: () => number
+): NonNullable<StructuredAgentSessionAdapter['settlePermissionTransition']> {
+  return (input) => settleAcpPermissionTransition(sessionFor(input.sessionId), input, graceMs())
 }
