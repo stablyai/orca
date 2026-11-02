@@ -34,9 +34,9 @@ export async function downloadAndOpenRemoteTerminalFile(
       !worktreeId ||
       !(await hostStreamsGrantedFiles(target.environmentId))
     ) {
-      return false
+      // Why: a newer click made while the host answered owns the outcome, so a stale one falls back to nothing.
+      return !isCurrent()
     }
-    // Why: a newer click made while the host answered owns the outcome; this one does nothing.
     if (!isCurrent()) {
       return true
     }

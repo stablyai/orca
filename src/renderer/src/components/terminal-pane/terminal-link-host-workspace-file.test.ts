@@ -194,7 +194,7 @@ describe('a paired-server link outside its own workspace', () => {
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-main', worktreePath: '/repo' }),
       '/repo/src/index.ts',
-      null
+      expect.objectContaining({ grant: null })
     )
   })
 

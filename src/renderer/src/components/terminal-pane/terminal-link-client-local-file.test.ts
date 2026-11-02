@@ -275,7 +275,7 @@ describe('a link to this computer printed in a paired-server terminal', () => {
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-feat' }),
       '/tmp/artifact.txt',
-      { terminalArtifactGrantId: 'g-1' }
+      expect.objectContaining({ grant: { terminalArtifactGrantId: 'g-1' } })
     )
     expect(onOpenFailure).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(

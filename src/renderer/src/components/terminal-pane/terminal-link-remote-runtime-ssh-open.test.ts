@@ -233,7 +233,7 @@ describe('handleOscLink', () => {
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'ssh-1' }),
       '/home/me/repo/report.html',
-      null
+      expect.objectContaining({ grant: null })
     )
   })
 
