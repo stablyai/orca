@@ -82,23 +82,11 @@ function Checklist({ list }: { list: TaskList }): React.JSX.Element {
 }
 
 function taskProgressLabel(completed: number, total: number): string {
-  return total === 1
-    ? translate(
-        'components.native-chat.taskList.progress_one',
-        '{{completed}} of {{count}} task completed',
-        {
-          completed,
-          count: total
-        }
-      )
-    : translate(
-        'components.native-chat.taskList.progress_other',
-        '{{completed}} of {{count}} tasks completed',
-        {
-          completed,
-          count: total
-        }
-      )
+  return translate(
+    'components.native-chat.taskList.progress',
+    '{{completed}} of {{count}} tasks completed',
+    { completed, count: total, defaultValue_one: '{{completed}} of {{count}} task completed' }
+  )
 }
 
 export function NativeChatTaskList({

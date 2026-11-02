@@ -4,6 +4,7 @@ import { markdownTabDocumentSchema, sessionWorktreeRecordSchema } from './sessio
 import { terminalSendAcceptedSchema } from '../terminal/terminal-reply-schema'
 import {
   sessionCreatedTerminalTabSchema,
+  sessionTabCloseReplySchema,
   sessionWriteUnreadReplySchema
 } from './session-write-reply-schema'
 import { quickCommandsReader } from './mobile-session-read-operations'
@@ -67,7 +68,7 @@ export const sessionTabClose = bindDeferredRpcOperation(
     method: 'session.tabs.close',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('session-tab-closed', sessionWriteUnreadReplySchema)
+    read: rpcResultVariant('session-tab-closed', sessionTabCloseReplySchema)
   })
 )
 

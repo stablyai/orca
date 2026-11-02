@@ -7,7 +7,8 @@ import { arrayElementsUnchanged } from './catalog-identity'
 type PluginContentListState<Entry> = {
   entries: Entry[]
   loaded: boolean
-  fetchEntries: () => Promise<void>
+  /** Resolves to what this request read, even when a newer request owns the store. */
+  fetchEntries: () => Promise<Entry[]>
 }
 
 // Share startup discovery only within a bound; wedged requests must not pin ensureLoaded consumers to built-ins forever. Later consumers retry independently (main/git/coalesced-probe.ts).
@@ -37,7 +38,7 @@ export function createPluginContentListStore<Entry extends { id: string }>(optio
           latestRequestStartedAt = null
           set({ entries: keepUnchangedEntries([]), loaded: true })
         }
-        return
+        return []
       }
       try {
         const response = await list()
@@ -53,10 +54,12 @@ export function createPluginContentListStore<Entry extends { id: string }>(optio
         if (generation === requestGeneration) {
           set({ entries: keepUnchangedEntries(entries), loaded: true })
         }
+        return entries
       } catch {
         if (generation === requestGeneration) {
           set({ entries: keepUnchangedEntries([]), loaded: true })
         }
+        return []
       } finally {
         if (generation === requestGeneration) {
           latestRequestStartedAt = null

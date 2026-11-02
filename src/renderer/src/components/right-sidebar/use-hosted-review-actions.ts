@@ -16,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 import { getHostedReviewStateChangeCopy } from './hosted-review-state-change-copy'
 import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 import { useReadyHostedReviewAction } from './use-ready-hosted-review-action'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -115,7 +116,7 @@ export function useHostedReviewActions({
               prRepo: githubPR?.prRepo ?? null
             })
         if (!result.ok) {
-          setActionError(result.error)
+          setActionError(codeHostErrorText(result))
         } else {
           await onRefreshReview()
         }
@@ -155,7 +156,7 @@ export function useHostedReviewActions({
         prRepo: githubPR?.prRepo ?? null
       })
       if (!result.ok) {
-        setActionError(result.error)
+        setActionError(codeHostErrorText(result))
         // Refresh stale eligibility without replacing the provider's mutation error.
         await onRefreshReview().catch(() => {})
       } else {
@@ -221,8 +222,9 @@ export function useHostedReviewActions({
               nextState
             })
         if (!result.ok) {
-          setActionError(result.error)
-          toast.error(result.error)
+          const message = codeHostErrorText(result)
+          setActionError(message)
+          toast.error(message)
         } else {
           toast.success(
             isClosing

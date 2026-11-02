@@ -1,5 +1,6 @@
 import type {
   BitbucketConnectArgs,
+  BitbucketConnectResult,
   BitbucketConnectionStatus
 } from '../../shared/bitbucket-credentials'
 import type {
@@ -10,11 +11,17 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs,
+  HostedReviewForBranchReply,
   HostedReviewInfo
 } from '../../shared/hosted-review'
 
 export type HostedReviewApi = {
-  forBranch: (args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>
+  forBranch: {
+    (
+      args: HostedReviewForBranchArgs & { reportReadOutcome?: false }
+    ): Promise<HostedReviewInfo | null>
+    (args: HostedReviewForBranchArgs): Promise<HostedReviewForBranchReply>
+  }
   getCreationEligibility: (
     args: HostedReviewCreationEligibilityArgs
   ) => Promise<HostedReviewCreationEligibility>
@@ -23,9 +30,7 @@ export type HostedReviewApi = {
 }
 
 export type BitbucketApi = {
-  connect: (
-    args: BitbucketConnectArgs
-  ) => Promise<{ ok: true; account: string | null } | { ok: false; error: string }>
+  connect: (args: BitbucketConnectArgs) => Promise<BitbucketConnectResult>
   disconnect: () => Promise<void>
   status: () => Promise<BitbucketConnectionStatus>
 }

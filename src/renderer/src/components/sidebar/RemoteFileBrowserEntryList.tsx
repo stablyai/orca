@@ -1,8 +1,8 @@
 import type React from 'react'
 import { useEffect, useRef, type RefObject } from 'react'
-import { ChevronRight, Folder, LoaderCircle } from 'lucide-react'
+import { ChevronRight, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import {
   isRemoteFileBrowserPathResolveTextTooLarge,
   type DirEntry
@@ -132,7 +132,11 @@ export function RemoteFileBrowserEntryList({
                 )}
               >
                 {entry.isDirectory ? (
-                  <Folder className="size-3.5 text-muted-foreground shrink-0" />
+                  <FolderIcon
+                    folderPath={entry.name}
+                    open={false}
+                    className="size-3.5 text-muted-foreground shrink-0"
+                  />
                 ) : (
                   <FileTypeIcon
                     filePath={entry.name}

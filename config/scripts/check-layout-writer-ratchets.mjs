@@ -381,6 +381,17 @@ export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
       !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
       !ts.isComputedPropertyName(node.parent) &&
       !(ts.isElementAccessExpression(node.parent) && node.parent.argumentExpression === node) &&
+      !(
+        ts.isCallExpression(node.parent) &&
+        !node.parent.questionDotToken &&
+        node.parent.arguments.length === 2 &&
+        node.parent.arguments[1] === node &&
+        ts.isPropertyAccessExpression(node.parent.expression) &&
+        !node.parent.expression.questionDotToken &&
+        ts.isIdentifier(node.parent.expression.expression) &&
+        node.parent.expression.expression.text === 'Object' &&
+        node.parent.expression.name.text === 'hasOwn'
+      ) &&
       !ts.isLiteralTypeNode(node.parent)
     ) {
       count += 1

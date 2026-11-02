@@ -16,7 +16,7 @@ import * as rendererI18n from './i18n'
 import { useLanguageReadiness } from './language-readiness'
 import * as languageReadiness from './language-readiness'
 import { usePluginLanguagePackStore } from '../store/plugin-language-packs'
-import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { I18nProvider } from './I18nProvider'
 
 // Wait for async settings before selecting the OS locale, or an in-flight load can override the persisted preference.
@@ -263,6 +263,7 @@ it("re-applies a plugin language only when the selected pack's content changes",
     id,
     resourceLanguage: pluginLanguageResourceId(id),
     pluginKey: 'example.german',
+    coverage: 100,
     locale: 'de-DE',
     catalog: { common: { save } }
   })

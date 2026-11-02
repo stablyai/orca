@@ -1,10 +1,38 @@
 import type { TaskPageWorkspaceActionsModel } from '../use-task-page-workspace-actions'
 import { useCallback } from 'react'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useAppStore } from '@/store/index'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsModel) {
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
+type TaskPageGitHubIssueCreationInput = Pick<
+  TaskPageWorkspaceActionsModel,
+  | 'setTaskRefreshNonce'
+  | 'setDialogWorkItem'
+  | 'openGitHubDetailPage'
+  | 'setNewIssueOpen'
+  | 'newIssueTitle'
+  | 'setNewIssueTitle'
+  | 'newIssueBody'
+  | 'setNewIssueBody'
+  | 'newIssueLabels'
+  | 'setNewIssueLabels'
+  | 'newIssueAssignees'
+  | 'setNewIssueAssignees'
+  | 'newIssueSubmitting'
+  | 'setNewIssueSubmitting'
+  | 'setNewIssueDraft'
+  | 'clearNewIssueDraft'
+  | 'newIssueTargetRepo'
+  | 'newIssueSourceContext'
+  | 'newIssueRuntimeTarget'
+>
+
+export function useTaskPageGitHubIssueCreation<Model extends TaskPageGitHubIssueCreationInput>(
+  model: Model
+) {
   const {
     setTaskRefreshNonce,
     setDialogWorkItem,
@@ -66,7 +94,7 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
           })
       if (!result.ok) {
         toast.error(
-          result.error ||
+          codeHostErrorText(result) ||
             translate('auto.components.TaskPage.7437e340b4', 'Failed to create issue.')
         )
         return
@@ -82,7 +110,7 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
         action: result.url
           ? {
               label: translate('auto.components.TaskPage.9c57663908', 'View'),
-              onClick: () => window.open(result.url, '_blank')
+              onClick: () => openAppHttpLink(result.url)
             }
           : undefined
       }
@@ -125,6 +153,7 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
         author: null
       }
       openGitHubDetailPage(stub)
+      setDialogWorkItem(stub)
       const stubRepoId = newIssueTargetRepo.id
       const fullIssuePromise = newIssueRuntimeTarget
         ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
@@ -151,7 +180,12 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
           })
       void fullIssuePromise
         .then((full) => {
-          if (full) {
+          const state = useAppStore.getState()
+          if (
+            full &&
+            state.taskPageData.openGitHubWorkItem === stub &&
+            state.githubTaskDrawerWorkItem === stub
+          ) {
             // Why: cast through unknown — spreading the discriminated union loses the discriminant, so { ...full, repoId } won't typecheck.
             const withRepoId = {
               ...full,
@@ -191,4 +225,6 @@ export function useTaskPageGitHubIssueCreation(model: TaskPageWorkspaceActionsMo
   nextModel.handleCreateNewIssue = handleCreateNewIssue
   return nextModel
 }
-export type TaskPageGitHubIssueCreationModel = ReturnType<typeof useTaskPageGitHubIssueCreation>
+export type TaskPageGitHubIssueCreationModel = ReturnType<
+  typeof useTaskPageGitHubIssueCreation<TaskPageWorkspaceActionsModel>
+>

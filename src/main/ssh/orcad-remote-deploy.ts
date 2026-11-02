@@ -21,9 +21,9 @@ import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
 import { readOrcadBundleTarget } from './orcad-deployment-target'
 import { resolveOrcadRuntimeTarget } from '../managed-server/lifecycle/orcad-runtime-target'
 import {
-  materializeNodeRuntimeArchive,
-  nodeRuntimeArchiveCachePath
-} from '../node-runtime/pinned-runtime-materializer'
+  orcadNodeRuntimeInstallOptions,
+  type NodeRuntimeDownloadBudget
+} from './orcad-node-runtime-install-options'
 import {
   orcadActivationFenceExists,
   resolveOrcadActivationReadinessTimeout,
@@ -52,6 +52,8 @@ export type OrcadDeployOptions = {
   censusRecord?: OrcadActivationRecord
   /** WSL only: the record and fence this connect read moments ago; skips the same pre-upload reads. */
   preRead?: { record: OrcadActivationRecord; fenceOpen: boolean }
+  /** WSL only: a same-version deploy skips its fence; the caller's wake re-checks under its own. */
+  sameVersionFencedByCaller?: boolean
   /** Recount under fence just before stopping the same incumbent; uploads may outdate initial counts and failures stay unverifiable. */
   recountCensus: () => Promise<OrcadTerminalCensus>
   /** Best-effort reopen when incumbent keeps serving; admission also expires server-side. */
@@ -64,6 +66,8 @@ export type OrcadDeployOptions = {
   readinessTimeoutMs?: number
   /** WSL only; SSH hosts always re-hash the runtime (see `installOrcadBundle`). */
   recordedNodeRuntimeProbe?: boolean
+  /** WSL only: bounded Node runtime downloads; SSH keeps the default timing. */
+  nodeRuntimeDownload?: NodeRuntimeDownloadBudget
   now?: () => Date
   sleep?: (ms: number) => Promise<void>
   signal?: AbortSignal
@@ -92,9 +96,7 @@ export async function deployOrcad(
       input.readinessTimeoutMs,
       ORCAD_STARTUP_READINESS_TIMEOUT_MS
     ),
-    nodeRuntimeArchive: () =>
-      materializeNodeRuntimeArchive(target, runtimeCacheRoot, { signal: input.signal }),
-    nodeRuntimeOfflineArchivePath: nodeRuntimeArchiveCachePath(target, runtimeCacheRoot),
+    ...orcadNodeRuntimeInstallOptions(target, runtimeCacheRoot, input),
     localOrcadDir:
       input.localOrcadDir ?? (await materializeOrcadArtifact(target, { signal: input.signal }))
   }
@@ -105,7 +107,13 @@ export async function deployOrcad(
     // Retry one cleared abandoned fence; repeated abandonment must surface to the caller.
     if (cleared && retryClearedFence) {
       return deployOrcad(
-        { ...input, preRead: undefined, target, localOrcadDir: options.localOrcadDir },
+        {
+          ...input,
+          preRead: undefined,
+          sameVersionFencedByCaller: undefined,
+          target,
+          localOrcadDir: options.localOrcadDir
+        },
         false
       )
     }
@@ -123,6 +131,9 @@ export async function deployOrcad(
   }
 
   await installOrcadBundle(options, fullVersion, remoteDir)
+  if (options.sameVersionFencedByCaller && preUploadRecord.active === fullVersion) {
+    return { outcome: 'already-active', fullVersion }
+  }
 
   return logOrcadActivationOutcome(
     `update to ${fullVersion}`,

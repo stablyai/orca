@@ -1,12 +1,12 @@
 import { rewindRefusal } from './structured-rewind-refusal'
-import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   agentSessionRefusalFromReference,
   readAgentSessionRefusalReference,
   refuse,
   type AgentSessionRefusalReference,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export type AgentSessionReplayOutcomeDecision<TValue> =
   | { decision: 'replay'; value: TValue }

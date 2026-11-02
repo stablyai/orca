@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { applyDocumentTheme } from '@/lib/document-theme'
+import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { track } from '@/lib/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -153,9 +154,13 @@ export function useOnboardingFlow(
   const [initialStartTime] = useState(() => Date.now())
   const startTimeRef = useRef<number>(initialStartTime)
 
-  // Unmount-only restoration needs the latest persisted theme without rerunning on settings changes.
-  const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
-  persistedThemeRef.current = settings?.theme ?? 'dark'
+  // Unmount-only restoration needs the latest painted theme without rerunning on settings changes;
+  // painted, because Match Terminal can paint the mode the setting doesn't ask for.
+  const paintedTheme = resolvePaintedTheme(settings, settings?.theme ?? 'dark')
+  const paintedThemeRef = useRef<GlobalSettings['theme']>(paintedTheme)
+  useEffect(() => {
+    paintedThemeRef.current = paintedTheme
+  }, [paintedTheme])
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
   const themeStepEntryCapturedRef = useRef(false)
   useEffect(() => {
@@ -171,9 +176,10 @@ export function useOnboardingFlow(
     themeStepEntryThemeRef.current = settings.theme
   }, [currentStep.id, settings])
 
+  const previewTheme = resolvePaintedTheme(settings, theme)
   useEffect(() => {
-    applyDocumentTheme(theme)
-  }, [theme])
+    applyDocumentTheme(previewTheme)
+  }, [previewTheme])
 
   useEffect(() => {
     void refreshPreflightStatus()
@@ -220,7 +226,7 @@ export function useOnboardingFlow(
     useOnboardingFlowTelemetry({
       remappedLastCompletedStep,
       currentStep,
-      persistedThemeRef,
+      paintedThemeRef,
       preflightStatus,
       preflightStatusLoading,
       linearStatus,

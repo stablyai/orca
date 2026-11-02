@@ -82,8 +82,10 @@ function findCaseInsensitiveMatchRanges(
   return matches
 }
 
-// Treat Unicode letters/digits/underscore as word characters, matching editor whole-word find boundaries.
-const WORD_CHARACTER = /[\p{L}\p{N}_]/u
+// Combining marks stay attached to their letters when checking whole-word boundaries.
+const WORD_CHARACTER = /[\p{L}\p{M}\p{N}_]/u
+const COMBINING_MARK = /\p{M}/u
+const ENCLOSING_MARK = /\p{Me}/u
 
 function isWordCharacter(char: string | undefined): boolean {
   return char !== undefined && WORD_CHARACTER.test(char)
@@ -113,10 +115,22 @@ function codePointAt(text: string, index: number): string | undefined {
   return codePoint === undefined ? undefined : String.fromCodePoint(codePoint)
 }
 
+// A leading mark belongs to the preceding base (emoji+VS16 stays a boundary); enclosing marks make a symbol (keycaps).
+function isWordGraphemeBefore(text: string, index: number): boolean {
+  let offset = index
+  let codePoint = codePointBefore(text, offset)
+  while (codePoint !== undefined && COMBINING_MARK.test(codePoint)) {
+    if (ENCLOSING_MARK.test(codePoint)) {
+      return false
+    }
+    offset -= codePoint.length
+    codePoint = codePointBefore(text, offset)
+  }
+  return isWordCharacter(codePoint)
+}
+
 function isWholeWordMatch(text: string, start: number, end: number): boolean {
-  const before = codePointBefore(text, start)
-  const after = codePointAt(text, end)
-  return !isWordCharacter(before) && !isWordCharacter(after)
+  return !isWordGraphemeBefore(text, start) && !isWordCharacter(codePointAt(text, end))
 }
 
 function buildLocaleLowercaseIndex(text: string): {

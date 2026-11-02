@@ -7,7 +7,7 @@ import {
 } from './pty-ipc-mock-registry'
 import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../../pty/windows-path-registry-reader'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-hook-relay-manager'

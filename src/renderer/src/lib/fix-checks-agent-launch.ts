@@ -54,6 +54,7 @@ type StartFixChecksAgentArgs = {
   launchSource: LaunchSource
   telemetrySource?: WorkspaceCreateTelemetrySource
   openModalFallback?: () => void
+  onSetupRequired?: () => void
 }
 
 type SavedAgentOverrideResult =
@@ -284,7 +285,7 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     return false
   }
 
-  return await launchWorkItemDirect({
+  const result = await launchWorkItemDirect({
     item: { ...args.item, pasteContent: prompt },
     repoId: args.repoId,
     agentLaunchPreferences,
@@ -295,7 +296,6 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     resolveAgentArgs: (agent) =>
       sourceControlActionAgentArgs(recipe(), agent, useAppStore.getState().settings),
     resolveSessionOptions: (agent) => resolveSourceControlActionSessionOptions(recipe(), agent),
-    sessionOptionsYieldToAgentArgs: recipe().launchPreferencesYieldToAgentArgs,
     ...(agentOverride.kind === 'agent'
       ? {
           agentOverride: agentOverride.agent,
@@ -307,6 +307,8 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
           }
         }
       : {}),
-    openModalFallback: args.openModalFallback
+    openModalFallback: args.openModalFallback,
+    onSetupRequired: args.onSetupRequired
   })
+  return result === true
 }

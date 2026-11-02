@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Use host elements to observe control labels and handlers without importing native runtime.
 vi.mock('react-native', () => ({
+  StyleSheet: { create: <T,>(styles: T) => styles },
   ActivityIndicator: (props: Record<string, unknown>) =>
     createElement('rn-activity-indicator', props),
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },

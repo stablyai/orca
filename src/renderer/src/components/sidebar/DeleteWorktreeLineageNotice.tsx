@@ -70,17 +70,14 @@ export function DeleteWorktreeLineageNotice({
             )}
           </div>
           <div className="mt-1 text-muted-foreground">
-            {childWorkspaceCount === 1
-              ? translate(
-                  'auto.components.sidebar.DeleteWorktreeLineageNotice.alsoDeletesChildren_one',
-                  'Deleting this workspace also deletes {{count}} child workspace.',
-                  { count: childWorkspaceCount }
-                )
-              : translate(
-                  'auto.components.sidebar.DeleteWorktreeLineageNotice.alsoDeletesChildren_other',
-                  'Deleting this workspace also deletes {{count}} child workspaces.',
-                  { count: childWorkspaceCount }
-                )}
+            {translate(
+              'auto.components.sidebar.DeleteWorktreeLineageNotice.alsoDeletesChildren',
+              'Deleting this workspace also deletes {{count}} child workspaces.',
+              {
+                count: childWorkspaceCount,
+                defaultValue_one: 'Deleting this workspace also deletes {{count}} child workspace.'
+              }
+            )}
             {foreignProjects.length > 0 ? ` (${foreignProjects.join(', ')})` : null}
           </div>
           {/* Constrain grid min-content width so nowrap paths cannot widen the modal. */}
@@ -109,17 +106,11 @@ export function DeleteWorktreeLineageNotice({
             ))}
             {descendants.length > 4 ? (
               <div className="text-muted-foreground">
-                {descendants.length - 4 === 1
-                  ? translate(
-                      'auto.components.sidebar.DeleteWorktreeLineageNotice.moreChildren_one',
-                      '+{{count}} more',
-                      { count: descendants.length - 4 }
-                    )
-                  : translate(
-                      'auto.components.sidebar.DeleteWorktreeLineageNotice.moreChildren_other',
-                      '+{{count}} more',
-                      { count: descendants.length - 4 }
-                    )}
+                {translate(
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.moreChildren',
+                  '+{{count}} more',
+                  { count: descendants.length - 4, defaultValue_one: '+{{count}} more' }
+                )}
               </div>
             ) : null}
           </div>

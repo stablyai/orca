@@ -12,7 +12,7 @@ import type {
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { ClaudeUsagePersistedState } from './types'
 import {
   scanClaudeUsageFilesViaWorker,

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n, setRendererPluginLanguagePacks } from '@/i18n/i18n'
 
-import { pluginLanguageResourceId } from '../../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 
 import {
   agentSessionWriteFailureText,
@@ -22,6 +22,7 @@ describe('desktop words for a write that did not happen', () => {
         id,
         resourceLanguage,
         pluginKey: 'example.older-french',
+        coverage: 100,
         locale: 'fr',
         catalog: {}
       }
@@ -62,7 +63,8 @@ describe('desktop words for a write that did not happen', () => {
               }
             }
           }
-        }
+        },
+        coverage: 100
       }
     ])
     await i18n.changeLanguage(pluginLanguageResourceId(id))

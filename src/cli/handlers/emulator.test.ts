@@ -83,7 +83,7 @@ describe('orca emulator CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith(
       'emulator.attach',
       { device: 'device-1', worktree: undefined, focus: false },
-      { timeoutMs: 180_000 }
+      { timeoutMs: 240_000 }
     )
   })
 
@@ -103,7 +103,7 @@ describe('orca emulator CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith(
       'emulator.attach',
       { device: 'device-1', worktree: 'folder:folder-1', focus: false },
-      { timeoutMs: 180_000 }
+      { timeoutMs: 240_000 }
     )
   })
 
@@ -123,7 +123,7 @@ describe('orca emulator CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith(
       'emulator.attach',
       { device: 'device-1', worktree: 'repo-1::/repo/project ', focus: false },
-      { timeoutMs: 180_000 }
+      { timeoutMs: 240_000 }
     )
   })
 

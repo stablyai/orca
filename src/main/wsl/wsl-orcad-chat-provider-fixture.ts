@@ -12,7 +12,7 @@ export type WslChatHost = {
 }
 
 export async function writeChatFixtureFile(
-  host: WslChatHost,
+  host: Pick<WslChatHost, 'guest'>,
   path: string,
   content: string
 ): Promise<void> {
@@ -28,7 +28,8 @@ export const WSL_CHAT_GUEST_BIN = 'orca-lane-chat-bin'
 const GUEST_CLI_FIXTURES = {
   claude: 'src/main/claude/__fixtures__/claude-agent-sdk-scripted-cli.mjs',
   codex: 'src/main/codex/__fixtures__/codex-app-server-scripted-cli.mjs',
-  grok: 'src/main/acp/__fixtures__/grok-acp-scripted-cli.mjs'
+  grok: 'src/main/acp/__fixtures__/grok-acp-scripted-cli.mjs',
+  opencode: 'src/main/acp/__fixtures__/opencode-acp-scripted-cli.mjs'
 } as const
 
 export type WslChatGuestAgent = keyof typeof GUEST_CLI_FIXTURES
@@ -37,37 +38,76 @@ export type WslGuestCli = { script: string; cli: string }
 
 /** Where a scripted provider reports its launch and waits for the test to see its partial reply. */
 export type WslScriptedProviderInstall = WslGuestCli & {
-  agent: 'codex' | 'grok'
+  agent: 'codex' | 'grok' | 'opencode'
   accountHome: string
   reportPath: string
   ackPath: string
+}
+
+type GuestCliPlace = { home: string; root: string; runtime: string }
+
+async function installGuestCli(
+  lane: Pick<WslChatHost, 'guest'>,
+  { home, root, runtime }: GuestCliPlace,
+  agent: WslChatGuestAgent
+): Promise<WslGuestCli> {
+  const script = `${root}/${agent}-scripted.mjs`
+  const cli = `${home}/${WSL_CHAT_GUEST_BIN}/${agent}`
+  await writeChatFixtureFile(lane, script, readFileSync(resolve(GUEST_CLI_FIXTURES[agent]), 'utf8'))
+  await writeChatFixtureFile(
+    lane,
+    cli,
+    `#!/bin/sh
+export ORCA_LANE_CLI_WRAPPER="$0"
+${
+  agent === 'claude'
+    ? `export ORCA_LANE_CLAUDE_WRAPPER="$0"
+previous=
+for argument in "$@"; do
+  if [ "$previous" = --output-format ] && [ "$argument" = text ]; then
+    cat > /dev/null
+    printf '%s\\n' 'WSL fixture title'
+    exit 0
+  fi
+  previous=$argument
+done
+`
+    : ''
+}exec ${quotePosixShell(runtime)} ${quotePosixShell(script)} "$@"\n`
+  )
+  await lane.guest(`chmod 700 ${quotePosixShell(cli)}`)
+  return { script, cli }
+}
+
+/** Puts one agent's command back after a step removed it, e.g. the Windows-decoy probe. */
+export async function reinstallWslGuestCli(
+  lane: WslChatHost,
+  agent: WslChatGuestAgent
+): Promise<GuestCliPlace & WslGuestCli> {
+  const home = (await lane.guest('printf %s "$HOME"')).trim()
+  const runtime = (await lane.guest(`readlink -f /proc/${lane.runtimePid}/exe`)).trim()
+  const place = { home, root: `${home}/wsl chat fixture`, runtime }
+  return { ...place, ...(await installGuestCli(lane, place, agent)) }
 }
 
 /** Install each wire fixture as its agent's command on the guest's login PATH, run by the guest's packaged runtime. */
 export async function installWslChatFixture(lane: WslChatHost) {
   const home = (await lane.guest('printf %s "$HOME"')).trim()
   const root = `${home}/wsl chat fixture`
-  const dirs = [`${root}/codex-home`, `${root}/grok-home`, `${home}/${WSL_CHAT_GUEST_BIN}`]
+  const dirs = [
+    `${root}/codex-home`,
+    `${root}/grok-home`,
+    `${root}/opencode-home`,
+    `${home}/${WSL_CHAT_GUEST_BIN}`
+  ]
   await lane.guest(`mkdir -p ${dirs.map(quotePosixShell).join(' ')}`)
   const runtime = (await lane.guest(`readlink -f /proc/${lane.runtimePid}/exe`)).trim()
-  const installCli = async (agent: WslChatGuestAgent): Promise<WslGuestCli> => {
-    const script = `${root}/${agent}-scripted.mjs`
-    const cli = `${home}/${WSL_CHAT_GUEST_BIN}/${agent}`
-    await writeChatFixtureFile(
-      lane,
-      script,
-      readFileSync(resolve(GUEST_CLI_FIXTURES[agent]), 'utf8')
-    )
-    await writeChatFixtureFile(
-      lane,
-      cli,
-      `#!/bin/sh\nexport ORCA_LANE_CLI_WRAPPER="$0"\nexec ${quotePosixShell(runtime)} ${quotePosixShell(script)} "$@"\n`
-    )
-    await lane.guest(`chmod 700 ${quotePosixShell(cli)}`)
-    return { script, cli }
-  }
+  const installCli = (agent: WslChatGuestAgent) =>
+    installGuestCli(lane, { home, root, runtime }, agent)
   const claude = await installCli('claude')
-  const scripted = async (agent: 'codex' | 'grok'): Promise<WslScriptedProviderInstall> => ({
+  const scripted = async (
+    agent: WslScriptedProviderInstall['agent']
+  ): Promise<WslScriptedProviderInstall> => ({
     ...(await installCli(agent)),
     agent,
     accountHome: `${root}/${agent}-home`,
@@ -76,6 +116,7 @@ export async function installWslChatFixture(lane: WslChatHost) {
   })
   const codex = await scripted('codex')
   const grok = await scripted('grok')
+  const opencode = await scripted('opencode')
   // No Command setting: orcad must find each CLI the way a user's install is found.
   await lane.rpc('settings.update', {
     nativeChatPermissionMode: 'ask',
@@ -83,6 +124,7 @@ export async function installWslChatFixture(lane: WslChatHost) {
       claude: {
         ORCA_SDK_CONTRACT_SCENARIO_PATH: `${root}/scenario.json`,
         ORCA_SDK_CONTRACT_REPORT_PATH: `${root}/report.json`,
+        ORCA_SDK_CONTRACT_REPORT_LOG_PATH: `${root}/report-log.jsonl`,
         ORCA_SDK_CONTRACT_TIMEOUT_MS: '120000'
       },
       codex: {
@@ -94,6 +136,12 @@ export async function installWslChatFixture(lane: WslChatHost) {
         GROK_HOME: grok.accountHome,
         ORCA_ACP_CONTRACT_REPORT_PATH: grok.reportPath,
         ORCA_ACP_CONTRACT_ACK_PATH: grok.ackPath
+      },
+      // An unmanaged OpenCode account keeps the user's own data dir, set here like a user's env.
+      opencode: {
+        XDG_DATA_HOME: opencode.accountHome,
+        ORCA_ACP_CONTRACT_REPORT_PATH: opencode.reportPath,
+        ORCA_ACP_CONTRACT_ACK_PATH: opencode.ackPath
       }
     }
   })
@@ -113,6 +161,7 @@ export async function installWslChatFixture(lane: WslChatHost) {
     ...claude,
     codex,
     grok,
+    opencode,
     folderPath,
     folderWorktree: folderWorkspaceKey(folder.folderWorkspace.id)
   }
@@ -130,9 +179,82 @@ export const WslChatProviderReport = z.object({
 
 const PROVIDER_REPORT_TIMEOUT_MS = 30_000
 
+/**
+ * Every report any launch of the scripted Claude wrote, oldest first. A launch after the one under
+ * test (model discovery after a restart) overwrites the single report file, so read the log.
+ */
+async function readProviderReportLog(
+  host: Pick<WslChatHost, 'guest'>,
+  logPath: string
+): Promise<string[]> {
+  return (await host.guest(`cat ${quotePosixShell(logPath)} 2>/dev/null || true`))
+    .split('\n')
+    .filter(Boolean)
+}
+
+/** Lines already logged, so a later wait can skip launches from before an action. */
+export async function providerReportLogLength(
+  host: Pick<WslChatHost, 'guest'>,
+  logPath: string
+): Promise<number> {
+  return (await readProviderReportLog(host, logPath)).length
+}
+
+export async function waitForProviderReportInLog<T>(
+  host: Pick<WslChatHost, 'guest'>,
+  logPath: string,
+  schema: z.ZodType<T>,
+  settled: (report: T) => boolean,
+  awaiting: string,
+  afterLine = 0
+): Promise<T> {
+  let seen: string[] = []
+  try {
+    return await vi.waitFor(
+      async () => {
+        const lines = await readProviderReportLog(host, logPath)
+        seen = lines.map((line, index) => `${index}: ${summarizeReportLine(line)}`)
+        // A line being appended can be torn; skip what does not parse.
+        const found = lines
+          .slice(afterLine)
+          .map((line) => schema.safeParse(safeJson(line)))
+          .find((parsed) => parsed.success && settled(parsed.data))
+        if (!found?.success) {
+          throw new Error(`no report in the log shows ${awaiting} yet`)
+        }
+        return found.data
+      },
+      { timeout: PROVIDER_REPORT_TIMEOUT_MS, interval: 250 }
+    )
+  } catch (error) {
+    throw new Error(
+      `Provider report log ${logPath} did not show ${awaiting} within ${PROVIDER_REPORT_TIMEOUT_MS} ms; launches logged:\n${seen.join('\n')}`,
+      { cause: error }
+    )
+  }
+}
+
+// Each launch's argv and user-message count; env is noise when telling launches apart.
+function summarizeReportLine(line: string): string {
+  const parsed = z
+    .object({ argv: z.array(z.string()), userMessages: z.array(z.unknown()) })
+    .safeParse(safeJson(line))
+  return parsed.success
+    ? `${parsed.data.userMessages.length} user message(s): ${parsed.data.argv.join(' ')}`
+    : `unparsed: ${line.slice(0, 200)}`
+}
+
+function safeJson(line: string): unknown {
+  try {
+    return JSON.parse(line)
+  } catch {
+    return null
+  }
+}
+
 /** Scripted providers rewrite their report in place after each act, so one read can see a torn file or a stale one. */
 export async function waitForProviderReport<T>(
-  host: WslChatHost,
+  host: Pick<WslChatHost, 'guest'>,
   path: string,
   schema: z.ZodType<T>,
   settled: (report: T) => boolean,

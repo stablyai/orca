@@ -14,28 +14,16 @@ export function reportTerminalDropUploadSkipsAndFailures(
     const allSymlinks = skipped.every((item) => item.reason === 'symlink')
     toast.message(
       allSymlinks
-        ? skipped.length === 1
-          ? translate(
-              'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinks_one',
-              'Skipped {{count}} symlink.',
-              { count: skipped.length }
-            )
-          : translate(
-              'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinks_other',
-              'Skipped {{count}} symlinks.',
-              { count: skipped.length }
-            )
-        : skipped.length === 1
-          ? translate(
-              'auto.components.terminal.pane.terminal.drop.handler.skippedItems_one',
-              'Skipped {{count}} item.',
-              { count: skipped.length }
-            )
-          : translate(
-              'auto.components.terminal.pane.terminal.drop.handler.skippedItems_other',
-              'Skipped {{count}} items.',
-              { count: skipped.length }
-            ),
+        ? translate(
+            'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinks',
+            'Skipped {{count}} symlinks.',
+            { count: skipped.length, defaultValue_one: 'Skipped {{count}} symlink.' }
+          )
+        : translate(
+            'auto.components.terminal.pane.terminal.drop.handler.skippedItems',
+            'Skipped {{count}} items.',
+            { count: skipped.length, defaultValue_one: 'Skipped {{count}} item.' }
+          ),
       {
         description: allSymlinks ? undefined : describeSharedDropSkipReason(skipped)
       }
@@ -43,17 +31,11 @@ export function reportTerminalDropUploadSkipsAndFailures(
   }
   if (failed.length > 0) {
     toast.error(
-      failed.length === 1
-        ? translate(
-            'auto.components.terminal.pane.terminal.drop.handler.failedUploads_one',
-            'Failed to upload {{count}} file.',
-            { count: failed.length }
-          )
-        : translate(
-            'auto.components.terminal.pane.terminal.drop.handler.failedUploads_other',
-            'Failed to upload {{count}} files.',
-            { count: failed.length }
-          ),
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.failedUploads',
+        'Failed to upload {{count}} files.',
+        { count: failed.length, defaultValue_one: 'Failed to upload {{count}} file.' }
+      ),
       { description: describeSharedDropFailureReason(failed) }
     )
   }

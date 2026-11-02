@@ -56,6 +56,8 @@ export function fakePorts(overrides: Partial<WslMoveOrchestratorPorts> = {}): Fa
     now: () => clock.now,
     appVersion: '1.0.0',
     autoMoveEnabled: () => true,
+    // The orchestrator's own moves are Stage 2 behaviour, which these tests drive.
+    autoMovesBridgeProjects: () => true,
     prepareHost: vi.fn(async () => 'ready' as const),
     isHostReady: vi.fn(() => true),
     hostRemovalPending: vi.fn(() => false),

@@ -38,6 +38,7 @@ it('persists only phone-specific delivery preferences', async () => {
   expect(await loadNotificationDeliveryPreferences()).toEqual(value)
   expect(notificationPreferencesFilter(value)).toEqual({
     onlyWhenDesktopAway: false,
+    onlyWhenAgentNeedsInput: false,
     sound: false
   })
 })
@@ -54,11 +55,13 @@ it('ignores unrelated stored preferences', async () => {
   )
   expect(await loadNotificationDeliveryPreferences()).toEqual({
     onlyWhenDesktopAway: false,
+    onlyWhenAgentNeedsInput: false,
     sound: false,
     suppressWhileViewing: false
   })
   expect(notificationPreferencesFilter(await loadNotificationDeliveryPreferences())).toEqual({
     onlyWhenDesktopAway: false,
+    onlyWhenAgentNeedsInput: false,
     sound: false
   })
 })

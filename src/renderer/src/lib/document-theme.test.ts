@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { parsePluginAppThemeArtifact } from '../../../shared/plugins/plugin-theme-artifact'
 import {
   applyCachedPluginAppTheme,
   applyDocumentTheme,
@@ -169,21 +168,6 @@ describe('applyPluginAppTheme', () => {
     const [r = 0, g = 0, b = 0] = match.slice(1, 4).map((hex) => Number.parseInt(hex, 16))
     return [r, g, b, Number.parseInt(match[4] ?? 'ff', 16) / 255] as const
   }
-  // Like the browser, resolves color-mix(in srgb, A N%, B) for derived tokens.
-  const mixingProbe = (value: string) => {
-    const mix = /^color-mix\(in srgb, (#[0-9a-f]{6}) (\d+)%, (#[0-9a-f]{6})\)$/i.exec(value)
-    if (!mix) {
-      return probe(value)
-    }
-    const a = probe(mix[1] ?? '')
-    const b = probe(mix[3] ?? '')
-    const weight = Number(mix[2]) / 100
-    if (!a || !b) {
-      return null
-    }
-    const channel = (i: number) => (a[i] ?? 0) * weight + (b[i] ?? 0) * (1 - weight)
-    return [channel(0), channel(1), channel(2), 1] as const
-  }
   // Orca's dark built-ins, as the document would report them.
   const darkBuiltIns = () => ({
     '--background': '#0a0a0a',
@@ -260,6 +244,67 @@ describe('applyPluginAppTheme', () => {
     })
   })
 
+  it('drops only the status or link color that fails, never the shared surface', () => {
+    const sidebar = { '--sidebar': '#202020', '--sidebar-foreground': '#ffffff' }
+    expect(
+      painted({
+        ...sidebar,
+        '--git-decoration-ignored': '#303030',
+        '--git-decoration-added': '#4ec95a'
+      })
+    ).toEqual({ ...sidebar, '--git-decoration-added': '#4ec95a' })
+    expect(painted({ '--editor-surface': '#151515', '--text-link': '#1a1a40' })).toEqual({
+      '--editor-surface': '#151515'
+    })
+  })
+
+  it('checks a translucent row as painted over the sidebar it tints', () => {
+    const sidebar = { '--worktree-sidebar': '#202020', '--worktree-sidebar-foreground': '#f0f0f0' }
+    expect(painted({ ...sidebar, '--worktree-sidebar-active': '#ffffff1a' })).toEqual({
+      ...sidebar,
+      '--worktree-sidebar-active': '#ffffff1a'
+    })
+    expect(painted({ ...sidebar, '--worktree-sidebar-active': '#ffffffd0' })).toEqual(sidebar)
+  })
+
+  it('checks half of a pair against what main.css paints for the other half', () => {
+    // The badge text falls back to --muted-foreground, which this badge would hide.
+    expect(painted({ '--accent': '#303030', '--host-badge': '#a1a1a1' })).toEqual({
+      '--accent': '#303030'
+    })
+    // The inactive tab follows --card, so its text is checked on the theme's card.
+    expect(painted({ '--card': '#202020', '--tab-inactive-foreground': '#262626' })).toEqual({
+      '--card': '#202020'
+    })
+  })
+
+  it('checks omitted surfaces as main.css paints them in this mode', () => {
+    // A bright hue makes its 20% added-line tint unreadable, so the hue itself is dropped.
+    const dim = {
+      '--background': '#333333',
+      '--editor-surface': '#333333',
+      '--foreground': '#cccccc'
+    }
+    expect(painted({ ...dim, '--diff-added': '#ffffff' })).toEqual(dim)
+    // A tint the theme set itself takes the blame alone.
+    expect(
+      painted({ ...dim, '--diff-added': '#3ddc84', '--diff-added-background': '#ffffff' })
+    ).toEqual({ ...dim, '--diff-added': '#3ddc84' })
+    // Bubble text is chat's mixed foreground, not raw --foreground.
+    const black = { '--background': '#000000', '--foreground': '#ffffff' }
+    expect(painted({ ...black, '--chat-user-message': '#727272' })).toEqual(black)
+    // Dark badges paint --accent at 80%.
+    const sidebar = { '--worktree-sidebar': '#000000', '--worktree-sidebar-foreground': '#ffffff' }
+    expect(
+      painted({
+        ...sidebar,
+        '--accent': '#ffffff',
+        '--accent-foreground': '#000000',
+        '--host-badge-foreground': '#767676'
+      })
+    ).toEqual({ ...sidebar, '--accent': '#ffffff', '--accent-foreground': '#000000' })
+  })
+
   it('keeps the startup cache tied to the theme id and revision until cleared', () => {
     const storage = memoryStorage()
     applyPluginAppTheme(theme({ '--background': '#101018' }), { ...options(), storage })
@@ -278,20 +323,5 @@ describe('applyPluginAppTheme', () => {
 
     applyPluginAppTheme(null, { ...options(), storage })
     expect(readCachedPluginAppTheme(storage)).toBeNull()
-  })
-
-  it('paints a minimal two-token theme with readable derived muted text, borders and accents', () => {
-    const { tokens } = parsePluginAppThemeArtifact(
-      JSON.stringify({
-        base: 'dark',
-        tokens: { '--background': '#1b1430', '--foreground': '#e8e0ff' }
-      })
-    )
-    const root = fakeRoot()
-    applyPluginAppTheme(theme(tokens), { ...options(root), probe: mixingProbe })
-    for (const token of ['--muted-foreground', '--border', '--accent', '--sidebar-accent']) {
-      expect(root.properties.get(token)).toMatch(/^color-mix/)
-    }
-    expect(root.properties.get('--background')).toBe('#1b1430')
   })
 })

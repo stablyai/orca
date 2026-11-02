@@ -7,6 +7,7 @@ import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
+import type { TerminalLiveInputFailure } from './terminal-live-pending-flush-state'
 import {
   readLiveInputSelection,
   useTerminalLiveAccessoryInputCommit,
@@ -36,6 +37,8 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabType: TTabType | null | undefined
   readonly activeSessionTabTypeRef: RefObject<TTabType | null>
+  readonly framesLivePaste?: (handle: string) => boolean
+  readonly onSendFailure?: (failure: TerminalLiveInputFailure) => void
   readonly connected: boolean
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
@@ -62,6 +65,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   activeHandleRef,
   activeSessionTabType,
   activeSessionTabTypeRef,
+  framesLivePaste,
+  onSendFailure,
   connected,
   liveInputRef,
   liveInputTerminalHandles,
@@ -87,6 +92,13 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   const advanceLiveInputInteractionGeneration = useCallback(() => {
     liveInputInteractionGenerationRef.current += 1
   }, [])
+  // Drop the cleared field's late native echo of whatever session just ended.
+  const recordEndedSession = useCallback((handle: string) => {
+    const fieldText = liveInputTextRef.current
+    if (fieldText.length > 0) {
+      endedSessionTextRef.current = { handle, text: fieldText, at: Date.now() }
+    }
+  }, [])
   const {
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
@@ -101,8 +113,11 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   } = useTerminalLivePendingInputFlush({
     activeHandleRef,
     activeSessionTabTypeRef,
+    framesLivePaste,
     liveInputRef,
     liveInputTerminalHandlesRef,
+    onFieldSessionEnded: recordEndedSession,
+    onSendFailure,
     sendLiveTerminalInputRef,
     setLiveInputCapture: updateLiveInputCapture
   })
@@ -153,15 +168,18 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   )
 
   // Clicks, Return and held-text controls leave the mirror’s assumed field; start a new editing session.
-  const endFieldSessionThenSend = useCallback(
-    (handle: string, bytes: string): Promise<boolean> => {
+  const endFieldSessionThenSend = useCallback<TerminalLiveInputSender>(
+    (handle, bytes, origin) => {
       advanceLiveInputInteractionGeneration()
-      const fieldText = liveInputTextRef.current
-      endedSessionTextRef.current =
-        fieldText.length > 0 ? { handle, text: fieldText, at: Date.now() } : null
-      return endLiveInputSessionThenSend(handle, bytes)
+      recordEndedSession(handle)
+      return endLiveInputSessionThenSend(handle, bytes, origin)
     },
-    [advanceLiveInputInteractionGeneration, endLiveInputSessionThenSend]
+    [advanceLiveInputInteractionGeneration, endLiveInputSessionThenSend, recordEndedSession]
+  )
+
+  const sendLiveInputClick = useCallback(
+    (handle: string, bytes: string) => endFieldSessionThenSend(handle, bytes, 'pointer'),
+    [endFieldSessionThenSend]
   )
 
   // Ignore the cleared field’s native echo or it would retype old text at the new cursor.
@@ -305,6 +323,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     handleLiveInputChange,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
-    sendLiveInputClick: endFieldSessionThenSend
+    sendLiveInputClick
   }
 }

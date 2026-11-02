@@ -36,9 +36,11 @@ import {
 } from '../../../shared/node-bounded-file-reader'
 import { isBinaryBuffer } from '../../../shared/binary-buffer'
 import type {
-  DocPreviewFileAccessRequest,
-  DocPreviewFileAccessResult
+  DocPreviewFileAccessResult,
+  DocPreviewFileChunk,
+  DocPreviewFileTarget
 } from '../../../shared/doc-preview-file-access'
+import type { LocalFilesystemProvider } from '../../providers/local-filesystem-provider'
 
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
 
@@ -90,12 +92,7 @@ export class RuntimeFileReads {
     )
     if (mimeType) {
       return assertPreviewWithinTransportBudget(
-        {
-          content: buffer.toString('base64'),
-          isBinary: true,
-          isImage: true,
-          mimeType
-        },
+        { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
         maxContentBytes
       )
     }
@@ -117,6 +114,52 @@ export class RuntimeFileReads {
     authorizedRootRelativePaths: string[],
     maxContentBytes?: number
   ): Promise<DocPreviewFileAccessResult> {
+    const { target, provider } = await this.resolveDocPreviewTarget(
+      worktreeSelector,
+      relativePath,
+      entryRelativePath,
+      implicitRootRelativePath,
+      authorizedRootRelativePaths
+    )
+    if (!provider.readDocPreviewFile) {
+      throw new Error('Secure document previews require a newer SSH relay')
+    }
+    return assertPreviewWithinTransportBudget(
+      await provider.readDocPreviewFile({
+        ...target,
+        maxTextBytes: MOBILE_FILE_READ_MAX_BYTES,
+        maxBinaryBytes: binaryPreviewMaxBytes(maxContentBytes)
+      }),
+      maxContentBytes
+    )
+  }
+
+  async readDocPreviewChunk(
+    worktreeSelector: string,
+    relativePath: string,
+    entryRelativePath: string,
+    implicitRootRelativePath: string | null,
+    authorizedRootRelativePaths: string[],
+    offset: number,
+    length: number
+  ): Promise<DocPreviewFileChunk> {
+    const { target, provider } = await this.resolveDocPreviewTarget(
+      worktreeSelector,
+      relativePath,
+      entryRelativePath,
+      implicitRootRelativePath,
+      authorizedRootRelativePaths
+    )
+    return provider.readDocPreviewFileChunk(target, offset, length)
+  }
+
+  private async resolveDocPreviewTarget(
+    worktreeSelector: string,
+    relativePath: string,
+    entryRelativePath: string,
+    implicitRootRelativePath: string | null,
+    authorizedRootRelativePaths: string[]
+  ): Promise<{ target: DocPreviewFileTarget; provider: LocalFilesystemProvider }> {
     const relativePaths = [
       '',
       entryRelativePath,
@@ -131,23 +174,16 @@ export class RuntimeFileReads {
     )
     const implicitRoot = implicitRootRelativePath === null ? null : authorityRoots[0]
     const authorizedRoots = authorityRoots.slice(implicitRoot === null ? 0 : 1)
-    const request: DocPreviewFileAccessRequest = {
-      boundaryPath: boundary.path,
-      entryPath: entry.path,
-      implicitRootPath: implicitRoot?.path ?? null,
-      authorizedRootPaths: authorizedRoots.map((root) => root.path),
-      targetPath: target.path,
-      maxTextBytes: MOBILE_FILE_READ_MAX_BYTES,
-      maxBinaryBytes: binaryPreviewMaxBytes(maxContentBytes)
+    return {
+      target: {
+        boundaryPath: boundary.path,
+        entryPath: entry.path,
+        implicitRootPath: implicitRoot?.path ?? null,
+        authorizedRootPaths: authorizedRoots.map((root) => root.path),
+        targetPath: target.path
+      },
+      provider: requireRuntimeFileProvider(target, this.host)
     }
-    const provider = requireRuntimeFileProvider(target, this.host)
-    if (!provider.readDocPreviewFile) {
-      throw new Error('Secure document previews require a newer SSH relay')
-    }
-    return assertPreviewWithinTransportBudget(
-      await provider.readDocPreviewFile(request),
-      maxContentBytes
-    )
   }
 
   async readFileExplorerChunk(

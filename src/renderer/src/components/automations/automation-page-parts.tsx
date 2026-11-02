@@ -4,20 +4,21 @@ import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { translate } from '@/i18n/i18n'
 import { formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 // Reuse one formatter across run cells; per-cell construction dominates large-history rendering.
-const automationDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+const AUTOMATION_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit'
-})
+}
 
 export function formatAutomationDateTime(value: number | null | undefined): string {
   if (!value) {
     return translate('auto.components.automations.automationPageParts.never', 'Never')
   }
-  return automationDateTimeFormatter.format(value)
+  return uiDateTimeFormat(AUTOMATION_DATE_TIME_OPTIONS).format(value)
 }
 
 export function formatAutomationRelativeTime(

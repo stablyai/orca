@@ -4,6 +4,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
+import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
+import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import { useAppStore } from '../../store'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -11,6 +13,7 @@ import { ShortcutHintList } from './AppearanceShortcutHintList'
 import { FontAutocomplete, SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import {
+  getCodeEditorThemeEntries,
   getLanguageEntries,
   getMenuBarIconEntries,
   getSystemTrayEntries,
@@ -27,8 +30,14 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
-import { AppearanceThemeControl } from './AppearanceThemeControl'
+import {
+  AppearanceThemeControl,
+  AppearanceThemeSlotSelect,
+  CodeEditorThemeSelect
+} from './AppearanceThemeControl'
+import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -53,6 +62,46 @@ export function AppearanceInterfaceSection({
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const pluginLanguagePacks = usePluginLanguagePacks()
+  const pluginIconThemes = usePluginIconThemes()
+  const themeSlots = [
+    {
+      base: 'light' as const,
+      title: translate(
+        'auto.components.settings.AppearanceInterfaceSection.lightTheme',
+        'Light theme'
+      )
+    },
+    {
+      base: 'dark' as const,
+      title: translate(
+        'auto.components.settings.AppearanceInterfaceSection.darkTheme',
+        'Dark theme'
+      )
+    }
+  ]
+  const editorThemeEntry = getCodeEditorThemeEntries()[0]
+  const editorThemeSlots = [
+    {
+      base: 'light' as const,
+      title: translate('settings.appearance.editorTheme.light', 'Light editor theme'),
+      description: translate(
+        'settings.appearance.editorTheme.lightDescription',
+        'Code editor, diff and notebook colors while the app is light.'
+      )
+    },
+    {
+      base: 'dark' as const,
+      title: translate('settings.appearance.editorTheme.dark', 'Dark editor theme'),
+      description: translate(
+        'settings.appearance.editorTheme.darkDescription',
+        'Code editor, diff and notebook colors while the app is dark.'
+      )
+    }
+  ]
+  const iconThemeTitle = translate(
+    'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
+    'Icon theme'
+  )
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
@@ -64,8 +113,10 @@ export function AppearanceInterfaceSection({
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
+  const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
+    ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
@@ -92,6 +143,110 @@ export function AppearanceInterfaceSection({
           }
         />
       </SearchableSetting>
+
+      {themeSlots.map((slot) => (
+        <SearchableSetting
+          key={slot.base}
+          title={slot.title}
+          description={translate(
+            'auto.components.settings.AppearanceInterfaceSection.themeSlot.description',
+            'App colors for this mode.'
+          )}
+          keywords={[
+            'plugin',
+            'theme',
+            'terminal',
+            slot.base,
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.matchTerminal',
+              'match terminal'
+            )
+          ]}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={slot.title}
+            control={
+              <AppearanceThemeSlotSelect
+                base={slot.base}
+                label={slot.title}
+                settings={settings}
+                updateSettings={updateSettings}
+              />
+            }
+          />
+        </SearchableSetting>
+      ))}
+
+      {editorThemeSlots.map((slot) => (
+        <SearchableSetting
+          key={slot.base}
+          title={slot.title}
+          description={editorThemeEntry?.description}
+          keywords={editorThemeEntry?.keywords ?? []}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={slot.title}
+            description={slot.description}
+            control={
+              <CodeEditorThemeSelect
+                base={slot.base}
+                label={slot.title}
+                settings={settings}
+                updateSettings={updateSettings}
+              />
+            }
+          />
+        </SearchableSetting>
+      ))}
+
+      {pluginIconThemes.length > 0 ? (
+        <SearchableSetting
+          title={iconThemeTitle}
+          description={translate(
+            'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.description',
+            'File and folder icons from an enabled plugin.'
+          )}
+          keywords={['plugin', 'icon', 'file', 'folder']}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={iconThemeTitle}
+            control={
+              <Select
+                value={
+                  pluginIconThemes.find((theme) => theme.id === settings.pluginIconTheme)?.id ??
+                  'built-in'
+                }
+                onValueChange={(value) =>
+                  updateSettings({
+                    pluginIconTheme:
+                      pluginIconThemes.find((theme) => theme.id === value)?.id ?? null
+                  })
+                }
+              >
+                <SelectTrigger size="sm" className="min-w-[220px]" aria-label={iconThemeTitle}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="built-in">
+                    {translate(
+                      'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
+                      'Built-in'
+                    )}
+                  </SelectItem>
+                  {pluginIconThemes.map((theme) => (
+                    <SelectItem key={theme.id} value={theme.id}>
+                      {theme.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
+        </SearchableSetting>
+      ) : null}
 
       {SHOW_UI_LANGUAGE_SETTING ? (
         <SearchableSetting
@@ -195,6 +350,12 @@ export function AppearanceInterfaceSection({
                 }
               />
             </SearchableSetting>
+
+            <ReduceVisualEffectsSetting
+              entry={reduceVisualEffectsEntry}
+              enabled={settings.reduceVisualEffects === true}
+              updateSettings={updateSettings}
+            />
 
             {isDesktopWindows ? (
               <SearchableSetting

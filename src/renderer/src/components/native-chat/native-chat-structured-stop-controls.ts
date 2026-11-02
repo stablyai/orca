@@ -17,7 +17,7 @@ export function nativeChatStructuredStopControls(
     isWorking: boolean
     isStopping: boolean
     onStop: (() => void) | undefined
-    steerQueued: (() => boolean) | undefined
+    steerHead: (() => boolean) | undefined
     afterStop: NativeChatAfterStopSend | undefined
   }
 } {
@@ -35,7 +35,7 @@ export function nativeChatStructuredStopControls(
       isWorking: controller.canStop || controller.queueSendsNext,
       isStopping: stopInFlight,
       onStop: controller.canStop ? () => void (stopInFlight || controller.stop()) : undefined,
-      steerQueued: stopping ? undefined : controller.queuedMessages.steerNewest,
+      steerHead: stopping ? undefined : controller.queuedMessages.steerHead,
       afterStop: stopping ? (controller.sendsQueue ? 'queue' : 'send') : undefined
     }
   }

@@ -7,7 +7,7 @@ import type {
 } from '../../../preload/api-types'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { useAppStore } from '@/store'
-import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
+import { usePluginLanguagePackStore, usePluginLanguagePacks } from '@/store/plugin-language-packs'
 import { translate } from '@/i18n/i18n'
 import { track } from '@/lib/telemetry'
 import { resolveUiLocale } from '@/i18n/supported-languages'
@@ -26,7 +26,7 @@ export function useMacTccAttributionSeveredNotice(): void {
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const uiLanguage = useAppStore((s) => s.settings?.uiLanguage ?? null)
-  const pluginLanguagePacks = usePluginLanguagePackStore((s) => s.entries)
+  const pluginLanguagePacks = usePluginLanguagePacks()
   const pluginLanguagePacksLoaded = usePluginLanguagePackStore((s) => s.loaded)
   const { i18n } = useTranslation()
   const selectedPluginLanguage = pluginLanguagePacks.find((pack) => pack.id === uiLanguage)

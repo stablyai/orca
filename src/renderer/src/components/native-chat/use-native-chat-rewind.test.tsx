@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
-import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session-rewind'
-import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/structured-agent-session-reducer'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/agent-session/structured-agent-session-reducer'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NATIVE_CHAT_REWIND_RESET_TIMEOUT_MS, useNativeChatRewind } from './use-native-chat-rewind'
 import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
 import {
@@ -20,7 +20,7 @@ import {
 import {
   parseAgentSessionWriteFailure,
   type AgentSessionWriteFailure
-} from '../../../../shared/agent-session-write-failure'
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
 
 type Input = Parameters<typeof useNativeChatRewind>[0]

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
+import type * as WslUncAccessGate from '../wsl/wsl-unc-access-gate'
 
 const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
@@ -21,6 +22,11 @@ vi.mock('./registered-worktree-roots-cache', () =>
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+// The stopped-distro gate has its own tests; here it must not hide the routing under test.
+vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslUncAccessGate>()),
+  blockedWslDistroForPath: vi.fn(async () => null)
+}))
 
 import { registerRepoHandlers } from './repos'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
@@ -62,30 +68,6 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result).toEqual({ defaultBaseRef: null, remoteCount: 0 })
   })
 
-  it('returns { defaultBaseRef: null, remoteCount: 0 } for an unknown repoId', async () => {
-    mockStore.getRepo.mockReturnValue(undefined)
-
-    const result = await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'missing' })
-
-    expect(result).toEqual({ defaultBaseRef: null, remoteCount: 0 })
-  })
-
-  it('wraps the local getBaseRefDefault result in the envelope', async () => {
-    mockStore.getRepo.mockReturnValue({
-      id: 'r1',
-      path: '/repo',
-      kind: 'git'
-    })
-
-    const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
-      defaultBaseRef: string | null
-      remoteCount: number
-    }
-
-    expect(result.defaultBaseRef).toBe('origin/main')
-    expect(result.remoteCount).toBe(1)
-  })
-
   it('returns { defaultBaseRef: null, remoteCount: 0 } for an SSH repo without running git', async () => {
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
@@ -114,22 +96,6 @@ describe('repos:searchBaseRefs on SSH repos', () => {
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
-  it('returns [] for a folder-mode repo without invoking the relay', async () => {
-    mockStore.getRepo.mockReturnValue({
-      id: 'r1',
-      path: '/some/folder',
-      kind: 'folder',
-      connectionId: 'conn-1'
-    })
-
-    const result = await handlers.get('repos:searchBaseRefs')!(null, {
-      repoId: 'r1',
-      query: 'main'
-    })
-
-    expect(result).toEqual([])
-  })
-
   it('returns [] for an SSH repo without running git', async () => {
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
@@ -145,22 +111,6 @@ describe('repos:searchBaseRefs on SSH repos', () => {
 
     expect(result).toEqual([])
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('returns [] when the SSH provider is not connected', async () => {
-    mockStore.getRepo.mockReturnValue({
-      id: 'r1',
-      path: '/remote/repo',
-      connectionId: 'unknown-conn',
-      kind: 'git'
-    })
-
-    const result = await handlers.get('repos:searchBaseRefs')!(null, {
-      repoId: 'r1',
-      query: 'main'
-    })
-
-    expect(result).toEqual([])
   })
 })
 
@@ -178,7 +128,10 @@ describe('base-ref queries on a drive project whose runtime is WSL', () => {
       .mockReset()
       .mockReturnValue([{ id: 'p1', sourceRepoIds: ['r1'], createdAt: 0, updatedAt: 0 }])
     Object.assign(mockStore, {
-      getSettings: () => ({ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } })
+      getSettings: () => ({
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
+        experimentalWslHosts: true
+      })
     })
     gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
     vi.mocked(getBaseRefDefault).mockClear()

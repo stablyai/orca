@@ -56,8 +56,10 @@ export class HydrationRuntime extends OrcaRuntimeService {
 
 const runtimes: HydrationRuntime[] = []
 
-export function createHydrationRuntime(): HydrationRuntime {
-  const runtime = new HydrationRuntime(store)
+export function createHydrationRuntime(
+  deps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
+): HydrationRuntime {
+  const runtime = new HydrationRuntime(store, undefined, deps)
   syncSinglePty(runtime, PTY_ID)
   runtimes.push(runtime)
   return runtime

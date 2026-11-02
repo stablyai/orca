@@ -1,3 +1,4 @@
+import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
@@ -23,7 +24,7 @@ import type { RpcCallerIdentity } from './rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './rpc-binary-sender'
 import type { RpcMethodPermission } from './rpc-method-permission'
-import type { OrcadFeature } from './orcad-feature-readiness'
+import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
 import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
@@ -108,6 +109,8 @@ export type RpcContext = {
   caller?: RpcCallerIdentity
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
+  // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.
+  capabilitySource?: RuntimeClientCapabilities
   // Trust socket-negotiated capabilities, never destructive request assertions.
   clientCapabilities?: readonly RuntimeCapability[]
   // Capability upgrades mutate only the authenticated socket after exact-key v2 auth.
@@ -180,7 +183,7 @@ export type RpcTypedMethod<TName extends string, TSchema extends ZodType | null,
   readonly permission: RpcMethodPermission
   readonly params: TSchema
   // Startup phases this method needs; the dispatcher waits for them, bounded (orcad only).
-  readonly requires?: readonly OrcadFeature[]
+  readonly requires?: OrcadFeatureRequirement<RpcParsedParams<TSchema>>
   readonly handler: (params: RpcParsedParams<TSchema>, ctx: RpcContext) => TResult
 }
 
@@ -195,7 +198,7 @@ export type RpcTypedStreamingMethod<TName extends string, TSchema extends ZodTyp
   readonly name: TName
   readonly permission: RpcMethodPermission
   readonly params: TSchema
-  readonly requires?: readonly OrcadFeature[]
+  readonly requires?: OrcadFeatureRequirement<RpcParsedParams<TSchema>>
   readonly stream: true
   readonly handler: (
     params: RpcParsedParams<TSchema>,
@@ -214,7 +217,7 @@ type RpcMethodWithParams<P> = {
   readonly name: string
   readonly permission: RpcMethodPermission
   readonly params: ZodType | null
-  readonly requires?: readonly OrcadFeature[]
+  readonly requires?: OrcadFeatureRequirement<P>
   readonly handler: (params: P, ctx: RpcContext) => unknown
 }
 
@@ -222,7 +225,7 @@ type RpcStreamingMethodWithParams<P> = {
   readonly name: string
   readonly permission: RpcMethodPermission
   readonly params: ZodType | null
-  readonly requires?: readonly OrcadFeature[]
+  readonly requires?: OrcadFeatureRequirement<P>
   readonly stream: true
   readonly handler: (params: P, ctx: RpcContext, emit: (result: unknown) => void) => Promise<void>
 }

@@ -88,7 +88,9 @@ export function useSourceControlCreatePrIntentProbes({
       }
       let result: HostedReviewCreationEligibility
       try {
+        // The user's Create PR: it may start the repo's stopped WSL distro (E9).
         result = await getHostedReviewCreationEligibility({
+          wakeWslDistro: true,
           repoPath: activeRepo.path,
           repoId: activeRepo.id,
           worktreePath: token.worktreePath,

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(target: RuntimeClientTarget, method: string, params?: unknown) => Promise<unknown>>()
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: vi.fn()
 }))
 vi.mock('./structured-agent-session-close', () => ({

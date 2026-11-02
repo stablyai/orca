@@ -9,6 +9,7 @@ import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import { CodexTerminalServerIsolationSetting } from './CodexTerminalServerIsolationSetting'
+import { CodexHistorySharingSetting } from './CodexHistorySharingSetting'
 import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
@@ -73,6 +74,13 @@ export function AgentsPane({
         hostScope={hostScope}
         renderPermissions={renderAgentPermissions}
       />
+      <section className="space-y-3">
+        <CodexHistorySharingSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          hostScope={hostScope}
+        />
+      </section>
       <section className="space-y-8">
         <SettingsSubsectionHeader title={getLocalExecutionHostLabel()} />
         <AgentRuntimeSetting

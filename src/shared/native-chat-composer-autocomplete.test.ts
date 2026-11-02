@@ -2,21 +2,17 @@ import { describe, expect, it } from 'vitest'
 import {
   applyMentionSuggestion,
   applyPickerSuggestion,
-  applySlashSuggestion,
   buildNativeChatPickerItems,
   classifyNativeChatSend,
   deriveComposerAutocomplete,
   editReplacesTriggerToken,
-  filterSlashCommands,
   isSkillPickerTriggered,
-  isSlashCommandDraft,
-  slashCommandDispatchText,
   type SlashCommandSuggestion
 } from './native-chat-composer-autocomplete'
 import { sessionSlashCommandSuggestions } from './native-chat/input/native-chat-slash-commands'
 import type { DiscoveredSkill } from './skills'
-import { getNativeChatAgentProfile } from './native-chat-agent-profiles'
-import { pickedSkillsInText } from './structured-agent-session-send-mutation'
+import { getNativeChatAgentProfile } from './native-chat/native-chat-agent-profiles'
+import { pickedSkillsInText } from './agent-session/requests/structured-agent-session-send-mutation'
 
 const COMMANDS: SlashCommandSuggestion[] = [
   { name: 'clear' },
@@ -252,29 +248,7 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
   })
 })
 
-describe('filterSlashCommands', () => {
-  it('is case-insensitive prefix match', () => {
-    expect(filterSlashCommands(COMMANDS, 'C').map((c) => c.name)).toEqual(['clear', 'compact'])
-  })
-})
-
-describe('isSlashCommandDraft', () => {
-  it('treats leading slash drafts as TUI commands, not chat prompts', () => {
-    expect(isSlashCommandDraft('/clear')).toBe(true)
-    expect(isSlashCommandDraft('  /compact')).toBe(true)
-    expect(isSlashCommandDraft('please run /clear')).toBe(false)
-  })
-})
-
 describe('apply suggestions', () => {
-  it('applySlashSuggestion replaces the token with a trailing space', () => {
-    expect(applySlashSuggestion({ name: 'clear' })).toBe('/clear ')
-  })
-
-  it('slashCommandDispatchText returns the command without completion whitespace', () => {
-    expect(slashCommandDispatchText({ name: 'clear' })).toBe('/clear')
-  })
-
   it('applyMentionSuggestion replaces the active @token at the caret', () => {
     const result = applyMentionSuggestion('open @sr more', 8, 'src/app.ts')
     expect(result.draft).toBe('open @src/app.ts more')
@@ -431,22 +405,6 @@ describe('native skill and command picker', () => {
     })
     expect(result.draft).toBe('validate it with /electron  now')
     expect(result.caret).toBe('validate it with /electron '.length)
-  })
-
-  it('groups Claude commands and skills under slash', () => {
-    const result = deriveComposerAutocomplete(
-      '/',
-      1,
-      COMMANDS,
-      [skill({ name: 'browser' })],
-      getNativeChatAgentProfile('claude')
-    )
-    expect(result.mode).toBe('slash')
-    if (result.mode === 'slash') {
-      expect(result.grouped).toBe(true)
-      expect(result.items.map((item) => item.kind)).toContain('command')
-      expect(result.items.map((item) => item.kind)).toContain('skill')
-    }
   })
 
   it('lets a session report replace the disk scan and enrich the names it knows', () => {

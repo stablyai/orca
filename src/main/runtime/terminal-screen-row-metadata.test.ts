@@ -1,22 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { projectTerminalVisibleLines } from './orca-runtime-terminal-projection'
-import { buildVisibleSnapshotReadFallback } from './terminal-tail-read'
-import { MAX_TERMINAL_PREVIEW_CHARS } from './terminal-tail-limits'
 import { redactWorkerTerminalView } from './orchestration/worker-terminal-redaction'
-import type { RuntimeTerminalRead } from '../../shared/runtime-terminal-contracts'
-
-const stream: RuntimeTerminalRead = {
-  handle: 'terminal:test',
-  status: 'running',
-  tail: ['old stream'],
-  tailRows: [{ wrapped: false, trailingSpaces: 0 }],
-  truncated: false,
-  oldestCursor: '0',
-  nextCursor: '1',
-  latestCursor: '1',
-  returnedLineCount: 1
-}
 
 describe('screen row provenance boundaries', () => {
   it.each([5, 30, 100])(
@@ -77,35 +62,4 @@ describe('screen row provenance boundaries', () => {
       emulator.dispose()
     }
   })
-
-  it('aligns metadata after both line and character limits and ends continuity at the first row', () => {
-    const lines = ['omitted', 'older', 'x'.repeat(MAX_TERMINAL_PREVIEW_CHARS), 'PermissionDenied']
-    const rows = lines.map(() => ({ wrapped: true, trailingSpaces: 0 }))
-    const read = buildVisibleSnapshotReadFallback(stream, lines, 3, undefined, rows)
-    expect(read.tail.join('')).toHaveLength(MAX_TERMINAL_PREVIEW_CHARS)
-    expect(read.tail).toHaveLength(2)
-    expect(read.tailRows).toEqual([
-      { wrapped: false, trailingSpaces: 0 },
-      { wrapped: true, trailingSpaces: 0 }
-    ])
-    expect(read.limited).toBe(true)
-  })
-
-  it.each([undefined, []])(
-    'drops stale stream provenance when the new projection has no aligned rows (%j)',
-    (rows) => {
-      const read = buildVisibleSnapshotReadFallback(
-        stream,
-        ['dcap_sssss', 'PermissionDenied'],
-        2,
-        undefined,
-        rows
-      )
-      expect(read.tailRows).toBeUndefined()
-      expect(redactWorkerTerminalView(read).tail).toEqual(read.tail)
-      expect(redactWorkerTerminalView(read).warnings).toContain(
-        'Terminal wrap information was unavailable; capability masking used complete lines.'
-      )
-    }
-  )
 })

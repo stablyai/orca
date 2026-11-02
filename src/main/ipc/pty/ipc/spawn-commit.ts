@@ -1,5 +1,6 @@
 import { provenSpawnResponse, type PtySpawnOutcome } from '../spawn-outcome'
 import { admitRendererAgentLaunchAuthority } from '../pane/launch-authority'
+import { resolveLaunchedAgent } from '../../../runtime/runtime-agent-launch-resolution'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { commitPtySpawn } from '../spawn-commit-assembly'
@@ -20,6 +21,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         ? args.worktreeId
         : null
     const response = ipcSpawnResponse(ctx)
+    const freshSpawn = ctx.result.isReattach !== true && ctx.stablePaneOwner === null
     return commitPtySpawn({
       state: ctx,
       nativeWindowsConptySpawn: ctx.nativeWindowsConptySpawn,
@@ -37,7 +39,8 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
           isReattach: ctx.result.isReattach === true,
           hasStablePaneOwner: ctx.stablePaneOwner !== null,
           incarnationId: ctx.result.incarnationId
-        })
+        }),
+        launchedAgent: freshSpawn ? resolveLaunchedAgent(args.command, args.launchAgent) : null
       },
       preAllocatedHandle: ctx.preAllocatedHandle,
       spawnTiming: ctx.spawnTiming,

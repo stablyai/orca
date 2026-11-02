@@ -36,7 +36,12 @@ import { createFakeBridgePortPair } from './bridge/bridge-port-pair-test-harness
 import { storageReadParamsSchema, storageReadResultSchema } from './bridge/bridge-native-verbs'
 import pageAsyncStorage, { publishPageStorage } from './bridge/page-async-storage'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
-import { hydrateMirroredStorage, writeMirroredStorage } from '../storage/mirrored-storage-keys'
+import {
+  hydrateMirroredStorage,
+  readMirroredKeyOrStore,
+  readMirroredStorage,
+  writeMirroredStorage
+} from '../storage/mirrored-storage-keys'
 
 const CHAT_TABS = 'orca:nativeChatTabs:host-a:wt-1'
 const LIVE_INPUT = 'orca:terminalLiveInputDisabled:host-a:wt-1'
@@ -124,6 +129,21 @@ beforeEach(async () => {
 })
 
 describe('the per-workspace keys of a host-area page', () => {
+  it('keeps unmounted workspace writes readable until native persistence settles', async () => {
+    const detail = await snapshotFor('/h/host-a/session/wt-1', false)
+    detail.writeStorage(CHAT_TABS, '["pending"]')
+    act(() => {
+      for (const tree of mounted.splice(0)) {
+        tree.unmount()
+      }
+    })
+    expect(store.get(CHAT_TABS)).toBe('["tab-1"]')
+    expect(await readMirroredKeyOrStore(CHAT_TABS)).toBe('["pending"]')
+    await act(async () => persisted())
+    expect(readMirroredStorage([CHAT_TABS])).toEqual({})
+    expect(await readMirroredKeyOrStore(CHAT_TABS)).toBe('["pending"]')
+  })
+
   it('reaches init with none of them, and reads each from the shell as a session page would', async () => {
     const perRoute = (await snapshotFor('/h/host-a/session/wt-1', false)).readStorage().storage
     const { view, settled } = await hostAreaPage()

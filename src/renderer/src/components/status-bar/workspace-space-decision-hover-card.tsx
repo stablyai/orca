@@ -173,17 +173,11 @@ export function WorkspaceDecisionHoverCard({
       <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3">
         <div className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
           {details.browserTabCount > 0
-            ? details.browserTabCount === 1
-              ? translate(
-                  'auto.components.status.bar.workspaceSpaceDecision.browserTabsOpen_one',
-                  '{{count}} browser tab open',
-                  { count: details.browserTabCount }
-                )
-              : translate(
-                  'auto.components.status.bar.workspaceSpaceDecision.browserTabsOpen_other',
-                  '{{count}} browser tabs open',
-                  { count: details.browserTabCount }
-                )
+            ? translate(
+                'auto.components.status.bar.workspaceSpaceDecision.browserTabsOpen',
+                '{{count}} browser tabs open',
+                { count: details.browserTabCount, defaultValue_one: '{{count}} browser tab open' }
+              )
             : worktree.path}
         </div>
         <Button

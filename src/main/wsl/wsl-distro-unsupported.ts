@@ -5,32 +5,18 @@
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import { OrcadHostGlibcUnsupportedError } from '../managed-server/lifecycle/orcad-runtime-target'
 import { RemoteNodeRuntimeSelfTestError } from '../ssh/orcad-remote-node-runtime-report'
-
-export function wsl1DistroMessage(distro: string): string {
-  return (
-    `${distro} runs WSL 1, which Orca no longer supports. ` +
-    `Convert it to WSL 2 in a Windows terminal with: wsl --set-version ${distro} 2`
-  )
-}
-
-export function wslDistroNotRegisteredMessage(distro: string): string {
-  return (
-    `${distro} is not an installed WSL distro. ` +
-    'Run wsl --list --verbose in a Windows terminal to see the installed ones, ' +
-    'or reinstall it and try again.'
-  )
-}
+import { wslHostAddRefusalText } from '../../shared/wsl-host-failure-copy'
 
 /** Keeps OrcadHostUnsupportedError's name, so callers that classify by name still see it. */
 export class WslDistroVersion1Error extends OrcadHostUnsupportedError {
-  constructor(distro: string) {
-    super(wsl1DistroMessage(distro))
+  constructor(readonly distro: string) {
+    super(wslHostAddRefusalText('wsl1', { distro }).text)
   }
 }
 
 export class WslDistroNotRegisteredError extends OrcadHostUnsupportedError {
-  constructor(distro: string) {
-    super(wslDistroNotRegisteredMessage(distro))
+  constructor(readonly distro: string) {
+    super(wslHostAddRefusalText('notRegistered', { distro }).text)
   }
 }
 

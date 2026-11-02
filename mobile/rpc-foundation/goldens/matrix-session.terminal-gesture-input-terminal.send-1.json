@@ -143,13 +143,6 @@
         }
       }
     },
-    "2744881d0748": {
-      "name": "terminal-subscribe",
-      "ordinal": 8,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
     "3a2f96d25da8": {
       "name": "terminal.send#1",
       "ordinal": 1,
@@ -239,43 +232,6 @@
           "$rpc": "null"
         },
         "message": "Terminal cleared"
-      }
-    },
-    "42b4a7d170de": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.clearBuffer"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 16,
-        "settledAt": 16,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "clear": {
-              "cleared": true,
-              "handle": "terminal-1"
-            }
-          }
-        }
       }
     },
     "47c387a75ffc": {
@@ -390,44 +346,6 @@
         "handle": "terminal-1"
       }
     },
-    "77d8a44e0dcc": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
-      }
-    },
-    "7e0ebd472c7b": {
-      "name": "toast",
-      "ordinal": 9,
-      "value": {
-        "durationMs": {
-          "$rpc": "null"
-        },
-        "message": "Terminal cleared"
-      }
-    },
     "8224ccdb2cd8": {
       "name": "terminal.send#1",
       "ordinal": 2,
@@ -436,16 +354,6 @@
     "839dec95ae1c": {
       "status": "pending",
       "startedAt": 16
-    },
-    "85a38010bc83": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
-    },
-    "8716af94ca80": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
     "8cc2f30cc0d2": {
       "name": "terminal.send#1",
@@ -528,49 +436,6 @@
         }
       }
     },
-    "94a34b9a1800": {
-      "name": "terminal-unsubscribe",
-      "ordinal": 7,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
-    "94ce15ec36dc": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 16,
-        "settledAt": 16,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "reported": true
-          }
-        }
-      }
-    },
     "94fa272beafb": {
       "name": "terminal.send#1",
       "ordinal": 1,
@@ -649,32 +514,6 @@
       "ordinal": 5,
       "value": {
         "handle": "terminal-1"
-      }
-    },
-    "bfd73b81d7a1": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.clearBuffer"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
       }
     },
     "caa6ece1bdab": {
@@ -815,8 +654,8 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:sent",
         "observation": {
-          "sender": ["47c387a75ffc", "77d8a44e0dcc"],
-          "payloads": ["8224ccdb2cd8", "85a38010bc83"],
+          "sender": ["47c387a75ffc"],
+          "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
@@ -828,8 +667,8 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:reported",
         "observation": {
-          "sender": ["47c387a75ffc", "94ce15ec36dc"],
-          "payloads": ["8224ccdb2cd8", "85a38010bc83"],
+          "sender": ["47c387a75ffc"],
+          "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
@@ -841,8 +680,8 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:clearing",
         "observation": {
-          "sender": ["47c387a75ffc", "94ce15ec36dc", "bfd73b81d7a1"],
-          "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
+          "sender": ["47c387a75ffc", "4b5c402c0aac"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a",
@@ -855,15 +694,15 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:cleared",
         "observation": {
-          "sender": ["47c387a75ffc", "94ce15ec36dc", "42b4a7d170de"],
-          "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
+          "sender": ["47c387a75ffc", "4d7959cb9208"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a",
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["94a34b9a1800", "2744881d0748", "7e0ebd472c7b"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {

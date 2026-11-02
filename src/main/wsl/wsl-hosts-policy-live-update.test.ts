@@ -1,8 +1,12 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { parseWslHostsPolicy, wslHostsPolicyState } from '../../shared/wsl-hosts-policy'
+import {
+  parseWslHostsPolicy,
+  wslHostsPolicyMovedProjects,
+  wslHostsPolicyState
+} from '../../shared/wsl-hosts-policy'
 import {
   readCachedWslHostsPolicy,
   WslHostsPolicyLiveUpdater,
@@ -36,6 +40,28 @@ describe('WSL hosts policy parsing', () => {
     expect(parseWslHostsPolicy(text).ok).toBe(false)
   })
 
+  it('reads moved projects as keep unless a block asks for them back', () => {
+    const parse = (fields: Record<string, unknown>) => {
+      const parsed = parseWslHostsPolicy(JSON.stringify({ version: 1, revision: 1, ...fields }))
+      if (!parsed.ok) {
+        throw new Error(parsed.error)
+      }
+      return parsed.policy
+    }
+    expect(wslHostsPolicyMovedProjects(null)).toBe('keep')
+    expect(wslHostsPolicyMovedProjects(parse({ wslHosts: 'block' }))).toBe('keep')
+    expect(
+      wslHostsPolicyMovedProjects(parse({ wslHosts: 'block', movedProjects: 'bring-back' }))
+    ).toBe('bring-back')
+    expect(
+      wslHostsPolicyMovedProjects(parse({ wslHosts: 'allow', movedProjects: 'bring-back' }))
+    ).toBe('keep')
+    // A later value must not drop the block it rides on.
+    const later = parse({ wslHosts: 'block', movedProjects: 'some-later-mode' })
+    expect(wslHostsPolicyState(later)).toBe('block')
+    expect(wslHostsPolicyMovedProjects(later)).toBe('keep')
+  })
+
   it('reads no policy as missing, never as a block', () => {
     expect(wslHostsPolicyState(null)).toBe('missing')
     expect(wslHostsPolicyState({ version: 1, revision: 1, wslHosts: 'allow' })).toBe('allow')
@@ -56,13 +82,14 @@ describe('WSL hosts policy live update', () => {
   const respond = (body: string, status = 200) => vi.fn(async () => new Response(body, { status }))
   const updater = (
     fetch: (url: string) => Promise<Response>,
-    options: { appVersion?: string; isPackaged?: boolean } = {}
+    options: { appVersion?: string; isPackaged?: boolean; onBlock?: () => void } = {}
   ) =>
     new WslHostsPolicyLiveUpdater({
       userDataPath,
       appVersion: options.appVersion ?? STABLE,
       isPackaged: options.isPackaged ?? true,
-      fetch
+      fetch,
+      onBlock: options.onBlock
     })
   const seedCache = (text: string, appVersion = STABLE) => {
     const channel = wslHostsPolicyChannelForAppVersion(appVersion)
@@ -92,6 +119,47 @@ describe('WSL hosts policy live update', () => {
       revision: 1,
       wslHosts: 'block'
     })
+  })
+
+  // A build that doesn't know a field must not strip it for the newer build sharing the profile.
+  it('caches the downloaded text verbatim, fields this build does not know included', async () => {
+    const text = JSON.stringify({
+      version: 1,
+      revision: 3,
+      wslHosts: 'block',
+      someLaterField: { keep: true }
+    })
+    const live = updater(respond(text))
+    await live.start()
+    live.stop()
+
+    const cachedText = readFileSync(
+      join(userDataPath, wslHostsPolicyCacheFileName('stable')),
+      'utf8'
+    )
+    expect(cachedText).toBe(text)
+    // This build reads its own fields from it, and a newer parser still finds the later one.
+    expect(readCachedWslHostsPolicy(userDataPath, STABLE)?.wslHosts).toBe('block')
+    expect(JSON.parse(cachedText)).toMatchObject({ someLaterField: { keep: true } })
+  })
+
+  // The newest known block stops new work this run: a fresh one, or one already cached.
+  it.each([
+    ['a newer block', null, policy(2, 'block'), true],
+    ['an already cached block re-served', policy(2, 'block'), policy(2, 'block'), true],
+    ['a stale allow behind a cached block', policy(3, 'block'), policy(2, 'allow'), true],
+    ['a newer allow', policy(1, 'block'), policy(2, 'allow'), false],
+    ['an allow', null, policy(1, 'allow'), false]
+  ])('reports %s to this run', async (_label, cachedText, downloaded, blocks) => {
+    if (cachedText) {
+      seedCache(cachedText)
+    }
+    const onBlock = vi.fn()
+    const live = updater(respond(downloaded), { onBlock })
+    await live.start()
+    live.stop()
+
+    expect(onBlock).toHaveBeenCalledTimes(blocks ? 1 : 0)
   })
 
   it('never lets a lower or equal revision replace the cache', async () => {

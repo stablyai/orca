@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../src/shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import type * as SharedLaunchRoute from '../../src/shared/structured-native-chat-launch-route'
@@ -22,7 +23,7 @@ vi.mock('../../src/shared/structured-native-chat-launch-route', async (importOri
 })
 
 const settings = {
-  experimentalNativeChat: true,
+  nativeChatProviders: EVERY_AGENT_CHAT,
   experimentalStructuredNativeChat: true,
   openAgentTabsInChatByDefault: true
 }

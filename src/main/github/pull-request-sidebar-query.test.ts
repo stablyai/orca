@@ -12,6 +12,7 @@ import { derivePRRefreshData } from './client/lookup/branch-lookup-derived-data'
 import { _resetPRStackSummaryCacheForTests } from './client/lookup/pr-stack-summary-cache'
 import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
 import { readPullRequestSidebarQuery } from './client/lookup/pull-request-sidebar-query'
+import { createImplicitDefaultBranchPRPolicy } from './client/lookup/implicit-default-branch-pr'
 import { deriveCheckStatus } from './mappers'
 
 const repository = { owner: 'acme', repo: 'widgets', host: 'github.com' }
@@ -86,6 +87,31 @@ beforeEach(() => {
 })
 
 describe('sidebar PR query', () => {
+  it('rejects a deleted fork from the parsed number query when head identity is unknown', async () => {
+    exec.mockResolvedValueOnce(
+      response({ ...fields, isCrossRepository: true, headRepository: null })
+    )
+    const policy = createImplicitDefaultBranchPRPolicy({
+      originHeadRepo: null,
+      trackedUpstream: null,
+      branchName: fields.headRefName,
+      repoPath: '/folder-workspace',
+      localGitOptions: {},
+      ghOptions: options
+    })
+    expect(
+      await lookupPRByNumber({
+        candidates: [repository],
+        number: 42,
+        ghOptions: options,
+        executionScope: 'local:host',
+        policy
+      })
+    ).toEqual({ data: null, dataRepo: null })
+    expect([...policy.rejectedPRUrls]).toEqual([fields.url])
+    expect(exec).toHaveBeenCalledTimes(1)
+  })
+
   it.each(['HTTP 401: Bad credentials', 'HTTP 429: secondary rate limit', 'ETIMEDOUT'])(
     'uses REST recovery directly after %s without another GraphQL attempt',
     async (message) => {

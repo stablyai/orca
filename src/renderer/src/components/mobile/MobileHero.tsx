@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
-import { getChannelTagline, type IosChannel } from './mobile-platform-copy'
+import type { InstallCopy } from './mobile-platform-copy'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { MobileHeroPairingStep } from './MobileHeroPairingStep'
@@ -20,8 +20,7 @@ type HeroFlowProps = {
   platform: Platform
   onPlatformChange: (next: Platform) => void
   installQrUrl: string | null
-  iosChannel: IosChannel
-  onIosChannelChange: (next: IosChannel) => void
+  installCopy: InstallCopy
   onOpenAndroidInstallGuide: () => void
   onOpenInstallUrl: () => void
   onCopyInstallUrl: () => void
@@ -59,8 +58,7 @@ export function HeroFlow({
   platform,
   onPlatformChange,
   installQrUrl,
-  iosChannel,
-  onIosChannelChange,
+  installCopy,
   onOpenAndroidInstallGuide,
   onOpenInstallUrl,
   onCopyInstallUrl,
@@ -136,12 +134,12 @@ export function HeroFlow({
                 </span>
               </div>
               <h2 className="mp-h2">
-                {translate('auto.components.mobile.MobileHero.0d9b33299e', 'Get the app.')}
+                {translate('auto.components.mobile.MobileHero.0d9b33299e', 'Download the app.')}
               </h2>
               <p className="mp-lead-sm">
                 {translate(
                   'auto.components.mobile.MobileHero.e75647ace0',
-                  'Scan the QR with your phone or open the install link to grab Orca Mobile.'
+                  "Scan this download QR with your phone's camera. Already have Orca Mobile? Continue to step 2 for the pairing QR."
                 )}
               </p>
               <div className="mp-tab-toggle">
@@ -164,39 +162,9 @@ export function HeroFlow({
                   {translate('auto.components.mobile.MobileHero.ac1eb64952', 'Android')}
                 </button>
               </div>
-              {platform === 'ios' ? (
-                <div
-                  className="mp-channel-toggle"
-                  role="radiogroup"
-                  aria-label={translate(
-                    'auto.components.mobile.MobileHero.channel.group',
-                    'Release channel'
-                  )}
-                >
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={iosChannel === 'preview'}
-                    className={cn(iosChannel === 'preview' && 'is-active')}
-                    onClick={() => onIosChannelChange('preview')}
-                  >
-                    {translate('auto.components.mobile.MobileHero.channel.preview', 'Preview')}
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={iosChannel === 'stable'}
-                    className={cn(iosChannel === 'stable' && 'is-active')}
-                    onClick={() => onIosChannelChange('stable')}
-                  >
-                    {translate('auto.components.mobile.MobileHero.channel.stable', 'Stable')}
-                  </button>
-                  <span className="mp-channel-tagline">{getChannelTagline(iosChannel)}</span>
-                </div>
-              ) : null}
               <div className="mp-inline-actions">
                 <button type="button" className="mp-ghost-action" onClick={onOpenInstallUrl}>
-                  {translate('auto.components.mobile.MobileHero.downloadApp', 'Download app')}
+                  {installCopy.ctaLabel}
                 </button>
                 <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
                   <Copy className="size-3.5" />

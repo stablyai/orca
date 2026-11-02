@@ -295,7 +295,7 @@ describe('ensureHooksConfirmed', () => {
     expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
       selector: 'owner-env',
       method: 'repo.hooksCheck',
-      params: { repo: 'repo-1' },
+      params: { repo: 'repo-1', wakeWslDistro: true },
       timeoutMs: 15_000
     })
     expect(hooksCheckMock).not.toHaveBeenCalled()
@@ -411,7 +411,12 @@ describe('ensureHooksConfirmed', () => {
 
     await ensureHooksConfirmed(state, 'repo-1', 'issueCommand', 'ssh:server')
 
-    expect(readIssueCommandMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:server' })
+    // A launch is a user act, so its read may start a stopped WSL distro (E9).
+    expect(readIssueCommandMock).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      hostId: 'ssh:server',
+      wakeWslDistro: true
+    })
   })
 
   it('approves and returns the exact issue-command bytes from one host-qualified read', async () => {
@@ -452,7 +457,8 @@ describe('ensureHooksConfirmed', () => {
     expect(readIssueCommandMock).toHaveBeenCalledTimes(1)
     expect(readIssueCommandMock).toHaveBeenCalledWith({
       repoId: 'repo-1',
-      hostId: 'ssh:server'
+      hostId: 'ssh:server',
+      wakeWslDistro: true
     })
   })
 

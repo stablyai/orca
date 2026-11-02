@@ -31,18 +31,11 @@ export function WorkspaceCleanupSortHeader({
 }): React.JSX.Element {
   const allSelected = selectableCount > 0 && selectedCount >= selectableCount
   const someSelected = selectableCount > 0 && selectedCount > 0 && !allSelected
-  const selectAllLabel =
-    selectableCount === 1
-      ? translate(
-          'components.workspace.cleanup.browse.selectAllSafetyChecked_one',
-          'Select {{count}} safety-checked workspace',
-          { count: selectableCount }
-        )
-      : translate(
-          'components.workspace.cleanup.browse.selectAllSafetyChecked_other',
-          'Select all {{count}} safety-checked workspaces',
-          { count: selectableCount }
-        )
+  const selectAllLabel = translate(
+    'components.workspace.cleanup.browse.selectAllSafetyChecked',
+    'Select all {{count}} safety-checked workspaces',
+    { count: selectableCount, defaultValue_one: 'Select {{count}} safety-checked workspace' }
+  )
   return (
     <div className="flex items-center gap-1 border-b border-border bg-muted/25 px-3 py-1.5">
       <button

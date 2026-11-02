@@ -16,6 +16,7 @@ import {
   normalizeOsc52ClipboardDefaultOn,
   osc52ClipboardDefaultOnOverridesPersistedOff
 } from '../../../shared/osc52-clipboard-settings'
+import { splitLegacyTerminalColorOverrides } from '../../../shared/terminal-color-overrides'
 import {
   migrateTerminalScrollbackRows,
   migrateTerminalTuiScrollSensitivityDefault
@@ -47,6 +48,7 @@ export type PreparedLoadedTerminalSettings = {
     GlobalSettings,
     'terminalAllowOsc52Clipboard' | 'terminalAllowOsc52ClipboardDefaultedOnForAllUsers'
   >
+  migratedTerminalColorOverrides: ReturnType<typeof splitLegacyTerminalColorOverrides>
   migratedFloatingTerminalCwd: GlobalSettings['floatingTerminalCwd']
   migratedFloatingTerminalTrustedCwds: GlobalSettings['floatingTerminalTrustedCwds']
   osc52ClipboardNoticePending: boolean
@@ -90,17 +92,21 @@ export function prepareLoadedTerminalSettings(
     markNeedsSave()
   }
   const legacyCommitMessageAi = parsed.settings?.commitMessageAi
-  let migratedSourceControlAi = rawSourceControlAiMissing
+  const sourceBeforeNormalization = rawSourceControlAiMissing
     ? sourceControlAiSettingsFromLegacy(legacyCommitMessageAi ?? defaults.settings.commitMessageAi)
-    : mergeLegacyCommitMessageAiIntoSourceControlAi(
-        parsed.settings?.sourceControlAi,
-        legacyCommitMessageAi
-      )
-  const actions = migrateActionPermissionArgs(migratedSourceControlAi.actions)
-  if (actions !== migratedSourceControlAi.actions) {
-    migratedSourceControlAi = { ...migratedSourceControlAi, actions }
+    : rawSourceControlAi
+  const sourceActions = {
+    ...sourceBeforeNormalization.launchActionDefaults,
+    ...sourceBeforeNormalization.actions
+  }
+  const actions = migrateActionPermissionArgs(sourceActions)
+  if (actions !== sourceActions) {
     markNeedsSave()
   }
+  const sourceWithActions = { ...sourceBeforeNormalization, actions }
+  const migratedSourceControlAi = rawSourceControlAiMissing
+    ? sourceWithActions
+    : mergeLegacyCommitMessageAiIntoSourceControlAi(sourceWithActions, legacyCommitMessageAi)
   migratedExternalVisibility.repos = migratedExternalVisibility.repos.map((repo) => {
     const actionOverrides = migrateActionPermissionArgs(repo.sourceControlAi?.actionOverrides)
     if (actionOverrides === repo.sourceControlAi?.actionOverrides) {
@@ -129,6 +135,10 @@ export function prepareLoadedTerminalSettings(
     osc52ClipboardDefaultOnOverridesPersistedOff(parsed.settings) ||
     parsed.ui?.osc52ClipboardDefaultOnNoticePending === true
   if (parsed.settings?.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !== true) {
+    markNeedsSave()
+  }
+  const migratedTerminalColorOverrides = splitLegacyTerminalColorOverrides(parsed.settings)
+  if (parsed.settings?.terminalColorOverridesSplit !== true) {
     markNeedsSave()
   }
   const floatingTerminalCwdMigrated =
@@ -178,6 +188,7 @@ export function prepareLoadedTerminalSettings(
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,
+    migratedTerminalColorOverrides,
     migratedFloatingTerminalCwd,
     migratedFloatingTerminalTrustedCwds,
     osc52ClipboardNoticePending

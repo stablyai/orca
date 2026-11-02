@@ -51,6 +51,8 @@ export function useMobileNativeChatPromptDismiss({
   }, [sessionKey, occurrenceKey, scopeKey])
   const dismissed = useSyncExternalStore(dismissals.subscribe, () => dismissals.read(storeKey))
   const matches =
+    (!(card?.kind === 'question' && card.prompt.replyAsMessage) ||
+      dismissed?.state === 'collapsed') &&
     dismissed?.sessionKey === sessionKey &&
     nativeChatPromptDismissalMatches(dismissed, content, startedAt)
   useLayoutEffect(() => {
@@ -77,5 +79,31 @@ export function useMobileNativeChatPromptDismiss({
     dismissPrompt: () => record('answered'),
     collapsePrompt: () => record('collapsed'),
     expandPrompt: () => dismissals.forget(storeKey)
+  }
+}
+
+/** Keep addressed hides in the existing scoped owner, independently of the loaded definition. */
+export function useMobileAsyncQuestionHides(
+  scopeKey: string | null,
+  sourceKey: string,
+  viewKey: string
+) {
+  const storeKey = JSON.stringify(['async', scopeKey, sourceKey])
+  const owner = useMemo(() => ({ storeKey, viewKey }), [storeKey, viewKey])
+  const active = useRef<object | null>(null)
+  useLayoutEffect(() => {
+    active.current = owner
+    return () => {
+      active.current = null
+    }
+  }, [owner])
+  const hidden = useSyncExternalStore(dismissals.subscribe, () => dismissals.readAsync(storeKey))
+  return {
+    hidden,
+    capture: (ids: readonly string[]) => () => {
+      if (active.current === owner) {
+        dismissals.hideAsync(storeKey, ids)
+      }
+    }
   }
 }

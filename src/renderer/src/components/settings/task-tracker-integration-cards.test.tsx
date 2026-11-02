@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import es from '@/i18n/locales/es.json'
-import { setRendererUiLanguage, translate } from '@/i18n/i18n'
+import { i18n, loadRendererUiLanguage, translate } from '@/i18n/i18n'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { TooltipProvider } from '../ui/tooltip'
 import { LinearIntegrationCard } from './task-tracker-integration-cards'
@@ -122,14 +122,14 @@ describe('LinearIntegrationCard account scope', () => {
     container?.remove()
     container = null
     mocks.store.current = null
-    await setRendererUiLanguage('en')
+    await i18n.changeLanguage(await loadRendererUiLanguage('en'))
     Reflect.deleteProperty(window, 'api')
   })
 
   it.each(['en', 'ko'] as const)(
     'renders complete %s connection counts without an English suffix',
     async (language) => {
-      await setRendererUiLanguage(language)
+      await i18n.changeLanguage(await loadRendererUiLanguage(language))
       for (const count of [0, 1, 2]) {
         const state = installStore(true)
         state.linearStatus.workspaces = Array.from({ length: count }, (_, index) => ({
@@ -157,7 +157,7 @@ describe('LinearIntegrationCard account scope', () => {
   )
 
   it('translates a coded connection failure at the display site', async () => {
-    await setRendererUiLanguage('es')
+    await i18n.changeLanguage(await loadRendererUiLanguage('es'))
     const state = installStore(true)
     state.testLinearConnection = vi.fn(async () => ({
       ok: false,

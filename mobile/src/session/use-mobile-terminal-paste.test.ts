@@ -1,3 +1,4 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -14,9 +15,6 @@ vi.mock('expo-clipboard', () => ({
   getImageAsync: async () => ({ data: 'png' })
 }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: {} }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 vi.mock('./mobile-clipboard-image', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./mobile-clipboard-image')>()),
   prepareMobileClipboardImageBase64: async () => 'png',
@@ -42,6 +40,7 @@ describe('mobile clipboard image followed by typing', () => {
         close: vi.fn()
       }
       const paste = useMobileTerminalPaste({
+        sendTerminalUserInput: terminalInputSend.request,
         agent,
         activeHandle: 'term-1',
         activeHandleRef: { current: 'term-1' },
@@ -94,6 +93,7 @@ describe('mobile clipboard image followed by typing', () => {
       })
       const onSuccess = vi.fn()
       const paste = useMobileTerminalPaste({
+        sendTerminalUserInput: terminalInputSend.request,
         agent: null,
         activeHandle: 'term-1',
         activeHandleRef,
@@ -154,6 +154,7 @@ describe('mobile clipboard text paste', () => {
       close: vi.fn()
     }
     const paste = useMobileTerminalPaste({
+      sendTerminalUserInput: terminalInputSend.request,
       agent: null,
       activeHandle: 'term-1',
       activeHandleRef: { current: 'term-1' },

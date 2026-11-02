@@ -3,7 +3,10 @@ import {
   type GitStageWorktreeScope
 } from '../../../shared/git-stage-worktree-scope'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
+import type { ConflictResolution } from '../../../shared/source-control-entry-actions'
+import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from './runtime-rpc-client'
+import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 export async function stageRuntimeGitPath(
@@ -25,6 +28,41 @@ export async function stageRuntimeGitPath(
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePath },
     { timeoutMs: 15_000 }
   )
+}
+
+export async function resolveRuntimeGitConflict(
+  context: RuntimeGitContext,
+  filePath: string,
+  resolution: ConflictResolution
+): Promise<void> {
+  const target = context.target
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.resolveConflict({
+      worktreePath: resolveLocalWorktreePath(context),
+      filePath,
+      resolution,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  try {
+    await callRuntimeRpc(
+      target,
+      'git.resolveConflict',
+      { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePath, resolution },
+      { timeoutMs: 15_000 }
+    )
+  } catch (error) {
+    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
+      throw new Error(
+        translate(
+          'auto.runtime.runtimeGitWorkingTreeClient.resolveConflictNeedsNewerHost',
+          'Resolving conflicts needs a newer Orca on this host. Update Orca on that host.'
+        )
+      )
+    }
+    throw error
+  }
 }
 
 export async function bulkStageRuntimeGitPaths(

@@ -828,4 +828,38 @@ describe('web UI preload API', () => {
       'runtime disconnected'
     )
   })
+
+  it('surfaces a cancelled paired web setup instead of reporting it as complete', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'computer.permissions') {
+            return Promise.resolve({
+              id: method,
+              ok: false,
+              error: { code: 'accessibility_error', message: 'Computer Use setup was cancelled' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.computerUsePermissions.openSetup({ id: 'accessibility' })
+    ).rejects.toThrow('Computer Use setup was cancelled')
+  })
 })

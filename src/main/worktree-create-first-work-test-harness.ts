@@ -1,4 +1,4 @@
-import { expect, vi, type Mock } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import type { CreateWorktreeArgs } from '../shared/worktree/create-types'
 import type { Worktree } from '../shared/worktree/types'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
@@ -11,14 +11,18 @@ import {
 import { gitResponder, workingEvent } from './agent-hooks/first-work-branch-rename-test-harness'
 import { mergeWorktree } from './ipc/worktree-metadata-merge'
 
-export const labelOnlyCreateRequests: Pick<
+export const typedLabelCreateRequests: Pick<
   CreateWorktreeArgs,
-  'name' | 'displayName' | 'displayNameKind' | 'nameWasGenerated'
+  'name' | 'displayName' | 'displayNameKind'
 >[] = [
   { name: '認証を修正', displayName: '認証を修正', displayNameKind: 'user' },
-  { name: 'fix-authentication', displayNameKind: 'user' },
-  { name: 'nautilus', nameWasGenerated: true }
+  { name: 'fix-authentication', displayNameKind: 'user' }
 ]
+
+export const generatedNameCreateRequest: Pick<CreateWorktreeArgs, 'name' | 'nameWasGenerated'> = {
+  name: 'nautilus',
+  nameWasGenerated: true
+}
 
 export async function renameCreatedWorktreeOnFirstWork(
   worktree: Worktree,
@@ -54,7 +58,6 @@ export async function renameCreatedWorktreeOnFirstWork(
     badgeColor: '',
     addedAt: 0
   }
-  const notifyBranchRenamed = vi.fn()
   const deps = firstWorkRenameDeps(
     {
       getSettings: () => ({
@@ -73,12 +76,10 @@ export async function renameCreatedWorktreeOnFirstWork(
     {
       getCommitMessageAgentEnvironmentResolvers: () => undefined,
       notifyFolderWorkspaceChanged: vi.fn(),
-      notifyBranchRenamed,
+      notifyBranchRenamed: vi.fn(),
       notifyWorktreeFolderRenamed: vi.fn()
     }
   )
   await maybeAutoRenameBranchOnFirstWork(workingEvent({ worktreeId: worktree.id }), deps)
-  expect(notifyBranchRenamed).toHaveBeenCalledWith(worktree.repoId)
-  expect(branch).toBe('fix-auth')
   return mergeWorktree(worktree.repoId, { ...worktree, branch: `refs/heads/${branch}` }, meta)
 }

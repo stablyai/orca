@@ -453,7 +453,7 @@ describe('OrcaRuntimeService', () => {
       clientNavigationId: 'device-a'
     })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      await expect(pending).resolves.toEqual({ closed: true })
+      await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
       expect(closeTerminalTab).not.toHaveBeenCalled()
       expect(setBackgroundThrottling).not.toHaveBeenCalled()
       expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
@@ -463,7 +463,7 @@ describe('OrcaRuntimeService', () => {
     expect(setBackgroundThrottling.mock.calls).toEqual([[false]])
 
     acknowledged.resolve()
-    await expect(pending).resolves.toEqual({ closed: true })
+    await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
     // Release restores throttling next task, after native destruction.
     await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
   })
@@ -544,7 +544,7 @@ describe('OrcaRuntimeService', () => {
       clientNavigationId: 'device-a'
     })
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      await expect(pending).resolves.toEqual({ closed: true })
+      await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
       expect(kill).toHaveBeenCalledWith('persisted-pty')
       expect(closeTerminalTab).not.toHaveBeenCalled()
       return
@@ -559,7 +559,7 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     acknowledged.resolve()
-    await expect(pending).resolves.toEqual({ closed: true })
+    await expect(pending).resolves.toEqual({ closed: true, retirementConfirmed: true })
     expect(kill).toHaveBeenCalledWith('persisted-pty')
   })
 

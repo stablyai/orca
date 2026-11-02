@@ -4,7 +4,7 @@ import { AgentTokenUsageReporter } from './agent-token-usage-reporter'
 import { isTelemetryEnabled } from '../telemetry/client'
 import { join, parse } from 'node:path'
 import { AnalyticsSessionIdStore, type AnalyticsSessionId } from './analytics-session-id-store'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import { loadKnownUsageWorktreesByRepo } from '../usage-worktree-metadata'
 import type {

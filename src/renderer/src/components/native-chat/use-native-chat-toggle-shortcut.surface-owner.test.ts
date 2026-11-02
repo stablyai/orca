@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -41,7 +42,7 @@ vi.mock('../../store', () => {
         },
         terminalLayoutsByTabId: {},
         agentStatusByPaneKey: {},
-        settings: { experimentalNativeChat: true },
+        settings: { nativeChatProviders: EVERY_AGENT_CHAT },
         toggleTabViewMode
       })
     }

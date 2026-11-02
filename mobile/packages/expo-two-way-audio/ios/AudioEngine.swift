@@ -94,6 +94,13 @@ class AudioEngine {
             print("Could not set the audio category: \(error.localizedDescription)")
         }
 
+        // iOS mutes haptics while input runs by default; dictation taps the user on start and stop.
+        do {
+            try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+        } catch {
+            print("Could not allow haptics during recording: \(error.localizedDescription)")
+        }
+
         do {
             try session.setPreferredSampleRate(voiceIOFormat.sampleRate)
         } catch {

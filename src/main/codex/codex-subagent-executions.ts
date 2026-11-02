@@ -1,4 +1,4 @@
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
+import type { NativeChatSubagentState } from '../../shared/native-chat/native-chat-types'
 import {
   MAX_SUBAGENT_FIELD_CHARS,
   canReplaceSubagentState

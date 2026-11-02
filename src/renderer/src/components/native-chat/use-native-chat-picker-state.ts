@@ -15,7 +15,7 @@ import {
   type SetStateAction
 } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
@@ -69,6 +69,7 @@ export function useNativeChatPickerState(args: {
   sessionSkills?: readonly NativeChatSessionSkill[]
   /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
   onPickerOpened?: () => void
+  onPickerDemand?: (open: boolean) => void
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
@@ -87,6 +88,7 @@ export function useNativeChatPickerState(args: {
     sessionSkills,
     commandAvailable,
     onPickerOpened,
+    onPickerDemand,
     textareaRef,
     setDraft,
     setCaret,
@@ -156,6 +158,12 @@ export function useNativeChatPickerState(args: {
       onPickerOpened?.()
     }
   }, [agent, autocomplete, dismissalContext, onPickerOpened])
+
+  const menuOpen = autocomplete.mode === 'slash'
+  useEffect(() => {
+    onPickerDemand?.(menuOpen)
+    return () => onPickerDemand?.(false)
+  }, [dismissalContext, menuOpen, onPickerDemand])
 
   // The editor may be ahead of this render when a key lands just before the pick.
   const liveDraft = useCallback((): [string, number] => {

@@ -10,11 +10,8 @@ import {
   type GhRateLimitBucket
 } from '../gh-rate-limit-breaker'
 import { extractExecError, parseRetryAfterMs } from '../exec-error'
-import {
-  resolveCommand,
-  resolveDefaultWslCli,
-  type ResolvedCommand
-} from './wsl-command-resolution'
+import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
+import { resolveDefaultWslCliFallback } from './default-wsl-cli-fallback'
 import {
   canFallBackToHostGitHubCli,
   isHostCommandMissing,
@@ -247,7 +244,7 @@ export async function ghExecFileWithScopeAsync(
         !options.wslDistro &&
         isHostCommandMissing(err, 'gh')
       ) {
-        const wslResolved = resolveDefaultWslCli('gh', args)
+        const wslResolved = await resolveDefaultWslCliFallback('gh', args)
         if (wslResolved) {
           // Global calls have no cwd to route WSL-only Windows installs.
           resolved = wslResolved

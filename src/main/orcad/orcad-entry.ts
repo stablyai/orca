@@ -90,6 +90,8 @@ async function startOrcadRuntime(
   const { buildOrcadServeReadiness } = await import('./orcad-serve-readiness')
   const { createOrcadProfileStateStartup } = await import('./orcad-profile-state-startup')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-provider-state')
+  const { resolveDaemonSessionScrollbackRows } =
+    await import('../daemon/daemon-session-scrollback-window')
   const { collectOrcadHealth } = await import('./orcad-health')
   const { agentHookServer } = await import('../agent-hooks/server')
   const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
@@ -161,7 +163,7 @@ async function startOrcadRuntime(
 
   // Reconcile, daemon and runtime all consume this environment.
   await timed('login-env-wait', () => loginEnvironment)
-  startOrcadManagedAgentHooks(
+  const managedAgentHooks = startOrcadManagedAgentHooks(
     profileStore,
     (enabled) => agentHookServer.setStatusHooksEnabled(enabled),
     registerCleanup
@@ -210,6 +212,8 @@ async function startOrcadRuntime(
     canRecoverPersistentLocalPtys: () => daemonOwnsFreshPersistentPtys(),
     // Node hosts cannot promote into desktop windows; override the constructor’s openable default.
     getDesktopWindowStatus: () => 'blocked',
+    // No renderer reveals from this model; it keeps the daemon's live window, which deeper snapshot reads ask first.
+    headlessTerminalScrollbackRows: resolveDaemonSessionScrollbackRows(),
     // Unchanged settings would reconstruct a healthy search index; deduplicate before apply.
     applySessionSearchSettings: (before, after) => {
       const next = changedAiVaultSearchSettings(before, after)
@@ -329,6 +333,7 @@ async function startOrcadRuntime(
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
   reportStartupTiming()
+  managedAgentHooks.readinessPublished()
 
   await idleExitStartup.start({
     rpc,
