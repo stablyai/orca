@@ -17,7 +17,11 @@ import {
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
-import { pendingAgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import {
+  pendingAgentSessionOperationRow,
+  type AgentSessionOperationOutcome,
+  type AgentSessionOperationRow
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   isPreparedAgentLaunchStatus,
   type PreparedAgentLaunchDescriptor
@@ -32,6 +36,19 @@ import {
 } from './prepared-terminal-publication'
 import { installPreparedPromptContinuation } from './prepared-terminal-prompt-delivery'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+
+/** The saved ledger as publication reads it: one enumeration, then exact rows by key. */
+function storeOf(
+  rows: AgentSessionOperationRow[],
+  retire: PreparedPublicationPorts['store']['retirePreparedAgentLaunch']
+): PreparedPublicationPorts['store'] {
+  return {
+    listOperationRows: () => rows,
+    getOperationRow: (callerKey, operationId) =>
+      rows.find((row) => row.callerKey === callerKey && row.operationId === operationId) ?? null,
+    retirePreparedAgentLaunch: retire
+  }
+}
 
 /** Publication never writes, kills or inspects a terminal; those members only satisfy the contract. */
 function controllerDouble(members: Partial<RuntimePtyController>): RuntimePtyController {
@@ -99,11 +116,23 @@ async function fixture(
       incarnationId: options.sessionId === 'agent' ? incarnations.agent : incarnations.setup
     }
   })
+  const setupLines: string[] = []
+  const listProcesses = vi.fn(async () => [])
   const owner = new PreparedAgentLaunchOwner({
     owners: new ClaimedAgentPtyOwnerRegistry(),
     create,
     isAlive: () => true,
-    reserveCapacity: () => () => {}
+    reserveCapacity: () => () => {},
+    setupSession: (id) =>
+      id === 'setup'
+        ? {
+            isAlive: true,
+            incarnationId: incarnations.setup,
+            terminalHandle: 'term_setup',
+            paneKey: `${surfaces.setup.tabId}:${surfaces.setup.leafId}`,
+            startupIngress: { accept: (data: string) => setupLines.push(data) }
+          }
+        : undefined
   })
   const payload = {
     launch: {
@@ -183,13 +212,13 @@ async function fixture(
     preparedLaunch: descriptor
   }
   // Like the store, only the call that removes the descriptor reports it and saves the answer.
-  const retire = vi.fn(async (args: { answer?: unknown }): Promise<boolean> => {
+  const retire = vi.fn(async (args: { outcome?: AgentSessionOperationOutcome }) => {
     if (!('preparedLaunch' in row)) {
       return false
     }
     Reflect.deleteProperty(row, 'preparedLaunch')
-    if (args.answer) {
-      row.outcome = { status: 'succeeded', sessionId: '', launch: args.answer }
+    if (args.outcome) {
+      row.outcome = args.outcome
     }
     return true
   })
@@ -205,21 +234,10 @@ async function fixture(
   const ports: PreparedPublicationPorts = {
     controller: controllerDouble({
       preparedAgentLaunch: (request) => owner.handle(request),
-      listProcesses: async () =>
-        withSetup
-          ? [
-              {
-                id: 'setup',
-                cwd: '/work',
-                title: 'Setup',
-                terminalHandle: 'term_setup',
-                incarnationId: incarnations.setup,
-                paneKey: `${surfaces.setup.tabId}:${surfaces.setup.leafId}`
-              }
-            ]
-          : []
+      // Recovery reads the owner's own Setup; a host inventory is never needed.
+      listProcesses
     }),
-    store: { listOperationRows: () => [row], retirePreparedAgentLaunch: retire },
+    store: storeOf([row], retire),
     createTerminal,
     placePrimary: vi.fn(async () => {}),
     setTabColor: vi.fn(async () => {}),
@@ -236,6 +254,8 @@ async function fixture(
     createTerminal,
     retire,
     deliver,
+    setupLines,
+    listProcesses,
     observer: () => observer!,
     zero: () => observer?.onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:0\n`)
   }
@@ -293,7 +313,45 @@ describe('prepared terminal publication recovery', () => {
     expect(f.create).toHaveBeenCalledTimes(2)
     expect(f.createTerminal).toHaveBeenCalledTimes(2)
     expect(f.retire).toHaveBeenCalledTimes(1)
+    expect(f.listProcesses).not.toHaveBeenCalled()
   })
+
+  it.each([1, 10])(
+    'recovers %i known Setups in one pass without reading any host inventory',
+    async (count) => {
+      const launches = await Promise.all(Array.from({ length: count }, () => fixture(true)))
+      const byOperation = new Map(launches.map((launch) => [launch.identity.operationId, launch]))
+      const listProcesses = vi.fn(async () => [])
+      const createTerminal = vi.fn<PreparedPublicationPorts['createTerminal']>(async () => ({
+        handle: 'term_setup',
+        worktreeId: 'wt',
+        title: null
+      }))
+      const ports: PreparedPublicationPorts = {
+        ...launches[0]!.ports,
+        controller: controllerDouble({
+          preparedAgentLaunch: (request) =>
+            byOperation
+              .get('identity' in request ? request.identity.operationId : '')!
+              .owner.handle(request),
+          listProcesses
+        }),
+        store: storeOf(
+          launches.flatMap((launch) => launch.ports.store.listOperationRows()),
+          vi.fn(async () => true)
+        ),
+        createTerminal
+      }
+      void reconcilePreparedTerminalPublications(ports)
+      await vi.advanceTimersByTimeAsync(0)
+      // Each launch's owner names its live Setup; no host, related or not, is inventoried.
+      expect(listProcesses).not.toHaveBeenCalled()
+      expect(createTerminal).toHaveBeenCalledTimes(count)
+      for (const [, options] of createTerminal.mock.calls) {
+        expect(options).toMatchObject({ sessionId: 'setup', attachOnly: true })
+      }
+    }
+  )
 
   it('places the delayed primary only on first publication and preserves later user placement', async () => {
     const f = await fixture(true)
@@ -376,7 +434,11 @@ describe('prepared terminal publication recovery', () => {
     expect(f.deliver).toHaveBeenCalledOnce()
     expect(f.retire).toHaveBeenCalledTimes(2)
     expect(f.retire).toHaveBeenLastCalledWith(
-      expect.objectContaining({ answer: expect.not.objectContaining({ warning: UNCERTAIN }) })
+      expect.objectContaining({
+        outcome: expect.objectContaining({
+          launch: expect.not.objectContaining({ warning: UNCERTAIN })
+        })
+      })
     )
     expect(f.ports.notifyLaunchNotice).not.toHaveBeenCalled()
   })
@@ -388,7 +450,11 @@ describe('prepared terminal publication recovery', () => {
     expect(f.createTerminal).toHaveBeenCalledOnce()
     expect(f.deliver).not.toHaveBeenCalled()
     expect(f.retire).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ answer: expect.objectContaining({ warning: UNCERTAIN }) })
+      expect.objectContaining({
+        outcome: expect.objectContaining({
+          launch: expect.objectContaining({ warning: UNCERTAIN })
+        })
+      })
     )
     expect(f.ports.notifyLaunchNotice).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ operationId: f.identity.operationId, kind: 'prompt-uncertain' })
@@ -411,7 +477,7 @@ describe('prepared terminal publication recovery', () => {
     await reconcilePreparedTerminalPublications(f.ports)
     expect(f.retire).toHaveBeenCalledTimes(2)
     expect(f.ports.notifyLaunchNotice).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ operationId: f.identity.operationId, kind: 'setup-closed' })
+      expect.objectContaining({ operationId: f.identity.operationId, kind: 'setup-ended' })
     )
   })
 
@@ -470,7 +536,7 @@ describe('prepared terminal publication recovery', () => {
       const ports: PreparedPublicationPorts = {
         ...f.ports,
         controller: controllerDouble({ preparedAgentLaunch: probes }),
-        store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
+        store: storeOf(rows, retire)
       }
       vi.useRealTimers()
       await reconcilePreparedTerminalPublications(ports)
@@ -516,7 +582,7 @@ describe('prepared terminal publication recovery', () => {
             )
           }
         }),
-        store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
+        store: storeOf(rows, retire)
       }
       for (const pass of [1, 2]) {
         for (const probe of [
@@ -569,7 +635,7 @@ describe('prepared terminal publication recovery', () => {
           throw reply.error
         }
       }),
-      store: { listOperationRows: () => rows, retirePreparedAgentLaunch: retire }
+      store: storeOf(rows, retire)
     }
     vi.useRealTimers()
     await reconcilePreparedTerminalPublications(ports)

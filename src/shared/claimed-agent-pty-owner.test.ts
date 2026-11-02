@@ -312,4 +312,38 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     await expect(second).resolves.toMatchObject({ disposition: 'adopted' })
     expect(spawn).toHaveBeenCalledOnce()
   })
+
+  it.each([10, 100])(
+    'admits ordinary claims among %i owners without searching their surfaces',
+    (count) => {
+      const registry = new ClaimedAgentPtyOwnerRegistry()
+      const digest = (index: number) => String(index).padStart(43, 'a')
+      for (let index = 0; index < count; index++) {
+        registry.prepare({
+          claim: claim(digest(index)),
+          surface: { ...surface, tabId: `tab-${index}` }
+        })
+      }
+      const ownerMaps = [registry['reserved'], registry['live']]
+      const walks = vi.spyOn(Map.prototype, 'values')
+      for (let index = 0; index < 10; index++) {
+        registry.prepare({
+          claim: claim(digest(count + index)),
+          surface: { ...surface, tabId: `new-${index}` }
+        })
+      }
+      const ownerWalks = walks.mock.contexts.filter((context) =>
+        ownerMaps.some((owners) => owners === context)
+      )
+      walks.mockRestore()
+      expect(ownerWalks).toHaveLength(0)
+      // A fresh launch still refuses a pane another owner holds.
+      expect(() =>
+        registry.prepare({
+          claim: { ...claim(digest(count + 10)), kind: 'fresh-launch' },
+          surface: { ...surface, tabId: 'tab-0' }
+        })
+      ).toThrow('agent_session_conflict')
+    }
+  )
 })

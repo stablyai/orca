@@ -19,6 +19,7 @@ import {
   cloneAgentSessionClaim,
   cloneAgentSessionOwner,
   cloneAgentSessionSurface,
+  isAgentSessionSurfaceOwned,
   prepareRegisteredAgentSessionOwner,
   reconcileClaimedAgentPtyOwnerSnapshot,
   scopedAgentSessionClaimsEqual,
@@ -132,15 +133,12 @@ export class ClaimedAgentPtyOwnerRegistry {
       }
       return { phase: 'reserved', owner: this.copyReservation(existing), created: false }
     }
-    for (const owner of [...this.reserved.values(), ...this.live.values()]) {
-      if (
-        requestedClaim.kind === 'fresh-launch' &&
-        owner.surface.worktreeId === requestedSurface.worktreeId &&
-        owner.surface.tabId === requestedSurface.tabId &&
-        owner.surface.leafId === requestedSurface.leafId
-      ) {
-        throw new Error('agent_session_conflict')
-      }
+    // Only a fresh launch can collide on a surface; other claims never pay for this search.
+    if (
+      requestedClaim.kind === 'fresh-launch' &&
+      isAgentSessionSurfaceOwned([this.reserved, this.live], requestedSurface)
+    ) {
+      throw new Error('agent_session_conflict')
     }
     this.assertCapacityForNewOwner()
     const completion = Promise.withResolvers<AgentSessionClaimedSpawnResult>()

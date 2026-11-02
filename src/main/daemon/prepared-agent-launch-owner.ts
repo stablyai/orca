@@ -1,8 +1,11 @@
 import {
   PreparedAgentLaunchExecution,
   PREPARED_LAUNCH_CALLER_KEY,
-  type LaunchWork
+  type LaunchWork,
+  type SetupOutputSession
 } from './prepared-agent-launch-execution'
+import type { Session } from './session'
+import { sessionSpawnPaneKey } from './terminal-host-session-listing'
 import {
   validatePreparedAgentSpawn,
   fingerprintPreparedAgentLaunch,
@@ -102,6 +105,8 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
         return this.snapshot(work)
       case 'wait':
         return waitForPreparedLaunch(work, payload.timeoutMs, payload.until)
+      case 'writeSetupOutcome':
+        return { written: this.writeSetupOutcome(work, payload.text) }
     }
   }
 
@@ -286,5 +291,20 @@ export class PreparedAgentLaunchOwner extends PreparedAgentLaunchExecution {
     for (const changed of work.changed) {
       changed()
     }
+  }
+}
+
+/** A session as a prepared launch's Setup reads it: identity, pane and its output ingress. */
+export function preparedSetupSession(session: Session | undefined): SetupOutputSession | undefined {
+  if (!session) {
+    return undefined
+  }
+  const paneKey = sessionSpawnPaneKey(session)
+  return {
+    isAlive: session.isAlive,
+    incarnationId: session.incarnationId,
+    terminalHandle: session.terminalHandle,
+    ...(paneKey ? { paneKey } : {}),
+    startupIngress: session.startupIngress
   }
 }

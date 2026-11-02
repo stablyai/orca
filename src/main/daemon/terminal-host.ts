@@ -1,4 +1,4 @@
-import { PreparedAgentLaunchOwner } from './prepared-agent-launch-owner'
+import { PreparedAgentLaunchOwner, preparedSetupSession } from './prepared-agent-launch-owner'
 import type { PreparedAgentLaunchRequest } from './prepared-agent-launch-protocol'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
@@ -74,7 +74,7 @@ export class TerminalHost {
       create: (options) => this.createOrAttach(options),
       isAlive: (id) => this.sessions.get(id)?.isAlive === true,
       reserveCapacity: () => opts.spawnGate?.reservePreparedLaunch() ?? (() => {}),
-      notice: (id, text) => this.sessions.get(id)?.startupIngress.accept(text),
+      setupSession: (id) => preparedSetupSession(this.sessions.get(id)),
       fenced: () => this.creationFenced
     })
     this.onSessionReaped = opts.onSessionReaped

@@ -57,7 +57,13 @@ export type PreparedAgentLaunchStatus = PreparedAgentLaunchIdentity & {
   accepted: boolean
   execution: 'not-dispatched' | 'dispatching' | 'started' | 'settled' | 'unknown'
   retirement: 'unused-retired' | 'retained-pending' | 'retained-live' | 'unknown'
-  setup?: { sessionId: string; incarnationId?: PtyIncarnationId; exitCode?: number }
+  setup?: {
+    sessionId: string
+    incarnationId?: PtyIncarnationId
+    exitCode?: number
+    /** Present only while that exact Setup process runs, so main can rejoin it without an inventory. */
+    pane?: { paneKey: string; terminalHandle: string }
+  }
   physical?: { sessionId: string; incarnationId: PtyIncarnationId; startedAt: number }
   failure?:
     | 'setup-failed'
@@ -69,12 +75,18 @@ export type PreparedAgentLaunchStatus = PreparedAgentLaunchIdentity & {
   published: boolean
 }
 
-/** An automatic launch outcome no surviving terminal shows; the window shows one short notice per operation. */
+/** Why an accepted launch left no usable agent; each value has one user-facing explanation. */
+export type PreparedLaunchFailureReason =
+  | NonNullable<PreparedAgentLaunchStatus['failure']>
+  | 'setup-not-started'
+  | 'exited'
+
+/** A final launch outcome no surviving terminal shows; the window shows one short notice per operation. */
 export type PreparedAgentLaunchNotice = {
   operationId: string
   worktreeId: string
   agent: string
-  kind: 'setup-closed' | 'prompt-uncertain'
+  kind: Exclude<PreparedLaunchFailureReason, 'cancelled'> | 'prompt-uncertain'
 }
 
 /** Accepted presentation the daemon returns to the exact publication observer; never listed or saved. */
@@ -134,22 +146,30 @@ export function isPreparedLaunchOperationUnknown(error: unknown): boolean {
   return error instanceof Error && error.message.startsWith('agent_session_operation_unknown')
 }
 
+/** The one reason a settled, unpublished launch has no agent, read from its owner's status. */
+export function preparedLaunchFailureReason(
+  status: PreparedAgentLaunchStatus
+): PreparedLaunchFailureReason {
+  if (status.physical) {
+    return 'exited'
+  }
+  if (status.failure === 'spawn-failed' && status.setup && !status.setup.incarnationId) {
+    return 'setup-not-started'
+  }
+  return status.failure ?? 'spawn-failed'
+}
+
 /** Final outcome text for an automatic launch that did not produce a usable agent. */
 export function preparedLaunchStatusFailureText(status: PreparedAgentLaunchStatus): string {
-  const setupNeverRan =
-    status.failure === 'spawn-failed' && status.setup !== undefined && !status.setup.incarnationId
-  return preparedLaunchFailureText(
-    status.physical ? 'exited' : setupNeverRan ? 'setup-not-started' : status.failure,
-    status.claim.agent
-  )
+  return preparedLaunchFailureText(preparedLaunchFailureReason(status), status.claim.agent)
 }
 
 export function preparedLaunchFailureText(
-  failure: PreparedAgentLaunchStatus['failure'] | 'exited' | 'setup-not-started',
+  reason: PreparedLaunchFailureReason,
   agent: string
 ): string {
   const name = tuiAgentDisplayName(agent) ?? agent
-  switch (failure) {
+  switch (reason) {
     case 'setup-not-started':
       return `Setup could not start, so ${name} was not started. Check the Setup command, then start ${name} from a new tab.`
     case 'setup-failed':
@@ -160,7 +180,10 @@ export function preparedLaunchFailureText(
       return `Setup was closed before it finished, so ${name} was not started. Start ${name} from a new tab.`
     case 'exited':
       return `${name} exited right after it started. Start ${name} again from a new tab.`
-    default:
+    case 'spawn-failed':
+      return `${name} could not be started. Check the agent command in Settings, then start ${name} from a new tab.`
+    case 'cancelled':
+    case 'expired':
       return `${name} could not be started. Start ${name} from a new tab.`
   }
 }

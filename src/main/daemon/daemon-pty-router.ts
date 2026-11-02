@@ -285,7 +285,8 @@ export class DaemonPtyRouter extends DaemonPtyPreparedLaunchRouting implements I
 
   private retireExitedLegacy(adapter: DaemonPtyAdapter, error: unknown): ExitedLegacyVerdict {
     const { current, legacy, legacyExitProof: exitProof, subscriptions } = this
-    return retireExitedLegacyAdapter({ adapter, error, current, legacy, exitProof, subscriptions })
+    const args = { adapter, error, current, legacy, exitProof, subscriptions }
+    return this.forgetRetiredPreparedLaunchOwner(adapter, retireExitedLegacyAdapter(args))
   }
 
   async getDefaultShell(): Promise<string> {

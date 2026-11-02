@@ -14,10 +14,9 @@ import type {
   PreparedAgentLaunchStatus,
   PreparedAgentSpawn
 } from './prepared-agent-launch-protocol'
-import {
-  preparedLaunchFailureText,
-  type PreparedLaunchIncarnation,
-  type PreparedLaunchPublication
+import type {
+  PreparedLaunchIncarnation,
+  PreparedLaunchPublication
 } from '../../shared/prepared-agent-launch'
 
 export const PREPARED_LAUNCH_CALLER_KEY = 'prepared-agent-launch-v1'
@@ -31,10 +30,20 @@ export type LaunchWork = {
   /** Retained until input retirement so recovery publishes the accepted recipe, view and authority. */
   publication?: PreparedLaunchPublication
   stopSetupScan?: () => void
+  /** The exact Setup process while it runs; a replacement under its id is never returned. */
+  liveSetup?: () => SetupOutputSession | undefined
   cancelDeadline?: () => void
   releaseCapacity?: () => void
   changed: Set<() => void>
   physicalEnded: boolean
+}
+
+export type SetupOutputSession = {
+  isAlive: boolean
+  incarnationId: string
+  terminalHandle: string | null
+  paneKey?: string
+  startupIngress: { accept(data: string): void }
 }
 
 export type PreparedLaunchDependencies = {
@@ -42,8 +51,8 @@ export type PreparedLaunchDependencies = {
   create: (options: InternalCreateOrAttachOptions) => Promise<CreateOrAttachResult>
   isAlive: (sessionId: string) => boolean
   reserveCapacity: () => () => void
-  /** Writes a final line into a still-running Setup's own output. */
-  notice?: (sessionId: string, text: string) => void
+  /** The live session under a Setup id, whose output can take main's explanation. */
+  setupSession?: (sessionId: string) => SetupOutputSession | undefined
   /** A host shutting down admits no new preparation or acceptance. */
   fenced?: () => boolean
   now?: () => number
@@ -129,6 +138,12 @@ export abstract class PreparedAgentLaunchExecution {
       })
       if (work.status.setup) {
         work.status.setup.incarnationId = result.incarnationId
+      }
+      work.liveSetup = () => {
+        const session = this.deps.setupSession?.(setup.spawn.sessionId)
+        return session?.isAlive && session.incarnationId === result.incarnationId
+          ? session
+          : undefined
       }
       this.notify(work)
     } catch {
@@ -242,14 +257,17 @@ export abstract class PreparedAgentLaunchExecution {
       row.outcome = { status: 'failed', code: failure ?? 'cancelled' }
       delete row.preparedLaunch
     }
-    const setupSessionId = work.status.setup?.sessionId
-    if (setupSessionId && (failure === 'setup-failed' || failure === 'setup-timeout')) {
-      // Main may be absent; the surviving Setup terminal is where the user is looking.
-      const text = `\r\n[orca] ${preparedLaunchFailureText(failure, work.owner.claim.agent)}\r\n`
-      // After the output chunk that carried the marker, so the notice reads below it.
-      queueMicrotask(() => this.deps.notice?.(setupSessionId, text))
-    }
     this.notify(work)
+  }
+
+  /** Writes main's explanation into this launch's own Setup, only while that exact process runs. */
+  protected writeSetupOutcome(work: LaunchWork, text: string): boolean {
+    const session = work.status.physical ? undefined : work.liveSetup?.()
+    if (!session || !isOneLine(text)) {
+      return false
+    }
+    session.startupIngress.accept(`\r\n[orca] ${text}\r\n`)
+    return true
   }
 
   /** Command, env and authority die with the launch obligation; the status stays readable. */
@@ -290,4 +308,13 @@ export abstract class PreparedAgentLaunchExecution {
     }
     this.notify(work)
   }
+}
+
+/** Main's explanation is one bounded line; control bytes could drive the terminal. */
+function isOneLine(text: string): boolean {
+  return (
+    text.length > 0 &&
+    text.length <= 512 &&
+    ![...text].some((char) => char < ' ' || char === '\u007f')
+  )
 }

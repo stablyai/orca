@@ -6,7 +6,6 @@ import type {
 } from '../../../../shared/agent-session/agent-session-host-authority'
 import {
   isPreparedAgentLaunchStatus,
-  preparedLaunchStatusFailureText,
   type PreparedAgentLaunchDescriptor,
   type PreparedAgentLaunchIdentity
 } from '../../../../shared/prepared-agent-launch'
@@ -76,7 +75,6 @@ export async function startPreparedWorktreeTerminals(args: {
 }): Promise<{
   pending: PendingWorktreeAgentLaunch
   setupTerminal?: RuntimeTerminalCreate
-  warning?: string
 }> {
   const { ports } = args
   const controller = ports.controller
@@ -239,7 +237,6 @@ export async function startPreparedWorktreeTerminals(args: {
       }
     }
     let setupTerminal: RuntimeTerminalCreate | undefined
-    let warning: string | undefined
     try {
       let observed = receipt
       if (setup && !observed.setup?.incarnationId && observed.execution === 'not-dispatched') {
@@ -253,10 +250,7 @@ export async function startPreparedWorktreeTerminals(args: {
           observed = next
         }
       }
-      // A Setup that never ran has no terminal to explain itself; the create result carries why.
-      if (setup && observed.failure === 'spawn-failed' && !observed.setup?.incarnationId) {
-        warning = preparedLaunchStatusFailureText(observed)
-      }
+      // A Setup that never ran is explained once, by the publication that retires its launch.
       if (setup && observed.setup?.incarnationId) {
         setupTerminal = await ports.createTerminal(`id:${args.worktreeId}`, {
           ...setup.options,
@@ -280,8 +274,7 @@ export async function startPreparedWorktreeTerminals(args: {
           ? { setupTerminalHandle: setupTerminal?.handle ?? setup.surface.terminalHandle }
           : {})
       },
-      setupTerminal,
-      ...(warning ? { warning } : {})
+      setupTerminal
     }
   } catch (error) {
     throw accepted ? error : new PreparedLaunchNotAcceptedError(error)
@@ -295,7 +288,10 @@ export async function startPreparedWorktreeTerminals(args: {
           .catch(() => null)
         unused = isPreparedAgentLaunchStatus(cancelled) && cancelled.retirement === 'unused-retired'
         if (unused) {
-          await ports.store.retirePreparedAgentLaunch(identity)
+          await ports.store.retirePreparedAgentLaunch({
+            callerKey: PREPARED_LAUNCH_ROW_CALLER,
+            ...identity
+          })
         }
       }
       if (unused) {

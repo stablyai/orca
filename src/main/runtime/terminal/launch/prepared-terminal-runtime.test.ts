@@ -24,14 +24,32 @@ function controllerDouble(members: Partial<RuntimePtyController>): RuntimePtyCon
   }
 }
 
-async function fixture() {
+type FixtureOptions = {
+  /** Setup output the native start buffered before its process was selected. */
+  setupOutputBeforeSelected?: (attemptId: string) => string
+  /** The agent's own creation fails, as staging or native spawn can. */
+  agentCreateFails?: boolean
+  /** Whether that Setup's session can take output when main asks; false before registration. */
+  setupSessionLive?: () => boolean
+}
+
+async function fixture(options: FixtureOptions = {}) {
   vi.useFakeTimers({ now: 1_800_000_000_000 })
   let setupObserver: RawPtySpawnObserver | undefined
   const incarnation = randomUUID()
+  const setupLines: string[] = []
   const create = vi.fn(async (opts: InternalCreateOrAttachOptions) => {
     if (opts.rawSpawnObserver) {
       setupObserver = opts.rawSpawnObserver()
+      const attemptId = row?.preparedLaunch?.setup?.attemptId ?? ''
+      const early = options.setupOutputBeforeSelected?.(attemptId)
+      if (early) {
+        setupObserver.onData(early)
+      }
       setupObserver.onSelected()
+    } else if (options.agentCreateFails) {
+      opts.onCreationDisposition?.({ kind: 'no-fork' })
+      throw new Error('startup_command_staging_failed')
     }
     return {
       isNew: true,
@@ -43,13 +61,20 @@ async function fixture() {
       incarnationId: incarnation
     }
   })
-  const notice = vi.fn()
   const owner = new PreparedAgentLaunchOwner({
     owners: new ClaimedAgentPtyOwnerRegistry(),
     create,
     isAlive: () => true,
     reserveCapacity: () => () => {},
-    notice
+    setupSession: (id) =>
+      id === 'setup' && (options.setupSessionLive?.() ?? true)
+        ? {
+            isAlive: true,
+            incarnationId: incarnation,
+            terminalHandle: 'term_setup',
+            startupIngress: { accept: (data: string) => setupLines.push(data) }
+          }
+        : undefined
   })
   let row:
     | {
@@ -75,17 +100,19 @@ async function fixture() {
           return { claim: { claim: 'won' as const } }
         }
       ),
-      retirePreparedAgentLaunch: vi.fn(async (args: { answer?: unknown }) => {
+      retirePreparedAgentLaunch: vi.fn(async (args: { outcome?: AgentSessionOperationOutcome }) => {
         if (!row?.preparedLaunch) {
           return false
         }
         delete row.preparedLaunch
-        if (args.answer) {
-          row.outcome = { status: 'succeeded', sessionId: '', launch: args.answer }
+        if (args.outcome) {
+          row.outcome = args.outcome
         }
         return true
       }),
-      listOperationRows: () => (row ? [row] : [])
+      listOperationRows: () => (row ? [row] : []),
+      getOperationRow: (_callerKey: string, operationId: string) =>
+        row?.operationId === operationId ? row : null
     },
     prepare: vi.fn(async (options: { command?: string; title?: string }) => {
       const setup = options.title === 'Setup'
@@ -156,12 +183,31 @@ async function fixture() {
     startPorts,
     runtime,
     create,
-    notice,
+    setupLines,
     notifier,
     wait,
     setupObserver: () => setupObserver!
   }
 }
+
+/** What the desktop showed: lines written into Setup and the window's toasts. */
+function explained(f: Awaited<ReturnType<typeof fixture>>) {
+  return {
+    lines: f.setupLines,
+    notices: [
+      ...f.ports.notifyLaunchNotice.mock.calls,
+      ...f.notifier.preparedAgentLaunchNotice.mock.calls
+    ].map(([notice]) => notice.kind)
+  }
+}
+
+const SETUP = {
+  runnerScriptPath: '/work/.git/orca/setup-runner.sh',
+  envVars: {},
+  waitForAgentStartup: true
+}
+const SPAWN_FAILED =
+  'Codex could not be started. Check the agent command in Settings, then start Codex from a new tab.'
 
 describe('late prepared agent waiter', () => {
   it('joins an agent whose background publication already retired its descriptor', async () => {
@@ -269,10 +315,13 @@ describe('late prepared agent waiter', () => {
     )
     await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
     await outcome
-    expect(f.notice).toHaveBeenCalledExactlyOnceWith(
-      'setup',
-      expect.stringContaining('Setup did not finish within 2 hours, so Codex was not started.')
-    )
+    // Setup is still running, so the explanation is its last line and there is no toast.
+    expect(explained(f)).toEqual({
+      lines: [
+        expect.stringContaining('Setup did not finish within 2 hours, so Codex was not started.')
+      ],
+      notices: []
+    })
     // A late marker after the deadline never revives the launch.
     f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:x:0\n`)
     expect(f.create).toHaveBeenCalledTimes(1)
@@ -343,5 +392,92 @@ describe('late prepared agent waiter', () => {
     expect(f.ports.deliverPrompts).not.toHaveBeenCalled()
     expect(f.ports.notifyLaunchNotice).not.toHaveBeenCalled()
     expect(f.notifier.preparedAgentLaunchNotice).not.toHaveBeenCalled()
+  })
+})
+
+describe('final outcome explanation', () => {
+  it('explains an agent that could not be started, with no Setup, in one toast', async () => {
+    const f = await fixture({ agentCreateFails: true })
+    const started = await startPreparedWorktreeTerminals({
+      worktreeId: 'wt',
+      targetKind: 'new-git',
+      startupOptions: { command: 'codex', launchAgent: 'codex' },
+      ports: f.startPorts
+    })
+    await expect(f.wait(started.pending)).rejects.toThrow(SPAWN_FAILED)
+    expect(explained(f)).toEqual({ lines: [], notices: ['spawn-failed'] })
+    // A delayed observer replays the recorded answer and shows nothing more.
+    await expect(f.wait(started.pending)).rejects.toThrow(SPAWN_FAILED)
+    expect(explained(f)).toEqual({ lines: [], notices: ['spawn-failed'] })
+  })
+
+  it('explains an agent that failed after Setup succeeded in one toast, not in Setup', async () => {
+    const f = await fixture({ agentCreateFails: true })
+    const started = await startPreparedWorktreeTerminals({
+      worktreeId: 'wt',
+      targetKind: 'new-git',
+      setup: SETUP,
+      startupOptions: { command: 'codex', launchAgent: 'codex' },
+      ports: f.startPorts
+    })
+    const attemptId = f.ports.store.listOperationRows()[0]?.preparedLaunch?.setup?.attemptId
+    f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:0\n`)
+    await expect(f.wait(started.pending)).rejects.toThrow(SPAWN_FAILED)
+    expect(explained(f)).toEqual({ lines: [], notices: ['spawn-failed'] })
+  })
+
+  it('writes a failed Setup once as its last line while its tab is open, with no toast', async () => {
+    const f = await fixture()
+    const started = await startPreparedWorktreeTerminals({
+      worktreeId: 'wt',
+      targetKind: 'new-git',
+      setup: SETUP,
+      startupOptions: { command: 'codex', launchAgent: 'codex' },
+      ports: f.startPorts
+    })
+    const attemptId = f.ports.store.listOperationRows()[0]?.preparedLaunch?.setup?.attemptId
+    f.setupObserver().onData(`\n__ORCA_SETUP_COMPLETE__:${attemptId}:2\n`)
+    await expect(f.wait(started.pending)).rejects.toThrow('Setup failed, so Codex was not started.')
+    await expect(f.wait(started.pending)).rejects.toThrow('Setup failed, so Codex was not started.')
+    expect(explained(f)).toEqual({
+      lines: [expect.stringContaining('Setup failed, so Codex was not started.')],
+      notices: []
+    })
+  })
+
+  it.each([
+    ['takes the line', true, { lines: 1, notices: [] }],
+    ['cannot take it yet', false, { lines: 0, notices: ['setup-failed'] }]
+  ])(
+    'explains a nonzero Setup completion buffered before its session existed exactly once (session %s)',
+    async (_case, live, expected) => {
+      // Windows native start can deliver the completion before the process is selected.
+      const f = await fixture({
+        setupOutputBeforeSelected: (attemptId) => `__ORCA_SETUP_COMPLETE__:${attemptId}:9\r\n`,
+        setupSessionLive: () => live
+      })
+      const started = await startPreparedWorktreeTerminals({
+        worktreeId: 'wt',
+        targetKind: 'new-git',
+        setup: SETUP,
+        startupOptions: { command: 'codex', launchAgent: 'codex' },
+        ports: f.startPorts
+      })
+      await expect(f.wait(started.pending)).rejects.toThrow('Setup failed')
+      const shown = explained(f)
+      expect({ lines: shown.lines.length, notices: shown.notices }).toEqual(expected)
+    }
+  )
+
+  it('shows nothing for an agent that started cleanly', async () => {
+    const f = await fixture()
+    const started = await startPreparedWorktreeTerminals({
+      worktreeId: 'wt',
+      targetKind: 'new-git',
+      startupOptions: { command: 'codex', launchAgent: 'codex' },
+      ports: f.startPorts
+    })
+    await expect(f.wait(started.pending)).resolves.toMatchObject({ handle: 'term_agent' })
+    expect(explained(f)).toEqual({ lines: [], notices: [] })
   })
 })

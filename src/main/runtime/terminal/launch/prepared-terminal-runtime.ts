@@ -7,11 +7,17 @@ import {
   publishPreparedTerminal
 } from './prepared-terminal-publication'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { readPreparedLaunchAnswer } from './prepared-terminal-prompt-delivery'
+import {
+  preparedLaunchRow,
+  readPreparedLaunchAnswer,
+  readPreparedLaunchFailure
+} from './prepared-terminal-prompt-delivery'
 import type { PreparedTerminalPrompts } from '../../../daemon/prepared-agent-launch-protocol'
+import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   isPreparedAgentLaunchDescriptor,
   preparedLaunchStatusFailureText,
+  type PreparedAgentLaunchDescriptor,
   type PreparedAgentLaunchIdentity,
   type PreparedAgentLaunchStatus
 } from '../../../../shared/prepared-agent-launch'
@@ -27,7 +33,6 @@ import { prepareWorkspaceTerminalSpawn } from './prepare-workspace-terminal-spaw
 import { terminalCreateTeamAllocation } from './terminal-create-team-allocation'
 import { agentLaunchTokenFor } from '../../../agent-launch/agent-launch-token'
 import { admitRuntimePane } from '../../runtime-pane-admission'
-import type { PreparedAgentLaunchDescriptor } from '../../../../shared/prepared-agent-launch'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
 
 export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTerminalCreateDeduplication {
@@ -123,13 +128,9 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
       throw new PreparedTerminalPendingError(identity)
     }
     const store = await this.openAgentSessionRecordStore()
-    const row = store
-      .listOperationRows()
-      .find(
-        (row) =>
-          row.operationId === identity.operationId && row.fingerprint === identity.fingerprint
-      )
-    let status: PreparedAgentLaunchStatus
+    const row = preparedLaunchRow(store, identity)
+    let status: PreparedAgentLaunchStatus | undefined
+    let failure: string | null
     try {
       const terminal = isPreparedAgentLaunchDescriptor(row?.preparedLaunch)
         ? await publishPreparedTerminal(
@@ -141,23 +142,23 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
       if (terminal) {
         return terminal
       }
-      status = await readPreparedTerminalStatus(controller, identity)
       // Read the saved answer now: a publication above may have recorded it after the first read.
-      const published = this.publishedPreparedTerminal(
-        status,
-        readPreparedLaunchAnswer(
-          store.listOperationRows(),
-          identity,
-          status.physical?.incarnationId
-        )
-      )
-      if (published) {
-        return published
+      failure = readPreparedLaunchFailure(preparedLaunchRow(store, identity))
+      if (!failure) {
+        status = await readPreparedTerminalStatus(controller, identity)
+        const published = this.publishedPreparedTerminal(status, preparedLaunchRow(store, identity))
+        if (published) {
+          return published
+        }
       }
     } catch {
       throw new PreparedTerminalPendingError(identity)
     }
-    if (status.retirement !== 'unused-retired' || (!status.physical && !status.failure)) {
+    // The retiring transaction's recorded answer is every later caller's answer.
+    if (failure) {
+      throw new Error(failure)
+    }
+    if (status?.retirement !== 'unused-retired' || (!status.physical && !status.failure)) {
       throw new PreparedTerminalPendingError(identity)
     }
     throw new Error(preparedLaunchStatusFailureText(status))
@@ -166,7 +167,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
   /** An already published agent is read from this runtime's own records, never attached again. */
   private publishedPreparedTerminal(
     status: PreparedAgentLaunchStatus,
-    answer: { warning?: string } | null
+    row: AgentSessionOperationRow | null
   ): dependencies.RuntimeTerminalCreate | null {
     const { physical, surface } = status
     if (!physical || !status.published || status.execution !== 'started') {
@@ -180,6 +181,7 @@ export abstract class OrcaRuntimeWithPreparedTerminals extends OrcaRuntimeWithTe
     ) {
       return null
     }
+    const answer = readPreparedLaunchAnswer(row, status, physical.incarnationId)
     return {
       handle: surface.terminalHandle,
       worktreeId: surface.worktreeId,

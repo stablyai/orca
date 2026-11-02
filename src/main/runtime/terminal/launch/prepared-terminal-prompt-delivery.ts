@@ -8,6 +8,7 @@ import type {
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { PreparedTerminalPendingError } from './prepared-terminal-pending'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 
 /** The operation namespace main records prepared worktree launches under. */
 export const PREPARED_LAUNCH_ROW_CALLER = 'worktree-startup'
@@ -76,14 +77,14 @@ export function joinPreparedPromptContinuation(
   identity: PreparedAgentLaunchIdentity,
   descriptor: PreparedAgentLaunchDescriptor,
   terminal: RuntimeTerminalCreate,
-  rows: () => readonly AgentSessionOperationRow[]
+  row: () => AgentSessionOperationRow | null
 ): Promise<RuntimeTerminalCreate> {
   const continuation = continuations.get(preparedLaunchKey(identity))
   if (continuation) {
     continuation.publish(terminal)
     return continuation.answer
   }
-  const saved = readPreparedLaunchAnswer(rows(), identity, terminal.incarnationId)
+  const saved = readPreparedLaunchAnswer(row(), identity, terminal.incarnationId)
   if (saved || typeof descriptor.promptOwnerRef !== 'string') {
     return Promise.resolve(saved?.warning ? { ...terminal, warning: saved.warning } : terminal)
   }
@@ -96,19 +97,25 @@ export function joinPreparedPromptContinuation(
   })
 }
 
+/** This launch's saved row, by its exact key; one launch never searches the whole ledger. */
+export function preparedLaunchRow(
+  store: Pick<AgentSessionRecordStore, 'getOperationRow'>,
+  identity: PreparedAgentLaunchIdentity
+): AgentSessionOperationRow | null {
+  const row = store.getOperationRow(PREPARED_LAUNCH_ROW_CALLER, identity.operationId)
+  return row?.fingerprint === identity.fingerprint ? row : null
+}
+
 /** The final answer the retiring transaction saved for this exact launch and agent incarnation. */
 export function readPreparedLaunchAnswer(
-  rows: readonly AgentSessionOperationRow[],
+  row: AgentSessionOperationRow | null,
   identity: PreparedAgentLaunchIdentity,
   incarnationId: string | null | undefined
 ): { warning?: string } | null {
-  const row = rows.find(
-    (candidate) =>
-      candidate.callerKey === PREPARED_LAUNCH_ROW_CALLER &&
-      candidate.operationId === identity.operationId &&
-      candidate.fingerprint === identity.fingerprint
-  )
-  const answer = row?.outcome.status === 'succeeded' ? row.outcome.launch : undefined
+  const answer =
+    row?.fingerprint === identity.fingerprint && row.outcome.status === 'succeeded'
+      ? row.outcome.launch
+      : undefined
   if (
     typeof answer !== 'object' ||
     answer === null ||
@@ -120,6 +127,11 @@ export function readPreparedLaunchAnswer(
   }
   const warning = 'warning' in answer ? answer.warning : undefined
   return typeof warning === 'string' ? { warning } : {}
+}
+
+/** The saved reason this launch left no agent, as the sentence every later caller receives. */
+export function readPreparedLaunchFailure(row: AgentSessionOperationRow | null): string | null {
+  return row?.outcome.status === 'failed' && row.outcome.message ? row.outcome.message : null
 }
 
 /** Kept until its answer is recorded or the launch is gone, so a failed write retries recording only. */

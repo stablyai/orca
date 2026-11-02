@@ -262,28 +262,20 @@ export function settleAgentSessionOperationInto(
 export function retirePreparedAgentLaunchInto(
   state: { operations: Map<string, AgentSessionOperationRow> },
   args: {
+    callerKey: string
     operationId: string
     daemonGeneration: string
     reservationGeneration: string
-    answer?: unknown
+    outcome?: AgentSessionOperationOutcome
   }
 ): boolean {
-  let removed = false
-  for (const [key, row] of state.operations) {
-    if (
-      row.operationId !== args.operationId ||
-      !matchesPreparedLaunchGeneration(row.preparedLaunch, args)
-    ) {
-      continue
-    }
-    const { preparedLaunch: _retired, ...retained } = row
-    state.operations.set(
-      key,
-      args.answer === undefined
-        ? retained
-        : { ...retained, outcome: { status: 'succeeded', sessionId: '', launch: args.answer } }
-    )
-    removed = true
+  // Exact key: retiring one launch never walks the rest of the ledger.
+  const key = agentSessionOperationKey(args.callerKey, args.operationId)
+  const row = state.operations.get(key)
+  if (!row || !matchesPreparedLaunchGeneration(row.preparedLaunch, args)) {
+    return false
   }
-  return removed
+  const { preparedLaunch: _retired, ...retained } = row
+  state.operations.set(key, args.outcome ? { ...retained, outcome: args.outcome } : retained)
+  return true
 }

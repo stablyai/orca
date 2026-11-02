@@ -69,6 +69,25 @@ export function scopedAgentSessionClaimsEqual(
   )
 }
 
+/** Whether any owner holds this pane; the handle is not part of a pane's identity here. */
+export function isAgentSessionSurfaceOwned(
+  owners: readonly ReadonlyMap<string, { surface: AgentSessionSurfaceBinding }>[],
+  surface: AgentSessionSurfaceBinding
+): boolean {
+  for (const map of owners) {
+    for (const owner of map.values()) {
+      if (
+        owner.surface.worktreeId === surface.worktreeId &&
+        owner.surface.tabId === surface.tabId &&
+        owner.surface.leafId === surface.leafId
+      ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 export function agentSessionSurfacesEqual(
   left: AgentSessionSurfaceBinding,
   right: AgentSessionSurfaceBinding

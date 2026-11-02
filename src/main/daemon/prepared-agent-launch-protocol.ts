@@ -61,5 +61,11 @@ export type PreparedAgentLaunchRequest = {
         timeoutMs: number
         until?: 'setup' | 'launch'
       }
+    | {
+        /** Main's one explanation of a launch that never started, written as Setup's last line. */
+        action: 'writeSetupOutcome'
+        identity: PreparedAgentLaunchIdentity
+        text: string
+      }
     | { action: 'list'; after?: string; limit?: number }
 }

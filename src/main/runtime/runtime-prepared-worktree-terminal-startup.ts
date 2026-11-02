@@ -18,7 +18,6 @@ export type PreparedStartupPorts = {
   ) => Promise<{
     pending: PendingPreparedAgentLaunch
     setupTerminal?: RuntimeTerminalCreate
-    warning?: string
   } | null>
 }
 
@@ -28,7 +27,7 @@ export async function startPreparedLocalWorktreeTerminals(
 ): Promise<RuntimeLocalWorktreeTerminalStartupResult | PreparedLaunchNotAcceptedError | null> {
   const { request, repo, worktree, defaultTabs, startup, ports, setup } = args
   const shouldActivate = request.activate === true || request.runHooks === true
-  let warning = args.warning
+  const warning = args.warning
   if (
     startup &&
     request.preparedAgentLaunch &&
@@ -69,9 +68,6 @@ export async function startPreparedLocalWorktreeTerminals(
       return prepared
     }
     if (prepared) {
-      if (prepared.warning) {
-        warning = warning ? `${warning} ${prepared.warning}` : prepared.warning
-      }
       // The first template belongs to the eventual agent; extras run once while Setup is interactive.
       const provisioned = await ports.provision({
         ...provisionArgs,
