@@ -1,6 +1,9 @@
 import { cn } from '@/lib/utils'
 import { useTabDragActive } from '../tab-group/tab-drag-context'
-import { TAB_CONTAINER_WIDTH_CLASSES } from './tab-width-rules'
+import {
+  TAB_CONTAINER_WIDTH_CLASSES,
+  TAB_ICON_ONLY_CONTAINER_WIDTH_CLASSES
+} from './tab-width-rules'
 
 type TabStripSlotProps = {
   className: string
@@ -9,11 +12,18 @@ type TabStripSlotProps = {
 }
 
 /** Dock the active slot at viewport edges except during drag, when overlapping rects would corrupt drop targets. */
-export function useTabStripSlotProps(tabId: string, isActive: boolean): TabStripSlotProps {
+export function useTabStripSlotProps(
+  tabId: string,
+  isActive: boolean,
+  iconOnly = false
+): TabStripSlotProps {
   const isTabDragActive = useTabDragActive()
   const docks = isActive && !isTabDragActive
   return {
-    className: cn(TAB_CONTAINER_WIDTH_CLASSES, docks && 'sticky inset-x-0 z-10'),
+    className: cn(
+      iconOnly ? TAB_ICON_ONLY_CONTAINER_WIDTH_CLASSES : TAB_CONTAINER_WIDTH_CLASSES,
+      docks && 'sticky inset-x-0 z-10'
+    ),
     'data-tab-strip-slot': tabId,
     'data-active-tab-dock': docks ? '' : undefined
   }

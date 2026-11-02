@@ -56,6 +56,7 @@ function renderProjection(initialIds: string[]): {
         unifiedTabs: [],
         unifiedTabByVisibleId: new Map(),
         generatedTabTitlesEnabled: false,
+        pinnedTabsIconOnly: false,
         statusByRelativePath: new Map()
       }),
     { initialProps: initialIds }

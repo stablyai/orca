@@ -24,7 +24,7 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
-import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_ICON_ONLY_ROOT_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
@@ -69,6 +69,7 @@ export default function BrowserTab({
   tab,
   isActive,
   isPinned,
+  pinnedIconOnly = false,
   hasTabsToRight,
   tabCount,
   onActivate,
@@ -84,6 +85,7 @@ export default function BrowserTab({
   tab: BrowserTabState
   isActive: boolean
   isPinned: boolean
+  pinnedIconOnly?: boolean
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
   tabCount: number
@@ -150,7 +152,8 @@ export default function BrowserTab({
     { onActivate }
   )
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive)
+  const iconOnly = isPinned && pinnedIconOnly
+  const slotProps = useTabStripSlotProps(tab.id, isActive, iconOnly)
 
   const tabRoot = (
     <div
@@ -160,7 +163,9 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      // Why: collapsed to an icon there is no text to name the tab, and dnd-kit's role="button" needs one.
+      aria-label={iconOnly ? tabLabel : undefined}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)} ${iconOnly ? TAB_ICON_ONLY_ROOT_CLASSES : ''}`}
       onPointerDown={(e) => {
         onTabPointerDown(
           e,
@@ -204,8 +209,10 @@ export default function BrowserTab({
           fallbackClassName="text-blue-500"
         />
       )}
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
+      {isPinned && !iconOnly && (
+        <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
+      )}
+      {iconOnly ? null : <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>}
       {showAudioControl && (
         // Why: unlike close, stays visible on inactive tabs; finding the playing tab is the point.
         <button
