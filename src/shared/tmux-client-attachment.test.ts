@@ -49,7 +49,7 @@ describe('execution-host tmux client attachment', () => {
     ],
     ['shown by this pane’s own client', [{ pid: 101, pane: '%1' }], [ROOT, stoppedHere], false],
     ['shown by no client', [{ pid: 301, pane: '%2' }], [ROOT, ITERM, ITERM_CLIENT], false]
-  ])('verifies a pane %s as shown elsewhere: %s', (_name, clients, rows, elsewhere) => {
+  ])('tells whether a pane %s is shown elsewhere', (_name, clients, rows, elsewhere) => {
     expect(isTmuxPaneShownElsewhere(100, '%1', clients, rows)).toBe(elsewhere)
   })
 
