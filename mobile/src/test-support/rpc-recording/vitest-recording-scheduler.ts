@@ -71,6 +71,9 @@ const KNOWN_MAIN_TIMERS: Readonly<Record<string, Readonly<Record<string, KnownMa
   }
 }
 
+// A timer callback as the fake timers invoke it.
+type TimerCallback = (this: unknown, ...args: unknown[]) => unknown
+
 type TrackedTimer = {
   kind: 'timeout' | 'interval'
   delay: number
@@ -85,13 +88,12 @@ function trackTimers(): Map<unknown, TrackedTimer> {
   const fakeSetInterval = globalThis.setInterval
   const fakeClearTimeout = globalThis.clearTimeout
   const fakeClearInterval = globalThis.clearInterval
-  const callable = (callback: unknown): ((...args: unknown[]) => unknown) => {
+  const callable = (callback: unknown): TimerCallback => {
     if (typeof callback !== 'function') {
       throw new Error('A recorded timer needs a callback')
     }
-    return function (this: unknown, ...args: unknown[]) {
-      return Reflect.apply(callback, this, args)
-    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a timer callback is any function, called with the fake timer's own receiver and arguments.
+    return callback as TimerCallback
   }
   const allocation = (kind: TrackedTimer['kind'], delay: number | undefined) => ({
     kind,
@@ -104,7 +106,7 @@ function trackTimers(): Map<unknown, TrackedTimer> {
     const handle = fakeSetTimeout(
       function (this: unknown, ...fired: unknown[]) {
         live.delete(handle)
-        return Reflect.apply(original, this, fired)
+        return original.call(this, ...fired)
       },
       delay,
       ...args
