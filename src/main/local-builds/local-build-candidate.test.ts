@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
-import type { LocalBuildCompatibility } from '../../shared/local-build-compatibility'
+import { ORCA_APP_ID, type LocalBuildCompatibility } from '../../shared/local-build-compatibility'
 import { loadLocalBuildCandidate } from './local-build-candidate'
 import { startLocalBuildFeed } from './local-build-feed-server'
 
@@ -16,7 +16,7 @@ const execFileAsync = promisify(execFile)
 function compatibility(): LocalBuildCompatibility {
   return {
     formatVersion: 1,
-    appId: 'com.stablyai.orca',
+    appId: ORCA_APP_ID,
     buildId: '1.2.3-local.1-abc-arm64',
     version: '1.2.3-local.1',
     commit: 'abc',
@@ -96,9 +96,11 @@ describe('loadLocalBuildCandidate', () => {
   it('rejects symlinked artifacts', async () => {
     const { artifactPath, directory, manifestPath } = await fixture()
     const realArtifact = join(directory, 'real.zip')
-    await writeFile(realArtifact, 'signed-zip-placeholder')
+    const isWindows = process.platform === 'win32'
+    // Windows junctions exercise link rejection without requiring symlink privileges.
+    await (isWindows ? mkdir(realArtifact) : writeFile(realArtifact, 'signed-zip-placeholder'))
     await rm(artifactPath)
-    await symlink(realArtifact, artifactPath)
+    await symlink(realArtifact, artifactPath, isWindows ? 'junction' : 'file')
 
     await expect(
       loadLocalBuildCandidate(manifestPath, 'arm64', {

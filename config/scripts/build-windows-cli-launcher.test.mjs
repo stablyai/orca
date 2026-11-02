@@ -256,8 +256,8 @@ describe('Windows CLI launcher', () => {
         const info = JSON.parse(inspect.stdout)
         const { version } = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'))
         expect(info.CompanyName).toBe('Stably AI')
-        expect(info.ProductName).toBe('Orca')
-        expect(info.FileDescription).toBe('Orca CLI Launcher')
+        expect(info.ProductName).toBe('Phorca')
+        expect(info.FileDescription).toBe('Phorca CLI Launcher')
         expect(info.FileVersion).toBe(`${version.split(/[+-]/)[0]}.0`)
         expect(info.ProductVersion).toBe(version)
         const binary = readFileSync(launcherPath)
@@ -292,6 +292,63 @@ describe('Windows CLI launcher', () => {
     }
   })
 
+  itCrossHost('never hands the child an explicit environment map', () => {
+    // Why: setting any entry on the child's environment makes the spawn build its own
+    // block from a case-insensitive map, which collapses an inherited PATH and Path
+    // into one entry and killed the CLI (stablyai/orca#12046). Mutating this process
+    // and leaving the map untouched passes the block through verbatim.
+    const source = readFileSync(
+      join(projectRoot, 'native', 'windows-cli-launcher', 'src', 'main.rs'),
+      'utf8'
+    )
+    const code = source.replace(/^\s*\/\/.*$/gm, '')
+
+    expect(code).not.toMatch(/\.envs?\(/u)
+    expect(code).not.toContain('env_clear')
+    expect(code).toContain('env::set_var')
+  })
+
+  itCrossHost('never reintroduces a managed launcher alongside the native one', () => {
+    // Why: the MSIL image is what vendors flagged (stablyai/orca#23383). A stray .cs
+    // left in the crate would compile back into the shape the rewrite removed.
+    expect(
+      existsSync(join(projectRoot, 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs'))
+    ).toBe(false)
+  })
+
+  itWindows('rejects missing and invalid executable identities', () => {
+    const appRoot = mkdtempSync(join(tmpdir(), 'phorca invalid launcher identity '))
+    try {
+      const resourcesPath = join(appRoot, 'resources')
+      const launcherPath = join(resourcesPath, 'bin', 'orca.exe')
+      mkdirSync(dirname(launcherPath), { recursive: true })
+      const build = spawnSync(
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
+        { cwd: projectRoot, encoding: 'utf8' }
+      )
+      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+      for (const identity of [
+        null,
+        '',
+        '../Phorca.exe',
+        '..\\Phorca.exe',
+        'C:\\Phorca.exe',
+        'Phorca',
+        'Phorca.exe\0'
+      ]) {
+        if (identity !== null) {
+          writeFileSync(join(resourcesPath, 'app-executable-name.txt'), identity)
+        }
+        const result = spawnSync(launcherPath, [], { encoding: 'utf8' })
+        expect(result.status, identity).not.toBe(0)
+        expect(result.stderr, identity).toContain('executable identity')
+      }
+    } finally {
+      removeFixtureTree(appRoot)
+    }
+  })
+
   itWindows('preserves a multiline argument from PowerShell through the native launcher', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'orca cli launcher '))
     try {
@@ -300,7 +357,8 @@ describe('Windows CLI launcher', () => {
       const cliPath = join(resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
       mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
       mkdirSync(dirname(cliPath), { recursive: true })
-      copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      copyFileSync(process.execPath, join(appRoot, 'Phorca.exe'))
+      writeFileSync(join(resourcesPath, 'app-executable-name.txt'), 'Phorca.exe\n', 'utf8')
       writeFileSync(
         cliPath,
         `process.stdout.write(JSON.stringify({
@@ -437,6 +495,7 @@ describe('Windows CLI launcher', () => {
       mkdirSync(dirname(launcherPath), { recursive: true })
       mkdirSync(dirname(cliPath), { recursive: true })
       copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      writeFileSync(join(resourcesPath, 'app-executable-name.txt'), 'Orca.exe\n', 'utf8')
       writeFileSync(
         cliPath,
         `require('node:fs').writeFileSync(process.env.ORCA_TEST_OUTPUT, JSON.stringify({

@@ -85,9 +85,17 @@ export function installedElectronCandidates(
   if (platform === 'win32') {
     return [
       ...(environment.LOCALAPPDATA
-        ? [joinPath(environment.LOCALAPPDATA, 'Programs', 'Orca', 'Orca.exe')]
+        ? [
+            joinPath(environment.LOCALAPPDATA, 'Programs', 'Phorca', 'Phorca.exe'),
+            joinPath(environment.LOCALAPPDATA, 'Programs', 'Orca', 'Orca.exe')
+          ]
         : []),
-      ...(environment.ProgramFiles ? [joinPath(environment.ProgramFiles, 'Orca', 'Orca.exe')] : [])
+      ...(environment.ProgramFiles
+        ? [
+            joinPath(environment.ProgramFiles, 'Phorca', 'Phorca.exe'),
+            joinPath(environment.ProgramFiles, 'Orca', 'Orca.exe')
+          ]
+        : [])
     ]
   }
   return [

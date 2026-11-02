@@ -1,7 +1,4 @@
-// The tag families published as GitHub releases of this repo. Every release-triggered workflow and
-// every script that lists releases classifies tags through this file, so a new family (like the
-// agent state rules) is excluded or admitted in one place; release-tag-pattern-census.test.mjs
-// enforces that.
+// Release tag families shared by the scripts that classify published releases.
 
 const NUMBER = '(?:0|[1-9][0-9]*)'
 const VERSION = `${NUMBER}\\.${NUMBER}\\.${NUMBER}`

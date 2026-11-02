@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { chmod, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -16,6 +16,7 @@ const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.
 
 describe('electron-builder config', () => {
   it('keeps the packaged app identity aligned with local-build validation', () => {
+    expect(electronBuilderConfig.productName).toBe('Phorca')
     expect(electronBuilderConfig.appId).toBe(
       require('../../src/shared/local-build-compatibility-contract.json').appId
     )
@@ -568,8 +569,10 @@ describe('arch-aware packaging guard', () => {
   const HOST_ARCH = process.arch === 'arm64' ? 3 : 1
   const OTHER_ARCH = process.arch === 'arm64' ? 1 : 3
   const OTHER_ARCH_NAME = process.arch === 'arm64' ? 'x64' : 'arm64'
-  const SHERPA_PLATFORM = process.platform === 'win32' ? 'win' : process.platform
-  const otherSherpa = `sherpa-onnx-${SHERPA_PLATFORM}-${OTHER_ARCH_NAME}`
+  const otherSherpa =
+    process.platform === 'win32'
+      ? 'sherpa-onnx-win-x64'
+      : `sherpa-onnx-${process.platform}-${OTHER_ARCH_NAME}`
 
   // beforePack also hash-verifies the mobile web bundle, which the unit-test job never builds.
   // Point it at a real bundle built into a temp dir: these tests are about the native-variant
@@ -618,8 +621,23 @@ describe('arch-aware packaging guard', () => {
       require('../../package.json').optionalDependencies,
       otherSherpa
     )
+    const otherWatcherPrefix = `watcher-${process.platform}-${OTHER_ARCH_NAME}`
+    const otherWatcherInstalled = readdirSync(join(REPO_ROOT, 'node_modules', '@parcel')).some(
+      (name) =>
+        name.startsWith(otherWatcherPrefix) &&
+        existsSync(join(REPO_ROOT, 'node_modules', '@parcel', name, 'package.json'))
+    )
+    const missingNatives = []
     if (otherSherpaExpected && !otherSherpaInstalled) {
-      expect(() => packHost(OTHER_ARCH)).toThrow(otherSherpa)
+      missingNatives.push(otherSherpa)
+    }
+    if (!otherWatcherInstalled) {
+      missingNatives.push(`@parcel/${otherWatcherPrefix}`)
+    }
+    if (missingNatives.length > 0) {
+      for (const native of missingNatives) {
+        expect(() => packHost(OTHER_ARCH)).toThrow(native)
+      }
       expect(() => packHost(OTHER_ARCH)).toThrow('pnpm install:release')
     } else if (process.platform !== 'win32') {
       expect(() => packHost(OTHER_ARCH)).not.toThrow()

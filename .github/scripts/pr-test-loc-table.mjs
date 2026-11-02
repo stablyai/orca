@@ -76,13 +76,16 @@ export function renderLocBlock(totals) {
 }
 
 export function mergeLocBlock(body, totals) {
-  const block = renderLocBlock(totals)
+  return mergeMarkedBlock(body, renderLocBlock(totals), LOC_BLOCK_START, LOC_BLOCK_END)
+}
+
+export function mergeMarkedBlock(body, block, startMarker, endMarker) {
   const current = body ?? ''
-  const start = current.indexOf(LOC_BLOCK_START)
-  const end = current.indexOf(LOC_BLOCK_END)
+  const start = current.indexOf(startMarker)
+  const end = current.indexOf(endMarker, start + startMarker.length)
 
   if (start !== -1 && end !== -1 && end > start) {
-    const rest = current.slice(end + LOC_BLOCK_END.length).replace(/^\r?\n/, '')
+    const rest = current.slice(end + endMarker.length).replace(/^\r?\n/, '')
     if (rest.trim().length === 0) {
       return `${current.slice(0, start)}${block}\n`
     }

@@ -9,6 +9,8 @@
 // the substitution happens at compile time so a curious contributor cannot
 // spoof transmission with a shell export.
 //
+declare const PHORCA_MANAGED_BUILD: boolean
+
 declare const ORCA_BUILD_IDENTITY: 'stable' | 'rc' | null
 declare const ORCA_POSTHOG_WRITE_KEY: string | null
 

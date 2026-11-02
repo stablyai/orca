@@ -13,7 +13,7 @@ function readAppDirArg(argv) {
     return explicit.slice('--app-dir='.length)
   }
   if (process.platform === 'darwin') {
-    return 'dist/mac-arm64/Orca.app'
+    return 'dist/mac-arm64/Phorca.app'
   }
   if (process.platform === 'win32') {
     return 'dist/win-unpacked'
@@ -40,13 +40,14 @@ try {
   await cp(appDir, copiedAppDir, { recursive: true, verbatimSymlinks: true })
   const cliPath = getPackagedCliPath(copiedAppDir)
   const env = { ...process.env, NODE_PATH: '' }
+  const commandTimeoutMs = process.platform === 'win32' ? 60_000 : 30_000
   delete env.ORCA_CLI_CWD
   const run = (args) =>
     execFileAsync(cliPath, args, {
       env,
       killSignal: 'SIGKILL',
       maxBuffer: 16 * 1024 * 1024,
-      timeout: 30_000
+      timeout: commandTimeoutMs
     })
 
   await run(['--help'])
@@ -78,7 +79,7 @@ try {
   smokeFailure = error
 }
 
-// Why: on Windows the launcher above spawns the copied Orca.exe (and its crashpad/utility children)
+// Why: on Windows the launcher above spawns the packaged app executable (and its crashpad/utility children)
 // once per command; those handles can outlive execFile's exit by a few ms, so this cleanup hits
 // EBUSY on our own just-exited process after every assertion already passed. Same retry treatment
 // as removeHostTree(); a lock that never clears still throws — unless the smoke run itself failed,

@@ -186,11 +186,13 @@ describe('cross-platform browser provider paths', () => {
     expect(installedElectronCandidates('linux', '/home/test', {})).toContain(
       '/home/test/.local/bin/orca-ide'
     )
-    expect(
-      installedElectronCandidates('win32', 'C:\\Users\\test', {
-        LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local'
-      })
-    ).toContain('C:\\Users\\test\\AppData\\Local\\Programs\\Orca\\Orca.exe')
+    const windowsCandidates = installedElectronCandidates('win32', 'C:\\Users\\test', {
+      LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local'
+    })
+    expect(windowsCandidates).toContain(
+      'C:\\Users\\test\\AppData\\Local\\Programs\\Phorca\\Phorca.exe'
+    )
+    expect(windowsCandidates).toContain('C:\\Users\\test\\AppData\\Local\\Programs\\Orca\\Orca.exe')
   })
 
   it('uses platform-specific bundled agent-browser names', () => {

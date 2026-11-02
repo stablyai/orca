@@ -2,6 +2,13 @@
 
 Thanks for contributing to Orca.
 
+**Phorca fork:** only the [Sync Orca release](ORCA_SYNC.md) workflow is retained. The
+upstream PR/build/deployment/release workflows described below are not installed
+in this fork. Run checks locally; they are not automatic PR gates.
+Selected `config/scripts/*.test.mjs` suites are also retired; the exact paths are
+listed in [`config/phorca-retired-tests.json`](../config/phorca-retired-tests.json).
+Their remaining script/build/runtime coverage is not retained elsewhere.
+
 ## Before You Start
 
 - Keep changes scoped to a clear user-facing improvement, bug fix, or refactor.
@@ -62,7 +69,7 @@ Avoid vague names like `test`, `misc`, or `changes`.
 
 ## Before Opening a PR
 
-Run the same checks that CI runs:
+Run the upstream project's checks locally (Phorca does not run these in PR CI):
 
 ```bash
 pnpm lint
@@ -107,13 +114,15 @@ Each pull request should follow [`.github/pull_request_template.md`](./pull_requ
 
 Version bumps, tags, and releases are maintainer-managed. Do not include release version changes in a normal contribution unless a maintainer asks for them.
 
-### Cutting a release (maintainers)
+### Cutting an upstream Orca release (upstream maintainers)
 
-All releases are cut from the **Cut Release** GitHub Actions workflow. There is no local `pnpm release:*` script — running releases locally is too easy to get wrong (dirty tree, wrong branch, stale main).
+Upstream Orca releases are cut from the **Cut Release** GitHub Actions workflow;
+that workflow is not installed in Phorca. There is no local `pnpm release:*`
+script — running releases locally is too easy to get wrong (dirty tree, wrong branch, stale main).
 
 **To cut a release:**
 
-1. Open [Actions → Cut Release](../../actions/workflows/release-cut.yml).
+1. Open upstream's [Actions → Cut Release](https://github.com/stablyai/orca/actions/workflows/release-cut.yml).
 2. Click **Run workflow** and pick:
    - **kind**: one of `rc`, `patch`, `minor`, `major`.
    - **ref**: the branch, tag, or SHA to build from. Defaults to `main`.
@@ -147,7 +156,8 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 - **One-off RC for a feature branch:** `kind=rc`, `ref=<branch-or-sha>`. Produces an RC tag that does not touch `main`.
 - **Minor or major bump:** `kind=minor` or `kind=major`.
 
-The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
+Upstream's scheduled 2x/day RC cron is independent of manual release cuts.
+Neither release automation runs in Phorca.
 
 ## Release Channels
 

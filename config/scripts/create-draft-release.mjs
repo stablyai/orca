@@ -23,8 +23,13 @@ export function parseDesktopReleaseTag(tag) {
   }
 }
 
+// Why: lives here because release-cut restores only this file onto an older tag checkout.
+export function compareDesktopVersions(a, b) {
+  return a.major - b.major || a.minor - b.minor || a.patch - b.patch
+}
+
 function compareDesktopReleaseTags(a, b) {
-  const versionDiff = a.major - b.major || a.minor - b.minor || a.patch - b.patch
+  const versionDiff = compareDesktopVersions(a, b)
   if (versionDiff !== 0) {
     return versionDiff
   }

@@ -1,7 +1,10 @@
-import { useRef, type JSX } from 'react'
+import { useId, useRef, type JSX } from 'react'
 import { MessagesSquare, SquareTerminal, type LucideIcon } from 'lucide-react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { NativeChatUpgradeTipVariant } from '../../../../shared/native-chat-upgrade-tip-audience'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { translate } from '@/i18n/i18n'
 import { FeatureTipActions } from './FeatureTipActions'
 import {
@@ -51,26 +54,67 @@ function ActionLine({
   )
 }
 
+/** For users whose new agent tabs still open in the terminal: say so and offer the switch. */
+function ChatModeSwitch({
+  chatModeOn,
+  onChatModeChange
+}: {
+  chatModeOn: boolean
+  onChatModeChange: (on: boolean) => void
+}): JSX.Element {
+  const switchId = useId()
+  return (
+    <div className="mt-3 space-y-2 text-sm leading-relaxed">
+      <p className="text-muted-foreground">
+        {translate(
+          'featureTips.nativeChatUpgrade.chatModeNote',
+          'New agent tabs still open in the terminal, as before.'
+        )}
+      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <Label htmlFor={switchId}>
+            {translate('featureTips.nativeChatUpgrade.chatModeLabel', 'Turn on chat mode')}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'featureTips.nativeChatUpgrade.chatModeHint',
+              'New agent tabs open as chat instead.'
+            )}
+          </p>
+        </div>
+        <Switch id={switchId} checked={chatModeOn} onCheckedChange={onChatModeChange} />
+      </div>
+    </div>
+  )
+}
+
 export function NativeChatUpgradeTipDialog({
   open,
   tip,
   primaryBusy,
+  variant,
   chatModeOn,
   onOpenChange,
   onPrimaryAction,
+  onChatModeChange,
   onSettingsClick
 }: {
   open: boolean
   tip: FeatureTip
   primaryBusy: boolean
+  /** From the saved tip audience, never the live setting. */
+  variant: NativeChatUpgradeTipVariant
   /** Live Chat UI setting. */
   chatModeOn: boolean
   onOpenChange: (open: boolean) => void
   onPrimaryAction: () => void
+  onChatModeChange: (on: boolean) => void
   onSettingsClick: () => void
 }): JSX.Element {
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
-  const offerChatMode = !chatModeOn
+  // Why: only profiles whose new agent tabs opened in the terminal before the upgrade.
+  const offerChatMode = variant === 'keep-terminal'
 
   return (
     <FeatureTipDialogFrame
@@ -82,6 +126,7 @@ export function NativeChatUpgradeTipDialog({
         primaryButtonRef.current?.focus({ preventScroll: true })
       }}
       visual={<NativeChatUpgradeFeatureTipVisual />}
+      tall={offerChatMode}
     >
       <DialogHeader className="text-left">
         <div>
@@ -89,6 +134,9 @@ export function NativeChatUpgradeTipDialog({
           <DialogTitle size="display">
             {translate('featureTips.nativeChatUpgrade.title', 'Native chat got an upgrade')}
           </DialogTitle>
+          {offerChatMode ? (
+            <ChatModeSwitch chatModeOn={chatModeOn} onChatModeChange={onChatModeChange} />
+          ) : null}
           <DialogDescription className="mt-3 max-w-2xl">
             <span className="block space-y-3 leading-relaxed">
               <span className="block">
@@ -146,18 +194,7 @@ export function NativeChatUpgradeTipDialog({
         </div>
       </DialogHeader>
 
-      <DialogFooter className="mt-8 flex flex-row items-center">
-        {offerChatMode ? (
-          // Why: plain text, flush with the copy, so Enable Now reads as the only button.
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            disabled={primaryBusy}
-            className="mr-4 shrink-0 cursor-pointer rounded-sm text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-          >
-            {translate('featureTips.nativeChatUpgrade.leaveOff', 'Leave Off')}
-          </button>
-        ) : null}
+      <DialogFooter className="mt-8 flex sm:justify-stretch">
         <FeatureTipActions
           currentTip={tip}
           primaryBusy={primaryBusy}
@@ -166,11 +203,7 @@ export function NativeChatUpgradeTipDialog({
           showSkip={false}
           fullWidth
           primaryButtonRef={primaryButtonRef}
-          label={
-            offerChatMode
-              ? translate('featureTips.nativeChatUpgrade.enableNow', 'Enable Now')
-              : translate('featureTips.nativeChatUpgrade.gotIt', 'Got It')
-          }
+          label={translate('featureTips.nativeChatUpgrade.gotIt', 'Got it')}
         />
       </DialogFooter>
     </FeatureTipDialogFrame>

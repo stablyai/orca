@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const { createMacBuildCompatibility } = require('./mac-build-compatibility.cjs')
+const compatibilityContract = require('../../src/shared/local-build-compatibility-contract.json')
 
 describe('mac build compatibility metadata', () => {
   it('binds version, commit, and architecture into the packaged contract', () => {
@@ -14,7 +15,7 @@ describe('mac build compatibility metadata', () => {
       })
     ).toMatchObject({
       formatVersion: 1,
-      appId: 'com.stablyai.orca',
+      appId: compatibilityContract.appId,
       buildId: '1.2.3-local.1-abc123-arm64',
       version: '1.2.3-local.1',
       commit: 'abc123',

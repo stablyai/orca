@@ -32,8 +32,8 @@ import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-pr
  * Relocate the terminal daemon's process image out of the app install dir into LOCAL userData so it
  * survives Windows auto-updates: the NSIS installer deletes the old install and force-kills every process
  * imaged under it, which would otherwise kill the daemon and its live terminals. The relocated exe is a
- * run-as-node Orca.exe copy (not node.exe) so there's no console flash and asar still resolves. Fail-open:
- * any failure returns null and the caller forks the install-dir host (pre-relocation behavior).
+ * run-as-node copy of the packaged app executable (not node.exe) so there's no console flash and asar
+ * still resolves. Fail-open: any failure returns null and the caller forks the install-dir host.
  *
  * What escapes the updater is the PATH, not the file name: electron-builder's kill sweep selects
  * processes whose image path sits under $INSTDIR, which is why the exe is copied verbatim rather
@@ -77,8 +77,10 @@ function currentBuildFingerprint(
   return observed?.entrySourcePath === sources.entrySourcePath ? observed.fingerprint : null
 }
 
-// LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
-const LOCAL_HOST_ROOT_NAME = 'Orca'
+// LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. The executable
+// basename scopes rebranded builds away from upstream Orca; electron-builder's PRODUCT_FILENAME
+// supplies the same sanitized executable basename to NSIS.
+const daemonHostRootName = (execPath: string): string => winPath.parse(execPath).name
 
 // Mirror getDaemonEntryPath()'s resolution order so the copied entry is the exact file the in-dir fork would run.
 function resolveEntrySourcePath(resourcesPath: string, observedEntryPath?: string): string {
@@ -160,12 +162,12 @@ function userDataProfileKey(userDataPath: string): string {
 /** This profile's mirror root; the only tree its prune may reclaim. */
 export function getDaemonHostRootDir(): string {
   const userDataPath = getAppEnvironment().getPath('userData')
-  // Prefer LOCAL appData (see LOCAL_HOST_ROOT_NAME); fall back to userData only if LOCALAPPDATA is unset.
+  // Prefer LOCAL appData; fall back to userData only if LOCALAPPDATA is unset.
   const localAppData = process.env.LOCALAPPDATA
   if (typeof localAppData === 'string' && localAppData.length > 0) {
     return join(
       localAppData,
-      LOCAL_HOST_ROOT_NAME,
+      daemonHostRootName(process.execPath),
       PROFILE_HOST_SUBDIR,
       userDataProfileKey(userDataPath)
     )

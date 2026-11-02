@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import { pathToFileURL } from 'node:url'
+import { compareDesktopVersions } from './create-draft-release.mjs'
 
 const API_VERSION = '2022-11-28'
-const DESKTOP_STABLE_TAG_PATTERN = /^v([0-9]+)\.([0-9]+)\.([0-9]+)$/
+const DESKTOP_STABLE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 
 export function parseDesktopStableTag(tag) {
   const match = DESKTOP_STABLE_TAG_PATTERN.exec(tag)
@@ -11,22 +12,34 @@ export function parseDesktopStableTag(tag) {
     return null
   }
 
-  return {
+  const version = {
     tag,
     major: Number(match[1]),
     minor: Number(match[2]),
     patch: Number(match[3])
   }
+  return [version.major, version.minor, version.patch].every(Number.isSafeInteger) ? version : null
+}
+
+export function latestStableDesktopRelease(releases, { isEligible = () => true } = {}) {
+  let selected = null
+  let selectedVersion = null
+  for (const release of releases) {
+    const version = parseDesktopStableTag(release?.tag_name ?? release?.tagName ?? '')
+    if (!version || release.draft === true || !isEligible(release)) {
+      continue
+    }
+    if (!selectedVersion || compareDesktopVersions(version, selectedVersion) > 0) {
+      selected = release
+      selectedVersion = version
+    }
+  }
+  return selected
 }
 
 export function latestStableDesktopReleaseTag(releases) {
-  const stableTags = releases
-    .filter((release) => release?.draft !== true)
-    .map((release) => parseDesktopStableTag(release?.tag_name ?? release?.tagName ?? ''))
-    .filter(Boolean)
-    .sort((a, b) => a.major - b.major || a.minor - b.minor || a.patch - b.patch)
-
-  return stableTags.at(-1)?.tag ?? ''
+  const release = latestStableDesktopRelease(releases)
+  return release?.tag_name ?? release?.tagName ?? ''
 }
 
 async function githubJson(fetchImpl, url, token) {

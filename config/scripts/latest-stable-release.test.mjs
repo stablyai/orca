@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   fetchReleases,
+  latestStableDesktopRelease,
   latestStableDesktopReleaseTag,
   parseDesktopStableTag
 } from './latest-stable-release.mjs'
@@ -26,6 +27,8 @@ describe('parseDesktopStableTag', () => {
     expect(parseDesktopStableTag('v1.4.44-rc.0')).toBeNull()
     expect(parseDesktopStableTag('mobile-v0.0.12')).toBeNull()
     expect(parseDesktopStableTag('cli-v4.12.28')).toBeNull()
+    expect(parseDesktopStableTag('v01.2.3')).toBeNull()
+    expect(parseDesktopStableTag('v9007199254740992.2.3')).toBeNull()
   })
 })
 
@@ -57,6 +60,31 @@ describe('latestStableDesktopReleaseTag', () => {
         { tag_name: 'mobile-v0.0.12', draft: false }
       ])
     ).toBe('')
+  })
+})
+
+describe('latestStableDesktopRelease', () => {
+  it('returns the highest eligible release without losing release metadata', () => {
+    const eligible = { tag_name: 'v2.0.0', published_at: '2026-10-08', prerelease: false }
+    expect(
+      latestStableDesktopRelease(
+        [
+          { tag_name: 'v9.0.0', draft: true, published_at: '2026-10-08' },
+          { tag_name: 'v8.0.0', prerelease: true, published_at: '2026-10-08' },
+          { tag_name: 'v7.0.0', published_at: '2026-10-12' },
+          eligible,
+          { tag_name: 'v1.9.99', published_at: '2026-10-08' }
+        ],
+        {
+          isEligible: (release) => !release.prerelease && release.published_at <= '2026-10-09'
+        }
+      )
+    ).toBe(eligible)
+  })
+
+  it('preserves tagName callers and returns null when no release is eligible', () => {
+    expect(latestStableDesktopReleaseTag([{ tagName: 'v1.4.44' }])).toBe('v1.4.44')
+    expect(latestStableDesktopRelease([], { isEligible: () => false })).toBeNull()
   })
 })
 

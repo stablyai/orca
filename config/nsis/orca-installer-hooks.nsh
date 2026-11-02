@@ -23,8 +23,8 @@
 ;
 ; Keep the extension list in sync with isOsOpenedDocumentName().
 ; ---------------------------------------------------------------------------
-!define MARKDOWN_PROGID "Orca.Markdown"
-!define TABULAR_PROGID "Orca.Tabular"
+!define MARKDOWN_PROGID "Phorca.Markdown"
+!define TABULAR_PROGID "Phorca.Tabular"
 
 !macro ORCA_REGISTER_DOCUMENT_OPEN_WITH EXT PROGID
   WriteRegNone SHELL_CONTEXT "Software\Classes\${EXT}\OpenWithProgids" "${PROGID}"
@@ -59,7 +59,7 @@
 ; Clean up the relocated terminal daemon on a REAL uninstall.
 ;
 ; Why: the daemon host is deliberately copied OUT of the install dir into
-; %LOCALAPPDATA%\Orca\daemon-host-profiles so that app UPDATES cannot kill it —
+; %LOCALAPPDATA%\${PRODUCT_FILENAME}\daemon-host-profiles so that app UPDATES cannot kill it —
 ; electron-builder's kill sweep selects processes whose image path is under
 ; $INSTDIR, and that relocation is what keeps terminals alive across updates.
 ; The same design means a normal uninstall's process sweep and file removal both
@@ -69,8 +69,8 @@
 ; part of uninstallOldVersion on EVERY update, and killing the daemon there would
 ; defeat the whole feature. Only clean up on a genuine uninstall.
 ;
-; The LOCALAPPDATA folder name must stay in sync with LOCAL_HOST_ROOT_NAME in
-; src/main/daemon/daemon-host-relocation.ts. See
+; PRODUCT_FILENAME is electron-builder's resolved and sanitized executable basename, matching
+; process.execPath in src/main/daemon/daemon-host-relocation.ts. See
 ; docs/reference/windows-daemon-host-relocation.md.
 !macro customUnInstall
   ${ifNot} ${isUpdated}
@@ -102,8 +102,8 @@
     Pop $0
     ; Give the OS a moment to release the image lock before removing the tree.
     Sleep 500
-    RMDir /r "$LOCALAPPDATA\Orca\daemon-host"
-    RMDir /r "$LOCALAPPDATA\Orca\daemon-host-profiles"
+    RMDir /r "$LOCALAPPDATA\${PRODUCT_FILENAME}\daemon-host"
+    RMDir /r "$LOCALAPPDATA\${PRODUCT_FILENAME}\daemon-host-profiles"
   ${endIf}
   ; Why outside the ${isUpdated} guard: customInstall rewrites these on every update, so
   ; dropping them during uninstallOldVersion is correct and keeps the pair symmetric.

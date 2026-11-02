@@ -4,17 +4,29 @@ import { randomUUID } from 'node:crypto'
 function readRootEntries(sha) {
   // Why: a git pathname is arbitrary bytes, and 'utf8' folds every invalid
   // sequence to U+FFFD — that mangles the reported name and makes two different
-  // entries compare equal, so a genuinely new one can slip past the Set below.
+  // entries compare equal, so a genuinely new one can slip past the comparison below.
   // latin1 maps each byte to one code unit, so the bytes survive the round trip.
-  const stdout = execFileSync('git', ['ls-tree', '-z', '--name-only', sha], {
+  const stdout = execFileSync('git', ['ls-tree', '-z', sha], {
     encoding: 'latin1',
     stdio: ['ignore', 'pipe', 'inherit']
   })
-  return stdout.split('\0').filter(Boolean)
+  return new Map(
+    stdout
+      .split('\0')
+      .filter(Boolean)
+      .map((entry) => {
+        const separator = entry.indexOf('\t')
+        return [entry.slice(separator + 1), entry.slice(0, separator).split(' ')[1]]
+      })
+  )
 }
 
-// These reviewed additions stay listed until the base tree carries them.
-const REVIEWED_ROOT_ENTRIES = new Set(['cloud', 'opencode.json'])
+// Keep explicitly requested root additions allowed until the base tree carries them.
+const REVIEWED_ROOT_ENTRIES = new Map([
+  ['cloud', 'tree'],
+  ['opencode.json', 'blob'],
+  ['MERGE-CONFLICTS.md', 'blob']
+])
 
 function checkRootDirectoryEntries(argv) {
   if (argv.length !== 2) {
@@ -23,10 +35,10 @@ function checkRootDirectoryEntries(argv) {
   }
 
   const [baseSha, headSha] = argv
-  const baseEntries = new Set(readRootEntries(baseSha))
-  const blockedEntries = readRootEntries(headSha).filter(
-    (entry) => !baseEntries.has(entry) && !REVIEWED_ROOT_ENTRIES.has(entry)
-  )
+  const baseEntries = readRootEntries(baseSha)
+  const blockedEntries = [...readRootEntries(headSha)]
+    .filter(([name, type]) => !baseEntries.has(name) && REVIEWED_ROOT_ENTRIES.get(name) !== type)
+    .map(([name]) => name)
 
   if (blockedEntries.length === 0) {
     console.log('Root directory guard passed: no new root-level files or folders.')

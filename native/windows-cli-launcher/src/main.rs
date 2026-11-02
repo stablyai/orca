@@ -13,8 +13,7 @@
 //! On a Windows server host, orcad copies this binary into its profile and
 //! writes `orca-launcher.cfg` beside it; that file selects the server mode.
 
-use std::env;
-use std::fs;
+use std::{env, fs};
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command};
 
@@ -40,21 +39,31 @@ fn main() {
 
     let Some(resources_directory) = launcher.parent().and_then(Path::parent) else {
         fail(&format!(
-            "Unable to locate Orca.exe next to \"{}\"",
+            "Unable to locate the packaged app next to \"{}\"",
             launcher.display()
         ))
     };
     let Some(app_directory) = resources_directory.parent() else {
         fail(&format!(
-            "Unable to locate Orca.exe next to \"{}\"",
+            "Unable to locate the packaged app next to \"{}\"",
             resources_directory.display()
         ))
     };
 
-    let electron_path = app_directory.join("Orca.exe");
+    let identity_path = resources_directory.join("app-executable-name.txt");
+    let identity = fs::read_to_string(&identity_path)
+        .unwrap_or_else(|error| fail(&format!("Unable to read the packaged app executable identity: {error}")));
+    let executable_name = identity.trim();
+    if executable_name.is_empty()
+        || !executable_name.to_ascii_lowercase().ends_with(".exe")
+        || executable_name.contains(['/', '\\', ':', '\0'])
+    {
+        fail("The packaged app executable identity is invalid.");
+    }
+    let electron_path = app_directory.join(executable_name);
     if !electron_path.is_file() {
         fail(&format!(
-            "Unable to locate Orca.exe next to \"{}\"",
+            "Unable to locate {executable_name} next to \"{}\"",
             resources_directory.display()
         ));
     }

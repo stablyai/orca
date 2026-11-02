@@ -238,17 +238,28 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(readFileSync(result!.execPath)).toEqual(readFileSync(sourceExe))
   })
 
-  it('tracks a differently-named app exe rather than pinning an image name of its own', () => {
-    // A dev-channel or rebranded build ships a different executableName; the host copy must follow
-    // it, which is what keeps the copy verbatim instead of reintroducing a name mismatch.
-    renameSync(join(installDir, 'Orca.exe'), join(installDir, 'Orca Nightly.exe'))
-    setProcessProp('execPath', join(installDir, 'Orca Nightly.exe'))
+  it('scopes a differently-named app exe to its own LOCALAPPDATA root', () => {
+    // A dev-channel or rebranded build ships a different executableName. Both the host copy and
+    // daemon-host root follow it so the build cannot prune another installed product's runtime.
+    renameSync(join(installDir, 'Orca.exe'), join(installDir, 'Phorca.exe'))
+    setProcessProp('execPath', join(installDir, 'Phorca.exe'))
     const result = materializeRelocatedDaemonHost()
     const dest = relocatedHostRoot()
-    expect(result?.execPath).toBe(join(dest, 'Orca Nightly.exe'))
+    expect(
+      getDaemonHostRootDir().startsWith(join(localAppDataDir, 'Phorca', 'daemon-host-profiles'))
+    ).toBe(true)
+    expect(result?.execPath).toBe(join(dest, 'Phorca.exe'))
     expect(existsSync(join(dest, 'orca-terminal-daemon.exe'))).toBe(false)
     // Re-resolution must agree with materialization or the fork would target a missing exe.
-    expect(getRelocatedDaemonHost()?.execPath).toBe(join(dest, 'Orca Nightly.exe'))
+    expect(getRelocatedDaemonHost()?.execPath).toBe(join(dest, 'Phorca.exe'))
+    expect(existsSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toBe(false)
+  })
+
+  it('does not duplicate product identity when userData is the fallback root', () => {
+    delete process.env.LOCALAPPDATA
+    const result = materializeRelocatedDaemonHost()
+    expect(getDaemonHostRootDir()).toBe(join(userDataDir, 'daemon-host'))
+    expect(result?.execPath).toBe(join(relocatedHostRoot(), 'Orca.exe'))
   })
 
   it.each([
