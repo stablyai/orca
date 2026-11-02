@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mapKittyToOrca } from './mapper'
-import { loadKittyConfig } from './parser'
+import { loadKittyConfig, matchesFileGlob } from './parser'
 
 let dir: string
 
@@ -68,7 +68,8 @@ describe('Kitty config import', () => {
       ['cursor_text_color', 'background'],
       ['cursor_shape', 'hollow'],
       ['macos_option_as_alt', 'left'],
-      ['constructor', '#ff0000']
+      ['constructor', '#ff0000'],
+      ['font_size', '1e3']
     ])
     const { diff, unsupportedKeys } = mapKittyToOrca({ options, unsupportedKeys: [] }, false)
     expect(diff).toEqual({})
@@ -77,7 +78,16 @@ describe('Kitty config import', () => {
       'cursor_text_color',
       'cursor_shape',
       'macos_option_as_alt',
-      'constructor'
+      'constructor',
+      'font_size'
     ])
+  })
+
+  it('matches file globs without exponential backtracking', () => {
+    expect(matchesFileGlob('dark.conf', '*.conf')).toBe(true)
+    expect(matchesFileGlob('dark.conf.bak', '*.conf')).toBe(false)
+    expect(matchesFileGlob('a1.conf', 'a?.conf')).toBe(true)
+    // A regex translation of this pattern backtracks for minutes; the matcher returns at once.
+    expect(matchesFileGlob('a'.repeat(48), `${'a*'.repeat(16)}b`)).toBe(false)
   })
 })

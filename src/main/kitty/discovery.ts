@@ -1,6 +1,7 @@
 import { homedir, platform } from 'node:os'
 import path from 'node:path'
-import { stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { access, stat } from 'node:fs/promises'
 
 function expandHome(dir: string, home: string): string {
   return dir === '~' || dir.startsWith('~/') ? path.join(home, dir.slice(1)) : dir
@@ -29,11 +30,13 @@ export function getKittyConfigPaths(): string[] {
   return [...new Set(dirs)].map((dir) => path.posix.join(dir, 'kitty.conf'))
 }
 
-/** Kitty reads a single kitty.conf: the first location that has one. */
+/** Kitty reads a single kitty.conf: the first location that has one in a writable directory. */
 export async function findKittyConfigPaths(): Promise<string[]> {
   for (const configPath of getKittyConfigPaths()) {
     try {
+      // The writability check keeps a read-only system default (e.g. /etc/xdg) from shadowing the user's config.
       if ((await stat(configPath)).isFile()) {
+        await access(path.dirname(configPath), constants.W_OK)
         return [configPath]
       }
     } catch {

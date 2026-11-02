@@ -61,23 +61,45 @@ function expandIncludePath(value: string, baseDir: string, home: string): string
   return path.isAbsolute(expanded) ? expanded : path.join(baseDir, expanded)
 }
 
-// Kitty globs with pathlib; Orca supports wildcards in the file name, the common `themes/*.conf` form.
+// Greedy `*`/`?` matching with one backtrack point stays linear-ish, unlike a translated regex.
+export function matchesFileGlob(name: string, pattern: string): boolean {
+  let nameIndex = 0
+  let patternIndex = 0
+  let starIndex = -1
+  let starNameIndex = 0
+  while (nameIndex < name.length) {
+    const token = pattern[patternIndex]
+    if (token === '?' || (token !== undefined && token !== '*' && token === name[nameIndex])) {
+      nameIndex++
+      patternIndex++
+    } else if (token === '*') {
+      starIndex = patternIndex++
+      starNameIndex = nameIndex
+    } else if (starIndex !== -1) {
+      patternIndex = starIndex + 1
+      nameIndex = ++starNameIndex
+    } else {
+      return false
+    }
+  }
+  while (pattern[patternIndex] === '*') {
+    patternIndex++
+  }
+  return patternIndex === pattern.length
+}
+
+// Kitty globs with pathlib; Orca supports `*` and `?` in the file name, the common `themes/*.conf` form.
 async function expandGlobInclude(pattern: string): Promise<string[] | null> {
   const dir = path.dirname(pattern)
-  if (/[*?[]/.test(dir)) {
+  const namePattern = path.basename(pattern)
+  if (/[*?[]/.test(dir) || namePattern.includes('[')) {
     return null
   }
-  const source = path
-    .basename(pattern)
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replaceAll('*', '.*')
-    .replaceAll('?', '.')
-  const nameRe = new RegExp(`^${source}$`)
   try {
     const names = await readdir(dir)
     return names
       .slice(0, MAX_GLOB_ENTRIES)
-      .filter((name) => nameRe.test(name))
+      .filter((name) => matchesFileGlob(name, namePattern))
       .sort()
       .map((name) => path.join(dir, name))
   } catch {
@@ -134,7 +156,7 @@ export async function loadKittyConfig(entryPath: string, home: string): Promise<
       } else if (optionKey === 'globinclude') {
         const matches = await expandGlobInclude(expandIncludePath(value, baseDir, home))
         if (matches === null) {
-          unsupportedKeys.add('globinclude (wildcards in directory names)')
+          unsupportedKeys.add('globinclude (only * and ? in file names are supported)')
         }
         for (const match of matches ?? []) {
           await loadFile(match)
